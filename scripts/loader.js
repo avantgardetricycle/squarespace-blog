@@ -1,68 +1,29 @@
-/**
- * Squarespace Blog Overlay - Loader Script
- *
- * This script is injected into Squarespace via Code Injection.
- * It fetches the user's config and loads the renderer bundle.
- *
- * Usage:
- * <script src="https://your-domain.com/loader.js" data-token="USER_TOKEN"></script>
- */
-
 (function() {
   'use strict';
 
-  // Get the token from the script tag
-  const scriptTag = document.currentScript;
-  const token = scriptTag?.getAttribute('data-token');
+  // 1. Read data-site-key
+  const script = document.currentScript;
+  const siteKey = script.getAttribute('data-site-key');
 
-  if (!token) {
-    console.error('[BlogOverlay] No data-token attribute found on script tag');
+  if (!siteKey) {
+    console.error('[BlogOverlay] Missing data-site-key attribute');
     return;
   }
 
-  // Configuration
-  const API_BASE = scriptTag.getAttribute('data-api') || 'https://your-domain.com';
-
-  // Fetch user config
-  async function loadConfig() {
-    try {
-      const response = await fetch(`${API_BASE}/api/config/${token}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch config: ${response.status}`);
-      }
-
-      const config = await response.json();
-
-      // Load the renderer script
-      if (config.rendererUrl) {
-        loadRenderer(config.rendererUrl, config);
-      }
-    } catch (error) {
-      console.error('[BlogOverlay] Failed to load config:', error);
-    }
-  }
-
-  // Load and initialize the renderer
-  function loadRenderer(url, config) {
-    const script = document.createElement('script');
-    script.src = url;
-    script.onload = function() {
-      // The renderer will expose a global init function
-      if (window.BlogOverlayRenderer?.init) {
-        window.BlogOverlayRenderer.init(config);
-      }
-    };
-    script.onerror = function() {
-      console.error('[BlogOverlay] Failed to load renderer script');
-    };
-    document.head.appendChild(script);
-  }
-
-  // Wait for DOM to be ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadConfig);
-  } else {
-    loadConfig();
-  }
+  // 2. Fetch config
+  fetch(`/api/bootstrap?siteKey=${encodeURIComponent(siteKey)}`)
+    .then(response => response.json())
+    .then(config => {
+      // 3. Load the renderer bundle
+      const renderer = document.createElement('script');
+      renderer.src = '/renderer.js';
+      renderer.onload = () => {
+        // 4. Call mount({ config })
+        window.mount({ config });
+      };
+      document.head.appendChild(renderer);
+    })
+    .catch(error => {
+      console.error('[BlogOverlay] Failed to bootstrap:', error);
+    });
 })();
