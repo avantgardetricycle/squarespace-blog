@@ -39,12 +39,12 @@
                    document.querySelector('[class*="blog"]') ||
                    document.body;
 
-      // Fetch Squarespace blog JSON and render a preview block
+      // Fetch Squarespace blog JSON and render a list of titles and bodies
       fetch('/blog?format=json')
         .then(function(res) { return res.json(); })
         .then(function(json) {
           var container = document.createElement('div');
-          container.id = 'blog-overlay-json-preview';
+          container.id = 'blog-overlay-list';
           container.style.padding = '16px';
           container.style.margin = '16px 0';
           container.style.border = '1px solid #ddd';
@@ -56,14 +56,35 @@
           heading.style.fontWeight = '600';
           heading.style.marginBottom = '8px';
 
-          var pre = document.createElement('pre');
-          pre.textContent = JSON.stringify(json, null, 2);
-          pre.style.whiteSpace = 'pre-wrap';
-          pre.style.wordBreak = 'break-word';
-          pre.style.margin = 0;
+          var list = document.createElement('div');
+          list.className = 'blog-overlay-posts';
+
+          var items = Array.isArray(json && json.items) ? json.items : [];
+          for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var article = document.createElement('article');
+            article.style.marginBottom = '24px';
+
+            var h2 = document.createElement('h2');
+            h2.textContent = item.title || 'Untitled';
+            h2.style.margin = '0 0 8px 0';
+
+            var body = document.createElement('div');
+            body.innerHTML = item.body || '';
+
+            article.appendChild(h2);
+            article.appendChild(body);
+            list.appendChild(article);
+          }
+
+          if (items.length === 0) {
+            var empty = document.createElement('div');
+            empty.textContent = 'No posts found.';
+            list.appendChild(empty);
+          }
 
           container.appendChild(heading);
-          container.appendChild(pre);
+          container.appendChild(list);
 
           if (target && target.prepend) {
             target.prepend(container);
@@ -71,8 +92,8 @@
             document.body.prepend(container);
           }
 
-          // Also log to console for debugging
-          console.log('[BlogOverlay] Squarespace blog JSON:', json);
+          // Log for debugging
+          console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
         })
         .catch(function(err) {
           console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
