@@ -12,7 +12,7 @@
   }
 
   // 2. Fetch config
-  fetch(`/api/bootstrap?siteKey=${encodeURIComponent(siteKey)}`)
+  fetch(`http://localhost:3001/api/config/${encodeURIComponent(siteKey)}`)
     .then(response => response.json())
     .then(config => {
       // 3. Load the renderer bundle
@@ -25,6 +25,6 @@
       document.head.appendChild(renderer);
     })
     .catch(error => {
-      console.error('[BlogOverlay] Failed to bootstrap:', error);
+      console.error('[BlogOverlay] Failed to fetch config:', error);
     });
 })();
