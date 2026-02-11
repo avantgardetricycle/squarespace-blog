@@ -17,7 +17,8 @@
     .then(config => {
       // 3. Load the renderer bundle
       const renderer = document.createElement('script');
-      renderer.src = '/renderer.js';
+      const rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/renderer.js';
+      renderer.src = rendererUrl;
       renderer.onload = () => {
         // 4. Call mount({ config })
         window.mount({ config });
