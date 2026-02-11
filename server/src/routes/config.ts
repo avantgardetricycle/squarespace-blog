@@ -21,6 +21,10 @@ router.get('/:token', (req: Request, res: Response) => {
 
   try {
     const configData = JSON.parse(config.config_json)
+
+    // Ensure the API response always includes the rendererUrl used by the loader
+    configData.rendererUrl = 'https://avantgardetricycle.github.io/renderer.js'
+
     res.json(configData)
   } catch {
     res.status(500).json({ error: 'Invalid config data' })
