@@ -19,6 +19,7 @@
       const renderer = document.createElement('script');
       const rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/renderer.js';
       renderer.src = rendererUrl;
+      console.log('[BLOGGA BLOGGA] rendrer src', renderer.src)
       renderer.onload = () => {
         // 4. Call mount({ config })
         window.mount({ config });
