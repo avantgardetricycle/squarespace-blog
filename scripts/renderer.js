@@ -33,21 +33,63 @@
      * Render the blog overlay
      */
     render: function() {
-      console.log('[BLOGGA BLOGGA IS IN]')
-      // Placeholder - find blog section and log info
-      const blogSection = document.querySelector('[data-section-type="blog"]') ||
-                          document.querySelector('.blog-list') ||
-                          document.querySelector('[class*="blog"]');
+      // Determine a target to render into
+      var target = document.querySelector('[data-section-type="blog"]') ||
+                   document.querySelector('.blog-list') ||
+                   document.querySelector('[class*="blog"]') ||
+                   document.body;
 
-      if (blogSection) {
-        console.log('[BlogOverlay] Found blog section:', blogSection);
-        console.log('[BlogOverlay] Layout:', this.config?.layout);
-        console.log('[BlogOverlay] Posts per page:', this.config?.postsPerPage);
+      // Fetch Squarespace blog JSON and render a preview block
+      fetch('/blog?format=json')
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+          var container = document.createElement('div');
+          container.id = 'blog-overlay-json-preview';
+          container.style.padding = '16px';
+          container.style.margin = '16px 0';
+          container.style.border = '1px solid #ddd';
+          container.style.background = '#fafafa';
+          container.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
-        // TODO: Replace blog content with custom layout
-      } else {
-        console.log('[BlogOverlay] No blog section found on this page');
-      }
+          var heading = document.createElement('div');
+          heading.textContent = 'Hello, this is the blog JSON';
+          heading.style.fontWeight = '600';
+          heading.style.marginBottom = '8px';
+
+          var pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(json, null, 2);
+          pre.style.whiteSpace = 'pre-wrap';
+          pre.style.wordBreak = 'break-word';
+          pre.style.margin = 0;
+
+          container.appendChild(heading);
+          container.appendChild(pre);
+
+          if (target && target.prepend) {
+            target.prepend(container);
+          } else {
+            document.body.prepend(container);
+          }
+
+          // Also log to console for debugging
+          console.log('[BlogOverlay] Squarespace blog JSON:', json);
+        })
+        .catch(function(err) {
+          console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
+        });
     }
   };
+
+  // Expose a lightweight mount API used by loader.js to initialize the renderer
+  if (typeof window.mount !== 'function') {
+    window.mount = function(params) {
+      try {
+        var cfg = params && params.config ? params.config : {};
+        window.BlogOverlayRenderer.init(cfg);
+      } catch (e) {
+        console.error('[BlogOverlay] Failed to mount renderer:', e);
+      }
+    };
+  }
+
 })();
