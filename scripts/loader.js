@@ -20,10 +20,14 @@
       const renderer = document.createElement('script');
       const rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js';
       renderer.src = rendererUrl;
-      console.log('[BLOGGA BLOGGA] rendrer src', renderer.src)
+      renderer.async = true;
+      
       renderer.onload = () => {
-        // 4. Call mount({ config })
-        window.mount({ config });
+        if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer.init === 'function') {
+          window.BlogOverlayRenderer.init(config);
+        } else {
+          console.error('[BlogOverlay] Renderer loaded, but BlogOverlayRenderer.init was not found');
+        }
       };
       document.head.appendChild(renderer);
     })

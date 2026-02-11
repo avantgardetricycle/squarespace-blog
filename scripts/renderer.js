@@ -33,6 +33,7 @@
      * Render the blog overlay
      */
     render: function() {
+      console.log('[BLOGGA BLOGGA IS IN]')
       // Placeholder - find blog section and log info
       const blogSection = document.querySelector('[data-section-type="blog"]') ||
                           document.querySelector('.blog-list') ||
