@@ -5,6 +5,7 @@
   const script = document.currentScript;
   const siteKey = script.getAttribute('data-site-key');
 
+  console.log('[BLOGGA BLOGGA] data site key', siteKey)
   if (!siteKey) {
     console.error('[BlogOverlay] Missing data-site-key attribute');
     return;
