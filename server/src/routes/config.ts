@@ -23,7 +23,7 @@ router.get('/:token', (req: Request, res: Response) => {
     const configData = JSON.parse(config.config_json)
 
     // Ensure the API response always includes the rendererUrl used by the loader
-    configData.rendererUrl = 'https://avantgardetricycle.github.io/renderer.js'
+    configData.rendererUrl = 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
 
     res.json(configData)
   } catch {

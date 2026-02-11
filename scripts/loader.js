@@ -18,7 +18,7 @@
       console.log('[BLOGGA BLOGGA] config', config)
       // 3. Load the renderer bundle
       const renderer = document.createElement('script');
-      const rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/renderer.js';
+      const rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js';
       renderer.src = rendererUrl;
       console.log('[BLOGGA BLOGGA] rendrer src', renderer.src)
       renderer.onload = () => {

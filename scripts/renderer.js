@@ -14,14 +14,6 @@
     config: null,
 
     /**
-     * Return the URL of the renderer bundle for loader usage.
-     * Keeping a single source of truth for where the renderer is hosted.
-     */
-    getRendererUrl: function() {
-      return 'https://avantgardetricycle.github.io/renderer.js';
-    },
-
-    /**
      * Initialize the renderer with user config
      * @param {Object} config - User configuration from the API
      */
