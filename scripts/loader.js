@@ -15,6 +15,7 @@
   fetch(`https://tribal-intelligent-rankings-manually.trycloudflare.com/api/config/${encodeURIComponent(siteKey)}`)
     .then(response => response.json())
     .then(config => {
+      console.log('[BLOGGA BLOGGA] config', config)
       // 3. Load the renderer bundle
       const renderer = document.createElement('script');
       const rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/renderer.js';
