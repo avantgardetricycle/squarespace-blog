@@ -12,7 +12,7 @@
   }
 
   // 2. Fetch config
-  fetch(`http://localhost:3001/api/config/${encodeURIComponent(siteKey)}`)
+  fetch(`https://tribal-intelligent-rankings-manually.trycloudflare.com/api/config/${encodeURIComponent(siteKey)}`)
     .then(response => response.json())
     .then(config => {
       // 3. Load the renderer bundle
