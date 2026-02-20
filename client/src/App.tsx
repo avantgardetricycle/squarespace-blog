@@ -1,24 +1,38 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface BlogConfig {
-  layout: 'grid' | 'list' | 'masonry'
-  postsPerPage: number
-  showExcerpt: boolean
-  showDate: boolean
   showAuthor: boolean
+  showDate: boolean
+  showTableOfContents: boolean
 }
 
 const defaultConfig: BlogConfig = {
-  layout: 'grid',
-  postsPerPage: 9,
-  showExcerpt: true,
-  showDate: true,
   showAuthor: false,
+  showDate: true,
+  showTableOfContents: false,
 }
+
+type ModalStatus = 'success' | 'failure' | null
 
 function App() {
   const [config, setConfig] = useState<BlogConfig>(defaultConfig)
-  const [siteKey] = useState(null)
+  const [siteKey] = useState('demo-site-key')
+  const [modalStatus, setModalStatus] = useState<ModalStatus>(null)
+
+  useEffect(() => {
+    fetch(`/api/config/${siteKey}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          setConfig({
+            showAuthor: Boolean(data.showAuthor),
+            showDate: Boolean(data.showDate),
+            showTableOfContents: Boolean(data.showTableOfContents),
+          })
+        }
+      })
+      .catch(() => {})
+  }, [siteKey])
 
   const handleSave = async () => {
     try {
@@ -27,16 +41,33 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ siteKey, config }),
       })
-      if (response.ok) {
-        alert('Configuration saved!')
-      }
+      setModalStatus(response.ok ? 'success' : 'failure')
     } catch (error) {
       console.error('Failed to save config:', error)
+      setModalStatus('failure')
     }
   }
 
   return (
     <div className="app">
+      {modalStatus && (
+        <div className="modal-overlay" onClick={() => setModalStatus(null)}>
+          <div className={`modal modal--${modalStatus}`} onClick={(e) => e.stopPropagation()}>
+            <h3>{modalStatus === 'success' ? 'Success' : 'Error'}</h3>
+            <p>
+              {modalStatus === 'success'
+                ? 'Configuration saved!'
+                : 'Failed to save configuration. Please try again.'}
+            </p>
+            <button
+              className="modal-btn"
+              onClick={() => setModalStatus(null)}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
       <header>
         <h1>Squarespace Blog Configurator</h1>
         <p>Customize your blog layout and paste the script into Squarespace Code Injection</p>
@@ -46,39 +77,14 @@ function App() {
         <section className="config-section">
           <h2>Layout Settings</h2>
 
-          <div className="form-group">
-            <label htmlFor="layout">Layout Style</label>
-            <select
-              id="layout"
-              value={config.layout}
-              onChange={(e) => setConfig({ ...config, layout: e.target.value as BlogConfig['layout'] })}
-            >
-              <option value="grid">Grid</option>
-              <option value="list">List</option>
-              <option value="masonry">Masonry</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="postsPerPage">Posts Per Page</label>
-            <input
-              id="postsPerPage"
-              type="number"
-              min="1"
-              max="50"
-              value={config.postsPerPage}
-              onChange={(e) => setConfig({ ...config, postsPerPage: parseInt(e.target.value) || 9 })}
-            />
-          </div>
-
           <div className="form-group checkbox">
             <label>
               <input
                 type="checkbox"
-                checked={config.showExcerpt}
-                onChange={(e) => setConfig({ ...config, showExcerpt: e.target.checked })}
+                checked={config.showAuthor}
+                onChange={(e) => setConfig({ ...config, showAuthor: e.target.checked })}
               />
-              Show Excerpt
+              Show Author
             </label>
           </div>
 
@@ -97,10 +103,10 @@ function App() {
             <label>
               <input
                 type="checkbox"
-                checked={config.showAuthor}
-                onChange={(e) => setConfig({ ...config, showAuthor: e.target.checked })}
+                checked={config.showTableOfContents}
+                onChange={(e) => setConfig({ ...config, showTableOfContents: e.target.checked })}
               />
-              Show Author
+              Table of Contents
             </label>
           </div>
 

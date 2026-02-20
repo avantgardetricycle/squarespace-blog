@@ -33,11 +33,9 @@ if (!demoUser) {
 // Seed demo site and its config if not exists
 const demoSite = db.prepare('SELECT * FROM sites WHERE site_key = ?').get('demo-site-key') as { id: string } | undefined
 const defaultConfig = JSON.stringify({
-  layout: 'grid',
-  postsPerPage: 9,
-  showExcerpt: true,
-  showDate: true,
   showAuthor: false,
+  showDate: true,
+  showTableOfContents: false,
   rendererUrl: 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
 })
 if (!demoSite) {

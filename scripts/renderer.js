@@ -3,8 +3,6 @@
  *
  * This script renders the custom blog layout overlay.
  * It uses Squarespace's blog JSON data combined with user config.
- *
- * TODO: This is a placeholder. Implement the actual rendering logic.
  */
 
 (function() {
@@ -26,75 +24,158 @@
 
       this.config = config;
       console.log('[BlogOverlay] Renderer initialized with config:', config);
-
-      // TODO: Implement actual rendering
-      // 1. Find the Squarespace blog container
-      // 2. Fetch blog JSON from Squarespace (usually available at /blog?format=json)
-      // 3. Render custom layout based on config
-
       this.render();
+    },
+
+    /**
+     * Get timestamp from item (Squarespace may use publishedOn, publishOn, or addedOn)
+     */
+    _getDate: function(item) {
+      var ts = item.publishedOn || item.publishOn || item.addedOn;
+      return ts ? new Date(ts).toLocaleDateString() : null;
+    },
+
+    /**
+     * Get author display name from item
+     */
+    _getAuthor: function(item) {
+      return (item.author && item.author.displayName) ? item.author.displayName : null;
     },
 
     /**
      * Render the blog overlay
      */
     render: function() {
+      var self = this;
       var root = document.getElementById('blogga-blogga-root');
       if (!root) {
         console.log('[BlogOverlay] Skipping render: #blogga-blogga-root not found');
         return;
       }
 
-      // Fetch Squarespace blog JSON and render a list of titles and bodies
+      var cfg = this.config || {};
+      var showTableOfContents = Boolean(cfg.showTableOfContents);
+      var showDate = Boolean(cfg.showDate);
+      var showAuthor = Boolean(cfg.showAuthor);
+
       fetch('/blog?format=json')
         .then(function(res) { return res.json(); })
         .then(function(json) {
-          var container = document.createElement('div');
-          container.id = 'blog-overlay-list';
-          container.style.padding = '16px';
-          container.style.margin = '16px 0';
-          container.style.border = '1px solid #ddd';
-          container.style.background = '#fafafa';
-          container.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
-
-          var heading = document.createElement('div');
-          heading.textContent = 'Hello, this is the blog JSON';
-          heading.style.fontWeight = '600';
-          heading.style.marginBottom = '8px';
-
-          var list = document.createElement('div');
-          list.className = 'blog-overlay-posts';
-
           var items = Array.isArray(json && json.items) ? json.items : [];
-          for (var i = 0; i < items.length; i++) {
-            var item = items[i];
+
+          var wrapper = document.createElement('div');
+          wrapper.id = 'blog-overlay-list';
+          wrapper.style.display = 'flex';
+          wrapper.style.gap = '24px';
+          wrapper.style.padding = '16px';
+          wrapper.style.margin = '16px 0';
+          wrapper.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+
+          var main = document.createElement('div');
+          main.className = 'blog-overlay-posts';
+          main.style.flex = '1';
+          main.style.minWidth = '0';
+
+          if (showTableOfContents && items.length > 0) {
+            var sidebar = document.createElement('nav');
+            sidebar.className = 'blog-overlay-toc';
+            sidebar.style.flexShrink = '0';
+            sidebar.style.width = '200px';
+            sidebar.style.padding = '12px';
+            sidebar.style.background = '#f5f5f5';
+            sidebar.style.borderRadius = '8px';
+            sidebar.style.position = 'sticky';
+            sidebar.style.top = '16px';
+            sidebar.style.alignSelf = 'flex-start';
+
+            var tocTitle = document.createElement('div');
+            tocTitle.textContent = 'Table of Contents';
+            tocTitle.style.fontWeight = '600';
+            tocTitle.style.marginBottom = '8px';
+            tocTitle.style.fontSize = '0.9rem';
+            sidebar.appendChild(tocTitle);
+
+            for (var i = 0; i < items.length; i++) {
+              var item = items[i];
+              var slug = 'blog-post-' + i;
+              var link = document.createElement('a');
+              link.href = '#' + slug;
+              link.textContent = item.title || 'Untitled';
+              link.style.display = 'block';
+              link.style.padding = '4px 0';
+              link.style.fontSize = '0.85rem';
+              link.style.color = '#0066cc';
+              link.style.textDecoration = 'none';
+              link.style.lineHeight = '1.3';
+              link.onclick = function(id) {
+                return function(e) {
+                  e.preventDefault();
+                  var el = document.getElementById(id);
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                };
+              }(slug);
+              sidebar.appendChild(link);
+            }
+            wrapper.appendChild(sidebar);
+          }
+
+          for (var j = 0; j < items.length; j++) {
+            var post = items[j];
             var article = document.createElement('article');
+            article.id = 'blog-post-' + j;
             article.style.marginBottom = '24px';
+            article.style.paddingBottom = '24px';
+            article.style.borderBottom = '1px solid #eee';
 
             var h2 = document.createElement('h2');
-            h2.textContent = item.title || 'Untitled';
             h2.style.margin = '0 0 8px 0';
+            h2.style.fontSize = '1.25rem';
+            if (post.fullUrl) {
+              var titleLink = document.createElement('a');
+              titleLink.href = post.fullUrl;
+              titleLink.textContent = post.title || 'Untitled';
+              titleLink.style.color = 'inherit';
+              titleLink.style.textDecoration = 'none';
+              h2.appendChild(titleLink);
+            } else {
+              h2.textContent = post.title || 'Untitled';
+            }
+            article.appendChild(h2);
+
+            var meta = document.createElement('div');
+            meta.style.fontSize = '0.875rem';
+            meta.style.color = '#666';
+            meta.style.marginBottom = '8px';
+            var metaParts = [];
+            if (showDate) {
+              var dateStr = self._getDate(post);
+              if (dateStr) metaParts.push(dateStr);
+            }
+            if (showAuthor) {
+              var authorStr = self._getAuthor(post);
+              if (authorStr) metaParts.push('by ' + authorStr);
+            }
+            if (metaParts.length > 0) {
+              meta.textContent = metaParts.join(' ');
+              article.appendChild(meta);
+            }
 
             var body = document.createElement('div');
-            body.innerHTML = item.body || '';
-
-            article.appendChild(h2);
+            body.innerHTML = post.body || '';
+            body.style.lineHeight = '1.6';
             article.appendChild(body);
-            list.appendChild(article);
+            main.appendChild(article);
           }
 
           if (items.length === 0) {
             var empty = document.createElement('div');
             empty.textContent = 'No posts found.';
-            list.appendChild(empty);
+            main.appendChild(empty);
           }
 
-          container.appendChild(heading);
-          container.appendChild(list);
+          wrapper.appendChild(main);
+          root.prepend(wrapper);
 
-          root.prepend(container);
-
-          // Log for debugging
           console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
         })
         .catch(function(err) {
