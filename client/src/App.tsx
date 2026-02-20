@@ -4,12 +4,14 @@ interface BlogConfig {
   showAuthor: boolean
   showDate: boolean
   showTableOfContents: boolean
+  showProgressBar: boolean
 }
 
 const defaultConfig: BlogConfig = {
   showAuthor: false,
   showDate: true,
   showTableOfContents: false,
+  showProgressBar: false,
 }
 
 type ModalStatus = 'success' | 'failure' | null
@@ -28,6 +30,7 @@ function App() {
             showAuthor: Boolean(data.showAuthor),
             showDate: Boolean(data.showDate),
             showTableOfContents: Boolean(data.showTableOfContents),
+            showProgressBar: Boolean(data.showProgressBar),
           })
         }
       })
@@ -107,6 +110,17 @@ function App() {
                 onChange={(e) => setConfig({ ...config, showTableOfContents: e.target.checked })}
               />
               Table of Contents
+            </label>
+          </div>
+
+          <div className="form-group checkbox">
+            <label>
+              <input
+                type="checkbox"
+                checked={config.showProgressBar}
+                onChange={(e) => setConfig({ ...config, showProgressBar: e.target.checked })}
+              />
+              Progress Bar
             </label>
           </div>
 

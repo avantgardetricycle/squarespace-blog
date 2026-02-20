@@ -10,6 +10,7 @@
 
   window.BlogOverlayRenderer = {
     config: null,
+    items: [],
 
     /**
      * Initialize the renderer with user config
@@ -24,6 +25,12 @@
 
       this.config = config;
       console.log('[BlogOverlay] Renderer initialized with config:', config);
+
+      var self = this;
+      window.addEventListener('hashchange', function() {
+        if (self.items.length) self._renderContent(self.items);
+      });
+
       this.render();
     },
 
@@ -43,40 +50,28 @@
     },
 
     /**
-     * Get overlay base path (e.g. /blogga-blogga or /).
-     * Uses data-overlay-base on #blogga-blogga-root if set; otherwise derives from first path segment.
+     * Get selected post index from hash (#post-0, #post-1, etc). Returns -1 for list view.
      */
-    _getOverlayBase: function() {
-      var root = document.getElementById('blogga-blogga-root');
-      if (root) {
-        var base = root.getAttribute('data-overlay-base');
-        if (base) return base.replace(/\/+$/, '') || '/';
+    _getSelectedIndexFromHash: function() {
+      var hash = (window.location.hash || '').replace(/^#/, '');
+      if (!hash || hash.indexOf('post-') !== 0) return -1;
+      var idx = parseInt(hash.slice(5), 10);
+      return isNaN(idx) ? -1 : idx;
+    },
+
+    /**
+     * Set hash to show single post (index) or list (-1)
+     */
+    _setViewHash: function(index) {
+      if (index < 0) {
+        if (window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else {
+          window.location.hash = '';
+        }
+      } else {
+        window.location.hash = 'post-' + index;
       }
-      var path = window.location.pathname || '/';
-      var segments = path.split('/').filter(Boolean);
-      if (segments.length === 0) return '/';
-      return '/' + segments[0];
-    },
-
-    /**
-     * Get post path from URL if we're on a single-post view
-     */
-    _getPostPathFromUrl: function() {
-      var base = this._getOverlayBase();
-      var path = window.location.pathname || '/';
-      if (path === base || path === base + '/') return null;
-      var postPath = path.slice(base.length).replace(/^\//, '');
-      return postPath || null;
-    },
-
-    /**
-     * Build overlay URL for a post (stays on overlay page instead of Squarespace blog)
-     */
-    _getOverlayPostUrl: function(fullUrl) {
-      if (!fullUrl) return null;
-      var path = fullUrl.replace(/^\//, '');
-      var base = this._getOverlayBase();
-      return base === '/' ? '/' + path : base + '/' + path;
     },
 
     /**
@@ -90,51 +85,69 @@
         return;
       }
 
+      fetch('/blog?format=json')
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+          var items = Array.isArray(json && json.items) ? json.items : [];
+          self.items = items;
+          self._renderContent(items);
+          console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
+        })
+        .catch(function(err) {
+          console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
+        });
+    },
+
+    _renderContent: function(items) {
+      var self = this;
+      var root = document.getElementById('blogga-blogga-root');
+      if (!root) return;
+
+      var existing = root.querySelector('#blog-overlay-list');
+      if (existing) existing.remove();
+
       var cfg = this.config || {};
       var showTableOfContents = Boolean(cfg.showTableOfContents);
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
 
-      var postPath = this._getPostPathFromUrl();
-      var fetchUrl = postPath ? '/' + postPath + '?format=json' : '/blog?format=json';
+      var selectedIndex = this._getSelectedIndexFromHash();
+      var displayItems = selectedIndex >= 0 && selectedIndex < items.length
+        ? [items[selectedIndex]]
+        : items;
+      var isSinglePost = displayItems.length === 1 && selectedIndex >= 0;
 
-      fetch(fetchUrl)
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-          var items = [];
-          if (postPath) {
-            var single = json.item || (json.items && json.items[0]) || (json.id ? json : null);
-            items = single ? [single] : [];
-          } else {
-            items = Array.isArray(json && json.items) ? json.items : [];
-          }
+      var wrapper = document.createElement('div');
+      wrapper.id = 'blog-overlay-list';
+      wrapper.style.display = 'flex';
+      wrapper.style.gap = '24px';
+      wrapper.style.padding = '16px';
+      wrapper.style.margin = '16px 0';
+      wrapper.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
 
-          var wrapper = document.createElement('div');
-          wrapper.id = 'blog-overlay-list';
-          wrapper.style.display = 'flex';
-          wrapper.style.gap = '24px';
-          wrapper.style.padding = '16px';
-          wrapper.style.margin = '16px 0';
-          wrapper.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+      var main = document.createElement('div');
+      main.className = 'blog-overlay-posts';
+      main.style.flex = '1';
+      main.style.minWidth = '0';
 
-          var main = document.createElement('div');
-          main.className = 'blog-overlay-posts';
-          main.style.flex = '1';
-          main.style.minWidth = '0';
+      if (isSinglePost) {
+        var backLink = document.createElement('a');
+        backLink.href = '#';
+        backLink.textContent = '← Back to list';
+        backLink.style.display = 'inline-block';
+        backLink.style.marginBottom = '16px';
+        backLink.style.color = '#0066cc';
+        backLink.style.textDecoration = 'none';
+        backLink.style.fontSize = '0.9rem';
+        backLink.onclick = function(e) {
+          e.preventDefault();
+          self._setViewHash(-1);
+          self._renderContent(self.items);
+        };
+        main.appendChild(backLink);
+      }
 
-          if (postPath && items.length > 0) {
-            var backLink = document.createElement('a');
-            backLink.href = self._getOverlayBase();
-            backLink.textContent = '← Back to list';
-            backLink.style.display = 'inline-block';
-            backLink.style.marginBottom = '16px';
-            backLink.style.color = '#0066cc';
-            backLink.style.textDecoration = 'none';
-            backLink.style.fontSize = '0.9rem';
-            main.appendChild(backLink);
-          }
-
-          if (showTableOfContents && items.length > 0 && !postPath) {
+      if (showTableOfContents && items.length > 0 && !isSinglePost) {
             var sidebar = document.createElement('nav');
             sidebar.className = 'blog-overlay-toc';
             sidebar.style.flexShrink = '0';
@@ -155,9 +168,9 @@
 
             for (var i = 0; i < items.length; i++) {
               var item = items[i];
-              var slug = 'blog-post-' + i;
+              var idx = i;
               var link = document.createElement('a');
-              link.href = '#' + slug;
+              link.href = '#post-' + i;
               link.textContent = item.title || 'Untitled';
               link.style.display = 'block';
               link.style.padding = '4px 0';
@@ -165,20 +178,21 @@
               link.style.color = '#0066cc';
               link.style.textDecoration = 'none';
               link.style.lineHeight = '1.3';
-              link.onclick = function(id) {
+              link.onclick = function(index) {
                 return function(e) {
                   e.preventDefault();
-                  var el = document.getElementById(id);
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  self._setViewHash(index);
+                  self._renderContent(self.items);
                 };
-              }(slug);
+              }(idx);
               sidebar.appendChild(link);
             }
             wrapper.appendChild(sidebar);
           }
 
-          for (var j = 0; j < items.length; j++) {
-            var post = items[j];
+          for (var j = 0; j < displayItems.length; j++) {
+            var post = displayItems[j];
+            var postIndex = isSinglePost ? selectedIndex : j;
             var article = document.createElement('article');
             article.id = 'blog-post-' + j;
             article.style.marginBottom = '24px';
@@ -188,13 +202,20 @@
             var h2 = document.createElement('h2');
             h2.style.margin = '0 0 8px 0';
             h2.style.fontSize = '1.25rem';
-            var postUrl = self._getOverlayPostUrl(post.fullUrl);
-            if (postUrl) {
+            if (!isSinglePost) {
               var titleLink = document.createElement('a');
-              titleLink.href = postUrl;
+              titleLink.href = '#post-' + postIndex;
               titleLink.textContent = post.title || 'Untitled';
               titleLink.style.color = 'inherit';
               titleLink.style.textDecoration = 'none';
+              titleLink.style.cursor = 'pointer';
+              titleLink.onclick = function(index) {
+                return function(e) {
+                  e.preventDefault();
+                  self._setViewHash(index);
+                  self._renderContent(self.items);
+                };
+              }(postIndex);
               h2.appendChild(titleLink);
             } else {
               h2.textContent = post.title || 'Untitled';
@@ -226,7 +247,7 @@
             main.appendChild(article);
           }
 
-          if (items.length === 0) {
+          if (displayItems.length === 0) {
             var empty = document.createElement('div');
             empty.textContent = 'No posts found.';
             main.appendChild(empty);
@@ -234,12 +255,6 @@
 
           wrapper.appendChild(main);
           root.prepend(wrapper);
-
-          console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
-        })
-        .catch(function(err) {
-          console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
-        });
     }
   };
 
