@@ -18,6 +18,12 @@
      * @param {Object} config - User configuration from the API
      */
     init: function(config) {
+      var root = document.getElementById('blogga-blogga-root');
+      if (!root) {
+        console.log('[BlogOverlay] Skipping render: #blogga-blogga-root not found');
+        return;
+      }
+
       this.config = config;
       console.log('[BlogOverlay] Renderer initialized with config:', config);
 
@@ -33,11 +39,11 @@
      * Render the blog overlay
      */
     render: function() {
-      // Determine a target to render into
-      var target = document.querySelector('[data-section-type="blog"]') ||
-                   document.querySelector('.blog-list') ||
-                   document.querySelector('[class*="blog"]') ||
-                   document.body;
+      var root = document.getElementById('blogga-blogga-root');
+      if (!root) {
+        console.log('[BlogOverlay] Skipping render: #blogga-blogga-root not found');
+        return;
+      }
 
       // Fetch Squarespace blog JSON and render a list of titles and bodies
       fetch('/blog?format=json')
@@ -86,11 +92,7 @@
           container.appendChild(heading);
           container.appendChild(list);
 
-          if (target && target.prepend) {
-            target.prepend(container);
-          } else {
-            document.body.prepend(container);
-          }
+          root.prepend(container);
 
           // Log for debugging
           console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
