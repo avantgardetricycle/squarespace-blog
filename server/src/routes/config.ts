@@ -1,29 +1,38 @@
 import { Router, Request, Response } from 'express'
-import { getUserByToken, getConfigByUserId, upsertConfig } from '../db/index.js'
+import {
+  getSiteBySiteKey,
+  getActiveSiteConfig,
+  upsertSiteConfig
+} from '../db/index.js'
 
 const router = Router()
 
-// GET /api/config/:token - Public endpoint for loader.js
-router.get('/:token', (req: Request, res: Response) => {
-  const { token } = req.params
+// GET /api/config/:siteKey - Public endpoint for loader.js
+router.get('/:siteKey', (req: Request, res: Response) => {
+  const siteKey = req.params.siteKey as string
 
-  const user = getUserByToken(token)
-  if (!user) {
-    res.status(404).json({ error: 'User not found' })
+  const site = getSiteBySiteKey(siteKey)
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
     return
   }
 
-  const config = getConfigByUserId(user.id)
-  if (!config) {
+  if (site.status === 'disabled') {
+    res.status(403).json({ error: 'Site is disabled' })
+    return
+  }
+
+  const siteConfig = getActiveSiteConfig(site.id)
+  if (!siteConfig) {
     res.status(404).json({ error: 'Config not found' })
     return
   }
 
   try {
-    const configData = JSON.parse(config.config_json)
+    const configData = JSON.parse(siteConfig.config_json)
 
     // Ensure the API response always includes the rendererUrl used by the loader
-    configData.rendererUrl = 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
+    configData.rendererUrl = configData.rendererUrl ?? 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
 
     res.json(configData)
   } catch {
@@ -31,24 +40,24 @@ router.get('/:token', (req: Request, res: Response) => {
   }
 })
 
-// POST /api/config - Save/update user config
+// POST /api/config - Save/update site config
 router.post('/', (req: Request, res: Response) => {
-  const { token, config } = req.body
+  const { siteKey, config } = req.body
 
-  if (!token || !config) {
-    res.status(400).json({ error: 'Token and config are required' })
+  if (!siteKey || !config) {
+    res.status(400).json({ error: 'siteKey and config are required' })
     return
   }
 
-  const user = getUserByToken(token)
-  if (!user) {
-    res.status(404).json({ error: 'User not found' })
+  const site = getSiteBySiteKey(siteKey)
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
     return
   }
 
   try {
     const configJson = JSON.stringify(config)
-    upsertConfig(user.id, configJson)
+    upsertSiteConfig(site.id, configJson)
     res.json({ success: true })
   } catch (error) {
     console.error('Failed to save config:', error)

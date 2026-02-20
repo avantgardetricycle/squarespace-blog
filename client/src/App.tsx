@@ -18,14 +18,14 @@ const defaultConfig: BlogConfig = {
 
 function App() {
   const [config, setConfig] = useState<BlogConfig>(defaultConfig)
-  const [token] = useState('demo-token-123')
+  const [siteKey] = useState(null)
 
   const handleSave = async () => {
     try {
       const response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, config }),
+        body: JSON.stringify({ siteKey, config }),
       })
       if (response.ok) {
         alert('Configuration saved!')
@@ -113,7 +113,7 @@ function App() {
           <h2>Installation Code</h2>
           <p>Paste this into Squarespace Code Injection (Settings → Advanced → Code Injection):</p>
           <pre>
-            <code>{`<script src="https://your-domain.com/loader.js" data-token="${token}"></script>`}</code>
+            <code>{`<script src="https://your-domain.com/loader.js" data-site-key="${siteKey}"></script>`}</code>
           </pre>
         </section>
       </main>

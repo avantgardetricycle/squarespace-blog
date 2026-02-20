@@ -6,7 +6,7 @@ A full-stack application that enables custom blog layouts on Squarespace sites t
 
 1. **Configuration App**: Users configure their blog layout preferences via a React web interface
 2. **Code Injection**: Users paste a `<script>` tag into Squarespace's Code Injection settings
-3. **Loader Script**: The injected `loader.js` fetches user config from `GET /api/config/:token`
+3. **Loader Script**: The injected `loader.js` fetches site config from `GET /api/config/:siteKey`
 4. **Renderer**: The `renderer.js` bundle overlays a custom layout on the Squarespace blog page using the fetched config and Squarespace's blog JSON
 
 ## Architecture
@@ -42,8 +42,8 @@ squarespace-blog/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/config/:token` | GET | Returns user config JSON (public, for loader.js) |
-| `/api/config` | POST | Save/update user config (authenticated) |
+| `/api/config/:siteKey` | GET | Returns site config JSON (public, for loader.js) |
+| `/api/config` | POST | Save/update site config |
 | `/api/user` | GET | Get current user info (authenticated) |
 
 ## Development
@@ -74,7 +74,7 @@ npm run dev --workspace=client
 ### Testing the Config Endpoint
 
 ```bash
-curl http://localhost:3001/api/config/test-token
+curl http://localhost:3001/api/config/demo-site-key
 ```
 
 ## Squarespace Integration
@@ -82,7 +82,7 @@ curl http://localhost:3001/api/config/test-token
 Add the following to your Squarespace site's Code Injection (Settings > Advanced > Code Injection):
 
 ```html
-<script src="https://your-domain.com/loader.js" data-token="YOUR_TOKEN"></script>
+<script src="https://your-domain.com/loader.js" data-site-key="YOUR_SITE_KEY"></script>
 ```
 
 The loader will automatically fetch your config and apply your custom blog layout.

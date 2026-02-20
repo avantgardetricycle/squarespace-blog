@@ -30,6 +30,77 @@ if (!demoUser) {
   db.prepare('INSERT INTO configs (user_id, config_json) VALUES (?, ?)').run(user.id, defaultConfig)
 }
 
+// Seed demo site and its config if not exists
+const demoSite = db.prepare('SELECT * FROM sites WHERE site_key = ?').get('demo-site-key') as { id: string } | undefined
+const defaultConfig = JSON.stringify({
+  layout: 'grid',
+  postsPerPage: 9,
+  showExcerpt: true,
+  showDate: true,
+  showAuthor: false,
+  rendererUrl: 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
+})
+if (!demoSite) {
+  db.prepare(
+    'INSERT INTO sites (site_key, name, status, channel) VALUES (?, ?, ?, ?)'
+  ).run('demo-site-key', 'Demo Site', 'active', 'stable')
+  const site = db.prepare('SELECT id FROM sites WHERE site_key = ?').get('demo-site-key') as { id: string }
+  db.prepare(
+    'INSERT INTO site_configs (site_id, version, config_json, is_active) VALUES (?, ?, ?, ?)'
+  ).run(site.id, 1, defaultConfig, 1)
+} else {
+  const activeConfig = db.prepare(
+    'SELECT id FROM site_configs WHERE site_id = ? AND is_active = 1'
+  ).get(demoSite.id)
+  if (!activeConfig) {
+    db.prepare(
+      'INSERT INTO site_configs (site_id, version, config_json, is_active) VALUES (?, ?, ?, ?)'
+    ).run(demoSite.id, 1, defaultConfig, 1)
+  }
+}
+
+export interface Site {
+  id: string
+  site_key: string
+  name: string | null
+  status: string
+  channel: string
+  created_at: string
+  updated_at: string
+}
+
+export interface SiteConfig {
+  id: string
+  site_id: string
+  version: number
+  config_json: string
+  is_active: number
+  created_at: string
+}
+
+export function getSiteBySiteKey(siteKey: string): Site | undefined {
+  return db.prepare('SELECT * FROM sites WHERE site_key = ?').get(siteKey) as Site | undefined
+}
+
+export function getActiveSiteConfig(siteId: string): SiteConfig | undefined {
+  return db.prepare(
+    'SELECT * FROM site_configs WHERE site_id = ? AND is_active = 1 LIMIT 1'
+  ).get(siteId) as SiteConfig | undefined
+}
+
+export function upsertSiteConfig(siteId: string, configJson: string): void {
+  const insert = db.transaction(() => {
+    db.prepare('UPDATE site_configs SET is_active = 0 WHERE site_id = ? AND is_active = 1').run(siteId)
+    const row = db.prepare(
+      'SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM site_configs WHERE site_id = ?'
+    ).get(siteId) as { next_version: number }
+    db.prepare(
+      'INSERT INTO site_configs (site_id, version, config_json, is_active) VALUES (?, ?, ?, ?)'
+    ).run(siteId, row.next_version, configJson, 1)
+  })
+  insert()
+}
+
 export interface User {
   id: number
   token: string
