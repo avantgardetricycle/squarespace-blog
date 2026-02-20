@@ -43,6 +43,43 @@
     },
 
     /**
+     * Get overlay base path (e.g. /blogga-blogga or /).
+     * Uses data-overlay-base on #blogga-blogga-root if set; otherwise derives from first path segment.
+     */
+    _getOverlayBase: function() {
+      var root = document.getElementById('blogga-blogga-root');
+      if (root) {
+        var base = root.getAttribute('data-overlay-base');
+        if (base) return base.replace(/\/+$/, '') || '/';
+      }
+      var path = window.location.pathname || '/';
+      var segments = path.split('/').filter(Boolean);
+      if (segments.length === 0) return '/';
+      return '/' + segments[0];
+    },
+
+    /**
+     * Get post path from URL if we're on a single-post view
+     */
+    _getPostPathFromUrl: function() {
+      var base = this._getOverlayBase();
+      var path = window.location.pathname || '/';
+      if (path === base || path === base + '/') return null;
+      var postPath = path.slice(base.length).replace(/^\//, '');
+      return postPath || null;
+    },
+
+    /**
+     * Build overlay URL for a post (stays on overlay page instead of Squarespace blog)
+     */
+    _getOverlayPostUrl: function(fullUrl) {
+      if (!fullUrl) return null;
+      var path = fullUrl.replace(/^\//, '');
+      var base = this._getOverlayBase();
+      return base === '/' ? '/' + path : base + '/' + path;
+    },
+
+    /**
      * Render the blog overlay
      */
     render: function() {
@@ -58,10 +95,19 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
 
-      fetch('/blog?format=json')
+      var postPath = this._getPostPathFromUrl();
+      var fetchUrl = postPath ? '/' + postPath + '?format=json' : '/blog?format=json';
+
+      fetch(fetchUrl)
         .then(function(res) { return res.json(); })
         .then(function(json) {
-          var items = Array.isArray(json && json.items) ? json.items : [];
+          var items = [];
+          if (postPath) {
+            var single = json.item || (json.items && json.items[0]) || (json.id ? json : null);
+            items = single ? [single] : [];
+          } else {
+            items = Array.isArray(json && json.items) ? json.items : [];
+          }
 
           var wrapper = document.createElement('div');
           wrapper.id = 'blog-overlay-list';
@@ -76,7 +122,19 @@
           main.style.flex = '1';
           main.style.minWidth = '0';
 
-          if (showTableOfContents && items.length > 0) {
+          if (postPath && items.length > 0) {
+            var backLink = document.createElement('a');
+            backLink.href = self._getOverlayBase();
+            backLink.textContent = '← Back to list';
+            backLink.style.display = 'inline-block';
+            backLink.style.marginBottom = '16px';
+            backLink.style.color = '#0066cc';
+            backLink.style.textDecoration = 'none';
+            backLink.style.fontSize = '0.9rem';
+            main.appendChild(backLink);
+          }
+
+          if (showTableOfContents && items.length > 0 && !postPath) {
             var sidebar = document.createElement('nav');
             sidebar.className = 'blog-overlay-toc';
             sidebar.style.flexShrink = '0';
@@ -130,9 +188,10 @@
             var h2 = document.createElement('h2');
             h2.style.margin = '0 0 8px 0';
             h2.style.fontSize = '1.25rem';
-            if (post.fullUrl) {
+            var postUrl = self._getOverlayPostUrl(post.fullUrl);
+            if (postUrl) {
               var titleLink = document.createElement('a');
-              titleLink.href = post.fullUrl;
+              titleLink.href = postUrl;
               titleLink.textContent = post.title || 'Untitled';
               titleLink.style.color = 'inherit';
               titleLink.style.textDecoration = 'none';
