@@ -1,18 +1,21 @@
 (function() {
   'use strict';
 
-  // 1. Read data-site-key
+  // 1. Read attributes from the injected script tag
   const script = document.currentScript;
   const siteKey = script.getAttribute('data-site-key');
+  const apiBase = script.getAttribute('data-api-base') || 'https://tribal-intelligent-rankings-manually.trycloudflare.com';
+  const normalizedApiBase = apiBase.replace(/\/+$/, '');
 
   console.log('[BLOGGA BLOGGA] data site key', siteKey)
+  console.log('[BLOGGA BLOGGA] data api base', apiBase)
   if (!siteKey) {
     console.error('[BlogOverlay] Missing data-site-key attribute');
     return;
   }
 
   // 2. Fetch config
-  fetch(`https://tribal-intelligent-rankings-manually.trycloudflare.com/api/config/${encodeURIComponent(siteKey)}`)
+  fetch(`${normalizedApiBase}/api/config/${encodeURIComponent(siteKey)}`)
     .then(response => response.json())
     .then(config => {
       console.log('[BLOGGA BLOGGA] config', config)
