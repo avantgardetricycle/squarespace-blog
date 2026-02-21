@@ -146,8 +146,11 @@
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
       var article = document.querySelector('#blog-overlay-list article');
       if (!fill || !article) return;
-      var rect = article.getBoundingClientRect();
       var scrollY = window.scrollY || document.documentElement.scrollTop;
+      var navbarHeight = this._getNavbarOffset();
+      track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
+
+      var rect = article.getBoundingClientRect();
       var postTop = rect.top + scrollY;
       var postHeight = article.offsetHeight;
       var viewportHeight = window.innerHeight;
@@ -205,9 +208,10 @@
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.position = 'fixed';
         progressTrack.style.top = navbarOffset + 'px';
+        progressTrack.style.transition = 'top 0.05s ease-out';
         progressTrack.style.left = '0';
         progressTrack.style.right = '0';
-        progressTrack.style.height = '4px';
+        progressTrack.style.height = '6px';
         progressTrack.style.backgroundColor = 'rgba(0,0,0,0.08)';
         progressTrack.style.zIndex = '9999';
         var progressFill = document.createElement('div');
