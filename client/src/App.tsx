@@ -4,15 +4,25 @@ interface BlogConfig {
   showAuthor: boolean
   showDate: boolean
   showTableOfContents: boolean
+  tableOfContentsPosition: 'left' | 'right'
   showProgressBar: boolean
+  showRecentPostsSidebar: boolean
+  recentPostsCount: number
+  sidebarPosition: 'left' | 'right'
 }
 
 const defaultConfig: BlogConfig = {
   showAuthor: false,
   showDate: true,
   showTableOfContents: false,
+  tableOfContentsPosition: 'left',
   showProgressBar: false,
+  showRecentPostsSidebar: false,
+  recentPostsCount: 5,
+  sidebarPosition: 'left',
 }
+
+const RECENT_POSTS_OPTIONS = [3, 5, 10, 15]
 
 type ModalStatus = 'success' | 'failure' | null
 
@@ -30,7 +40,19 @@ function App() {
             showAuthor: Boolean(data.showAuthor),
             showDate: Boolean(data.showDate),
             showTableOfContents: Boolean(data.showTableOfContents),
+            tableOfContentsPosition:
+              data.tableOfContentsPosition === 'left' || data.tableOfContentsPosition === 'right'
+                ? data.tableOfContentsPosition
+                : 'left',
             showProgressBar: Boolean(data.showProgressBar),
+            showRecentPostsSidebar: Boolean(data.showRecentPostsSidebar),
+            recentPostsCount: RECENT_POSTS_OPTIONS.includes(data.recentPostsCount)
+              ? data.recentPostsCount
+              : 5,
+            sidebarPosition:
+              data.sidebarPosition === 'left' || data.sidebarPosition === 'right'
+                ? data.sidebarPosition
+                : 'left',
           })
         }
       })
@@ -113,6 +135,34 @@ function App() {
             </label>
           </div>
 
+          {config.showTableOfContents && (
+            <div className="form-group">
+              <label>Table of Contents position</label>
+              <div className="radio-group">
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="tableOfContentsPosition"
+                    value="left"
+                    checked={config.tableOfContentsPosition === 'left'}
+                    onChange={() => setConfig({ ...config, tableOfContentsPosition: 'left' })}
+                  />
+                  Left
+                </label>
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="tableOfContentsPosition"
+                    value="right"
+                    checked={config.tableOfContentsPosition === 'right'}
+                    onChange={() => setConfig({ ...config, tableOfContentsPosition: 'right' })}
+                  />
+                  Right
+                </label>
+              </div>
+            </div>
+          )}
+
           <div className="form-group checkbox">
             <label>
               <input
@@ -122,6 +172,62 @@ function App() {
               />
               Progress Bar
             </label>
+          </div>
+
+          <div className="form-group checkbox">
+            <label>
+              <input
+                type="checkbox"
+                checked={config.showRecentPostsSidebar}
+                onChange={(e) => setConfig({ ...config, showRecentPostsSidebar: e.target.checked })}
+              />
+              Recent Posts Sidebar
+            </label>
+          </div>
+
+          {config.showRecentPostsSidebar && (
+            <div className="form-group">
+              <label htmlFor="recentPostsCount">Number of recent posts</label>
+              <select
+                id="recentPostsCount"
+                value={config.recentPostsCount}
+                onChange={(e) =>
+                  setConfig({ ...config, recentPostsCount: parseInt(e.target.value, 10) })
+                }
+              >
+                {RECENT_POSTS_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label>Sidebar position</label>
+            <div className="radio-group">
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="sidebarPosition"
+                  value="left"
+                  checked={config.sidebarPosition === 'left'}
+                  onChange={() => setConfig({ ...config, sidebarPosition: 'left' })}
+                />
+                Left
+              </label>
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="sidebarPosition"
+                  value="right"
+                  checked={config.sidebarPosition === 'right'}
+                  onChange={() => setConfig({ ...config, sidebarPosition: 'right' })}
+                />
+                Right
+              </label>
+            </div>
           </div>
 
           <button onClick={handleSave} className="save-btn">

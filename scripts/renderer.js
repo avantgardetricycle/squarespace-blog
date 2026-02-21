@@ -179,6 +179,7 @@
 
       var cfg = this.config || {};
       var showTableOfContents = Boolean(cfg.showTableOfContents);
+      var tableOfContentsPosition = (cfg.tableOfContentsPosition === 'right') ? 'right' : 'left';
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showProgressBar = Boolean(cfg.showProgressBar);
@@ -361,7 +362,18 @@
             main.appendChild(empty);
           }
 
-          wrapper.appendChild(main);
+          if (showTableOfContents && items.length > 0 && !isSinglePost) {
+            if (tableOfContentsPosition === 'right') {
+              wrapper.appendChild(main);
+              wrapper.appendChild(sidebar);
+            } else {
+              wrapper.appendChild(sidebar);
+              wrapper.appendChild(main);
+            }
+          } else {
+            wrapper.appendChild(main);
+          }
+
           root.prepend(wrapper);
 
       if (isSinglePost && showProgressBar) {

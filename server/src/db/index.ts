@@ -36,7 +36,11 @@ const defaultConfig = JSON.stringify({
   showAuthor: false,
   showDate: true,
   showTableOfContents: false,
+  tableOfContentsPosition: 'left',
   showProgressBar: false,
+  showRecentPostsSidebar: false,
+  recentPostsCount: 5,
+  sidebarPosition: 'left',
   rendererUrl: 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
 })
 if (!demoSite) {
