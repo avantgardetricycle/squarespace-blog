@@ -12,6 +12,7 @@
     config: null,
     items: [],
     _progressScrollHandler: null,
+    _tocScrollHandler: null,
 
     /**
      * Initialize the renderer with user config
@@ -99,6 +100,47 @@
         });
     },
 
+    _updateTocHighlight: function() {
+      var articles = document.querySelectorAll('#blog-overlay-list article');
+      var tocLinks = document.querySelectorAll('.blog-overlay-toc a[data-post-index]');
+      if (!articles.length || !tocLinks.length) return;
+
+      var viewportTop = 100;
+      var activeIndex = -1;
+      for (var i = articles.length - 1; i >= 0; i--) {
+        var rect = articles[i].getBoundingClientRect();
+        if (rect.top <= viewportTop) {
+          activeIndex = i;
+          break;
+        }
+      }
+      if (activeIndex < 0) activeIndex = 0;
+
+      for (var j = 0; j < tocLinks.length; j++) {
+        var idx = parseInt(tocLinks[j].getAttribute('data-post-index'), 10);
+        if (idx === activeIndex) {
+          tocLinks[j].classList.add('blog-overlay-toc-active');
+          tocLinks[j].style.fontWeight = '600';
+          tocLinks[j].style.color = '#333';
+        } else {
+          tocLinks[j].classList.remove('blog-overlay-toc-active');
+          tocLinks[j].style.fontWeight = '';
+          tocLinks[j].style.color = '#0066cc';
+        }
+      }
+    },
+
+    _getNavbarOffset: function() {
+      var root = document.getElementById('blogga-blogga-root');
+      if (root) {
+        var h = root.getAttribute('data-navbar-height');
+        if (h) return parseInt(h, 10) || 0;
+      }
+      var header = document.querySelector('header, .Header, #header, [data-section-type="header"]');
+      if (header) return header.offsetHeight || 0;
+      return 50;
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
@@ -123,6 +165,10 @@
       if (this._progressScrollHandler) {
         window.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
         this._progressScrollHandler = null;
+      }
+      if (this._tocScrollHandler) {
+        window.removeEventListener('scroll', this._tocScrollHandler, { passive: true });
+        this._tocScrollHandler = null;
       }
 
       var existing = root.querySelector('#blog-overlay-list');
@@ -154,10 +200,11 @@
       main.style.minWidth = '0';
 
       if (isSinglePost && showProgressBar) {
+        var navbarOffset = this._getNavbarOffset();
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.position = 'fixed';
-        progressTrack.style.top = '0';
+        progressTrack.style.top = navbarOffset + 'px';
         progressTrack.style.left = '0';
         progressTrack.style.right = '0';
         progressTrack.style.height = '4px';
@@ -219,6 +266,7 @@
               var idx = i;
               var link = document.createElement('a');
               link.href = '#post-' + i;
+              link.setAttribute('data-post-index', String(i));
               link.textContent = item.title || 'Untitled';
               link.style.display = 'block';
               link.style.padding = '4px 0';
@@ -236,6 +284,14 @@
               sidebar.appendChild(link);
             }
             wrapper.appendChild(sidebar);
+
+            this._tocScrollHandler = function() {
+              self._updateTocHighlight();
+            };
+            window.addEventListener('scroll', this._tocScrollHandler, { passive: true });
+            requestAnimationFrame(function() {
+              self._updateTocHighlight();
+            });
           }
 
           for (var j = 0; j < displayItems.length; j++) {
