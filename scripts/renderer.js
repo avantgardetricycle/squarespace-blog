@@ -52,6 +52,18 @@
     },
 
     /**
+     * Strip HTML and truncate text to maxLen chars
+     */
+    _truncateText: function(html, maxLen) {
+      if (!html) return '';
+      var div = document.createElement('div');
+      div.innerHTML = html;
+      var text = (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+      if (text.length <= maxLen) return text;
+      return text.slice(0, maxLen) + '…';
+    },
+
+    /**
      * Get selected post index from hash (#post-0, #post-1, etc). Returns -1 for list view.
      */
     _getSelectedIndexFromHash: function() {
@@ -180,6 +192,9 @@
       var cfg = this.config || {};
       var showTableOfContents = Boolean(cfg.showTableOfContents);
       var tableOfContentsPosition = (cfg.tableOfContentsPosition === 'right') ? 'right' : 'left';
+      var showRecentPostsSidebar = Boolean(cfg.showRecentPostsSidebar);
+      var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
+      var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showProgressBar = Boolean(cfg.showProgressBar);
@@ -247,48 +262,50 @@
         main.appendChild(backLink);
       }
 
+      var tocSidebar = null;
+      var recentPostsSidebar = null;
+
       if (showTableOfContents && items.length > 0 && !isSinglePost) {
-            var sidebar = document.createElement('nav');
-            sidebar.className = 'blog-overlay-toc';
-            sidebar.style.flexShrink = '0';
-            sidebar.style.width = '200px';
-            sidebar.style.padding = '12px';
-            sidebar.style.background = '#f5f5f5';
-            sidebar.style.borderRadius = '8px';
-            sidebar.style.position = 'sticky';
-            sidebar.style.top = '16px';
-            sidebar.style.alignSelf = 'flex-start';
+            tocSidebar = document.createElement('nav');
+            tocSidebar.className = 'blog-overlay-toc';
+            tocSidebar.style.flexShrink = '0';
+            tocSidebar.style.width = '200px';
+            tocSidebar.style.padding = '12px';
+            tocSidebar.style.background = '#f5f5f5';
+            tocSidebar.style.borderRadius = '8px';
+            tocSidebar.style.position = 'sticky';
+            tocSidebar.style.top = '16px';
+            tocSidebar.style.alignSelf = 'flex-start';
 
             var tocTitle = document.createElement('div');
             tocTitle.textContent = 'Table of Contents';
             tocTitle.style.fontWeight = '600';
             tocTitle.style.marginBottom = '8px';
             tocTitle.style.fontSize = '0.9rem';
-            sidebar.appendChild(tocTitle);
+            tocSidebar.appendChild(tocTitle);
 
             for (var i = 0; i < items.length; i++) {
-              var item = items[i];
-              var idx = i;
-              var link = document.createElement('a');
-              link.href = '#post-' + i;
-              link.setAttribute('data-post-index', String(i));
-              link.textContent = item.title || 'Untitled';
-              link.style.display = 'block';
-              link.style.padding = '4px 0';
-              link.style.fontSize = '0.85rem';
-              link.style.color = '#0066cc';
-              link.style.textDecoration = 'none';
-              link.style.lineHeight = '1.3';
-              link.onclick = function(index) {
+              var tocItem = items[i];
+              var tocIdx = i;
+              var tocLink = document.createElement('a');
+              tocLink.href = '#post-' + i;
+              tocLink.setAttribute('data-post-index', String(i));
+              tocLink.textContent = tocItem.title || 'Untitled';
+              tocLink.style.display = 'block';
+              tocLink.style.padding = '4px 0';
+              tocLink.style.fontSize = '0.85rem';
+              tocLink.style.color = '#0066cc';
+              tocLink.style.textDecoration = 'none';
+              tocLink.style.lineHeight = '1.3';
+              tocLink.onclick = function(index) {
                 return function(e) {
                   e.preventDefault();
                   self._setViewHash(index);
                   self._renderContent(self.items);
                 };
-              }(idx);
-              sidebar.appendChild(link);
+              }(tocIdx);
+              tocSidebar.appendChild(tocLink);
             }
-            wrapper.appendChild(sidebar);
 
             this._tocScrollHandler = function() {
               self._updateTocHighlight();
@@ -297,6 +314,61 @@
             requestAnimationFrame(function() {
               self._updateTocHighlight();
             });
+          }
+
+      if (showRecentPostsSidebar && items.length > 0) {
+            recentPostsSidebar = document.createElement('aside');
+            recentPostsSidebar.className = 'blog-overlay-recent-posts';
+            recentPostsSidebar.style.flexShrink = '0';
+            recentPostsSidebar.style.width = '220px';
+            recentPostsSidebar.style.padding = '12px';
+            recentPostsSidebar.style.background = '#f5f5f5';
+            recentPostsSidebar.style.borderRadius = '8px';
+            recentPostsSidebar.style.position = 'sticky';
+            recentPostsSidebar.style.top = '16px';
+            recentPostsSidebar.style.alignSelf = 'flex-start';
+
+            var rpTitle = document.createElement('div');
+            rpTitle.textContent = 'Recent Posts';
+            rpTitle.style.fontWeight = '600';
+            rpTitle.style.marginBottom = '8px';
+            rpTitle.style.fontSize = '0.9rem';
+            recentPostsSidebar.appendChild(rpTitle);
+
+            var recentItems = items.slice(0, recentPostsCount);
+            for (var r = 0; r < recentItems.length; r++) {
+              var rpPost = recentItems[r];
+              var rpIdx = r;
+              var rpEntry = document.createElement('div');
+              rpEntry.style.marginBottom = '12px';
+
+              var rpLink = document.createElement('a');
+              rpLink.href = '#post-' + rpIdx;
+              rpLink.textContent = rpPost.title || 'Untitled';
+              rpLink.style.display = 'block';
+              rpLink.style.fontSize = '0.9rem';
+              rpLink.style.fontWeight = '500';
+              rpLink.style.color = '#0066cc';
+              rpLink.style.textDecoration = 'none';
+              rpLink.style.marginBottom = '4px';
+              rpLink.onclick = function(index) {
+                return function(e) {
+                  e.preventDefault();
+                  self._setViewHash(index);
+                  self._renderContent(self.items);
+                };
+              }(rpIdx);
+              rpEntry.appendChild(rpLink);
+
+              var rpExcerpt = document.createElement('div');
+              rpExcerpt.textContent = self._truncateText(rpPost.body || rpPost.excerpt || '', 120);
+              rpExcerpt.style.fontSize = '0.8rem';
+              rpExcerpt.style.color = '#666';
+              rpExcerpt.style.lineHeight = '1.4';
+              rpEntry.appendChild(rpExcerpt);
+
+              recentPostsSidebar.appendChild(rpEntry);
+            }
           }
 
           for (var j = 0; j < displayItems.length; j++) {
@@ -362,17 +434,26 @@
             main.appendChild(empty);
           }
 
-          if (showTableOfContents && items.length > 0 && !isSinglePost) {
-            if (tableOfContentsPosition === 'right') {
-              wrapper.appendChild(main);
-              wrapper.appendChild(sidebar);
-            } else {
-              wrapper.appendChild(sidebar);
-              wrapper.appendChild(main);
-            }
-          } else {
-            wrapper.appendChild(main);
-          }
+          var leftSidebar = document.createElement('div');
+          leftSidebar.style.display = 'flex';
+          leftSidebar.style.flexDirection = 'column';
+          leftSidebar.style.gap = '16px';
+          leftSidebar.style.flexShrink = '0';
+
+          var rightSidebar = document.createElement('div');
+          rightSidebar.style.display = 'flex';
+          rightSidebar.style.flexDirection = 'column';
+          rightSidebar.style.gap = '16px';
+          rightSidebar.style.flexShrink = '0';
+
+          if (tocSidebar && tableOfContentsPosition === 'left') leftSidebar.appendChild(tocSidebar);
+          if (tocSidebar && tableOfContentsPosition === 'right') rightSidebar.appendChild(tocSidebar);
+          if (recentPostsSidebar && sidebarPosition === 'left') leftSidebar.appendChild(recentPostsSidebar);
+          if (recentPostsSidebar && sidebarPosition === 'right') rightSidebar.appendChild(recentPostsSidebar);
+
+          if (leftSidebar.childNodes.length) wrapper.appendChild(leftSidebar);
+          wrapper.appendChild(main);
+          if (rightSidebar.childNodes.length) wrapper.appendChild(rightSidebar);
 
           root.prepend(wrapper);
 

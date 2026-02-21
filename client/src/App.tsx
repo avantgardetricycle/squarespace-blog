@@ -22,7 +22,8 @@ const defaultConfig: BlogConfig = {
   sidebarPosition: 'left',
 }
 
-const RECENT_POSTS_OPTIONS = [3, 5, 10, 15]
+const RECENT_POSTS_MIN = 1
+const RECENT_POSTS_MAX = 50
 
 type ModalStatus = 'success' | 'failure' | null
 
@@ -46,9 +47,12 @@ function App() {
                 : 'left',
             showProgressBar: Boolean(data.showProgressBar),
             showRecentPostsSidebar: Boolean(data.showRecentPostsSidebar),
-            recentPostsCount: RECENT_POSTS_OPTIONS.includes(data.recentPostsCount)
-              ? data.recentPostsCount
-              : 5,
+            recentPostsCount: (function() {
+              const n = parseInt(data.recentPostsCount, 10)
+              return !isNaN(n) && n >= RECENT_POSTS_MIN && n <= RECENT_POSTS_MAX
+                ? n
+                : 5
+            })(),
             sidebarPosition:
               data.sidebarPosition === 'left' || data.sidebarPosition === 'right'
                 ? data.sidebarPosition
@@ -188,19 +192,25 @@ function App() {
           {config.showRecentPostsSidebar && (
             <div className="form-group">
               <label htmlFor="recentPostsCount">Number of recent posts</label>
-              <select
+              <input
                 id="recentPostsCount"
+                type="number"
+                min={RECENT_POSTS_MIN}
+                max={RECENT_POSTS_MAX}
                 value={config.recentPostsCount}
-                onChange={(e) =>
-                  setConfig({ ...config, recentPostsCount: parseInt(e.target.value, 10) })
-                }
-              >
-                {RECENT_POSTS_OPTIONS.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10)
+                  if (!isNaN(n) && n >= RECENT_POSTS_MIN && n <= RECENT_POSTS_MAX) {
+                    setConfig({ ...config, recentPostsCount: n })
+                  }
+                }}
+                onBlur={(e) => {
+                  const n = parseInt(e.target.value, 10)
+                  if (isNaN(n) || n < RECENT_POSTS_MIN || n > RECENT_POSTS_MAX) {
+                    setConfig({ ...config, recentPostsCount: 5 })
+                  }
+                }}
+              />
             </div>
           )}
 
