@@ -34,6 +34,12 @@ router.get('/:siteKey', (req: Request, res: Response) => {
     // Ensure the API response always includes the rendererUrl used by the loader
     configData.rendererUrl = configData.rendererUrl ?? 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
 
+    // Merge defaults for newer config fields (for configs saved before these were added)
+    configData.showRecentPostsSidebar = configData.showRecentPostsSidebar ?? false
+    configData.recentPostsCount = configData.recentPostsCount ?? 5
+    configData.sidebarPosition = configData.sidebarPosition ?? 'left'
+    configData.tableOfContentsPosition = configData.tableOfContentsPosition ?? 'left'
+
     res.json(configData)
   } catch {
     res.status(500).json({ error: 'Invalid config data' })

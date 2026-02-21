@@ -25,8 +25,8 @@
         return;
       }
 
-      this.config = config;
-      console.log('[BlogOverlay] Renderer initialized with config:', config);
+      this.config = config || {};
+      console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
 
       var self = this;
       window.addEventListener('hashchange', function() {
@@ -103,6 +103,9 @@
         .then(function(res) { return res.json(); })
         .then(function(json) {
           var items = Array.isArray(json && json.items) ? json.items : [];
+          if (!items.length && json && json.collection && Array.isArray(json.collection.items)) {
+            items = json.collection.items;
+          }
           self.items = items;
           self._renderContent(items);
           console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
@@ -195,6 +198,10 @@
       var showRecentPostsSidebar = Boolean(cfg.showRecentPostsSidebar);
       var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
       var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
+
+      if (showRecentPostsSidebar && items.length > 0) {
+        console.log('[BlogOverlay] Rendering Recent Posts sidebar:', { recentPostsCount, sidebarPosition, itemsCount: items.length });
+      }
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showProgressBar = Boolean(cfg.showProgressBar);
