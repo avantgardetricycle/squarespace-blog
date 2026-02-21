@@ -11,6 +11,7 @@
   window.BlogOverlayRenderer = {
     config: null,
     items: [],
+    _progressScrollHandler: null,
 
     /**
      * Initialize the renderer with user config
@@ -98,10 +99,31 @@
         });
     },
 
+    _updateProgressBar: function() {
+      var track = document.getElementById('blog-overlay-progress');
+      var fill = track && track.querySelector('.blog-overlay-progress-fill');
+      var article = document.querySelector('#blog-overlay-list article');
+      if (!fill || !article) return;
+      var rect = article.getBoundingClientRect();
+      var scrollY = window.scrollY || document.documentElement.scrollTop;
+      var postTop = rect.top + scrollY;
+      var postHeight = article.offsetHeight;
+      var viewportHeight = window.innerHeight;
+      var progress = Math.min(100, Math.max(0,
+        (scrollY - postTop + viewportHeight) / (postHeight + viewportHeight) * 100
+      ));
+      fill.style.width = progress + '%';
+    },
+
     _renderContent: function(items) {
       var self = this;
       var root = document.getElementById('blogga-blogga-root');
       if (!root) return;
+
+      if (this._progressScrollHandler) {
+        window.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
+        this._progressScrollHandler = null;
+      }
 
       var existing = root.querySelector('#blog-overlay-list');
       if (existing) existing.remove();
@@ -110,6 +132,7 @@
       var showTableOfContents = Boolean(cfg.showTableOfContents);
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
+      var showProgressBar = Boolean(cfg.showProgressBar);
 
       var selectedIndex = this._getSelectedIndexFromHash();
       var displayItems = selectedIndex >= 0 && selectedIndex < items.length
@@ -129,6 +152,31 @@
       main.className = 'blog-overlay-posts';
       main.style.flex = '1';
       main.style.minWidth = '0';
+
+      if (isSinglePost && showProgressBar) {
+        var progressTrack = document.createElement('div');
+        progressTrack.id = 'blog-overlay-progress';
+        progressTrack.style.position = 'fixed';
+        progressTrack.style.top = '0';
+        progressTrack.style.left = '0';
+        progressTrack.style.right = '0';
+        progressTrack.style.height = '4px';
+        progressTrack.style.backgroundColor = 'rgba(0,0,0,0.08)';
+        progressTrack.style.zIndex = '9999';
+        var progressFill = document.createElement('div');
+        progressFill.className = 'blog-overlay-progress-fill';
+        progressFill.style.height = '100%';
+        progressFill.style.width = '0%';
+        progressFill.style.backgroundColor = '#0066cc';
+        progressFill.style.transition = 'width 0.1s ease-out';
+        progressTrack.appendChild(progressFill);
+        wrapper.appendChild(progressTrack);
+
+        this._progressScrollHandler = function() {
+          self._updateProgressBar();
+        };
+        window.addEventListener('scroll', this._progressScrollHandler, { passive: true });
+      }
 
       if (isSinglePost) {
         var backLink = document.createElement('a');
@@ -255,6 +303,12 @@
 
           wrapper.appendChild(main);
           root.prepend(wrapper);
+
+      if (isSinglePost && showProgressBar) {
+        requestAnimationFrame(function() {
+          self._updateProgressBar();
+        });
+      }
     }
   };
 
