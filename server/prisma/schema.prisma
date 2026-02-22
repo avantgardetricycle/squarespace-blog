@@ -1,0 +1,132 @@
+// Prisma schema for Squarespace Blog Overlay
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  configs       Config[]
+  subscriptions Subscription[]
+  loginTokens   LoginToken[]
+  sessions      Session[]
+  sites         Site[]
+
+  @@map("users")
+}
+
+model Config {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  configJson String  @map("config_json")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("configs")
+}
+
+model Site {
+  id        String   @id @default(uuid())
+  userId    Int      @map("user_id")
+  siteKey   String   @unique @map("site_key")
+  name      String?
+  status    String   @default("active") // active | disabled
+  channel   String   @default("stable") // stable | beta
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteDomains SiteDomain[]
+  siteConfigs SiteConfig[]
+
+  @@index([siteKey])
+  @@index([userId])
+  @@map("sites")
+}
+
+model SiteDomain {
+  id        String   @id @default(uuid())
+  siteId    String   @map("site_id")
+  hostname  String
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("site_domains")
+}
+
+model SiteConfig {
+  id         String   @id @default(uuid())
+  siteId     String   @map("site_id")
+  version    Int
+  configJson String   @map("config_json")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@map("site_configs")
+}
+
+model Subscription {
+  id                    String    @id @default(uuid())
+  userId                Int       @map("user_id")
+  stripeCustomerId      String    @unique @map("stripe_customer_id")
+  stripeSubscriptionId  String?   @unique @map("stripe_subscription_id")
+  plan                  String    // starter | pro | agency
+  status                String    // trialing | active | past_due | canceled
+  maxSites              Int?      @map("max_sites") // 1 | 3 | null (unlimited)
+  currentPeriodEnd      DateTime? @map("current_period_end")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model LoginToken {
+  id        String    @id @default(uuid())
+  userId    Int       @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  purpose   String    // login | invite
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("login_tokens")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  userId           Int       @map("user_id")
+  sessionTokenHash String    @map("session_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionTokenHash])
+  @@map("sessions")
+}
