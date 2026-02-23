@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:fresh": "lsof -ti :3001 | xargs kill -9 2>/dev/null; tsx watch src/index.ts",
-    "build": "prisma generate && tsc && cp src/emails/betterblog-logo-white-1024x1024.png dist/emails/",
+    "build": "prisma generate && tsc && cp -r src/generated dist/ && cp src/emails/betterblog-logo-white-1024x1024.png dist/emails/",
     "start": "node dist/index.js",
     "start:worker": "node dist/worker.js",
     "db:push": "prisma db push",
