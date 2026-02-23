@@ -14,7 +14,7 @@ Set these for each Heroku app (staging and prod):
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | Auto-set when Heroku Postgres add-on is attached |
+| `DATABASE_URL` | Auto-set when Heroku Postgres add-on is attached. SSL is enforced automatically for remote hosts. |
 | `APP_URL` | Base URL of your client app (e.g. `https://app.example.com`) |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret (create endpoint for each app's URL) |

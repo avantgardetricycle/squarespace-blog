@@ -1,12 +1,8 @@
 import { PgBoss } from 'pg-boss'
-
-const connectionString = process.env.DATABASE_URL
-if (!connectionString) {
-  throw new Error('DATABASE_URL is required for pg-boss')
-}
+import { getDatabaseUrl } from '../lib/db-connection.js'
 
 export const boss = new PgBoss({
-  connectionString,
+  connectionString: getDatabaseUrl(),
   schema: 'pgboss'
 })
 
