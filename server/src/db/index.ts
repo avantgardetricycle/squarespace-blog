@@ -2,9 +2,12 @@ import 'dotenv/config'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../generated/prisma/client.js'
-import { getDatabaseUrl } from '../lib/db-connection.js'
+import { getDatabaseUrl, getSslConfig } from '../lib/db-connection.js'
 
-const pool = new Pool({ connectionString: getDatabaseUrl() })
+const pool = new Pool({
+  connectionString: getDatabaseUrl(),
+  ssl: getSslConfig()
+})
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 

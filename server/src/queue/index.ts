@@ -1,8 +1,9 @@
 import { PgBoss } from 'pg-boss'
-import { getDatabaseUrl } from '../lib/db-connection.js'
+import { getDatabaseUrl, getSslConfig } from '../lib/db-connection.js'
 
 export const boss = new PgBoss({
   connectionString: getDatabaseUrl(),
+  ssl: getSslConfig(),
   schema: 'pgboss'
 })
 

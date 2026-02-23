@@ -19,3 +19,18 @@ export function getDatabaseUrl(): string {
   const separator = url.includes('?') ? '&' : '?'
   return `${url}${separator}sslmode=require`
 }
+
+/** Whether we're connecting to a remote DB (e.g. Heroku) */
+export function isRemoteDatabase(): boolean {
+  const url = process.env.DATABASE_URL ?? ''
+  return !url.includes('localhost') && !url.includes('127.0.0.1')
+}
+
+/**
+ * SSL config for pg when connecting to Heroku Postgres.
+ * Heroku dynos lack the full CA chain, causing "unable to get local issuer certificate".
+ * rejectUnauthorized: false is the standard workaround for Heroku + pg.
+ */
+export function getSslConfig(): { rejectUnauthorized: false } | false {
+  return isRemoteDatabase() ? { rejectUnauthorized: false } : false
+}
