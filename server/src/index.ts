@@ -41,6 +41,20 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
+// Root: redirect to client app or show API info
+app.get('/', (req, res) => {
+  const appUrl = process.env.APP_URL
+  if (appUrl) {
+    res.redirect(302, appUrl)
+  } else {
+    res.json({
+      name: 'BetterBlog API',
+      status: 'ok',
+      docs: '/api/health'
+    })
+  }
+})
+
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })
