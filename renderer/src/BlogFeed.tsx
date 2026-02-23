@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface BlogPost {
   id: string;
   title: string;
@@ -24,7 +22,7 @@ interface BlogFeedProps {
   config: Config;
 }
 
-export function BlogFeed({ data, config }: BlogFeedProps) {
+export function BlogFeed({ data, config: _config }: BlogFeedProps) {
   const posts = data.items ?? [];
 
   if (posts.length === 0) {
