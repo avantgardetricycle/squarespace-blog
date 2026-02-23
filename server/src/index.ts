@@ -41,18 +41,25 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Root: redirect to client app or show API info
+// Root: redirect to client app only if it's a different origin (avoid redirect loop)
 app.get('/', (req, res) => {
   const appUrl = process.env.APP_URL
   if (appUrl) {
-    res.redirect(302, appUrl)
-  } else {
-    res.json({
-      name: 'BetterBlog API',
-      status: 'ok',
-      docs: '/api/health'
-    })
+    try {
+      const appHost = new URL(appUrl).host
+      const reqHost = req.get('host') ?? ''
+      if (appHost !== reqHost) {
+        return res.redirect(302, appUrl)
+      }
+    } catch {
+      // Invalid APP_URL, fall through to JSON
+    }
   }
+  res.json({
+    name: 'BetterBlog API',
+    status: 'ok',
+    docs: '/api/health'
+  })
 })
 
 const server = app.listen(PORT, () => {
