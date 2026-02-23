@@ -53,3 +53,30 @@ export async function requireSession(
 
   next()
 }
+
+/** Attaches user to req if session exists; does not reject. */
+export async function optionalSession(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> {
+  const token = req.cookies?.session
+  if (!token) {
+    next()
+    return
+  }
+
+  const tokenHash = hashToken(token)
+  const session = await prisma.session.findFirst({
+    where: { sessionTokenHash: tokenHash },
+    include: { user: true }
+  })
+
+  if (session && !session.revokedAt && new Date() <= session.expiresAt) {
+    ;(req as Request & { user?: SessionUser }).user = {
+      id: session.user.id,
+      email: session.user.email
+    }
+  }
+  next()
+}

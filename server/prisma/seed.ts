@@ -1,9 +1,15 @@
 import 'dotenv/config'
+import { Pool } from 'pg'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client.js'
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 
-const dbUrl = process.env.DATABASE_URL ?? 'file:./data.db'
-const adapter = new PrismaBetterSqlite3({ url: dbUrl })
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required')
+}
+
+const pool = new Pool({ connectionString })
+const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 const defaultUserConfig = {
@@ -14,6 +20,15 @@ const defaultUserConfig = {
   showAuthor: false,
   rendererUrl: '/renderer.js'
 }
+
+const SANDBOX_PLANS = [
+  { planKey: 'starter', cadence: 'monthly', stripePriceId: 'price_1T3n4I8ZBrL80ZhKCBhjfxN6', maxSites: 1 },
+  { planKey: 'starter', cadence: 'annual', stripePriceId: 'price_1T3n4I8ZBrL80ZhKU3trEwlH', maxSites: 1 },
+  { planKey: 'pro', cadence: 'monthly', stripePriceId: 'price_1T3n6Z8ZBrL80ZhKp1l74rkZ', maxSites: 3 },
+  { planKey: 'pro', cadence: 'annual', stripePriceId: 'price_1T3n6x8ZBrL80ZhKYlDlh55g', maxSites: 3 },
+  { planKey: 'agency', cadence: 'monthly', stripePriceId: 'price_1T3n7f8ZBrL80ZhK4dECtOgR', maxSites: null },
+  { planKey: 'agency', cadence: 'annual', stripePriceId: 'price_1T3n8F8ZBrL80ZhKriIEl6H9', maxSites: null },
+] as const
 
 const defaultSiteConfig = {
   showAuthor: false,
@@ -28,6 +43,33 @@ const defaultSiteConfig = {
 }
 
 async function main() {
+  // Seed plans (sandbox)
+  for (const p of SANDBOX_PLANS) {
+    const stripePriceLabel = `better_blog_${p.planKey}_${p.cadence}_usd`
+    await prisma.plan.upsert({
+      where: {
+        planKey_cadence_stripeEnvironment: {
+          planKey: p.planKey,
+          cadence: p.cadence,
+          stripeEnvironment: 'sandbox'
+        }
+      },
+      create: {
+        planKey: p.planKey,
+        cadence: p.cadence,
+        stripePriceId: p.stripePriceId,
+        stripePriceLabel,
+        maxSites: p.maxSites,
+        stripeEnvironment: 'sandbox'
+      },
+      update: {
+        stripePriceId: p.stripePriceId,
+        stripePriceLabel,
+        maxSites: p.maxSites
+      }
+    })
+  }
+
   // Seed demo user if not exists
   let demoUser = await prisma.user.findUnique({
     where: { email: 'demo@example.com' }

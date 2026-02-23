@@ -1,4 +1,6 @@
+import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
+import { getInviteEmailHtml } from '../emails/invite-email-html.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -10,18 +12,18 @@ const transporter = nodemailer.createTransport({
       : undefined,
 })
 
-export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
-  const from = process.env.MAIL_FROM ?? 'BetterBlog <noreply@betterblog.com>'
-  const appName = process.env.APP_NAME ?? 'BetterBlog'
+const appName = process.env.APP_NAME ?? 'BetterBlog'
+const mailFrom = process.env.MAIL_FROM ?? 'BetterBlog <no-reply@revsplit.app>'
 
-  // When no SMTP is configured (e.g. local dev), log the link instead
+/** Send invite email via nodemailer (used by manual /api/auth/invite) */
+export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
   if (!process.env.SMTP_HOST && process.env.NODE_ENV !== 'production') {
     console.log(`[Invite] Magic link for ${to}: ${magicLink}`)
     return
   }
 
   await transporter.sendMail({
-    from,
+    from: mailFrom,
     to,
     subject: `You're invited to ${appName}`,
     html: `
@@ -32,5 +34,25 @@ export async function sendInviteEmail(to: string, magicLink: string): Promise<vo
       <p>This link expires in 24 hours.</p>
       <p>If you didn't request this, you can safely ignore this email.</p>
     `,
+  })
+}
+
+/** Send invite email via SendGrid using InviteEmail.tsx design (used by checkout webhook) */
+export async function sendInviteEmailViaSendGrid(to: string, magicLink: string): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[Invite] SENDGRID_API_KEY not set. Magic link for ${to}: ${magicLink}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  const html = getInviteEmailHtml(magicLink)
+
+  await sgMail.send({
+    to,
+    from: mailFrom,
+    subject: `You're invited to ${appName}`,
+    html
   })
 }

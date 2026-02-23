@@ -59,6 +59,7 @@ export default function LandingPage() {
 
   const pricingTiers = [
     {
+      planKey: "starter",
       name: "Starter",
       description: "Perfect for personal blogs",
       monthlyPrice: 15,
@@ -67,6 +68,7 @@ export default function LandingPage() {
       highlight: false
     },
     {
+      planKey: "pro",
       name: "Pro",
       description: "For serious content creators",
       monthlyPrice: 29,
@@ -75,6 +77,7 @@ export default function LandingPage() {
       highlight: true
     },
     {
+      planKey: "agency",
       name: "Agency",
       description: "Manage multiple client sites",
       monthlyPrice: 79,
@@ -83,6 +86,31 @@ export default function LandingPage() {
       highlight: false
     }
   ];
+
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  const handleCheckout = async (planKey: string) => {
+    const cadence = isAnnual ? "annual" : "monthly";
+    setCheckoutLoading(planKey);
+    try {
+      const res = await fetch("/api/checkout/create-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ planKey, cadence }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error ?? "Checkout failed");
+      }
+    } catch (err) {
+      console.error(err);
+      setCheckoutLoading(null);
+      alert(err instanceof Error ? err.message : "Failed to start checkout");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-blue-100 selection:text-blue-900">
@@ -341,17 +369,16 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 
-                <Button 
-                  asChild
+                <Button
                   variant={tier.highlight ? "default" : "outline"}
                   className={cn(
                     "w-full rounded-full h-12",
                     tier.highlight ? "bg-blue-600 hover:bg-blue-700 text-white" : "border-neutral-200 hover:bg-neutral-50"
                   )}
+                  disabled={checkoutLoading !== null}
+                  onClick={() => handleCheckout(tier.planKey)}
                 >
-                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>
-                    {tier.highlight ? "Get Started" : "Start Free Trial"}
-                  </Link>
+                  {checkoutLoading === tier.planKey ? "Redirecting..." : (tier.highlight ? "Get Started" : "Start Free Trial")}
                 </Button>
               </motion.div>
             ))}

@@ -1,6 +1,10 @@
 import { Sparkles } from "lucide-react";
 
-export function InviteEmail() {
+interface InviteEmailProps {
+  magicLink?: string;
+}
+
+export function InviteEmail({ magicLink = "#" }: InviteEmailProps) {
   return (
     <div style={{
       fontFamily: "'Karla', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -85,7 +89,7 @@ export function InviteEmail() {
           {/* CTA Button */}
           <div style={{ textAlign: "center", margin: "32px 0" }}>
             <a 
-              href="#"
+              href={magicLink}
               style={{
                 display: "inline-block",
                 background: "linear-gradient(135deg, #1e3a8a 0%, #059669 100%)",

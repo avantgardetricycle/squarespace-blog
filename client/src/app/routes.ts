@@ -5,6 +5,7 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import Configure from "./pages/Configure";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
 import { getDashboardMe } from "@/api/auth";
 
 const protectedLoader = async () => {
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
     path: "/login",
     Component: Login,
     loader: publicLoader,
+  },
+  {
+    path: "/checkout/success",
+    Component: CheckoutSuccess,
   },
   {
     path: "/dashboard",
