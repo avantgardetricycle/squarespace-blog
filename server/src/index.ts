@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
@@ -41,26 +44,21 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Root: redirect to client app only if it's a different origin (avoid redirect loop)
-app.get('/', (req, res) => {
-  const appUrl = process.env.APP_URL
-  if (appUrl) {
-    try {
-      const appHost = new URL(appUrl).host
-      const reqHost = req.get('host') ?? ''
-      if (appHost !== reqHost) {
-        return res.redirect(302, appUrl)
-      }
-    } catch {
-      // Invalid APP_URL, fall through to JSON
-    }
-  }
-  res.json({
-    name: 'BetterBlog API',
-    status: 'ok',
-    docs: '/api/health'
+// Serve client static files (when client is built and deployed with server)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const clientDist = path.join(__dirname, '../../client/dist')
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist))
+  // SPA fallback: serve index.html for non-API routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'))
   })
-})
+} else {
+  // Client not built (e.g. API-only deploy) - show API info at root
+  app.get('/', (_req, res) => {
+    res.json({ name: 'BetterBlog API', status: 'ok', docs: '/api/health' })
+  })
+}
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
