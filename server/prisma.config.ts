@@ -6,11 +6,7 @@ import { defineConfig } from "prisma/config";
 function getDatabaseUrl(): string {
   const url = process.env["DATABASE_URL"];
   if (!url) throw new Error("DATABASE_URL is required");
-  if (url.includes("sslmode=")) return url;
-  const isRemote = !url.includes("localhost") && !url.includes("127.0.0.1");
-  if (!isRemote) return url;
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}sslmode=require`;
+  return url;
 }
 
 export default defineConfig({
