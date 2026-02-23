@@ -132,7 +132,7 @@ export default function LandingPage() {
               <>
                 <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-blue-600 transition-colors hidden sm:block">Log in</Link>
                 <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6">
-                  <Link to="/login">Get Started</Link>
+                  <a href="#pricing">Get Started</a>
                 </Button>
               </>
             )}
@@ -174,7 +174,7 @@ export default function LandingPage() {
                 </Button>
               ) : (
                 <Button size="lg" className="h-12 px-8 text-base bg-blue-600 hover:bg-blue-700 rounded-full w-full sm:w-auto" asChild>
-                  <Link to="/login">Start Free Trial</Link>
+                  <a href="#pricing">Start Free Trial</a>
                 </Button>
               )}
               <Button size="lg" variant="outline" className="h-12 px-8 text-base border-neutral-200 hover:bg-neutral-50 rounded-full w-full sm:w-auto" asChild>

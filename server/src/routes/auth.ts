@@ -1,19 +1,15 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { hashToken, generateToken, generateSessionToken } from '../lib/auth.js'
-import { sendInviteEmail } from '../lib/email.js'
+import { sendMagicLinkEmailViaSendGrid } from '../lib/email.js'
+import { getAppUrl } from '../lib/url.js'
 
 const router = Router()
 const SESSION_COOKIE = 'session'
 const SESSION_DAYS = 30
-const TOKEN_EXPIRY_HOURS = 24
+const MAGIC_LINK_EXPIRY_MINUTES = 15
 
-function getAppUrl(): string {
-  const url = process.env.APP_URL ?? 'http://localhost:3000'
-  return url.replace(/\/$/, '')
-}
-
-// POST /api/auth/invite - Send magic link invite (called by Stripe webhook later)
+// POST /api/auth/invite - Send magic link (user must exist)
 router.post('/invite', async (req: Request, res: Response) => {
   const { email } = req.body
 
@@ -29,20 +25,19 @@ router.post('/invite', async (req: Request, res: Response) => {
   }
 
   try {
-    let user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { email: normalizedEmail }
     })
 
     if (!user) {
-      user = await prisma.user.create({
-        data: { email: normalizedEmail }
-      })
+      res.status(404).json({ error: 'No account found with that email' })
+      return
     }
 
     const rawToken = generateToken()
     const tokenHash = hashToken(rawToken)
     const expiresAt = new Date()
-    expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS)
+    expiresAt.setMinutes(expiresAt.getMinutes() + MAGIC_LINK_EXPIRY_MINUTES)
 
     await prisma.loginToken.create({
       data: {
@@ -56,16 +51,16 @@ router.post('/invite', async (req: Request, res: Response) => {
     const appUrl = getAppUrl()
     const magicLink = `${appUrl}/api/auth/magic?token=${rawToken}`
 
-    await sendInviteEmail(normalizedEmail, magicLink)
+    await sendMagicLinkEmailViaSendGrid(normalizedEmail, magicLink)
 
-    res.json({ success: true, message: 'Invite sent' })
+    res.json({ success: true, message: 'Check your email for the magic link' })
   } catch (err) {
     console.error('Invite error:', err)
-    res.status(500).json({ error: 'Failed to send invite' })
+    res.status(500).json({ error: 'Failed to send magic link' })
   }
 })
 
-// GET /auth/magic?token=... - Validate token, create session, redirect to dashboard
+// GET /api/auth/magic?token=... - Validate token, create session, redirect to dashboard
 router.get('/magic', async (req: Request, res: Response) => {
   const token = req.query.token as string | undefined
   const appUrl = getAppUrl()

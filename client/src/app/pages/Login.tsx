@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { motion } from "motion/react";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
@@ -61,7 +61,9 @@ export default function Login() {
         className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-neutral-100"
       >
         <div className="text-center flex flex-col items-center">
-          <Logo size="lg" className="mb-6" />
+          <Link to="/" className="mb-6">
+            <Logo size="lg" />
+          </Link>
           <h2 className="text-3xl font-extrabold tracking-tight text-neutral-900">
             {sent ? "Check your email" : "Sign in to your account"}
           </h2>

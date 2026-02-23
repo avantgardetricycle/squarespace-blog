@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { optionalSession, SessionUser } from '../middleware/session.js'
+import { getAppUrl } from '../lib/url.js'
 
 const router = Router()
 const TRIAL_DAYS = 7
@@ -10,11 +11,6 @@ function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
   return new Stripe(key)
-}
-
-function getAppUrl(): string {
-  const url = process.env.APP_URL ?? 'http://localhost:3000'
-  return url.replace(/\/$/, '')
 }
 
 // POST /api/checkout/create-session - Create Stripe Checkout session

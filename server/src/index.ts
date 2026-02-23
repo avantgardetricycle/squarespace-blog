@@ -8,7 +8,6 @@ import dashboardRoutes from './routes/dashboard.js'
 import checkoutRoutes from './routes/checkout.js'
 import stripeWebhookRoutes from './routes/stripe-webhook.js'
 import { startQueue, stopQueue } from './queue/index.js'
-import { registerStripeWorkers } from './queue/workers.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -48,8 +47,7 @@ const server = app.listen(PORT, () => {
 
 async function main() {
   await startQueue()
-  await registerStripeWorkers()
-  console.log('pg-boss workers registered')
+  console.log('pg-boss queue ready (workers run on separate dyno)')
 }
 
 main().catch((err) => {

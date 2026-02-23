@@ -3,6 +3,7 @@ import { boss, stripeEventToQueueName } from './index.js'
 import prisma from '../db/index.js'
 import { hashToken, generateToken } from '../lib/auth.js'
 import { sendInviteEmailViaSendGrid } from '../lib/email.js'
+import { getAppUrl } from '../lib/url.js'
 
 const TOKEN_EXPIRY_HOURS = 24
 
@@ -10,11 +11,6 @@ function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
   return new Stripe(key)
-}
-
-function getAppUrl(): string {
-  const url = process.env.APP_URL ?? 'http://localhost:3000'
-  return url.replace(/\/$/, '')
 }
 
 /** Register all Stripe webhook workers. Call after boss.start(). */

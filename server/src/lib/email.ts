@@ -1,6 +1,6 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getInviteEmailHtml } from '../emails/invite-email-html.js'
+import { renderInviteEmail, renderMagicLinkEmail } from '../emails/index.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
 })
 
 const appName = process.env.APP_NAME ?? 'BetterBlog'
-const mailFrom = process.env.MAIL_FROM ?? 'BetterBlog <no-reply@revsplit.app>'
+const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <no-reply@revsplit.app>'
 
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
 export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
@@ -47,12 +47,34 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
 
   sgMail.setApiKey(apiKey)
 
-  const html = getInviteEmailHtml(magicLink)
+  const html = await renderInviteEmail(magicLink)
 
   await sgMail.send({
     to,
     from: mailFrom,
     subject: `You're invited to ${appName}`,
-    html
+    html,
+    trackingSettings: { clickTracking: { enable: false } }
+  })
+}
+
+/** Send magic link email via SendGrid using MagicLinkEmail.tsx design (used by login page) */
+export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: string): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[MagicLink] SENDGRID_API_KEY not set. Magic link for ${to}: ${magicLink}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  const html = await renderMagicLinkEmail(magicLink)
+
+  await sgMail.send({
+    to,
+    from: mailFrom,
+    subject: `Sign in to ${appName}`,
+    html,
+    trackingSettings: { clickTracking: { enable: false } }
   })
 }
