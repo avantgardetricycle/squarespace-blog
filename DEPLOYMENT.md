@@ -24,12 +24,14 @@ Set these for each Heroku app (staging and prod):
 
 ## Scaling the Worker
 
-By default, only the web dyno runs. Enable the worker for each app:
+`app.json` defines the formation (web + worker) so **new** pipeline apps get the worker scaled automatically. For **existing** apps created before this was added, run once per app:
 
 ```bash
 heroku ps:scale worker=1 -a your-staging-app
 heroku ps:scale worker=1 -a your-prod-app
 ```
+
+After that, the worker starts with every deploy.
 
 ## Deploy
 

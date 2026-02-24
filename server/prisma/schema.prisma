@@ -43,31 +43,18 @@ model Site {
   userId    Int      @map("user_id")
   siteKey   String   @unique @map("site_key")
   name      String?
+  url       String?
   status    String   @default("active") // active | disabled
   channel   String   @default("stable") // stable | beta
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteDomains SiteDomain[]
   siteConfigs SiteConfig[]
 
   @@index([siteKey])
   @@index([userId])
   @@map("sites")
-}
-
-model SiteDomain {
-  id        String   @id @default(uuid())
-  siteId    String   @map("site_id")
-  hostname  String
-  isPrimary Boolean  @default(false) @map("is_primary")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
-
-  @@index([siteId])
-  @@map("site_domains")
 }
 
 model SiteConfig {

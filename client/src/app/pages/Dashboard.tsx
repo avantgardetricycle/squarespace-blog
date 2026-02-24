@@ -5,10 +5,15 @@ import {
   User,
   Copy,
   Check,
-  ExternalLink,
   ArrowRight,
   Globe,
   Plus,
+  Trash2,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -18,19 +23,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/app/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 import { Input } from "@/app/components/ui/input";
+import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { toast } from "sonner";
-import { getDashboardMe, createSite, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, createSite, deleteSite, type DashboardMe, type CreatedSite } from "@/api/auth";
 
-const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
+const LOADER_URL =
+  "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
 
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
+  const [copiedSiteKey, setCopiedSiteKey] = useState<string | null>(null);
+  const [showAddBlogModal, setShowAddBlogModal] = useState(false);
+  const [newBlogName, setNewBlogName] = useState("");
+  const [newBlogUrl, setNewBlogUrl] = useState("");
   const [creating, setCreating] = useState(false);
-  const [siteUrl, setSiteUrl] = useState("https://my-awesome-blog.squarespace.com");
+  const [justCreatedSite, setJustCreatedSite] = useState<CreatedSite | null>(null);
+  const [siteToDelete, setSiteToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -39,21 +60,37 @@ export default function Dashboard() {
     });
   }, []);
 
+  const blogLimit = me?.subscription?.maxSites ?? 3;
+  const userPlan = me?.subscription?.plan ?? "Pro";
+  const sites = me?.sites ?? [];
+
   const handleCopy = (siteKey: string) => {
     const scriptTag = `<script src="${LOADER_URL}" data-site-key="${siteKey}"></script>`;
     navigator.clipboard.writeText(scriptTag);
-    setCopiedKey(siteKey);
+    setCopiedSiteKey(siteKey);
     toast.success("Script code copied to clipboard!");
-    setTimeout(() => setCopiedKey(null), 2000);
+    setTimeout(() => setCopiedSiteKey(null), 2000);
   };
 
-  const handleCreateSite = async () => {
-    if (!me?.canCreateSite) return;
+  const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
+
+  const handleAddBlog = async () => {
+    if (!newBlogName.trim()) {
+      toast.error("Please enter a blog name");
+      return;
+    }
+    if (!newBlogUrl.trim()) {
+      toast.error("Please enter a blog URL");
+      return;
+    }
+    if (!me?.canCreateSite) {
+      toast.error("You've reached your site limit");
+      return;
+    }
     setCreating(true);
     try {
-      const site = await createSite();
+      const site = await createSite(newBlogName.trim(), newBlogUrl.trim());
       if (site) {
-        toast.success("Site created! Copy the install snippet below.");
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = [...prev.sites, site];
@@ -62,9 +99,14 @@ export default function Dashboard() {
             ...prev,
             sites: newSites,
             canCreateSite:
-              prev.subscription?.maxSites === null || newSites.length < maxSites,
+              prev.subscription?.maxSites === null ||
+              newSites.length < maxSites,
           };
         });
+        setNewBlogName("");
+        setNewBlogUrl("");
+        setJustCreatedSite(site);
+        setExpandedSiteId(site.id);
       } else {
         toast.error("Failed to create site");
       }
@@ -73,9 +115,85 @@ export default function Dashboard() {
     }
   };
 
-  const handleSaveUrl = () => {
-    toast.success("Squarespace URL updated!");
+  const handleConfirmDelete = async () => {
+    if (!siteToDelete) return;
+    const siteId = siteToDelete.id;
+    setDeleting(true);
+    try {
+      const ok = await deleteSite(siteId);
+      if (ok) {
+        setMe((prev) => {
+          if (!prev) return prev;
+          const newSites = prev.sites.filter((s) => s.id !== siteId);
+          const maxSites = prev.subscription?.maxSites ?? 1;
+          return {
+            ...prev,
+            sites: newSites,
+            canCreateSite:
+              prev.subscription?.maxSites === null ||
+              newSites.length < maxSites,
+          };
+        });
+        if (expandedSiteId === siteId) setExpandedSiteId(null);
+        setSiteToDelete(null);
+        toast.success("Blog removed");
+      } else {
+        toast.error("Failed to remove blog");
+      }
+    } catch {
+      toast.error("Failed to remove blog");
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  const toggleExpand = (siteId: string) => {
+    setExpandedSiteId((prev) => (prev === siteId ? null : siteId));
+  };
+
+  const getVerificationStatus = (site: (typeof sites)[0]) => {
+    const url = getSiteUrl(site);
+    const verified = site.status === "active" || site.status === "verified";
+    if (verified) {
+      return {
+        icon: <CheckCircle className="w-4 h-4 text-green-600" />,
+        text: "Verified",
+        color: "text-green-600",
+      };
+    }
+    if (url) {
+      return {
+        icon: <AlertCircle className="w-4 h-4 text-amber-600" />,
+        text: "Pending",
+        color: "text-amber-600",
+      };
+    }
+    return {
+      icon: <XCircle className="w-4 h-4 text-neutral-400" />,
+      text: "Not configured",
+      color: "text-neutral-400",
+    };
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const capitalize = (s: string) =>
+    s
+      ? s
+          .split("_")
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(" ")
+      : s;
 
   if (loading) {
     return (
@@ -103,8 +221,341 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Add Blog Modal */}
+      <Dialog
+        open={showAddBlogModal}
+        onOpenChange={(open) => {
+          setShowAddBlogModal(open);
+          if (!open) setJustCreatedSite(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px] overflow-x-hidden">
+          {justCreatedSite ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Blog added successfully</DialogTitle>
+                <DialogDescription>
+                  Install the code snippet on your Squarespace site to get started.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4 min-w-0 overflow-hidden">
+                <div className="flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-800 text-sm min-w-0">
+                  <CheckCircle className="h-5 w-5 shrink-0 text-green-600 mt-0.5" />
+                  <span className="min-w-0 break-words">
+                    <strong>{justCreatedSite.name || "Your blog"}</strong> has been added. Copy the code below and add it to your site.
+                  </span>
+                </div>
+                <div className="space-y-2 min-w-0">
+                  <p className="text-sm text-neutral-600 break-words">
+                    Paste this into your Squarespace site&apos;s{" "}
+                    <span className="font-medium text-neutral-900">
+                      Settings → Advanced → Code Injection → Header
+                    </span>
+                    .
+                  </p>
+                  <div className="relative min-w-0">
+                    <div className="absolute right-2 top-2 z-10">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 px-2 bg-neutral-800 hover:bg-neutral-700 text-white border-none"
+                        onClick={() => handleCopy(justCreatedSite.siteKey)}
+                      >
+                        {copiedSiteKey === justCreatedSite.siteKey ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 mr-1.5 text-green-400" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5 mr-1.5" />
+                            Copy Code
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    <pre className="overflow-x-auto rounded-lg bg-neutral-950 p-4 pr-24 text-sm text-blue-100 font-mono border border-neutral-800 shadow-inner min-w-0 max-w-full">
+                      <code>{`<script src="${LOADER_URL}" data-site-key="${justCreatedSite.siteKey}"></script>`}</code>
+                    </pre>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={() => {
+                    setShowAddBlogModal(false);
+                    setJustCreatedSite(null);
+                  }}
+                  className="bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700"
+                >
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Add New Blog</DialogTitle>
+                <DialogDescription>
+                  Connect a new Squarespace blog to customize with BetterBlog.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="blog-name">
+                    Blog Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="blog-name"
+                    placeholder="e.g., My Travel Blog"
+                    value={newBlogName}
+                    onChange={(e) => setNewBlogName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddBlog();
+                      }
+                    }}
+                  />
+                  <p className="text-xs text-neutral-500">
+                    A friendly name to identify this blog
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="blog-url">
+                    Blog URL <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-neutral-500" />
+                    <Input
+                      id="blog-url"
+                      placeholder="https://yoursite.squarespace.com/blog"
+                      value={newBlogUrl}
+                      onChange={(e) => setNewBlogUrl(e.target.value)}
+                      className="pl-9"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddBlog();
+                        }
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-500">
+                    The full URL path to your blog page (e.g.,{" "}
+                    <span className="font-mono">
+                      https://yoursite.squarespace.com/blog
+                    </span>
+                    )
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAddBlogModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddBlog}
+                  disabled={creating}
+                  className="bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700"
+                >
+                  Add Blog
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation modal */}
+      <Dialog open={!!siteToDelete} onOpenChange={(open) => !open && setSiteToDelete(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Remove blog</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove &quot;{siteToDelete?.name}&quot;? This will delete the site and its configuration. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSiteToDelete(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? "Removing…" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* My Blogs Section with Integrated Setup */}
+      <Card className="border-neutral-200 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>My Blogs</CardTitle>
+              <CardDescription>
+                {sites.length} of {blogLimit} blog{blogLimit !== 1 ? "s" : ""}{" "}
+                on your {userPlan} plan
+              </CardDescription>
+            </div>
+            {me.canCreateSite && (
+              <Button
+                onClick={() => setShowAddBlogModal(true)}
+                size="sm"
+                className="bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Blog
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            {sites.map((site) => {
+              const isExpanded = expandedSiteId === site.id;
+              const status = getVerificationStatus(site);
+              const siteUrl = getSiteUrl(site);
+              const scriptTag = `<script src="${LOADER_URL}" data-site-key="${site.siteKey}"></script>`;
+
+              return (
+                <div
+                  key={site.id}
+                  className="border border-neutral-200 rounded-lg overflow-hidden hover:border-blue-300 transition-all"
+                >
+                  <div
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-blue-50/30 transition-colors"
+                    onClick={() => toggleExpand(site.id)}
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-green-100 rounded-lg flex items-center justify-center shrink-0">
+                        <Globe className="w-5 h-5 text-blue-700" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold text-neutral-900">
+                            {site.name || "Unnamed site"}
+                          </h4>
+                          <div className="flex items-center gap-1 text-xs">
+                            {status.icon}
+                            <span className={status.color}>{status.text}</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-neutral-500 truncate">
+                          {siteUrl || "No URL configured"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-neutral-400 hidden sm:flex">
+                        <span>{formatDate(site.createdAt)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-3"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        asChild
+                      >
+                        <Link to={`/dashboard/configure?siteKey=${site.siteKey}`}>
+                          Customize
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSiteToDelete({ id: site.id, name: site.name || "Unnamed site" });
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-neutral-400" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-neutral-400" />
+                      )}
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-neutral-200 bg-neutral-50 p-6 space-y-4">
+                      <p className="text-sm text-neutral-600">
+                        Copy the code below and paste it into your Squarespace
+                        site&apos;s{" "}
+                        <span className="font-medium text-neutral-900">
+                          Settings → Advanced → Code Injection → Header
+                        </span>
+                        .
+                      </p>
+                      <div className="relative">
+                        <div className="absolute right-2 top-2 z-10">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 px-2 bg-neutral-800 hover:bg-neutral-700 text-white border-none"
+                            onClick={() => handleCopy(site.siteKey)}
+                          >
+                            {copiedSiteKey === site.siteKey ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 mr-1.5 text-green-400" />
+                                Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                                Copy Code
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <pre className="overflow-x-auto rounded-lg bg-neutral-950 p-4 text-sm text-blue-100 font-mono border border-neutral-800 shadow-inner">
+                          <code>{scriptTag}</code>
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {sites.length === 0 && (
+            <div className="text-center py-8 text-neutral-500">
+              <p className="mb-2">No blogs yet</p>
+              {me.canCreateSite ? (
+                <Button
+                  onClick={() => setShowAddBlogModal(true)}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add your first blog
+                </Button>
+              ) : (
+                <p>You&apos;ve reached your site limit.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Quick Actions */}
         <Card className="md:col-span-2 border-neutral-200 shadow-sm">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
@@ -149,20 +600,21 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Account Info Card */}
         <Card className="border-neutral-200 shadow-sm bg-blue-50/30">
           <CardHeader>
             <CardTitle>Account Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-neutral-500">Plan</p>
+              <p className="text-sm font-medium text-neutral-500">
+                Subscription
+              </p>
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 border border-green-200">
-                  {me.subscription?.status ?? "—"}
+                  {me.subscription?.status ? capitalize(me.subscription.status) : "—"}
                 </span>
                 <span className="text-sm font-semibold">
-                  {me.subscription?.plan ?? "No plan"}
+                  {capitalize(userPlan)} Plan
                 </span>
               </div>
             </div>
@@ -177,211 +629,16 @@ export default function Dashboard() {
             <Separator className="bg-blue-100" />
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-neutral-500">Sites</p>
+              <p className="text-sm font-medium text-neutral-500">
+                Member Since
+              </p>
               <p className="text-sm">
-                {me.sites.length}
-                {me.subscription?.maxSites != null
-                  ? ` / ${me.subscription.maxSites}`
-                  : " (unlimited)"}
+                {formatDate(me.user.createdAt)}
               </p>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Sites & Create Site Key */}
-      <Card className="border-neutral-200 shadow-sm overflow-hidden">
-        <CardHeader className="bg-neutral-50 border-b border-neutral-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Your Sites</CardTitle>
-              <CardDescription>
-                Create site keys and install the snippet on each Squarespace
-                blog.
-              </CardDescription>
-            </div>
-            {me.canCreateSite && (
-              <Button
-                onClick={handleCreateSite}
-                disabled={creating}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Create Site Key
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-6">
-          {me.sites.length === 0 ? (
-            <div className="text-center py-12 text-neutral-500">
-              {me.canCreateSite ? (
-                <p className="mb-4">
-                  You don&apos;t have any sites yet. Click &quot;Create Site
-                  Key&quot; to get started.
-                </p>
-              ) : (
-                <p>You&apos;ve reached your site limit. Upgrade your plan to add more.</p>
-              )}
-            </div>
-          ) : (
-            me.sites.map((site) => (
-              <div
-                key={site.id}
-                className="border border-neutral-200 rounded-lg p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-neutral-900">
-                      {site.name || "Unnamed site"}
-                    </p>
-                    <p className="text-sm text-neutral-500 font-mono">
-                      {site.siteKey}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      asChild
-                    >
-                      <Link to={`/dashboard/configure?siteKey=${site.siteKey}`}>
-                        Configure
-                      </Link>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="bg-neutral-800 hover:bg-neutral-700 text-white border-none"
-                      onClick={() => handleCopy(site.siteKey)}
-                    >
-                      {copiedKey === site.siteKey ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 mr-1.5 text-green-400" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5 mr-1.5" />
-                          Copy Snippet
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <pre className="overflow-x-auto rounded-lg bg-neutral-950 p-3 text-xs text-blue-100 font-mono border border-neutral-800">
-                  <code>{`<script src="${LOADER_URL}" data-site-key="${site.siteKey}"></script>`}</code>
-                </pre>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Setup Instructions */}
-      <Card className="border-neutral-200 shadow-sm overflow-hidden">
-        <CardHeader className="bg-neutral-50 border-b border-neutral-100">
-          <CardTitle>Squarespace Integration</CardTitle>
-          <CardDescription>
-            Follow these steps to connect your custom blog design to your
-            Squarespace site.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-8 pt-8">
-          <div className="flex gap-4">
-            <div className="flex-none">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm shadow-sm ring-4 ring-blue-50">
-                1
-              </div>
-            </div>
-            <div className="space-y-3 flex-1">
-              <h3 className="font-semibold text-neutral-900">
-                Connect your site
-              </h3>
-              <p className="text-sm text-neutral-500">
-                Enter the full URL of your Squarespace website so we can verify
-                the installation.
-              </p>
-              <div className="flex gap-2 max-w-md">
-                <div className="relative flex-1">
-                  <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-neutral-500" />
-                  <Input
-                    value={siteUrl}
-                    onChange={(e) => setSiteUrl(e.target.value)}
-                    className="pl-9 focus-visible:ring-blue-600"
-                    placeholder="https://your-site.squarespace.com"
-                  />
-                </div>
-                <Button
-                  onClick={handleSaveUrl}
-                  variant="default"
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  Save
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="flex gap-4">
-            <div className="flex-none">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white font-bold text-sm shadow-sm ring-4 ring-blue-50">
-                2
-              </div>
-            </div>
-            <div className="space-y-3 flex-1">
-              <h3 className="font-semibold text-neutral-900">
-                Install the code snippet
-              </h3>
-              <p className="text-sm text-neutral-500">
-                Copy the snippet for each site above and paste it into your
-                Squarespace site&apos;s{" "}
-                <span className="font-medium text-neutral-900">
-                  Settings → Advanced → Code Injection → Header
-                </span>
-                .
-              </p>
-              <div className="bg-blue-50 text-blue-800 text-sm p-3 rounded-md border border-blue-100 flex gap-2 items-start">
-                <div className="mt-0.5">ℹ️</div>
-                <p>
-                  Note: Code Injection is a premium feature on Squarespace. You
-                  need a Business or Commerce plan to use this plugin.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="flex gap-4">
-            <div className="flex-none">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-600 text-white font-bold text-sm shadow-sm ring-4 ring-green-50">
-                3
-              </div>
-            </div>
-            <div className="space-y-3 flex-1">
-              <h3 className="font-semibold text-neutral-900">
-                Verify Installation
-              </h3>
-              <p className="text-sm text-neutral-500">
-                Once you&apos;ve added the code, visit your blog page to see your
-                new design in action.
-              </p>
-              <Button
-                variant="outline"
-                className="gap-2 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800 hover:border-green-300"
-                asChild
-              >
-                <a href={siteUrl} target="_blank" rel="noopener noreferrer">
-                  Open My Site <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

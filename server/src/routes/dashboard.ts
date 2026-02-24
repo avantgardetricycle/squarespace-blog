@@ -63,6 +63,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         id: s.id,
         siteKey: s.siteKey,
         name: s.name,
+        url: s.url,
         status: s.status,
         createdAt: s.createdAt
       })),
@@ -77,7 +78,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
 // POST /api/dashboard/sites - Create new site
 router.post('/sites', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { name } = req.body ?? {}
+  const { name, url } = req.body ?? {}
 
   try {
     const [subscription, siteCount] = await Promise.all([
@@ -111,12 +112,14 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     }
 
     const siteName = typeof name === 'string' && name.trim() ? name.trim() : null
+    const siteUrl = typeof url === 'string' && url.trim() ? url.trim() : null
 
     const site = await prisma.site.create({
       data: {
         userId: user.id,
         siteKey,
         name: siteName,
+        url: siteUrl,
         status: 'active',
         channel: 'stable'
       }
@@ -147,12 +150,44 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       id: site.id,
       siteKey: site.siteKey,
       name: site.name,
+      url: site.url,
       status: site.status,
       createdAt: site.createdAt
     })
   } catch (err) {
     console.error('Create site error:', err)
     res.status(500).json({ error: 'Failed to create site' })
+  }
+})
+
+// DELETE /api/dashboard/sites/:id - Delete site
+router.delete('/sites/:id', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const { id: siteId } = req.params
+
+  if (!siteId) {
+    res.status(400).json({ error: 'Site ID required' })
+    return
+  }
+
+  try {
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, userId: user.id }
+    })
+
+    if (!site) {
+      res.status(404).json({ error: 'Site not found' })
+      return
+    }
+
+    await prisma.site.delete({
+      where: { id: siteId }
+    })
+
+    res.status(204).send()
+  } catch (err) {
+    console.error('Delete site error:', err)
+    res.status(500).json({ error: 'Failed to delete site' })
   }
 })
 
