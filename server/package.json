@@ -9,7 +9,7 @@
     "build": "prisma generate && tsc && cp -r src/generated dist/ && cp src/emails/betterblog-logo-white-1024x1024.png dist/emails/",
     "start": "node dist/index.js",
     "start:worker": "node dist/worker.js",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push --accept-data-loss",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "generate-email-logo": "tsx scripts/generate-email-logo.ts"
