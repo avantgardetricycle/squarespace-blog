@@ -14,6 +14,7 @@ export interface DashboardMe {
     name: string | null
     url: string | null
     blogPath: string | null
+    hasBlogPassword?: boolean
     status: string
     createdAt: string
   }>
@@ -56,4 +57,24 @@ export async function deleteSite(siteId: string): Promise<boolean> {
     credentials: 'include'
   })
   return res.ok
+}
+
+export async function updateSite(siteKey: string, updates: { blogPassword?: string }): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${API}/dashboard/sites/by-key/${encodeURIComponent(siteKey)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(updates)
+  })
+  if (!res.ok) {
+    let error = 'Failed to update site'
+    try {
+      const data = await res.json()
+      if (data?.error) error = data.error
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error }
+  }
+  return { ok: true }
 }

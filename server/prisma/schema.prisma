@@ -39,16 +39,17 @@ model Config {
 }
 
 model Site {
-  id        String   @id @default(uuid())
-  userId    Int      @map("user_id")
-  siteKey   String   @unique @map("site_key")
-  name      String?
-  url       String?
-  blogPath  String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
-  status    String   @default("active") // active | disabled
-  channel   String   @default("stable") // stable | beta
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
+  id           String   @id @default(uuid())
+  userId       Int      @map("user_id")
+  siteKey      String   @unique @map("site_key")
+  name         String?
+  url          String?
+  blogPath     String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
+  blogPassword String?  @map("blog_password") // for password-protected Squarespace blogs (?password=)
+  status       String   @default("active") // active | disabled
+  channel      String   @default("stable") // stable | beta
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @map("updated_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   siteConfigs SiteConfig[]

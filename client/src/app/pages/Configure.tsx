@@ -11,6 +11,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import {
@@ -25,7 +26,7 @@ import { Separator } from "@/app/components/ui/separator";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { toast } from "sonner";
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
-import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, updateSite, type DashboardMe } from "@/api/auth";
 
 export interface SiteConfigForm {
   showDate: boolean;
@@ -112,6 +113,9 @@ export default function Configure() {
   const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [saving, setSaving] = useState(false);
+  const [blogPassword, setBlogPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -157,10 +161,15 @@ export default function Configure() {
       .finally(() => setConfigLoading(false));
   }, [siteKey]);
 
-  const effectiveSiteKey =
+  const effectiveSite =
     me && me.sites.length > 0
-      ? (me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]).siteKey
+      ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
+  const effectiveSiteKey = effectiveSite?.siteKey ?? null;
+
+  useEffect(() => {
+    setBlogPassword("");
+  }, [effectiveSiteKey]);
 
   const isDirty = !configsEqual(config, savedConfig);
   const rendererConfig = useMemo(() => configToRendererConfig(config), [config]);
@@ -254,6 +263,48 @@ export default function Configure() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="blog-password" className="text-xs font-medium text-neutral-500">
+              Blog password
+            </Label>
+            <p className="text-xs text-neutral-500">
+              Required if your blog is password protected on Squarespace.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                id="blog-password"
+                type="password"
+                placeholder={effectiveSite?.hasBlogPassword ? "••••••••" : "Enter password"}
+                value={blogPassword}
+                onChange={(e) => setBlogPassword(e.target.value)}
+                className="flex-1"
+                autoComplete="off"
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  const site = effectiveSite;
+                  if (!site) return;
+                  setSavingPassword(true);
+                  const result = await updateSite(site.siteKey, { blogPassword: blogPassword.trim() || "" });
+                  setSavingPassword(false);
+                  if (result.ok) {
+                    const fresh = await getDashboardMe();
+                    if (fresh) setMe(fresh);
+                    setBlogPassword("");
+                    setPreviewRefreshKey((k) => k + 1);
+                    toast.success(blogPassword ? "Password saved" : "Password cleared");
+                  } else {
+                    toast.error(result.error ?? "Failed to save password");
+                  }
+                }}
+                disabled={savingPassword}
+              >
+                {savingPassword ? "Saving…" : "Save"}
+              </Button>
+            </div>
           </div>
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
@@ -471,6 +522,7 @@ export default function Configure() {
             <div className="h-full w-full overflow-y-auto">
               {effectiveSiteKey && (
                 <BlogPreviewRenderer
+                  key={`${effectiveSiteKey}-${previewRefreshKey}`}
                   siteKey={effectiveSiteKey}
                   config={rendererConfig}
                   className="min-h-full"

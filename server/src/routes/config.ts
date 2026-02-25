@@ -10,6 +10,17 @@ import { requireSession, SessionUser } from '../middleware/session.js'
 
 const router = Router()
 
+function appendPasswordToUrl (url: string, password: string | null | undefined): string {
+  if (!password || !password.trim()) return url
+  try {
+    const u = new URL(url)
+    u.searchParams.set('password', password.trim())
+    return u.toString()
+  } catch {
+    return url
+  }
+}
+
 // GET /api/blog-preview/:siteKey - Proxy blog JSON for configure page preview
 router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
@@ -39,10 +50,16 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
+  const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
+
   try {
-    const fetchRes = await fetch(blogUrl)
+    const fetchRes = await fetch(urlWithPassword)
     if (!fetchRes.ok) {
-      res.status(502).json({ error: 'Failed to fetch blog from Squarespace' })
+      const isProtected = fetchRes.status === 401 || fetchRes.status === 403
+      const errMsg = isProtected
+        ? 'Blog may be password protected. Add your blog password in the settings below.'
+        : 'Failed to fetch blog from Squarespace'
+      res.status(502).json({ error: errMsg })
       return
     }
     const json = await fetchRes.json()

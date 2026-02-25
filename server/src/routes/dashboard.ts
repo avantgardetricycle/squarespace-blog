@@ -75,6 +75,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         name: s.name,
         url: s.url,
         blogPath: s.blogPath,
+        hasBlogPassword: Boolean(s.blogPassword),
         status: s.status,
         createdAt: s.createdAt
       })),
@@ -163,6 +164,118 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Create site error:', err)
     res.status(500).json({ error: 'Failed to create site' })
+  }
+})
+
+// PATCH /api/dashboard/sites/by-key/:siteKey - Update site by siteKey (e.g. blog password)
+router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const { siteKey } = req.params
+  const { blogPassword } = req.body ?? {}
+
+  if (!siteKey) {
+    res.status(400).json({ error: 'Site key required' })
+    return
+  }
+
+  try {
+    const site = await prisma.site.findFirst({
+      where: { siteKey, userId: user.id }
+    })
+
+    if (!site) {
+      res.status(404).json({ error: 'Site not found' })
+      return
+    }
+
+    const updates: { blogPassword?: string | null } = {}
+    if ('blogPassword' in req.body) {
+      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: 'No valid updates provided' })
+      return
+    }
+
+    await prisma.site.update({
+      where: { id: site.id },
+      data: updates
+    })
+
+    const updated = await prisma.site.findUnique({
+      where: { id: site.id }
+    })
+
+    res.json({
+      id: updated!.id,
+      siteKey: updated!.siteKey,
+      name: updated!.name,
+      url: updated!.url,
+      blogPath: updated!.blogPath,
+      hasBlogPassword: Boolean(updated!.blogPassword),
+      status: updated!.status,
+      createdAt: updated!.createdAt
+    })
+  } catch (err) {
+    console.error('Update site error:', err)
+    res.status(500).json({ error: 'Failed to update site' })
+  }
+})
+
+// PATCH /api/dashboard/sites/:id - Update site by id (e.g. blog password)
+router.patch('/sites/:id', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const { id: siteId } = req.params
+  const { blogPassword } = req.body ?? {}
+
+  if (!siteId) {
+    res.status(400).json({ error: 'Site ID required' })
+    return
+  }
+
+  try {
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, userId: user.id }
+    })
+
+    if (!site) {
+      res.status(404).json({ error: 'Site not found' })
+      return
+    }
+
+    const updates: { blogPassword?: string | null } = {}
+    if ('blogPassword' in req.body) {
+      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: 'No valid updates provided' })
+      return
+    }
+
+    await prisma.site.update({
+      where: { id: siteId },
+      data: updates
+    })
+
+    const updated = await prisma.site.findUnique({
+      where: { id: siteId }
+    })
+
+    res.json({
+      id: updated!.id,
+      siteKey: updated!.siteKey,
+      name: updated!.name,
+      url: updated!.url,
+      blogPath: updated!.blogPath,
+      hasBlogPassword: Boolean(updated!.blogPassword),
+      status: updated!.status,
+      createdAt: updated!.createdAt
+    })
+  } catch (err) {
+    console.error('Update site error:', err)
+    res.status(500).json({ error: 'Failed to update site' })
   }
 })
 

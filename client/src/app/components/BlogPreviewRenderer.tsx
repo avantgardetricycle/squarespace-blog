@@ -104,7 +104,7 @@ export default function BlogPreviewRenderer({
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-neutral-50 text-red-600">
+        <div className="absolute inset-0 flex items-center justify-center bg-neutral-50 text-red-600 p-4 text-center">
           {error}
         </div>
       )}
