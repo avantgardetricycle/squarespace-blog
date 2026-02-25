@@ -44,6 +44,7 @@ model Site {
   siteKey   String   @unique @map("site_key")
   name      String?
   url       String?
+  blogPath  String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
   status    String   @default("active") // active | disabled
   channel   String   @default("stable") // stable | beta
   createdAt DateTime @default(now()) @map("created_at")
@@ -58,12 +59,16 @@ model Site {
 }
 
 model SiteConfig {
-  id         String   @id @default(uuid())
-  siteId     String   @map("site_id")
-  version    Int
-  configJson String   @map("config_json")
-  isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(uuid())
+  siteId             String   @map("site_id")
+  version            Int
+  showDate           Boolean  @default(true) @map("show_date")
+  showAuthor         Boolean  @default(false) @map("show_author")
+  progressBar        Json     @default("{\"show\":false,\"position\":null}") @map("progress_bar")
+  tableOfContents    Json     @default("{\"show\":false,\"position\":null}") @map("table_of_contents")
+  recentPostsSidebar Json     @default("{\"show\":false,\"position\":null}") @map("recent_posts_sidebar")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 

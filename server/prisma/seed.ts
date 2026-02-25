@@ -30,15 +30,11 @@ const SANDBOX_PLANS = [
 ] as const
 
 const defaultSiteConfig = {
-  showAuthor: false,
   showDate: true,
-  showTableOfContents: false,
-  tableOfContentsPosition: 'left',
-  showProgressBar: false,
-  showRecentPostsSidebar: false,
-  recentPostsCount: 5,
-  sidebarPosition: 'left',
-  rendererUrl: 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
+  showAuthor: false,
+  progressBar: { show: false, position: null },
+  tableOfContents: { show: false, position: null },
+  recentPostsSidebar: { show: false, position: null }
 }
 
 async function main() {
@@ -112,7 +108,7 @@ async function main() {
       data: {
         siteId: demoSite.id,
         version: 1,
-        configJson: JSON.stringify(defaultSiteConfig),
+        ...defaultSiteConfig,
         isActive: true
       }
     })
@@ -125,7 +121,7 @@ async function main() {
         data: {
           siteId: demoSite.id,
           version: 1,
-          configJson: JSON.stringify(defaultSiteConfig),
+          ...defaultSiteConfig,
           isActive: true
         }
       })

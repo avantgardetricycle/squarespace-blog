@@ -5,6 +5,16 @@ import { randomBytes } from 'crypto'
 
 const router = Router()
 
+function extractBlogPath(url: string): string | null {
+  try {
+    const parsed = new URL(url.trim())
+    const path = parsed.pathname.replace(/\/$/, '') || '/'
+    return path
+  } catch {
+    return null
+  }
+}
+
 function generateSiteKey(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   let key = ''
@@ -64,6 +74,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         siteKey: s.siteKey,
         name: s.name,
         url: s.url,
+        blogPath: s.blogPath,
         status: s.status,
         createdAt: s.createdAt
       })),
@@ -113,6 +124,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
 
     const siteName = typeof name === 'string' && name.trim() ? name.trim() : null
     const siteUrl = typeof url === 'string' && url.trim() ? url.trim() : null
+    const blogPath = siteUrl ? extractBlogPath(siteUrl) : null
 
     const site = await prisma.site.create({
       data: {
@@ -120,28 +132,21 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         siteKey,
         name: siteName,
         url: siteUrl,
+        blogPath,
         status: 'active',
         channel: 'stable'
       }
-    })
-
-    const defaultConfig = JSON.stringify({
-      showAuthor: false,
-      showDate: true,
-      showTableOfContents: false,
-      tableOfContentsPosition: 'left',
-      showProgressBar: false,
-      showRecentPostsSidebar: false,
-      recentPostsCount: 5,
-      sidebarPosition: 'left',
-      rendererUrl: 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
     })
 
     await prisma.siteConfig.create({
       data: {
         siteId: site.id,
         version: 1,
-        configJson: defaultConfig,
+        showDate: true,
+        showAuthor: false,
+        progressBar: { show: false, position: null },
+        tableOfContents: { show: false, position: null },
+        recentPostsSidebar: { show: false, position: null },
         isActive: true
       }
     })
@@ -151,6 +156,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       siteKey: site.siteKey,
       name: site.name,
       url: site.url,
+      blogPath: site.blogPath,
       status: site.status,
       createdAt: site.createdAt
     })

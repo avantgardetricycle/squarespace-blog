@@ -13,6 +13,7 @@ export interface DashboardMe {
     siteKey: string
     name: string | null
     url: string | null
+    blogPath: string | null
     status: string
     createdAt: string
   }>
@@ -30,6 +31,7 @@ export interface CreatedSite {
   siteKey: string
   name: string | null
   url: string | null
+  blogPath: string | null
   status: string
   createdAt: string
 }

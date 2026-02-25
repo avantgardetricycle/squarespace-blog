@@ -8,6 +8,92 @@
 (function() {
   'use strict';
 
+  /**
+   * Adapter: find the best container to render blog content into.
+   * Tries selectors in order; if multiple candidates, picks the one with most blog items.
+   * @returns {Element|null}
+   */
+  function findBlogContainer() {
+    var BLOG_ITEM_SELECTORS = 'article, .blog-item, .blog-article, .blog-post, .entry, .post, [class*="blog-item"], [class*="blog-article"], [class*="blog-post"]';
+    var MAIN_SELECTORS = 'main, #siteWrapper, #content, #main, .main-content, .content-wrapper, [role="main"]';
+
+    function countBlogItems(el) {
+      return el.querySelectorAll(BLOG_ITEM_SELECTORS).length;
+    }
+
+    function scoreAndPick(candidates) {
+      var best = null;
+      var bestScore = 0;
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (!el || !el.parentNode) continue;
+        var score = countBlogItems(el);
+        if (score > bestScore) {
+          bestScore = score;
+          best = el;
+        }
+      }
+      return best;
+    }
+
+    // 1. Blog list container candidates
+    var listSelectors = [
+      '.blog-list', '.blog-list-wrapper', '.blog-list-container',
+      '[class*="blog"][class*="list"]', '.collection-items', '.Index-page',
+      '#blogList', '[id*="blog"][id*="list"]'
+    ];
+    for (var l = 0; l < listSelectors.length; l++) {
+      try {
+        var listCandidates = document.querySelectorAll(listSelectors[l]);
+        if (listCandidates.length > 0) {
+          var picked = scoreAndPick(Array.prototype.slice.call(listCandidates));
+          if (picked) return picked;
+        }
+      } catch (e) { /* invalid selector */ }
+    }
+
+    // 2. Blog post container candidates (single post view - parent of article/item)
+    var postSelectors = [
+      '.blog-item', '.blog-article', '.blog-post', '.entry', '.post',
+      '[class*="blog-item"]', '[class*="blog-article"]', 'article'
+    ];
+    var postContainers = [];
+    for (var p = 0; p < postSelectors.length; p++) {
+      try {
+        var postEls = document.querySelectorAll(postSelectors[p]);
+        for (var j = 0; j < postEls.length; j++) {
+          var parent = postEls[j].parentElement;
+          if (parent && postContainers.indexOf(parent) === -1) {
+            postContainers.push(parent);
+          }
+        }
+      } catch (e) { /* invalid selector */ }
+    }
+    if (postContainers.length > 0) {
+      var picked = scoreAndPick(postContainers);
+      if (picked) return picked;
+    }
+
+    // 3. Fallback: main content area, look for blog-ish children
+    var mains = document.querySelectorAll(MAIN_SELECTORS);
+    var fallbackCandidates = [];
+    for (var m = 0; m < mains.length; m++) {
+      var main = mains[m];
+      var bloggy = main.querySelectorAll('[class*="blog"], [id*="blog"], article');
+      for (var b = 0; b < bloggy.length; b++) {
+        fallbackCandidates.push(bloggy[b]);
+      }
+      if (bloggy.length === 0 && countBlogItems(main) > 0) {
+        fallbackCandidates.push(main);
+      }
+    }
+    if (fallbackCandidates.length > 0) {
+      return scoreAndPick(fallbackCandidates);
+    }
+
+    return null;
+  }
+
   window.BlogOverlayRenderer = {
     config: null,
     items: [],
@@ -15,17 +101,48 @@
     _tocScrollHandler: null,
 
     /**
+     * Check if current path is a blog route (exact path or post sub-path)
+     * @param {string} pathname - Current path (e.g. window.location.pathname)
+     * @param {string|null} blogPath - Blog path from config (e.g. /blog, /journal)
+     * @returns {boolean}
+     */
+    _isOnBlogRoute: function(pathname, blogPath) {
+      if (!blogPath) return false;
+      if (blogPath === '/') {
+        return pathname === '/' || pathname === '';
+      }
+      if (pathname === blogPath) return true;
+      if (pathname.indexOf(blogPath + '/') === 0) return true;
+      return false;
+    },
+
+    /**
      * Initialize the renderer with user config
      * @param {Object} config - User configuration from the API
+     *   - previewMode: if true, skip route check and use rootEl/previewFetchUrl
+     *   - rootEl: optional DOM element to render into (preview mode)
+     *   - previewFetchUrl: optional URL to fetch blog JSON from (preview mode)
      */
     init: function(config) {
-      var root = document.getElementById('blogga-blogga-root');
-      if (!root) {
-        console.log('[BlogOverlay] Skipping render: #blogga-blogga-root not found');
-        return;
+      this.config = config || {};
+      var previewMode = Boolean(this.config.previewMode);
+
+      if (!previewMode) {
+        var blogPath = this.config.blogPath;
+        var pathname = window.location.pathname || '/';
+        if (!this._isOnBlogRoute(pathname, blogPath)) {
+          console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
+          return;
+        }
       }
 
-      this.config = config || {};
+      var root = this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
+      if (!root) {
+        console.log('[BlogOverlay] Skipping render: no blog container found');
+        return;
+      }
+      this._root = root;
+      this._previewMode = previewMode;
       console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
 
       var self = this;
@@ -93,13 +210,30 @@
      */
     render: function() {
       var self = this;
-      var root = document.getElementById('blogga-blogga-root');
+      var previewMode = Boolean(this.config && this.config.previewMode);
+
+      if (!previewMode) {
+        var blogPath = this.config && this.config.blogPath;
+        var pathname = window.location.pathname || '/';
+        if (!this._isOnBlogRoute(pathname, blogPath)) {
+          console.log('[BlogOverlay] Skipping render: not on blog route');
+          return;
+        }
+      }
+
+      var root = this._root || this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) {
-        console.log('[BlogOverlay] Skipping render: #blogga-blogga-root not found');
+        console.log('[BlogOverlay] Skipping render: no blog container found');
         return;
       }
 
-      fetch('/blog?format=json')
+      var fetchUrl = this.config.previewFetchUrl;
+      if (!fetchUrl) {
+        var blogPath = this.config && this.config.blogPath;
+        var fetchPath = (blogPath && blogPath !== '/') ? blogPath : '/blog';
+        fetchUrl = fetchPath + '?format=json';
+      }
+      fetch(fetchUrl)
         .then(function(res) { return res.json(); })
         .then(function(json) {
           var items = Array.isArray(json && json.items) ? json.items : [];
@@ -146,7 +280,7 @@
     },
 
     _getNavbarOffset: function() {
-      var root = document.getElementById('blogga-blogga-root');
+      var root = this._root || document.getElementById('blogga-blogga-root');
       if (root) {
         var h = root.getAttribute('data-navbar-height');
         if (h) return parseInt(h, 10) || 0;
@@ -156,19 +290,45 @@
       return 50;
     },
 
+    _getScrollContainer: function() {
+      var root = this._root;
+      if (!root) return null;
+      var el = root.parentElement;
+      while (el) {
+        var style = window.getComputedStyle(el);
+        var overflowY = style.overflowY || style.overflow;
+        if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return el;
+        el = el.parentElement;
+      }
+      return null;
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
       var article = document.querySelector('#blog-overlay-list article');
       if (!fill || !article) return;
-      var scrollY = window.scrollY || document.documentElement.scrollTop;
-      var navbarHeight = this._getNavbarOffset();
-      track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
 
-      var rect = article.getBoundingClientRect();
-      var postTop = rect.top + scrollY;
-      var postHeight = article.offsetHeight;
-      var viewportHeight = window.innerHeight;
+      var scrollY, viewportHeight, postTop, postHeight;
+      if (this._previewMode) {
+        var scrollContainer = this._getScrollContainer();
+        if (!scrollContainer) return;
+        scrollY = scrollContainer.scrollTop;
+        viewportHeight = scrollContainer.clientHeight;
+        var articleRect = article.getBoundingClientRect();
+        var containerRect = scrollContainer.getBoundingClientRect();
+        postTop = articleRect.top - containerRect.top + scrollContainer.scrollTop;
+        postHeight = article.offsetHeight;
+      } else {
+        scrollY = window.scrollY || document.documentElement.scrollTop;
+        var navbarHeight = this._getNavbarOffset();
+        track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
+        viewportHeight = window.innerHeight;
+        var rect = article.getBoundingClientRect();
+        postTop = rect.top + scrollY;
+        postHeight = article.offsetHeight;
+      }
+
       var progress = Math.min(100, Math.max(0,
         (scrollY - postTop + viewportHeight) / (postHeight + viewportHeight) * 100
       ));
@@ -177,12 +337,14 @@
 
     _renderContent: function(items) {
       var self = this;
-      var root = document.getElementById('blogga-blogga-root');
+      var root = this._root || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) return;
 
       if (this._progressScrollHandler) {
-        window.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
+        var scrollTarget = this._progressScrollTarget || window;
+        scrollTarget.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
         this._progressScrollHandler = null;
+        this._progressScrollTarget = null;
       }
       if (this._tocScrollHandler) {
         window.removeEventListener('scroll', this._tocScrollHandler, { passive: true });
@@ -191,6 +353,8 @@
 
       var existing = root.querySelector('#blog-overlay-list');
       if (existing) existing.remove();
+      var existingProgress = root.querySelector('#blog-overlay-progress');
+      if (existingProgress) existingProgress.remove();
 
       var cfg = this.config || {};
       var showTableOfContents = Boolean(cfg.showTableOfContents);
@@ -225,18 +389,29 @@
       main.style.flex = '1';
       main.style.minWidth = '0';
 
+      var progressTrackForPreview = null;
       if (isSinglePost && showProgressBar) {
-        var navbarOffset = this._getNavbarOffset();
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
-        progressTrack.style.position = 'fixed';
-        progressTrack.style.top = navbarOffset + 'px';
-        progressTrack.style.transition = 'top 0.05s ease-out';
-        progressTrack.style.left = '0';
-        progressTrack.style.right = '0';
         progressTrack.style.height = '6px';
         progressTrack.style.backgroundColor = 'rgba(0,0,0,0.08)';
         progressTrack.style.zIndex = '9999';
+        if (this._previewMode) {
+          root.style.position = 'relative';
+          progressTrack.style.position = 'absolute';
+          progressTrack.style.top = '0';
+          progressTrack.style.left = '0';
+          progressTrack.style.right = '0';
+          progressTrackForPreview = progressTrack;
+        } else {
+          var navbarOffset = this._getNavbarOffset();
+          progressTrack.style.position = 'fixed';
+          progressTrack.style.top = navbarOffset + 'px';
+          progressTrack.style.transition = 'top 0.05s ease-out';
+          progressTrack.style.left = '0';
+          progressTrack.style.right = '0';
+          wrapper.appendChild(progressTrack);
+        }
         var progressFill = document.createElement('div');
         progressFill.className = 'blog-overlay-progress-fill';
         progressFill.style.height = '100%';
@@ -244,12 +419,15 @@
         progressFill.style.backgroundColor = '#0066cc';
         progressFill.style.transition = 'width 0.1s ease-out';
         progressTrack.appendChild(progressFill);
-        wrapper.appendChild(progressTrack);
 
         this._progressScrollHandler = function() {
           self._updateProgressBar();
         };
-        window.addEventListener('scroll', this._progressScrollHandler, { passive: true });
+        var scrollTarget = this._previewMode ? this._getScrollContainer() : window;
+        this._progressScrollTarget = scrollTarget;
+        if (scrollTarget) {
+          scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
+        }
       }
 
       if (isSinglePost) {
@@ -463,6 +641,10 @@
           if (rightSidebar.childNodes.length) wrapper.appendChild(rightSidebar);
 
           root.prepend(wrapper);
+
+      if (progressTrackForPreview) {
+        root.insertBefore(progressTrackForPreview, root.firstChild);
+      }
 
       if (isSinglePost && showProgressBar) {
         requestAnimationFrame(function() {

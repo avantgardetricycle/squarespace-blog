@@ -3,11 +3,55 @@ import prisma from '../db/index.js'
 import {
   getSiteBySiteKey,
   getActiveSiteConfig,
-  upsertSiteConfig
+  upsertSiteConfig,
+  type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 
 const router = Router()
+
+// GET /api/blog-preview/:siteKey - Proxy blog JSON for configure page preview
+router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
+  const siteKey = req.params.siteKey as string
+
+  const site = await getSiteBySiteKey(siteKey)
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  if (site.status === 'disabled') {
+    res.status(403).json({ error: 'Site is disabled' })
+    return
+  }
+
+  let blogUrl: string
+  if (site.url) {
+    const parsed = new URL(site.url)
+    const hasPath = parsed.pathname && parsed.pathname !== '/'
+    const base = site.url.replace(/\/$/, '')
+    blogUrl = hasPath ? base + '?format=json' : parsed.origin + (site.blogPath || '/blog') + '?format=json'
+  } else if (site.blogPath) {
+    res.status(400).json({ error: 'Site has no URL configured' })
+    return
+  } else {
+    res.status(400).json({ error: 'Site has no URL or blog path' })
+    return
+  }
+
+  try {
+    const fetchRes = await fetch(blogUrl)
+    if (!fetchRes.ok) {
+      res.status(502).json({ error: 'Failed to fetch blog from Squarespace' })
+      return
+    }
+    const json = await fetchRes.json()
+    res.json(json)
+  } catch (err) {
+    console.error('Blog preview fetch error:', err)
+    res.status(502).json({ error: 'Failed to fetch blog from Squarespace' })
+  }
+})
 
 // GET /api/config/:siteKey - Public endpoint for loader.js
 router.get('/:siteKey', async (req: Request, res: Response) => {
@@ -31,16 +75,23 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
   }
 
   try {
-    const configData = JSON.parse(siteConfig.configJson)
+    const progressBar = (siteConfig.progressBar as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
+    const tableOfContents = (siteConfig.tableOfContents as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
+    const recentPostsSidebar = (siteConfig.recentPostsSidebar as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
 
-    // Ensure the API response always includes the rendererUrl used by the loader
-    configData.rendererUrl = configData.rendererUrl ?? 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js'
-
-    // Merge defaults for newer config fields (for configs saved before these were added)
-    configData.showRecentPostsSidebar = configData.showRecentPostsSidebar ?? false
-    configData.recentPostsCount = configData.recentPostsCount ?? 5
-    configData.sidebarPosition = configData.sidebarPosition ?? 'left'
-    configData.tableOfContentsPosition = configData.tableOfContentsPosition ?? 'left'
+    const configData = {
+      blogPath: site.blogPath ?? null,
+      rendererUrl: `${(process.env.APP_URL ?? 'http://localhost:3001').replace(/\/$/, '')}/renderer.js`,
+      showDate: siteConfig.showDate,
+      showAuthor: siteConfig.showAuthor,
+      showProgressBar: progressBar.show ?? false,
+      progressBarPosition: progressBar.position ?? 'top',
+      showTableOfContents: tableOfContents.show ?? false,
+      tableOfContentsPosition: tableOfContents.position ?? 'left',
+      showRecentPostsSidebar: recentPostsSidebar.show ?? false,
+      sidebarPosition: recentPostsSidebar.position ?? 'left',
+      recentPostsCount: 5
+    }
 
     res.json(configData)
   } catch {
@@ -67,8 +118,25 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
   }
 
   try {
-    const configJson = JSON.stringify(config)
-    await upsertSiteConfig(site.id, configJson)
+    const c = config as Record<string, unknown>
+    const layout = (c.layout as Record<string, unknown>) ?? {}
+    const data: SiteConfigData = {
+      showDate: (c.showDate ?? layout.showDate ?? true) as boolean,
+      showAuthor: (c.showAuthor ?? layout.showAuthor ?? false) as boolean,
+      progressBar: {
+        show: (c.showProgressBar ?? false) as boolean,
+        position: ((c as { progressBarPosition?: string | null }).progressBarPosition ?? 'top') as string | null
+      },
+      tableOfContents: {
+        show: (c.showTableOfContents ?? false) as boolean,
+        position: (c.tableOfContentsPosition ?? 'left') as string
+      },
+      recentPostsSidebar: {
+        show: (c.showRecentPostsSidebar ?? false) as boolean,
+        position: (c.sidebarPosition ?? 'left') as string
+      }
+    }
+    await upsertSiteConfig(site.id, data)
     res.json({ success: true })
   } catch (error) {
     console.error('Failed to save config:', error)

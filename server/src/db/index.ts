@@ -26,7 +26,15 @@ export async function getActiveSiteConfig(siteId: string) {
   })
 }
 
-export async function upsertSiteConfig(siteId: string, configJson: string) {
+export interface SiteConfigData {
+  showDate?: boolean
+  showAuthor?: boolean
+  progressBar?: { show: boolean; position: string | null }
+  tableOfContents?: { show: boolean; position: string }
+  recentPostsSidebar?: { show: boolean; position: string }
+}
+
+export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
   await prisma.$transaction(async (tx) => {
     await tx.siteConfig.updateMany({
       where: { siteId, isActive: true },
@@ -38,7 +46,16 @@ export async function upsertSiteConfig(siteId: string, configJson: string) {
     })
     const nextVersion = (maxVersion._max.version ?? 0) + 1
     await tx.siteConfig.create({
-      data: { siteId, version: nextVersion, configJson, isActive: true }
+      data: {
+        siteId,
+        version: nextVersion,
+        showDate: data.showDate ?? true,
+        showAuthor: data.showAuthor ?? false,
+        progressBar: data.progressBar ?? { show: false, position: null },
+        tableOfContents: data.tableOfContents ?? { show: false, position: null },
+        recentPostsSidebar: data.recentPostsSidebar ?? { show: false, position: null },
+        isActive: true
+      }
     })
   })
 }

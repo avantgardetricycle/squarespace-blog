@@ -1,10 +1,12 @@
-import { Outlet, NavLink, useNavigate } from "react-router";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router";
 import { LayoutDashboard, Settings, User, LogOut } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 
 export default function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isConfigure = location.pathname === "/dashboard/configure";
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -59,9 +61,13 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto max-w-5xl p-8">
+        {isConfigure ? (
           <Outlet />
-        </div>
+        ) : (
+          <div className="container mx-auto max-w-5xl p-8">
+            <Outlet />
+          </div>
+        )}
       </main>
     </div>
   );

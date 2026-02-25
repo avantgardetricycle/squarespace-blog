@@ -1,121 +1,233 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, Link } from "react-router";
-import { 
-  Palette, 
-  Type, 
-  LayoutTemplate, 
-  Monitor, 
-  Tablet, 
-  Smartphone, 
-  Save, 
-  Undo2 
+import {
+  Palette,
+  Type,
+  LayoutTemplate,
+  Monitor,
+  Tablet,
+  Smartphone,
+  Save,
+  Undo2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
-import { Slider } from "@/app/components/ui/slider";
 import { Switch } from "@/app/components/ui/switch";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/app/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Separator } from "@/app/components/ui/separator";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { toast } from "sonner";
-import BlogPreview, { BlogConfig } from "@/app/components/BlogPreview";
+import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
+import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
-const defaultConfig: BlogConfig = {
-  typography: {
-    fontFamily: "Inter, sans-serif",
-    headingFont: "Inter, sans-serif",
-    baseSize: 16,
-  },
-  colors: {
-    accent: "#111827",
-    background: "#ffffff",
-    text: "#1f2937",
-    cardBg: "#ffffff",
-  },
-  layout: {
-    gridColumns: 3,
-    gap: 32,
-    showAuthor: true,
-    showDate: true,
-    cardStyle: 'bordered',
-  },
+export interface SiteConfigForm {
+  showDate: boolean;
+  showAuthor: boolean;
+  progressBar: { show: boolean; position: "top" | "bottom" };
+  tableOfContents: { show: boolean; position: "left" | "right" };
+  recentPostsSidebar: { show: boolean; position: "left" | "right" };
+}
+
+const defaultSiteConfig: SiteConfigForm = {
+  showDate: true,
+  showAuthor: false,
+  progressBar: { show: false, position: "top" },
+  tableOfContents: { show: false, position: "left" },
+  recentPostsSidebar: { show: false, position: "left" },
 };
 
-function isBlogConfig(data: unknown): data is BlogConfig {
-  const d = data as Record<string, unknown>;
-  return Boolean(
-    d?.typography && typeof d.typography === "object" &&
-    d?.colors && typeof d.colors === "object" &&
-    d?.layout && typeof d.layout === "object"
+function configFromApi(data: Record<string, unknown>): SiteConfigForm {
+  return {
+    showDate: Boolean(data.showDate ?? true),
+    showAuthor: Boolean(data.showAuthor ?? false),
+    progressBar: {
+      show: Boolean(data.showProgressBar ?? false),
+      position: (data.progressBarPosition === "bottom" ? "bottom" : "top") as "top" | "bottom",
+    },
+    tableOfContents: {
+      show: Boolean(data.showTableOfContents ?? false),
+      position: (data.tableOfContentsPosition === "right" ? "right" : "left") as "left" | "right",
+    },
+    recentPostsSidebar: {
+      show: Boolean(data.showRecentPostsSidebar ?? false),
+      position: (data.sidebarPosition === "right" ? "right" : "left") as "left" | "right",
+    },
+  };
+}
+
+function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
+  return {
+    showDate: config.showDate,
+    showAuthor: config.showAuthor,
+    showProgressBar: config.progressBar.show,
+    progressBarPosition: config.progressBar.position,
+    showTableOfContents: config.tableOfContents.show,
+    tableOfContentsPosition: config.tableOfContents.position,
+    showRecentPostsSidebar: config.recentPostsSidebar.show,
+    sidebarPosition: config.recentPostsSidebar.position,
+  };
+}
+
+function configToRendererConfig(config: SiteConfigForm): Record<string, unknown> {
+  return {
+    showDate: config.showDate,
+    showAuthor: config.showAuthor,
+    showProgressBar: config.progressBar.show,
+    progressBarPosition: config.progressBar.position,
+    showTableOfContents: config.tableOfContents.show,
+    tableOfContentsPosition: config.tableOfContents.position,
+    showRecentPostsSidebar: config.recentPostsSidebar.show,
+    sidebarPosition: config.recentPostsSidebar.position,
+    recentPostsCount: 5,
+  };
+}
+
+function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
+  return (
+    a.showDate === b.showDate &&
+    a.showAuthor === b.showAuthor &&
+    a.progressBar.show === b.progressBar.show &&
+    a.progressBar.position === b.progressBar.position &&
+    a.tableOfContents.show === b.tableOfContents.show &&
+    a.tableOfContents.position === b.tableOfContents.position &&
+    a.recentPostsSidebar.show === b.recentPostsSidebar.show &&
+    a.recentPostsSidebar.position === b.recentPostsSidebar.position
   );
 }
 
 export default function Configure() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const siteKey = searchParams.get("siteKey");
-  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [config, setConfig] = useState<BlogConfig>(defaultConfig);
+  const [me, setMe] = useState<DashboardMe | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
+  const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getDashboardMe().then((data) => {
+      setMe(data ?? null);
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!me || me.sites.length === 0) return;
+    if (!siteKey) {
+      setSearchParams({ siteKey: me.sites[0].siteKey }, { replace: true });
+      return;
+    }
+    const validSite = me.sites.some((s) => s.siteKey === siteKey);
+    if (!validSite) {
+      setSearchParams({ siteKey: me.sites[0].siteKey }, { replace: true });
+    }
+  }, [me, siteKey, setSearchParams]);
 
   useEffect(() => {
     if (!siteKey) return;
-    fetch(`/api/config/${siteKey}`)
+    setConfigLoading(true);
+    fetch(`/api/config/${siteKey}`, { credentials: "include" })
       .then((res) => {
         if (!res.ok) return null;
         return res.json();
       })
       .then((data) => {
-        if (data && isBlogConfig(data)) {
-          setConfig({ ...defaultConfig, ...data } as BlogConfig);
+        if (data && typeof data === "object") {
+          const loaded = configFromApi(data as Record<string, unknown>);
+          setConfig(loaded);
+          setSavedConfig(loaded);
+        } else {
+          setConfig(defaultSiteConfig);
+          setSavedConfig(defaultSiteConfig);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setConfig(defaultSiteConfig);
+        setSavedConfig(defaultSiteConfig);
+      })
+      .finally(() => setConfigLoading(false));
   }, [siteKey]);
 
-  const handleSave = async () => {
-    if (!siteKey) return;
+  const effectiveSiteKey =
+    me && me.sites.length > 0
+      ? (me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]).siteKey
+      : null;
+
+  const isDirty = !configsEqual(config, savedConfig);
+  const rendererConfig = useMemo(() => configToRendererConfig(config), [config]);
+
+  const handleSave = useCallback(async () => {
+    const keyToSave = effectiveSiteKey ?? siteKey;
+    if (!keyToSave) return;
+    setSaving(true);
     try {
       const res = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ siteKey, config }),
+        body: JSON.stringify({
+          siteKey: keyToSave,
+          config: configToApiPayload(config),
+        }),
       });
       if (res.ok) {
+        setSavedConfig(config);
         toast.success("Configuration saved successfully!");
       } else {
         toast.error("Failed to save configuration.");
       }
     } catch {
       toast.error("Failed to save configuration.");
+    } finally {
+      setSaving(false);
     }
-  };
+  }, [effectiveSiteKey, siteKey, config]);
 
   const handleReset = () => {
-    setConfig(defaultConfig);
-    toast.info("Configuration reset to defaults.");
+    setConfig(savedConfig);
+    toast.info("Changes reverted.");
   };
 
-  const updateConfig = (section: keyof BlogConfig, key: string, value: any) => {
-    setConfig((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [key]: value,
-      },
-    }));
+  const updateConfig = (path: string, value: unknown) => {
+    setConfig((prev) => {
+      const next = { ...prev };
+      if (path === "showDate") next.showDate = value as boolean;
+      else if (path === "showAuthor") next.showAuthor = value as boolean;
+      else if (path === "progressBar.show") next.progressBar = { ...prev.progressBar, show: value as boolean };
+      else if (path === "progressBar.position") next.progressBar = { ...prev.progressBar, position: value as "top" | "bottom" };
+      else if (path === "tableOfContents.show") next.tableOfContents = { ...prev.tableOfContents, show: value as boolean };
+      else if (path === "tableOfContents.position") next.tableOfContents = { ...prev.tableOfContents, position: value as "left" | "right" };
+      else if (path === "recentPostsSidebar.show") next.recentPostsSidebar = { ...prev.recentPostsSidebar, show: value as boolean };
+      else if (path === "recentPostsSidebar.position") next.recentPostsSidebar = { ...prev.recentPostsSidebar, position: value as "left" | "right" };
+      return next;
+    });
   };
 
-  if (!siteKey) {
+  const handleBlogChange = (newSiteKey: string) => {
+    setSearchParams({ siteKey: newSiteKey });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="animate-pulse text-neutral-500">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!me || me.sites.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-center">
-        <p className="text-neutral-500">Select a site to configure.</p>
+        <p className="text-neutral-500">No blogs yet. Add a blog from the dashboard to get started.</p>
         <Button asChild>
           <Link to="/dashboard">Go to Dashboard</Link>
         </Button>
@@ -124,19 +236,26 @@ export default function Configure() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] -m-8 overflow-hidden bg-neutral-100">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-neutral-100">
       {/* Configuration Sidebar */}
       <aside className="w-80 bg-white border-r border-neutral-200 flex flex-col z-10 shadow-sm">
-        <div className="p-4 border-b border-neutral-100 flex items-center justify-between">
-          <h2 className="font-semibold text-lg">Settings</h2>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="icon" onClick={handleReset} title="Reset">
-              <Undo2 className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleSave} title="Save">
-              <Save className="h-4 w-4" />
-            </Button>
+        <div className="p-4 border-b border-neutral-100 space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-neutral-500">Customizing</Label>
+            <Select value={effectiveSiteKey ?? undefined} onValueChange={handleBlogChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a blog" />
+              </SelectTrigger>
+              <SelectContent>
+                {me.sites.map((site) => (
+                  <SelectItem key={site.id} value={site.siteKey}>
+                    {site.name || "Unnamed blog"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <h2 className="font-semibold text-lg">Settings</h2>
         </div>
 
         <Tabs defaultValue="layout" className="flex-1 flex flex-col overflow-hidden">
@@ -146,11 +265,11 @@ export default function Configure() {
                 <LayoutTemplate className="h-4 w-4" />
                 <span className="sr-only">Layout</span>
               </TabsTrigger>
-              <TabsTrigger value="typography" className="flex gap-2">
+              <TabsTrigger value="typography" className="flex gap-2 opacity-50" disabled>
                 <Type className="h-4 w-4" />
                 <span className="sr-only">Typography</span>
               </TabsTrigger>
-              <TabsTrigger value="colors" className="flex gap-2">
+              <TabsTrigger value="colors" className="flex gap-2 opacity-50" disabled>
                 <Palette className="h-4 w-4" />
                 <span className="sr-only">Colors</span>
               </TabsTrigger>
@@ -159,199 +278,131 @@ export default function Configure() {
 
           <ScrollArea className="flex-1">
             <div className="p-6 space-y-6">
-              
               {/* Layout Settings */}
               <TabsContent value="layout" className="space-y-6 mt-0">
+                {configLoading ? (
+                  <div className="text-sm text-neutral-500">Loading settings…</div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="show-date">Show Date</Label>
+                      <Switch
+                        id="show-date"
+                        checked={config.showDate}
+                        onCheckedChange={(v) => updateConfig("showDate", v)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="show-author">Show Author</Label>
+                      <Switch
+                        id="show-author"
+                        checked={config.showAuthor}
+                        onCheckedChange={(v) => updateConfig("showAuthor", v)}
+                      />
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>Progress Bar</Label>
+                        <Switch
+                          checked={config.progressBar.show}
+                          onCheckedChange={(v) => updateConfig("progressBar.show", v)}
+                        />
+                      </div>
+                      {config.progressBar.show && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-neutral-500">Position</Label>
+                          <Select
+                            value={config.progressBar.position}
+                            onValueChange={(v) => updateConfig("progressBar.position", v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="top">Top</SelectItem>
+                              <SelectItem value="bottom">Bottom</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>Table of Contents</Label>
+                        <Switch
+                          checked={config.tableOfContents.show}
+                          onCheckedChange={(v) => updateConfig("tableOfContents.show", v)}
+                        />
+                      </div>
+                      {config.tableOfContents.show && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-neutral-500">Position</Label>
+                          <Select
+                            value={config.tableOfContents.position}
+                            onValueChange={(v) => updateConfig("tableOfContents.position", v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left</SelectItem>
+                              <SelectItem value="right">Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label>Recent Posts Sidebar</Label>
+                        <Switch
+                          checked={config.recentPostsSidebar.show}
+                          onCheckedChange={(v) => updateConfig("recentPostsSidebar.show", v)}
+                        />
+                      </div>
+                      {config.recentPostsSidebar.show && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-neutral-500">Position</Label>
+                          <Select
+                            value={config.recentPostsSidebar.position}
+                            onValueChange={(v) => updateConfig("recentPostsSidebar.position", v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left</SelectItem>
+                              <SelectItem value="right">Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Typography Settings - disabled for now */}
+              <TabsContent value="typography" className="space-y-6 mt-0 opacity-50 pointer-events-none">
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Card Style</Label>
-                    <Select 
-                      value={config.layout.cardStyle} 
-                      onValueChange={(v) => updateConfig('layout', 'cardStyle', v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select style" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="minimal">Minimal</SelectItem>
-                        <SelectItem value="bordered">Bordered</SelectItem>
-                        <SelectItem value="shadow">Shadow</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label>Grid Columns</Label>
-                      <span className="text-xs text-neutral-500">{config.layout.gridColumns}</span>
-                    </div>
-                    <Slider 
-                      min={1} 
-                      max={4} 
-                      step={1} 
-                      value={[config.layout.gridColumns]} 
-                      onValueChange={([v]) => updateConfig('layout', 'gridColumns', v)}
-                    />
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label>Gap Size</Label>
-                      <span className="text-xs text-neutral-500">{config.layout.gap}px</span>
-                    </div>
-                    <Slider 
-                      min={16} 
-                      max={64} 
-                      step={4} 
-                      value={[config.layout.gap]} 
-                      onValueChange={([v]) => updateConfig('layout', 'gap', v)}
-                    />
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="show-author">Show Author</Label>
-                    <Switch 
-                      id="show-author" 
-                      checked={config.layout.showAuthor}
-                      onCheckedChange={(v) => updateConfig('layout', 'showAuthor', v)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="show-date">Show Date</Label>
-                    <Switch 
-                      id="show-date" 
-                      checked={config.layout.showDate}
-                      onCheckedChange={(v) => updateConfig('layout', 'showDate', v)}
-                    />
-                  </div>
+                  <p className="text-sm text-neutral-500">Coming soon.</p>
                 </div>
               </TabsContent>
 
-              {/* Typography Settings */}
-              <TabsContent value="typography" className="space-y-6 mt-0">
+              {/* Colors Settings - disabled for now */}
+              <TabsContent value="colors" className="space-y-6 mt-0 opacity-50 pointer-events-none">
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Heading Font</Label>
-                    <Select 
-                      value={config.typography.headingFont} 
-                      onValueChange={(v) => updateConfig('typography', 'headingFont', v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select font" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Inter, sans-serif">Inter</SelectItem>
-                        <SelectItem value="Playfair Display, serif">Playfair Display</SelectItem>
-                        <SelectItem value="Merriweather, serif">Merriweather</SelectItem>
-                        <SelectItem value="Oswald, sans-serif">Oswald</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Body Font</Label>
-                    <Select 
-                      value={config.typography.fontFamily} 
-                      onValueChange={(v) => updateConfig('typography', 'fontFamily', v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select font" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Inter, sans-serif">Inter</SelectItem>
-                        <SelectItem value="Roboto, sans-serif">Roboto</SelectItem>
-                        <SelectItem value="Open Sans, sans-serif">Open Sans</SelectItem>
-                        <SelectItem value="Lora, serif">Lora</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label>Base Size</Label>
-                      <span className="text-xs text-neutral-500">{config.typography.baseSize}px</span>
-                    </div>
-                    <Slider 
-                      min={12} 
-                      max={24} 
-                      step={1} 
-                      value={[config.typography.baseSize]} 
-                      onValueChange={([v]) => updateConfig('typography', 'baseSize', v)}
-                    />
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* Colors Settings */}
-              <TabsContent value="colors" className="space-y-6 mt-0">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Accent Color</Label>
-                    <div className="flex gap-2">
-                      <div 
-                        className="w-8 h-8 rounded-full border border-neutral-200 cursor-pointer transition-transform hover:scale-110"
-                        style={{ backgroundColor: "#111827" }}
-                        onClick={() => updateConfig('colors', 'accent', "#111827")}
-                      />
-                      <div 
-                        className="w-8 h-8 rounded-full border border-neutral-200 cursor-pointer transition-transform hover:scale-110"
-                        style={{ backgroundColor: "#2563eb" }}
-                        onClick={() => updateConfig('colors', 'accent', "#2563eb")}
-                      />
-                      <div 
-                        className="w-8 h-8 rounded-full border border-neutral-200 cursor-pointer transition-transform hover:scale-110"
-                        style={{ backgroundColor: "#dc2626" }}
-                        onClick={() => updateConfig('colors', 'accent', "#dc2626")}
-                      />
-                      <div 
-                        className="w-8 h-8 rounded-full border border-neutral-200 cursor-pointer transition-transform hover:scale-110"
-                        style={{ backgroundColor: "#16a34a" }}
-                        onClick={() => updateConfig('colors', 'accent', "#16a34a")}
-                      />
-                      <div 
-                        className="w-8 h-8 rounded-full border border-neutral-200 cursor-pointer transition-transform hover:scale-110"
-                        style={{ backgroundColor: "#9333ea" }}
-                        onClick={() => updateConfig('colors', 'accent', "#9333ea")}
-                      />
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-2">
-                    <Label>Background</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button 
-                        variant={config.colors.background === "#ffffff" ? "default" : "outline"}
-                        className="justify-start"
-                        onClick={() => {
-                          updateConfig('colors', 'background', "#ffffff");
-                          updateConfig('colors', 'cardBg', "#ffffff");
-                          updateConfig('colors', 'text', "#1f2937");
-                        }}
-                      >
-                        Light Mode
-                      </Button>
-                      <Button 
-                        variant={config.colors.background === "#1f2937" ? "default" : "outline"}
-                        className="justify-start"
-                        onClick={() => {
-                          updateConfig('colors', 'background', "#1f2937");
-                          updateConfig('colors', 'cardBg', "#374151");
-                          updateConfig('colors', 'text', "#f3f4f6");
-                        }}
-                      >
-                        Dark Mode
-                      </Button>
-                    </div>
-                  </div>
+                  <p className="text-sm text-neutral-500">Coming soon.</p>
                 </div>
               </TabsContent>
             </div>
@@ -362,34 +413,47 @@ export default function Configure() {
       {/* Preview Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-neutral-100/50">
         <div className="h-14 border-b border-neutral-200 bg-white px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <div className="flex items-center gap-3">
             <span className="font-medium text-neutral-900">Live Preview</span>
-            <span>•</span>
-            <span>Changes auto-save</span>
+            {isDirty ? (
+              <>
+                <span className="text-amber-600 text-sm">Unsaved changes</span>
+                <Button variant="ghost" size="sm" onClick={handleReset} title="Revert changes">
+                  <Undo2 className="h-4 w-4 mr-1.5" />
+                  Undo
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  <Save className="h-4 w-4 mr-1.5" />
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </>
+            ) : (
+              <span className="text-neutral-500 text-sm">No unsaved changes</span>
+            )}
           </div>
-          
+
           <div className="flex items-center bg-neutral-100 rounded-lg p-1">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className={`h-8 w-8 p-0 ${device === 'desktop' ? 'bg-white shadow-sm' : 'text-neutral-500'}`}
-              onClick={() => setDevice('desktop')}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 w-8 p-0 ${device === "desktop" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              onClick={() => setDevice("desktop")}
             >
               <Monitor className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className={`h-8 w-8 p-0 ${device === 'tablet' ? 'bg-white shadow-sm' : 'text-neutral-500'}`}
-              onClick={() => setDevice('tablet')}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 w-8 p-0 ${device === "tablet" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              onClick={() => setDevice("tablet")}
             >
               <Tablet className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className={`h-8 w-8 p-0 ${device === 'mobile' ? 'bg-white shadow-sm' : 'text-neutral-500'}`}
-              onClick={() => setDevice('mobile')}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-8 w-8 p-0 ${device === "mobile" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              onClick={() => setDevice("mobile")}
             >
               <Smartphone className="h-4 w-4" />
             </Button>
@@ -397,15 +461,21 @@ export default function Configure() {
         </div>
 
         <div className="flex-1 overflow-auto p-8 flex items-start justify-center">
-          <div 
+          <div
             className={`bg-white shadow-xl transition-all duration-300 origin-top overflow-hidden
-              ${device === 'desktop' ? 'w-full h-full' : ''}
-              ${device === 'tablet' ? 'w-[768px] h-[1024px] rounded-lg my-4 border-8 border-neutral-800' : ''}
-              ${device === 'mobile' ? 'w-[375px] h-[812px] rounded-[2rem] my-4 border-8 border-neutral-800' : ''}
+              ${device === "desktop" ? "w-full h-full" : ""}
+              ${device === "tablet" ? "w-[768px] h-[1024px] rounded-lg my-4 border-8 border-neutral-800" : ""}
+              ${device === "mobile" ? "w-[375px] h-[812px] rounded-[2rem] my-4 border-8 border-neutral-800" : ""}
             `}
           >
             <div className="h-full w-full overflow-y-auto">
-              <BlogPreview config={config} />
+              {effectiveSiteKey && (
+                <BlogPreviewRenderer
+                  siteKey={effectiveSiteKey}
+                  config={rendererConfig}
+                  className="min-h-full"
+                />
+              )}
             </div>
           </div>
         </div>

@@ -44,8 +44,17 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Serve client static files (when client is built and deployed with server)
+// Serve renderer.js from scripts/ (single source of truth for both Configure preview and Squarespace loader)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const rendererPath = path.join(__dirname, '../../scripts/renderer.js')
+if (fs.existsSync(rendererPath)) {
+  app.get('/renderer.js', (_req, res) => {
+    res.type('application/javascript')
+    res.sendFile(rendererPath)
+  })
+}
+
+// Serve client static files (when client is built and deployed with server)
 const clientDist = path.join(__dirname, '../../client/dist')
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist))
