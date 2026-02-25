@@ -92,13 +92,13 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
   const priceItem = stripeSubscription.items.data[0]
   const stripePriceId = priceItem?.price?.id ?? null
   const cancelAtPeriodEnd = Boolean(
-    (stripeSubscription as Record<string, unknown>).cancel_at_period_end ??
+    (stripeSubscription as unknown as Record<string, unknown>).cancel_at_period_end ??
     stripeSubscription.cancel_at_period_end
   )
 
   // Stripe API uses snake_case (current_period_end). Access via bracket notation in case
   // the SDK or runtime transforms the object. Fallback to trial_end for trialing subs.
-  const sub = stripeSubscription as Record<string, unknown>
+  const sub = stripeSubscription as unknown as Record<string, unknown>
   const periodEnd =
     (typeof sub.current_period_end === 'number' ? sub.current_period_end : null) ??
     (typeof sub.currentPeriodEnd === 'number' ? sub.currentPeriodEnd : null) ??
