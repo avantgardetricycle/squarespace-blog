@@ -87,29 +87,9 @@ export default function LandingPage() {
     }
   ];
 
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
-
-  const handleCheckout = async (planKey: string) => {
+  const handleCheckout = (planKey: string) => {
     const cadence = isAnnual ? "annual" : "monthly";
-    setCheckoutLoading(planKey);
-    try {
-      const res = await fetch("/api/checkout/create-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ planKey, cadence }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error(data.error ?? "Checkout failed");
-      }
-    } catch (err) {
-      console.error(err);
-      setCheckoutLoading(null);
-      alert(err instanceof Error ? err.message : "Failed to start checkout");
-    }
+    window.location.href = `/checkout?plan=${planKey}&billing=${cadence}`;
   };
 
   return (
@@ -375,10 +355,9 @@ export default function LandingPage() {
                     "w-full rounded-full h-12",
                     tier.highlight ? "bg-blue-600 hover:bg-blue-700 text-white" : "border-neutral-200 hover:bg-neutral-50"
                   )}
-                  disabled={checkoutLoading !== null}
                   onClick={() => handleCheckout(tier.planKey)}
                 >
-                  {checkoutLoading === tier.planKey ? "Redirecting..." : (tier.highlight ? "Get Started" : "Start Free Trial")}
+                  {tier.highlight ? "Get Started" : "Start Free Trial"}
                 </Button>
               </motion.div>
             ))}

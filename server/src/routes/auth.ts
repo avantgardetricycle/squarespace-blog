@@ -3,6 +3,7 @@ import prisma from '../db/index.js'
 import { hashToken, generateToken, generateSessionToken } from '../lib/auth.js'
 import { sendMagicLinkEmailViaSendGrid } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
+import { syncSubscriptionFromStripe } from '../lib/stripe.js'
 
 const router = Router()
 const SESSION_COOKIE = 'session'
@@ -99,6 +100,14 @@ router.get('/magic', async (req: Request, res: Response) => {
       where: { id: loginToken.id },
       data: { usedAt: new Date() }
     })
+
+    try {
+      console.log('[auth/magic] syncing subscription for userId', loginToken.userId)
+      await syncSubscriptionFromStripe(loginToken.userId)
+      console.log('[auth/magic] subscription sync complete')
+    } catch (err) {
+      console.error('[auth/magic] subscription sync on login failed:', err)
+    }
 
     const sessionToken = generateSessionToken()
     const sessionTokenHash = hashToken(sessionToken)

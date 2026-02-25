@@ -1,43 +1,145 @@
 import { useState, useEffect } from "react";
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardFooter, 
-  CardHeader, 
-  CardTitle 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { getAccount, getSubscription, updateProfile } from "@/api/stubs";
+import { getDashboardMe, updateProfile, cancelSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
 
 export default function Account() {
-  const [profile, setProfile] = useState<Awaited<ReturnType<typeof getAccount>> | null>(null);
-  const [subscription, setSubscription] = useState<Awaited<ReturnType<typeof getSubscription>> | null>(null);
+  const [me, setMe] = useState<DashboardMe | null>(null);
+  const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | null>(null);
 
   useEffect(() => {
-    getAccount().then((a) => {
-      setProfile(a);
-      setName(a.name);
+    getDashboardMe().then((data) => {
+      setMe(data ?? null);
+      if (data?.user) {
+        setName(data.user.name ?? "");
+      }
+      setLoading(false);
     });
-    getSubscription().then(setSubscription);
   }, []);
 
-  const handleSaveProfile = async () => {
-    const updated = await updateProfile({ name });
-    setProfile(updated);
-    toast.success("Profile updated!");
+  const handleCancelSubscription = async () => {
+    setCanceling(true);
+    try {
+      const result = await cancelSubscription();
+      if (result.success) {
+        setMe((prev) =>
+          prev?.subscription
+            ? {
+                ...prev,
+                subscription: { ...prev.subscription, cancelAtPeriodEnd: true },
+              }
+            : prev
+        );
+        setShowCancelModal(false);
+        toast.success("Your subscription will cancel at the end of your billing period.");
+      } else {
+        toast.error(result.error ?? "Failed to cancel subscription");
+      }
+    } finally {
+      setCanceling(false);
+    }
   };
+
+  const handleOpenPortal = (button: "changePlan" | "updatePayment") => async () => {
+    setPortalLoading(true);
+    setPortalLoadingButton(button);
+    try {
+      const { url, error } = await createPortalSession();
+      if (url) {
+        window.location.href = url;
+      } else {
+        toast.error(error ?? "Failed to open billing portal");
+        setPortalLoading(false);
+        setPortalLoadingButton(null);
+      }
+    } catch {
+      setPortalLoading(false);
+      setPortalLoadingButton(null);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!me) return;
+    setSaving(true);
+    try {
+      const updated = await updateProfile({ name: name.trim() || null });
+      if (updated) {
+        setMe((prev) =>
+          prev ? { ...prev, user: { ...prev.user, name: updated.name } } : null
+        );
+        toast.success("Profile updated!");
+      } else {
+        toast.error("Failed to update profile");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="animate-pulse text-neutral-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!me) {
+    return null;
+  }
+
+  const planKey = me.subscription?.plan ?? "pro";
+  const planDisplay = planKey.charAt(0).toUpperCase() + planKey.slice(1);
+  const cadence = me.subscription?.cadence ?? "monthly";
+  const cadenceDisplay = cadence.charAt(0).toUpperCase() + cadence.slice(1);
+  const priceDisplay = me.subscription?.priceDisplay ?? "—";
+  const statusDisplay = me.subscription?.status
+    ? me.subscription.status.charAt(0).toUpperCase() + me.subscription.status.slice(1)
+    : "—";
+  const currentPeriodEnd = me.subscription?.currentPeriodEnd
+    ? new Date(me.subscription.currentPeriodEnd).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "—";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Account Settings</h1>
-        <p className="text-neutral-500">Manage your account details and subscription plan.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
+          Account Settings
+        </h1>
+        <p className="text-neutral-500">
+          Manage your account details and subscription plan.
+        </p>
       </div>
 
       <div className="space-y-6">
@@ -52,16 +154,25 @@ export default function Account() {
           <CardContent className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="name">Full Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Update your name"
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email Address</Label>
-              <Input id="email" value={profile?.email ?? ""} disabled />
-              <p className="text-[0.8rem] text-neutral-500">Your email address is managed via your Squarespace account.</p>
+              <Input id="email" value={me.user.email} disabled />
+              <p className="text-[0.8rem] text-neutral-500">
+                Your email address is managed via your Squarespace account.
+              </p>
             </div>
           </CardContent>
           <CardFooter>
-            <Button onClick={handleSaveProfile}>Save Changes</Button>
+            <Button onClick={handleSaveProfile} disabled={saving || portalLoading}>
+              {saving ? "Saving…" : "Save Changes"}
+            </Button>
           </CardFooter>
         </Card>
 
@@ -70,7 +181,7 @@ export default function Account() {
           <CardHeader>
             <CardTitle>Current Plan</CardTitle>
             <CardDescription>
-              You are currently subscribed to the {subscription?.plan ?? "Pro"} plan.
+              You are currently subscribed to the {planDisplay} plan.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -79,22 +190,83 @@ export default function Account() {
                 <CreditCard className="w-5 h-5 text-neutral-900" />
               </div>
               <div className="flex-1 space-y-1">
-                <p className="text-sm font-medium leading-none">{subscription?.plan ?? "Pro Plan"}</p>
-                <p className="text-xs text-neutral-500">{subscription?.price ?? "$19.00/month"}</p>
+                <p className="text-sm font-medium leading-none">
+                  {planDisplay} Plan
+                </p>
+                <p className="text-xs text-neutral-500">
+                  {cadenceDisplay} • {priceDisplay} • {statusDisplay}
+                </p>
               </div>
-              <Button variant="outline" size="sm">
-                Change Plan
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenPortal("changePlan")}
+                disabled={portalLoading || !me.subscription}
+              >
+                {portalLoadingButton === "changePlan" ? "Opening…" : "Change Plan"}
               </Button>
             </div>
             <div className="text-sm text-neutral-500">
-              Your next billing date is <span className="font-medium text-neutral-900">{subscription?.nextBillingDate ?? "—"}</span>.
+              {me.subscription?.cancelAtPeriodEnd ? (
+                <>
+                  Your subscription will end on{" "}
+                  <span className="font-medium text-neutral-900">{currentPeriodEnd}</span>.
+                  You'll keep access until then.
+                </>
+              ) : (
+                <>
+                  Your next billing date is{" "}
+                  <span className="font-medium text-neutral-900">{currentPeriodEnd}</span>.
+                </>
+              )}
             </div>
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
-            <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50">
-              Cancel Subscription
+            {me.subscription?.cancelAtPeriodEnd ? (
+              <p className="text-sm text-amber-600">Cancellation scheduled for end of period</p>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => setShowCancelModal(true)}
+                  disabled={canceling || portalLoading}
+                >
+                  Cancel Subscription
+                </Button>
+                <AlertDialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        You'll keep access until the end of your billing period. Your subscription
+                        will not renew after that date.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={canceling}>Keep subscription</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleCancelSubscription();
+                        }}
+                        disabled={canceling}
+                        className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                      >
+                        {canceling ? "Canceling…" : "Yes, cancel"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+            <Button
+              variant="outline"
+              onClick={handleOpenPortal("updatePayment")}
+              disabled={portalLoading || !me.subscription}
+            >
+              {portalLoadingButton === "updatePayment" ? "Opening…" : "Update Payment Method"}
             </Button>
-            <Button variant="outline">Update Payment Method</Button>
           </CardFooter>
         </Card>
       </div>

@@ -15,7 +15,7 @@ function getStripe(): Stripe {
 
 // POST /api/checkout/create-session - Create Stripe Checkout session
 router.post('/create-session', optionalSession, async (req: Request, res: Response) => {
-  const { planKey, cadence } = req.body ?? {}
+  const { planKey, cadence, name, email } = req.body ?? {}
   const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
 
   if (!planKey || !cadence) {
@@ -29,6 +29,9 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     res.status(400).json({ error: 'Invalid planKey or cadence' })
     return
   }
+
+  const customerEmail = typeof email === 'string' && email.includes('@') ? email.trim().toLowerCase() : null
+  const customerName = typeof name === 'string' && name.trim() ? name.trim() : null
 
   try {
     const plan = await prisma.plan.findUnique({
@@ -49,6 +52,24 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     const stripe = getStripe()
     const appUrl = getAppUrl()
 
+    const metadata: Record<string, string> = {
+      plan_key: planKey,
+      cadence,
+      stripe_price_label: plan.stripePriceLabel
+    }
+    if (customerName) {
+      metadata.customer_name = customerName
+    }
+
+    const subscriptionMetadata: Record<string, string> = {
+      plan_key: planKey,
+      cadence,
+      stripe_price_label: plan.stripePriceLabel
+    }
+    if (customerName) {
+      subscriptionMetadata.customer_name = customerName
+    }
+
     const sessionOptions: Stripe.Checkout.SessionCreateParams = {
       mode: 'subscription',
       line_items: [
@@ -58,21 +79,20 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
         }
       ],
       subscription_data: {
-        trial_period_days: TRIAL_DAYS
+        trial_period_days: TRIAL_DAYS,
+        metadata: subscriptionMetadata
       },
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/#pricing`,
-      metadata: {
-        plan_key: planKey,
-        cadence,
-        stripe_price_label: plan.stripePriceLabel
-      }
+      cancel_url: `${appUrl}/checkout?plan=${planKey}&billing=${cadence}`,
+      metadata,
+      // Collect name on Stripe's form as fallback if our metadata doesn't propagate
+      name_collection: { individual: { enabled: true, optional: true } }
     }
 
-    // If user is logged in, prefill email
     const user = (req as Request & { user?: SessionUser }).user
-    if (user?.email) {
-      sessionOptions.customer_email = user.email
+    const emailToUse = customerEmail ?? user?.email
+    if (emailToUse) {
+      sessionOptions.customer_email = emailToUse
     }
 
     const session = await stripe.checkout.sessions.create(sessionOptions)
@@ -81,14 +101,15 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
       data: {
         stripeCheckoutSessionId: session.id,
         userId: user?.id ?? null,
-        email: user?.email ?? null,
+        email: emailToUse ?? user?.email ?? null,
         plan: planKey,
         stripePriceId: plan.stripePriceId,
         status: 'created',
         metadataJson: JSON.stringify({
           cadence,
           stripePriceLabel: plan.stripePriceLabel,
-          maxSites: plan.maxSites
+          maxSites: plan.maxSites,
+          customerName: customerName ?? undefined
         })
       }
     })

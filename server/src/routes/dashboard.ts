@@ -1,9 +1,18 @@
 import { Router, Request, Response } from 'express'
+import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { getPlanPriceDisplay } from '../lib/pricing.js'
+import { getAppUrl } from '../lib/url.js'
 import { randomBytes } from 'crypto'
 
 const router = Router()
+
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
+  return new Stripe(key)
+}
 
 function extractBlogPath(url: string): string | null {
   try {
@@ -55,18 +64,34 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
     const subscription = userWithRelations.subscriptions[0] ?? null
     const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
 
+    const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+    const planRecord =
+      subscription?.stripePriceId
+        ? await prisma.plan.findFirst({
+            where: {
+              stripePriceId: subscription.stripePriceId,
+              stripeEnvironment: stripeEnv
+            }
+          })
+        : null
+    const cadence = planRecord?.cadence ?? 'monthly'
+
     res.json({
       user: {
         id: userWithRelations.id,
         email: userWithRelations.email,
+        name: userWithRelations.name,
         createdAt: userWithRelations.createdAt
       },
       subscription: subscription
         ? {
             plan: subscription.plan,
+            cadence,
+            priceDisplay: getPlanPriceDisplay(subscription.plan, cadence),
             status: subscription.status,
             maxSites: subscription.maxSites,
-            currentPeriodEnd: subscription.currentPeriodEnd
+            currentPeriodEnd: subscription.currentPeriodEnd,
+            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd
           }
         : null,
       sites: userWithRelations.sites.map((s) => ({
@@ -84,6 +109,110 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Dashboard me error:', err)
     res.status(500).json({ error: 'Failed to load dashboard' })
+  }
+})
+
+// PATCH /api/dashboard/me - Update user profile
+router.patch('/me', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const { name } = req.body ?? {}
+
+  try {
+    const updateData: { name?: string | null } = {}
+    if (name !== undefined) {
+      updateData.name = typeof name === 'string' ? (name.trim() || null) : null
+    }
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: updateData
+    })
+    res.json({
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      createdAt: updated.createdAt
+    })
+  } catch (err) {
+    console.error('Dashboard me patch error:', err)
+    res.status(500).json({ error: 'Failed to update profile' })
+  }
+})
+
+// POST /api/dashboard/subscription/cancel - Cancel subscription at period end
+router.post('/subscription/cancel', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        userId: user.id,
+        status: { in: ['trialing', 'active'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    if (!subscription?.stripeSubscriptionId) {
+      res.status(404).json({ error: 'No active subscription found' })
+      return
+    }
+
+    const stripe = getStripe()
+    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      cancel_at_period_end: true
+    })
+
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { cancelAtPeriodEnd: true }
+    })
+
+    res.json({
+      success: true,
+      message: 'Your subscription will cancel at the end of your billing period',
+      currentPeriodEnd: subscription.currentPeriodEnd
+    })
+  } catch (err) {
+    console.error('Subscription cancel error:', err)
+    const message = err instanceof Error ? err.message : 'Failed to cancel subscription'
+    res.status(500).json({ error: message })
+  }
+})
+
+// POST /api/dashboard/subscription/portal - Create Stripe Customer Portal session
+router.post('/subscription/portal', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    let stripeCustomerId: string | null = subscription?.stripeCustomerId ?? null
+    if (!stripeCustomerId) {
+      const u = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { stripeCustomerId: true }
+      })
+      stripeCustomerId = u?.stripeCustomerId ?? null
+    }
+    if (!stripeCustomerId) {
+      res.status(404).json({ error: 'No Stripe customer found. Subscribe to a plan first.' })
+      return
+    }
+
+    const stripe = getStripe()
+    const appUrl = getAppUrl()
+    const session = await stripe.billingPortal.sessions.create({
+      customer: stripeCustomerId,
+      return_url: `${appUrl}/dashboard/account`
+    })
+
+    res.json({ url: session.url })
+  } catch (err) {
+    console.error('Portal session error:', err)
+    const message = err instanceof Error ? err.message : 'Failed to create portal session'
+    res.status(500).json({ error: message })
   }
 })
 

@@ -48,3 +48,26 @@ Create separate webhook endpoints for staging and prod:
 - Prod: `https://your-prod-app.herokuapp.com/api/webhooks/stripe`
 
 Use the corresponding signing secret in each app's config.
+
+Subscribe to these events in the Stripe Dashboard:
+- `checkout.session.completed`
+- `customer.subscription.updated`
+
+## Local Development: Running the Worker
+
+The worker is a **separate process** from the API server. Jobs are queued by the server but processed by the worker. For Stripe webhooks to update your database, you must run the worker:
+
+```bash
+# In a separate terminal (from project root):
+npm run dev:worker
+```
+
+Or from the server workspace: `npm run dev:worker --workspace=server`
+
+When the worker starts, you should see:
+```
+[worker] Starting pg-boss worker...
+[worker] Subscribed to queue: stripe.checkout.session.completed
+[worker] Subscribed to queue: stripe.customer.subscription.updated
+[worker] pg-boss workers registered. Listening for jobs on: ...
+```

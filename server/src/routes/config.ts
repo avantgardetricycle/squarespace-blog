@@ -71,10 +71,25 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
 })
 
 // GET /api/config/:siteKey - Public endpoint for loader.js
+// Uses internal subscription record only (no Stripe API calls) - gated on status
 router.get('/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
 
-  const site = await getSiteBySiteKey(siteKey)
+  const site = await prisma.site.findUnique({
+    where: { siteKey },
+    include: {
+      user: {
+        include: {
+          subscriptions: {
+            where: { status: { in: ['trialing', 'active'] } },
+            orderBy: { updatedAt: 'desc' },
+            take: 1
+          }
+        }
+      }
+    }
+  })
+
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
     return
@@ -82,6 +97,12 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 
   if (site.status === 'disabled') {
     res.status(403).json({ error: 'Site is disabled' })
+    return
+  }
+
+  const activeSubscription = site.user?.subscriptions?.[0] ?? null
+  if (!activeSubscription) {
+    res.status(403).json({ error: 'Subscription required' })
     return
   }
 

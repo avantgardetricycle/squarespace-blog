@@ -1,12 +1,15 @@
 const API = '/api'
 
 export interface DashboardMe {
-  user: { id: number; email: string; createdAt: string }
+  user: { id: number; email: string; name: string | null; createdAt: string }
   subscription: {
     plan: string
+    cadence: string
+    priceDisplay: string
     status: string
     maxSites: number | null
     currentPeriodEnd: string | null
+    cancelAtPeriodEnd: boolean
   } | null
   sites: Array<{
     id: string
@@ -23,6 +26,17 @@ export interface DashboardMe {
 
 export async function getDashboardMe(): Promise<DashboardMe | null> {
   const res = await fetch(`${API}/dashboard/me`, { credentials: 'include' })
+  if (!res.ok) return null
+  return res.json()
+}
+
+export async function updateProfile(data: { name?: string | null }): Promise<{ id: number; email: string; name: string | null; createdAt: string } | null> {
+  const res = await fetch(`${API}/dashboard/me`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data)
+  })
   if (!res.ok) return null
   return res.json()
 }
@@ -57,6 +71,30 @@ export async function deleteSite(siteId: string): Promise<boolean> {
     credentials: 'include'
   })
   return res.ok
+}
+
+export async function createPortalSession(): Promise<{ url?: string; error?: string }> {
+  const res = await fetch(`${API}/dashboard/subscription/portal`, {
+    method: 'POST',
+    credentials: 'include'
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { error: data?.error ?? 'Failed to open billing portal' }
+  }
+  return { url: data.url }
+}
+
+export async function cancelSubscription(): Promise<{ success: boolean; error?: string; currentPeriodEnd?: string }> {
+  const res = await fetch(`${API}/dashboard/subscription/cancel`, {
+    method: 'POST',
+    credentials: 'include'
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: data?.error ?? 'Failed to cancel subscription' }
+  }
+  return { success: true, currentPeriodEnd: data.currentPeriodEnd }
 }
 
 export async function updateSite(siteKey: string, updates: { blogPassword?: string }): Promise<{ ok: boolean; error?: string }> {

@@ -3,10 +3,12 @@ import { startQueue, stopQueue } from './queue/index.js'
 import { registerStripeWorkers } from './queue/workers.js'
 
 async function main() {
-  console.log('Starting pg-boss worker...')
+  console.log('[worker] Starting pg-boss worker...')
   await startQueue()
   await registerStripeWorkers()
-  console.log('pg-boss workers registered and running')
+  console.log('[worker] pg-boss workers registered. Listening for jobs on:')
+  console.log('[worker]   - stripe.checkout.session.completed')
+  console.log('[worker]   - stripe.customer.subscription.updated')
 }
 
 main().catch((err) => {

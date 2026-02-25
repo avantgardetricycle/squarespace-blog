@@ -8,8 +8,8 @@ const router = Router()
 
 /** Stripe event types we handle (each maps to a worker) */
 const HANDLED_EVENT_TYPES = new Set([
-  'checkout.session.completed'
-  // Add more as needed: 'customer.subscription.updated', 'invoice.paid', etc.
+  'checkout.session.completed',
+  'customer.subscription.updated'
 ])
 
 function getStripe(): Stripe {
@@ -79,10 +79,15 @@ router.post('/', async (req: Request, res: Response) => {
 
   if (isHandled) {
     try {
-      await queueStripeEvent(event.type, {
+      const jobId = await queueStripeEvent(event.type, {
         stripeEventId: event.id,
         type: event.type,
         data: event.data.object as object
+      })
+      console.log('[webhook] Stripe event queued', {
+        eventType: event.type,
+        stripeEventId: event.id,
+        jobId
       })
     } catch (err) {
       console.error('Failed to queue Stripe event:', err)

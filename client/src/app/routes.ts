@@ -5,6 +5,7 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import Configure from "./pages/Configure";
+import Checkout from "./pages/Checkout";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import { getDashboardMe } from "@/api/auth";
 
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
     path: "/login",
     Component: Login,
     loader: publicLoader,
+  },
+  {
+    path: "/checkout",
+    Component: Checkout,
   },
   {
     path: "/checkout/success",
