@@ -170,7 +170,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
 // PATCH /api/dashboard/sites/by-key/:siteKey - Update site by siteKey (e.g. blog password)
 router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { siteKey } = req.params
+  const siteKey = Array.isArray(req.params.siteKey) ? req.params.siteKey[0] : req.params.siteKey ?? ''
   const { blogPassword } = req.body ?? {}
 
   if (!siteKey) {
@@ -226,7 +226,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 // PATCH /api/dashboard/sites/:id - Update site by id (e.g. blog password)
 router.patch('/sites/:id', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { id: siteId } = req.params
+  const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
   const { blogPassword } = req.body ?? {}
 
   if (!siteId) {
@@ -282,7 +282,7 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
 // DELETE /api/dashboard/sites/:id - Delete site
 router.delete('/sites/:id', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { id: siteId } = req.params
+  const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
 
   if (!siteId) {
     res.status(400).json({ error: 'Site ID required' })
