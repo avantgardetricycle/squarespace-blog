@@ -17,19 +17,6 @@ const PORT = process.env.PORT || 3001
 
 app.set('trust proxy', 1)
 
-// Config endpoint: allow any origin (loader runs on user blogs - arbitrary custom domains)
-// credentials: true so Configure page can POST with session cookie; loader uses GET without credentials
-app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
-
-// All other routes: strict CORS (app origin only)
-const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-app.use(
-  cors({
-    origin: appOrigin,
-    credentials: true
-  })
-)
-
 // Stripe webhook MUST use raw body for signature verification - mount before express.json()
 app.use(
   '/api/webhooks/stripe',
@@ -40,7 +27,20 @@ app.use(
 app.use(express.json())
 app.use(cookieParser())
 
-// Routes (config mounted above with permissive CORS)
+// Config endpoint: allow any origin (loader runs on user blogs - arbitrary custom domains)
+// credentials: true so Configure page can POST with session cookie; loader uses GET without credentials
+// Must be after cookieParser so POST /api/config receives the session cookie
+// Must be before general CORS so permissive CORS applies to config routes
+app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
+
+// All other routes: strict CORS (app origin only)
+const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+app.use(
+  cors({
+    origin: appOrigin,
+    credentials: true
+  })
+)
 app.use('/api/auth', authRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/checkout', checkoutRoutes)

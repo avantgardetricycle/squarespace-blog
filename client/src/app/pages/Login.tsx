@@ -15,6 +15,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   token_expired: "This link has expired. Please request a new magic link.",
   server_error: "Something went wrong. Please try again.",
   existing_user: "User with that email already exists. Login to manage your account.",
+  session_expired: "Your session has expired. Please sign in again to save your changes.",
 };
 
 export default function Login() {

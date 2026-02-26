@@ -178,7 +178,9 @@ export default function Configure() {
     if (!keyToSave) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/config", {
+      // Use absolute URL so the request always targets the app origin (avoids iframe base URL issues)
+      const apiBase = typeof window !== "undefined" ? window.location.origin : "";
+      const res = await fetch(`${apiBase}/api/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -191,7 +193,9 @@ export default function Configure() {
         setSavedConfig(config);
         toast.success("Configuration saved successfully!");
       } else {
-        toast.error("Failed to save configuration.");
+        const data = await res.json().catch(() => ({}));
+        const message = data?.error ?? "Failed to save configuration.";
+        toast.error(message);
       }
     } catch {
       toast.error("Failed to save configuration.");

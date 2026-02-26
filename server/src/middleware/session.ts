@@ -15,7 +15,7 @@ export async function requireSession(
   const token = req.cookies?.session
 
   if (!token) {
-    res.status(401).json({ error: 'Unauthorized' })
+    res.status(401).json({ error: 'Session required. Please log in again.' })
     return
   }
 
@@ -27,17 +27,17 @@ export async function requireSession(
   })
 
   if (!session) {
-    res.status(401).json({ error: 'Invalid session' })
+    res.status(401).json({ error: 'Invalid session. Please log in again.' })
     return
   }
 
   if (session.revokedAt) {
-    res.status(401).json({ error: 'Session revoked' })
+    res.status(401).json({ error: 'Session revoked. Please log in again.' })
     return
   }
 
   if (new Date() > session.expiresAt) {
-    res.status(401).json({ error: 'Session expired' })
+    res.status(401).json({ error: 'Session expired. Please log in again.' })
     return
   }
 
