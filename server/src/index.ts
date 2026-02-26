@@ -15,10 +15,17 @@ import { startQueue, stopQueue } from './queue/index.js'
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// Middleware
+app.set('trust proxy', 1)
+
+// Config endpoint: allow any origin (loader runs on user blogs - arbitrary custom domains)
+// credentials: true so Configure page can POST with session cookie; loader uses GET without credentials
+app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
+
+// All other routes: strict CORS (app origin only)
+const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 app.use(
   cors({
-    origin: process.env.APP_URL ?? 'http://localhost:3000',
+    origin: appOrigin,
     credentials: true
   })
 )
@@ -33,8 +40,7 @@ app.use(
 app.use(express.json())
 app.use(cookieParser())
 
-// Routes
-app.use('/api/config', configRoutes)
+// Routes (config mounted above with permissive CORS)
 app.use('/api/auth', authRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/checkout', checkoutRoutes)
@@ -44,13 +50,21 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Serve renderer.js from scripts/ (single source of truth for both Configure preview and Squarespace loader)
+// Serve loader.js and renderer.js from scripts/ (for Squarespace code injection)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const rendererPath = path.join(__dirname, '../../scripts/renderer.js')
+const scriptsDir = path.join(__dirname, '../../scripts')
+const rendererPath = path.join(scriptsDir, 'renderer.js')
+const loaderPath = path.join(scriptsDir, 'loader.js')
 if (fs.existsSync(rendererPath)) {
   app.get('/renderer.js', (_req, res) => {
     res.type('application/javascript')
     res.sendFile(rendererPath)
+  })
+}
+if (fs.existsSync(loaderPath)) {
+  app.get('/loader.js', (_req, res) => {
+    res.type('application/javascript')
+    res.sendFile(loaderPath)
   })
 }
 

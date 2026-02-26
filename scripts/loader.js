@@ -4,13 +4,22 @@
   // 1. Read attributes from the injected script tag
   const script = document.currentScript;
   const siteKey = script.getAttribute('data-site-key');
-  const apiBase = script.getAttribute('data-api-base') || 'https://tribal-intelligent-rankings-manually.trycloudflare.com';
+  const apiBase = script.getAttribute('data-api-base') || (function() {
+    try {
+      if (script && script.src) return new URL(script.src).origin;
+    } catch (e) {}
+    return '';
+  })();
   const normalizedApiBase = apiBase.replace(/\/+$/, '');
 
   console.log('[BLOGGA BLOGGA] data site key', siteKey)
   console.log('[BLOGGA BLOGGA] data api base', apiBase)
   if (!siteKey) {
     console.error('[BlogOverlay] Missing data-site-key attribute');
+    return;
+  }
+  if (!normalizedApiBase) {
+    console.error('[BlogOverlay] Missing data-api-base and could not derive from script src');
     return;
   }
 

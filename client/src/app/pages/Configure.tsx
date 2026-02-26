@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, Link } from "react-router";
 import {
+  Copy,
   Palette,
   Type,
   LayoutTemplate,
@@ -11,7 +12,6 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import {
@@ -25,8 +25,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/ta
 import { Separator } from "@/app/components/ui/separator";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
 import { toast } from "sonner";
+import BlogPreviewIframe, {
+  buildBlogPreviewUrl,
+  isSquarespaceUrl,
+} from "@/app/components/BlogPreviewIframe";
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
-import { getDashboardMe, updateSite, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
 export interface SiteConfigForm {
   showDate: boolean;
@@ -113,9 +117,7 @@ export default function Configure() {
   const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [saving, setSaving] = useState(false);
-  const [blogPassword, setBlogPassword] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const [copiedSiteKey, setCopiedSiteKey] = useState<string | null>(null);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -167,9 +169,6 @@ export default function Configure() {
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
 
-  useEffect(() => {
-    setBlogPassword("");
-  }, [effectiveSiteKey]);
 
   const isDirty = !configsEqual(config, savedConfig);
   const rendererConfig = useMemo(() => configToRendererConfig(config), [config]);
@@ -247,7 +246,7 @@ export default function Configure() {
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-neutral-100">
       {/* Configuration Sidebar */}
-      <aside className="w-80 bg-white border-r border-neutral-200 flex flex-col z-10 shadow-sm">
+      <aside className="w-80 bg-white border-r border-neutral-200 flex flex-col min-h-0 z-10 shadow-sm">
         <div className="p-4 border-b border-neutral-100 space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-neutral-500">Customizing</Label>
@@ -265,46 +264,40 @@ export default function Configure() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="blog-password" className="text-xs font-medium text-neutral-500">
-              Blog password
+            <Label className="text-xs font-medium text-neutral-500">
+              Install on your blog
             </Label>
             <p className="text-xs text-neutral-500">
-              Required if your blog is password protected on Squarespace.
+              In Squarespace, go to Settings → Advanced → Code Injection. Add this code to the header of your blog page.
             </p>
-            <div className="flex gap-2">
-              <Input
-                id="blog-password"
-                type="password"
-                placeholder={effectiveSite?.hasBlogPassword ? "••••••••" : "Enter password"}
-                value={blogPassword}
-                onChange={(e) => setBlogPassword(e.target.value)}
-                className="flex-1"
-                autoComplete="off"
-              />
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={async () => {
-                  const site = effectiveSite;
-                  if (!site) return;
-                  setSavingPassword(true);
-                  const result = await updateSite(site.siteKey, { blogPassword: blogPassword.trim() || "" });
-                  setSavingPassword(false);
-                  if (result.ok) {
-                    const fresh = await getDashboardMe();
-                    if (fresh) setMe(fresh);
-                    setBlogPassword("");
-                    setPreviewRefreshKey((k) => k + 1);
-                    toast.success(blogPassword ? "Password saved" : "Password cleared");
-                  } else {
-                    toast.error(result.error ?? "Failed to save password");
-                  }
-                }}
-                disabled={savingPassword}
-              >
-                {savingPassword ? "Saving…" : "Save"}
-              </Button>
-            </div>
+            {effectiveSiteKey && (() => {
+              const base = typeof window !== "undefined" ? window.location.origin : "";
+              const snippet = `<script
+  src="${base}/loader.js"
+  data-site-key="${effectiveSiteKey}"
+  data-api-base="${base}"
+></script>`;
+              return (
+              <div className="space-y-2">
+                <pre className="text-xs bg-neutral-100 p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
+                  {snippet}
+                </pre>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(snippet);
+                    setCopiedSiteKey(effectiveSiteKey);
+                    toast.success("Code copied to clipboard");
+                    setTimeout(() => setCopiedSiteKey(null), 2000);
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  {copiedSiteKey === effectiveSiteKey ? "Copied!" : "Copy code"}
+                </Button>
+              </div>
+            );
+            })()}
           </div>
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
@@ -327,7 +320,7 @@ export default function Configure() {
             </TabsList>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-6 space-y-6">
               {/* Layout Settings */}
               <TabsContent value="layout" className="space-y-6 mt-0">
@@ -519,15 +512,42 @@ export default function Configure() {
               ${device === "mobile" ? "w-[375px] h-[812px] rounded-[2rem] my-4 border-8 border-neutral-800" : ""}
             `}
           >
-            <div className="h-full w-full overflow-y-auto">
-              {effectiveSiteKey && (
-                <BlogPreviewRenderer
-                  key={`${effectiveSiteKey}-${previewRefreshKey}`}
-                  siteKey={effectiveSiteKey}
-                  config={rendererConfig}
-                  className="min-h-full"
-                />
-              )}
+            <div className="h-full w-full overflow-hidden overflow-y-auto">
+              {effectiveSite && (() => {
+                const previewUrl = buildBlogPreviewUrl(effectiveSite);
+                if (!previewUrl) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-neutral-500 p-8 text-center">
+                      Add your blog URL in the dashboard to see a live preview.
+                    </div>
+                  );
+                }
+                if (isSquarespaceUrl(previewUrl)) {
+                  return (
+                    <div className="flex flex-col h-full">
+                      <p className="text-xs text-neutral-500 px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
+                        Squarespace blocks iframe embedding. Using a simplified preview.
+                      </p>
+                      <div className="flex-1 min-h-0 overflow-y-auto">
+                        <BlogPreviewRenderer
+                          key={effectiveSite.siteKey}
+                          siteKey={effectiveSite.siteKey}
+                          config={rendererConfig}
+                          className="min-h-full"
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <BlogPreviewIframe
+                    key={effectiveSite.siteKey}
+                    blogUrl={previewUrl}
+                    config={rendererConfig}
+                    className="min-h-full"
+                  />
+                );
+              })()}
             </div>
           </div>
         </div>

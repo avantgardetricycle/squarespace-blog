@@ -117,9 +117,17 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const tableOfContents = (siteConfig.tableOfContents as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
     const recentPostsSidebar = (siteConfig.recentPostsSidebar as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
 
+    // Derive renderer URL from request host so loader gets a URL it can fetch (avoids
+    // localhost/loopback when API is reached via tunnel - Private Network Access blocks
+    // public pages loading scripts from loopback)
+    const protocol = req.get('x-forwarded-proto') || req.protocol || 'https'
+    const host = req.get('x-forwarded-host') || req.get('host') || ''
+    const baseUrl = host ? `${protocol}://${host}`.replace(/\/$/, '') : (process.env.APP_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+    const rendererUrl = `${baseUrl}/renderer.js`
+
     const configData = {
       blogPath: site.blogPath ?? null,
-      rendererUrl: `${(process.env.APP_URL ?? 'http://localhost:3001').replace(/\/$/, '')}/renderer.js`,
+      rendererUrl,
       showDate: siteConfig.showDate,
       showAuthor: siteConfig.showAuthor,
       showProgressBar: progressBar.show ?? false,
