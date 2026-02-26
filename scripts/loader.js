@@ -4,13 +4,15 @@
   // 1. Read attributes from the injected script tag
   const script = document.currentScript;
   const siteKey = script.getAttribute('data-site-key');
-  let apiBase = script.getAttribute('data-api-base') || (function() {
-    try {
-      if (script && script.src) return new URL(script.src).origin;
-    } catch (e) {}
-    return '';
-  })() || '__API_BASE_URL__';
-  if (apiBase === '__API_BASE_URL__') apiBase = '';
+  const injectedBase = '__API_BASE_URL__';
+  let apiBase = script.getAttribute('data-api-base')
+    || (injectedBase !== '__API_' + 'BASE_URL__' ? injectedBase : '')
+    || (function() {
+      try {
+        if (script && script.src) return new URL(script.src).origin;
+      } catch (e) {}
+      return '';
+    })();
   const normalizedApiBase = apiBase.replace(/\/+$/, '');
 
   console.log('[BLOGGA BLOGGA] data site key', siteKey)
