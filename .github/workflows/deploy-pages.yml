@@ -28,7 +28,8 @@ jobs:
         run: |
           API_BASE="${{ vars.API_BASE_URL }}"
           if [ -n "$API_BASE" ]; then
-            sed -i "s|__API_BASE_URL__|$API_BASE|g" scripts/loader.js
+            # Replace only the first occurrence (fallback value), not the check
+            sed -i "s|__API_BASE_URL__|$API_BASE|1" scripts/loader.js
           fi
 
       - name: Setup Pages
