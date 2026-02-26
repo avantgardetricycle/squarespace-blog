@@ -25,9 +25,11 @@ export default function Login() {
 
   const errorCode = searchParams.get("error");
   const reasonCode = searchParams.get("reason");
-  const errorMessage =
-    (errorCode ? ERROR_MESSAGES[errorCode] ?? "An error occurred." : null) ??
-    (reasonCode ? ERROR_MESSAGES[reasonCode] ?? null) : null;
+  const errorMessage = errorCode
+    ? (ERROR_MESSAGES[errorCode] ?? "An error occurred.")
+    : reasonCode
+      ? (ERROR_MESSAGES[reasonCode] ?? null)
+      : null;
 
   useEffect(() => {
     if (errorMessage) toast.error(errorMessage);
