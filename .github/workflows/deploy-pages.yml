@@ -24,6 +24,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Inject API base URL into loader
+        run: |
+          API_BASE="${{ vars.API_BASE_URL }}"
+          if [ -n "$API_BASE" ]; then
+            sed -i "s|__API_BASE_URL__|$API_BASE|g" scripts/loader.js
+          fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

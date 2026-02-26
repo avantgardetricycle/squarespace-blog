@@ -7,6 +7,28 @@ import { getAppUrl } from '../lib/url.js'
 const router = Router()
 const TRIAL_DAYS = 7
 
+// POST /api/checkout/check-email - Check if user with email already exists (for duplicate prevention)
+router.post('/check-email', async (req: Request, res: Response) => {
+  const email = typeof req.body?.email === 'string' && req.body.email.includes('@')
+    ? req.body.email.trim().toLowerCase()
+    : null
+
+  if (!email) {
+    res.status(400).json({ error: 'Valid email is required' })
+    return
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({
+      where: { email }
+    })
+    res.json({ exists: !!existing })
+  } catch (err) {
+    console.error('Check email error:', err)
+    res.status(500).json({ error: 'Failed to check email' })
+  }
+})
+
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')

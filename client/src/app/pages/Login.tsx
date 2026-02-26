@@ -14,6 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   token_used: "This link has already been used. Please request a new one.",
   token_expired: "This link has expired. Please request a new magic link.",
   server_error: "Something went wrong. Please try again.",
+  existing_user: "User with that email already exists. Login to manage your account.",
 };
 
 export default function Login() {
@@ -23,7 +24,10 @@ export default function Login() {
   const [sent, setSent] = useState(false);
 
   const errorCode = searchParams.get("error");
-  const errorMessage = errorCode ? ERROR_MESSAGES[errorCode] ?? "An error occurred." : null;
+  const reasonCode = searchParams.get("reason");
+  const errorMessage =
+    (errorCode ? ERROR_MESSAGES[errorCode] ?? "An error occurred." : null) ??
+    (reasonCode ? ERROR_MESSAGES[reasonCode] ?? null) : null;
 
   useEffect(() => {
     if (errorMessage) toast.error(errorMessage);

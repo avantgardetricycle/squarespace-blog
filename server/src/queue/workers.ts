@@ -160,6 +160,7 @@ async function handleCheckoutSessionCompleted(
     const currentPeriodEnd =
       typeof periodEnd === 'number' ? new Date(periodEnd * 1000) : null
 
+    // Use existing user if one exists (by email) to avoid duplicates
     const upsertPayload = {
       create: { email: normalizedEmail, name: customerName, stripeCustomerId },
       update: {

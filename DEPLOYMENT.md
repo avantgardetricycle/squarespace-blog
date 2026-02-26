@@ -1,3 +1,18 @@
+# Deployment
+
+## GitHub Pages (loader.js / renderer.js)
+
+The `scripts/` directory is deployed to GitHub Pages on push to `main`. The loader fetches config from your API; when served from GitHub Pages it cannot infer the API URL from the script origin.
+
+**Required:** Set the `API_BASE_URL` repository variable so the loader knows where to fetch config:
+
+1. GitHub repo → Settings → Secrets and variables → Actions → Variables
+2. Add `API_BASE_URL` = your Heroku app URL (e.g. `https://your-staging-app.herokuapp.com`)
+
+The deploy workflow injects this into `loader.js` before publishing. Without it, users must include `data-api-base` in their Squarespace snippet.
+
+---
+
 # Heroku Deployment
 
 ## Overview

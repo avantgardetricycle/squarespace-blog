@@ -79,6 +79,19 @@ export default function Checkout() {
 
     setCheckoutLoading(true);
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const checkRes = await fetch("/api/checkout/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      const checkData = await checkRes.json().catch(() => ({}));
+      if (checkData.exists) {
+        window.location.href = "/login?reason=existing_user";
+        return;
+      }
+
       const cadence = isAnnual ? "annual" : "monthly";
       const res = await fetch("/api/checkout/create-session", {
         method: "POST",
