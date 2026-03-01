@@ -20,10 +20,10 @@ export default function Layout() {
   ];
 
   return (
-    <div className="flex h-screen bg-neutral-50 text-neutral-900 font-sans">
+    <div className="flex h-screen bg-[#f7f6f3] text-[#0a0a0a] font-sans">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-neutral-200 bg-white flex flex-col">
-        <div className="p-6 border-b border-neutral-100 flex items-center gap-2">
+      <aside className="w-64 border-r border-[#e5e4e0] bg-white flex flex-col">
+        <div className="p-6 border-b border-[#e5e4e0] flex items-center gap-2">
            <Logo />
         </div>
 
@@ -37,21 +37,21 @@ export default function Layout() {
                 cn(
                   "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                    ? "bg-[#5B4FE8]/10 text-[#5B4FE8]"
+                    : "text-[#6b6b6b] hover:bg-[#f7f6f3] hover:text-[#0a0a0a]"
                 )
               }
             >
-              <item.icon className={cn("w-4 h-4", window.location.pathname === item.to ? "text-blue-600" : "")} />
+              <item.icon className={cn("w-4 h-4", window.location.pathname === item.to ? "text-[#5B4FE8]" : "")} />
               {item.label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-neutral-100">
+        <div className="p-4 border-t border-[#e5e4e0]">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-neutral-500 hover:bg-neutral-50 hover:text-red-600 transition-colors"
+            className="flex w-full items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-[#6b6b6b] hover:bg-[#f7f6f3] hover:text-red-600 transition-colors"
           >
             <LogOut className="w-4 h-4" />
             Sign Out

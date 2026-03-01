@@ -12,7 +12,9 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Slider } from "@/app/components/ui/slider";
 import { Switch } from "@/app/components/ui/switch";
 import {
   Select,
@@ -35,7 +37,7 @@ import { getDashboardMe, type DashboardMe } from "@/api/auth";
 export interface SiteConfigForm {
   showDate: boolean;
   showAuthor: boolean;
-  progressBar: { show: boolean; position: "top" | "bottom" };
+  progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
   tableOfContents: { show: boolean; position: "left" | "right" };
   recentPostsSidebar: { show: boolean; position: "left" | "right" };
 }
@@ -43,7 +45,7 @@ export interface SiteConfigForm {
 const defaultSiteConfig: SiteConfigForm = {
   showDate: true,
   showAuthor: false,
-  progressBar: { show: false, position: "top" },
+  progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
   tableOfContents: { show: false, position: "left" },
   recentPostsSidebar: { show: false, position: "left" },
 };
@@ -55,6 +57,10 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     progressBar: {
       show: Boolean(data.showProgressBar ?? false),
       position: (data.progressBarPosition === "bottom" ? "bottom" : "top") as "top" | "bottom",
+      thickness: Math.min(12, Math.max(2, Number(data.progressBarThickness) || 6)),
+      color: typeof data.progressBarColor === "string" && /^#[0-9A-Fa-f]{6}$/.test(data.progressBarColor as string)
+        ? (data.progressBarColor as string)
+        : "#5B4FE8",
     },
     tableOfContents: {
       show: Boolean(data.showTableOfContents ?? false),
@@ -73,6 +79,8 @@ function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
     showAuthor: config.showAuthor,
     showProgressBar: config.progressBar.show,
     progressBarPosition: config.progressBar.position,
+    progressBarThickness: config.progressBar.thickness,
+    progressBarColor: config.progressBar.color,
     showTableOfContents: config.tableOfContents.show,
     tableOfContentsPosition: config.tableOfContents.position,
     showRecentPostsSidebar: config.recentPostsSidebar.show,
@@ -86,6 +94,8 @@ function configToRendererConfig(config: SiteConfigForm): Record<string, unknown>
     showAuthor: config.showAuthor,
     showProgressBar: config.progressBar.show,
     progressBarPosition: config.progressBar.position,
+    progressBarThickness: config.progressBar.thickness,
+    progressBarColor: config.progressBar.color,
     showTableOfContents: config.tableOfContents.show,
     tableOfContentsPosition: config.tableOfContents.position,
     showRecentPostsSidebar: config.recentPostsSidebar.show,
@@ -100,6 +110,8 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.showAuthor === b.showAuthor &&
     a.progressBar.show === b.progressBar.show &&
     a.progressBar.position === b.progressBar.position &&
+    a.progressBar.thickness === b.progressBar.thickness &&
+    a.progressBar.color === b.progressBar.color &&
     a.tableOfContents.show === b.tableOfContents.show &&
     a.tableOfContents.position === b.tableOfContents.position &&
     a.recentPostsSidebar.show === b.recentPostsSidebar.show &&
@@ -216,6 +228,8 @@ export default function Configure() {
       else if (path === "showAuthor") next.showAuthor = value as boolean;
       else if (path === "progressBar.show") next.progressBar = { ...prev.progressBar, show: value as boolean };
       else if (path === "progressBar.position") next.progressBar = { ...prev.progressBar, position: value as "top" | "bottom" };
+      else if (path === "progressBar.thickness") next.progressBar = { ...prev.progressBar, thickness: value as number };
+      else if (path === "progressBar.color") next.progressBar = { ...prev.progressBar, color: value as string };
       else if (path === "tableOfContents.show") next.tableOfContents = { ...prev.tableOfContents, show: value as boolean };
       else if (path === "tableOfContents.position") next.tableOfContents = { ...prev.tableOfContents, position: value as "left" | "right" };
       else if (path === "recentPostsSidebar.show") next.recentPostsSidebar = { ...prev.recentPostsSidebar, show: value as boolean };
@@ -231,7 +245,7 @@ export default function Configure() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
-        <div className="animate-pulse text-neutral-500">Loading…</div>
+        <div className="animate-pulse text-[#6b6b6b]">Loading…</div>
       </div>
     );
   }
@@ -239,7 +253,7 @@ export default function Configure() {
   if (!me || me.sites.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-center">
-        <p className="text-neutral-500">No blogs yet. Add a blog from the dashboard to get started.</p>
+        <p className="text-[#6b6b6b]">No blogs yet. Add a blog from the dashboard to get started.</p>
         <Button asChild>
           <Link to="/dashboard">Go to Dashboard</Link>
         </Button>
@@ -248,12 +262,12 @@ export default function Configure() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-neutral-100">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f7f6f3]">
       {/* Configuration Sidebar */}
-      <aside className="w-80 bg-white border-r border-neutral-200 flex flex-col min-h-0 z-10 shadow-sm">
-        <div className="p-4 border-b border-neutral-100 space-y-4">
+      <aside className="w-80 bg-white border-r border-[#e5e4e0] flex flex-col min-h-0 z-10 shadow-sm">
+        <div className="p-4 border-b border-[#e5e4e0] space-y-4">
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-neutral-500">Customizing</Label>
+            <Label className="text-xs font-medium text-[#6b6b6b]">Customizing</Label>
             <Select value={effectiveSiteKey ?? undefined} onValueChange={handleBlogChange}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a blog" />
@@ -268,10 +282,10 @@ export default function Configure() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-neutral-500">
+            <Label className="text-xs font-medium text-[#6b6b6b]">
               Install on your blog
             </Label>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-[#6b6b6b]">
               In Squarespace, go to Settings → Advanced → Code Injection. Add this code to the header of your blog page.
             </p>
             {effectiveSiteKey && (() => {
@@ -283,7 +297,7 @@ export default function Configure() {
 ></script>`;
               return (
               <div className="space-y-2">
-                <pre className="text-xs bg-neutral-100 p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
+                <pre className="text-xs bg-[#f7f6f3] p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
                   {snippet}
                 </pre>
                 <Button
@@ -307,7 +321,7 @@ export default function Configure() {
         </div>
 
         <Tabs defaultValue="layout" className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-4 py-2 border-b border-neutral-100">
+          <div className="px-4 py-2 border-b border-[#e5e4e0]">
             <TabsList className="w-full grid grid-cols-3">
               <TabsTrigger value="layout" className="flex gap-2">
                 <LayoutTemplate className="h-4 w-4" />
@@ -329,7 +343,7 @@ export default function Configure() {
               {/* Layout Settings */}
               <TabsContent value="layout" className="space-y-6 mt-0">
                 {configLoading ? (
-                  <div className="text-sm text-neutral-500">Loading settings…</div>
+                  <div className="text-sm text-[#6b6b6b]">Loading settings…</div>
                 ) : (
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
@@ -361,20 +375,55 @@ export default function Configure() {
                         />
                       </div>
                       {config.progressBar.show && (
-                        <div className="space-y-2">
-                          <Label className="text-xs text-neutral-500">Position</Label>
-                          <Select
-                            value={config.progressBar.position}
-                            onValueChange={(v) => updateConfig("progressBar.position", v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="top">Top</SelectItem>
-                              <SelectItem value="bottom">Bottom</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                            <Select
+                              value={config.progressBar.position}
+                              onValueChange={(v) => updateConfig("progressBar.position", v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="top">Top</SelectItem>
+                                <SelectItem value="bottom">Bottom</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Thickness</Label>
+                            <div className="flex items-center gap-3">
+                              <Slider
+                                value={[config.progressBar.thickness]}
+                                onValueChange={([v]) => updateConfig("progressBar.thickness", v ?? 6)}
+                                min={2}
+                                max={12}
+                                step={1}
+                                className="flex-1"
+                              />
+                              <span className="text-xs text-[#6b6b6b] w-8 shrink-0">
+                                {config.progressBar.thickness}px
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Color</Label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={config.progressBar.color}
+                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
+                                className="h-9 w-14 cursor-pointer rounded border border-[#e5e4e0] bg-white p-0"
+                              />
+                              <Input
+                                value={config.progressBar.color}
+                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
+                                className="font-mono text-sm h-9 w-24"
+                                placeholder="#5B4FE8"
+                              />
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -391,7 +440,7 @@ export default function Configure() {
                       </div>
                       {config.tableOfContents.show && (
                         <div className="space-y-2">
-                          <Label className="text-xs text-neutral-500">Position</Label>
+                          <Label className="text-xs text-[#6b6b6b]">Position</Label>
                           <Select
                             value={config.tableOfContents.position}
                             onValueChange={(v) => updateConfig("tableOfContents.position", v)}
@@ -420,7 +469,7 @@ export default function Configure() {
                       </div>
                       {config.recentPostsSidebar.show && (
                         <div className="space-y-2">
-                          <Label className="text-xs text-neutral-500">Position</Label>
+                          <Label className="text-xs text-[#6b6b6b]">Position</Label>
                           <Select
                             value={config.recentPostsSidebar.position}
                             onValueChange={(v) => updateConfig("recentPostsSidebar.position", v)}
@@ -443,14 +492,14 @@ export default function Configure() {
               {/* Typography Settings - disabled for now */}
               <TabsContent value="typography" className="space-y-6 mt-0 opacity-50 pointer-events-none">
                 <div className="space-y-4">
-                  <p className="text-sm text-neutral-500">Coming soon.</p>
+                  <p className="text-sm text-[#6b6b6b]">Coming soon.</p>
                 </div>
               </TabsContent>
 
               {/* Colors Settings - disabled for now */}
               <TabsContent value="colors" className="space-y-6 mt-0 opacity-50 pointer-events-none">
                 <div className="space-y-4">
-                  <p className="text-sm text-neutral-500">Coming soon.</p>
+                  <p className="text-sm text-[#6b6b6b]">Coming soon.</p>
                 </div>
               </TabsContent>
             </div>
@@ -459,10 +508,10 @@ export default function Configure() {
       </aside>
 
       {/* Preview Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-neutral-100/50">
-        <div className="h-14 border-b border-neutral-200 bg-white px-4 flex items-center justify-between">
+      <main className="flex-1 flex flex-col min-w-0 bg-[#f7f6f3]/50">
+        <div className="h-14 border-b border-[#e5e4e0] bg-white px-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-medium text-neutral-900">Live Preview</span>
+            <span className="font-medium text-[#0a0a0a]">Live Preview</span>
             {isDirty ? (
               <>
                 <span className="text-amber-600 text-sm">Unsaved changes</span>
@@ -476,15 +525,15 @@ export default function Configure() {
                 </Button>
               </>
             ) : (
-              <span className="text-neutral-500 text-sm">No unsaved changes</span>
+              <span className="text-[#6b6b6b] text-sm">No unsaved changes</span>
             )}
           </div>
 
-          <div className="flex items-center bg-neutral-100 rounded-lg p-1">
+          <div className="flex items-center bg-[#f7f6f3] rounded-lg p-1">
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 w-8 p-0 ${device === "desktop" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              className={`h-8 w-8 p-0 ${device === "desktop" ? "bg-white shadow-sm" : "text-[#6b6b6b]"}`}
               onClick={() => setDevice("desktop")}
             >
               <Monitor className="h-4 w-4" />
@@ -492,7 +541,7 @@ export default function Configure() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 w-8 p-0 ${device === "tablet" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              className={`h-8 w-8 p-0 ${device === "tablet" ? "bg-white shadow-sm" : "text-[#6b6b6b]"}`}
               onClick={() => setDevice("tablet")}
             >
               <Tablet className="h-4 w-4" />
@@ -500,7 +549,7 @@ export default function Configure() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-8 w-8 p-0 ${device === "mobile" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              className={`h-8 w-8 p-0 ${device === "mobile" ? "bg-white shadow-sm" : "text-[#6b6b6b]"}`}
               onClick={() => setDevice("mobile")}
             >
               <Smartphone className="h-4 w-4" />
@@ -512,8 +561,8 @@ export default function Configure() {
           <div
             className={`bg-white shadow-xl transition-all duration-300 origin-top overflow-hidden
               ${device === "desktop" ? "w-full h-full" : ""}
-              ${device === "tablet" ? "w-[768px] h-[1024px] rounded-lg my-4 border-8 border-neutral-800" : ""}
-              ${device === "mobile" ? "w-[375px] h-[812px] rounded-[2rem] my-4 border-8 border-neutral-800" : ""}
+              ${device === "tablet" ? "w-[768px] h-[1024px] rounded-lg my-4 border-8 border-[#8F86F0]/30" : ""}
+              ${device === "mobile" ? "w-[375px] h-[812px] rounded-[2rem] my-4 border-8 border-[#8F86F0]/30" : ""}
             `}
           >
             <div className="h-full w-full overflow-hidden overflow-y-auto">
@@ -521,7 +570,7 @@ export default function Configure() {
                 const previewUrl = buildBlogPreviewUrl(effectiveSite);
                 if (!previewUrl) {
                   return (
-                    <div className="flex items-center justify-center h-full text-neutral-500 p-8 text-center">
+                    <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
                       Add your blog URL in the dashboard to see a live preview.
                     </div>
                   );
@@ -529,12 +578,12 @@ export default function Configure() {
                 if (isSquarespaceUrl(previewUrl)) {
                   return (
                     <div className="flex flex-col h-full">
-                      <p className="text-xs text-neutral-500 px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
+                      <p className="text-xs text-[#6b6b6b] px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
                         Squarespace blocks iframe embedding. Using a simplified preview.
                       </p>
                       <div className="flex-1 min-h-0 overflow-y-auto">
                         <BlogPreviewRenderer
-                          key={effectiveSite.siteKey}
+                          key={`${effectiveSite.siteKey}-${config.progressBar.thickness}-${config.progressBar.color}`}
                           siteKey={effectiveSite.siteKey}
                           config={rendererConfig}
                           className="min-h-full"

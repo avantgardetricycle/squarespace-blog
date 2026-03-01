@@ -60,21 +60,21 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-emerald-700 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0a0a0a] via-[#2d2a5e] to-[#5B4FE8] px-4 py-12 sm:px-6 lg:px-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-neutral-100"
+        className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-[#d4d4d0]"
       >
         <div className="text-center flex flex-col items-center">
           <Link to="/" className="mb-6">
             <Logo size="lg" />
           </Link>
-          <h2 className="text-3xl font-extrabold tracking-tight text-neutral-900">
+          <h2 className="text-3xl font-heading font-bold tracking-tight text-[#0a0a0a]">
             {sent ? "Check your email" : "Sign in to your account"}
           </h2>
-          <p className="mt-2 text-sm text-neutral-600">
+          <p className="mt-2 text-sm text-[#6b6b6b]">
             {sent
               ? `We sent a magic link to ${email}. Click it to sign in.`
               : "Enter your email to receive a magic link"}
@@ -100,7 +100,7 @@ export default function Login() {
                 type="email"
                 autoComplete="email"
                 required
-                className="relative block w-full appearance-none rounded-md border border-neutral-300 px-3 py-2 text-neutral-900 placeholder-neutral-500 focus:z-10 focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                className="relative block w-full appearance-none rounded-lg border border-[#d4d4d0] px-3 py-2 text-[#0a0a0a] placeholder-[#6b6b6b] focus:z-10 focus:border-[#5B4FE8] focus:outline-none focus:ring-2 focus:ring-[#5B4FE8] focus:ring-offset-0 sm:text-sm"
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -112,7 +112,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={loading}
-              className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="group relative flex w-full justify-center rounded-full border border-transparent bg-[#5B4FE8] py-2 px-4 text-sm font-medium text-white hover:bg-[#4a3fd4] focus:outline-none focus:ring-2 focus:ring-[#5B4FE8] focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -127,7 +127,7 @@ export default function Login() {
         </form>
         )}
         
-        <div className="text-center text-xs text-neutral-400 mt-4">
+        <div className="text-center text-xs text-[#6b6b6b] mt-4">
           By signing in, you agree to our Terms of Service and Privacy Policy.
         </div>
       </motion.div>

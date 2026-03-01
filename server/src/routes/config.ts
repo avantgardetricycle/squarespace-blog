@@ -113,7 +113,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
   }
 
   try {
-    const progressBar = (siteConfig.progressBar as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
+    const progressBar = (siteConfig.progressBar as { show?: boolean; position?: string | null; thickness?: number; color?: string }) ?? { show: false, position: null, thickness: 6, color: '#5B4FE8' }
     const tableOfContents = (siteConfig.tableOfContents as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
     const recentPostsSidebar = (siteConfig.recentPostsSidebar as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
 
@@ -132,6 +132,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       showAuthor: siteConfig.showAuthor,
       showProgressBar: progressBar.show ?? false,
       progressBarPosition: progressBar.position ?? 'top',
+      progressBarThickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
+      progressBarColor: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8',
       showTableOfContents: tableOfContents.show ?? false,
       tableOfContentsPosition: tableOfContents.position ?? 'left',
       showRecentPostsSidebar: recentPostsSidebar.show ?? false,
@@ -171,7 +173,11 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       showAuthor: (c.showAuthor ?? layout.showAuthor ?? false) as boolean,
       progressBar: {
         show: (c.showProgressBar ?? false) as boolean,
-        position: ((c as { progressBarPosition?: string | null }).progressBarPosition ?? 'top') as string | null
+        position: ((c as { progressBarPosition?: string | null }).progressBarPosition ?? 'top') as string | null,
+        thickness: Math.min(12, Math.max(2, Number((c as { progressBarThickness?: number }).progressBarThickness) || 6)),
+        color: (typeof (c as { progressBarColor?: string }).progressBarColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test((c as { progressBarColor: string }).progressBarColor))
+          ? (c as { progressBarColor: string }).progressBarColor
+          : '#5B4FE8'
       },
       tableOfContents: {
         show: (c.showTableOfContents ?? false) as boolean,

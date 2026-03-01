@@ -29,7 +29,7 @@ export async function getActiveSiteConfig(siteId: string) {
 export interface SiteConfigData {
   showDate?: boolean
   showAuthor?: boolean
-  progressBar?: { show: boolean; position: string | null }
+  progressBar?: { show: boolean; position: string | null; thickness?: number; color?: string }
   tableOfContents?: { show: boolean; position: string }
   recentPostsSidebar?: { show: boolean; position: string }
 }
@@ -51,7 +51,7 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         version: nextVersion,
         showDate: data.showDate ?? true,
         showAuthor: data.showAuthor ?? false,
-        progressBar: data.progressBar ?? { show: false, position: null },
+        progressBar: data.progressBar ?? { show: false, position: null, thickness: 6, color: '#5B4FE8' },
         tableOfContents: data.tableOfContents ?? { show: false, position: null },
         recentPostsSidebar: data.recentPostsSidebar ?? { show: false, position: null },
         isActive: true

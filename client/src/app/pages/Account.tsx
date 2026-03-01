@@ -106,7 +106,7 @@ export default function Account() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-pulse text-neutral-500">Loading...</div>
+        <div className="animate-pulse text-[#6b6b6b]">Loading...</div>
       </div>
     );
   }
@@ -134,10 +134,10 @@ export default function Account() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
+        <h1 className="text-3xl font-heading font-bold tracking-tight text-[#0a0a0a]">
           Account Settings
         </h1>
-        <p className="text-neutral-500">
+        <p className="text-[#6b6b6b]">
           Manage your account details and subscription plan.
         </p>
       </div>
@@ -164,7 +164,7 @@ export default function Account() {
             <div className="grid gap-2">
               <Label htmlFor="email">Email Address</Label>
               <Input id="email" value={me.user.email} disabled />
-              <p className="text-[0.8rem] text-neutral-500">
+              <p className="text-[0.8rem] text-[#6b6b6b]">
                 Your email address is managed via your Squarespace account.
               </p>
             </div>
@@ -186,14 +186,14 @@ export default function Account() {
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="flex items-center space-x-4 rounded-md border p-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-100">
-                <CreditCard className="w-5 h-5 text-neutral-900" />
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-[#5B4FE8]/10">
+                <CreditCard className="w-5 h-5 text-[#5B4FE8]" />
               </div>
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-medium leading-none">
                   {planDisplay} Plan
                 </p>
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-[#6b6b6b]">
                   {cadenceDisplay} • {priceDisplay} • {statusDisplay}
                 </p>
               </div>
@@ -206,17 +206,17 @@ export default function Account() {
                 {portalLoadingButton === "changePlan" ? "Opening…" : "Change Plan"}
               </Button>
             </div>
-            <div className="text-sm text-neutral-500">
+            <div className="text-sm text-[#6b6b6b]">
               {me.subscription?.cancelAtPeriodEnd ? (
                 <>
                   Your subscription will end on{" "}
-                  <span className="font-medium text-neutral-900">{currentPeriodEnd}</span>.
+                  <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
                   You'll keep access until then.
                 </>
               ) : (
                 <>
                   Your next billing date is{" "}
-                  <span className="font-medium text-neutral-900">{currentPeriodEnd}</span>.
+                  <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
                 </>
               )}
             </div>

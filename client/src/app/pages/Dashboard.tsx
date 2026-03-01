@@ -168,11 +168,11 @@ export default function Dashboard() {
         color: "text-amber-600",
       };
     }
-    return {
-      icon: <XCircle className="w-4 h-4 text-neutral-400" />,
-      text: "Not configured",
-      color: "text-neutral-400",
-    };
+      return {
+        icon: <XCircle className="w-4 h-4 text-[#6b6b6b]" />,
+        text: "Not configured",
+        color: "text-[#6b6b6b]",
+      };
   };
 
   const formatDate = (dateStr: string) => {
@@ -198,7 +198,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-pulse text-neutral-500">Loading...</div>
+        <div className="animate-pulse text-[#6b6b6b]">Loading...</div>
       </div>
     );
   }
@@ -210,13 +210,13 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-heading font-bold tracking-tight text-neutral-900 flex items-center gap-2">
+        <h1 className="text-3xl font-heading font-bold tracking-tight text-[#0a0a0a] flex items-center gap-2">
           Welcome to{" "}
-          <span className="bg-gradient-to-r from-blue-700 to-green-600 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-[#5B4FE8] to-[#8F86F0] bg-clip-text text-transparent">
             BetterBlog
           </span>
         </h1>
-        <p className="text-neutral-500 text-lg">
+        <p className="text-[#6b6b6b] text-lg">
           Manage your blog customization and Squarespace integration.
         </p>
       </div>
@@ -246,9 +246,9 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <div className="space-y-2 min-w-0">
-                  <p className="text-sm text-neutral-600 break-words">
+                  <p className="text-sm text-[#6b6b6b] break-words">
                     Paste this into your Squarespace site&apos;s{" "}
-                    <span className="font-medium text-neutral-900">
+                    <span className="font-medium text-[#0a0a0a]">
                       Settings → Advanced → Code Injection → Header
                     </span>
                     .
@@ -258,7 +258,7 @@ export default function Dashboard() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        className="h-8 px-2 bg-neutral-800 hover:bg-neutral-700 text-white border-none"
+                        className="h-8 px-2 bg-[#0a0a0a] hover:bg-[#2d2a5e] text-white border-none"
                         onClick={() => handleCopy(justCreatedSite.siteKey)}
                       >
                         {copiedSiteKey === justCreatedSite.siteKey ? (
@@ -274,7 +274,7 @@ export default function Dashboard() {
                         )}
                       </Button>
                     </div>
-                    <pre className="overflow-x-auto rounded-lg bg-neutral-950 p-4 pr-24 text-sm text-blue-100 font-mono border border-neutral-800 shadow-inner min-w-0 max-w-full">
+                    <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
                       <code>{`<script src="${LOADER_URL}" data-site-key="${justCreatedSite.siteKey}"></script>`}</code>
                     </pre>
                   </div>
@@ -286,7 +286,7 @@ export default function Dashboard() {
                     setShowAddBlogModal(false);
                     setJustCreatedSite(null);
                   }}
-                  className="bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700"
+                  className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
                 >
                   Done
                 </Button>
@@ -317,7 +317,7 @@ export default function Dashboard() {
                       }
                     }}
                   />
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-[#6b6b6b]">
                     A friendly name to identify this blog
                   </p>
                 </div>
@@ -326,7 +326,7 @@ export default function Dashboard() {
                     Blog URL <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
-                    <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-neutral-500" />
+                    <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-[#6b6b6b]" />
                     <Input
                       id="blog-url"
                       placeholder="https://yoursite.squarespace.com/blog"
@@ -341,7 +341,7 @@ export default function Dashboard() {
                       }}
                     />
                   </div>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-[#6b6b6b]">
                     The full URL path to your blog page (e.g.,{" "}
                     <span className="font-mono">
                       https://yoursite.squarespace.com/blog
@@ -360,7 +360,7 @@ export default function Dashboard() {
                 <Button
                   onClick={handleAddBlog}
                   disabled={creating}
-                  className="bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700"
+                  className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
                 >
                   Add Blog
                 </Button>
@@ -399,7 +399,7 @@ export default function Dashboard() {
       </Dialog>
 
       {/* My Blogs Section with Integrated Setup */}
-      <Card className="border-neutral-200 shadow-sm">
+      <Card className="border-[#e5e4e0] shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -413,7 +413,7 @@ export default function Dashboard() {
               <Button
                 onClick={() => setShowAddBlogModal(true)}
                 size="sm"
-                className="bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700"
+                className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Blog
@@ -432,19 +432,19 @@ export default function Dashboard() {
               return (
                 <div
                   key={site.id}
-                  className="border border-neutral-200 rounded-lg overflow-hidden hover:border-blue-300 transition-all"
+                  className="border border-[#e5e4e0] rounded-lg overflow-hidden hover:border-[#5B4FE8]/50 transition-all"
                 >
                   <div
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-blue-50/30 transition-colors"
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-[#5B4FE8]/5 transition-colors"
                     onClick={() => toggleExpand(site.id)}
                   >
                     <div className="flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-green-100 rounded-lg flex items-center justify-center shrink-0">
-                        <Globe className="w-5 h-5 text-blue-700" />
+                      <div className="w-10 h-10 bg-[#5B4FE8]/10 rounded-lg flex items-center justify-center shrink-0">
+                        <Globe className="w-5 h-5 text-[#5B4FE8]" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold text-neutral-900">
+                          <h4 className="font-semibold text-[#0a0a0a]">
                             {site.name || "Unnamed site"}
                           </h4>
                           <div className="flex items-center gap-1 text-xs">
@@ -456,7 +456,7 @@ export default function Dashboard() {
                           {siteUrl || "No URL configured"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-neutral-400 hidden sm:flex">
+                      <div className="flex items-center gap-2 text-xs text-[#6b6b6b] hidden sm:flex">
                         <span>{formatDate(site.createdAt)}</span>
                       </div>
                     </div>
@@ -464,7 +464,7 @@ export default function Dashboard() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-3"
+                        className="h-8 px-3 text-[#5B4FE8] hover:bg-[#5B4FE8]/10 hover:text-[#5B4FE8]"
                         onClick={(e) => {
                           e.stopPropagation();
                         }}
@@ -486,19 +486,19 @@ export default function Dashboard() {
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
                       {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-neutral-400" />
+                        <ChevronDown className="w-5 h-5 text-[#6b6b6b]" />
                       ) : (
-                        <ChevronRight className="w-5 h-5 text-neutral-400" />
+                        <ChevronRight className="w-5 h-5 text-[#6b6b6b]" />
                       )}
                     </div>
                   </div>
 
                   {isExpanded && (
-                    <div className="border-t border-neutral-200 bg-neutral-50 p-6 space-y-4">
-                      <p className="text-sm text-neutral-600">
+                    <div className="border-t border-[#e5e4e0] bg-[#f7f6f3] p-6 space-y-4">
+                      <p className="text-sm text-[#6b6b6b]">
                         Copy the code below and paste it into your Squarespace
                         site&apos;s{" "}
-                        <span className="font-medium text-neutral-900">
+                        <span className="font-medium text-[#0a0a0a]">
                           Settings → Advanced → Code Injection → Header
                         </span>
                         .
@@ -524,7 +524,7 @@ export default function Dashboard() {
                             )}
                           </Button>
                         </div>
-                        <pre className="overflow-x-auto rounded-lg bg-neutral-950 p-4 text-sm text-blue-100 font-mono border border-neutral-800 shadow-inner">
+                        <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner">
                           <code>{scriptTag}</code>
                         </pre>
                       </div>
@@ -536,7 +536,7 @@ export default function Dashboard() {
           </div>
 
           {sites.length === 0 && (
-            <div className="text-center py-8 text-neutral-500">
+            <div className="text-center py-8 text-[#6b6b6b]">
               <p className="mb-2">No blogs yet</p>
               {me.canCreateSite ? (
                 <Button
@@ -556,43 +556,43 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2 border-neutral-200 shadow-sm">
+        <Card className="md:col-span-2 border-[#e5e4e0] shadow-sm">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>Get straight to what matters.</CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
             <Link to="/dashboard/configure" className="block group">
-              <div className="border border-neutral-200 rounded-xl p-6 hover:border-blue-600 hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-blue-50/30">
-                <div className="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors text-blue-700">
+              <div className="border border-[#e5e4e0] rounded-xl p-6 hover:border-[#5B4FE8] hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-[#5B4FE8]/5">
+                <div className="bg-[#5B4FE8]/10 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-[#5B4FE8] group-hover:text-white transition-colors text-[#5B4FE8]">
                   <Settings className="w-6 h-6" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2 text-neutral-900">
+                <h3 className="font-semibold text-lg mb-2 text-[#0a0a0a]">
                   Customize Blog
                 </h3>
-                <p className="text-neutral-500 text-sm mb-4 flex-1 group-hover:text-neutral-600">
+                <p className="text-[#6b6b6b] text-sm mb-4 flex-1 group-hover:text-[#6b6b6b]">
                   Adjust layout, typography, and colors to match your brand
                   perfectly.
                 </p>
-                <div className="flex items-center text-sm font-medium text-blue-600 group-hover:translate-x-1 transition-transform">
+                <div className="flex items-center text-sm font-medium text-[#5B4FE8] group-hover:translate-x-1 transition-transform">
                   Open Editor <ArrowRight className="w-4 h-4 ml-1" />
                 </div>
               </div>
             </Link>
 
             <Link to="/dashboard/account" className="block group">
-              <div className="border border-neutral-200 rounded-xl p-6 hover:border-green-600 hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-green-50/30">
-                <div className="bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors text-green-700">
+              <div className="border border-[#e5e4e0] rounded-xl p-6 hover:border-[#8F86F0] hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-[#8F86F0]/5">
+                <div className="bg-[#8F86F0]/20 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-[#8F86F0] group-hover:text-white transition-colors text-[#5B4FE8]">
                   <User className="w-6 h-6" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2 text-neutral-900">
+                <h3 className="font-semibold text-lg mb-2 text-[#0a0a0a]">
                   Manage Account
                 </h3>
-                <p className="text-neutral-500 text-sm mb-4 flex-1 group-hover:text-neutral-600">
+                <p className="text-[#6b6b6b] text-sm mb-4 flex-1 group-hover:text-[#6b6b6b]">
                   Update your subscription, billing details, and personal
                   profile.
                 </p>
-                <div className="flex items-center text-sm font-medium text-green-600 group-hover:translate-x-1 transition-transform">
+                <div className="flex items-center text-sm font-medium text-[#8F86F0] group-hover:translate-x-1 transition-transform">
                   View Account <ArrowRight className="w-4 h-4 ml-1" />
                 </div>
               </div>
@@ -600,13 +600,13 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-neutral-200 shadow-sm bg-blue-50/30">
+        <Card className="border-[#e5e4e0] shadow-sm bg-[#5B4FE8]/5">
           <CardHeader>
             <CardTitle>Account Status</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-neutral-500">
+              <p className="text-sm font-medium text-[#6b6b6b]">
                 Subscription
               </p>
               <div className="flex items-center gap-2">
@@ -619,17 +619,17 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <Separator className="bg-blue-100" />
+            <Separator className="bg-[#5B4FE8]/20" />
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-neutral-500">Email</p>
+              <p className="text-sm font-medium text-[#6b6b6b]">Email</p>
               <p className="text-sm">{me.user.email}</p>
             </div>
 
-            <Separator className="bg-blue-100" />
+            <Separator className="bg-[#5B4FE8]/20" />
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-neutral-500">
+              <p className="text-sm font-medium text-[#6b6b6b]">
                 Member Since
               </p>
               <p className="text-sm">

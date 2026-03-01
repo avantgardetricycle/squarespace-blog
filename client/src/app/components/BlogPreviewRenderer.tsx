@@ -7,6 +7,8 @@ interface RendererConfigOverrides {
   showAuthor?: boolean;
   showProgressBar?: boolean;
   progressBarPosition?: string;
+  progressBarThickness?: number;
+  progressBarColor?: string;
   showTableOfContents?: boolean;
   tableOfContentsPosition?: string;
   showRecentPostsSidebar?: boolean;
@@ -53,6 +55,8 @@ export default function BlogPreviewRenderer({
         showTableOfContents: configOverrides?.showTableOfContents ?? false,
         showProgressBar: configOverrides?.showProgressBar ?? false,
         progressBarPosition: configOverrides?.progressBarPosition ?? "top",
+        progressBarThickness: configOverrides?.progressBarThickness ?? 6,
+        progressBarColor: configOverrides?.progressBarColor ?? "#5B4FE8",
         tableOfContentsPosition: configOverrides?.tableOfContentsPosition ?? "left",
         showRecentPostsSidebar: configOverrides?.showRecentPostsSidebar ?? false,
         sidebarPosition: configOverrides?.sidebarPosition ?? "left",
@@ -86,8 +90,11 @@ export default function BlogPreviewRenderer({
 
     return () => {
       if (script.parentNode) script.parentNode.removeChild(script);
-      const existing = containerRef.current?.querySelector("#blog-overlay-list");
-      if (existing) existing.remove();
+      const root = containerRef.current;
+      if (root) {
+        root.querySelector("#blog-overlay-list")?.remove();
+        root.querySelector("#blog-overlay-progress")?.remove();
+      }
     };
   }, [siteKey, configOverrides]);
 

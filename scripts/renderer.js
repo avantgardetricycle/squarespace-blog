@@ -478,10 +478,12 @@
 
       var progressTrackForPreview = null;
       var progressBarPosition = (cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
+      var progressBarThickness = Math.min(12, Math.max(2, parseInt(cfg.progressBarThickness, 10) || 6));
+      var progressBarColor = (typeof cfg.progressBarColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(cfg.progressBarColor)) ? cfg.progressBarColor : '#5B4FE8';
       if (isSinglePost && showProgressBar) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
-        progressTrack.style.height = '6px';
+        progressTrack.style.height = progressBarThickness + 'px';
         progressTrack.style.backgroundColor = 'rgba(0,0,0,0.08)';
         progressTrack.style.zIndex = '9999';
         if (this._previewMode) {
@@ -516,7 +518,7 @@
         progressFill.className = 'blog-overlay-progress-fill';
         progressFill.style.height = '100%';
         progressFill.style.width = '0%';
-        progressFill.style.backgroundColor = '#0066cc';
+        progressFill.style.backgroundColor = progressBarColor;
         progressFill.style.transition = 'width 0.1s ease-out';
         progressTrack.appendChild(progressFill);
 

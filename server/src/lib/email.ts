@@ -1,6 +1,7 @@
 import sgMail from '@sendgrid/mail'
+import Attachment from '@sendgrid/helpers/classes/attachment'
 import nodemailer from 'nodemailer'
-import { renderInviteEmail, renderMagicLinkEmail } from '../emails/index.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail } from '../emails/index.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -13,7 +14,7 @@ const transporter = nodemailer.createTransport({
 })
 
 const appName = process.env.APP_NAME ?? 'BetterBlog'
-const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <no-reply@revsplit.app>'
+const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <no-reply@betterblog.xyz>'
 
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
 export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
@@ -49,13 +50,36 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
 
   const html = await renderInviteEmail(magicLink)
 
-  await sgMail.send({
+  const logoAttachment = new Attachment({
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline',
+    contentId: 'logo',
+  })
+
+  const msg = {
     to,
     from: mailFrom,
     subject: `You're invited to ${appName}`,
     html,
-    trackingSettings: { clickTracking: { enable: false } }
-  })
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[Invite] SendGrid error:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    } else {
+      throw err
+    }
+  }
 }
 
 /** Send magic link email via SendGrid using MagicLinkEmail.tsx design (used by login page) */
@@ -70,11 +94,34 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
 
   const html = await renderMagicLinkEmail(magicLink)
 
-  await sgMail.send({
+  const logoAttachment = new Attachment({
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline',
+    contentId: 'logo',
+  })
+
+  const msg = {
     to,
     from: mailFrom,
     subject: `Sign in to ${appName}`,
     html,
-    trackingSettings: { clickTracking: { enable: false } }
-  })
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[MagicLink] SendGrid error:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    } else {
+      throw err
+    }
+  }
 }

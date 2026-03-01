@@ -5,6 +5,8 @@ export interface RendererConfig {
   showAuthor?: boolean;
   showProgressBar?: boolean;
   progressBarPosition?: string;
+  progressBarThickness?: number;
+  progressBarColor?: string;
   showTableOfContents?: boolean;
   tableOfContentsPosition?: string;
   showRecentPostsSidebar?: boolean;
@@ -69,6 +71,8 @@ export default function BlogPreviewIframe({
   className = "",
 }: BlogPreviewIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const configRef = useRef(config);
+  configRef.current = config;
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -83,8 +87,9 @@ export default function BlogPreviewIframe({
     })();
 
     const sendConfig = () => {
+      const latestConfig = configRef.current;
       iframe.contentWindow?.postMessage(
-        { type: MESSAGE_TYPE_CONFIG, config },
+        { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
         targetOrigin
       );
     };
@@ -104,6 +109,21 @@ export default function BlogPreviewIframe({
     return () => window.removeEventListener("message", handleMessage);
   }, [blogUrl, config]);
 
+  // Send config when iframe loads (renderer may not be ready yet, but READY will trigger another send)
+  const handleIframeLoad = () => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    try {
+      const targetOrigin = new URL(blogUrl).origin;
+      iframe.contentWindow.postMessage(
+        { type: MESSAGE_TYPE_CONFIG, config: configRef.current },
+        targetOrigin
+      );
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <iframe
       ref={iframeRef}
@@ -111,6 +131,7 @@ export default function BlogPreviewIframe({
       title="Blog preview"
       className={`w-full h-full border-0 ${className}`}
       sandbox="allow-scripts allow-same-origin allow-forms"
+      onLoad={handleIframeLoad}
     />
   );
 }
