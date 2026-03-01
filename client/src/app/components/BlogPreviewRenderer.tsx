@@ -5,6 +5,9 @@ const RENDERER_URL = "/renderer.js";
 interface RendererConfigOverrides {
   showDate?: boolean;
   showAuthor?: boolean;
+  defaultAuthorIds?: string[];
+  postAuthorOverrides?: Record<string, string[]>;
+  authorMap?: Record<string, string>;
   showProgressBar?: boolean;
   progressBarPosition?: string;
   progressBarThickness?: number;
@@ -51,6 +54,9 @@ export default function BlogPreviewRenderer({
         rootEl: root,
         previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}`,
         showAuthor: configOverrides?.showAuthor ?? false,
+        defaultAuthorIds: configOverrides?.defaultAuthorIds ?? [],
+        postAuthorOverrides: configOverrides?.postAuthorOverrides ?? {},
+        authorMap: configOverrides?.authorMap ?? {},
         showDate: configOverrides?.showDate ?? true,
         showTableOfContents: configOverrides?.showTableOfContents ?? false,
         showProgressBar: configOverrides?.showProgressBar ?? false,

@@ -165,6 +165,10 @@
       var self = this;
       window.addEventListener('hashchange', function() {
         if (self.items.length) self._renderContent(self.items);
+        if (bbPreview && window.parent !== window) {
+          var idx = self._getSelectedIndexFromHash();
+          window.parent.postMessage({ type: 'BETTERBLOG_PREVIEW_POST_SELECTED', postIndex: idx }, '*');
+        }
       });
 
       if (bbPreview) {
@@ -192,6 +196,8 @@
       });
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'BETTERBLOG_PREVIEW_READY' }, '*');
+        var idx = self._getSelectedIndexFromHash();
+        window.parent.postMessage({ type: 'BETTERBLOG_PREVIEW_POST_SELECTED', postIndex: idx }, '*');
       }
     },
 
@@ -212,10 +218,33 @@
     },
 
     /**
-     * Get author display name from item
+     * Get author display name from item (legacy single author)
      */
     _getAuthor: function(item) {
       return (item.author && item.author.displayName) ? item.author.displayName : null;
+    },
+
+    /**
+     * Get author names for a post, respecting defaultAuthorIds and postAuthorOverrides
+     */
+    _getAuthorsForPost: function(post, cfg) {
+      var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
+      var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object') ? cfg.postAuthorOverrides : {};
+      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds) ? cfg.defaultAuthorIds : [];
+      var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object') ? cfg.authorMap : {};
+      var ids = (postId && postId in overrides)
+        ? overrides[postId]
+        : (defaultIds.length > 0 ? defaultIds : null);
+      if (ids && ids.length > 0) {
+        var names = [];
+        for (var i = 0; i < ids.length; i++) {
+          var n = authorMap[ids[i]];
+          if (n) names.push(n);
+        }
+        if (names.length > 0) return names.join(', ');
+      }
+      if (postId && postId in overrides) return ''; // explicit override with no authors
+      return this._getAuthor(post);
     },
 
     /**
@@ -702,7 +731,7 @@
               if (dateStr) metaParts.push(dateStr);
             }
             if (showAuthor) {
-              var authorStr = self._getAuthor(post);
+              var authorStr = self._getAuthorsForPost(post, cfg);
               if (authorStr) metaParts.push('by ' + authorStr);
             }
             if (metaParts.length > 0) {

@@ -3,6 +3,9 @@ import { useEffect, useRef } from "react";
 export interface RendererConfig {
   showDate?: boolean;
   showAuthor?: boolean;
+  defaultAuthorIds?: string[];
+  postAuthorOverrides?: Record<string, string[]>;
+  authorMap?: Record<string, string>;
   showProgressBar?: boolean;
   progressBarPosition?: string;
   progressBarThickness?: number;

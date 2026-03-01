@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js'
 import dashboardRoutes from './routes/dashboard.js'
 import checkoutRoutes from './routes/checkout.js'
 import stripeWebhookRoutes from './routes/stripe-webhook.js'
+import blogAuthorsRoutes from './routes/blog-authors.js'
 import { startQueue, stopQueue } from './queue/index.js'
 
 const app = express()
@@ -43,6 +44,7 @@ app.use(
 )
 app.use('/api/auth', authRoutes)
 app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/blog-authors', blogAuthorsRoutes)
 app.use('/api/checkout', checkoutRoutes)
 
 // Health check
