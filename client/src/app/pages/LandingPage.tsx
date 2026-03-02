@@ -51,6 +51,7 @@ export default function LandingPage() {
     {
       name: "Essentials",
       tier: "Starter",
+      planKey: "starter" as const,
       description: "Fix the basics. Everything Squarespace should have included from day one.",
       monthlyPrice: 12,
       annualPrice: 9,
@@ -67,6 +68,7 @@ export default function LandingPage() {
     {
       name: "Professional",
       tier: "Core",
+      planKey: "pro" as const,
       description: "A real blog. Discoverable, navigable, and genuinely readable.",
       monthlyPrice: 19,
       annualPrice: 14,
@@ -85,6 +87,7 @@ export default function LandingPage() {
     {
       name: "Publication",
       tier: "Pro",
+      planKey: "agency" as const,
       description: "A serious publication. Beautiful, branded, fully under your control.",
       monthlyPrice: 39,
       annualPrice: 29,
@@ -140,7 +143,7 @@ export default function LandingPage() {
                 <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">Log in</Link>
                 {isLive === true ? (
                   <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
-                    <Link to="/login">Get Started</Link>
+                    <Link to={`/checkout?plan=pro&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started</Link>
                   </Button>
                 ) : (
                   <Button onClick={() => setInterestModalOpen(true)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
@@ -185,7 +188,7 @@ export default function LandingPage() {
                 </Button>
               ) : isLive === true ? (
                 <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
-                  <Link to="/login">Start Free Trial</Link>
+                  <Link to={`/checkout?plan=pro&billing=${isAnnual ? "annual" : "monthly"}`}>Start Free Trial</Link>
                 </Button>
               ) : (
                 <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto">
@@ -404,7 +407,7 @@ export default function LandingPage() {
                         : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
                     )}
                   >
-                    <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                    <Link to={isAuthenticated ? "/dashboard" : `/checkout?plan=${tier.planKey}&billing=${isAnnual ? "annual" : "monthly"}`}>
                       Start free trial
                     </Link>
                   </Button>
@@ -530,7 +533,7 @@ export default function LandingPage() {
           </h2>
           {isLive === true ? (
             <Button size="lg" className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10" asChild>
-              <Link to="/login">Get Started for Free</Link>
+              <Link to={`/checkout?plan=pro&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started for Free</Link>
             </Button>
           ) : (
             <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">

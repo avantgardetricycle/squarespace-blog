@@ -13,6 +13,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { toast } from "sonner";
+import { Logo } from "@/app/components/Logo";
 
 const pricingPlans = {
   starter: {
@@ -117,32 +118,30 @@ export default function Checkout() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-blue-50/30 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#f7f6f3] flex items-center justify-center p-4">
       <div className="w-full max-w-5xl">
         {/* Logo */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <h1 className="text-4xl font-heading font-bold bg-gradient-to-r from-blue-700 to-green-600 bg-clip-text text-transparent">
-              BetterBlog
-            </h1>
+            <Logo size="lg" />
           </Link>
-          <p className="text-neutral-600 mt-2">Complete your subscription</p>
+          <p className="text-[#6b6b6b] mt-2 text-sm">Complete your subscription</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Left Column - Customer Information */}
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle>Your Information</CardTitle>
-              <CardDescription>
-                Enter your details to continue to secure checkout
-              </CardDescription>
-            </CardHeader>
+          <Card className="shadow-[0_1px_3px_rgba(26,26,42,0.06),0_1px_2px_rgba(26,26,42,0.04)] border-neutral-200 rounded-[10px]">
+<CardHeader>
+            <CardTitle className="font-heading text-[#0a0a0a]">Your Information</CardTitle>
+            <CardDescription className="text-[#6b6b6b]">
+              Enter your details to continue to secure checkout
+            </CardDescription>
+          </CardHeader>
             <CardContent>
               <form onSubmit={handleCheckout} className="space-y-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">
+                    <Label htmlFor="name" className="text-[#0a0a0a]">
                       Full Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
@@ -167,7 +166,7 @@ export default function Checkout() {
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
-                    <p className="text-xs text-neutral-500">
+                    <p className="text-xs text-[#6b6b6b]">
                       We'll send your receipt and login details here
                     </p>
                   </div>
@@ -177,39 +176,33 @@ export default function Checkout() {
 
                 {/* Billing Frequency Toggle */}
                 <div className="space-y-3">
-                  <Label>Billing Frequency</Label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <Label className="text-[#0a0a0a]">Billing Frequency</Label>
+                  <div className="inline-flex bg-white border border-neutral-200 rounded-full p-1 gap-1 shadow-sm w-full">
                     <button
                       type="button"
                       onClick={() => setIsAnnual(false)}
-                      className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                      className={`flex-1 rounded-full px-5 py-2.5 text-[13px] font-medium transition-all ${
                         !isAnnual
-                          ? "border-blue-600 bg-blue-50"
-                          : "border-neutral-200 hover:border-neutral-300"
+                          ? "bg-[#5B4FE8] text-white shadow-md"
+                          : "bg-transparent text-neutral-400 hover:text-[#6b6b6b]"
                       }`}
                     >
-                      <div className="font-semibold text-neutral-900">Monthly</div>
-                      <div className="text-sm text-neutral-600">
-                        ${plan.monthlyPrice}/month
-                      </div>
+                      Monthly · ${plan.monthlyPrice}/mo
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsAnnual(true)}
-                      className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+                      className={`relative flex-1 rounded-full px-5 py-2.5 text-[13px] font-medium transition-all ${
                         isAnnual
-                          ? "border-blue-600 bg-blue-50"
-                          : "border-neutral-200 hover:border-neutral-300"
+                          ? "bg-[#5B4FE8] text-white shadow-md"
+                          : "bg-transparent text-neutral-400 hover:text-[#6b6b6b]"
                       }`}
                     >
-                      <div className="font-semibold text-neutral-900">Annual</div>
-                      <div className="text-sm text-neutral-600">
-                        ${plan.annualPrice}/month
-                      </div>
+                      Annual · ${plan.annualPrice}/mo
                       {savings > 0 && (
-                        <div className="absolute -top-2 -right-2 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                          Save ${savings}
-                        </div>
+                        <span className={isAnnual ? "ml-1.5 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-white/20" : "ml-1.5 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-[#eaf7f2] text-[#10B981]"}>
+                          Save 25%
+                        </span>
                       )}
                     </button>
                   </div>
@@ -217,7 +210,7 @@ export default function Checkout() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-blue-700 to-green-600 hover:from-blue-800 hover:to-green-700 h-12 text-base font-semibold"
+                  className="w-full bg-[#5B4FE8] hover:bg-[#4a3fd4] h-12 text-base font-semibold text-white rounded-[6px]"
                   size="lg"
                   disabled={checkoutLoading}
                 >
@@ -226,7 +219,7 @@ export default function Checkout() {
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
 
-                <p className="text-xs text-center text-neutral-500">
+                <p className="text-xs text-center text-[#6b6b6b]">
                   Secured by Stripe. Your payment information is encrypted and secure.
                 </p>
               </form>
@@ -235,29 +228,29 @@ export default function Checkout() {
 
           {/* Right Column - Order Summary */}
           <div className="space-y-6">
-            <Card className="shadow-lg border-blue-200">
+            <Card className="shadow-[0_1px_3px_rgba(26,26,42,0.06),0_1px_2px_rgba(26,26,42,0.04)] border-[#5B4FE8] border-[1.5px] rounded-[10px]">
               <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-                <CardDescription>Review your subscription details</CardDescription>
+                <CardTitle className="font-heading text-[#0a0a0a]">Order Summary</CardTitle>
+                <CardDescription className="text-[#6b6b6b]">Review your subscription details</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Plan Details */}
-                <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-lg p-5 space-y-3">
+                <div className="bg-[#f2f2fd] rounded-[10px] p-5 space-y-3 border border-[#5B4FE8]/20">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-heading font-bold text-xl text-neutral-900">
+                      <h3 className="font-heading font-bold text-xl text-[#0a0a0a]">
                         {plan.name}
                       </h3>
-                      <p className="text-sm text-neutral-600">{plan.description}</p>
-                      <p className="text-sm font-medium text-green-700 mt-1">
+                      <p className="text-sm text-[#6b6b6b]">{plan.description}</p>
+                      <p className="text-sm font-medium text-[#10B981] mt-1">
                         {trialDays}-day free trial • Nothing due today
                       </p>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold bg-gradient-to-r from-blue-700 to-green-600 bg-clip-text text-transparent">
+                      <div className="text-2xl font-bold font-heading text-[#5B4FE8]">
                         ${price}
                       </div>
-                      <div className="text-xs text-neutral-600">
+                      <div className="text-xs text-[#6b6b6b]">
                         per month after trial
                       </div>
                     </div>
@@ -266,12 +259,12 @@ export default function Checkout() {
 
                 {/* Features List */}
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-neutral-900">Included features:</h4>
+                  <h4 className="font-semibold text-[#0a0a0a]">Included features:</h4>
                   <div className="space-y-2">
                     {plan.features.map((feature, index) => (
                       <div key={index} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                        <span className="text-sm text-neutral-700">{feature}</span>
+                        <Check className="w-5 h-5 text-[#5B4FE8] shrink-0 mt-0.5" />
+                        <span className="text-sm text-[#6b6b6b]">{feature}</span>
                       </div>
                     ))}
                   </div>
@@ -282,25 +275,25 @@ export default function Checkout() {
                 {/* Price Breakdown */}
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-neutral-600">
+                    <span className="text-[#6b6b6b]">
                       {plan.name} Plan ({isAnnual ? "Annual" : "Monthly"})
                     </span>
-                    <span className="font-medium text-neutral-900">
+                    <span className="font-medium text-[#0a0a0a]">
                       ${price}/mo
                     </span>
                   </div>
                   {isAnnual && (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-neutral-600">Billed annually</span>
-                        <span className="font-medium text-neutral-900">
+                        <span className="text-[#6b6b6b]">Billed annually</span>
+                        <span className="font-medium text-[#0a0a0a]">
                           ${totalPrice}/year
                         </span>
                       </div>
                       {savings > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-green-600 font-medium">Annual savings</span>
-                          <span className="font-medium text-green-600">
+                          <span className="text-[#10B981] font-medium">Annual savings</span>
+                          <span className="font-medium text-[#10B981]">
                             -${savings}
                           </span>
                         </div>
@@ -308,8 +301,8 @@ export default function Checkout() {
                     </>
                   )}
                   <div className="flex justify-between text-sm">
-                    <span className="text-green-600 font-medium">{trialDays}-day free trial</span>
-                    <span className="font-medium text-green-600">$0</span>
+                    <span className="text-[#10B981] font-medium">{trialDays}-day free trial</span>
+                    <span className="font-medium text-[#10B981]">$0</span>
                   </div>
 
                   <Separator />
@@ -334,11 +327,11 @@ export default function Checkout() {
                 </div>
 
                 {/* Money Back Guarantee */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-sm text-green-800 font-medium text-center">
+                <div className="bg-[#eaf7f2] border border-[#10B981]/30 rounded-[10px] p-4">
+                  <p className="text-sm text-[#10B981] font-medium text-center">
                     ✓ 30-Day Money-Back Guarantee
                   </p>
-                  <p className="text-xs text-green-700 text-center mt-1">
+                  <p className="text-xs text-[#10B981]/80 text-center mt-1">
                     Not satisfied? Get a full refund within 30 days.
                   </p>
                 </div>
@@ -347,11 +340,11 @@ export default function Checkout() {
 
             {/* Help */}
             <div className="text-center">
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-[#6b6b6b]">
                 Questions?{" "}
                 <a
                   href="mailto:support@betterblog.com"
-                  className="text-blue-700 hover:text-blue-800 font-medium underline"
+                  className="text-[#5B4FE8] hover:text-[#4a3fd4] font-medium underline"
                 >
                   Contact support
                 </a>
