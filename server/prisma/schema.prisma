@@ -192,3 +192,13 @@ model Session {
   @@index([sessionTokenHash])
   @@map("sessions")
 }
+
+model CustomerLead {
+  id        Int      @id @default(autoincrement())
+  email     String
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([email])
+  @@map("customer_leads")
+}

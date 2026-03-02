@@ -11,6 +11,7 @@ import dashboardRoutes from './routes/dashboard.js'
 import checkoutRoutes from './routes/checkout.js'
 import stripeWebhookRoutes from './routes/stripe-webhook.js'
 import blogAuthorsRoutes from './routes/blog-authors.js'
+import leadsRoutes from './routes/leads.js'
 import { startQueue, stopQueue } from './queue/index.js'
 
 const app = express()
@@ -46,10 +47,14 @@ app.use('/api/auth', authRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/blog-authors', blogAuthorsRoutes)
 app.use('/api/checkout', checkoutRoutes)
+app.use('/api/leads', leadsRoutes)
 
-// Health check
+// Health check - includes isLive for landing page CTA behavior
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' })
+  res.json({
+    status: 'ok',
+    isLive: process.env.IS_BETTER_BLOG_LIVE === 'true',
+  })
 })
 
 // Serve loader.js and renderer.js from scripts/ (for Squarespace code injection)

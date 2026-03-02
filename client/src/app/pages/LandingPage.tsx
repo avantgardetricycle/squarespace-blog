@@ -8,14 +8,24 @@ import { BeforeAfterComparison } from "@/app/components/BeforeAfterComparison";
 import { FeatureGrid } from "@/app/components/FeatureGrid";
 import { FeatureExplorer } from "@/app/components/FeatureExplorer";
 import HowItWorks from "@/app/components/HowItWorks";
+import { InterestModal } from "@/app/components/InterestModal";
 import { getDashboardMe } from "@/api/auth";
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLive, setIsLive] = useState<boolean | null>(null);
+  const [interestModalOpen, setInterestModalOpen] = useState(false);
 
   useEffect(() => {
     getDashboardMe().then((me) => setIsAuthenticated(!!me));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((data) => setIsLive(data.isLive === true))
+      .catch(() => setIsLive(false));
   }, []);
 
   const containerVariants = {
@@ -128,9 +138,15 @@ export default function LandingPage() {
             ) : (
               <>
                 <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">Log in</Link>
-                <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
-                  <Link to="/login">Get Started</Link>
-                </Button>
+                {isLive === true ? (
+                  <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
+                    <Link to="/login">Get Started</Link>
+                  </Button>
+                ) : (
+                  <Button onClick={() => setInterestModalOpen(true)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
+                    Get Started
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -167,9 +183,13 @@ export default function LandingPage() {
                 <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
                   <Link to="/dashboard">Go to Dashboard</Link>
                 </Button>
-              ) : (
+              ) : isLive === true ? (
                 <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
                   <Link to="/login">Start Free Trial</Link>
+                </Button>
+              ) : (
+                <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto">
+                  Start Free Trial
                 </Button>
               )}
               <Button size="lg" variant="outline" className="h-12 px-8 text-base border-neutral-200 hover:bg-neutral-50 rounded-full w-full sm:w-auto" asChild>
@@ -374,19 +394,33 @@ export default function LandingPage() {
                 </ul>
 
                 {/* CTA */}
-                <Button
-                  asChild
-                  className={cn(
-                    "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
-                    tier.highlight
-                      ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
-                      : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
-                  )}
-                >
-                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                {isLive === true ? (
+                  <Button
+                    asChild
+                    className={cn(
+                      "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
+                      tier.highlight
+                        ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
+                        : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
+                    )}
+                  >
+                    <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                      Start free trial
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setInterestModalOpen(true)}
+                    className={cn(
+                      "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
+                      tier.highlight
+                        ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
+                        : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
+                    )}
+                  >
                     Start free trial
-                  </Link>
-                </Button>
+                  </Button>
+                )}
               </motion.div>
             ))}
           </div>
@@ -454,14 +488,23 @@ export default function LandingPage() {
             </ul>
 
             <div className="flex items-center justify-center relative z-10">
-              <Button
-                asChild
-                className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
-              >
-                <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+              {isLive === true ? (
+                <Button
+                  asChild
+                  className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
+                >
+                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                    Contact us
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setInterestModalOpen(true)}
+                  className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
+                >
                   Contact us
-                </Link>
-              </Button>
+                </Button>
+              )}
             </div>
           </motion.div>
 
@@ -485,9 +528,15 @@ export default function LandingPage() {
             <span className="text-neutral-400">You don't need a stack of plugins.</span><br />
             <span className="text-white">You just need BetterBlog.</span>
           </h2>
-          <Button size="lg" className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10" asChild>
-            <Link to="/login">Get Started for Free</Link>
-          </Button>
+          {isLive === true ? (
+            <Button size="lg" className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10" asChild>
+              <Link to="/login">Get Started for Free</Link>
+            </Button>
+          ) : (
+            <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">
+              Get Started for Free
+            </Button>
+          )}
           <p className="mt-6 text-sm text-neutral-500">No credit card required for 14-day trial.</p>
         </div>
       </section>
@@ -517,6 +566,8 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      <InterestModal open={interestModalOpen} onOpenChange={setInterestModalOpen} />
     </div>
   );
 }
