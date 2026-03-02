@@ -76,13 +76,13 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         version: nextVersion,
         showDate: data.showDate ?? true,
         showAuthor: data.showAuthor ?? false,
-        authorSettings,
+        authorSettings: authorSettings as object,
         progressBar: data.progressBar ?? { show: false, position: null, thickness: 6, color: '#5B4FE8' },
         tableOfContents: data.tableOfContents ?? { show: false, position: null },
         recentPostsSidebar: data.recentPostsSidebar ?? { show: false, position: null },
-        leftSidebar,
-        rightSidebar,
-        headerContent,
+        leftSidebar: leftSidebar as object,
+        rightSidebar: rightSidebar as object,
+        headerContent: headerContent as object,
         isActive: true
       }
     })

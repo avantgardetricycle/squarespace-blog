@@ -14,7 +14,7 @@ import blogAuthorsRoutes from './routes/blog-authors.js'
 import { startQueue, stopQueue } from './queue/index.js'
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = Number(process.env.PORT) || 3001
 
 app.set('trust proxy', 1)
 
