@@ -158,6 +158,29 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const hc = headerContent && typeof headerContent === 'object'
       ? { show: headerContent.show ?? false, tableOfContents: headerContent.tableOfContents ?? false, breadcrumbs: headerContent.breadcrumbs ?? false }
       : { show: false, tableOfContents: false, breadcrumbs: false }
+    const fi = (siteConfig as { featuredImage?: Record<string, unknown> }).featuredImage
+    const featuredImage = fi && typeof fi === 'object'
+      ? {
+          show: fi.show ?? true,
+          layoutMode: (fi.layoutMode === 'fullBleed' ? 'fullBleed' : fi.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified') as 'fullBleed' | 'leftJustified' | 'rightJustified',
+          imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
+          aspectBehavior: (fi.aspectBehavior === 'cropped' ? 'cropped' : 'original') as 'original' | 'cropped',
+          aspectRatio: (fi.aspectRatio === '3:2' ? '3:2' : fi.aspectRatio === '1:1' ? '1:1' : '16:9') as '16:9' | '3:2' | '1:1',
+          roundedCorners: (fi.roundedCorners === 'small' ? 'small' : fi.roundedCorners === 'large' ? 'large' : 'off') as 'off' | 'small' | 'large',
+          shadow: Boolean(fi.shadow),
+          showCaption: Boolean(fi.showCaption ?? true),
+          verticalSpacing: (fi.verticalSpacing === 'tight' ? 'tight' : fi.verticalSpacing === 'spacious' ? 'spacious' : 'normal') as 'tight' | 'normal' | 'spacious',
+        }
+      : {
+          show: true,
+          layoutMode: 'leftJustified' as const,
+          aspectBehavior: 'original' as const,
+          aspectRatio: '16:9' as const,
+          roundedCorners: 'off' as const,
+          shadow: false,
+          showCaption: true,
+          verticalSpacing: 'normal' as const,
+        }
 
     const configData = {
       blogPath: site.blogPath ?? null,
@@ -174,6 +197,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       leftSidebar: ls,
       rightSidebar: rs,
       headerContent: hc,
+      featuredImage,
       recentPostsCount: 5
     }
 
@@ -216,6 +240,10 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const ls = c.leftSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
     const rs = c.rightSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
     const hc = c.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } | undefined
+    const fi = c.featuredImage as {
+      show?: boolean; layoutMode?: string; imageWidthPercent?: number; aspectBehavior?: string; aspectRatio?: string;
+      roundedCorners?: string; shadow?: boolean; showCaption?: boolean; verticalSpacing?: string;
+    } | undefined
     const data: SiteConfigData = {
       showDate: (c.showDate ?? layout.showDate ?? true) as boolean,
       showAuthor: (c.showAuthor ?? layout.showAuthor ?? false) as boolean,
@@ -241,7 +269,18 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       },
       leftSidebar: ls && typeof ls === 'object' ? { show: ls.show ?? false, modules: Array.isArray(ls.modules) ? ls.modules : [], width: Math.min(400, Math.max(160, ls.width ?? 240)) } : undefined,
       rightSidebar: rs && typeof rs === 'object' ? { show: rs.show ?? false, modules: Array.isArray(rs.modules) ? rs.modules : [], width: Math.min(400, Math.max(160, rs.width ?? 240)) } : undefined,
-      headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, tableOfContents: hc.tableOfContents ?? false, breadcrumbs: hc.breadcrumbs ?? false } : undefined
+      headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, tableOfContents: hc.tableOfContents ?? false, breadcrumbs: hc.breadcrumbs ?? false } : undefined,
+      featuredImage: fi && typeof fi === 'object' ? {
+        show: fi.show ?? true,
+        layoutMode: (fi.layoutMode === 'fullBleed' ? 'fullBleed' : fi.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified') as 'fullBleed' | 'leftJustified' | 'rightJustified',
+        imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
+        aspectBehavior: (fi.aspectBehavior === 'cropped' ? 'cropped' : 'original') as 'original' | 'cropped',
+        aspectRatio: (fi.aspectRatio === '3:2' ? '3:2' : fi.aspectRatio === '1:1' ? '1:1' : '16:9') as '16:9' | '3:2' | '1:1',
+        roundedCorners: (fi.roundedCorners === 'small' ? 'small' : fi.roundedCorners === 'large' ? 'large' : 'off') as 'off' | 'small' | 'large',
+        shadow: Boolean(fi.shadow),
+        showCaption: Boolean(fi.showCaption ?? true),
+        verticalSpacing: (fi.verticalSpacing === 'tight' ? 'tight' : fi.verticalSpacing === 'spacious' ? 'spacious' : 'normal') as 'tight' | 'normal' | 'spacious',
+      } : undefined
     }
     await upsertSiteConfig(site.id, data)
     res.json({ success: true })

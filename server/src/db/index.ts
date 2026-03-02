@@ -43,6 +43,18 @@ export interface HeaderContentConfig {
   breadcrumbs?: boolean
 }
 
+export interface FeaturedImageConfig {
+  show?: boolean
+  layoutMode?: 'fullBleed' | 'leftJustified' | 'rightJustified'
+  imageWidthPercent?: number
+  aspectBehavior?: 'original' | 'cropped'
+  aspectRatio?: '16:9' | '3:2' | '1:1'
+  roundedCorners?: 'off' | 'small' | 'large'
+  shadow?: boolean
+  showCaption?: boolean
+  verticalSpacing?: 'tight' | 'normal' | 'spacious'
+}
+
 export interface SiteConfigData {
   showDate?: boolean
   showAuthor?: boolean
@@ -53,6 +65,7 @@ export interface SiteConfigData {
   leftSidebar?: SidebarConfig
   rightSidebar?: SidebarConfig
   headerContent?: HeaderContentConfig
+  featuredImage?: FeaturedImageConfig
 }
 
 export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
@@ -70,6 +83,17 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
     const leftSidebar = data.leftSidebar ?? { show: false, modules: [], width: 240 }
     const rightSidebar = data.rightSidebar ?? { show: false, modules: [], width: 240 }
     const headerContent = data.headerContent ?? { show: false, tableOfContents: false, breadcrumbs: false }
+    const featuredImage = data.featuredImage ?? {
+      show: true,
+      layoutMode: 'leftJustified',
+      imageWidthPercent: 40,
+      aspectBehavior: 'original',
+      aspectRatio: '16:9',
+      roundedCorners: 'off',
+      shadow: false,
+      showCaption: true,
+      verticalSpacing: 'normal',
+    }
     await tx.siteConfig.create({
       data: {
         siteId,
@@ -83,6 +107,7 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         leftSidebar: leftSidebar as object,
         rightSidebar: rightSidebar as object,
         headerContent: headerContent as object,
+        featuredImage: featuredImage as object,
         isActive: true
       }
     })

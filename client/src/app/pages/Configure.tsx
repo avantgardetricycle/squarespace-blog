@@ -51,6 +51,24 @@ export interface BlogAuthorOption {
 export const SIDEBAR_MODULE_TYPES = ["recentPosts", "relevantPosts", "tableOfContents"] as const;
 export type SidebarModuleType = (typeof SIDEBAR_MODULE_TYPES)[number];
 
+export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";
+export type FeaturedImageAspectBehavior = "original" | "cropped";
+export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
+export type FeaturedImageRoundedCorners = "off" | "small" | "large";
+export type FeaturedImageVerticalSpacing = "tight" | "normal" | "spacious";
+
+export interface FeaturedImageConfig {
+  show: boolean;
+  layoutMode: FeaturedImageLayoutMode;
+  imageWidthPercent: number;
+  aspectBehavior: FeaturedImageAspectBehavior;
+  aspectRatio: FeaturedImageAspectRatio;
+  roundedCorners: FeaturedImageRoundedCorners;
+  shadow: boolean;
+  showCaption: boolean;
+  verticalSpacing: FeaturedImageVerticalSpacing;
+}
+
 export interface SiteConfigForm {
   showDate: boolean;
   showAuthor: boolean;
@@ -60,7 +78,20 @@ export interface SiteConfigForm {
   leftSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
   rightSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
   headerContent: { show: boolean; tableOfContents: boolean; breadcrumbs: boolean };
+  featuredImage: FeaturedImageConfig;
 }
+
+const defaultFeaturedImage: FeaturedImageConfig = {
+  show: true,
+  layoutMode: "leftJustified",
+  imageWidthPercent: 40,
+  aspectBehavior: "original",
+  aspectRatio: "16:9",
+  roundedCorners: "off",
+  shadow: false,
+  showCaption: true,
+  verticalSpacing: "normal",
+};
 
 const defaultSiteConfig: SiteConfigForm = {
   showDate: true,
@@ -71,6 +102,7 @@ const defaultSiteConfig: SiteConfigForm = {
   leftSidebar: { show: false, modules: [], width: 240 },
   rightSidebar: { show: false, modules: [], width: 240 },
   headerContent: { show: false, tableOfContents: false, breadcrumbs: false },
+  featuredImage: defaultFeaturedImage,
 };
 
 function configFromApi(data: Record<string, unknown>): SiteConfigForm {
@@ -104,6 +136,18 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     }
     if (!headerContent) headerContent = { show: false, tableOfContents: false, breadcrumbs: false };
   }
+  const fi = data.featuredImage && typeof data.featuredImage === "object" ? data.featuredImage as Record<string, unknown> : null;
+  const featuredImage: FeaturedImageConfig = fi ? {
+    show: Boolean(fi.show ?? true),
+    layoutMode: (fi.layoutMode === "fullBleed" ? "fullBleed" : fi.layoutMode === "rightJustified" ? "rightJustified" : "leftJustified") as FeaturedImageLayoutMode,
+    imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
+    aspectBehavior: fi.aspectBehavior === "cropped" ? "cropped" : "original",
+    aspectRatio: (fi.aspectRatio === "3:2" ? "3:2" : fi.aspectRatio === "1:1" ? "1:1" : "16:9") as FeaturedImageAspectRatio,
+    roundedCorners: (fi.roundedCorners === "small" ? "small" : fi.roundedCorners === "large" ? "large" : "off") as FeaturedImageRoundedCorners,
+    shadow: Boolean(fi.shadow),
+    showCaption: Boolean(fi.showCaption ?? true),
+    verticalSpacing: (fi.verticalSpacing === "tight" ? "tight" : fi.verticalSpacing === "spacious" ? "spacious" : "normal") as FeaturedImageVerticalSpacing,
+  } : defaultFeaturedImage;
   return {
     showDate: Boolean(data.showDate ?? true),
     showAuthor: Boolean(data.showAuthor ?? false),
@@ -120,6 +164,7 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     leftSidebar,
     rightSidebar,
     headerContent,
+    featuredImage,
   };
 }
 
@@ -136,6 +181,7 @@ function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
     leftSidebar: config.leftSidebar,
     rightSidebar: config.rightSidebar,
     headerContent: config.headerContent,
+    featuredImage: config.featuredImage,
   };
 }
 
@@ -148,6 +194,7 @@ function configToRendererConfig(config: SiteConfigForm): Record<string, unknown>
     showProgressBar: config.progressBar.show,
     progressBarPosition: config.progressBar.position,
     progressBarThickness: config.progressBar.thickness,
+    featuredImage: config.featuredImage,
     progressBarColor: config.progressBar.color,
     leftSidebar: config.leftSidebar,
     rightSidebar: config.rightSidebar,
@@ -176,6 +223,15 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
   const hcEqual = a.headerContent.show === b.headerContent.show &&
     a.headerContent.tableOfContents === b.headerContent.tableOfContents &&
     a.headerContent.breadcrumbs === b.headerContent.breadcrumbs;
+  const fiEqual = a.featuredImage.show === b.featuredImage.show &&
+    a.featuredImage.layoutMode === b.featuredImage.layoutMode &&
+    a.featuredImage.imageWidthPercent === b.featuredImage.imageWidthPercent &&
+    a.featuredImage.aspectBehavior === b.featuredImage.aspectBehavior &&
+    a.featuredImage.aspectRatio === b.featuredImage.aspectRatio &&
+    a.featuredImage.roundedCorners === b.featuredImage.roundedCorners &&
+    a.featuredImage.shadow === b.featuredImage.shadow &&
+    a.featuredImage.showCaption === b.featuredImage.showCaption &&
+    a.featuredImage.verticalSpacing === b.featuredImage.verticalSpacing;
   return (
     a.showDate === b.showDate &&
     a.showAuthor === b.showAuthor &&
@@ -185,7 +241,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.progressBar.position === b.progressBar.position &&
     a.progressBar.thickness === b.progressBar.thickness &&
     a.progressBar.color === b.progressBar.color &&
-    lsEqual && rsEqual && hcEqual
+    lsEqual && rsEqual && hcEqual && fiEqual
   );
 }
 
@@ -211,6 +267,7 @@ export default function Configure() {
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     progressBar: false,
+    featuredImage: false,
     leftSidebar: false,
     rightSidebar: false,
     headerContent: false,
@@ -404,6 +461,15 @@ export default function Configure() {
       else if (path === "headerContent.show") next.headerContent = { ...prev.headerContent, show: value as boolean };
       else if (path === "headerContent.tableOfContents") next.headerContent = { ...prev.headerContent, tableOfContents: value as boolean };
       else if (path === "headerContent.breadcrumbs") next.headerContent = { ...prev.headerContent, breadcrumbs: value as boolean };
+      else if (path === "featuredImage.show") next.featuredImage = { ...prev.featuredImage, show: value as boolean };
+      else if (path === "featuredImage.layoutMode") next.featuredImage = { ...prev.featuredImage, layoutMode: value as FeaturedImageLayoutMode };
+      else if (path === "featuredImage.imageWidthPercent") next.featuredImage = { ...prev.featuredImage, imageWidthPercent: value as number };
+      else if (path === "featuredImage.aspectBehavior") next.featuredImage = { ...prev.featuredImage, aspectBehavior: value as FeaturedImageAspectBehavior };
+      else if (path === "featuredImage.aspectRatio") next.featuredImage = { ...prev.featuredImage, aspectRatio: value as FeaturedImageAspectRatio };
+      else if (path === "featuredImage.roundedCorners") next.featuredImage = { ...prev.featuredImage, roundedCorners: value as FeaturedImageRoundedCorners };
+      else if (path === "featuredImage.shadow") next.featuredImage = { ...prev.featuredImage, shadow: value as boolean };
+      else if (path === "featuredImage.showCaption") next.featuredImage = { ...prev.featuredImage, showCaption: value as boolean };
+      else if (path === "featuredImage.verticalSpacing") next.featuredImage = { ...prev.featuredImage, verticalSpacing: value as FeaturedImageVerticalSpacing };
       return next;
     });
   };
@@ -797,6 +863,149 @@ export default function Configure() {
                         </div>
                       </CollapsibleContent>
                     </Collapsible>
+                    </div>
+
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Featured Image</span>
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={config.featuredImage.show}
+                            onCheckedChange={(v) => {
+                              updateConfig("featuredImage.show", v);
+                              setSectionExpanded((p) => ({ ...p, featuredImage: v }));
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => config.featuredImage.show && setSectionExpanded((p) => ({ ...p, featuredImage: !p.featuredImage }))}
+                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.featuredImage.show ? "invisible pointer-events-none" : ""}`}
+                            aria-label={sectionExpanded.featuredImage ? "Collapse" : "Expand"}
+                          >
+                            {sectionExpanded.featuredImage ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <Collapsible open={config.featuredImage.show && sectionExpanded.featuredImage}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Layout mode</Label>
+                              <Select
+                                value={config.featuredImage.layoutMode}
+                                onValueChange={(v) => updateConfig("featuredImage.layoutMode", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="fullBleed">Full Bleed</SelectItem>
+                                  <SelectItem value="leftJustified">Left Justified</SelectItem>
+                                  <SelectItem value="rightJustified">Right Justified</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {(config.featuredImage.layoutMode === "leftJustified" || config.featuredImage.layoutMode === "rightJustified") && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Image width</Label>
+                                <div className="flex items-center gap-3">
+                                  <Slider
+                                    value={[config.featuredImage.imageWidthPercent]}
+                                    onValueChange={([v]) => updateConfig("featuredImage.imageWidthPercent", v ?? 40)}
+                                    min={25}
+                                    max={60}
+                                    step={5}
+                                    className="flex-1"
+                                  />
+                                  <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
+                                    {config.featuredImage.imageWidthPercent}%
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
+                              <Select
+                                value={config.featuredImage.aspectBehavior}
+                                onValueChange={(v) => updateConfig("featuredImage.aspectBehavior", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="original">Original ratio</SelectItem>
+                                  <SelectItem value="cropped">Cropped</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {config.featuredImage.aspectBehavior === "cropped" && (
+                                <Select
+                                  value={config.featuredImage.aspectRatio}
+                                  onValueChange={(v) => updateConfig("featuredImage.aspectRatio", v)}
+                                >
+                                  <SelectTrigger className="mt-1">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="16:9">16:9</SelectItem>
+                                    <SelectItem value="3:2">3:2</SelectItem>
+                                    <SelectItem value="1:1">1:1</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
+                              <Select
+                                value={config.featuredImage.roundedCorners}
+                                onValueChange={(v) => updateConfig("featuredImage.roundedCorners", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="off">Off</SelectItem>
+                                  <SelectItem value="small">Small</SelectItem>
+                                  <SelectItem value="large">Large</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
+                              <Switch
+                                checked={config.featuredImage.shadow}
+                                onCheckedChange={(v) => updateConfig("featuredImage.shadow", v)}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
+                              <Switch
+                                checked={config.featuredImage.showCaption}
+                                onCheckedChange={(v) => updateConfig("featuredImage.showCaption", v)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
+                              <Select
+                                value={config.featuredImage.verticalSpacing}
+                                onValueChange={(v) => updateConfig("featuredImage.verticalSpacing", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="tight">Tight</SelectItem>
+                                  <SelectItem value="normal">Normal</SelectItem>
+                                  <SelectItem value="spacious">Spacious</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
 
                     {(() => {

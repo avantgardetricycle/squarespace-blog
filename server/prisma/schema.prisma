@@ -88,6 +88,7 @@ model SiteConfig {
   leftSidebar        Json?    @map("left_sidebar")
   rightSidebar       Json?    @map("right_sidebar")
   headerContent      Json?    @map("header_content")
+  featuredImage      Json?    @map("featured_image")
   isActive           Boolean  @default(true) @map("is_active")
   createdAt          DateTime @default(now()) @map("created_at")
 

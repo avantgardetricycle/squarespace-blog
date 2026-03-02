@@ -14,6 +14,17 @@ interface HeaderContentConfig {
   breadcrumbs?: boolean;
 }
 
+interface FeaturedImageConfig {
+  show?: boolean;
+  layoutMode?: string;
+  aspectBehavior?: string;
+  aspectRatio?: string;
+  roundedCorners?: string;
+  shadow?: boolean;
+  showCaption?: boolean;
+  verticalSpacing?: string;
+}
+
 interface RendererConfigOverrides {
   showDate?: boolean;
   showAuthor?: boolean;
@@ -27,6 +38,7 @@ interface RendererConfigOverrides {
   leftSidebar?: SidebarConfig;
   rightSidebar?: SidebarConfig;
   headerContent?: HeaderContentConfig;
+  featuredImage?: FeaturedImageConfig;
   recentPostsCount?: number;
 }
 
@@ -76,6 +88,17 @@ export default function BlogPreviewRenderer({
         leftSidebar: configOverrides?.leftSidebar ?? { show: false, modules: [], width: 240 },
         rightSidebar: configOverrides?.rightSidebar ?? { show: false, modules: [], width: 240 },
         headerContent: configOverrides?.headerContent ?? { show: false, tableOfContents: false, breadcrumbs: false },
+        featuredImage: configOverrides?.featuredImage ?? {
+          show: true,
+          layoutMode: "leftJustified",
+          imageWidthPercent: 40,
+          aspectBehavior: "original",
+          aspectRatio: "16:9",
+          roundedCorners: "off",
+          shadow: false,
+          showCaption: true,
+          verticalSpacing: "normal",
+        },
         recentPostsCount: configOverrides?.recentPostsCount ?? 5,
       };
 

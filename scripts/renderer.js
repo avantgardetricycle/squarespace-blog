@@ -491,6 +491,16 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showProgressBar = Boolean(cfg.showProgressBar);
+      var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
+      var fiShow = Boolean(fiCfg.show !== false);
+      var fiLayout = fiCfg.layoutMode === 'fullBleed' ? 'fullBleed' : fiCfg.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified';
+      var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
+      var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
+      var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : '16:9');
+      var fiRounded = (fiCfg.roundedCorners === 'small' ? 'small' : fiCfg.roundedCorners === 'large' ? 'large' : 'off');
+      var fiShadow = Boolean(fiCfg.shadow);
+      var fiCaption = Boolean(fiCfg.showCaption !== false);
+      var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
 
       var selectedIndex = this._getSelectedIndexFromHash();
       var displayItems = selectedIndex >= 0 && selectedIndex < items.length
@@ -759,6 +769,71 @@
               article.style.scrollMarginTop = (navbarOffset + 8) + 'px';
             }
 
+            var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
+            var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
+            var isSideBySide = (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && imgUrl;
+            var rowEl = null;
+            var contentEl = null;
+            if (isSideBySide) {
+              rowEl = document.createElement('div');
+              rowEl.style.display = 'flex';
+              rowEl.style.flexDirection = fiLayout === 'rightJustified' ? 'row-reverse' : 'row';
+              rowEl.style.gap = '20px';
+              rowEl.style.alignItems = 'flex-start';
+              rowEl.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
+              contentEl = document.createElement('div');
+              contentEl.style.flex = '1';
+              contentEl.style.minWidth = '0';
+            }
+            if (fiShow && imgUrl) {
+              var fiWrap = document.createElement('div');
+              fiWrap.className = 'blog-overlay-featured-image';
+              if (fiLayout === 'fullBleed') {
+                fiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
+                fiWrap.style.marginLeft = '-16px';
+                fiWrap.style.marginRight = '-16px';
+                fiWrap.style.width = 'calc(100% + 32px)';
+              } else if (isSideBySide) {
+                fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
+                fiWrap.style.minWidth = '0';
+              }
+              var fiInner = document.createElement('div');
+              fiInner.style.overflow = 'hidden';
+              fiInner.style.position = 'relative';
+              if (fiRounded === 'small') fiInner.style.borderRadius = '6px';
+              else if (fiRounded === 'large') fiInner.style.borderRadius = '12px';
+              if (fiShadow) fiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+              if (fiAspect === 'cropped') {
+                fiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
+                fiInner.style.width = '100%';
+              }
+              var img = document.createElement('img');
+              img.src = imgUrl;
+              img.alt = post.title || '';
+              img.style.width = '100%';
+              img.style.height = '100%';
+              img.style.display = 'block';
+              img.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
+              img.style.objectPosition = 'center';
+              fiInner.appendChild(img);
+              fiWrap.appendChild(fiInner);
+              if (fiCaption && imgCaption) {
+                var capEl = document.createElement('div');
+                capEl.className = 'blog-overlay-featured-caption';
+                capEl.textContent = imgCaption;
+                capEl.style.fontSize = '0.85rem';
+                capEl.style.color = '#666';
+                capEl.style.marginTop = '6px';
+                capEl.style.fontStyle = 'italic';
+                fiWrap.appendChild(capEl);
+              }
+              if (isSideBySide) {
+                rowEl.appendChild(fiWrap);
+              } else {
+                article.appendChild(fiWrap);
+              }
+            }
+
             var h2 = document.createElement('h2');
             h2.className = 'blog-overlay-title';
             h2.style.margin = '0 0 8px 0';
@@ -780,7 +855,8 @@
             } else {
               h2.textContent = post.title || 'Untitled';
             }
-            article.appendChild(h2);
+            var appendTo = isSideBySide ? contentEl : article;
+            appendTo.appendChild(h2);
 
             var meta = document.createElement('div');
             meta.className = 'blog-overlay-meta';
@@ -796,13 +872,17 @@
             }
             if (metaParts.length > 0) {
               meta.textContent = metaParts.join(' ');
-              article.appendChild(meta);
+              appendTo.appendChild(meta);
             }
 
             var body = document.createElement('div');
             body.className = 'blog-overlay-body';
             body.innerHTML = post.body || '';
-            article.appendChild(body);
+            appendTo.appendChild(body);
+            if (isSideBySide) {
+              rowEl.appendChild(contentEl);
+              article.appendChild(rowEl);
+            }
             main.appendChild(article);
           }
 
