@@ -3,9 +3,11 @@ import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Logo } from "@/app/components/Logo";
 import { Button } from "@/app/components/ui/button";
-import { Check, ArrowRight, PanelLeft, Image, LayoutTemplate, Grid3x3, List, Tag, Clock, Link2, ChevronRight, TrendingUp, Users, UserCircle2, Hash } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { BeforeAfterComparison } from "@/app/components/BeforeAfterComparison";
+import { FeatureGrid } from "@/app/components/FeatureGrid";
+import { FeatureExplorer } from "@/app/components/FeatureExplorer";
+import HowItWorks from "@/app/components/HowItWorks";
 import { getDashboardMe } from "@/api/auth";
 
 export default function LandingPage() {
@@ -37,33 +39,75 @@ export default function LandingPage() {
 
   const pricingTiers = [
     {
-      planKey: "starter",
-      name: "Starter",
-      description: "Perfect for personal blogs",
-      monthlyPrice: 15,
-      annualPrice: 12,
-      features: ["1 Blog", "Basic Customization", "Standard Layouts", "Email Support"],
+      name: "Essentials",
+      tier: "Starter",
+      description: "Fix the basics. Everything Squarespace should have included from day one.",
+      monthlyPrice: 12,
+      annualPrice: 9,
+      features: [
+        "1 sidebar",
+        "Numbered pagination",
+        "Table of contents",
+        "Post thumbnail banners",
+        "Related posts",
+        "Social sharing buttons"
+      ],
       highlight: false
     },
     {
-      planKey: "pro",
-      name: "Pro",
-      description: "For serious content creators",
-      monthlyPrice: 29,
-      annualPrice: 24,
-      features: ["3 Blogs", "Advanced Customization", "All Premium Layouts", "Priority Support", "Custom CSS Injection"],
+      name: "Professional",
+      tier: "Core",
+      description: "A real blog. Discoverable, navigable, and genuinely readable.",
+      monthlyPrice: 19,
+      annualPrice: 14,
+      features: [
+        "Everything in Starter, plus",
+        "2 sidebars",
+        "Breadcrumb navigation",
+        "Post filtering & search",
+        "Reading time and scroll progress bar",
+        "Featured & pinned posts",
+        "Advanced post sorting",
+        "Rich author profiles"
+      ],
       highlight: true
     },
     {
-      planKey: "agency",
-      name: "Agency",
-      description: "Manage multiple client sites",
-      monthlyPrice: 79,
-      annualPrice: 65,
-      features: ["Unlimited Blogs", "White Labeling", "API Access", "Dedicated Success Manager", "Team Collaboration"],
+      name: "Publication",
+      tier: "Pro",
+      description: "A serious publication. Beautiful, branded, fully under your control.",
+      monthlyPrice: 39,
+      annualPrice: 29,
+      features: [
+        "Everything in Core, plus",
+        "Custom designed templates",
+        "Expanded post banner layouts",
+        "Multiple authors",
+        "Per-collection layouts & formatting",
+        "Image style options per collection",
+        "Advanced filtering & tag search",
+        "Saved post templates",
+        "Priority support"
+      ],
       highlight: false
     }
   ];
+
+  const studioTier = {
+    name: "BetterBlog Studio",
+    tier: "Studio",
+    description: "Manage every client blog from one place. Bill the cost back on your first project.",
+    monthlyPrice: 149,
+    annualPrice: 99,
+    features: [
+      "Unlimited client sites",
+      "All Pro features included",
+      "Client management dashboard",
+      "White-label options",
+      "Team member access",
+      "Early feature access & dedicated support"
+    ]
+  };
 
   return (
     <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-purple-100 selection:text-purple-900">
@@ -148,475 +192,283 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features Section */}
-      {/* Intro Banner */}
+      {/* Everything You Need Section */}
       <section className="py-20 bg-[#0a0a0a] text-white">
         <div className="container mx-auto px-4 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
             className="max-w-4xl mx-auto"
           >
-            <div className="text-[0.7rem] font-semibold tracking-[0.2em] uppercase text-[#8F86F0] mb-5">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/70 text-sm font-medium mb-8">
+              <span className="text-[#10B981]">✦</span>
               Everything you need. One extension.
             </div>
-            <h2 className="font-heading text-4xl md:text-6xl font-normal text-white tracking-tight leading-[1.15] mb-5">
-              Other tools solve <em className="italic text-[#8F86F0]">one</em> problem.<br />BetterBlog solves them all.
+            
+            <h2 className="font-heading text-4xl md:text-5xl font-normal tracking-tight text-white leading-tight mb-6">
+              Other tools solve one problem.<br />
+              BetterBlog solves <em className="italic text-[#8F86F0]">them all.</em>
             </h2>
-            <p className="text-lg text-white/55 font-light max-w-2xl mx-auto leading-relaxed">
+            
+            <p className="text-lg text-white/60 font-light max-w-2xl mx-auto leading-relaxed">
               There are plugins for sidebars. Workarounds for table of contents. Hacks for author profiles. BetterBlog replaces all of it — with a single, cohesive extension built specifically for Squarespace bloggers.
             </p>
           </motion.div>
         </div>
       </section>
 
-      {/* Layout & Design */}
-      <section id="features" className="py-20 bg-[#f7f6f3] border-b border-[#d4d4d0]">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mb-12"
-          >
-            <div className="text-[0.65rem] font-semibold tracking-[0.18em] uppercase text-[#5B4FE8] mb-3">
-              Layout & Design
-            </div>
-            <h3 className="font-heading text-3xl md:text-4xl font-normal tracking-tight text-[#0a0a0a] leading-tight mb-3">
-              Your blog, designed <em className="italic text-[#5B4FE8]">your</em> way.
-            </h3>
-            <p className="text-base text-[#6b6b6b] font-light leading-relaxed max-w-2xl">
-              Squarespace gives you a beautiful website and then hands you a blog that looks like an afterthought. BetterBlog puts you back in control — with real layout tools that match the design power you have everywhere else on your site.
-            </p>
-          </motion.div>
+      {/* Feature Grid */}
+      <FeatureGrid />
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                icon: PanelLeft,
-                name: "Sidebars — Left & Right",
-                copy: "Add a fully customizable sidebar to the left or right of your blog content. Surface what matters — recent posts, categories, a newsletter signup, or anything else — without touching a line of code."
-              },
-              {
-                icon: Image,
-                name: "Header Image Formatting",
-                copy: "Take full control of how your post header images look — size, crop, positioning, and style. Make every post feel intentional, not like it was slapped together by a template."
-              },
-              {
-                icon: LayoutTemplate,
-                name: "Template Layouts",
-                copy: "Choose from a set of professionally designed blog layouts — or customize your own. Apply them sitewide or per post. Your blog finally has the same design flexibility as the rest of your site."
-              },
-              {
-                icon: Grid3x3,
-                name: "Collection Formatting",
-                copy: "Control how post cards are displayed within each collection independently, so your travel blog looks nothing like your recipe blog, and your portfolio reads exactly the way you want it to. Full design control, per collection."
-              }
-            ].map((feature, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1 }}
-                className="bg-white rounded-xl p-7 border border-[#d4d4d0] flex flex-col gap-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all"
-              >
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center mb-1">
-                  <feature.icon className="w-5 h-5 text-[#5B4FE8]" />
-                </div>
-                <div className="font-heading text-lg font-normal text-[#0a0a0a] tracking-tight">
-                  {feature.name}
-                </div>
-                <div className="text-sm text-[#6b6b6b] leading-relaxed font-light">
-                  {feature.copy}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Feature Explorer - replaces all feature sections */}
+      <div id="feature-explorer">
+        <FeatureExplorer />
+      </div>
 
-      {/* Navigation & Discovery */}
-      <section className="py-20 bg-white border-b border-[#d4d4d0]">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mb-12"
-          >
-            <div className="text-[0.65rem] font-semibold tracking-[0.18em] uppercase text-[#5B4FE8] mb-3">
-              Navigation & Discovery
-            </div>
-            <h3 className="font-heading text-3xl md:text-4xl font-normal tracking-tight text-[#0a0a0a] leading-tight mb-3">
-              Help readers find what they're <em className="italic text-[#5B4FE8]">looking for.</em>
-            </h3>
-            <p className="text-base text-[#6b6b6b] font-light leading-relaxed max-w-2xl">
-              A great blog isn't just well-written — it's well-organized. BetterBlog adds the navigation and discovery tools that keep readers engaged, exploring, and coming back.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              {
-                icon: List,
-                name: "Table of Contents",
-                copy: "Automatically generate a table of contents from your post headings. Readers jump to what they need; you look organized and professional. Essential for long-form content."
-              },
-              {
-                icon: Tag,
-                name: "Tags & Category Filters",
-                copy: "Give readers real filtering power — by tag, category, or both. Let them self-sort into the content that's relevant to them, the way every serious blog should."
-              },
-              {
-                icon: Clock,
-                name: "Recent Posts",
-                copy: "Surface your latest content automatically — in the sidebar, at the end of a post, or anywhere you need it. Keep readers moving through your archive instead of bouncing."
-              },
-              {
-                icon: Link2,
-                name: "Related Posts",
-                copy: "Automatically show readers posts they're likely to love next, based on tags and categories. More time on site. More value delivered. Less work for you."
-              },
-              {
-                icon: ChevronRight,
-                name: "Breadcrumbs",
-                copy: "Show readers exactly where they are on your site — and give them an easy path back. A small detail that makes a big difference to navigation, SEO, and overall polish."
-              },
-              {
-                icon: Hash,
-                name: "Pagination",
-                copy: "Replace Squarespace's bare previous/next arrows with real pagination — numbered pages, post counts, and clear navigation that tells readers exactly where they are in your archive. Because '→' is not a page number."
-              }
-            ].map((feature, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1 }}
-                className="bg-[#f7f6f3] rounded-xl p-7 border border-[#d4d4d0] flex flex-col gap-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all"
-              >
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-1">
-                  <feature.icon className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div className="font-heading text-lg font-normal text-[#0a0a0a] tracking-tight">
-                  {feature.name}
-                </div>
-                <div className="text-sm text-[#6b6b6b] leading-relaxed font-light">
-                  {feature.copy}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Reader Experience */}
-      <section className="py-20 bg-[#f7f6f3] border-b border-[#d4d4d0]">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mb-12"
-          >
-            <div className="text-[0.65rem] font-semibold tracking-[0.18em] uppercase text-[#5B4FE8] mb-3">
-              Reader Experience
-            </div>
-            <h3 className="font-heading text-3xl md:text-4xl font-normal tracking-tight text-[#0a0a0a] leading-tight mb-3">
-              The little things that make readers <em className="italic text-[#5B4FE8]">stay.</em>
-            </h3>
-            <p className="text-base text-[#6b6b6b] font-light leading-relaxed max-w-2xl">
-              The best blogs feel effortless to read. BetterBlog adds the details that signal quality and keep readers engaged — the kind of features you see on the blogs you admire, now available on yours.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 gap-4 max-w-4xl">
-            {[
-              {
-                icon: TrendingUp,
-                name: "Reading Progress — % Read",
-                copy: "Show readers how far through a post they are with a subtle progress indicator. It encourages completion, sets expectations on long reads, and adds a layer of polish that readers notice — even if they can't say why."
-              },
-              {
-                icon: List,
-                name: "Table of Contents",
-                copy: "An auto-generated, scrollable table of contents that updates as readers move through your post. Great for long-form content, tutorials, and anything readers might want to reference more than once."
-              }
-            ].map((feature, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1 }}
-                className="bg-white rounded-xl p-7 border border-[#d4d4d0] flex flex-col gap-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all"
-              >
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center mb-1">
-                  <feature.icon className="w-5 h-5 text-[#5B4FE8]" />
-                </div>
-                <div className="font-heading text-lg font-normal text-[#0a0a0a] tracking-tight">
-                  {feature.name}
-                </div>
-                <div className="text-sm text-[#6b6b6b] leading-relaxed font-light">
-                  {feature.copy}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Publishing & Management */}
-      <section className="py-20 bg-white border-b border-[#d4d4d0]">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mb-12"
-          >
-            <div className="text-[0.65rem] font-semibold tracking-[0.18em] uppercase text-[#5B4FE8] mb-3">
-              Publishing & Management
-            </div>
-            <h3 className="font-heading text-3xl md:text-4xl font-normal tracking-tight text-[#0a0a0a] leading-tight mb-3">
-              Built for blogs that are <em className="italic text-[#5B4FE8]">actually</em> being run.
-            </h3>
-            <p className="text-base text-[#6b6b6b] font-light leading-relaxed max-w-2xl">
-              Whether you're a solo blogger or managing content for multiple clients, BetterBlog gives you the publishing infrastructure that Squarespace forgot to build.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="bg-[#f7f6f3] rounded-xl p-7 border border-[#d4d4d0] flex flex-col gap-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all"
-            >
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-1">
-                <Users className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div className="font-heading text-lg font-normal text-[#0a0a0a] tracking-tight">
-                Multiple Authors
-              </div>
-              <div className="text-sm text-[#6b6b6b] leading-relaxed font-light">
-                Publish posts under any author name on your site. Add multiple authors to a single post, or assign different contributors across your blog. Perfect for team blogs, guest contributors, and client sites with more than one voice.
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="bg-[#f7f6f3] rounded-xl p-7 border border-[#d4d4d0] flex flex-col gap-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all"
-            >
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center mb-1">
-                <UserCircle2 className="w-5 h-5 text-[#5B4FE8]" />
-              </div>
-              <div className="font-heading text-lg font-normal text-[#0a0a0a] tracking-tight">
-                Author Profiles
-              </div>
-              <div className="text-sm text-[#6b6b6b] leading-relaxed font-light">
-                Display a rich author profile on every post — name, photo, bio, and social links. Give your contributors a presence that builds trust with readers and keeps your publication feeling professional, not anonymous.
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Closer */}
-      <section className="py-20 bg-[#5B4FE8] text-white text-center">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="max-w-3xl mx-auto"
-          >
-            <h2 className="font-heading text-4xl md:text-5xl font-normal text-white tracking-tight leading-tight mb-4">
-              And we're <em className="italic text-white/60">just getting started.</em>
-            </h2>
-            <p className="text-base text-white/65 font-light max-w-lg mx-auto mb-8 leading-relaxed">
-              BetterBlog is actively developed with new features shipping regularly — all based on what real Squarespace bloggers actually need. One extension. Everything your blog deserves.
-            </p>
-            <Button 
-              asChild 
-              className="bg-white text-[#5B4FE8] hover:bg-white/90 rounded-lg px-8 h-12 text-sm font-semibold"
-            >
-              <Link to="/login">Get BetterBlog →</Link>
-            </Button>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* How It Works - Implementation */}
-      <section id="how-it-works" className="py-24 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-            >
-              <div className="text-[0.65rem] font-semibold tracking-[0.18em] uppercase text-[#5B4FE8] mb-3">
-                How it Works
-              </div>
-              <h2 className="font-heading text-4xl md:text-5xl font-normal text-[#0a0a0a] tracking-tight leading-tight mb-4">
-                One line of code. <em className="italic text-[#5B4FE8]">Seriously.</em>
-              </h2>
-              <p className="text-lg text-[#6b6b6b] font-light leading-relaxed">
-                Copy a snippet. Paste it into your Squarespace Custom CSS. That's it.
-              </p>
-            </motion.div>
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="max-w-4xl mx-auto"
-          >
-            <div className="bg-[#f7f6f3] rounded-2xl border border-[#d4d4d0] overflow-hidden shadow-xl">
-              {/* Browser chrome mockup */}
-              <div className="bg-[#e4e3de] px-4 py-3 flex items-center gap-2 border-b border-[#d4d4d0]">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
-                  <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
-                  <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
-                </div>
-                <div className="flex-1 text-center">
-                  <div className="inline-block bg-white rounded px-3 py-1 text-xs text-[#6b6b6b]">
-                    Squarespace → Design → Custom CSS
-                  </div>
-                </div>
-              </div>
-
-              {/* Code snippet */}
-              <div className="bg-white p-8 border-b border-[#d4d4d0]">
-                <pre className="text-sm text-[#0a0a0a] font-mono leading-relaxed">
-                  <code>{`/* Paste your BetterBlog snippet here */\n@import url('https://betterblog.app/v1/YOUR_ID.js');`}</code>
-                </pre>
-              </div>
-
-              {/* Description */}
-              <div className="p-8 bg-[#0a0a0a]">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center flex-shrink-0">
-                    <Check className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-heading text-lg font-normal text-white mb-2">
-                      No custom code. No developer required.
-                    </h3>
-                    <p className="text-sm text-white/70 font-light leading-relaxed">
-                      Get your unique snippet from your BetterBlog dashboard, paste it into Squarespace's Custom CSS panel, and start customizing.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mt-12"
-          >
-            <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full" asChild>
-              <Link to="/login">Try It Now <ArrowRight className="ml-2 w-4 h-4" /></Link>
-            </Button>
-          </motion.div>
-        </div>
-      </section>
+      {/* How It Works */}
+      <HowItWorks />
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 bg-neutral-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <h2 className="text-3xl md:text-4xl font-heading font-bold text-neutral-900 mb-4">Simple, transparent pricing</h2>
-            <p className="text-lg text-neutral-500 mb-8">Choose the plan that's right for your needs.</p>
-            
-            <div className="inline-flex items-center p-1 bg-white rounded-full border border-neutral-200 shadow-sm">
-              <button 
+      <section id="pricing" className="py-12 md:py-20 bg-[#f7f6f3]">
+        <div className="container mx-auto px-4 max-w-[1080px]">
+          {/* Header */}
+          <div className="text-center mb-8 md:mb-12">
+            <div className="inline-flex items-center gap-3 text-[11px] font-semibold tracking-[0.14em] uppercase text-[#5B4FE8] mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#5B4FE8] opacity-50"></span>
+              Simple, transparent pricing
+              <span className="w-1.5 h-1.5 rounded-full bg-[#5B4FE8] opacity-50"></span>
+            </div>
+            <h1 className="font-heading text-[clamp(36px,5vw,58px)] font-normal leading-[1.08] text-[#0a0a0a] mb-4 tracking-tight">
+              A better blog,<br />at a <em className="italic text-[#5B4FE8]">better price.</em>
+            </h1>
+            <p className="text-base text-[#6b6b6b] font-light max-w-[420px] mx-auto mb-8 leading-[1.7]">
+              Stay on the platform you love. Get everything you've been missing.
+            </p>
+
+            {/* Billing Toggle */}
+            <div className="inline-flex items-center bg-white border border-neutral-200 rounded-full p-1 gap-1 shadow-sm">
+              <button
                 onClick={() => setIsAnnual(false)}
                 className={cn(
-                  "px-6 py-2 rounded-full text-sm font-medium transition-all",
-                  !isAnnual ? "bg-neutral-900 text-white shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                  "font-medium text-[13px] px-5 py-2 rounded-full cursor-pointer border-none transition-all flex items-center gap-2",
+                  !isAnnual 
+                    ? "bg-[#5B4FE8] text-white shadow-md" 
+                    : "bg-transparent text-neutral-400"
                 )}
               >
                 Monthly
               </button>
-              <button 
+              <button
                 onClick={() => setIsAnnual(true)}
                 className={cn(
-                  "px-6 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
-                  isAnnual ? "bg-neutral-900 text-white shadow-sm" : "text-neutral-500 hover:text-neutral-900"
+                  "font-medium text-[13px] px-5 py-2 rounded-full cursor-pointer border-none transition-all flex items-center gap-2",
+                  isAnnual 
+                    ? "bg-[#5B4FE8] text-white shadow-md" 
+                    : "bg-transparent text-neutral-400"
                 )}
               >
-                Yearly <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold">-20%</span>
+                Annual 
+                <span className={cn(
+                  "text-[9.5px] font-bold px-1.5 py-0.5 rounded-full tracking-wide",
+                  isAnnual 
+                    ? "bg-white/20 text-white" 
+                    : "bg-[#eaf7f2] text-[#10B981]"
+                )}>
+                  Save 25%
+                </span>
               </button>
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          {/* Section Label */}
+          <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-neutral-400 mb-3.5 pl-0.5">
+            For bloggers &amp; site owners
+          </p>
+
+          {/* 3-Card Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mb-3.5">
             {pricingTiers.map((tier, idx) => (
-              <motion.div 
+              <motion.div
                 key={idx}
-                whileHover={{ y: -5 }}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.06, duration: 0.45 }}
+                whileHover={{ y: -3 }}
                 className={cn(
-                  "relative bg-white rounded-2xl p-8 border flex flex-col",
-                  tier.highlight 
-                    ? "border-purple-200 shadow-xl shadow-purple-100/50 z-10 scale-105" 
-                    : "border-neutral-200 shadow-sm hover:shadow-md"
+                  "bg-white border rounded-[10px] p-7 pb-6 relative transition-all flex flex-col",
+                  tier.highlight
+                    ? "border-[#5B4FE8] border-[1.5px] shadow-[0_8px_32px_rgba(91,79,232,0.14),0_2px_8px_rgba(91,79,232,0.08)] translate-y-[-5px]"
+                    : "border-neutral-200 shadow-[0_1px_3px_rgba(26,26,42,0.06),0_1px_2px_rgba(26,26,42,0.04)] hover:shadow-[0_4px_16px_rgba(26,26,42,0.07),0_1px_4px_rgba(26,26,42,0.05)]"
                 )}
               >
+                {/* Accent Bar */}
+                <div className={cn(
+                  "h-[3px] rounded-t-[10px] mb-5.5 -mt-7 -mx-7",
+                  tier.highlight ? "bg-[#5B4FE8]" : "bg-neutral-100"
+                )}></div>
+
                 {tier.highlight && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-[#5B4FE8] to-[#8F86F0] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
-                    Most Popular
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#5B4FE8] text-white text-[9.5px] font-bold tracking-[0.1em] uppercase px-3 py-1 rounded-full whitespace-nowrap">
+                    Most popular
                   </div>
                 )}
-                
-                <div className="mb-6">
-                  <h3 className="text-xl font-bold text-neutral-900">{tier.name}</h3>
-                  <p className="text-neutral-500 text-sm mt-1">{tier.description}</p>
+
+                <p className={cn(
+                  "text-[10px] font-bold tracking-[0.13em] uppercase mb-1",
+                  tier.highlight ? "text-[#5B4FE8]" : "text-neutral-400"
+                )}>
+                  {tier.tier}
+                </p>
+                <h2 className="font-heading text-2xl text-[#0a0a0a] mb-1.5 leading-tight">
+                  {tier.name}
+                </h2>
+                <p className="text-[12.5px] text-neutral-400 leading-[1.55] mb-5 min-h-[36px]">
+                  {tier.description}
+                </p>
+
+                {/* Price Block */}
+                <div className="mb-5 min-h-[74px]">
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-[17px] font-semibold text-[#0a0a0a] pb-1.5">$</span>
+                    <span className="font-heading text-[50px] leading-none text-[#0a0a0a]">
+                      {isAnnual ? tier.annualPrice : tier.monthlyPrice}
+                    </span>
+                    <span className="text-[13px] text-neutral-400 pb-1 ml-1">/mo</span>
+                  </div>
+                  <p className="text-[11.5px] text-neutral-400 mt-1 min-h-[16px]">
+                    {isAnnual 
+                      ? `Billed $${(isAnnual ? tier.annualPrice : tier.monthlyPrice) * 12}/year`
+                      : 'Billed monthly'}
+                  </p>
                 </div>
-                
-                <div className="mb-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-neutral-900">
-                    ${isAnnual ? tier.annualPrice : tier.monthlyPrice}
-                  </span>
-                  <span className="text-neutral-500">/mo</span>
-                </div>
-                
-                <ul className="space-y-4 mb-8 flex-1">
-                  {tier.features.map((feature, fIdx) => (
-                    <li key={fIdx} className="flex items-start gap-3 text-sm text-neutral-600">
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
+
+                {/* Divider */}
+                <div className="h-px bg-neutral-100 mb-4.5"></div>
+
+                <p className="text-[9.5px] font-bold tracking-[0.12em] uppercase text-neutral-400 mb-3">
+                  {tier.features[0].includes('Everything') ? tier.features[0] : 'What\'s included'}
+                </p>
+
+                {/* Features */}
+                <ul className="flex flex-col gap-2 mb-6 flex-1">
+                  {tier.features.map((feature, fIdx) => {
+                    // Skip "Everything in X, plus" text as we've shown it above
+                    if (feature.includes('Everything')) return null;
+                    return (
+                      <li key={fIdx} className="flex items-start gap-2.5 text-[13px] text-[#6b6b6b] leading-[1.45]">
+                        <span className={cn(
+                          "w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[8px] font-black",
+                          tier.highlight 
+                            ? "bg-[#e6e6f8] text-[#5B4FE8]" 
+                            : "bg-[#f7f6f3] text-neutral-400"
+                        )}>
+                          ✓
+                        </span>
+                        {feature}
+                      </li>
+                    );
+                  })}
                 </ul>
-                
-                <Button 
+
+                {/* CTA */}
+                <Button
                   asChild
-                  variant={tier.highlight ? "default" : "outline"}
                   className={cn(
-                    "w-full rounded-full h-12",
-                    tier.highlight ? "bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white" : "border-neutral-200 hover:bg-neutral-50"
+                    "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
+                    tier.highlight
+                      ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
+                      : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
                   )}
                 >
-                  <Link to={isAuthenticated ? "/dashboard" : `/checkout?plan=${tier.planKey}&billing=${isAnnual ? "annual" : "monthly"}`}>
-                    {tier.highlight ? "Get Started" : "Start Free Trial"}
+                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                    Start free trial
                   </Link>
                 </Button>
               </motion.div>
             ))}
           </div>
+
+          {/* Studio Divider */}
+          <div className="flex items-center gap-3.5 my-6">
+            <div className="flex-1 h-px bg-neutral-200"></div>
+            <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-neutral-400 whitespace-nowrap">
+              For designers &amp; agencies
+            </span>
+            <div className="flex-1 h-px bg-neutral-200"></div>
+          </div>
+
+          {/* Studio Band */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.24, duration: 0.45 }}
+            whileHover={{ y: -3 }}
+            className="bg-[#0a0a0a] rounded-[10px] p-6 md:p-10 flex flex-col md:grid md:grid-cols-[1.1fr_0.8fr_1.2fr_auto] gap-6 md:gap-9 items-start md:items-center relative overflow-hidden transition-all hover:shadow-[0_16px_48px_rgba(26,26,42,0.25)]"
+          >
+            {/* Gradient Overlays */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute w-full h-full bg-[radial-gradient(ellipse_at_85%_40%,rgba(91,79,232,0.15)_0%,transparent_55%)]"></div>
+              <div className="absolute w-full h-full bg-[radial-gradient(ellipse_at_15%_70%,rgba(91,79,232,0.07)_0%,transparent_50%)]"></div>
+            </div>
+
+            <div className="relative z-10">
+              <p className="text-[10px] font-bold tracking-[0.15em] uppercase text-[#8F86F0] opacity-80 mb-2">
+                {studioTier.tier}
+              </p>
+              <h2 className="font-heading text-[28px] font-normal text-[#f4f4f7] leading-[1.15] mb-2.5">
+                {studioTier.name}
+              </h2>
+              <p className="text-[13px] text-[#f4f4f7]/50 leading-[1.65]">
+                {studioTier.description}
+              </p>
+            </div>
+
+            <div className="relative z-10">
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-[17px] font-semibold text-[#f4f4f7] pb-1.5">$</span>
+                <span className="font-heading text-[50px] leading-none text-[#f4f4f7]">
+                  {isAnnual ? studioTier.annualPrice : studioTier.monthlyPrice}
+                </span>
+                <span className="text-[13px] text-[#f4f4f7]/45 pb-1 ml-1">/mo</span>
+              </div>
+              <p className="text-[11.5px] text-[#f4f4f7]/35 mt-1 min-h-[16px]">
+                {isAnnual 
+                  ? `Billed $${(isAnnual ? studioTier.annualPrice : studioTier.monthlyPrice) * 12}/year`
+                  : 'Billed monthly'}
+              </p>
+            </div>
+
+            <ul className="flex flex-col gap-1.5 relative z-10">
+              {studioTier.features.map((feature, idx) => (
+                <li key={idx} className="flex items-start gap-2.5 text-[12.5px] text-[#f4f4f7]/60 leading-[1.45]">
+                  <span className="w-[15px] h-[15px] rounded-full bg-[#5B4FE8]/25 text-[#8F86F0] flex items-center justify-center flex-shrink-0 mt-0.5 text-[8px] font-black">
+                    ✓
+                  </span>
+                  {feature}
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex items-center justify-center relative z-10">
+              <Button
+                asChild
+                className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
+              >
+                <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                  Contact us
+                </Link>
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* Footer Note */}
+          <p className="text-center mt-7 text-[12.5px] text-neutral-400 leading-[1.9]">
+            All plans include a 30-day free trial &nbsp;·&nbsp; No credit card required &nbsp;·&nbsp; Cancel anytime
+          </p>
         </div>
       </section>
 

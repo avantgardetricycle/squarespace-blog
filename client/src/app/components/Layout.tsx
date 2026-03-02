@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate, useLocation } from "react-router";
+import { Outlet, NavLink, Link, useNavigate, useLocation } from "react-router";
 import { LayoutDashboard, Settings, User, LogOut } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
@@ -24,7 +24,9 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className="w-64 border-r border-[#e5e4e0] bg-white flex flex-col">
         <div className="p-6 border-b border-[#e5e4e0] flex items-center gap-2">
-           <Logo />
+          <Link to="/" className="hover:opacity-80 transition-opacity">
+            <Logo />
+          </Link>
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
