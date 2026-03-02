@@ -271,7 +271,7 @@ export default function HowItWorks() {
             Setup takes under a minute. Your blog looks completely different in under five.
           </p>
           <a
-            href="#"
+            href="#pricing"
             className="inline-flex items-center gap-[9px] bg-[#5B4FE8] text-white text-[0.88rem] font-semibold px-8 py-[14px] rounded-full no-underline shadow-[0_4px_20px_rgba(91,79,232,0.3)] transition-all duration-150 hover:bg-[#4e43d4] hover:-translate-y-[2px] hover:shadow-[0_8px_32px_rgba(91,79,232,0.4)]"
           >
             Start your free trial
