@@ -1,5 +1,4 @@
 import sgMail from '@sendgrid/mail'
-import Attachment from '@sendgrid/helpers/classes/attachment'
 import nodemailer from 'nodemailer'
 import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail } from '../emails/index.js'
 
@@ -50,13 +49,13 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
 
   const html = await renderInviteEmail(magicLink)
 
-  const logoAttachment = new Attachment({
+  const logoAttachment = {
     content: getLogoBase64(),
     filename: 'logo.png',
     type: 'image/png',
-    disposition: 'inline',
-    contentId: 'logo',
-  })
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
 
   const msg = {
     to,
@@ -94,13 +93,13 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
 
   const html = await renderMagicLinkEmail(magicLink)
 
-  const logoAttachment = new Attachment({
+  const logoAttachment = {
     content: getLogoBase64(),
     filename: 'logo.png',
     type: 'image/png',
-    disposition: 'inline',
-    contentId: 'logo',
-  })
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
 
   const msg = {
     to,
