@@ -74,6 +74,9 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
 // Uses internal subscription record only (no Stripe API calls) - gated on status
 router.get('/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
+  const reqId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  console.log(`[config] GET ${siteKey} start (${reqId})`)
+  try {
 
   const site = await prisma.site.findUnique({
     where: { siteKey },
@@ -117,6 +120,9 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const tableOfContents = (siteConfig.tableOfContents as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
     const recentPostsSidebar = (siteConfig.recentPostsSidebar as { show?: boolean; position?: string | null }) ?? { show: false, position: null }
     const authorSettings = (siteConfig.authorSettings as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> }) ?? { defaultAuthorIds: [], postAuthorOverrides: {} }
+    const leftSidebar = (siteConfig as { leftSidebar?: { show?: boolean; modules?: string[]; width?: number } }).leftSidebar ?? null
+    const rightSidebar = (siteConfig as { rightSidebar?: { show?: boolean; modules?: string[]; width?: number } }).rightSidebar ?? null
+    const headerContent = (siteConfig as { headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } }).headerContent ?? null
 
     // Build author map (id -> name) for renderer
     const authorIds = new Set<string>(authorSettings.defaultAuthorIds ?? [])
@@ -139,6 +145,20 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const baseUrl = host ? `${protocol}://${host}`.replace(/\/$/, '') : (process.env.APP_URL ?? 'http://localhost:3001').replace(/\/$/, '')
     const rendererUrl = `${baseUrl}/renderer.js`
 
+    const ls = leftSidebar && typeof leftSidebar === 'object'
+      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)) }
+      : (tableOfContents.show && tableOfContents.position === 'left') || (recentPostsSidebar.show && recentPostsSidebar.position === 'left')
+        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'left' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'left' ? ['recentPosts'] : [])], width: 240 }
+        : { show: false, modules: [], width: 240 }
+    const rs = rightSidebar && typeof rightSidebar === 'object'
+      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)) }
+      : (tableOfContents.show && tableOfContents.position === 'right') || (recentPostsSidebar.show && recentPostsSidebar.position === 'right')
+        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240 }
+        : { show: false, modules: [], width: 240 }
+    const hc = headerContent && typeof headerContent === 'object'
+      ? { show: headerContent.show ?? false, tableOfContents: headerContent.tableOfContents ?? false, breadcrumbs: headerContent.breadcrumbs ?? false }
+      : { show: false, tableOfContents: false, breadcrumbs: false }
+
     const configData = {
       blogPath: site.blogPath ?? null,
       rendererUrl,
@@ -151,16 +171,23 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       progressBarPosition: progressBar.position ?? 'top',
       progressBarThickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
       progressBarColor: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8',
-      showTableOfContents: tableOfContents.show ?? false,
-      tableOfContentsPosition: tableOfContents.position ?? 'left',
-      showRecentPostsSidebar: recentPostsSidebar.show ?? false,
-      sidebarPosition: recentPostsSidebar.position ?? 'left',
+      leftSidebar: ls,
+      rightSidebar: rs,
+      headerContent: hc,
       recentPostsCount: 5
     }
 
+    console.log(`[config] GET ${siteKey} ok (${reqId})`)
     res.json(configData)
-  } catch {
+  } catch (err) {
+    console.error(`[config] GET ${siteKey} error (${reqId}):`, err)
     res.status(500).json({ error: 'Invalid config data' })
+  }
+  } catch (err) {
+    console.error(`[config] GET ${siteKey} unhandled (${reqId}):`, err)
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to load config' })
+    }
   }
 })
 
@@ -186,6 +213,9 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const c = config as Record<string, unknown>
     const layout = (c.layout as Record<string, unknown>) ?? {}
     const authorSettings = (c as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> })
+    const ls = c.leftSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
+    const rs = c.rightSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
+    const hc = c.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } | undefined
     const data: SiteConfigData = {
       showDate: (c.showDate ?? layout.showDate ?? true) as boolean,
       showAuthor: (c.showAuthor ?? layout.showAuthor ?? false) as boolean,
@@ -208,7 +238,10 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       recentPostsSidebar: {
         show: (c.showRecentPostsSidebar ?? false) as boolean,
         position: (c.sidebarPosition ?? 'left') as string
-      }
+      },
+      leftSidebar: ls && typeof ls === 'object' ? { show: ls.show ?? false, modules: Array.isArray(ls.modules) ? ls.modules : [], width: Math.min(400, Math.max(160, ls.width ?? 240)) } : undefined,
+      rightSidebar: rs && typeof rs === 'object' ? { show: rs.show ?? false, modules: Array.isArray(rs.modules) ? rs.modules : [], width: Math.min(400, Math.max(160, rs.width ?? 240)) } : undefined,
+      headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, tableOfContents: hc.tableOfContents ?? false, breadcrumbs: hc.breadcrumbs ?? false } : undefined
     }
     await upsertSiteConfig(site.id, data)
     res.json({ success: true })

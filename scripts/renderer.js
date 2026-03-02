@@ -468,14 +468,25 @@
       }
 
       var cfg = this.config || {};
+      var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
+      var leftSidebarCfg = cfg.leftSidebar && typeof cfg.leftSidebar === 'object' ? cfg.leftSidebar : null;
+      var rightSidebarCfg = cfg.rightSidebar && typeof cfg.rightSidebar === 'object' ? cfg.rightSidebar : null;
+      var headerContentCfg = cfg.headerContent && typeof cfg.headerContent === 'object' ? cfg.headerContent : null;
       var showTableOfContents = Boolean(cfg.showTableOfContents);
       var tableOfContentsPosition = (cfg.tableOfContentsPosition === 'right') ? 'right' : 'left';
       var showRecentPostsSidebar = Boolean(cfg.showRecentPostsSidebar);
-      var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
       var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
-
-      if (showRecentPostsSidebar && items.length > 0) {
-        console.log('[BlogOverlay] Rendering Recent Posts sidebar:', { recentPostsCount, sidebarPosition, itemsCount: items.length });
+      if (!leftSidebarCfg && cfg.showTableOfContents) {
+        leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200 } : null;
+      }
+      if (!rightSidebarCfg && cfg.showTableOfContents) {
+        rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200 } : null;
+      }
+      if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
+        leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220 } : leftSidebarCfg;
+      }
+      if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
+        rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220 } : rightSidebarCfg;
       }
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
@@ -578,114 +589,163 @@
         main.appendChild(backLink);
       }
 
-      var tocSidebar = null;
-      var recentPostsSidebar = null;
-
-      if (showTableOfContents && items.length > 0 && !isSinglePost) {
-            tocSidebar = document.createElement('nav');
-            tocSidebar.className = 'blog-overlay-toc';
-            tocSidebar.style.flexShrink = '0';
-            tocSidebar.style.width = '200px';
-            tocSidebar.style.padding = '12px';
-            tocSidebar.style.background = '#f5f5f5';
-            tocSidebar.style.borderRadius = '8px';
-            tocSidebar.style.position = 'sticky';
-            tocSidebar.style.top = '16px';
-            tocSidebar.style.alignSelf = 'flex-start';
-
-            var tocTitle = document.createElement('div');
-            tocTitle.textContent = 'Table of Contents';
-            tocTitle.style.fontWeight = '600';
-            tocTitle.style.marginBottom = '8px';
-            tocTitle.style.fontSize = '0.9rem';
-            tocSidebar.appendChild(tocTitle);
-
-            for (var i = 0; i < items.length; i++) {
-              var tocItem = items[i];
-              var tocIdx = i;
-              var tocLink = document.createElement('a');
-              tocLink.href = '#post-' + i;
-              tocLink.setAttribute('data-post-index', String(i));
-              tocLink.textContent = tocItem.title || 'Untitled';
-              tocLink.style.display = 'block';
-              tocLink.style.padding = '4px 0';
-              tocLink.style.fontSize = '0.85rem';
-              tocLink.style.color = '#0066cc';
-              tocLink.style.textDecoration = 'none';
-              tocLink.style.lineHeight = '1.3';
-              tocLink.onclick = function(index) {
-                return function(e) {
-                  e.preventDefault();
-                  self._setViewHash(index);
-                  self._renderContent(self.items);
-                };
-              }(tocIdx);
-              tocSidebar.appendChild(tocLink);
-            }
-
-            this._tocScrollHandler = function() {
-              self._updateTocHighlight();
+      function createTocModule(sidebarWidth) {
+        if (items.length === 0 || isSinglePost) return null;
+        var el = document.createElement('nav');
+        el.className = 'blog-overlay-toc';
+        el.style.flexShrink = '0';
+        el.style.width = (sidebarWidth || 200) + 'px';
+        el.style.padding = '12px';
+        el.style.background = '#f5f5f5';
+        el.style.borderRadius = '8px';
+        el.style.position = 'sticky';
+        el.style.top = '16px';
+        el.style.alignSelf = 'flex-start';
+        var tocTitle = document.createElement('div');
+        tocTitle.textContent = 'Table of Contents';
+        tocTitle.style.fontWeight = '600';
+        tocTitle.style.marginBottom = '8px';
+        tocTitle.style.fontSize = '0.9rem';
+        el.appendChild(tocTitle);
+        for (var i = 0; i < items.length; i++) {
+          var tocItem = items[i];
+          var tocIdx = i;
+          var tocLink = document.createElement('a');
+          tocLink.href = '#post-' + i;
+          tocLink.setAttribute('data-post-index', String(i));
+          tocLink.textContent = tocItem.title || 'Untitled';
+          tocLink.style.display = 'block';
+          tocLink.style.padding = '4px 0';
+          tocLink.style.fontSize = '0.85rem';
+          tocLink.style.color = '#0066cc';
+          tocLink.style.textDecoration = 'none';
+          tocLink.style.lineHeight = '1.3';
+          tocLink.onclick = function(index) {
+            return function(e) {
+              e.preventDefault();
+              self._setViewHash(index);
+              self._renderContent(self.items);
             };
-            window.addEventListener('scroll', this._tocScrollHandler, { passive: true });
-            requestAnimationFrame(function() {
-              self._updateTocHighlight();
-            });
-          }
-
-      if (showRecentPostsSidebar && items.length > 0) {
-            recentPostsSidebar = document.createElement('aside');
-            recentPostsSidebar.className = 'blog-overlay-recent-posts';
-            recentPostsSidebar.style.flexShrink = '0';
-            recentPostsSidebar.style.width = '220px';
-            recentPostsSidebar.style.padding = '12px';
-            recentPostsSidebar.style.background = '#f5f5f5';
-            recentPostsSidebar.style.borderRadius = '8px';
-            recentPostsSidebar.style.position = 'sticky';
-            recentPostsSidebar.style.top = '16px';
-            recentPostsSidebar.style.alignSelf = 'flex-start';
-
-            var rpTitle = document.createElement('div');
-            rpTitle.textContent = 'Recent Posts';
-            rpTitle.style.fontWeight = '600';
-            rpTitle.style.marginBottom = '8px';
-            rpTitle.style.fontSize = '0.9rem';
-            recentPostsSidebar.appendChild(rpTitle);
-
-            var recentItems = items.slice(0, recentPostsCount);
-            for (var r = 0; r < recentItems.length; r++) {
-              var rpPost = recentItems[r];
-              var rpIdx = r;
-              var rpEntry = document.createElement('div');
-              rpEntry.style.marginBottom = '12px';
-
-              var rpLink = document.createElement('a');
-              rpLink.href = '#post-' + rpIdx;
-              rpLink.textContent = rpPost.title || 'Untitled';
-              rpLink.style.display = 'block';
-              rpLink.style.fontSize = '0.9rem';
-              rpLink.style.fontWeight = '500';
-              rpLink.style.color = '#0066cc';
-              rpLink.style.textDecoration = 'none';
-              rpLink.style.marginBottom = '4px';
-              rpLink.onclick = function(index) {
-                return function(e) {
-                  e.preventDefault();
-                  self._setViewHash(index);
-                  self._renderContent(self.items);
-                };
-              }(rpIdx);
-              rpEntry.appendChild(rpLink);
-
-              var rpExcerpt = document.createElement('div');
-              rpExcerpt.textContent = self._truncateText(rpPost.body || rpPost.excerpt || '', 120);
-              rpExcerpt.style.fontSize = '0.8rem';
-              rpExcerpt.style.color = '#666';
-              rpExcerpt.style.lineHeight = '1.4';
-              rpEntry.appendChild(rpExcerpt);
-
-              recentPostsSidebar.appendChild(rpEntry);
-            }
-          }
+          }(tocIdx);
+          el.appendChild(tocLink);
+        }
+        self._tocScrollHandler = function() { self._updateTocHighlight(); };
+        window.addEventListener('scroll', self._tocScrollHandler, { passive: true });
+        requestAnimationFrame(function() { self._updateTocHighlight(); });
+        return el;
+      }
+      function createRecentPostsModule(sidebarWidth) {
+        if (items.length === 0) return null;
+        var el = document.createElement('aside');
+        el.className = 'blog-overlay-recent-posts';
+        el.style.flexShrink = '0';
+        el.style.width = (sidebarWidth || 220) + 'px';
+        el.style.padding = '12px';
+        el.style.background = '#f5f5f5';
+        el.style.borderRadius = '8px';
+        el.style.position = 'sticky';
+        el.style.top = '16px';
+        el.style.alignSelf = 'flex-start';
+        var rpTitle = document.createElement('div');
+        rpTitle.textContent = 'Recent Posts';
+        rpTitle.style.fontWeight = '600';
+        rpTitle.style.marginBottom = '8px';
+        rpTitle.style.fontSize = '0.9rem';
+        el.appendChild(rpTitle);
+        var recentItems = items.slice(0, recentPostsCount);
+        for (var r = 0; r < recentItems.length; r++) {
+          var rpPost = recentItems[r];
+          var rpIdx = r;
+          var rpEntry = document.createElement('div');
+          rpEntry.style.marginBottom = '12px';
+          var rpLink = document.createElement('a');
+          rpLink.href = '#post-' + rpIdx;
+          rpLink.textContent = rpPost.title || 'Untitled';
+          rpLink.style.display = 'block';
+          rpLink.style.fontSize = '0.9rem';
+          rpLink.style.fontWeight = '500';
+          rpLink.style.color = '#0066cc';
+          rpLink.style.textDecoration = 'none';
+          rpLink.style.marginBottom = '4px';
+          rpLink.onclick = function(index) {
+            return function(e) {
+              e.preventDefault();
+              self._setViewHash(index);
+              self._renderContent(self.items);
+            };
+          }(rpIdx);
+          rpEntry.appendChild(rpLink);
+          var rpExcerpt = document.createElement('div');
+          rpExcerpt.textContent = self._truncateText(rpPost.body || rpPost.excerpt || '', 120);
+          rpExcerpt.style.fontSize = '0.8rem';
+          rpExcerpt.style.color = '#666';
+          rpExcerpt.style.lineHeight = '1.4';
+          rpEntry.appendChild(rpExcerpt);
+          el.appendChild(rpEntry);
+        }
+        return el;
+      }
+      function createRelevantPostsModule(sidebarWidth) {
+        if (items.length === 0) return null;
+        var el = document.createElement('aside');
+        el.className = 'blog-overlay-relevant-posts';
+        el.style.flexShrink = '0';
+        el.style.width = (sidebarWidth || 220) + 'px';
+        el.style.padding = '12px';
+        el.style.background = '#f5f5f5';
+        el.style.borderRadius = '8px';
+        el.style.position = 'sticky';
+        el.style.top = '16px';
+        el.style.alignSelf = 'flex-start';
+        var rpTitle = document.createElement('div');
+        rpTitle.textContent = 'Relevant Posts';
+        rpTitle.style.fontWeight = '600';
+        rpTitle.style.marginBottom = '8px';
+        rpTitle.style.fontSize = '0.9rem';
+        el.appendChild(rpTitle);
+        var relevantItems = isSinglePost && selectedIndex >= 0 ? items.filter(function(_, i) { return i !== selectedIndex; }).slice(0, 5) : items.slice(0, 5);
+        for (var r = 0; r < relevantItems.length; r++) {
+          var rpIdx = items.indexOf(relevantItems[r]);
+          if (rpIdx < 0) continue;
+          var rpPost = relevantItems[r];
+          var rpEntry = document.createElement('div');
+          rpEntry.style.marginBottom = '12px';
+          var rpLink = document.createElement('a');
+          rpLink.href = '#post-' + rpIdx;
+          rpLink.textContent = rpPost.title || 'Untitled';
+          rpLink.style.display = 'block';
+          rpLink.style.fontSize = '0.9rem';
+          rpLink.style.fontWeight = '500';
+          rpLink.style.color = '#0066cc';
+          rpLink.style.textDecoration = 'none';
+          rpLink.onclick = function(index) {
+            return function(e) {
+              e.preventDefault();
+              self._setViewHash(index);
+              self._renderContent(self.items);
+            };
+          }(rpIdx);
+          rpEntry.appendChild(rpLink);
+          el.appendChild(rpEntry);
+        }
+        return el;
+      }
+      function buildSidebarModules(sidebarCfg) {
+        if (!sidebarCfg || !sidebarCfg.show || !Array.isArray(sidebarCfg.modules) || sidebarCfg.modules.length === 0) return [];
+        var width = Math.min(400, Math.max(160, sidebarCfg.width || 240));
+        var mods = [];
+        for (var m = 0; m < sidebarCfg.modules.length; m++) {
+          var mod = sidebarCfg.modules[m];
+          var el = null;
+          if (mod === 'tableOfContents') el = createTocModule(width);
+          else if (mod === 'recentPosts') el = createRecentPostsModule(width);
+          else if (mod === 'relevantPosts') el = createRelevantPostsModule(width);
+          if (el) mods.push(el);
+        }
+        return mods;
+      }
+      var leftModules = buildSidebarModules(leftSidebarCfg);
+      var rightModules = buildSidebarModules(rightSidebarCfg);
 
           for (var j = 0; j < displayItems.length; j++) {
             var post = displayItems[j];
@@ -752,26 +812,55 @@
             main.appendChild(empty);
           }
 
-          var leftSidebar = document.createElement('div');
-          leftSidebar.style.display = 'flex';
-          leftSidebar.style.flexDirection = 'column';
-          leftSidebar.style.gap = '16px';
-          leftSidebar.style.flexShrink = '0';
+          var leftSidebarEl = document.createElement('div');
+          leftSidebarEl.style.display = 'flex';
+          leftSidebarEl.style.flexDirection = 'column';
+          leftSidebarEl.style.gap = '16px';
+          leftSidebarEl.style.flexShrink = '0';
+          for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
 
-          var rightSidebar = document.createElement('div');
-          rightSidebar.style.display = 'flex';
-          rightSidebar.style.flexDirection = 'column';
-          rightSidebar.style.gap = '16px';
-          rightSidebar.style.flexShrink = '0';
+          var rightSidebarEl = document.createElement('div');
+          rightSidebarEl.style.display = 'flex';
+          rightSidebarEl.style.flexDirection = 'column';
+          rightSidebarEl.style.gap = '16px';
+          rightSidebarEl.style.flexShrink = '0';
+          for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
 
-          if (tocSidebar && tableOfContentsPosition === 'left') leftSidebar.appendChild(tocSidebar);
-          if (tocSidebar && tableOfContentsPosition === 'right') rightSidebar.appendChild(tocSidebar);
-          if (recentPostsSidebar && sidebarPosition === 'left') leftSidebar.appendChild(recentPostsSidebar);
-          if (recentPostsSidebar && sidebarPosition === 'right') rightSidebar.appendChild(recentPostsSidebar);
+          if (headerContentCfg && headerContentCfg.show && (headerContentCfg.tableOfContents || headerContentCfg.breadcrumbs)) {
+            var headerEl = document.createElement('div');
+            headerEl.className = 'blog-overlay-header-content';
+            headerEl.style.marginBottom = '16px';
+            headerEl.style.paddingBottom = '12px';
+            headerEl.style.borderBottom = '1px solid #eee';
+            headerEl.style.display = 'flex';
+            headerEl.style.flexWrap = 'wrap';
+            headerEl.style.gap = '16px';
+            headerEl.style.alignItems = 'center';
+            if (headerContentCfg.breadcrumbs) {
+              var breadcrumbEl = document.createElement('nav');
+              breadcrumbEl.setAttribute('aria-label', 'Breadcrumb');
+              breadcrumbEl.style.fontSize = '0.85rem';
+              breadcrumbEl.style.color = '#666';
+              var bcParts = ['Blog'];
+              if (isSinglePost && selectedIndex >= 0) bcParts.push(items[selectedIndex].title || 'Untitled');
+              breadcrumbEl.textContent = bcParts.join(' › ');
+              headerEl.appendChild(breadcrumbEl);
+            }
+            if (headerContentCfg.tableOfContents && items.length > 0 && !isSinglePost) {
+              var headerToc = createTocModule(200);
+              if (headerToc) {
+                headerToc.style.position = 'static';
+                headerToc.style.width = 'auto';
+                headerToc.style.display = 'inline-block';
+                headerEl.appendChild(headerToc);
+              }
+            }
+            if (headerEl.childNodes.length > 0) main.insertBefore(headerEl, main.firstChild);
+          }
 
-          if (leftSidebar.childNodes.length) wrapper.appendChild(leftSidebar);
+          if (leftSidebarEl.childNodes.length) wrapper.appendChild(leftSidebarEl);
           wrapper.appendChild(main);
-          if (rightSidebar.childNodes.length) wrapper.appendChild(rightSidebar);
+          if (rightSidebarEl.childNodes.length) wrapper.appendChild(rightSidebarEl);
 
           root.prepend(wrapper);
 

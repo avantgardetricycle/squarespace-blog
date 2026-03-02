@@ -2,6 +2,18 @@ import { useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
 
+interface SidebarConfig {
+  show?: boolean;
+  modules?: string[];
+  width?: number;
+}
+
+interface HeaderContentConfig {
+  show?: boolean;
+  tableOfContents?: boolean;
+  breadcrumbs?: boolean;
+}
+
 interface RendererConfigOverrides {
   showDate?: boolean;
   showAuthor?: boolean;
@@ -12,10 +24,9 @@ interface RendererConfigOverrides {
   progressBarPosition?: string;
   progressBarThickness?: number;
   progressBarColor?: string;
-  showTableOfContents?: boolean;
-  tableOfContentsPosition?: string;
-  showRecentPostsSidebar?: boolean;
-  sidebarPosition?: string;
+  leftSidebar?: SidebarConfig;
+  rightSidebar?: SidebarConfig;
+  headerContent?: HeaderContentConfig;
   recentPostsCount?: number;
 }
 
@@ -58,14 +69,13 @@ export default function BlogPreviewRenderer({
         postAuthorOverrides: configOverrides?.postAuthorOverrides ?? {},
         authorMap: configOverrides?.authorMap ?? {},
         showDate: configOverrides?.showDate ?? true,
-        showTableOfContents: configOverrides?.showTableOfContents ?? false,
         showProgressBar: configOverrides?.showProgressBar ?? false,
         progressBarPosition: configOverrides?.progressBarPosition ?? "top",
         progressBarThickness: configOverrides?.progressBarThickness ?? 6,
         progressBarColor: configOverrides?.progressBarColor ?? "#5B4FE8",
-        tableOfContentsPosition: configOverrides?.tableOfContentsPosition ?? "left",
-        showRecentPostsSidebar: configOverrides?.showRecentPostsSidebar ?? false,
-        sidebarPosition: configOverrides?.sidebarPosition ?? "left",
+        leftSidebar: configOverrides?.leftSidebar ?? { show: false, modules: [], width: 240 },
+        rightSidebar: configOverrides?.rightSidebar ?? { show: false, modules: [], width: 240 },
+        headerContent: configOverrides?.headerContent ?? { show: false, tableOfContents: false, breadcrumbs: false },
         recentPostsCount: configOverrides?.recentPostsCount ?? 5,
       };
 

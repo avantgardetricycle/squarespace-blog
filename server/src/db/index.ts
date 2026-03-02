@@ -31,6 +31,18 @@ export interface AuthorSettings {
   postAuthorOverrides?: Record<string, string[]>
 }
 
+export interface SidebarConfig {
+  show?: boolean
+  modules?: string[]
+  width?: number
+}
+
+export interface HeaderContentConfig {
+  show?: boolean
+  tableOfContents?: boolean
+  breadcrumbs?: boolean
+}
+
 export interface SiteConfigData {
   showDate?: boolean
   showAuthor?: boolean
@@ -38,6 +50,9 @@ export interface SiteConfigData {
   progressBar?: { show: boolean; position: string | null; thickness?: number; color?: string }
   tableOfContents?: { show: boolean; position: string }
   recentPostsSidebar?: { show: boolean; position: string }
+  leftSidebar?: SidebarConfig
+  rightSidebar?: SidebarConfig
+  headerContent?: HeaderContentConfig
 }
 
 export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
@@ -52,6 +67,9 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
     })
     const nextVersion = (maxVersion._max.version ?? 0) + 1
     const authorSettings = data.authorSettings ?? { defaultAuthorIds: [], postAuthorOverrides: {} }
+    const leftSidebar = data.leftSidebar ?? { show: false, modules: [], width: 240 }
+    const rightSidebar = data.rightSidebar ?? { show: false, modules: [], width: 240 }
+    const headerContent = data.headerContent ?? { show: false, tableOfContents: false, breadcrumbs: false }
     await tx.siteConfig.create({
       data: {
         siteId,
@@ -62,6 +80,9 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         progressBar: data.progressBar ?? { show: false, position: null, thickness: 6, color: '#5B4FE8' },
         tableOfContents: data.tableOfContents ?? { show: false, position: null },
         recentPostsSidebar: data.recentPostsSidebar ?? { show: false, position: null },
+        leftSidebar,
+        rightSidebar,
+        headerContent,
         isActive: true
       }
     })

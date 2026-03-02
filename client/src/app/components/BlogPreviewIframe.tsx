@@ -10,10 +10,9 @@ export interface RendererConfig {
   progressBarPosition?: string;
   progressBarThickness?: number;
   progressBarColor?: string;
-  showTableOfContents?: boolean;
-  tableOfContentsPosition?: string;
-  showRecentPostsSidebar?: boolean;
-  sidebarPosition?: string;
+  leftSidebar?: { show?: boolean; modules?: string[]; width?: number };
+  rightSidebar?: { show?: boolean; modules?: string[]; width?: number };
+  headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean };
   recentPostsCount?: number;
 }
 

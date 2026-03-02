@@ -85,6 +85,9 @@ model SiteConfig {
   progressBar        Json     @default("{\"show\":false,\"position\":null}") @map("progress_bar")
   tableOfContents    Json     @default("{\"show\":false,\"position\":null}") @map("table_of_contents")
   recentPostsSidebar Json     @default("{\"show\":false,\"position\":null}") @map("recent_posts_sidebar")
+  leftSidebar        Json?    @map("left_sidebar")
+  rightSidebar       Json?    @map("right_sidebar")
+  headerContent      Json?    @map("header_content")
   isActive           Boolean  @default(true) @map("is_active")
   createdAt          DateTime @default(now()) @map("created_at")
 

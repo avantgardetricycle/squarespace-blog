@@ -85,8 +85,9 @@ if (fs.existsSync(clientDist)) {
   })
 }
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
+const HOST = process.env.HOST || '0.0.0.0'
+const server = app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`)
 })
 
 async function main() {
@@ -95,8 +96,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Failed to start queue:', err)
-  process.exit(1)
+  console.error('Failed to start queue (API will still work):', err)
 })
 
 async function shutdown() {
@@ -108,3 +108,8 @@ async function shutdown() {
 
 process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
+
+// Prevent unhandled promise rejections from crashing the process
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+})

@@ -48,5 +48,8 @@
     })
     .catch(error => {
       console.error('[BlogOverlay] Failed to fetch config:', error);
+      if (error && error.message === 'Failed to fetch') {
+        console.error('[BlogOverlay] This often means: (1) Mixed content - use HTTPS for the API when your blog is on HTTPS, or (2) CORS/network - ensure the API server is running and reachable.');
+      }
     });
 })();

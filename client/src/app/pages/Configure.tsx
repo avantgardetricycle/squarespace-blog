@@ -11,6 +11,7 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -47,14 +48,18 @@ export interface BlogAuthorOption {
   name: string;
 }
 
+export const SIDEBAR_MODULE_TYPES = ["recentPosts", "relevantPosts", "tableOfContents"] as const;
+export type SidebarModuleType = (typeof SIDEBAR_MODULE_TYPES)[number];
+
 export interface SiteConfigForm {
   showDate: boolean;
   showAuthor: boolean;
   defaultAuthorIds: string[];
   postAuthorOverrides: Record<string, string[]>;
   progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
-  tableOfContents: { show: boolean; position: "left" | "right" };
-  recentPostsSidebar: { show: boolean; position: "left" | "right" };
+  leftSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
+  rightSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
+  headerContent: { show: boolean; tableOfContents: boolean; breadcrumbs: boolean };
 }
 
 const defaultSiteConfig: SiteConfigForm = {
@@ -63,14 +68,42 @@ const defaultSiteConfig: SiteConfigForm = {
   defaultAuthorIds: [],
   postAuthorOverrides: {},
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
-  tableOfContents: { show: false, position: "left" },
-  recentPostsSidebar: { show: false, position: "left" },
+  leftSidebar: { show: false, modules: [], width: 240 },
+  rightSidebar: { show: false, modules: [], width: 240 },
+  headerContent: { show: false, tableOfContents: false, breadcrumbs: false },
 };
 
 function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   const defaultAuthorIds = Array.isArray(data.defaultAuthorIds) ? data.defaultAuthorIds as string[] : [];
   const postAuthorOverrides = (data.postAuthorOverrides && typeof data.postAuthorOverrides === "object")
     ? (data.postAuthorOverrides as Record<string, string[]>) : {};
+  const ls = data.leftSidebar && typeof data.leftSidebar === "object" ? data.leftSidebar as { show?: boolean; modules?: string[]; width?: number } : null;
+  const rs = data.rightSidebar && typeof data.rightSidebar === "object" ? data.rightSidebar as { show?: boolean; modules?: string[]; width?: number } : null;
+  const hc = data.headerContent && typeof data.headerContent === "object" ? data.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } : null;
+  const validModules = (arr: unknown): SidebarModuleType[] =>
+    Array.isArray(arr) ? arr.filter((m): m is SidebarModuleType => SIDEBAR_MODULE_TYPES.includes(m as SidebarModuleType)) : [];
+  let leftSidebar = ls ? { show: Boolean(ls.show ?? false), modules: validModules(ls.modules), width: Math.min(400, Math.max(160, Number(ls.width) || 240)) } : null;
+  let rightSidebar = rs ? { show: Boolean(rs.show ?? false), modules: validModules(rs.modules), width: Math.min(400, Math.max(160, Number(rs.width) || 240)) } : null;
+  let headerContent = hc ? { show: Boolean(hc.show ?? false), tableOfContents: Boolean(hc.tableOfContents ?? false), breadcrumbs: Boolean(hc.breadcrumbs ?? false) } : null;
+  if (!leftSidebar || !rightSidebar || !headerContent) {
+    const showToc = Boolean(data.showTableOfContents ?? false);
+    const tocPos = (data.tableOfContentsPosition === "right" ? "right" : "left") as "left" | "right";
+    const showRp = Boolean(data.showRecentPostsSidebar ?? false);
+    const rpPos = (data.sidebarPosition === "right" ? "right" : "left") as "left" | "right";
+    if (!leftSidebar) {
+      const modules: SidebarModuleType[] = [];
+      if (showToc && tocPos === "left") modules.push("tableOfContents");
+      if (showRp && rpPos === "left") modules.push("recentPosts");
+      leftSidebar = { show: modules.length > 0, modules, width: 240 };
+    }
+    if (!rightSidebar) {
+      const modules: SidebarModuleType[] = [];
+      if (showToc && tocPos === "right") modules.push("tableOfContents");
+      if (showRp && rpPos === "right") modules.push("recentPosts");
+      rightSidebar = { show: modules.length > 0, modules, width: 240 };
+    }
+    if (!headerContent) headerContent = { show: false, tableOfContents: false, breadcrumbs: false };
+  }
   return {
     showDate: Boolean(data.showDate ?? true),
     showAuthor: Boolean(data.showAuthor ?? false),
@@ -84,14 +117,9 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
         ? (data.progressBarColor as string)
         : "#5B4FE8",
     },
-    tableOfContents: {
-      show: Boolean(data.showTableOfContents ?? false),
-      position: (data.tableOfContentsPosition === "right" ? "right" : "left") as "left" | "right",
-    },
-    recentPostsSidebar: {
-      show: Boolean(data.showRecentPostsSidebar ?? false),
-      position: (data.sidebarPosition === "right" ? "right" : "left") as "left" | "right",
-    },
+    leftSidebar,
+    rightSidebar,
+    headerContent,
   };
 }
 
@@ -105,10 +133,9 @@ function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
     progressBarPosition: config.progressBar.position,
     progressBarThickness: config.progressBar.thickness,
     progressBarColor: config.progressBar.color,
-    showTableOfContents: config.tableOfContents.show,
-    tableOfContentsPosition: config.tableOfContents.position,
-    showRecentPostsSidebar: config.recentPostsSidebar.show,
-    sidebarPosition: config.recentPostsSidebar.position,
+    leftSidebar: config.leftSidebar,
+    rightSidebar: config.rightSidebar,
+    headerContent: config.headerContent,
   };
 }
 
@@ -122,10 +149,9 @@ function configToRendererConfig(config: SiteConfigForm): Record<string, unknown>
     progressBarPosition: config.progressBar.position,
     progressBarThickness: config.progressBar.thickness,
     progressBarColor: config.progressBar.color,
-    showTableOfContents: config.tableOfContents.show,
-    tableOfContentsPosition: config.tableOfContents.position,
-    showRecentPostsSidebar: config.recentPostsSidebar.show,
-    sidebarPosition: config.recentPostsSidebar.position,
+    leftSidebar: config.leftSidebar,
+    rightSidebar: config.rightSidebar,
+    headerContent: config.headerContent,
     recentPostsCount: 5,
   };
 }
@@ -139,6 +165,17 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     const bb = b.postAuthorOverrides[key] ?? [];
     return aa.length === bb.length && aa.every((id, i) => id === bb[i]);
   });
+  const lsEqual = a.leftSidebar.show === b.leftSidebar.show &&
+    a.leftSidebar.width === b.leftSidebar.width &&
+    a.leftSidebar.modules.length === b.leftSidebar.modules.length &&
+    a.leftSidebar.modules.every((m, i) => m === b.leftSidebar.modules[i]);
+  const rsEqual = a.rightSidebar.show === b.rightSidebar.show &&
+    a.rightSidebar.width === b.rightSidebar.width &&
+    a.rightSidebar.modules.length === b.rightSidebar.modules.length &&
+    a.rightSidebar.modules.every((m, i) => m === b.rightSidebar.modules[i]);
+  const hcEqual = a.headerContent.show === b.headerContent.show &&
+    a.headerContent.tableOfContents === b.headerContent.tableOfContents &&
+    a.headerContent.breadcrumbs === b.headerContent.breadcrumbs;
   return (
     a.showDate === b.showDate &&
     a.showAuthor === b.showAuthor &&
@@ -148,10 +185,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.progressBar.position === b.progressBar.position &&
     a.progressBar.thickness === b.progressBar.thickness &&
     a.progressBar.color === b.progressBar.color &&
-    a.tableOfContents.show === b.tableOfContents.show &&
-    a.tableOfContents.position === b.tableOfContents.position &&
-    a.recentPostsSidebar.show === b.recentPostsSidebar.show &&
-    a.recentPostsSidebar.position === b.recentPostsSidebar.position
+    lsEqual && rsEqual && hcEqual
   );
 }
 
@@ -177,8 +211,9 @@ export default function Configure() {
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     progressBar: false,
-    tableOfContents: false,
-    recentPostsSidebar: false,
+    leftSidebar: false,
+    rightSidebar: false,
+    headerContent: false,
   });
 
   useEffect(() => {
@@ -275,9 +310,10 @@ export default function Configure() {
                 body: JSON.stringify({ siteKey: effectiveSiteKey, name }),
               });
               const data = await res.json();
-              if (data?.id) {
-                id = data.id;
-                existingByName.set(name, id);
+              const newId = data?.id;
+              if (typeof newId === "string") {
+                id = newId;
+                existingByName.set(name, newId);
               }
             } catch {
               /* ignore */
@@ -359,10 +395,15 @@ export default function Configure() {
       else if (path === "progressBar.position") next.progressBar = { ...prev.progressBar, position: value as "top" | "bottom" };
       else if (path === "progressBar.thickness") next.progressBar = { ...prev.progressBar, thickness: value as number };
       else if (path === "progressBar.color") next.progressBar = { ...prev.progressBar, color: value as string };
-      else if (path === "tableOfContents.show") next.tableOfContents = { ...prev.tableOfContents, show: value as boolean };
-      else if (path === "tableOfContents.position") next.tableOfContents = { ...prev.tableOfContents, position: value as "left" | "right" };
-      else if (path === "recentPostsSidebar.show") next.recentPostsSidebar = { ...prev.recentPostsSidebar, show: value as boolean };
-      else if (path === "recentPostsSidebar.position") next.recentPostsSidebar = { ...prev.recentPostsSidebar, position: value as "left" | "right" };
+      else if (path === "leftSidebar.show") next.leftSidebar = { ...prev.leftSidebar, show: value as boolean };
+      else if (path === "leftSidebar.modules") next.leftSidebar = { ...prev.leftSidebar, modules: value as SidebarModuleType[] };
+      else if (path === "leftSidebar.width") next.leftSidebar = { ...prev.leftSidebar, width: value as number };
+      else if (path === "rightSidebar.show") next.rightSidebar = { ...prev.rightSidebar, show: value as boolean };
+      else if (path === "rightSidebar.modules") next.rightSidebar = { ...prev.rightSidebar, modules: value as SidebarModuleType[] };
+      else if (path === "rightSidebar.width") next.rightSidebar = { ...prev.rightSidebar, width: value as number };
+      else if (path === "headerContent.show") next.headerContent = { ...prev.headerContent, show: value as boolean };
+      else if (path === "headerContent.tableOfContents") next.headerContent = { ...prev.headerContent, tableOfContents: value as boolean };
+      else if (path === "headerContent.breadcrumbs") next.headerContent = { ...prev.headerContent, breadcrumbs: value as boolean };
       return next;
     });
   };
@@ -448,6 +489,11 @@ export default function Configure() {
                   <p className="text-sm text-[#6b6b6b]">
                     In Squarespace, go to Settings → Advanced → Code Injection. Add this code to the header of your blog page.
                   </p>
+                  {typeof window !== "undefined" && window.location.protocol === "http:" && (
+                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                      Local dev (HTTP): If your blog is on HTTPS, the overlay may fail to load due to mixed content. Use a tunnel (e.g. ngrok) or deploy to test.
+                    </p>
+                  )}
                   {(() => {
                     const base = typeof window !== "undefined" ? window.location.origin : "";
                     const snippet = `<script
@@ -753,97 +799,205 @@ export default function Configure() {
                     </Collapsible>
                     </div>
 
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Table of Contents</span>
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={config.tableOfContents.show}
-                            onCheckedChange={(v) => {
-                              updateConfig("tableOfContents.show", v);
-                              setSectionExpanded((p) => ({ ...p, tableOfContents: v }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => config.tableOfContents.show && setSectionExpanded((p) => ({ ...p, tableOfContents: !p.tableOfContents }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.tableOfContents.show ? "invisible pointer-events-none" : ""}`}
-                            aria-label={sectionExpanded.tableOfContents ? "Collapse" : "Expand"}
-                          >
-                            {sectionExpanded.tableOfContents ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <Collapsible open={config.tableOfContents.show && sectionExpanded.tableOfContents}>
-                        <CollapsibleContent>
-                        <div className="pb-4 space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                            <Select
-                              value={config.tableOfContents.position}
-                              onValueChange={(v) => updateConfig("tableOfContents.position", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="left">Left</SelectItem>
-                                <SelectItem value="right">Right</SelectItem>
-                              </SelectContent>
-                            </Select>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                    </div>
-
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Recent Posts Sidebar</span>
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={config.recentPostsSidebar.show}
-                            onCheckedChange={(v) => {
-                              updateConfig("recentPostsSidebar.show", v);
-                              setSectionExpanded((p) => ({ ...p, recentPostsSidebar: v }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => config.recentPostsSidebar.show && setSectionExpanded((p) => ({ ...p, recentPostsSidebar: !p.recentPostsSidebar }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.recentPostsSidebar.show ? "invisible pointer-events-none" : ""}`}
-                            aria-label={sectionExpanded.recentPostsSidebar ? "Collapse" : "Expand"}
-                          >
-                            {sectionExpanded.recentPostsSidebar ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <Collapsible open={config.recentPostsSidebar.show && sectionExpanded.recentPostsSidebar}>
-                        <CollapsibleContent>
-                        <div className="pb-4 space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                            <Select
-                              value={config.recentPostsSidebar.position}
-                              onValueChange={(v) => updateConfig("recentPostsSidebar.position", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="left">Left</SelectItem>
-                                <SelectItem value="right">Right</SelectItem>
-                              </SelectContent>
-                            </Select>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                    </div>
+                    {(() => {
+                      const MODULE_LABELS: Record<SidebarModuleType, string> = {
+                        recentPosts: "Recent Posts",
+                        relevantPosts: "Relevant Posts",
+                        tableOfContents: "Table of Contents",
+                      };
+                      const SidebarSection = ({ side }: { side: "left" | "right" }) => {
+                        const cfg = side === "left" ? config.leftSidebar : config.rightSidebar;
+                        const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
+                        const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
+                        const pathPrefix = side === "left" ? "leftSidebar" : "rightSidebar";
+                        const moveModule = (fromIdx: number, toIdx: number) => {
+                          const arr = [...cfg.modules];
+                          const [removed] = arr.splice(fromIdx, 1);
+                          arr.splice(toIdx, 0, removed);
+                          updateConfig(`${pathPrefix}.modules`, arr);
+                        };
+                        const addModule = (m: SidebarModuleType) => {
+                          if (!cfg.modules.includes(m)) updateConfig(`${pathPrefix}.modules`, [...cfg.modules, m]);
+                        };
+                        const removeModule = (idx: number) => {
+                          updateConfig(`${pathPrefix}.modules`, cfg.modules.filter((_, i) => i !== idx));
+                        };
+                        const handleDragOver = (e: React.DragEvent) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                        };
+                        const handleDrop = (e: React.DragEvent, toIdx: number) => {
+                          e.preventDefault();
+                          const fromIdx = Number(e.dataTransfer.getData("text/plain"));
+                          if (fromIdx !== toIdx && fromIdx >= 0) moveModule(fromIdx, toIdx);
+                        };
+                        const handleDragStart = (e: React.DragEvent, idx: number) => {
+                          e.dataTransfer.setData("text/plain", String(idx));
+                          e.dataTransfer.effectAllowed = "move";
+                        };
+                        return (
+                          <div className="border-b border-[#e5e4e0]">
+                            <div className="flex items-center justify-between py-3">
+                              <span className="font-medium">{side === "left" ? "Left Sidebar" : "Right Sidebar"}</span>
+                              <div className="flex items-center gap-1">
+                                <Switch
+                                  checked={cfg.show}
+                                  onCheckedChange={(v) => {
+                                    updateConfig(`${pathPrefix}.show`, v);
+                                    setExpanded(v);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => cfg.show && setExpanded(!expanded)}
+                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!cfg.show ? "invisible pointer-events-none" : ""}`}
+                                  aria-label={expanded ? "Collapse" : "Expand"}
+                                >
+                                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <Collapsible open={cfg.show && expanded}>
+                              <CollapsibleContent>
+                                <div className="pb-4 space-y-3">
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                    <div className="flex items-center gap-3">
+                                      <Slider
+                                        value={[cfg.width]}
+                                        onValueChange={([v]) => updateConfig(`${pathPrefix}.width`, v ?? 240)}
+                                        min={160}
+                                        max={400}
+                                        step={20}
+                                        className="flex-1"
+                                      />
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Modules</Label>
+                                    <Select
+                                      key={cfg.modules.join(",")}
+                                      value=""
+                                      onValueChange={(v) => {
+                                        if (v && SIDEBAR_MODULE_TYPES.includes(v as SidebarModuleType)) {
+                                          addModule(v as SidebarModuleType);
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger
+                                        className="h-8 w-full justify-start text-xs focus:bg-[#5B4FE8]/10 focus:text-[#5B4FE8]"
+                                        disabled={cfg.modules.length >= SIDEBAR_MODULE_TYPES.length}
+                                      >
+                                        <Plus className="h-3 w-3 shrink-0" />
+                                        <SelectValue
+                                          placeholder={
+                                            cfg.modules.length >= SIDEBAR_MODULE_TYPES.length
+                                              ? "All modules added"
+                                              : "Add Module"
+                                          }
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {SIDEBAR_MODULE_TYPES.filter((m) => !cfg.modules.includes(m)).map((m) => (
+                                          <SelectItem key={m} value={m}>
+                                            {MODULE_LABELS[m]}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <div className="space-y-1.5">
+                                      {cfg.modules.map((m, idx) => (
+                                        <div
+                                          key={`${m}-${idx}`}
+                                          draggable
+                                          onDragStart={(e) => handleDragStart(e, idx)}
+                                          onDragOver={handleDragOver}
+                                          onDrop={(e) => handleDrop(e, idx)}
+                                          onDragEnd={(e) => { e.dataTransfer.clearData(); }}
+                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                        >
+                                          <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
+                                          <span className="flex-1 min-w-0 truncate">{MODULE_LABELS[m]}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => removeModule(idx)}
+                                            className="p-0.5 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                                            aria-label="Remove"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </div>
+                        );
+                      };
+                      return (
+                        <>
+                          <SidebarSection side="left" />
+                          <SidebarSection side="right" />
+                          <div className="border-b border-[#e5e4e0]">
+                            <div className="flex items-center justify-between py-3">
+                              <span className="font-medium">Header Content</span>
+                              <div className="flex items-center gap-1">
+                                <Switch
+                                  checked={config.headerContent.show}
+                                  onCheckedChange={(v) => {
+                                    updateConfig("headerContent.show", v);
+                                    if (!v) {
+                                      updateConfig("headerContent.tableOfContents", false);
+                                      updateConfig("headerContent.breadcrumbs", false);
+                                    } else {
+                                      updateConfig("headerContent.tableOfContents", true);
+                                    }
+                                    setSectionExpanded((p) => ({ ...p, headerContent: v }));
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => config.headerContent.show && setSectionExpanded((p) => ({ ...p, headerContent: !p.headerContent }))}
+                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.headerContent.show ? "invisible pointer-events-none" : ""}`}
+                                  aria-label={sectionExpanded.headerContent ? "Collapse" : "Expand"}
+                                >
+                                  {sectionExpanded.headerContent ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <Collapsible open={config.headerContent.show && sectionExpanded.headerContent}>
+                              <CollapsibleContent>
+                                <div className="pb-4 space-y-3">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={config.headerContent.tableOfContents}
+                                      onCheckedChange={(v) => {
+                                        updateConfig("headerContent.tableOfContents", Boolean(v));
+                                        if (Boolean(v)) setSectionExpanded((p) => ({ ...p, headerContent: true }));
+                                      }}
+                                    />
+                                    <span className="text-sm">Table of Contents</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={config.headerContent.breadcrumbs}
+                                      onCheckedChange={(v) => {
+                                        updateConfig("headerContent.breadcrumbs", Boolean(v));
+                                        if (Boolean(v)) setSectionExpanded((p) => ({ ...p, headerContent: true }));
+                                      }}
+                                    />
+                                    <span className="text-sm">Breadcrumbs</span>
+                                  </label>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </>
                 )}
           </div>

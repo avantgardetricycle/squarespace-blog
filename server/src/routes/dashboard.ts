@@ -277,6 +277,9 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         progressBar: { show: false, position: null, thickness: 6, color: '#5B4FE8' },
         tableOfContents: { show: false, position: null },
         recentPostsSidebar: { show: false, position: null },
+        leftSidebar: { show: false, modules: [], width: 240 },
+        rightSidebar: { show: false, modules: [], width: 240 },
+        headerContent: { show: false, tableOfContents: false, breadcrumbs: false },
         isActive: true
       }
     })
