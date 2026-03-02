@@ -510,7 +510,7 @@ export default function LandingPage() {
 
           {/* Footer Note */}
           <p className="text-center mt-7 text-[12.5px] text-neutral-400 leading-[1.9]">
-            All plans include a 30-day free trial &nbsp;·&nbsp; No credit card required &nbsp;·&nbsp; Cancel anytime
+            All plans include a 7-day free trial &nbsp;·&nbsp; Cancel anytime
           </p>
         </div>
       </section>
@@ -537,7 +537,7 @@ export default function LandingPage() {
               Get Started for Free
             </Button>
           )}
-          <p className="mt-6 text-sm text-neutral-500">No credit card required for 14-day trial.</p>
+          <p className="mt-6 text-sm text-neutral-500">All plans include a 7-day free trial.</p>
         </div>
       </section>
 
