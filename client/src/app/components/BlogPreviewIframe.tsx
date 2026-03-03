@@ -13,7 +13,7 @@ export interface RendererConfig {
   progressBarColor?: string;
   leftSidebar?: { show?: boolean; modules?: string[]; width?: number };
   rightSidebar?: { show?: boolean; modules?: string[]; width?: number };
-  headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean };
+  headerContent?: { show?: boolean; modules?: string[]; height?: number };
   recentPostsCount?: number;
 }
 

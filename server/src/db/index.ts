@@ -39,8 +39,8 @@ export interface SidebarConfig {
 
 export interface HeaderContentConfig {
   show?: boolean
-  tableOfContents?: boolean
-  breadcrumbs?: boolean
+  modules?: string[]
+  height?: number
 }
 
 export interface FeaturedImageConfig {
@@ -83,7 +83,7 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
     const authorSettings = data.authorSettings ?? { defaultAuthorIds: [], postAuthorOverrides: {} }
     const leftSidebar = data.leftSidebar ?? { show: false, modules: [], width: 240 }
     const rightSidebar = data.rightSidebar ?? { show: false, modules: [], width: 240 }
-    const headerContent = data.headerContent ?? { show: false, tableOfContents: false, breadcrumbs: false }
+    const headerContent = data.headerContent ?? { show: false, modules: [], height: 48 }
     const featuredImage = data.featuredImage ?? {
       show: true,
       layoutMode: 'leftJustified',

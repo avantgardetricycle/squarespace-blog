@@ -10,8 +10,8 @@ interface SidebarConfig {
 
 interface HeaderContentConfig {
   show?: boolean;
-  tableOfContents?: boolean;
-  breadcrumbs?: boolean;
+  modules?: string[];
+  height?: number;
 }
 
 interface FeaturedImageConfig {
@@ -89,7 +89,7 @@ export default function BlogPreviewRenderer({
         progressBarColor: configOverrides?.progressBarColor ?? "#5B4FE8",
         leftSidebar: configOverrides?.leftSidebar ?? { show: false, modules: [], width: 240 },
         rightSidebar: configOverrides?.rightSidebar ?? { show: false, modules: [], width: 240 },
-        headerContent: configOverrides?.headerContent ?? { show: false, tableOfContents: false, breadcrumbs: false },
+        headerContent: configOverrides?.headerContent ?? { show: false, modules: [], height: 48 },
         featuredImage: configOverrides?.featuredImage ?? {
           show: true,
           layoutMode: "leftJustified",

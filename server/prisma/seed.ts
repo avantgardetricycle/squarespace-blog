@@ -38,7 +38,7 @@ const defaultSiteConfig = {
   recentPostsSidebar: { show: false, position: null },
   leftSidebar: { show: false, modules: [], width: 240 },
   rightSidebar: { show: false, modules: [], width: 240 },
-  headerContent: { show: false, tableOfContents: false, breadcrumbs: false }
+  headerContent: { show: false, modules: [], height: 48 }
 }
 
 async function main() {

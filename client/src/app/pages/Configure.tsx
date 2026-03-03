@@ -51,6 +51,9 @@ export interface BlogAuthorOption {
 export const SIDEBAR_MODULE_TYPES = ["recentPosts", "relevantPosts", "tableOfContents"] as const;
 export type SidebarModuleType = (typeof SIDEBAR_MODULE_TYPES)[number];
 
+export const HEADER_CONTENT_MODULE_TYPES = ["tableOfContents", "breadcrumbs", "postSearch", "filterByTagsAndCategories"] as const;
+export type HeaderContentModuleType = (typeof HEADER_CONTENT_MODULE_TYPES)[number];
+
 export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";
 export type FeaturedImageAspectBehavior = "original" | "cropped";
 export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
@@ -78,7 +81,7 @@ export interface SiteConfigForm {
   progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
   leftSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
   rightSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
-  headerContent: { show: boolean; tableOfContents: boolean; breadcrumbs: boolean };
+  headerContent: { show: boolean; modules: HeaderContentModuleType[]; height: number };
   featuredImage: FeaturedImageConfig;
 }
 
@@ -103,7 +106,7 @@ const defaultSiteConfig: SiteConfigForm = {
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
   leftSidebar: { show: false, modules: [], width: 240 },
   rightSidebar: { show: false, modules: [], width: 240 },
-  headerContent: { show: false, tableOfContents: false, breadcrumbs: false },
+  headerContent: { show: false, modules: [], height: 48 },
   featuredImage: defaultFeaturedImage,
 };
 
@@ -113,12 +116,26 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     ? (data.postAuthorOverrides as Record<string, string[]>) : {};
   const ls = data.leftSidebar && typeof data.leftSidebar === "object" ? data.leftSidebar as { show?: boolean; modules?: string[]; width?: number } : null;
   const rs = data.rightSidebar && typeof data.rightSidebar === "object" ? data.rightSidebar as { show?: boolean; modules?: string[]; width?: number } : null;
-  const hc = data.headerContent && typeof data.headerContent === "object" ? data.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } : null;
+  const hc = data.headerContent && typeof data.headerContent === "object" ? data.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean; modules?: unknown[]; height?: number } : null;
   const validModules = (arr: unknown): SidebarModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is SidebarModuleType => SIDEBAR_MODULE_TYPES.includes(m as SidebarModuleType)) : [];
+  const validHeaderModules = (arr: unknown): HeaderContentModuleType[] =>
+    Array.isArray(arr) ? arr.filter((m): m is HeaderContentModuleType => HEADER_CONTENT_MODULE_TYPES.includes(m as HeaderContentModuleType)) : [];
   let leftSidebar = ls ? { show: Boolean(ls.show ?? false), modules: validModules(ls.modules), width: Math.min(400, Math.max(160, Number(ls.width) || 240)) } : null;
   let rightSidebar = rs ? { show: Boolean(rs.show ?? false), modules: validModules(rs.modules), width: Math.min(400, Math.max(160, Number(rs.width) || 240)) } : null;
-  let headerContent = hc ? { show: Boolean(hc.show ?? false), tableOfContents: Boolean(hc.tableOfContents ?? false), breadcrumbs: Boolean(hc.breadcrumbs ?? false) } : null;
+  let headerContent: { show: boolean; modules: HeaderContentModuleType[]; height: number } | null = null;
+  if (hc) {
+    const modules = Array.isArray(hc.modules) ? validHeaderModules(hc.modules) : [];
+    const migrated = modules.length > 0 ? modules : [
+      ...(hc.tableOfContents ? (["tableOfContents"] as const) : []),
+      ...(hc.breadcrumbs ? (["breadcrumbs"] as const) : []),
+    ];
+    headerContent = {
+      show: Boolean(hc.show ?? false),
+      modules: migrated,
+      height: Math.min(120, Math.max(32, Number(hc.height) || 48)),
+    };
+  }
   if (!leftSidebar || !rightSidebar || !headerContent) {
     const showToc = Boolean(data.showTableOfContents ?? false);
     const tocPos = (data.tableOfContentsPosition === "right" ? "right" : "left") as "left" | "right";
@@ -136,7 +153,7 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
       if (showRp && rpPos === "right") modules.push("recentPosts");
       rightSidebar = { show: modules.length > 0, modules, width: 240 };
     }
-    if (!headerContent) headerContent = { show: false, tableOfContents: false, breadcrumbs: false };
+    if (!headerContent) headerContent = { show: false, modules: [], height: 48 };
   }
   const fi = data.featuredImage && typeof data.featuredImage === "object" ? data.featuredImage as Record<string, unknown> : null;
   const featuredImage: FeaturedImageConfig = fi ? {
@@ -226,8 +243,9 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.rightSidebar.modules.length === b.rightSidebar.modules.length &&
     a.rightSidebar.modules.every((m, i) => m === b.rightSidebar.modules[i]);
   const hcEqual = a.headerContent.show === b.headerContent.show &&
-    a.headerContent.tableOfContents === b.headerContent.tableOfContents &&
-    a.headerContent.breadcrumbs === b.headerContent.breadcrumbs;
+    a.headerContent.height === b.headerContent.height &&
+    a.headerContent.modules.length === b.headerContent.modules.length &&
+    a.headerContent.modules.every((m, i) => m === b.headerContent.modules[i]);
   const fiEqual = a.featuredImage.show === b.featuredImage.show &&
     a.featuredImage.layoutMode === b.featuredImage.layoutMode &&
     a.featuredImage.imageWidthPercent === b.featuredImage.imageWidthPercent &&
@@ -466,8 +484,8 @@ export default function Configure() {
       else if (path === "rightSidebar.modules") next.rightSidebar = { ...prev.rightSidebar, modules: value as SidebarModuleType[] };
       else if (path === "rightSidebar.width") next.rightSidebar = { ...prev.rightSidebar, width: value as number };
       else if (path === "headerContent.show") next.headerContent = { ...prev.headerContent, show: value as boolean };
-      else if (path === "headerContent.tableOfContents") next.headerContent = { ...prev.headerContent, tableOfContents: value as boolean };
-      else if (path === "headerContent.breadcrumbs") next.headerContent = { ...prev.headerContent, breadcrumbs: value as boolean };
+      else if (path === "headerContent.modules") next.headerContent = { ...prev.headerContent, modules: value as HeaderContentModuleType[] };
+      else if (path === "headerContent.height") next.headerContent = { ...prev.headerContent, height: value as number };
       else if (path === "featuredImage.show") next.featuredImage = { ...prev.featuredImage, show: value as boolean };
       else if (path === "featuredImage.layoutMode") next.featuredImage = { ...prev.featuredImage, layoutMode: value as FeaturedImageLayoutMode };
       else if (path === "featuredImage.imageWidthPercent") next.featuredImage = { ...prev.featuredImage, imageWidthPercent: value as number };
@@ -609,6 +627,10 @@ export default function Configure() {
                   <div className="text-sm text-[#6b6b6b]">Loading settings…</div>
                 ) : (
                   <>
+                    {/* Reader Experience */}
+                    <div className="pt-2 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#9a1a3e] border-b border-[rgba(154,26,62,0.2)]">
+                      Reader Experience
+                    </div>
                     <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
                       <span className="font-medium">Show Date</span>
                       <div className="flex items-center gap-1">
@@ -633,6 +655,93 @@ export default function Configure() {
                       </div>
                     </div>
 
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Progress Bar</span>
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={config.progressBar.show}
+                            onCheckedChange={(v) => {
+                              updateConfig("progressBar.show", v);
+                              setSectionExpanded((p) => ({ ...p, progressBar: v }));
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => config.progressBar.show && setSectionExpanded((p) => ({ ...p, progressBar: !p.progressBar }))}
+                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.progressBar.show ? "invisible pointer-events-none" : ""}`}
+                            aria-label={sectionExpanded.progressBar ? "Collapse" : "Expand"}
+                          >
+                            {sectionExpanded.progressBar ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <Collapsible open={config.progressBar.show && sectionExpanded.progressBar}>
+                        <CollapsibleContent>
+                        <div className="pb-4 space-y-4">
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                            <Select
+                              value={config.progressBar.position}
+                              onValueChange={(v) => updateConfig("progressBar.position", v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="top">Top</SelectItem>
+                                <SelectItem value="bottom">Bottom</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Thickness</Label>
+                            <div className="flex items-center gap-3">
+                              <Slider
+                                value={[config.progressBar.thickness]}
+                                onValueChange={([v]) => updateConfig("progressBar.thickness", v ?? 6)}
+                                min={2}
+                                max={12}
+                                step={1}
+                                className="flex-1"
+                              />
+                              <span className="text-xs text-[#6b6b6b] w-8 shrink-0">
+                                {config.progressBar.thickness}px
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Color</Label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="color"
+                                value={config.progressBar.color}
+                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
+                                className="h-9 w-14 cursor-pointer rounded border border-[#e5e4e0] bg-white p-0"
+                              />
+                              <Input
+                                value={config.progressBar.color}
+                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
+                                className="font-mono text-sm h-9 w-24"
+                                placeholder="#5B4FE8"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                    </div>
+
+                    {/* Publishing & Management */}
+                    <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
+                      Publishing & Management
+                    </div>
                     {selectedPostIndex >= 0 && blogItems.length > 0 && selectedPostIndex < blogItems.length ? (
                       <div className="border-b border-[#e5e4e0] pb-4">
                         <span className="font-medium block py-3">Post Author(s)</span>
@@ -801,89 +910,10 @@ export default function Configure() {
                       </div>
                     )}
 
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Progress Bar</span>
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={config.progressBar.show}
-                            onCheckedChange={(v) => {
-                              updateConfig("progressBar.show", v);
-                              setSectionExpanded((p) => ({ ...p, progressBar: v }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => config.progressBar.show && setSectionExpanded((p) => ({ ...p, progressBar: !p.progressBar }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.progressBar.show ? "invisible pointer-events-none" : ""}`}
-                            aria-label={sectionExpanded.progressBar ? "Collapse" : "Expand"}
-                          >
-                            {sectionExpanded.progressBar ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <Collapsible open={config.progressBar.show && sectionExpanded.progressBar}>
-                        <CollapsibleContent>
-                        <div className="pb-4 space-y-4">
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                            <Select
-                              value={config.progressBar.position}
-                              onValueChange={(v) => updateConfig("progressBar.position", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="top">Top</SelectItem>
-                                <SelectItem value="bottom">Bottom</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Thickness</Label>
-                            <div className="flex items-center gap-3">
-                              <Slider
-                                value={[config.progressBar.thickness]}
-                                onValueChange={([v]) => updateConfig("progressBar.thickness", v ?? 6)}
-                                min={2}
-                                max={12}
-                                step={1}
-                                className="flex-1"
-                              />
-                              <span className="text-xs text-[#6b6b6b] w-8 shrink-0">
-                                {config.progressBar.thickness}px
-                              </span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Color</Label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="color"
-                                value={config.progressBar.color}
-                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
-                                className="h-9 w-14 cursor-pointer rounded border border-[#e5e4e0] bg-white p-0"
-                              />
-                              <Input
-                                value={config.progressBar.color}
-                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
-                                className="font-mono text-sm h-9 w-24"
-                                placeholder="#5B4FE8"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+                    {/* Layout & Design */}
+                    <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#5B4FE8] border-b border-[rgba(91,79,232,0.2)]">
+                      Layout & Design
                     </div>
-
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Featured Image</span>
@@ -1169,6 +1199,10 @@ export default function Configure() {
                         <>
                           <SidebarSection side="left" />
                           <SidebarSection side="right" />
+                          {/* Navigation & Discovery */}
+                          <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#1a7a5e] border-b border-[rgba(26,122,94,0.2)]">
+                            Navigation & Discovery
+                          </div>
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">Header Content</span>
@@ -1177,12 +1211,6 @@ export default function Configure() {
                                   checked={config.headerContent.show}
                                   onCheckedChange={(v) => {
                                     updateConfig("headerContent.show", v);
-                                    if (!v) {
-                                      updateConfig("headerContent.tableOfContents", false);
-                                      updateConfig("headerContent.breadcrumbs", false);
-                                    } else {
-                                      updateConfig("headerContent.tableOfContents", true);
-                                    }
                                     setSectionExpanded((p) => ({ ...p, headerContent: v }));
                                   }}
                                 />
@@ -1199,26 +1227,104 @@ export default function Configure() {
                             <Collapsible open={config.headerContent.show && sectionExpanded.headerContent}>
                               <CollapsibleContent>
                                 <div className="pb-4 space-y-3">
-                                  <label className="flex items-center gap-2 cursor-pointer">
-                                    <Checkbox
-                                      checked={config.headerContent.tableOfContents}
-                                      onCheckedChange={(v) => {
-                                        updateConfig("headerContent.tableOfContents", Boolean(v));
-                                        if (Boolean(v)) setSectionExpanded((p) => ({ ...p, headerContent: true }));
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Height</Label>
+                                    <div className="flex items-center gap-3">
+                                      <Slider
+                                        value={[config.headerContent.height]}
+                                        onValueChange={([v]) => updateConfig("headerContent.height", v ?? 48)}
+                                        min={32}
+                                        max={120}
+                                        step={8}
+                                        className="flex-1"
+                                      />
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{config.headerContent.height}px</span>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Modules</Label>
+                                    <Select
+                                      key={config.headerContent.modules.join(",")}
+                                      value=""
+                                      onValueChange={(v) => {
+                                        if (v && HEADER_CONTENT_MODULE_TYPES.includes(v as HeaderContentModuleType)) {
+                                          const addModule = (m: HeaderContentModuleType) => {
+                                            if (!config.headerContent.modules.includes(m)) {
+                                              updateConfig("headerContent.modules", [...config.headerContent.modules, m]);
+                                            }
+                                          };
+                                          addModule(v as HeaderContentModuleType);
+                                        }
                                       }}
-                                    />
-                                    <span className="text-sm">Table of Contents</span>
-                                  </label>
-                                  <label className="flex items-center gap-2 cursor-pointer">
-                                    <Checkbox
-                                      checked={config.headerContent.breadcrumbs}
-                                      onCheckedChange={(v) => {
-                                        updateConfig("headerContent.breadcrumbs", Boolean(v));
-                                        if (Boolean(v)) setSectionExpanded((p) => ({ ...p, headerContent: true }));
-                                      }}
-                                    />
-                                    <span className="text-sm">Breadcrumbs</span>
-                                  </label>
+                                    >
+                                      <SelectTrigger
+                                        className="h-8 w-full justify-start text-xs focus:bg-[#5B4FE8]/10 focus:text-[#5B4FE8]"
+                                        disabled={config.headerContent.modules.length >= HEADER_CONTENT_MODULE_TYPES.length}
+                                      >
+                                        <Plus className="h-3 w-3 shrink-0" />
+                                        <SelectValue
+                                          placeholder={
+                                            config.headerContent.modules.length >= HEADER_CONTENT_MODULE_TYPES.length
+                                              ? "All modules added"
+                                              : "Add Module"
+                                          }
+                                        />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {HEADER_CONTENT_MODULE_TYPES.filter((m) => !config.headerContent.modules.includes(m)).map((m) => (
+                                          <SelectItem key={m} value={m}>
+                                            {m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "postSearch" ? "Post Search" : "Filter by Tags & Categories"}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <div className="space-y-1.5">
+                                      {config.headerContent.modules.map((m, idx) => {
+                                        const moveModule = (fromIdx: number, toIdx: number) => {
+                                          const arr = [...config.headerContent.modules];
+                                          const [removed] = arr.splice(fromIdx, 1);
+                                          arr.splice(toIdx, 0, removed);
+                                          updateConfig("headerContent.modules", arr);
+                                        };
+                                        const removeModule = (i: number) => {
+                                          updateConfig("headerContent.modules", config.headerContent.modules.filter((_, j) => j !== i));
+                                        };
+                                        const label = m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "postSearch" ? "Post Search" : "Filter by Tags & Categories";
+                                        return (
+                                          <div
+                                            key={`${m}-${idx}`}
+                                            draggable
+                                            onDragStart={(e) => {
+                                              e.dataTransfer.setData("text/plain", String(idx));
+                                              e.dataTransfer.effectAllowed = "move";
+                                            }}
+                                            onDragOver={(e) => {
+                                              e.preventDefault();
+                                              e.dataTransfer.dropEffect = "move";
+                                            }}
+                                            onDrop={(e) => {
+                                              e.preventDefault();
+                                              const fromIdx = Number(e.dataTransfer.getData("text/plain"));
+                                              if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
+                                            }}
+                                            onDragEnd={(e) => { e.dataTransfer.clearData(); }}
+                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                          >
+                                            <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
+                                            <span className="flex-1 min-w-0 truncate">{label}</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => removeModule(idx)}
+                                              className="p-0.5 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                                              aria-label="Remove"
+                                            >
+                                              <X className="h-3.5 w-3.5" />
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
                                 </div>
                               </CollapsibleContent>
                             </Collapsible>

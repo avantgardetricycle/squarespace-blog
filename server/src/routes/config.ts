@@ -122,7 +122,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const authorSettings = (siteConfig.authorSettings as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> }) ?? { defaultAuthorIds: [], postAuthorOverrides: {} }
     const leftSidebar = (siteConfig as { leftSidebar?: { show?: boolean; modules?: string[]; width?: number } }).leftSidebar ?? null
     const rightSidebar = (siteConfig as { rightSidebar?: { show?: boolean; modules?: string[]; width?: number } }).rightSidebar ?? null
-    const headerContent = (siteConfig as { headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } }).headerContent ?? null
+    const headerContent = (siteConfig as { headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean; modules?: string[]; height?: number } }).headerContent ?? null
 
     // Build author map (id -> name) for renderer
     let defaultAuthorIds = authorSettings.defaultAuthorIds ?? []
@@ -166,8 +166,19 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240 }
         : { show: false, modules: [], width: 240 }
     const hc = headerContent && typeof headerContent === 'object'
-      ? { show: headerContent.show ?? false, tableOfContents: headerContent.tableOfContents ?? false, breadcrumbs: headerContent.breadcrumbs ?? false }
-      : { show: false, tableOfContents: false, breadcrumbs: false }
+      ? (() => {
+          const modules = Array.isArray(headerContent.modules) ? headerContent.modules : [];
+          const migrated = modules.length > 0 ? modules : [
+            ...(headerContent.tableOfContents ? ['tableOfContents'] : []),
+            ...(headerContent.breadcrumbs ? ['breadcrumbs'] : []),
+          ];
+          return {
+            show: headerContent.show ?? false,
+            modules: migrated,
+            height: Math.min(120, Math.max(32, Number(headerContent.height) || 48)),
+          };
+        })()
+      : { show: false, modules: [], height: 48 }
     const fi = (siteConfig as { featuredImage?: Record<string, unknown> }).featuredImage
     const featuredImage = fi && typeof fi === 'object'
       ? {
@@ -250,7 +261,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const authorSettings = (c as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> })
     const ls = c.leftSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
     const rs = c.rightSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
-    const hc = c.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } | undefined
+    const hc = c.headerContent as { show?: boolean; modules?: string[]; height?: number } | undefined
     const fi = c.featuredImage as {
       show?: boolean; layoutMode?: string; imageWidthPercent?: number; aspectBehavior?: string; aspectRatio?: string;
       roundedCorners?: string; shadow?: boolean; showCaption?: boolean; verticalSpacing?: string;
@@ -281,7 +292,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       },
       leftSidebar: ls && typeof ls === 'object' ? { show: ls.show ?? false, modules: Array.isArray(ls.modules) ? ls.modules : [], width: Math.min(400, Math.max(160, ls.width ?? 240)) } : undefined,
       rightSidebar: rs && typeof rs === 'object' ? { show: rs.show ?? false, modules: Array.isArray(rs.modules) ? rs.modules : [], width: Math.min(400, Math.max(160, rs.width ?? 240)) } : undefined,
-      headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, tableOfContents: hc.tableOfContents ?? false, breadcrumbs: hc.breadcrumbs ?? false } : undefined,
+      headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, modules: Array.isArray(hc.modules) ? hc.modules : [], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) } : undefined,
       featuredImage: fi && typeof fi === 'object' ? {
         show: fi.show ?? true,
         layoutMode: (fi.layoutMode === 'fullBleed' ? 'fullBleed' : fi.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified') as 'fullBleed' | 'leftJustified' | 'rightJustified',
