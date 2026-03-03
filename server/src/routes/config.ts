@@ -125,9 +125,19 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const headerContent = (siteConfig as { headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean } }).headerContent ?? null
 
     // Build author map (id -> name) for renderer
-    const authorIds = new Set<string>(authorSettings.defaultAuthorIds ?? [])
+    let defaultAuthorIds = authorSettings.defaultAuthorIds ?? []
+    const authorIds = new Set<string>(defaultAuthorIds)
     for (const ids of Object.values(authorSettings.postAuthorOverrides ?? {})) {
       for (const id of ids) authorIds.add(id)
+    }
+    // When no default authors are configured, use authors marked as default (e.g. ingested from Squarespace)
+    if (defaultAuthorIds.length === 0) {
+      const defaultAuthors = await prisma.blogAuthor.findMany({
+        where: { siteId: site.id, isDefault: true },
+        orderBy: { name: 'asc' }
+      })
+      defaultAuthorIds = defaultAuthors.map((a) => a.id)
+      for (const a of defaultAuthors) authorIds.add(a.id)
     }
     const authors = authorIds.size > 0
       ? await prisma.blogAuthor.findMany({
@@ -187,7 +197,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       rendererUrl,
       showDate: siteConfig.showDate,
       showAuthor: siteConfig.showAuthor,
-      defaultAuthorIds: authorSettings.defaultAuthorIds ?? [],
+      showReadingTime: siteConfig.showReadingTime ?? false,
+      defaultAuthorIds,
       postAuthorOverrides: authorSettings.postAuthorOverrides ?? {},
       authorMap,
       showProgressBar: progressBar.show ?? false,
@@ -247,6 +258,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const data: SiteConfigData = {
       showDate: (c.showDate ?? layout.showDate ?? true) as boolean,
       showAuthor: (c.showAuthor ?? layout.showAuthor ?? false) as boolean,
+      showReadingTime: (c.showReadingTime ?? false) as boolean,
       authorSettings: {
         defaultAuthorIds: Array.isArray(authorSettings.defaultAuthorIds) ? authorSettings.defaultAuthorIds : [],
         postAuthorOverrides: (authorSettings.postAuthorOverrides && typeof authorSettings.postAuthorOverrides === 'object') ? authorSettings.postAuthorOverrides : {}

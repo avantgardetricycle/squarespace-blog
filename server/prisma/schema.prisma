@@ -61,12 +61,19 @@ model Site {
   @@map("sites")
 }
 
+enum IngestedFrom {
+  SQUARESPACE
+  BETTER_BLOG
+}
+
 model BlogAuthor {
-  id        String   @id @default(uuid())
-  siteId    String   @map("site_id")
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
+  id           String       @id @default(uuid())
+  siteId       String       @map("site_id")
+  name         String
+  ingestedFrom IngestedFrom @default(BETTER_BLOG) @map("ingested_from")
+  isDefault    Boolean      @default(false) @map("is_default")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @default(now()) @map("updated_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
@@ -81,6 +88,7 @@ model SiteConfig {
   version            Int
   showDate           Boolean  @default(true) @map("show_date")
   showAuthor         Boolean  @default(false) @map("show_author")
+  showReadingTime    Boolean  @default(false) @map("show_reading_time")
   authorSettings     Json     @default("{\"defaultAuthorIds\":[],\"postAuthorOverrides\":{}}") @map("author_settings")
   progressBar        Json     @default("{\"show\":false,\"position\":null}") @map("progress_bar")
   tableOfContents    Json     @default("{\"show\":false,\"position\":null}") @map("table_of_contents")

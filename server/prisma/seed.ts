@@ -32,6 +32,7 @@ const SANDBOX_PLANS = [
 const defaultSiteConfig = {
   showDate: true,
   showAuthor: false,
+  showReadingTime: false,
   progressBar: { show: false, position: null },
   tableOfContents: { show: false, position: null },
   recentPostsSidebar: { show: false, position: null },

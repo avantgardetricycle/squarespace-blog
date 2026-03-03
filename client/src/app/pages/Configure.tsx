@@ -72,6 +72,7 @@ export interface FeaturedImageConfig {
 export interface SiteConfigForm {
   showDate: boolean;
   showAuthor: boolean;
+  showReadingTime: boolean;
   defaultAuthorIds: string[];
   postAuthorOverrides: Record<string, string[]>;
   progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
@@ -96,6 +97,7 @@ const defaultFeaturedImage: FeaturedImageConfig = {
 const defaultSiteConfig: SiteConfigForm = {
   showDate: true,
   showAuthor: false,
+  showReadingTime: false,
   defaultAuthorIds: [],
   postAuthorOverrides: {},
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
@@ -151,6 +153,7 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   return {
     showDate: Boolean(data.showDate ?? true),
     showAuthor: Boolean(data.showAuthor ?? false),
+    showReadingTime: Boolean(data.showReadingTime ?? false),
     defaultAuthorIds,
     postAuthorOverrides,
     progressBar: {
@@ -172,6 +175,7 @@ function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
   return {
     showDate: config.showDate,
     showAuthor: config.showAuthor,
+    showReadingTime: config.showReadingTime,
     defaultAuthorIds: config.defaultAuthorIds,
     postAuthorOverrides: config.postAuthorOverrides,
     showProgressBar: config.progressBar.show,
@@ -189,6 +193,7 @@ function configToRendererConfig(config: SiteConfigForm): Record<string, unknown>
   return {
     showDate: config.showDate,
     showAuthor: config.showAuthor,
+    showReadingTime: config.showReadingTime,
     defaultAuthorIds: config.defaultAuthorIds,
     postAuthorOverrides: config.postAuthorOverrides,
     showProgressBar: config.progressBar.show,
@@ -235,6 +240,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
   return (
     a.showDate === b.showDate &&
     a.showAuthor === b.showAuthor &&
+    a.showReadingTime === b.showReadingTime &&
     defaultIdsEqual &&
     overridesEqual &&
     a.progressBar.show === b.progressBar.show &&
@@ -364,7 +370,7 @@ export default function Configure() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ siteKey: effectiveSiteKey, name }),
+                body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "SQUARESPACE", isDefault: true }),
               });
               const data = await res.json();
               const newId = data?.id;
@@ -442,6 +448,7 @@ export default function Configure() {
       const next = { ...prev };
       if (path === "showDate") next.showDate = value as boolean;
       else if (path === "showAuthor") next.showAuthor = value as boolean;
+      else if (path === "showReadingTime") next.showReadingTime = value as boolean;
       else if (path === "defaultAuthorIds") next.defaultAuthorIds = value as string[];
       else if (path === "postAuthorOverrides") next.postAuthorOverrides = value as Record<string, string[]>;
       else if (path.startsWith("postAuthorOverrides.")) {
@@ -609,6 +616,18 @@ export default function Configure() {
                           id="show-date"
                           checked={config.showDate}
                           onCheckedChange={(v) => updateConfig("showDate", v)}
+                        />
+                        <span className="w-6 h-6 shrink-0" aria-hidden />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
+                      <span className="font-medium">Show Reading Time</span>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          id="show-reading-time"
+                          checked={config.showReadingTime}
+                          onCheckedChange={(v) => updateConfig("showReadingTime", v)}
                         />
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
@@ -1234,7 +1253,7 @@ export default function Configure() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         credentials: "include",
-                        body: JSON.stringify({ siteKey: effectiveSiteKey, name }),
+                        body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "BETTER_BLOG", isDefault: addAuthorContext === "default" ? true : addAuthorAsDefault }),
                       })
                         .then((res) => res.json())
                         .then((data) => {
@@ -1266,7 +1285,7 @@ export default function Configure() {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       credentials: "include",
-                      body: JSON.stringify({ siteKey: effectiveSiteKey, name }),
+                      body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "BETTER_BLOG", isDefault: addAuthorContext === "default" ? true : addAuthorAsDefault }),
                     })
                       .then((res) => res.json())
                       .then((data) => {
@@ -1291,15 +1310,16 @@ export default function Configure() {
                 Add
               </Button>
             </div>
-              {addAuthorContext !== "default" && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={addAuthorAsDefault}
-                    onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
-                  />
-                  <span className="text-sm">Default Author</span>
-                </label>
-              )}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
+                  onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
+                  disabled={addAuthorContext === "default"}
+                />
+                <span className="text-sm">
+                  {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
+                </span>
+              </label>
             </div>
           </DialogContent>
         </Dialog>

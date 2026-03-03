@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 export interface RendererConfig {
   showDate?: boolean;
   showAuthor?: boolean;
+  showReadingTime?: boolean;
   defaultAuthorIds?: string[];
   postAuthorOverrides?: Record<string, string[]>;
   authorMap?: Record<string, string>;

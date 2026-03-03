@@ -219,9 +219,21 @@
 
     /**
      * Get author display name from item (legacy single author)
+     * Supports: author.displayName, authors[0].displayName, contributors[0].displayName
      */
     _getAuthor: function(item) {
-      return (item.author && item.author.displayName) ? item.author.displayName : null;
+      if (!item) return null;
+      var a = item.author;
+      if (a && a.displayName && typeof a.displayName === 'string') return a.displayName.trim();
+      var arr = item.authors || item.contributors;
+      if (Array.isArray(arr) && arr.length > 0) {
+        var first = arr[0];
+        if (first && (first.displayName || first.fullName)) {
+          var name = (first.displayName || first.fullName || '').trim();
+          if (name) return name;
+        }
+      }
+      return null;
     },
 
     /**
@@ -245,6 +257,18 @@
       }
       if (postId && postId in overrides) return ''; // explicit override with no authors
       return this._getAuthor(post);
+    },
+
+    /**
+     * Estimate reading time in minutes from HTML body (~200 wpm)
+     */
+    _getReadingTimeMinutes: function(html) {
+      if (!html || typeof html !== 'string') return 0;
+      var div = document.createElement('div');
+      div.innerHTML = html;
+      var text = (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+      var words = text ? text.split(/\s+/).length : 0;
+      return Math.max(1, Math.ceil(words / 200));
     },
 
     /**
@@ -490,6 +514,7 @@
       }
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
+      var showReadingTime = Boolean(cfg.showReadingTime);
       var showProgressBar = Boolean(cfg.showProgressBar);
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var fiShow = Boolean(fiCfg.show !== false);
@@ -868,10 +893,14 @@
             }
             if (showAuthor) {
               var authorStr = self._getAuthorsForPost(post, cfg);
-              if (authorStr) metaParts.push('by ' + authorStr);
+              if (authorStr) metaParts.push(authorStr);
+            }
+            if (showReadingTime) {
+              var mins = self._getReadingTimeMinutes(post.body);
+              metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
             }
             if (metaParts.length > 0) {
-              meta.textContent = metaParts.join(' ');
+              meta.textContent = metaParts.join(' · ');
               appendTo.appendChild(meta);
             }
 

@@ -28,6 +28,7 @@ interface FeaturedImageConfig {
 interface RendererConfigOverrides {
   showDate?: boolean;
   showAuthor?: boolean;
+  showReadingTime?: boolean;
   defaultAuthorIds?: string[];
   postAuthorOverrides?: Record<string, string[]>;
   authorMap?: Record<string, string>;
@@ -77,6 +78,7 @@ export default function BlogPreviewRenderer({
         rootEl: root,
         previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}`,
         showAuthor: configOverrides?.showAuthor ?? false,
+        showReadingTime: configOverrides?.showReadingTime ?? false,
         defaultAuthorIds: configOverrides?.defaultAuthorIds ?? [],
         postAuthorOverrides: configOverrides?.postAuthorOverrides ?? {},
         authorMap: configOverrides?.authorMap ?? {},

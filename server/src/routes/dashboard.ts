@@ -274,6 +274,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         version: 1,
         showDate: true,
         showAuthor: false,
+        showReadingTime: false,
         progressBar: { show: false, position: null, thickness: 6, color: '#5B4FE8' },
         tableOfContents: { show: false, position: null },
         recentPostsSidebar: { show: false, position: null },

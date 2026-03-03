@@ -58,6 +58,7 @@ export interface FeaturedImageConfig {
 export interface SiteConfigData {
   showDate?: boolean
   showAuthor?: boolean
+  showReadingTime?: boolean
   authorSettings?: AuthorSettings
   progressBar?: { show: boolean; position: string | null; thickness?: number; color?: string }
   tableOfContents?: { show: boolean; position: string }
@@ -100,6 +101,7 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         version: nextVersion,
         showDate: data.showDate ?? true,
         showAuthor: data.showAuthor ?? false,
+        showReadingTime: data.showReadingTime ?? false,
         authorSettings: authorSettings as object,
         progressBar: data.progressBar ?? { show: false, position: null, thickness: 6, color: '#5B4FE8' },
         tableOfContents: data.tableOfContents ?? { show: false, position: null },
