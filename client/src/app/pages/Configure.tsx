@@ -587,14 +587,18 @@ export default function Configure() {
           </div>
           {effectiveSiteKey && (
             <Dialog open={installationModalOpen} onOpenChange={setInstallationModalOpen}>
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  className="text-sm text-[#5B4FE8] hover:underline"
-                >
-                  Installation instructions
-                </button>
-              </DialogTrigger>
+              <p className="text-xs text-[#6b6b6b]">
+                Not seeing your changes? Make sure you've{" "}
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-[#5B4FE8] hover:underline text-xs font-normal cursor-pointer"
+                  >
+                    installed BetterBlog
+                  </button>
+                </DialogTrigger>
+                .
+              </p>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Installation instructions</DialogTitle>

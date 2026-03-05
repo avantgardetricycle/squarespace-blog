@@ -396,7 +396,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
         shadow: Boolean(fi.shadow),
         showCaption: Boolean(fi.showCaption ?? true),
         verticalSpacing: (fi.verticalSpacing === 'tight' ? 'tight' : fi.verticalSpacing === 'spacious' ? 'spacious' : 'normal') as 'tight' | 'normal' | 'spacious',
-      } : undefined
+      } : undefined,
     }
     await upsertSiteConfig(site.id, data)
     res.json({ success: true })

@@ -692,7 +692,6 @@
       var self = this;
       var root = this._root || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) return;
-
       if (this._progressScrollHandler) {
         var scrollTarget = this._progressScrollTarget || window;
         scrollTarget.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
@@ -745,17 +744,7 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
-      var showProgressBar = Boolean(cfg.showProgressBar);
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
-      var fiShow = Boolean(fiCfg.show !== false);
-      var fiLayout = fiCfg.layoutMode === 'fullBleed' ? 'fullBleed' : fiCfg.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified';
-      var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
-      var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
-      var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : '16:9');
-      var fiRounded = (fiCfg.roundedCorners === 'small' ? 'small' : fiCfg.roundedCorners === 'large' ? 'large' : 'off');
-      var fiShadow = Boolean(fiCfg.shadow);
-      var fiCaption = Boolean(fiCfg.showCaption !== false);
-      var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
 
       var selectedIndex = this._getSelectedIndex(items);
       var searchQuery = this._searchQuery || '';
@@ -784,6 +773,7 @@
       main.style.minWidth = '0';
 
       var progressTrackForPreview = null;
+      var showProgressBar = Boolean(cfg.showProgressBar);
       var progressBarPosition = (cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
       var progressBarThickness = Math.min(12, Math.max(2, parseInt(cfg.progressBarThickness, 10) || 6));
       var progressBarColor = (typeof cfg.progressBarColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(cfg.progressBarColor)) ? cfg.progressBarColor : '#5B4FE8';
@@ -992,6 +982,15 @@
           for (var j = 0; j < displayItems.length; j++) {
             var post = displayItems[j];
             var postIndex = isSinglePost ? selectedIndex : items.indexOf(post);
+            var fiShow = Boolean(fiCfg.show !== false);
+            var fiLayout = fiCfg.layoutMode === 'fullBleed' ? 'fullBleed' : fiCfg.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified';
+            var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
+            var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
+            var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : '16:9');
+            var fiRounded = (fiCfg.roundedCorners === 'small' ? 'small' : fiCfg.roundedCorners === 'large' ? 'large' : 'off');
+            var fiShadow = Boolean(fiCfg.shadow);
+            var fiCaption = Boolean(fiCfg.showCaption !== false);
+            var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
             var article = document.createElement('article');
             article.id = 'blog-post-' + j;
             article.style.marginBottom = '24px';
