@@ -472,17 +472,43 @@
     },
 
     /**
+     * Normalize path for comparison (decode to handle %20 vs space mismatch)
+     */
+    _normalizePathForMatch: function(p) {
+      if (!p || typeof p !== 'string') return '';
+      var s = p.replace(/\/+$/, '') || '/';
+      try {
+        return decodeURIComponent(s);
+      } catch (e) {
+        return s;
+      }
+    },
+
+    /**
      * Get selected post index from current path (matches post.fullUrl). Returns -1 for list view.
      */
     _getSelectedIndexFromPath: function(items) {
       if (!items || items.length === 0 || typeof window === 'undefined') return -1;
       var pathname = (window.location.pathname || '/').replace(/\/+$/, '') || '/';
+      var pathnameNorm = this._normalizePathForMatch(pathname);
       for (var i = 0; i < items.length; i++) {
         var postUrl = items[i].fullUrl || '';
         if (!postUrl) continue;
-        var postPath = postUrl.indexOf('http') === 0 ? new URL(postUrl).pathname : (postUrl.charAt(0) === '/' ? postUrl : '/' + postUrl);
+        var postPath;
+        try {
+          postPath = postUrl.indexOf('http') === 0 ? new URL(postUrl).pathname : (postUrl.charAt(0) === '/' ? postUrl : '/' + postUrl);
+        } catch (e) {
+          postPath = postUrl.charAt(0) === '/' ? postUrl : '/' + postUrl;
+        }
         postPath = postPath.replace(/\/+$/, '') || '/';
-        if (pathname === postPath) return i;
+        var postPathNorm = this._normalizePathForMatch(postPath);
+        if (pathnameNorm === postPathNorm) {
+          console.log('[BlogOverlay] _getSelectedIndexFromPath: matched pathname', pathnameNorm, 'to post', i);
+          return i;
+        }
+      }
+      if (pathname.indexOf('/') !== pathname.lastIndexOf('/')) {
+        console.log('[BlogOverlay] _getSelectedIndexFromPath: no match. pathname=', JSON.stringify(pathname), 'pathnameNorm=', JSON.stringify(pathnameNorm), 'first post fullUrl=', items[0] ? JSON.stringify(items[0].fullUrl) : '');
       }
       return -1;
     },
@@ -542,6 +568,12 @@
             items = json.collection.items;
           }
           self.items = items;
+          var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);
+          var collection = json && json.collection ? json.collection : null;
+          self._blogMeta = {
+            siteTitle: (website && website.title) ? String(website.title) : (typeof document !== 'undefined' && document.title ? document.title.split(/ [\-\|] /)[0] : ''),
+            blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
+          };
           self._renderContent(items);
           console.log('[BlogOverlay] Rendered', items.length, 'posts from blog JSON');
         })
@@ -1150,8 +1182,18 @@
                   breadcrumbEl.setAttribute('aria-label', 'Breadcrumb');
                   breadcrumbEl.style.fontSize = '0.85rem';
                   breadcrumbEl.style.color = '#666';
-                  var bcParts = ['Blog'];
-                  if (isSinglePost && selectedIndex >= 0) bcParts.push(items[selectedIndex].title || 'Untitled');
+                  var meta = self._blogMeta || {};
+                  var siteTitle = meta.siteTitle || '';
+                  var blogName = meta.blogName || 'Blog';
+                  var bcParts = [];
+                  if (siteTitle) bcParts.push(siteTitle);
+                  bcParts.push(blogName);
+                  if (isSinglePost && selectedIndex >= 0) {
+                    var post = items[selectedIndex];
+                    var cat = (post && post.category) ? String(post.category) : (post && post.categories && post.categories[0]) ? (typeof post.categories[0] === 'string' ? post.categories[0] : (post.categories[0].title || post.categories[0].name || post.categories[0])) : null;
+                    if (cat) bcParts.push(cat);
+                    bcParts.push(post.title || 'Untitled');
+                  }
                   breadcrumbEl.textContent = bcParts.join(' › ');
                   headerEl.appendChild(breadcrumbEl);
                 } else if (mod === 'tableOfContents' && items.length > 0 && !isSinglePost) {
