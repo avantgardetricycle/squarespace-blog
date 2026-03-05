@@ -39,6 +39,7 @@ interface RendererConfigOverrides {
   leftSidebar?: SidebarConfig;
   rightSidebar?: SidebarConfig;
   headerContent?: HeaderContentConfig;
+  socialMediaLinks?: { show?: boolean; platforms?: string[] };
   featuredImage?: FeaturedImageConfig;
   recentPostsCount?: number;
 }
@@ -90,6 +91,7 @@ export default function BlogPreviewRenderer({
         leftSidebar: configOverrides?.leftSidebar ?? { show: false, modules: [], width: 240 },
         rightSidebar: configOverrides?.rightSidebar ?? { show: false, modules: [], width: 240 },
         headerContent: configOverrides?.headerContent ?? { show: false, modules: [], height: 48 },
+        socialMediaLinks: configOverrides?.socialMediaLinks ?? { show: false, platforms: [] },
         featuredImage: configOverrides?.featuredImage ?? {
           show: true,
           layoutMode: "leftJustified",

@@ -281,6 +281,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         leftSidebar: { show: false, modules: [], width: 240 },
         rightSidebar: { show: false, modules: [], width: 240 },
         headerContent: { show: false, modules: [], height: 48 },
+        socialMediaLinks: { show: false, platforms: [] },
         isActive: true
       }
     })

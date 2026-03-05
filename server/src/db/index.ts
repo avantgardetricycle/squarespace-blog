@@ -66,6 +66,7 @@ export interface SiteConfigData {
   leftSidebar?: SidebarConfig
   rightSidebar?: SidebarConfig
   headerContent?: HeaderContentConfig
+  socialMediaLinks?: { show?: boolean; platforms?: string[] }
   featuredImage?: FeaturedImageConfig
 }
 
@@ -84,6 +85,7 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
     const leftSidebar = data.leftSidebar ?? { show: false, modules: [], width: 240 }
     const rightSidebar = data.rightSidebar ?? { show: false, modules: [], width: 240 }
     const headerContent = data.headerContent ?? { show: false, modules: [], height: 48 }
+    const socialMediaLinks = data.socialMediaLinks ?? { show: false, platforms: [] }
     const featuredImage = data.featuredImage ?? {
       show: true,
       layoutMode: 'leftJustified',
@@ -109,6 +111,7 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         leftSidebar: leftSidebar as object,
         rightSidebar: rightSidebar as object,
         headerContent: headerContent as object,
+        socialMediaLinks: socialMediaLinks as object,
         featuredImage: featuredImage as object,
         isActive: true
       }

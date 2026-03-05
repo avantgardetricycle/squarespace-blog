@@ -54,6 +54,9 @@ export type SidebarModuleType = (typeof SIDEBAR_MODULE_TYPES)[number];
 export const HEADER_CONTENT_MODULE_TYPES = ["tableOfContents", "breadcrumbs", "postSearch", "filterByTagsAndCategories"] as const;
 export type HeaderContentModuleType = (typeof HEADER_CONTENT_MODULE_TYPES)[number];
 
+export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
 export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";
 export type FeaturedImageAspectBehavior = "original" | "cropped";
 export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
@@ -82,6 +85,7 @@ export interface SiteConfigForm {
   leftSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
   rightSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
   headerContent: { show: boolean; modules: HeaderContentModuleType[]; height: number };
+  socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
 }
 
@@ -107,6 +111,7 @@ const defaultSiteConfig: SiteConfigForm = {
   leftSidebar: { show: false, modules: [], width: 240 },
   rightSidebar: { show: false, modules: [], width: 240 },
   headerContent: { show: false, modules: [], height: 48 },
+  socialMediaLinks: { show: false, platforms: [] },
   featuredImage: defaultFeaturedImage,
 };
 
@@ -155,6 +160,10 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     }
     if (!headerContent) headerContent = { show: false, modules: [], height: 48 };
   }
+  const sm = data.socialMediaLinks && typeof data.socialMediaLinks === "object" ? data.socialMediaLinks as { show?: boolean; platforms?: unknown[] } : null;
+  const validSocialPlatforms = (arr: unknown): SocialPlatform[] =>
+    Array.isArray(arr) ? arr.filter((p): p is SocialPlatform => SOCIAL_PLATFORMS.includes(p as SocialPlatform)) : [];
+  const socialMediaLinks = sm ? { show: Boolean(sm.show ?? false), platforms: validSocialPlatforms(sm.platforms) } : { show: false, platforms: [] };
   const fi = data.featuredImage && typeof data.featuredImage === "object" ? data.featuredImage as Record<string, unknown> : null;
   const featuredImage: FeaturedImageConfig = fi ? {
     show: Boolean(fi.show ?? true),
@@ -184,6 +193,7 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     leftSidebar,
     rightSidebar,
     headerContent,
+    socialMediaLinks,
     featuredImage,
   };
 }
@@ -202,6 +212,7 @@ function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
     leftSidebar: config.leftSidebar,
     rightSidebar: config.rightSidebar,
     headerContent: config.headerContent,
+    socialMediaLinks: config.socialMediaLinks,
     featuredImage: config.featuredImage,
   };
 }
@@ -221,6 +232,7 @@ function configToRendererConfig(config: SiteConfigForm): Record<string, unknown>
     leftSidebar: config.leftSidebar,
     rightSidebar: config.rightSidebar,
     headerContent: config.headerContent,
+    socialMediaLinks: config.socialMediaLinks,
     recentPostsCount: 5,
   };
 }
@@ -246,6 +258,9 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.headerContent.height === b.headerContent.height &&
     a.headerContent.modules.length === b.headerContent.modules.length &&
     a.headerContent.modules.every((m, i) => m === b.headerContent.modules[i]);
+  const smEqual = a.socialMediaLinks.show === b.socialMediaLinks.show &&
+    a.socialMediaLinks.platforms.length === b.socialMediaLinks.platforms.length &&
+    a.socialMediaLinks.platforms.every((p, i) => p === b.socialMediaLinks.platforms[i]);
   const fiEqual = a.featuredImage.show === b.featuredImage.show &&
     a.featuredImage.layoutMode === b.featuredImage.layoutMode &&
     a.featuredImage.imageWidthPercent === b.featuredImage.imageWidthPercent &&
@@ -265,7 +280,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.progressBar.position === b.progressBar.position &&
     a.progressBar.thickness === b.progressBar.thickness &&
     a.progressBar.color === b.progressBar.color &&
-    lsEqual && rsEqual && hcEqual && fiEqual
+    lsEqual && rsEqual && hcEqual && smEqual && fiEqual
   );
 }
 
@@ -295,6 +310,7 @@ export default function Configure() {
     leftSidebar: false,
     rightSidebar: false,
     headerContent: false,
+    socialMediaLinks: false,
   });
 
   useEffect(() => {
@@ -422,8 +438,13 @@ export default function Configure() {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
     for (const a of authors) authorMap[a.id] = a.name;
-    return { ...base, authorMap };
-  }, [config, authors]);
+    return {
+      ...base,
+      authorMap,
+      baseUrl: typeof window !== "undefined" ? window.location.origin : "",
+      siteKey: effectiveSiteKey ?? undefined,
+    };
+  }, [config, authors, effectiveSiteKey]);
 
   const handleSave = useCallback(async () => {
     const keyToSave = effectiveSiteKey ?? siteKey;
@@ -486,6 +507,8 @@ export default function Configure() {
       else if (path === "headerContent.show") next.headerContent = { ...prev.headerContent, show: value as boolean };
       else if (path === "headerContent.modules") next.headerContent = { ...prev.headerContent, modules: value as HeaderContentModuleType[] };
       else if (path === "headerContent.height") next.headerContent = { ...prev.headerContent, height: value as number };
+      else if (path === "socialMediaLinks.show") next.socialMediaLinks = { ...prev.socialMediaLinks, show: value as boolean };
+      else if (path === "socialMediaLinks.platforms") next.socialMediaLinks = { ...prev.socialMediaLinks, platforms: value as SocialPlatform[] };
       else if (path === "featuredImage.show") next.featuredImage = { ...prev.featuredImage, show: value as boolean };
       else if (path === "featuredImage.layoutMode") next.featuredImage = { ...prev.featuredImage, layoutMode: value as FeaturedImageLayoutMode };
       else if (path === "featuredImage.imageWidthPercent") next.featuredImage = { ...prev.featuredImage, imageWidthPercent: value as number };
@@ -1324,6 +1347,68 @@ export default function Configure() {
                                         );
                                       })}
                                     </div>
+                                  </div>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </div>
+                          <div className="border-b border-[#e5e4e0]">
+                            <div className="flex items-center justify-between py-3">
+                              <span className="font-medium">Social Media Links</span>
+                              <div className="flex items-center gap-1">
+                                <Switch
+                                  checked={config.socialMediaLinks.show}
+                                  onCheckedChange={(v) => {
+                                    setConfig((prev) => ({
+                                      ...prev,
+                                      socialMediaLinks: {
+                                        show: v,
+                                        platforms: v ? [...SOCIAL_PLATFORMS] : prev.socialMediaLinks.platforms,
+                                      },
+                                    }));
+                                    setSectionExpanded((p) => ({ ...p, socialMediaLinks: v }));
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => config.socialMediaLinks.show && setSectionExpanded((p) => ({ ...p, socialMediaLinks: !p.socialMediaLinks }))}
+                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.socialMediaLinks.show ? "invisible pointer-events-none" : ""}`}
+                                  aria-label={sectionExpanded.socialMediaLinks ? "Collapse" : "Expand"}
+                                >
+                                  {sectionExpanded.socialMediaLinks ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            <Collapsible open={config.socialMediaLinks.show && sectionExpanded.socialMediaLinks}>
+                              <CollapsibleContent>
+                                <div className="pb-4 space-y-3">
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Platforms</Label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                      <Checkbox
+                                        checked={config.socialMediaLinks.platforms.length === SOCIAL_PLATFORMS.length}
+                                        onCheckedChange={(v) => {
+                                          updateConfig("socialMediaLinks.platforms", v ? [...SOCIAL_PLATFORMS] : []);
+                                        }}
+                                      />
+                                      <span className="text-sm">All</span>
+                                    </label>
+                                    {SOCIAL_PLATFORMS.map((p) => (
+                                      <label key={p} className="flex items-center gap-2 cursor-pointer">
+                                        <Checkbox
+                                          checked={config.socialMediaLinks.platforms.includes(p)}
+                                          onCheckedChange={(v) => {
+                                            const next = v
+                                              ? [...config.socialMediaLinks.platforms, p]
+                                              : config.socialMediaLinks.platforms.filter((x) => x !== p);
+                                            updateConfig("socialMediaLinks.platforms", next);
+                                          }}
+                                        />
+                                        <span className="text-sm">
+                                          {p === "x" ? "X" : p === "whatsapp" ? "WhatsApp" : p.charAt(0).toUpperCase() + p.slice(1)}
+                                        </span>
+                                      </label>
+                                    ))}
                                   </div>
                                 </div>
                               </CollapsibleContent>

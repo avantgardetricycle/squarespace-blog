@@ -70,6 +70,90 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   }
 })
 
+// GET /api/config/share/:siteKey/:postIndex - Share redirect with OG meta for link previews
+router.get('/share/:siteKey/:postIndex', async (req: Request, res: Response) => {
+  const siteKey = req.params.siteKey as string
+  const postIndex = parseInt(String(req.params.postIndex ?? '0'), 10)
+  if (isNaN(postIndex) || postIndex < 0) {
+    res.status(400).send('Invalid post index')
+    return
+  }
+
+  const site = await getSiteBySiteKey(siteKey)
+  if (!site) {
+    res.status(404).send('Site not found')
+    return
+  }
+
+  let blogUrl: string
+  if (site.url) {
+    const parsed = new URL(site.url)
+    const hasPath = parsed.pathname && parsed.pathname !== '/'
+    const base = site.url.replace(/\/$/, '')
+    blogUrl = hasPath ? base : parsed.origin + (site.blogPath || '/blog')
+  } else {
+    res.status(400).send('Site has no URL configured')
+    return
+  }
+
+  const targetUrl = blogUrl.replace(/\/+$/, '') + '#post-' + postIndex
+
+  let ogImage = ''
+  let ogTitle = ''
+  let ogDescription = ''
+
+  try {
+    const jsonUrl = blogUrl + (blogUrl.includes('?') ? '&' : '?') + 'format=json'
+    const urlWithPassword = appendPasswordToUrl(jsonUrl, site.blogPassword)
+    const fetchRes = await fetch(urlWithPassword)
+    if (fetchRes.ok) {
+      const json = await fetchRes.json()
+      const items = Array.isArray(json?.items) ? json.items : (json?.collection?.items ?? [])
+      const post = items[postIndex]
+      if (post) {
+        ogTitle = (post.title || 'Untitled').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        ogDescription = (post.excerpt || post.body || '').replace(/<[^>]*>/g, '').slice(0, 200).replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        ogImage = post.assetUrl || post.thumbnailUrl || (post.assets?.[0]?.assetUrl) || ''
+        if (ogImage && ogImage.indexOf('http') !== 0) {
+          try {
+            const u = new URL(blogUrl)
+            ogImage = u.origin + (ogImage.charAt(0) === '/' ? '' : '/') + ogImage
+          } catch {
+            ogImage = ''
+          }
+        }
+      }
+    }
+  } catch {
+    /* use defaults */
+  }
+
+  const title = ogTitle || 'Blog Post'
+  const description = ogDescription || ''
+  const image = ogImage || ''
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0;url=${targetUrl.replace(/"/g, '&quot;')}">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="${targetUrl.replace(/"/g, '&quot;')}">
+  <meta property="og:title" content="${title.replace(/"/g, '&quot;')}">
+  <meta property="og:description" content="${description.replace(/"/g, '&quot;')}">
+  ${image ? `<meta property="og:image" content="${image.replace(/"/g, '&quot;')}">` : ''}
+  <meta name="twitter:card" content="${image ? 'summary_large_image' : 'summary'}">
+  <meta name="twitter:title" content="${title.replace(/"/g, '&quot;')}">
+  <meta name="twitter:description" content="${description.replace(/"/g, '&quot;')}">
+  ${image ? `<meta name="twitter:image" content="${image.replace(/"/g, '&quot;')}">` : ''}
+  <title>${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
+</head>
+<body><p>Redirecting to <a href="${targetUrl.replace(/"/g, '&quot;')}">${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>…</p></body>
+</html>`
+
+  res.type('html').send(html)
+})
+
 // GET /api/config/:siteKey - Public endpoint for loader.js
 // Uses internal subscription record only (no Stripe API calls) - gated on status
 router.get('/:siteKey', async (req: Request, res: Response) => {
@@ -123,6 +207,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const leftSidebar = (siteConfig as { leftSidebar?: { show?: boolean; modules?: string[]; width?: number } }).leftSidebar ?? null
     const rightSidebar = (siteConfig as { rightSidebar?: { show?: boolean; modules?: string[]; width?: number } }).rightSidebar ?? null
     const headerContent = (siteConfig as { headerContent?: { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean; modules?: string[]; height?: number } }).headerContent ?? null
+    const socialMediaLinks = (siteConfig as { socialMediaLinks?: { show?: boolean; platforms?: string[] } }).socialMediaLinks ?? null
 
     // Build author map (id -> name) for renderer
     let defaultAuthorIds = authorSettings.defaultAuthorIds ?? []
@@ -179,6 +264,9 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           };
         })()
       : { show: false, modules: [], height: 48 }
+    const sm = socialMediaLinks && typeof socialMediaLinks === 'object'
+      ? { show: socialMediaLinks.show ?? false, platforms: Array.isArray(socialMediaLinks.platforms) ? socialMediaLinks.platforms : [] }
+      : { show: false, platforms: [] }
     const fi = (siteConfig as { featuredImage?: Record<string, unknown> }).featuredImage
     const featuredImage = fi && typeof fi === 'object'
       ? {
@@ -204,6 +292,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         }
 
     const configData = {
+      siteKey,
       blogPath: site.blogPath ?? null,
       rendererUrl,
       showDate: siteConfig.showDate,
@@ -219,8 +308,10 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       leftSidebar: ls,
       rightSidebar: rs,
       headerContent: hc,
+      socialMediaLinks: sm,
       featuredImage,
-      recentPostsCount: 5
+      recentPostsCount: 5,
+      baseUrl
     }
 
     console.log(`[config] GET ${siteKey} ok (${reqId})`)
@@ -262,6 +353,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const ls = c.leftSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
     const rs = c.rightSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
     const hc = c.headerContent as { show?: boolean; modules?: string[]; height?: number } | undefined
+    const sm = c.socialMediaLinks as { show?: boolean; platforms?: string[] } | undefined
     const fi = c.featuredImage as {
       show?: boolean; layoutMode?: string; imageWidthPercent?: number; aspectBehavior?: string; aspectRatio?: string;
       roundedCorners?: string; shadow?: boolean; showCaption?: boolean; verticalSpacing?: string;
@@ -293,6 +385,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       leftSidebar: ls && typeof ls === 'object' ? { show: ls.show ?? false, modules: Array.isArray(ls.modules) ? ls.modules : [], width: Math.min(400, Math.max(160, ls.width ?? 240)) } : undefined,
       rightSidebar: rs && typeof rs === 'object' ? { show: rs.show ?? false, modules: Array.isArray(rs.modules) ? rs.modules : [], width: Math.min(400, Math.max(160, rs.width ?? 240)) } : undefined,
       headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, modules: Array.isArray(hc.modules) ? hc.modules : [], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) } : undefined,
+      socialMediaLinks: sm && typeof sm === 'object' ? { show: sm.show ?? false, platforms: Array.isArray(sm.platforms) ? sm.platforms : [] } : undefined,
       featuredImage: fi && typeof fi === 'object' ? {
         show: fi.show ?? true,
         layoutMode: (fi.layoutMode === 'fullBleed' ? 'fullBleed' : fi.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified') as 'fullBleed' | 'leftJustified' | 'rightJustified',
