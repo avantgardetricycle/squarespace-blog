@@ -3,7 +3,6 @@ import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Logo } from "@/app/components/Logo";
 import { Button } from "@/app/components/ui/button";
-import { Check, ArrowRight } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { BeforeAfterComparison } from "@/app/components/BeforeAfterComparison";
 import { FeatureGrid } from "@/app/components/FeatureGrid";
@@ -32,33 +31,6 @@ export default function LandingPage() {
       transition: { duration: 0.5 }
     }
   };
-
-  const features = [
-    {
-      icon: Check,
-      title: "Complete Customization",
-      description: "Change fonts, colors, and spacing without writing a single line of CSS code.",
-      color: "purple"
-    },
-    {
-      icon: Check,
-      title: "Modern Layouts",
-      description: "Choose from dozens of pre-designed grid, masonry, and list layouts for your posts.",
-      color: "emerald"
-    },
-    {
-      icon: Check,
-      title: "Lightning Fast",
-      description: "Optimized for speed. Your blog will load instantly, improving SEO and user experience.",
-      color: "purple"
-    },
-    {
-      icon: Check,
-      title: "No Code Required",
-      description: "Designed for creators, not developers. Visual editors for everything you need.",
-      color: "emerald"
-    }
-  ];
 
   const pricingTiers = [
     {
