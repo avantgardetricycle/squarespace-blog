@@ -113,8 +113,11 @@
     config: null,
     items: [],
     _searchQuery: '',
+    _categoryFilter: '',
     _progressScrollHandler: null,
+    _progressScrollTarget: null,
     _tocScrollHandler: null,
+    _tocScrollTarget: null,
 
     /**
      * Check if current path is a blog route (exact path or post sub-path)
@@ -193,6 +196,12 @@
       window.addEventListener('message', function(event) {
         if (event.data && event.data.type === 'BETTERBLOG_PREVIEW_CONFIG' && event.data.config) {
           self.updateConfig(event.data.config);
+        }
+        if (event.data && event.data.type === 'BETTERBLOG_PREVIEW_SELECT_POST' && typeof event.data.postIndex === 'number') {
+          var idx = event.data.postIndex;
+          if (self.items.length > 0 && idx >= 0 && idx < self.items.length) {
+            window.location.hash = '#post-' + idx;
+          }
         }
       });
       if (window.parent !== window) {
@@ -308,6 +317,45 @@
         var bodyText = this._stripHtml(post.body || '').toLowerCase();
         var searchable = title + ' ' + excerpt + ' ' + bodyText;
         if (searchable.indexOf(q) !== -1) results.push(post);
+      }
+      return results;
+    },
+
+    /**
+     * Get category names for a post (supports category, categories array, objects with title/name)
+     */
+    _getPostCategories: function(post) {
+      if (!post) return [];
+      var cats = [];
+      if (post.category) {
+        cats.push(String(post.category));
+      }
+      if (post.categories && Array.isArray(post.categories)) {
+        for (var i = 0; i < post.categories.length; i++) {
+          var c = post.categories[i];
+          var name = typeof c === 'string' ? c : (c && (c.title || c.name)) ? String(c.title || c.name) : null;
+          if (name && cats.indexOf(name) === -1) cats.push(name);
+        }
+      }
+      return cats;
+    },
+
+    /**
+     * Filter posts by category name (case-insensitive)
+     */
+    _filterPostsByCategory: function(items, categoryName) {
+      if (!categoryName || typeof categoryName !== 'string') return items;
+      var q = categoryName.toLowerCase();
+      var results = [];
+      for (var i = 0; i < items.length; i++) {
+        var post = items[i];
+        var cats = this._getPostCategories(post);
+        for (var j = 0; j < cats.length; j++) {
+          if (cats[j].toLowerCase() === q) {
+            results.push(post);
+            break;
+          }
+        }
       }
       return results;
     },
@@ -571,7 +619,7 @@
           var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);
           var collection = json && json.collection ? json.collection : null;
           self._blogMeta = {
-            siteTitle: (website && website.title) ? String(website.title) : (typeof document !== 'undefined' && document.title ? document.title.split(/ [\-\|] /)[0] : ''),
+            siteTitle: (website && website.title) ? String(website.title) : '',
             blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
           };
           self._renderContent(items);
@@ -583,9 +631,42 @@
     },
 
     _updateTocHighlight: function() {
+      var tocLinks = document.querySelectorAll('.blog-overlay-toc a');
+      if (!tocLinks.length) return;
+
+      var headingLinks = document.querySelectorAll('.blog-overlay-toc a[data-heading-index]');
+      if (headingLinks.length > 0) {
+        var viewportTop = 120;
+        var activeIdx = -1;
+        for (var hi = headingLinks.length - 1; hi >= 0; hi--) {
+          var headingEl = document.getElementById('toc-' + hi);
+          if (headingEl) {
+            var rect = headingEl.getBoundingClientRect();
+            if (rect.top <= viewportTop) {
+              activeIdx = hi;
+              break;
+            }
+          }
+        }
+        if (activeIdx < 0) activeIdx = 0;
+        for (var hj = 0; hj < headingLinks.length; hj++) {
+          var idx = parseInt(headingLinks[hj].getAttribute('data-heading-index'), 10);
+          if (idx === activeIdx) {
+            headingLinks[hj].classList.add('blog-overlay-toc-active');
+            headingLinks[hj].style.fontWeight = '600';
+            headingLinks[hj].style.color = '#333';
+          } else {
+            headingLinks[hj].classList.remove('blog-overlay-toc-active');
+            headingLinks[hj].style.fontWeight = '';
+            headingLinks[hj].style.color = '';
+          }
+        }
+        return;
+      }
+
       var articles = document.querySelectorAll('#blog-overlay-list article');
-      var tocLinks = document.querySelectorAll('.blog-overlay-toc a[data-post-index]');
-      if (!articles.length || !tocLinks.length) return;
+      var postLinks = document.querySelectorAll('.blog-overlay-toc a[data-post-index]');
+      if (!articles.length || !postLinks.length) return;
 
       var viewportTop = 100;
       var activeIndex = -1;
@@ -598,16 +679,16 @@
       }
       if (activeIndex < 0) activeIndex = 0;
 
-      for (var j = 0; j < tocLinks.length; j++) {
-        var idx = parseInt(tocLinks[j].getAttribute('data-post-index'), 10);
+      for (var j = 0; j < postLinks.length; j++) {
+        var idx = parseInt(postLinks[j].getAttribute('data-post-index'), 10);
         if (idx === activeIndex) {
-          tocLinks[j].classList.add('blog-overlay-toc-active');
-          tocLinks[j].style.fontWeight = '600';
-          tocLinks[j].style.color = '#333';
+          postLinks[j].classList.add('blog-overlay-toc-active');
+          postLinks[j].style.fontWeight = '600';
+          postLinks[j].style.color = '#333';
         } else {
-          tocLinks[j].classList.remove('blog-overlay-toc-active');
-          tocLinks[j].style.fontWeight = '';
-          tocLinks[j].style.color = '#0066cc';
+          postLinks[j].classList.remove('blog-overlay-toc-active');
+          postLinks[j].style.fontWeight = '';
+          postLinks[j].style.color = '';
         }
       }
     },
@@ -699,8 +780,10 @@
         this._progressScrollTarget = null;
       }
       if (this._tocScrollHandler) {
-        window.removeEventListener('scroll', this._tocScrollHandler, { passive: true });
+        var tocTarget = this._tocScrollTarget || window;
+        tocTarget.removeEventListener('scroll', this._tocScrollHandler, { passive: true });
         this._tocScrollHandler = null;
+        this._tocScrollTarget = null;
       }
 
       var existing = root.querySelector('#blog-overlay-list');
@@ -720,39 +803,50 @@
         root.removeChild(toRemove[r]);
       }
 
-      var cfg = this.config || {};
+      var baseCfg = this.config || {};
+      var selectedIndex = this._getSelectedIndex(items);
+      var searchQuery = this._searchQuery || '';
+      var hasSearchQuery = searchQuery.trim().length > 0;
+      var categoryFilter = this._categoryFilter || '';
+      var hasCategoryFilter = categoryFilter.trim().length > 0;
+      var baseItems = hasSearchQuery ? this._searchPosts(items, searchQuery) : items;
+      var filteredItems = hasCategoryFilter ? this._filterPostsByCategory(baseItems, categoryFilter) : baseItems;
+      var displayItems = (selectedIndex >= 0 && selectedIndex < items.length && !hasSearchQuery && !hasCategoryFilter)
+        ? [items[selectedIndex]]
+        : filteredItems;
+      var isSinglePost = displayItems.length === 1 && selectedIndex >= 0 && !hasSearchQuery && !hasCategoryFilter;
+      var levelCfg = isSinglePost ? (baseCfg.postConfig && typeof baseCfg.postConfig === 'object' ? baseCfg.postConfig : baseCfg) : (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' ? baseCfg.collectionConfig : baseCfg);
+      var cfg = Object.assign({}, baseCfg, levelCfg);
       var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
       var leftSidebarCfg = cfg.leftSidebar && typeof cfg.leftSidebar === 'object' ? cfg.leftSidebar : null;
       var rightSidebarCfg = cfg.rightSidebar && typeof cfg.rightSidebar === 'object' ? cfg.rightSidebar : null;
       var headerContentCfg = cfg.headerContent && typeof cfg.headerContent === 'object' ? cfg.headerContent : null;
+      var useLevelConfig = (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object') || (baseCfg.postConfig && typeof baseCfg.postConfig === 'object');
       var showTableOfContents = Boolean(cfg.showTableOfContents);
       var tableOfContentsPosition = (cfg.tableOfContentsPosition === 'right') ? 'right' : 'left';
       var showRecentPostsSidebar = Boolean(cfg.showRecentPostsSidebar);
       var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
-      if (!leftSidebarCfg && cfg.showTableOfContents) {
-        leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200 } : null;
-      }
-      if (!rightSidebarCfg && cfg.showTableOfContents) {
-        rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200 } : null;
-      }
-      if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-        leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220 } : leftSidebarCfg;
-      }
-      if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-        rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220 } : rightSidebarCfg;
+      if (!useLevelConfig) {
+        if (!leftSidebarCfg && cfg.showTableOfContents) {
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200 } : null;
+        }
+        if (!rightSidebarCfg && cfg.showTableOfContents) {
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200 } : null;
+        }
+        if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220 } : leftSidebarCfg;
+        }
+        if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220 } : rightSidebarCfg;
+        }
+      } else {
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240 };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240 };
       }
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
-
-      var selectedIndex = this._getSelectedIndex(items);
-      var searchQuery = this._searchQuery || '';
-      var hasSearchQuery = searchQuery.trim().length > 0;
-      var displayItems = hasSearchQuery
-        ? this._searchPosts(items, searchQuery)
-        : (selectedIndex >= 0 && selectedIndex < items.length ? [items[selectedIndex]] : items);
-      var isSinglePost = displayItems.length === 1 && selectedIndex >= 0 && !hasSearchQuery;
 
       var wrapper = document.createElement('div');
       wrapper.id = 'blog-overlay-list';
@@ -773,10 +867,11 @@
       main.style.minWidth = '0';
 
       var progressTrackForPreview = null;
-      var showProgressBar = Boolean(cfg.showProgressBar);
-      var progressBarPosition = (cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
-      var progressBarThickness = Math.min(12, Math.max(2, parseInt(cfg.progressBarThickness, 10) || 6));
-      var progressBarColor = (typeof cfg.progressBarColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(cfg.progressBarColor)) ? cfg.progressBarColor : '#5B4FE8';
+      var pb = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
+      var showProgressBar = Boolean(pb.show ?? cfg.showProgressBar);
+      var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
+      var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
+      var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || '')) ? (pb.color || cfg.progressBarColor) : '#5B4FE8';
       if (isSinglePost && showProgressBar) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
@@ -835,14 +930,13 @@
         backLink.textContent = '← Back to list';
         backLink.style.display = 'inline-block';
         backLink.style.marginBottom = '16px';
-        backLink.style.color = '#0066cc';
         backLink.style.textDecoration = 'none';
         backLink.style.fontSize = '0.9rem';
         main.appendChild(backLink);
       }
 
       function createTocModule(sidebarWidth) {
-        if (items.length === 0 || isSinglePost) return null;
+        if (items.length === 0) return null;
         var el = document.createElement('nav');
         el.className = 'blog-overlay-toc';
         el.style.flexShrink = '0';
@@ -859,6 +953,48 @@
         tocTitle.style.marginBottom = '8px';
         tocTitle.style.fontSize = '0.9rem';
         el.appendChild(tocTitle);
+
+        if (isSinglePost && selectedIndex >= 0 && selectedIndex < items.length) {
+          var post = items[selectedIndex];
+          var bodyHtml = post.body || '';
+          var parseDiv = document.createElement('div');
+          parseDiv.innerHTML = bodyHtml;
+          var headings = parseDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+          if (headings.length > 0) {
+            for (var hi = 0; hi < headings.length; hi++) {
+              var h = headings[hi];
+              var level = parseInt(h.tagName.charAt(1), 10);
+              var tocLink = document.createElement('a');
+              tocLink.href = '#toc-' + hi;
+              tocLink.setAttribute('data-heading-index', String(hi));
+              tocLink.textContent = (h.textContent || '').trim() || 'Section ' + (hi + 1);
+              tocLink.style.display = 'block';
+              tocLink.style.padding = '4px 0';
+              tocLink.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
+              tocLink.style.textDecoration = 'none';
+              tocLink.style.lineHeight = '1.3';
+              tocLink.style.paddingLeft = ((level - 1) * 8) + 'px';
+              el.appendChild(tocLink);
+            }
+          } else {
+            var titleLink = document.createElement('a');
+            titleLink.href = '#toc-0';
+            titleLink.textContent = post.title || 'Untitled';
+            titleLink.style.display = 'block';
+            titleLink.style.padding = '4px 0';
+            titleLink.style.fontSize = '0.85rem';
+            titleLink.style.textDecoration = 'none';
+            titleLink.style.lineHeight = '1.3';
+            el.appendChild(titleLink);
+          }
+          self._tocScrollHandler = function() { self._updateTocHighlight(); };
+          var scrollTarget = self._getScrollContainer() || window;
+          scrollTarget.addEventListener('scroll', self._tocScrollHandler, { passive: true });
+          self._tocScrollTarget = scrollTarget;
+          requestAnimationFrame(function() { self._updateTocHighlight(); });
+          return el;
+        }
+
         for (var i = 0; i < items.length; i++) {
           var tocItem = items[i];
           var tocUrl = self._getPostUrl(tocItem);
@@ -869,13 +1005,14 @@
           tocLink.style.display = 'block';
           tocLink.style.padding = '4px 0';
           tocLink.style.fontSize = '0.85rem';
-          tocLink.style.color = '#0066cc';
           tocLink.style.textDecoration = 'none';
           tocLink.style.lineHeight = '1.3';
           el.appendChild(tocLink);
         }
         self._tocScrollHandler = function() { self._updateTocHighlight(); };
-        window.addEventListener('scroll', self._tocScrollHandler, { passive: true });
+        var scrollTarget = self._getScrollContainer() || window;
+        scrollTarget.addEventListener('scroll', self._tocScrollHandler, { passive: true });
+        self._tocScrollTarget = scrollTarget;
         requestAnimationFrame(function() { self._updateTocHighlight(); });
         return el;
       }
@@ -909,7 +1046,6 @@
           rpLink.style.display = 'block';
           rpLink.style.fontSize = '0.9rem';
           rpLink.style.fontWeight = '500';
-          rpLink.style.color = '#0066cc';
           rpLink.style.textDecoration = 'none';
           rpLink.style.marginBottom = '4px';
           rpEntry.appendChild(rpLink);
@@ -955,7 +1091,6 @@
           rpLink.style.display = 'block';
           rpLink.style.fontSize = '0.9rem';
           rpLink.style.fontWeight = '500';
-          rpLink.style.color = '#0066cc';
           rpLink.style.textDecoration = 'none';
           rpEntry.appendChild(rpLink);
           el.appendChild(rpEntry);
@@ -972,6 +1107,35 @@
           if (mod === 'tableOfContents') el = createTocModule(width);
           else if (mod === 'recentPosts') el = createRecentPostsModule(width);
           else if (mod === 'relevantPosts') el = createRelevantPostsModule(width);
+          else if (mod === 'searchPosts' || mod === 'postSearch') {
+            var searchWrap = document.createElement('div');
+            searchWrap.style.width = '100%';
+            var searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'Search posts…';
+            searchInput.setAttribute('aria-label', 'Search posts');
+            searchInput.value = self._searchQuery || '';
+            searchInput.style.width = '100%';
+            searchInput.style.padding = '8px 12px';
+            searchInput.style.fontSize = '0.9rem';
+            searchInput.style.border = '1px solid #ddd';
+            searchInput.style.borderRadius = '6px';
+            searchInput.style.outline = 'none';
+            searchInput.style.boxSizing = 'border-box';
+            searchInput.onfocus = function() { searchInput.style.borderColor = '#5B4FE8'; searchInput.style.boxShadow = '0 0 0 2px rgba(91,79,232,0.2)'; };
+            searchInput.onblur = function() { searchInput.style.borderColor = '#ddd'; searchInput.style.boxShadow = ''; };
+            searchInput.oninput = function() { self._searchQuery = searchInput.value; self._focusSearchInput = true; self._renderContent(self.items); };
+            searchInput.onkeydown = function(e) { if (e.key === 'Escape') { searchInput.value = ''; self._searchQuery = ''; self._renderContent(self.items); searchInput.blur(); } };
+            searchInput.className = 'blog-overlay-search-input';
+            searchWrap.appendChild(searchInput);
+            el = searchWrap;
+          } else if (mod === 'filterByCategory' || mod === 'filterByTag' || mod === 'filterByTagsAndCategories') {
+            var ph = document.createElement('span');
+            ph.style.fontSize = '0.8rem';
+            ph.style.color = '#999';
+            ph.textContent = 'Filter by Tags & Categories (coming soon)';
+            el = ph;
+          }
           if (el) mods.push(el);
         }
         return mods;
@@ -1128,6 +1292,16 @@
             var body = document.createElement('div');
             body.className = 'blog-overlay-body';
             body.innerHTML = post.body || '';
+            if (isSinglePost) {
+              var headings = body.querySelectorAll('h1, h2, h3, h4, h5, h6');
+              if (headings.length > 0) {
+                for (var hi = 0; hi < headings.length; hi++) {
+                  headings[hi].id = 'toc-' + hi;
+                }
+              } else {
+                article.id = 'toc-0';
+              }
+            }
             appendTo.appendChild(body);
             if (isSideBySide) {
               rowEl.appendChild(contentEl);
@@ -1142,11 +1316,14 @@
             main.appendChild(empty);
           }
 
+          var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : 240;
+          var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : 240;
           var leftSidebarEl = document.createElement('div');
           leftSidebarEl.style.display = 'flex';
           leftSidebarEl.style.flexDirection = 'column';
           leftSidebarEl.style.gap = '16px';
           leftSidebarEl.style.flexShrink = '0';
+          leftSidebarEl.style.width = leftSidebarWidth + 'px';
           for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
 
           var rightSidebarEl = document.createElement('div');
@@ -1154,6 +1331,7 @@
           rightSidebarEl.style.flexDirection = 'column';
           rightSidebarEl.style.gap = '16px';
           rightSidebarEl.style.flexShrink = '0';
+          rightSidebarEl.style.width = rightSidebarWidth + 'px';
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
 
           if (headerContentCfg && headerContentCfg.show) {
@@ -1181,21 +1359,88 @@
                   breadcrumbEl.setAttribute('aria-label', 'Breadcrumb');
                   breadcrumbEl.style.fontSize = '0.85rem';
                   breadcrumbEl.style.color = '#666';
+                  breadcrumbEl.style.display = 'flex';
+                  breadcrumbEl.style.flexWrap = 'wrap';
+                  breadcrumbEl.style.alignItems = 'center';
+                  breadcrumbEl.style.gap = '2px';
                   var meta = self._blogMeta || {};
                   var siteTitle = meta.siteTitle || '';
                   var blogName = meta.blogName || 'Blog';
-                  var bcParts = [];
-                  if (siteTitle) bcParts.push(siteTitle);
-                  bcParts.push(blogName);
+                  var blogIndexUrl = self._getBlogIndexUrl();
+                  var sep = function() {
+                    var s = document.createElement('span');
+                    s.textContent = ' › ';
+                    s.style.margin = '0 4px';
+                    return s;
+                  };
+                  var makeLink = function(text, href, onClick) {
+                    var a = document.createElement('a');
+                    a.textContent = text;
+                    a.href = href || '#';
+                    a.style.textDecoration = 'none';
+                    a.onclick = function(e) {
+                      if (onClick) {
+                        e.preventDefault();
+                        onClick();
+                      }
+                    };
+                    return a;
+                  };
+                  var goToBlogIndex = function() {
+                    self._categoryFilter = '';
+                    self._searchQuery = '';
+                    if (typeof window !== 'undefined') {
+                      try { window.history.replaceState(null, '', window.location.pathname + (window.location.search || '')); } catch (err) {}
+                    }
+                    window.location.hash = '';
+                    self._renderContent(self.items);
+                  };
+                  if (siteTitle) {
+                    breadcrumbEl.appendChild(makeLink(siteTitle, blogIndexUrl, goToBlogIndex));
+                    breadcrumbEl.appendChild(sep());
+                  }
+                  breadcrumbEl.appendChild(makeLink(blogName, blogIndexUrl, goToBlogIndex));
                   if (isSinglePost && selectedIndex >= 0) {
                     var post = items[selectedIndex];
-                    var cat = (post && post.category) ? String(post.category) : (post && post.categories && post.categories[0]) ? (typeof post.categories[0] === 'string' ? post.categories[0] : (post.categories[0].title || post.categories[0].name || post.categories[0])) : null;
-                    if (cat) bcParts.push(cat);
-                    bcParts.push(post.title || 'Untitled');
+                    var postCats = self._getPostCategories(post);
+                    if (postCats.length > 0) {
+                      breadcrumbEl.appendChild(sep());
+                      var catParts = postCats;
+                      for (var ci = 0; ci < catParts.length; ci++) {
+                        if (ci > 0) {
+                          var comma = document.createElement('span');
+                          comma.textContent = ', ';
+                          breadcrumbEl.appendChild(comma);
+                        }
+                        var catName = catParts[ci];
+                        breadcrumbEl.appendChild(makeLink(catName, '#', (function(cat) {
+                          return function() {
+                            self._categoryFilter = cat;
+                            window.location.hash = '';
+                            self._renderContent(self.items);
+                          };
+                        })(catName)));
+                      }
+                    }
+                    breadcrumbEl.appendChild(sep());
+                    var postTitle = post.title || 'Untitled';
+                    var postUrl = self._getPostUrl(post);
+                    if (postUrl) {
+                      breadcrumbEl.appendChild(makeLink(postTitle, postUrl, null));
+                    } else {
+                      var span = document.createElement('span');
+                      span.textContent = postTitle;
+                      breadcrumbEl.appendChild(span);
+                    }
+                  } else if (hasCategoryFilter) {
+                    breadcrumbEl.appendChild(sep());
+                    var span = document.createElement('span');
+                    span.textContent = categoryFilter;
+                    span.setAttribute('aria-current', 'page');
+                    breadcrumbEl.appendChild(span);
                   }
-                  breadcrumbEl.textContent = bcParts.join(' › ');
                   headerEl.appendChild(breadcrumbEl);
-                } else if (mod === 'tableOfContents' && items.length > 0 && !isSinglePost) {
+                } else if (mod === 'tableOfContents' && items.length > 0) {
                   var headerToc = createTocModule(200);
                   if (headerToc) {
                     headerToc.style.position = 'static';
@@ -1203,7 +1448,7 @@
                     headerToc.style.display = 'inline-block';
                     headerEl.appendChild(headerToc);
                   }
-                } else if (mod === 'postSearch') {
+                } else if (mod === 'postSearch' || mod === 'searchPosts') {
                   var searchWrap = document.createElement('div');
                   searchWrap.style.width = '100%';
                   searchWrap.style.maxWidth = '320px';
@@ -1237,7 +1482,7 @@
                   searchInput.className = 'blog-overlay-search-input';
                   searchWrap.appendChild(searchInput);
                   headerEl.appendChild(searchWrap);
-                } else if (mod === 'filterByTagsAndCategories') {
+                } else if (mod === 'filterByTagsAndCategories' || mod === 'filterByCategory' || mod === 'filterByTag') {
                   var placeholder = document.createElement('span');
                   placeholder.style.fontSize = '0.8rem';
                   placeholder.style.color = '#999';
@@ -1272,6 +1517,27 @@
           self._updateProgressBar();
         });
       }
+
+      // Deferred navbar re-measure: header may load asynchronously (race condition)
+      var applyNavbarOffset = function(offset) {
+        if (offset <= 0 || !wrapper.parentNode) return;
+        wrapper.style.paddingTop = (offset + 16) + 'px';
+        var progressTrack = document.getElementById('blog-overlay-progress');
+        if (progressTrack && progressTrack.style.position === 'fixed') {
+          progressTrack.style.top = offset + 'px';
+        }
+        var articles = wrapper.querySelectorAll('article');
+        for (var a = 0; a < articles.length; a++) {
+          articles[a].style.scrollMarginTop = (offset + 8) + 'px';
+        }
+      };
+      [150, 450].forEach(function(delay) {
+        setTimeout(function() {
+          if (!wrapper.parentNode) return;
+          var newOffset = self._getNavbarOffset();
+          if (newOffset > navbarOffset) applyNavbarOffset(newOffset);
+        }, delay);
+      });
     }
   };
 

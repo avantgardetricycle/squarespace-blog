@@ -14,13 +14,48 @@ function getStripe(): Stripe {
   return new Stripe(key)
 }
 
-function extractBlogPath(url: string): string | null {
+/**
+ * Normalize and parse a blog URL. Handles inputs without scheme (e.g. "example.com/blog").
+ * Returns normalized full URL and blog path, or null if invalid.
+ */
+function parseBlogUrl(input: string): { url: string; blogPath: string } | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+  let toParse = trimmed
+  if (!/^https?:\/\//i.test(toParse)) {
+    toParse = 'https://' + toParse
+  }
   try {
-    const parsed = new URL(url.trim())
-    const path = parsed.pathname.replace(/\/$/, '') || '/'
-    return path
+    const parsed = new URL(toParse)
+    const path = parsed.pathname.replace(/\/+$/, '') || '/'
+    const normalizedUrl = parsed.origin + path
+    return { url: normalizedUrl, blogPath: path }
   } catch {
     return null
+  }
+}
+
+/**
+ * Build the blog JSON fetch URL from site url and blogPath.
+ */
+function buildBlogJsonUrl(url: string, blogPath: string | null): string {
+  const parsed = new URL(url)
+  const hasPath = parsed.pathname && parsed.pathname !== '/'
+  const base = url.replace(/\/+$/, '')
+  return hasPath ? base + '?format=json' : parsed.origin + (blogPath || '/blog') + '?format=json'
+}
+
+/**
+ * Try to fetch blog JSON from Squarespace. Returns true if successful.
+ */
+async function tryFetchBlogJson(blogJsonUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(blogJsonUrl)
+    if (!res.ok) return false
+    const json = await res.json()
+    return Array.isArray(json?.items) || (json?.collection && Array.isArray(json.collection?.items))
+  } catch {
+    return false
   }
 }
 
@@ -102,6 +137,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         blogPath: s.blogPath,
         hasBlogPassword: Boolean(s.blogPassword),
         status: s.status,
+        verificationStatus: s.verificationStatus,
         createdAt: s.createdAt
       })),
       canCreateSite: maxSites === null || siteCount < maxSites
@@ -253,8 +289,13 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     }
 
     const siteName = typeof name === 'string' && name.trim() ? name.trim() : null
-    const siteUrl = typeof url === 'string' && url.trim() ? url.trim() : null
-    const blogPath = siteUrl ? extractBlogPath(siteUrl) : null
+    const siteUrlInput = typeof url === 'string' && url.trim() ? url.trim() : null
+    const parsed = siteUrlInput ? parseBlogUrl(siteUrlInput) : null
+    if (!parsed) {
+      res.status(400).json({ error: 'Please enter a valid blog URL (e.g. example.com/blog or https://example.com/blog)' })
+      return
+    }
+    const { url: siteUrl, blogPath } = parsed
 
     const site = await prisma.site.create({
       data: {
@@ -264,8 +305,16 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         url: siteUrl,
         blogPath,
         status: 'active',
+        verificationStatus: 'pending',
         channel: 'stable'
       }
+    })
+
+    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
+    const verified = await tryFetchBlogJson(blogJsonUrl)
+    const updatedSite = await prisma.site.update({
+      where: { id: site.id },
+      data: { verificationStatus: verified ? 'verified' : 'needs_attention' }
     })
 
     await prisma.siteConfig.create({
@@ -287,13 +336,14 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     })
 
     res.status(201).json({
-      id: site.id,
-      siteKey: site.siteKey,
-      name: site.name,
-      url: site.url,
-      blogPath: site.blogPath,
-      status: site.status,
-      createdAt: site.createdAt
+      id: updatedSite.id,
+      siteKey: updatedSite.siteKey,
+      name: updatedSite.name,
+      url: updatedSite.url,
+      blogPath: updatedSite.blogPath,
+      status: updatedSite.status,
+      verificationStatus: updatedSite.verificationStatus,
+      createdAt: updatedSite.createdAt
     })
   } catch (err) {
     console.error('Create site error:', err)
@@ -349,6 +399,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       blogPath: updated!.blogPath,
       hasBlogPassword: Boolean(updated!.blogPassword),
       status: updated!.status,
+      verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt
     })
   } catch (err) {
@@ -405,6 +456,7 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
       blogPath: updated!.blogPath,
       hasBlogPassword: Boolean(updated!.blogPassword),
       status: updated!.status,
+      verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt
     })
   } catch (err) {

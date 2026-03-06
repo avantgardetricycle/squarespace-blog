@@ -291,25 +291,36 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           verticalSpacing: 'normal' as const,
         }
 
-    const configData = {
-      siteKey,
-      blogPath: site.blogPath ?? null,
-      rendererUrl,
+    const collectionConfig = (siteConfig as { collectionConfig?: object }).collectionConfig
+    const postConfig = (siteConfig as { postConfig?: object }).postConfig
+    const cc = collectionConfig && typeof collectionConfig === 'object' ? collectionConfig : {
       showDate: siteConfig.showDate,
       showAuthor: siteConfig.showAuthor,
       showReadingTime: siteConfig.showReadingTime ?? false,
-      defaultAuthorIds,
-      postAuthorOverrides: authorSettings.postAuthorOverrides ?? {},
-      authorMap,
-      showProgressBar: progressBar.show ?? false,
-      progressBarPosition: progressBar.position ?? 'top',
-      progressBarThickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
-      progressBarColor: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8',
       leftSidebar: ls,
       rightSidebar: rs,
       headerContent: hc,
       socialMediaLinks: sm,
-      featuredImage,
+      featuredImage
+    }
+    const pc = postConfig && typeof postConfig === 'object' ? postConfig : {
+      ...cc,
+      progressBar: {
+        show: progressBar.show ?? false,
+        position: progressBar.position ?? 'top',
+        thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
+        color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
+      }
+    }
+    const configData = {
+      siteKey,
+      blogPath: site.blogPath ?? null,
+      rendererUrl,
+      defaultAuthorIds,
+      postAuthorOverrides: authorSettings.postAuthorOverrides ?? {},
+      authorMap,
+      collectionConfig: cc,
+      postConfig: pc,
       recentPostsCount: 5,
       baseUrl
     }
@@ -348,55 +359,22 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
 
   try {
     const c = config as Record<string, unknown>
-    const layout = (c.layout as Record<string, unknown>) ?? {}
     const authorSettings = (c as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> })
-    const ls = c.leftSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
-    const rs = c.rightSidebar as { show?: boolean; modules?: string[]; width?: number } | undefined
-    const hc = c.headerContent as { show?: boolean; modules?: string[]; height?: number } | undefined
-    const sm = c.socialMediaLinks as { show?: boolean; platforms?: string[] } | undefined
-    const fi = c.featuredImage as {
-      show?: boolean; layoutMode?: string; imageWidthPercent?: number; aspectBehavior?: string; aspectRatio?: string;
-      roundedCorners?: string; shadow?: boolean; showCaption?: boolean; verticalSpacing?: string;
-    } | undefined
+    const cc = c.collectionConfig as object | undefined
+    const pc = c.postConfig as object | undefined
     const data: SiteConfigData = {
-      showDate: (c.showDate ?? layout.showDate ?? true) as boolean,
-      showAuthor: (c.showAuthor ?? layout.showAuthor ?? false) as boolean,
-      showReadingTime: (c.showReadingTime ?? false) as boolean,
+      showDate: true,
+      showAuthor: false,
+      showReadingTime: false,
       authorSettings: {
         defaultAuthorIds: Array.isArray(authorSettings.defaultAuthorIds) ? authorSettings.defaultAuthorIds : [],
         postAuthorOverrides: (authorSettings.postAuthorOverrides && typeof authorSettings.postAuthorOverrides === 'object') ? authorSettings.postAuthorOverrides : {}
       },
-      progressBar: {
-        show: (c.showProgressBar ?? false) as boolean,
-        position: ((c as { progressBarPosition?: string | null }).progressBarPosition ?? 'top') as string | null,
-        thickness: Math.min(12, Math.max(2, Number((c as { progressBarThickness?: number }).progressBarThickness) || 6)),
-        color: (typeof (c as { progressBarColor?: string }).progressBarColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test((c as { progressBarColor: string }).progressBarColor))
-          ? (c as { progressBarColor: string }).progressBarColor
-          : '#5B4FE8'
-      },
-      tableOfContents: {
-        show: (c.showTableOfContents ?? false) as boolean,
-        position: (c.tableOfContentsPosition ?? 'left') as string
-      },
-      recentPostsSidebar: {
-        show: (c.showRecentPostsSidebar ?? false) as boolean,
-        position: (c.sidebarPosition ?? 'left') as string
-      },
-      leftSidebar: ls && typeof ls === 'object' ? { show: ls.show ?? false, modules: Array.isArray(ls.modules) ? ls.modules : [], width: Math.min(400, Math.max(160, ls.width ?? 240)) } : undefined,
-      rightSidebar: rs && typeof rs === 'object' ? { show: rs.show ?? false, modules: Array.isArray(rs.modules) ? rs.modules : [], width: Math.min(400, Math.max(160, rs.width ?? 240)) } : undefined,
-      headerContent: hc && typeof hc === 'object' ? { show: hc.show ?? false, modules: Array.isArray(hc.modules) ? hc.modules : [], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) } : undefined,
-      socialMediaLinks: sm && typeof sm === 'object' ? { show: sm.show ?? false, platforms: Array.isArray(sm.platforms) ? sm.platforms : [] } : undefined,
-      featuredImage: fi && typeof fi === 'object' ? {
-        show: fi.show ?? true,
-        layoutMode: (fi.layoutMode === 'fullBleed' ? 'fullBleed' : fi.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified') as 'fullBleed' | 'leftJustified' | 'rightJustified',
-        imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
-        aspectBehavior: (fi.aspectBehavior === 'cropped' ? 'cropped' : 'original') as 'original' | 'cropped',
-        aspectRatio: (fi.aspectRatio === '3:2' ? '3:2' : fi.aspectRatio === '1:1' ? '1:1' : '16:9') as '16:9' | '3:2' | '1:1',
-        roundedCorners: (fi.roundedCorners === 'small' ? 'small' : fi.roundedCorners === 'large' ? 'large' : 'off') as 'off' | 'small' | 'large',
-        shadow: Boolean(fi.shadow),
-        showCaption: Boolean(fi.showCaption ?? true),
-        verticalSpacing: (fi.verticalSpacing === 'tight' ? 'tight' : fi.verticalSpacing === 'spacious' ? 'spacious' : 'normal') as 'tight' | 'normal' | 'spacious',
-      } : undefined,
+      progressBar: { show: false, position: 'top', thickness: 6, color: '#5B4FE8' },
+      tableOfContents: { show: false, position: 'left' },
+      recentPostsSidebar: { show: false, position: 'left' },
+      collectionConfig: cc && typeof cc === 'object' ? cc : undefined,
+      postConfig: pc && typeof pc === 'object' ? pc : undefined,
     }
     await upsertSiteConfig(site.id, data)
     res.json({ success: true })

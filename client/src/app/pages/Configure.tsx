@@ -43,16 +43,22 @@ import BlogPreviewIframe, {
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
+const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
+
 export interface BlogAuthorOption {
   id: string;
   name: string;
 }
 
-export const SIDEBAR_MODULE_TYPES = ["recentPosts", "relevantPosts", "tableOfContents"] as const;
-export type SidebarModuleType = (typeof SIDEBAR_MODULE_TYPES)[number];
+export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "searchPosts"] as const;
+export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
+export const SIDEBAR_POST_MODULES = ["tableOfContents"] as const;
+export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
-export const HEADER_CONTENT_MODULE_TYPES = ["tableOfContents", "breadcrumbs", "postSearch", "filterByTagsAndCategories"] as const;
-export type HeaderContentModuleType = (typeof HEADER_CONTENT_MODULE_TYPES)[number];
+export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "searchPosts"] as const;
+export type HeaderCollectionModuleType = (typeof HEADER_COLLECTION_MODULES)[number];
+export const HEADER_POST_MODULES = ["breadcrumbs", "tableOfContents"] as const;
+export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
 
 export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
@@ -75,18 +81,30 @@ export interface FeaturedImageConfig {
   verticalSpacing: FeaturedImageVerticalSpacing;
 }
 
-export interface SiteConfigForm {
+export type ConfigLevel = "collection" | "post";
+
+export interface BaseLevelConfig {
   showDate: boolean;
   showAuthor: boolean;
   showReadingTime: boolean;
-  defaultAuthorIds: string[];
-  postAuthorOverrides: Record<string, string[]>;
-  progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
-  leftSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
-  rightSidebar: { show: boolean; modules: SidebarModuleType[]; width: number };
-  headerContent: { show: boolean; modules: HeaderContentModuleType[]; height: number };
+  leftSidebar: { show: boolean; modules: string[]; width: number };
+  rightSidebar: { show: boolean; modules: string[]; width: number };
+  headerContent: { show: boolean; modules: string[]; height: number };
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
+}
+
+export interface CollectionLevelConfig extends BaseLevelConfig {}
+
+export interface PostLevelConfig extends BaseLevelConfig {
+  progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
+}
+
+export interface SiteConfigForm {
+  defaultAuthorIds: string[];
+  postAuthorOverrides: Record<string, string[]>;
+  collectionConfig: CollectionLevelConfig;
+  postConfig: PostLevelConfig;
 }
 
 const defaultFeaturedImage: FeaturedImageConfig = {
@@ -101,13 +119,10 @@ const defaultFeaturedImage: FeaturedImageConfig = {
   verticalSpacing: "normal",
 };
 
-const defaultSiteConfig: SiteConfigForm = {
+const defaultCollectionConfig: CollectionLevelConfig = {
   showDate: true,
   showAuthor: false,
   showReadingTime: false,
-  defaultAuthorIds: [],
-  postAuthorOverrides: {},
-  progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
   leftSidebar: { show: false, modules: [], width: 240 },
   rightSidebar: { show: false, modules: [], width: 240 },
   headerContent: { show: false, modules: [], height: 48 },
@@ -115,56 +130,30 @@ const defaultSiteConfig: SiteConfigForm = {
   featuredImage: defaultFeaturedImage,
 };
 
-function configFromApi(data: Record<string, unknown>): SiteConfigForm {
-  const defaultAuthorIds = Array.isArray(data.defaultAuthorIds) ? data.defaultAuthorIds as string[] : [];
-  const postAuthorOverrides = (data.postAuthorOverrides && typeof data.postAuthorOverrides === "object")
-    ? (data.postAuthorOverrides as Record<string, string[]>) : {};
-  const ls = data.leftSidebar && typeof data.leftSidebar === "object" ? data.leftSidebar as { show?: boolean; modules?: string[]; width?: number } : null;
-  const rs = data.rightSidebar && typeof data.rightSidebar === "object" ? data.rightSidebar as { show?: boolean; modules?: string[]; width?: number } : null;
-  const hc = data.headerContent && typeof data.headerContent === "object" ? data.headerContent as { show?: boolean; tableOfContents?: boolean; breadcrumbs?: boolean; modules?: unknown[]; height?: number } : null;
-  const validModules = (arr: unknown): SidebarModuleType[] =>
-    Array.isArray(arr) ? arr.filter((m): m is SidebarModuleType => SIDEBAR_MODULE_TYPES.includes(m as SidebarModuleType)) : [];
-  const validHeaderModules = (arr: unknown): HeaderContentModuleType[] =>
-    Array.isArray(arr) ? arr.filter((m): m is HeaderContentModuleType => HEADER_CONTENT_MODULE_TYPES.includes(m as HeaderContentModuleType)) : [];
-  let leftSidebar = ls ? { show: Boolean(ls.show ?? false), modules: validModules(ls.modules), width: Math.min(400, Math.max(160, Number(ls.width) || 240)) } : null;
-  let rightSidebar = rs ? { show: Boolean(rs.show ?? false), modules: validModules(rs.modules), width: Math.min(400, Math.max(160, Number(rs.width) || 240)) } : null;
-  let headerContent: { show: boolean; modules: HeaderContentModuleType[]; height: number } | null = null;
-  if (hc) {
-    const modules = Array.isArray(hc.modules) ? validHeaderModules(hc.modules) : [];
-    const migrated = modules.length > 0 ? modules : [
-      ...(hc.tableOfContents ? (["tableOfContents"] as const) : []),
-      ...(hc.breadcrumbs ? (["breadcrumbs"] as const) : []),
-    ];
-    headerContent = {
-      show: Boolean(hc.show ?? false),
-      modules: migrated,
-      height: Math.min(120, Math.max(32, Number(hc.height) || 48)),
-    };
-  }
-  if (!leftSidebar || !rightSidebar || !headerContent) {
-    const showToc = Boolean(data.showTableOfContents ?? false);
-    const tocPos = (data.tableOfContentsPosition === "right" ? "right" : "left") as "left" | "right";
-    const showRp = Boolean(data.showRecentPostsSidebar ?? false);
-    const rpPos = (data.sidebarPosition === "right" ? "right" : "left") as "left" | "right";
-    if (!leftSidebar) {
-      const modules: SidebarModuleType[] = [];
-      if (showToc && tocPos === "left") modules.push("tableOfContents");
-      if (showRp && rpPos === "left") modules.push("recentPosts");
-      leftSidebar = { show: modules.length > 0, modules, width: 240 };
-    }
-    if (!rightSidebar) {
-      const modules: SidebarModuleType[] = [];
-      if (showToc && tocPos === "right") modules.push("tableOfContents");
-      if (showRp && rpPos === "right") modules.push("recentPosts");
-      rightSidebar = { show: modules.length > 0, modules, width: 240 };
-    }
-    if (!headerContent) headerContent = { show: false, modules: [], height: 48 };
-  }
-  const sm = data.socialMediaLinks && typeof data.socialMediaLinks === "object" ? data.socialMediaLinks as { show?: boolean; platforms?: unknown[] } : null;
+const defaultPostConfig: PostLevelConfig = {
+  ...defaultCollectionConfig,
+  leftSidebar: { show: false, modules: [], width: 240 },
+  rightSidebar: { show: false, modules: [], width: 240 },
+  headerContent: { show: false, modules: [], height: 48 },
+  progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
+};
+
+const defaultSiteConfig: SiteConfigForm = {
+  defaultAuthorIds: [],
+  postAuthorOverrides: {},
+  collectionConfig: defaultCollectionConfig,
+  postConfig: defaultPostConfig,
+};
+
+function parseLevelConfig(
+  raw: Record<string, unknown> | null,
+  level: "collection" | "post"
+): CollectionLevelConfig | PostLevelConfig {
+  const sm = raw?.socialMediaLinks && typeof raw.socialMediaLinks === "object" ? raw.socialMediaLinks as { show?: boolean; platforms?: unknown[] } : null;
   const validSocialPlatforms = (arr: unknown): SocialPlatform[] =>
     Array.isArray(arr) ? arr.filter((p): p is SocialPlatform => SOCIAL_PLATFORMS.includes(p as SocialPlatform)) : [];
   const socialMediaLinks = sm ? { show: Boolean(sm.show ?? false), platforms: validSocialPlatforms(sm.platforms) } : { show: false, platforms: [] };
-  const fi = data.featuredImage && typeof data.featuredImage === "object" ? data.featuredImage as Record<string, unknown> : null;
+  const fi = raw?.featuredImage && typeof raw.featuredImage === "object" ? raw.featuredImage as Record<string, unknown> : null;
   const featuredImage: FeaturedImageConfig = fi ? {
     show: Boolean(fi.show ?? true),
     layoutMode: (fi.layoutMode === "fullBleed" ? "fullBleed" : fi.layoutMode === "rightJustified" ? "rightJustified" : "leftJustified") as FeaturedImageLayoutMode,
@@ -176,76 +165,116 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     showCaption: Boolean(fi.showCaption ?? true),
     verticalSpacing: (fi.verticalSpacing === "tight" ? "tight" : fi.verticalSpacing === "spacious" ? "spacious" : "normal") as FeaturedImageVerticalSpacing,
   } : defaultFeaturedImage;
-  return {
-    showDate: Boolean(data.showDate ?? true),
-    showAuthor: Boolean(data.showAuthor ?? false),
-    showReadingTime: Boolean(data.showReadingTime ?? false),
-    defaultAuthorIds,
-    postAuthorOverrides,
-    progressBar: {
-      show: Boolean(data.showProgressBar ?? false),
-      position: (data.progressBarPosition === "bottom" ? "bottom" : "top") as "top" | "bottom",
-      thickness: Math.min(12, Math.max(2, Number(data.progressBarThickness) || 6)),
-      color: typeof data.progressBarColor === "string" && /^#[0-9A-Fa-f]{6}$/.test(data.progressBarColor as string)
-        ? (data.progressBarColor as string)
-        : "#5B4FE8",
-    },
-    leftSidebar,
-    rightSidebar,
-    headerContent,
+  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; width?: number } : null;
+  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; width?: number } : null;
+  const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; height?: number } : null;
+  const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
+    Array.isArray(arr) ? arr.filter((m): m is SidebarCollectionModuleType => SIDEBAR_COLLECTION_MODULES.includes(m as SidebarCollectionModuleType)) : [];
+  const validSidebarPost = (arr: unknown): SidebarPostModuleType[] =>
+    Array.isArray(arr) ? arr.filter((m): m is SidebarPostModuleType => SIDEBAR_POST_MODULES.includes(m as SidebarPostModuleType)) : [];
+  const validHeaderCollection = (arr: unknown): HeaderCollectionModuleType[] =>
+    Array.isArray(arr) ? arr.filter((m): m is HeaderCollectionModuleType => HEADER_COLLECTION_MODULES.includes(m as HeaderCollectionModuleType)) : [];
+  const validHeaderPost = (arr: unknown): HeaderPostModuleType[] =>
+    Array.isArray(arr) ? arr.filter((m): m is HeaderPostModuleType => HEADER_POST_MODULES.includes(m as HeaderPostModuleType)) : [];
+  const leftSidebar = ls
+    ? { show: Boolean(ls.show ?? false), modules: level === "collection" ? validSidebarCollection(ls.modules) : validSidebarPost(ls.modules), width: Math.min(400, Math.max(160, Number(ls.width) || 240)) }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], width: 240 };
+  const rightSidebar = rs
+    ? { show: Boolean(rs.show ?? false), modules: level === "collection" ? validSidebarCollection(rs.modules) : validSidebarPost(rs.modules), width: Math.min(400, Math.max(160, Number(rs.width) || 240)) }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], width: 240 };
+  const headerContent = hc
+    ? { show: Boolean(hc.show ?? false), modules: level === "collection" ? validHeaderCollection(hc.modules) : validHeaderPost(hc.modules), height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
+    : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], height: 48 };
+  const base: CollectionLevelConfig = {
+    showDate: Boolean(raw?.showDate ?? true),
+    showAuthor: Boolean(raw?.showAuthor ?? false),
+    showReadingTime: Boolean(raw?.showReadingTime ?? false),
+    leftSidebar: leftSidebar as { show: boolean; modules: SidebarCollectionModuleType[]; width: number },
+    rightSidebar: rightSidebar as { show: boolean; modules: SidebarCollectionModuleType[]; width: number },
+    headerContent: headerContent as { show: boolean; modules: HeaderCollectionModuleType[]; height: number },
     socialMediaLinks,
     featuredImage,
+  };
+  if (level === "post") {
+    const pb = raw?.progressBar && typeof raw.progressBar === "object" ? raw.progressBar as { show?: boolean; position?: string; thickness?: number; color?: string } : null;
+    return {
+      ...base,
+      leftSidebar: leftSidebar as { show: boolean; modules: SidebarPostModuleType[]; width: number },
+      rightSidebar: rightSidebar as { show: boolean; modules: SidebarPostModuleType[]; width: number },
+      headerContent: headerContent as { show: boolean; modules: HeaderPostModuleType[]; height: number },
+      progressBar: pb ? {
+        show: Boolean(pb.show ?? false),
+        position: (pb.position === "bottom" ? "bottom" : "top") as "top" | "bottom",
+        thickness: Math.min(12, Math.max(2, Number(pb.thickness) || 6)),
+        color: (typeof pb.color === "string" && /^#[0-9A-Fa-f]{6}$/.test(pb.color)) ? pb.color : "#5B4FE8",
+      } : { show: false, position: "top" as const, thickness: 6, color: "#5B4FE8" },
+    };
+  }
+  return base;
+}
+
+function configFromApi(data: Record<string, unknown>): SiteConfigForm {
+  const defaultAuthorIds = Array.isArray(data.defaultAuthorIds) ? data.defaultAuthorIds as string[] : [];
+  const postAuthorOverrides = (data.postAuthorOverrides && typeof data.postAuthorOverrides === "object")
+    ? (data.postAuthorOverrides as Record<string, string[]>) : {};
+  const cc = data.collectionConfig && typeof data.collectionConfig === "object" ? data.collectionConfig as Record<string, unknown> : null;
+  const pc = data.postConfig && typeof data.postConfig === "object" ? data.postConfig as Record<string, unknown> : null;
+  if (cc && pc) {
+    return {
+      defaultAuthorIds,
+      postAuthorOverrides,
+      collectionConfig: parseLevelConfig(cc, "collection"),
+      postConfig: parseLevelConfig(pc, "post") as PostLevelConfig,
+    };
+  }
+  const legacy: Record<string, unknown> = {
+    showDate: data.showDate,
+    showAuthor: data.showAuthor,
+    showReadingTime: data.showReadingTime,
+    leftSidebar: data.leftSidebar,
+    rightSidebar: data.rightSidebar,
+    headerContent: data.headerContent,
+    socialMediaLinks: data.socialMediaLinks,
+    featuredImage: data.featuredImage,
+    progressBar: data.progressBar ?? { show: data.showProgressBar, position: data.progressBarPosition, thickness: data.progressBarThickness, color: data.progressBarColor },
+  };
+  const ls = data.leftSidebar as { modules?: string[] } | undefined;
+  const hc = data.headerContent as { modules?: string[] } | undefined;
+  const legacyModules = Array.isArray(ls?.modules) ? ls.modules : Array.isArray(hc?.modules) ? hc.modules : [];
+  const hasToc = legacyModules.includes("tableOfContents") || Boolean(data.showTableOfContents);
+  const hasBreadcrumbs = legacyModules.includes("breadcrumbs");
+  const lsObj = legacy.leftSidebar && typeof legacy.leftSidebar === "object" ? legacy.leftSidebar as Record<string, unknown> : {};
+  const rsObj = legacy.rightSidebar && typeof legacy.rightSidebar === "object" ? legacy.rightSidebar as Record<string, unknown> : {};
+  const hcObj = legacy.headerContent && typeof legacy.headerContent === "object" ? legacy.headerContent as Record<string, unknown> : {};
+  const migratedPost = { ...legacy, leftSidebar: { ...lsObj, modules: hasToc ? ["tableOfContents"] : [] }, rightSidebar: { ...rsObj, modules: hasToc ? ["tableOfContents"] : [] }, headerContent: { ...hcObj, modules: [...(hasBreadcrumbs ? ["breadcrumbs"] : []), ...(hasToc ? ["tableOfContents"] : [])] } };
+  return {
+    defaultAuthorIds,
+    postAuthorOverrides,
+    collectionConfig: parseLevelConfig(legacy, "collection"),
+    postConfig: parseLevelConfig(migratedPost, "post") as PostLevelConfig,
   };
 }
 
 function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
   return {
-    showDate: config.showDate,
-    showAuthor: config.showAuthor,
-    showReadingTime: config.showReadingTime,
     defaultAuthorIds: config.defaultAuthorIds,
     postAuthorOverrides: config.postAuthorOverrides,
-    showProgressBar: config.progressBar.show,
-    progressBarPosition: config.progressBar.position,
-    progressBarThickness: config.progressBar.thickness,
-    progressBarColor: config.progressBar.color,
-    leftSidebar: config.leftSidebar,
-    rightSidebar: config.rightSidebar,
-    headerContent: config.headerContent,
-    socialMediaLinks: config.socialMediaLinks,
-    featuredImage: config.featuredImage,
+    collectionConfig: config.collectionConfig,
+    postConfig: config.postConfig,
   };
 }
 
 function configToRendererConfig(config: SiteConfigForm): Record<string, unknown> {
   return {
-    showDate: config.showDate,
-    showAuthor: config.showAuthor,
-    showReadingTime: config.showReadingTime,
     defaultAuthorIds: config.defaultAuthorIds,
     postAuthorOverrides: config.postAuthorOverrides,
-    showProgressBar: config.progressBar.show,
-    progressBarPosition: config.progressBar.position,
-    progressBarThickness: config.progressBar.thickness,
-    featuredImage: config.featuredImage,
-    progressBarColor: config.progressBar.color,
-    leftSidebar: config.leftSidebar,
-    rightSidebar: config.rightSidebar,
-    headerContent: config.headerContent,
-    socialMediaLinks: config.socialMediaLinks,
+    collectionConfig: config.collectionConfig,
+    postConfig: config.postConfig,
     recentPostsCount: 5,
   };
 }
 
-function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
-  const defaultIdsEqual = a.defaultAuthorIds.length === b.defaultAuthorIds.length &&
-    a.defaultAuthorIds.every((id, i) => id === b.defaultAuthorIds[i]);
-  const overridesKeys = new Set([...Object.keys(a.postAuthorOverrides), ...Object.keys(b.postAuthorOverrides)]);
-  const overridesEqual = [...overridesKeys].every((key) => {
-    const aa = a.postAuthorOverrides[key] ?? [];
-    const bb = b.postAuthorOverrides[key] ?? [];
-    return aa.length === bb.length && aa.every((id, i) => id === bb[i]);
-  });
+function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
   const lsEqual = a.leftSidebar.show === b.leftSidebar.show &&
     a.leftSidebar.width === b.leftSidebar.width &&
     a.leftSidebar.modules.length === b.leftSidebar.modules.length &&
@@ -270,18 +299,28 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     a.featuredImage.shadow === b.featuredImage.shadow &&
     a.featuredImage.showCaption === b.featuredImage.showCaption &&
     a.featuredImage.verticalSpacing === b.featuredImage.verticalSpacing;
-  return (
-    a.showDate === b.showDate &&
-    a.showAuthor === b.showAuthor &&
-    a.showReadingTime === b.showReadingTime &&
-    defaultIdsEqual &&
-    overridesEqual &&
-    a.progressBar.show === b.progressBar.show &&
-    a.progressBar.position === b.progressBar.position &&
-    a.progressBar.thickness === b.progressBar.thickness &&
-    a.progressBar.color === b.progressBar.color &&
-    lsEqual && rsEqual && hcEqual && smEqual && fiEqual
-  );
+  const base = a.showDate === b.showDate && a.showAuthor === b.showAuthor && a.showReadingTime === b.showReadingTime &&
+    lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
+  if ("progressBar" in a && "progressBar" in b) {
+    const pa = (a as PostLevelConfig).progressBar;
+    const pb = (b as PostLevelConfig).progressBar;
+    return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color;
+  }
+  return base;
+}
+
+function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
+  const defaultIdsEqual = a.defaultAuthorIds.length === b.defaultAuthorIds.length &&
+    a.defaultAuthorIds.every((id, i) => id === b.defaultAuthorIds[i]);
+  const overridesKeys = new Set([...Object.keys(a.postAuthorOverrides), ...Object.keys(b.postAuthorOverrides)]);
+  const overridesEqual = [...overridesKeys].every((key) => {
+    const aa = a.postAuthorOverrides[key] ?? [];
+    const bb = b.postAuthorOverrides[key] ?? [];
+    return aa.length === bb.length && aa.every((id, i) => id === bb[i]);
+  });
+  return defaultIdsEqual && overridesEqual &&
+    levelConfigsEqual(a.collectionConfig, b.collectionConfig) &&
+    levelConfigsEqual(a.postConfig, b.postConfig);
 }
 
 export default function Configure() {
@@ -303,6 +342,7 @@ export default function Configure() {
   const [addAuthorAsDefault, setAddAuthorAsDefault] = useState(true);
   const [installationModalOpen, setInstallationModalOpen] = useState(false);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
+  const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     progressBar: false,
@@ -434,6 +474,9 @@ export default function Configure() {
   }, [effectiveSiteKey, effectiveSite, configLoading]);
 
   const isDirty = !configsEqual(config, savedConfig);
+  const effectiveConfig = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
+  const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
+  const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
@@ -485,42 +528,53 @@ export default function Configure() {
   const updateConfig = (path: string, value: unknown) => {
     setConfig((prev) => {
       const next = { ...prev };
-      if (path === "showDate") next.showDate = value as boolean;
-      else if (path === "showAuthor") next.showAuthor = value as boolean;
-      else if (path === "showReadingTime") next.showReadingTime = value as boolean;
-      else if (path === "defaultAuthorIds") next.defaultAuthorIds = value as string[];
+      if (path === "defaultAuthorIds") next.defaultAuthorIds = value as string[];
       else if (path === "postAuthorOverrides") next.postAuthorOverrides = value as Record<string, string[]>;
       else if (path.startsWith("postAuthorOverrides.")) {
         const postId = path.slice("postAuthorOverrides.".length);
         next.postAuthorOverrides = { ...prev.postAuthorOverrides, [postId]: value as string[] };
+      } else if (path.startsWith("collectionConfig.")) {
+        const sub = path.slice("collectionConfig.".length);
+        next.collectionConfig = updateLevelConfig(prev.collectionConfig, sub, value);
+      } else if (path.startsWith("postConfig.")) {
+        const sub = path.slice("postConfig.".length);
+        next.postConfig = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
       }
-      else if (path === "progressBar.show") next.progressBar = { ...prev.progressBar, show: value as boolean };
-      else if (path === "progressBar.position") next.progressBar = { ...prev.progressBar, position: value as "top" | "bottom" };
-      else if (path === "progressBar.thickness") next.progressBar = { ...prev.progressBar, thickness: value as number };
-      else if (path === "progressBar.color") next.progressBar = { ...prev.progressBar, color: value as string };
-      else if (path === "leftSidebar.show") next.leftSidebar = { ...prev.leftSidebar, show: value as boolean };
-      else if (path === "leftSidebar.modules") next.leftSidebar = { ...prev.leftSidebar, modules: value as SidebarModuleType[] };
-      else if (path === "leftSidebar.width") next.leftSidebar = { ...prev.leftSidebar, width: value as number };
-      else if (path === "rightSidebar.show") next.rightSidebar = { ...prev.rightSidebar, show: value as boolean };
-      else if (path === "rightSidebar.modules") next.rightSidebar = { ...prev.rightSidebar, modules: value as SidebarModuleType[] };
-      else if (path === "rightSidebar.width") next.rightSidebar = { ...prev.rightSidebar, width: value as number };
-      else if (path === "headerContent.show") next.headerContent = { ...prev.headerContent, show: value as boolean };
-      else if (path === "headerContent.modules") next.headerContent = { ...prev.headerContent, modules: value as HeaderContentModuleType[] };
-      else if (path === "headerContent.height") next.headerContent = { ...prev.headerContent, height: value as number };
-      else if (path === "socialMediaLinks.show") next.socialMediaLinks = { ...prev.socialMediaLinks, show: value as boolean };
-      else if (path === "socialMediaLinks.platforms") next.socialMediaLinks = { ...prev.socialMediaLinks, platforms: value as SocialPlatform[] };
-      else if (path === "featuredImage.show") next.featuredImage = { ...prev.featuredImage, show: value as boolean };
-      else if (path === "featuredImage.layoutMode") next.featuredImage = { ...prev.featuredImage, layoutMode: value as FeaturedImageLayoutMode };
-      else if (path === "featuredImage.imageWidthPercent") next.featuredImage = { ...prev.featuredImage, imageWidthPercent: value as number };
-      else if (path === "featuredImage.aspectBehavior") next.featuredImage = { ...prev.featuredImage, aspectBehavior: value as FeaturedImageAspectBehavior };
-      else if (path === "featuredImage.aspectRatio") next.featuredImage = { ...prev.featuredImage, aspectRatio: value as FeaturedImageAspectRatio };
-      else if (path === "featuredImage.roundedCorners") next.featuredImage = { ...prev.featuredImage, roundedCorners: value as FeaturedImageRoundedCorners };
-      else if (path === "featuredImage.shadow") next.featuredImage = { ...prev.featuredImage, shadow: value as boolean };
-      else if (path === "featuredImage.showCaption") next.featuredImage = { ...prev.featuredImage, showCaption: value as boolean };
-      else if (path === "featuredImage.verticalSpacing") next.featuredImage = { ...prev.featuredImage, verticalSpacing: value as FeaturedImageVerticalSpacing };
       return next;
     });
   };
+
+  function updateLevelConfig(cfg: CollectionLevelConfig | PostLevelConfig, path: string, value: unknown): CollectionLevelConfig | PostLevelConfig {
+    if (path === "showDate") return { ...cfg, showDate: value as boolean };
+    if (path === "showAuthor") return { ...cfg, showAuthor: value as boolean };
+    if (path === "showReadingTime") return { ...cfg, showReadingTime: value as boolean };
+    if (path === "leftSidebar.show") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, show: value as boolean } };
+    if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
+    if (path === "leftSidebar.width") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, width: value as number } };
+    if (path === "rightSidebar.show") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, show: value as boolean } };
+    if (path === "rightSidebar.modules") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, modules: value as string[] } };
+    if (path === "rightSidebar.width") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, width: value as number } };
+    if (path === "headerContent.show") return { ...cfg, headerContent: { ...cfg.headerContent, show: value as boolean } };
+    if (path === "headerContent.modules") return { ...cfg, headerContent: { ...cfg.headerContent, modules: value as string[] } };
+    if (path === "headerContent.height") return { ...cfg, headerContent: { ...cfg.headerContent, height: value as number } };
+    if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
+    if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
+    if (path === "socialMediaLinks.platforms") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, platforms: value as SocialPlatform[] } };
+    if (path === "featuredImage.show") return { ...cfg, featuredImage: { ...cfg.featuredImage, show: value as boolean } };
+    if (path === "featuredImage.layoutMode") return { ...cfg, featuredImage: { ...cfg.featuredImage, layoutMode: value as FeaturedImageLayoutMode } };
+    if (path === "featuredImage.imageWidthPercent") return { ...cfg, featuredImage: { ...cfg.featuredImage, imageWidthPercent: value as number } };
+    if (path === "featuredImage.aspectBehavior") return { ...cfg, featuredImage: { ...cfg.featuredImage, aspectBehavior: value as FeaturedImageAspectBehavior } };
+    if (path === "featuredImage.aspectRatio") return { ...cfg, featuredImage: { ...cfg.featuredImage, aspectRatio: value as FeaturedImageAspectRatio } };
+    if (path === "featuredImage.roundedCorners") return { ...cfg, featuredImage: { ...cfg.featuredImage, roundedCorners: value as FeaturedImageRoundedCorners } };
+    if (path === "featuredImage.shadow") return { ...cfg, featuredImage: { ...cfg.featuredImage, shadow: value as boolean } };
+    if (path === "featuredImage.showCaption") return { ...cfg, featuredImage: { ...cfg.featuredImage, showCaption: value as boolean } };
+    if (path === "featuredImage.verticalSpacing") return { ...cfg, featuredImage: { ...cfg.featuredImage, verticalSpacing: value as FeaturedImageVerticalSpacing } };
+    if (path === "progressBar.show" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, show: value as boolean } };
+    if (path === "progressBar.position" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, position: value as "top" | "bottom" } };
+    if (path === "progressBar.thickness" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, thickness: value as number } };
+    if (path === "progressBar.color" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, color: value as string } };
+    return cfg;
+  }
 
   const handleBlogChange = (newSiteKey: string) => {
     setSearchParams({ siteKey: newSiteKey });
@@ -545,6 +599,16 @@ export default function Configure() {
       window.removeEventListener("message", handleMessage);
     };
   }, []);
+
+  // When switching to Post config level with no post selected, switch preview to single-post view
+  // (BlogPreviewRenderer uses window hash; BlogPreviewIframe uses selectPostIndex prop)
+  useEffect(() => {
+    if (selectedLevel !== "post" || selectedPostIndex >= 0 || blogItems.length === 0 || !effectiveSite) return;
+    const previewUrl = buildBlogPreviewUrl(effectiveSite);
+    if (previewUrl && isSquarespaceUrl(previewUrl)) {
+      window.location.hash = "#post-0";
+    }
+  }, [selectedLevel, selectedPostIndex, blogItems.length, effectiveSite]);
 
   if (loading) {
     return (
@@ -572,18 +636,44 @@ export default function Configure() {
         <div className="p-4 border-b border-[#e5e4e0] space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-[#6b6b6b]">Customizing</Label>
-            <Select value={effectiveSiteKey ?? undefined} onValueChange={handleBlogChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a blog" />
-              </SelectTrigger>
-              <SelectContent>
-                {me.sites.map((site) => (
-                  <SelectItem key={site.id} value={site.siteKey}>
-                    {site.name || "Unnamed blog"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {me.sites.length === 1 ? (
+              <p className="text-sm font-medium text-[#0a0a0a] py-2">
+                {effectiveSite?.name || "Unnamed blog"}
+              </p>
+            ) : (
+              <Select value={effectiveSiteKey ?? undefined} onValueChange={handleBlogChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a blog" />
+                </SelectTrigger>
+                <SelectContent>
+                  {me.sites.map((site) => (
+                    <SelectItem key={site.id} value={site.siteKey}>
+                      {site.name || "Unnamed blog"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
+              <button
+                type="button"
+                onClick={() => setSelectedLevel("collection")}
+                className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                  selectedLevel === "collection" ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                }`}
+              >
+                Collection
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedLevel("post")}
+                className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                  selectedLevel === "post" ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                }`}
+              >
+                Post
+              </button>
+            </div>
           </div>
           {effectiveSiteKey && (
             <Dialog open={installationModalOpen} onOpenChange={setInstallationModalOpen}>
@@ -613,11 +703,11 @@ export default function Configure() {
                     </p>
                   )}
                   {(() => {
-                    const base = typeof window !== "undefined" ? window.location.origin : "";
+                    const apiBase = typeof window !== "undefined" ? window.location.origin : "";
                     const snippet = `<script
-  src="${base}/loader.js"
+  src="${LOADER_URL}"
   data-site-key="${effectiveSiteKey}"
-  data-api-base="${base}"
+  data-api-base="${apiBase}"
 ></script>`;
                     return (
                       <div className="space-y-2">
@@ -632,7 +722,6 @@ export default function Configure() {
                             setCopiedSiteKey(effectiveSiteKey);
                             toast.success("Code copied to clipboard");
                             setTimeout(() => setCopiedSiteKey(null), 2000);
-                            setInstallationModalOpen(false);
                           }}
                         >
                           <Copy className="h-3.5 w-3.5 mr-1.5" />
@@ -663,8 +752,8 @@ export default function Configure() {
                       <div className="flex items-center gap-1">
                         <Switch
                           id="show-date"
-                          checked={config.showDate}
-                          onCheckedChange={(v) => updateConfig("showDate", v)}
+                          checked={effectiveConfig.showDate}
+                          onCheckedChange={(v) => updateLevelConfigPath("showDate", v)}
                         />
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
@@ -675,28 +764,29 @@ export default function Configure() {
                       <div className="flex items-center gap-1">
                         <Switch
                           id="show-reading-time"
-                          checked={config.showReadingTime}
-                          onCheckedChange={(v) => updateConfig("showReadingTime", v)}
+                          checked={effectiveConfig.showReadingTime}
+                          onCheckedChange={(v) => updateLevelConfigPath("showReadingTime", v)}
                         />
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
                     </div>
 
+                    {selectedLevel === "post" && (
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Progress Bar</span>
                         <div className="flex items-center gap-1">
                           <Switch
-                            checked={config.progressBar.show}
+                            checked={(effectiveConfig as PostLevelConfig).progressBar.show}
                             onCheckedChange={(v) => {
-                              updateConfig("progressBar.show", v);
+                              updateLevelConfigPath("progressBar.show", v);
                               setSectionExpanded((p) => ({ ...p, progressBar: v }));
                             }}
                           />
                           <button
                             type="button"
-                            onClick={() => config.progressBar.show && setSectionExpanded((p) => ({ ...p, progressBar: !p.progressBar }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.progressBar.show ? "invisible pointer-events-none" : ""}`}
+                            onClick={() => (effectiveConfig as PostLevelConfig).progressBar.show && setSectionExpanded((p) => ({ ...p, progressBar: !p.progressBar }))}
+                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!(effectiveConfig as PostLevelConfig).progressBar.show ? "invisible pointer-events-none" : ""}`}
                             aria-label={sectionExpanded.progressBar ? "Collapse" : "Expand"}
                           >
                             {sectionExpanded.progressBar ? (
@@ -707,15 +797,15 @@ export default function Configure() {
                           </button>
                         </div>
                       </div>
-                      <Collapsible open={config.progressBar.show && sectionExpanded.progressBar}>
+                      <Collapsible open={(effectiveConfig as PostLevelConfig).progressBar.show && sectionExpanded.progressBar}>
                         <CollapsibleContent>
                         <div className="pb-4 space-y-4">
                         <div className="space-y-4">
                           <div className="space-y-2">
                             <Label className="text-xs text-[#6b6b6b]">Position</Label>
                             <Select
-                              value={config.progressBar.position}
-                              onValueChange={(v) => updateConfig("progressBar.position", v)}
+                              value={(effectiveConfig as PostLevelConfig).progressBar.position}
+                              onValueChange={(v) => updateLevelConfigPath("progressBar.position", v)}
                             >
                               <SelectTrigger>
                                 <SelectValue />
@@ -730,15 +820,15 @@ export default function Configure() {
                             <Label className="text-xs text-[#6b6b6b]">Thickness</Label>
                             <div className="flex items-center gap-3">
                               <Slider
-                                value={[config.progressBar.thickness]}
-                                onValueChange={([v]) => updateConfig("progressBar.thickness", v ?? 6)}
+                                value={[(effectiveConfig as PostLevelConfig).progressBar.thickness]}
+                                onValueChange={([v]) => updateLevelConfigPath("progressBar.thickness", v ?? 6)}
                                 min={2}
                                 max={12}
                                 step={1}
                                 className="flex-1"
                               />
                               <span className="text-xs text-[#6b6b6b] w-8 shrink-0">
-                                {config.progressBar.thickness}px
+                                {(effectiveConfig as PostLevelConfig).progressBar.thickness}px
                               </span>
                             </div>
                           </div>
@@ -747,13 +837,13 @@ export default function Configure() {
                             <div className="flex items-center gap-2">
                               <input
                                 type="color"
-                                value={config.progressBar.color}
-                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
+                                value={(effectiveConfig as PostLevelConfig).progressBar.color}
+                                onChange={(e) => updateLevelConfigPath("progressBar.color", e.target.value)}
                                 className="h-9 w-14 cursor-pointer rounded border border-[#e5e4e0] bg-white p-0"
                               />
                               <Input
-                                value={config.progressBar.color}
-                                onChange={(e) => updateConfig("progressBar.color", e.target.value)}
+                                value={(effectiveConfig as PostLevelConfig).progressBar.color}
+                                onChange={(e) => updateLevelConfigPath("progressBar.color", e.target.value)}
                                 className="font-mono text-sm h-9 w-24"
                                 placeholder="#5B4FE8"
                               />
@@ -764,6 +854,7 @@ export default function Configure() {
                       </CollapsibleContent>
                     </Collapsible>
                     </div>
+                    )}
 
                     {/* Publishing & Management */}
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
@@ -850,16 +941,16 @@ export default function Configure() {
                           <div className="flex items-center gap-1">
                             <Switch
                               id="show-author"
-                              checked={config.showAuthor}
+                              checked={effectiveConfig.showAuthor}
                               onCheckedChange={(v) => {
-                                updateConfig("showAuthor", v);
+                                updateLevelConfigPath("showAuthor", v);
                                 setSectionExpanded((p) => ({ ...p, showAuthor: v }));
                               }}
                             />
                             <button
                               type="button"
-                              onClick={() => config.showAuthor && setSectionExpanded((p) => ({ ...p, showAuthor: !p.showAuthor }))}
-                              className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.showAuthor ? "invisible pointer-events-none" : ""}`}
+                              onClick={() => effectiveConfig.showAuthor && setSectionExpanded((p) => ({ ...p, showAuthor: !p.showAuthor }))}
+                              className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!effectiveConfig.showAuthor ? "invisible pointer-events-none" : ""}`}
                               aria-label={sectionExpanded.showAuthor ? "Collapse" : "Expand"}
                             >
                               {sectionExpanded.showAuthor ? (
@@ -870,7 +961,7 @@ export default function Configure() {
                             </button>
                           </div>
                         </div>
-                        <Collapsible open={config.showAuthor && sectionExpanded.showAuthor}>
+                        <Collapsible open={effectiveConfig.showAuthor && sectionExpanded.showAuthor}>
                           <CollapsibleContent>
                             <div className="pb-4 space-y-2">
                                 <Label className="text-xs text-[#6b6b6b]">Default Author(s)</Label>
@@ -946,16 +1037,16 @@ export default function Configure() {
                         <span className="font-medium">Featured Image</span>
                         <div className="flex items-center gap-1">
                           <Switch
-                            checked={config.featuredImage.show}
+                            checked={effectiveConfig.featuredImage.show}
                             onCheckedChange={(v) => {
-                              updateConfig("featuredImage.show", v);
+                              updateLevelConfigPath("featuredImage.show", v);
                               setSectionExpanded((p) => ({ ...p, featuredImage: v }));
                             }}
                           />
                           <button
                             type="button"
-                            onClick={() => config.featuredImage.show && setSectionExpanded((p) => ({ ...p, featuredImage: !p.featuredImage }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.featuredImage.show ? "invisible pointer-events-none" : ""}`}
+                            onClick={() => effectiveConfig.featuredImage.show && setSectionExpanded((p) => ({ ...p, featuredImage: !p.featuredImage }))}
+                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!effectiveConfig.featuredImage.show ? "invisible pointer-events-none" : ""}`}
                             aria-label={sectionExpanded.featuredImage ? "Collapse" : "Expand"}
                           >
                             {sectionExpanded.featuredImage ? (
@@ -966,14 +1057,14 @@ export default function Configure() {
                           </button>
                         </div>
                       </div>
-                      <Collapsible open={config.featuredImage.show && sectionExpanded.featuredImage}>
+                      <Collapsible open={effectiveConfig.featuredImage.show && sectionExpanded.featuredImage}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-4">
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Layout mode</Label>
                               <Select
-                                value={config.featuredImage.layoutMode}
-                                onValueChange={(v) => updateConfig("featuredImage.layoutMode", v)}
+                                value={effectiveConfig.featuredImage.layoutMode}
+                                onValueChange={(v) => updateLevelConfigPath("featuredImage.layoutMode", v)}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -985,20 +1076,20 @@ export default function Configure() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            {(config.featuredImage.layoutMode === "leftJustified" || config.featuredImage.layoutMode === "rightJustified") && (
+                            {(effectiveConfig.featuredImage.layoutMode === "leftJustified" || effectiveConfig.featuredImage.layoutMode === "rightJustified") && (
                               <div className="space-y-2">
                                 <Label className="text-xs text-[#6b6b6b]">Image width</Label>
                                 <div className="flex items-center gap-3">
                                   <Slider
-                                    value={[config.featuredImage.imageWidthPercent]}
-                                    onValueChange={([v]) => updateConfig("featuredImage.imageWidthPercent", v ?? 40)}
+                                    value={[effectiveConfig.featuredImage.imageWidthPercent]}
+                                    onValueChange={([v]) => updateLevelConfigPath("featuredImage.imageWidthPercent", v ?? 40)}
                                     min={25}
                                     max={60}
                                     step={5}
                                     className="flex-1"
                                   />
                                   <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
-                                    {config.featuredImage.imageWidthPercent}%
+                                    {effectiveConfig.featuredImage.imageWidthPercent}%
                                   </span>
                                 </div>
                               </div>
@@ -1006,8 +1097,8 @@ export default function Configure() {
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
                               <Select
-                                value={config.featuredImage.aspectBehavior}
-                                onValueChange={(v) => updateConfig("featuredImage.aspectBehavior", v)}
+                                value={effectiveConfig.featuredImage.aspectBehavior}
+                                onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -1017,10 +1108,10 @@ export default function Configure() {
                                   <SelectItem value="cropped">Cropped</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {config.featuredImage.aspectBehavior === "cropped" && (
+                              {effectiveConfig.featuredImage.aspectBehavior === "cropped" && (
                                 <Select
-                                  value={config.featuredImage.aspectRatio}
-                                  onValueChange={(v) => updateConfig("featuredImage.aspectRatio", v)}
+                                  value={effectiveConfig.featuredImage.aspectRatio}
+                                  onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
                                 >
                                   <SelectTrigger className="mt-1">
                                     <SelectValue />
@@ -1036,8 +1127,8 @@ export default function Configure() {
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
                               <Select
-                                value={config.featuredImage.roundedCorners}
-                                onValueChange={(v) => updateConfig("featuredImage.roundedCorners", v)}
+                                value={effectiveConfig.featuredImage.roundedCorners}
+                                onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -1052,22 +1143,22 @@ export default function Configure() {
                             <div className="flex items-center justify-between">
                               <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
                               <Switch
-                                checked={config.featuredImage.shadow}
-                                onCheckedChange={(v) => updateConfig("featuredImage.shadow", v)}
+                                checked={effectiveConfig.featuredImage.shadow}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
                               />
                             </div>
                             <div className="flex items-center justify-between">
                               <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
                               <Switch
-                                checked={config.featuredImage.showCaption}
-                                onCheckedChange={(v) => updateConfig("featuredImage.showCaption", v)}
+                                checked={effectiveConfig.featuredImage.showCaption}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
                               />
                             </div>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
                               <Select
-                                value={config.featuredImage.verticalSpacing}
-                                onValueChange={(v) => updateConfig("featuredImage.verticalSpacing", v)}
+                                value={effectiveConfig.featuredImage.verticalSpacing}
+                                onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -1085,27 +1176,29 @@ export default function Configure() {
                     </div>
 
                     {(() => {
-                      const MODULE_LABELS: Record<SidebarModuleType, string> = {
-                        recentPosts: "Recent Posts",
-                        relevantPosts: "Relevant Posts",
+                      const SIDEBAR_MODULE_LABELS: Record<string, string> = {
+                        filterByCategory: "Filter by Category",
+                        filterByTag: "Filter by Tag",
+                        searchPosts: "Search Posts",
                         tableOfContents: "Table of Contents",
                       };
+                      const SIDEBAR_MODULES = selectedLevel === "collection" ? SIDEBAR_COLLECTION_MODULES : SIDEBAR_POST_MODULES;
                       const SidebarSection = ({ side }: { side: "left" | "right" }) => {
-                        const cfg = side === "left" ? config.leftSidebar : config.rightSidebar;
+                        const cfg = side === "left" ? effectiveConfig.leftSidebar : effectiveConfig.rightSidebar;
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
-                        const pathPrefix = side === "left" ? "leftSidebar" : "rightSidebar";
+                        const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
                         const moveModule = (fromIdx: number, toIdx: number) => {
                           const arr = [...cfg.modules];
                           const [removed] = arr.splice(fromIdx, 1);
                           arr.splice(toIdx, 0, removed);
-                          updateConfig(`${pathPrefix}.modules`, arr);
+                          updateLevelConfigPath(`${subPath}.modules`, arr);
                         };
-                        const addModule = (m: SidebarModuleType) => {
-                          if (!cfg.modules.includes(m)) updateConfig(`${pathPrefix}.modules`, [...cfg.modules, m]);
+                        const addModule = (m: string) => {
+                          if (!cfg.modules.includes(m)) updateLevelConfigPath(`${subPath}.modules`, [...cfg.modules, m]);
                         };
                         const removeModule = (idx: number) => {
-                          updateConfig(`${pathPrefix}.modules`, cfg.modules.filter((_, i) => i !== idx));
+                          updateLevelConfigPath(`${subPath}.modules`, cfg.modules.filter((_, i) => i !== idx));
                         };
                         const handleDragOver = (e: React.DragEvent) => {
                           e.preventDefault();
@@ -1128,7 +1221,7 @@ export default function Configure() {
                                 <Switch
                                   checked={cfg.show}
                                   onCheckedChange={(v) => {
-                                    updateConfig(`${pathPrefix}.show`, v);
+                                    updateLevelConfigPath(`${subPath}.show`, v);
                                     setExpanded(v);
                                   }}
                                 />
@@ -1150,7 +1243,7 @@ export default function Configure() {
                                     <div className="flex items-center gap-3">
                                       <Slider
                                         value={[cfg.width]}
-                                        onValueChange={([v]) => updateConfig(`${pathPrefix}.width`, v ?? 240)}
+                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
                                         min={160}
                                         max={400}
                                         step={20}
@@ -1165,28 +1258,28 @@ export default function Configure() {
                                       key={cfg.modules.join(",")}
                                       value=""
                                       onValueChange={(v) => {
-                                        if (v && SIDEBAR_MODULE_TYPES.includes(v as SidebarModuleType)) {
-                                          addModule(v as SidebarModuleType);
+                                        if (v && SIDEBAR_MODULES.includes(v as never)) {
+                                          addModule(v);
                                         }
                                       }}
                                     >
                                       <SelectTrigger
                                         className="h-8 w-full justify-start text-xs focus:bg-[#5B4FE8]/10 focus:text-[#5B4FE8]"
-                                        disabled={cfg.modules.length >= SIDEBAR_MODULE_TYPES.length}
+                                        disabled={cfg.modules.length >= SIDEBAR_MODULES.length}
                                       >
                                         <Plus className="h-3 w-3 shrink-0" />
                                         <SelectValue
                                           placeholder={
-                                            cfg.modules.length >= SIDEBAR_MODULE_TYPES.length
+                                            cfg.modules.length >= SIDEBAR_MODULES.length
                                               ? "All modules added"
                                               : "Add Module"
                                           }
                                         />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {SIDEBAR_MODULE_TYPES.filter((m) => !cfg.modules.includes(m)).map((m) => (
+                                        {SIDEBAR_MODULES.filter((m) => !cfg.modules.includes(m)).map((m) => (
                                           <SelectItem key={m} value={m}>
-                                            {MODULE_LABELS[m]}
+                                            {SIDEBAR_MODULE_LABELS[m]}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
@@ -1203,7 +1296,7 @@ export default function Configure() {
                                           className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
                                         >
                                           <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
-                                          <span className="flex-1 min-w-0 truncate">{MODULE_LABELS[m]}</span>
+                                          <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m]}</span>
                                           <button
                                             type="button"
                                             onClick={() => removeModule(idx)}
@@ -1235,88 +1328,88 @@ export default function Configure() {
                               <span className="font-medium">Header Content</span>
                               <div className="flex items-center gap-1">
                                 <Switch
-                                  checked={config.headerContent.show}
+                                  checked={effectiveConfig.headerContent.show}
                                   onCheckedChange={(v) => {
-                                    updateConfig("headerContent.show", v);
+                                    updateLevelConfigPath("headerContent.show", v);
                                     setSectionExpanded((p) => ({ ...p, headerContent: v }));
                                   }}
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => config.headerContent.show && setSectionExpanded((p) => ({ ...p, headerContent: !p.headerContent }))}
-                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.headerContent.show ? "invisible pointer-events-none" : ""}`}
+                                  onClick={() => effectiveConfig.headerContent.show && setSectionExpanded((p) => ({ ...p, headerContent: !p.headerContent }))}
+                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!effectiveConfig.headerContent.show ? "invisible pointer-events-none" : ""}`}
                                   aria-label={sectionExpanded.headerContent ? "Collapse" : "Expand"}
                                 >
                                   {sectionExpanded.headerContent ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 </button>
                               </div>
                             </div>
-                            <Collapsible open={config.headerContent.show && sectionExpanded.headerContent}>
+                            <Collapsible open={effectiveConfig.headerContent.show && sectionExpanded.headerContent}>
                               <CollapsibleContent>
                                 <div className="pb-4 space-y-3">
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Height</Label>
                                     <div className="flex items-center gap-3">
                                       <Slider
-                                        value={[config.headerContent.height]}
-                                        onValueChange={([v]) => updateConfig("headerContent.height", v ?? 48)}
+                                        value={[effectiveConfig.headerContent.height]}
+                                        onValueChange={([v]) => updateLevelConfigPath("headerContent.height", v ?? 48)}
                                         min={32}
                                         max={120}
                                         step={8}
                                         className="flex-1"
                                       />
-                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{config.headerContent.height}px</span>
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.headerContent.height}px</span>
                                     </div>
                                   </div>
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Modules</Label>
                                     <Select
-                                      key={config.headerContent.modules.join(",")}
+                                      key={effectiveConfig.headerContent.modules.join(",")}
                                       value=""
                                       onValueChange={(v) => {
-                                        if (v && HEADER_CONTENT_MODULE_TYPES.includes(v as HeaderContentModuleType)) {
-                                          const addModule = (m: HeaderContentModuleType) => {
-                                            if (!config.headerContent.modules.includes(m)) {
-                                              updateConfig("headerContent.modules", [...config.headerContent.modules, m]);
+                                        if (v && (selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).includes(v as never)) {
+                                          const addModule = (m: string) => {
+                                            if (!effectiveConfig.headerContent.modules.includes(m)) {
+                                              updateLevelConfigPath("headerContent.modules", [...effectiveConfig.headerContent.modules, m]);
                                             }
                                           };
-                                          addModule(v as HeaderContentModuleType);
+                                          addModule(v);
                                         }
                                       }}
                                     >
                                       <SelectTrigger
                                         className="h-8 w-full justify-start text-xs focus:bg-[#5B4FE8]/10 focus:text-[#5B4FE8]"
-                                        disabled={config.headerContent.modules.length >= HEADER_CONTENT_MODULE_TYPES.length}
+                                        disabled={effectiveConfig.headerContent.modules.length >= (selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).length}
                                       >
                                         <Plus className="h-3 w-3 shrink-0" />
                                         <SelectValue
                                           placeholder={
-                                            config.headerContent.modules.length >= HEADER_CONTENT_MODULE_TYPES.length
+                                            effectiveConfig.headerContent.modules.length >= (selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).length
                                               ? "All modules added"
                                               : "Add Module"
                                           }
                                         />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {HEADER_CONTENT_MODULE_TYPES.filter((m) => !config.headerContent.modules.includes(m)).map((m) => (
+                                        {(selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).filter((m) => !effectiveConfig.headerContent.modules.includes(m)).map((m) => (
                                           <SelectItem key={m} value={m}>
-                                            {m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "postSearch" ? "Post Search" : "Filter by Tags & Categories"}
+                                            {m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "filterByCategory" ? "Filter by Category" : m === "filterByTag" ? "Filter by Tag" : m === "searchPosts" ? "Search Posts" : m}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
                                     <div className="space-y-1.5">
-                                      {config.headerContent.modules.map((m, idx) => {
+                                      {effectiveConfig.headerContent.modules.map((m, idx) => {
                                         const moveModule = (fromIdx: number, toIdx: number) => {
-                                          const arr = [...config.headerContent.modules];
+                                          const arr = [...effectiveConfig.headerContent.modules];
                                           const [removed] = arr.splice(fromIdx, 1);
                                           arr.splice(toIdx, 0, removed);
-                                          updateConfig("headerContent.modules", arr);
+                                          updateLevelConfigPath("headerContent.modules", arr);
                                         };
                                         const removeModule = (i: number) => {
-                                          updateConfig("headerContent.modules", config.headerContent.modules.filter((_, j) => j !== i));
+                                          updateLevelConfigPath("headerContent.modules", effectiveConfig.headerContent.modules.filter((_, j) => j !== i));
                                         };
-                                        const label = m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "postSearch" ? "Post Search" : "Filter by Tags & Categories";
+                                        const label = m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "searchPosts" ? "Search Posts" : m === "filterByCategory" ? "Filter by Category" : m === "filterByTag" ? "Filter by Tag" : "Filter by Tags & Categories";
                                         return (
                                           <div
                                             key={`${m}-${idx}`}
@@ -1361,38 +1454,35 @@ export default function Configure() {
                               <span className="font-medium">Social Media Links</span>
                               <div className="flex items-center gap-1">
                                 <Switch
-                                  checked={config.socialMediaLinks.show}
+                                  checked={effectiveConfig.socialMediaLinks.show}
                                   onCheckedChange={(v) => {
-                                    setConfig((prev) => ({
-                                      ...prev,
-                                      socialMediaLinks: {
-                                        show: v,
-                                        platforms: v ? [...SOCIAL_PLATFORMS] : prev.socialMediaLinks.platforms,
-                                      },
-                                    }));
+                                    updateLevelConfigPath("socialMediaLinks", {
+                                      show: v,
+                                      platforms: v ? [...SOCIAL_PLATFORMS] : effectiveConfig.socialMediaLinks.platforms,
+                                    });
                                     setSectionExpanded((p) => ({ ...p, socialMediaLinks: v }));
                                   }}
                                 />
                                 <button
                                   type="button"
-                                  onClick={() => config.socialMediaLinks.show && setSectionExpanded((p) => ({ ...p, socialMediaLinks: !p.socialMediaLinks }))}
-                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!config.socialMediaLinks.show ? "invisible pointer-events-none" : ""}`}
+                                  onClick={() => effectiveConfig.socialMediaLinks.show && setSectionExpanded((p) => ({ ...p, socialMediaLinks: !p.socialMediaLinks }))}
+                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!effectiveConfig.socialMediaLinks.show ? "invisible pointer-events-none" : ""}`}
                                   aria-label={sectionExpanded.socialMediaLinks ? "Collapse" : "Expand"}
                                 >
                                   {sectionExpanded.socialMediaLinks ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 </button>
                               </div>
                             </div>
-                            <Collapsible open={config.socialMediaLinks.show && sectionExpanded.socialMediaLinks}>
+                            <Collapsible open={effectiveConfig.socialMediaLinks.show && sectionExpanded.socialMediaLinks}>
                               <CollapsibleContent>
                                 <div className="pb-4 space-y-3">
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Platforms</Label>
                                     <label className="flex items-center gap-2 cursor-pointer">
                                       <Checkbox
-                                        checked={config.socialMediaLinks.platforms.length === SOCIAL_PLATFORMS.length}
+                                        checked={effectiveConfig.socialMediaLinks.platforms.length === SOCIAL_PLATFORMS.length}
                                         onCheckedChange={(v) => {
-                                          updateConfig("socialMediaLinks.platforms", v ? [...SOCIAL_PLATFORMS] : []);
+                                          updateLevelConfigPath("socialMediaLinks.platforms", v ? [...SOCIAL_PLATFORMS] : []);
                                         }}
                                       />
                                       <span className="text-sm">All</span>
@@ -1400,12 +1490,12 @@ export default function Configure() {
                                     {SOCIAL_PLATFORMS.map((p) => (
                                       <label key={p} className="flex items-center gap-2 cursor-pointer">
                                         <Checkbox
-                                          checked={config.socialMediaLinks.platforms.includes(p)}
+                                          checked={effectiveConfig.socialMediaLinks.platforms.includes(p)}
                                           onCheckedChange={(v) => {
                                             const next = v
-                                              ? [...config.socialMediaLinks.platforms, p]
-                                              : config.socialMediaLinks.platforms.filter((x) => x !== p);
-                                            updateConfig("socialMediaLinks.platforms", next);
+                                              ? [...effectiveConfig.socialMediaLinks.platforms, p]
+                                              : effectiveConfig.socialMediaLinks.platforms.filter((x) => x !== p);
+                                            updateLevelConfigPath("socialMediaLinks.platforms", next);
                                           }}
                                         />
                                         <span className="text-sm">
@@ -1596,7 +1686,6 @@ export default function Configure() {
                       </p>
                       <div className="flex-1 min-h-0 overflow-y-auto">
                         <BlogPreviewRenderer
-                          key={`${effectiveSite.siteKey}-${config.progressBar.thickness}-${config.progressBar.color}`}
                           siteKey={effectiveSite.siteKey}
                           config={rendererConfig}
                           className="min-h-full"
@@ -1610,6 +1699,11 @@ export default function Configure() {
                     key={effectiveSite.siteKey}
                     blogUrl={previewUrl}
                     config={rendererConfig}
+                    selectPostIndex={
+                      selectedLevel === "post" && selectedPostIndex === -1 && blogItems.length > 0
+                        ? 0
+                        : undefined
+                    }
                     className="min-h-full"
                   />
                 );

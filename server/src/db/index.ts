@@ -68,6 +68,8 @@ export interface SiteConfigData {
   headerContent?: HeaderContentConfig
   socialMediaLinks?: { show?: boolean; platforms?: string[] }
   featuredImage?: FeaturedImageConfig
+  collectionConfig?: object
+  postConfig?: object
 }
 
 export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
@@ -113,6 +115,8 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         headerContent: headerContent as object,
         socialMediaLinks: socialMediaLinks as object,
         featuredImage: featuredImage as object,
+        collectionConfig: (data.collectionConfig && typeof data.collectionConfig === 'object') ? data.collectionConfig as object : undefined,
+        postConfig: (data.postConfig && typeof data.postConfig === 'object') ? data.postConfig as object : undefined,
         isActive: true
       }
     })

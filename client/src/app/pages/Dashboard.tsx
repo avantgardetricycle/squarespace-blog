@@ -245,6 +245,14 @@ export default function Dashboard() {
                     <strong>{justCreatedSite.name || "Your blog"}</strong> has been added. Copy the code below and add it to your site.
                   </span>
                 </div>
+                {justCreatedSite.verificationStatus === "needs_attention" && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800 text-sm min-w-0">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+                    <span className="min-w-0 break-words">
+                      We couldn&apos;t reach your blog at the URL you provided. Make sure you entered the full URL (e.g. <code className="bg-amber-100 px-1 rounded">https://yoursite.squarespace.com/blog</code>). You can update the URL later in settings.
+                    </span>
+                  </div>
+                )}
                 <div className="space-y-2 min-w-0">
                   <p className="text-sm text-[#6b6b6b] break-words">
                     Paste this into your Squarespace site&apos;s{" "}
@@ -329,7 +337,7 @@ export default function Dashboard() {
                     <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-[#6b6b6b]" />
                     <Input
                       id="blog-url"
-                      placeholder="https://yoursite.squarespace.com/blog"
+                      placeholder="yoursite.squarespace.com/blog"
                       value={newBlogUrl}
                       onChange={(e) => setNewBlogUrl(e.target.value)}
                       className="pl-9"

@@ -19,6 +19,7 @@ export interface DashboardMe {
     blogPath: string | null
     hasBlogPassword?: boolean
     status: string
+    verificationStatus: 'pending' | 'verified' | 'needs_attention'
     createdAt: string
   }>
   canCreateSite: boolean
@@ -48,6 +49,7 @@ export interface CreatedSite {
   url: string | null
   blogPath: string | null
   status: string
+  verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
 }
 

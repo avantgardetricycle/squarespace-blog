@@ -2,45 +2,13 @@ import { useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
 
-interface SidebarConfig {
-  show?: boolean;
-  modules?: string[];
-  width?: number;
-}
-
-interface HeaderContentConfig {
-  show?: boolean;
-  modules?: string[];
-  height?: number;
-}
-
-interface FeaturedImageConfig {
-  show?: boolean;
-  layoutMode?: string;
-  aspectBehavior?: string;
-  aspectRatio?: string;
-  roundedCorners?: string;
-  shadow?: boolean;
-  showCaption?: boolean;
-  verticalSpacing?: string;
-}
-
+/** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
-  showDate?: boolean;
-  showAuthor?: boolean;
-  showReadingTime?: boolean;
   defaultAuthorIds?: string[];
   postAuthorOverrides?: Record<string, string[]>;
   authorMap?: Record<string, string>;
-  showProgressBar?: boolean;
-  progressBarPosition?: string;
-  progressBarThickness?: number;
-  progressBarColor?: string;
-  leftSidebar?: SidebarConfig;
-  rightSidebar?: SidebarConfig;
-  headerContent?: HeaderContentConfig;
-  socialMediaLinks?: { show?: boolean; platforms?: string[] };
-  featuredImage?: FeaturedImageConfig;
+  collectionConfig?: Record<string, unknown>;
+  postConfig?: Record<string, unknown>;
   recentPostsCount?: number;
 }
 
@@ -48,6 +16,18 @@ interface BlogPreviewRendererProps {
   siteKey: string;
   config?: RendererConfigOverrides | null;
   className?: string;
+}
+
+function buildRendererConfig(overrides: RendererConfigOverrides | null | undefined) {
+  return {
+    previewMode: true,
+    defaultAuthorIds: overrides?.defaultAuthorIds ?? [],
+    postAuthorOverrides: overrides?.postAuthorOverrides ?? {},
+    authorMap: overrides?.authorMap ?? {},
+    collectionConfig: overrides?.collectionConfig ?? undefined,
+    postConfig: overrides?.postConfig ?? undefined,
+    recentPostsCount: overrides?.recentPostsCount ?? 5,
+  };
 }
 
 /**
@@ -61,9 +41,12 @@ export default function BlogPreviewRenderer({
   className = "",
 }: BlogPreviewRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const configRef = useRef(configOverrides);
+  configRef.current = configOverrides;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Init renderer when siteKey/container ready
   useEffect(() => {
     if (!siteKey || !containerRef.current) return;
 
@@ -75,35 +58,9 @@ export default function BlogPreviewRenderer({
       if (!root || !window.BlogOverlayRenderer) return;
 
       const config = {
-        previewMode: true,
+        ...buildRendererConfig(configRef.current),
         rootEl: root,
         previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}`,
-        showAuthor: configOverrides?.showAuthor ?? false,
-        showReadingTime: configOverrides?.showReadingTime ?? false,
-        defaultAuthorIds: configOverrides?.defaultAuthorIds ?? [],
-        postAuthorOverrides: configOverrides?.postAuthorOverrides ?? {},
-        authorMap: configOverrides?.authorMap ?? {},
-        showDate: configOverrides?.showDate ?? true,
-        showProgressBar: configOverrides?.showProgressBar ?? false,
-        progressBarPosition: configOverrides?.progressBarPosition ?? "top",
-        progressBarThickness: configOverrides?.progressBarThickness ?? 6,
-        progressBarColor: configOverrides?.progressBarColor ?? "#5B4FE8",
-        leftSidebar: configOverrides?.leftSidebar ?? { show: false, modules: [], width: 240 },
-        rightSidebar: configOverrides?.rightSidebar ?? { show: false, modules: [], width: 240 },
-        headerContent: configOverrides?.headerContent ?? { show: false, modules: [], height: 48 },
-        socialMediaLinks: configOverrides?.socialMediaLinks ?? { show: false, platforms: [] },
-        featuredImage: configOverrides?.featuredImage ?? {
-          show: true,
-          layoutMode: "leftJustified",
-          imageWidthPercent: 40,
-          aspectBehavior: "original",
-          aspectRatio: "16:9",
-          roundedCorners: "off",
-          shadow: false,
-          showCaption: true,
-          verticalSpacing: "normal",
-        },
-        recentPostsCount: configOverrides?.recentPostsCount ?? 5,
       };
 
       try {
@@ -139,7 +96,16 @@ export default function BlogPreviewRenderer({
         root.querySelector("#blog-overlay-progress")?.remove();
       }
     };
-  }, [siteKey, configOverrides]);
+  }, [siteKey]);
+
+  // Live preview: push config updates to renderer without full re-init
+  useEffect(() => {
+    if (!window.BlogOverlayRenderer?.updateConfig || !configOverrides) return;
+    // Only push updates after renderer has loaded items (avoids clearing content during initial fetch)
+    if (!window.BlogOverlayRenderer.items?.length) return;
+    const config = buildRendererConfig(configOverrides);
+    window.BlogOverlayRenderer.updateConfig(config);
+  }, [configOverrides]);
 
   return (
     <div className={`relative w-full min-h-[400px] ${className}`}>

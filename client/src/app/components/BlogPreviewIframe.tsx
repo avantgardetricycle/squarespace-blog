@@ -20,11 +20,14 @@ export interface RendererConfig {
 interface BlogPreviewIframeProps {
   blogUrl: string;
   config: RendererConfig;
+  /** When set, tells the iframe to switch to single-post view for this index (e.g. when editing post-level config) */
+  selectPostIndex?: number;
   className?: string;
 }
 
 const MESSAGE_TYPE_READY = "BETTERBLOG_PREVIEW_READY";
 const MESSAGE_TYPE_CONFIG = "BETTERBLOG_PREVIEW_CONFIG";
+const MESSAGE_TYPE_SELECT_POST = "BETTERBLOG_PREVIEW_SELECT_POST";
 
 /**
  * Returns true if the URL is a Squarespace subdomain (*.squarespace.com).
@@ -71,56 +74,75 @@ export function buildBlogPreviewUrl(
 export default function BlogPreviewIframe({
   blogUrl,
   config,
+  selectPostIndex,
   className = "",
 }: BlogPreviewIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
 
+  const getTargetOrigin = () => {
+    try {
+      return new URL(blogUrl).origin;
+    } catch {
+      return "*";
+    }
+  };
+
+  // Listen for READY from iframe and send config
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== MESSAGE_TYPE_READY) return;
+      const targetOrigin = getTargetOrigin();
+      if (targetOrigin !== "*" && event.origin !== targetOrigin) return;
+
+      const iframe = iframeRef.current;
+      if (!iframe?.contentWindow) return;
+      const latestConfig = configRef.current;
+      iframe.contentWindow.postMessage(
+        { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
+        "*"
+      );
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [blogUrl]);
+
+  // Tell iframe to switch to single-post view when selectPostIndex is set (e.g. user switched to Post config level)
+  useEffect(() => {
+    if (typeof selectPostIndex !== "number" || selectPostIndex < 0) return;
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    iframe.contentWindow.postMessage(
+      { type: MESSAGE_TYPE_SELECT_POST, postIndex: selectPostIndex },
+      "*"
+    );
+    iframe.contentWindow.postMessage(
+      { type: MESSAGE_TYPE_CONFIG, config: configRef.current },
+      "*"
+    );
+  }, [selectPostIndex, config]);
+
+  // Send config whenever it changes (iframe must be loaded)
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
 
-    const targetOrigin = (() => {
-      try {
-        return new URL(blogUrl).origin;
-      } catch {
-        return "*";
-      }
-    })();
-
-    const sendConfig = () => {
-      const latestConfig = configRef.current;
-      iframe.contentWindow?.postMessage(
-        { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
-        targetOrigin
-      );
-    };
-
-    const handleMessage = (event: MessageEvent) => {
-      if (
-        event.data?.type === MESSAGE_TYPE_READY &&
-        (targetOrigin === "*" || event.origin === targetOrigin)
-      ) {
-        sendConfig();
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    sendConfig();
-
-    return () => window.removeEventListener("message", handleMessage);
-  }, [blogUrl, config]);
+    const latestConfig = configRef.current;
+    iframe.contentWindow.postMessage(
+      { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
+      "*"
+    );
+  }, [config, blogUrl]);
 
   // Send config when iframe loads (renderer may not be ready yet, but READY will trigger another send)
   const handleIframeLoad = () => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     try {
-      const targetOrigin = new URL(blogUrl).origin;
       iframe.contentWindow.postMessage(
         { type: MESSAGE_TYPE_CONFIG, config: configRef.current },
-        targetOrigin
+        "*"
       );
     } catch {
       // ignore
