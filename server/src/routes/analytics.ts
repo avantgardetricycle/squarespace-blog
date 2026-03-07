@@ -61,7 +61,7 @@ router.post('/events', async (req: Request, res: Response) => {
       postId: e.postId ?? null,
       postIndex: e.postIndex ?? null,
       url: url ?? null,
-      payload: (e.payload && typeof e.payload === 'object') ? e.payload : null
+      payload: (e.payload && typeof e.payload === 'object') ? e.payload : {}
     }))
 
   if (rows.length === 0) {
