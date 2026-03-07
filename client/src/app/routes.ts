@@ -7,6 +7,7 @@ import Account from "./pages/Account";
 import Configure from "./pages/Configure";
 import Checkout from "./pages/Checkout";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
+import Analytics from "./pages/Analytics";
 import { getDashboardMe } from "@/api/auth";
 
 const protectedLoader = async () => {
@@ -59,6 +60,10 @@ export const router = createBrowserRouter([
       {
         path: "configure",
         Component: Configure,
+      },
+      {
+        path: "analytics",
+        Component: Analytics,
       },
     ],
   },

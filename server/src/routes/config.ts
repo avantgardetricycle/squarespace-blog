@@ -53,17 +53,58 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
 
   try {
-    const fetchRes = await fetch(urlWithPassword)
-    if (!fetchRes.ok) {
-      const isProtected = fetchRes.status === 401 || fetchRes.status === 403
-      const errMsg = isProtected
-        ? 'Blog may be password protected. Add your blog password in the settings below.'
-        : 'Failed to fetch blog from Squarespace'
-      res.status(502).json({ error: errMsg })
-      return
+    const allItems: unknown[] = []
+    let nextUrl: string | null = urlWithPassword
+    let firstJson: Record<string, unknown> | null = null
+    const maxPages = 50 // safety limit
+    let pageCount = 0
+
+    while (nextUrl && pageCount < maxPages) {
+      pageCount++
+      const fetchRes = await fetch(nextUrl)
+      if (!fetchRes.ok) {
+        const isProtected = fetchRes.status === 401 || fetchRes.status === 403
+        const errMsg = isProtected
+          ? 'Blog may be password protected. Add your blog password in the settings below.'
+          : 'Failed to fetch blog from Squarespace'
+        res.status(502).json({ error: errMsg })
+        return
+      }
+      const json = (await fetchRes.json()) as Record<string, unknown>
+      if (!firstJson) firstJson = json
+
+      const items = Array.isArray(json?.items) ? json.items : (json?.collection && typeof json.collection === 'object' && Array.isArray((json.collection as Record<string, unknown>).items) ? (json.collection as Record<string, unknown>).items : []) as unknown[]
+      for (const item of items) allItems.push(item)
+
+      const coll = json?.collection && typeof json.collection === 'object' ? json.collection as Record<string, unknown> : null
+      const nextPageUrl = (coll?.nextPageUrl ?? coll?.nextPage ?? json?.nextPageUrl ?? json?.nextPage) as string | undefined
+      if (nextPageUrl && typeof nextPageUrl === 'string' && nextPageUrl.startsWith('http')) {
+        nextUrl = appendPasswordToUrl(nextPageUrl, site.blogPassword)
+      } else if (nextPageUrl && typeof nextPageUrl === 'string' && nextPageUrl.startsWith('/')) {
+        try {
+          const base = new URL(urlWithPassword)
+          nextUrl = appendPasswordToUrl(base.origin + nextPageUrl, site.blogPassword)
+        } catch {
+          nextUrl = null
+        }
+      } else {
+        nextUrl = null
+      }
     }
-    const json = await fetchRes.json()
-    res.json(json)
+
+    if (firstJson) {
+      if (firstJson.collection && typeof firstJson.collection === 'object') {
+        (firstJson.collection as Record<string, unknown>).items = allItems
+        delete (firstJson.collection as Record<string, unknown>).nextPageUrl
+        delete (firstJson.collection as Record<string, unknown>).nextPage
+      }
+      firstJson.items = allItems
+      delete (firstJson as Record<string, unknown>).nextPageUrl
+      delete (firstJson as Record<string, unknown>).nextPage
+      res.json(firstJson)
+    } else {
+      res.json({ items: allItems })
+    }
   } catch (err) {
     console.error('Blog preview fetch error:', err)
     res.status(502).json({ error: 'Failed to fetch blog from Squarespace' })
@@ -241,15 +282,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const rendererUrl = `${baseUrl}/renderer.js`
 
     const ls = leftSidebar && typeof leftSidebar === 'object'
-      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)) }
+      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((leftSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (leftSidebar as { sticky?: boolean }).sticky !== false }
       : (tableOfContents.show && tableOfContents.position === 'left') || (recentPostsSidebar.show && recentPostsSidebar.position === 'left')
-        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'left' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'left' ? ['recentPosts'] : [])], width: 240 }
-        : { show: false, modules: [], width: 240 }
+        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'left' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'left' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: true }
+        : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true }
     const rs = rightSidebar && typeof rightSidebar === 'object'
-      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)) }
+      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((rightSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (rightSidebar as { sticky?: boolean }).sticky !== false }
       : (tableOfContents.show && tableOfContents.position === 'right') || (recentPostsSidebar.show && recentPostsSidebar.position === 'right')
-        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240 }
-        : { show: false, modules: [], width: 240 }
+        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: true }
+        : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true }
     const hc = headerContent && typeof headerContent === 'object'
       ? (() => {
           const modules = Array.isArray(headerContent.modules) ? headerContent.modules : [];
@@ -293,7 +334,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 
     const collectionConfig = (siteConfig as { collectionConfig?: object }).collectionConfig
     const postConfig = (siteConfig as { postConfig?: object }).postConfig
-    const cc = collectionConfig && typeof collectionConfig === 'object' ? collectionConfig : {
+    const ccBase = collectionConfig && typeof collectionConfig === 'object' ? collectionConfig : {
       showDate: siteConfig.showDate,
       showAuthor: siteConfig.showAuthor,
       showReadingTime: siteConfig.showReadingTime ?? false,
@@ -302,6 +343,13 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       headerContent: hc,
       socialMediaLinks: sm,
       featuredImage
+    }
+    const ccPagination = (ccBase as { pagination?: { show?: boolean; postsPerPage?: number } }).pagination
+    const cc = {
+      ...ccBase,
+      pagination: ccPagination && typeof ccPagination === 'object'
+        ? { show: ccPagination.show ?? false, postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10 }
+        : { show: false, postsPerPage: 10 }
     }
     const pc = postConfig && typeof postConfig === 'object' ? postConfig : {
       ...cc,
@@ -312,8 +360,26 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
       }
     }
+    // When postSort is "popularity", fetch post view counts from analytics for the renderer
+    let postViewCounts: Record<string, number> = {}
+    const ccPostSort = (cc as { postSort?: string }).postSort
+    if (ccPostSort === 'popularity') {
+      const since = new Date()
+      since.setDate(since.getDate() - 30)
+      const pageViews = await prisma.analyticsEvent.findMany({
+        where: { siteId: site.id, eventType: 'page_view', occurredAt: { gte: since }, postId: { not: null } },
+        select: { postId: true }
+      })
+      for (const e of pageViews) {
+        if (e.postId) {
+          postViewCounts[e.postId] = (postViewCounts[e.postId] ?? 0) + 1
+        }
+      }
+    }
+
     const configData = {
       siteKey,
+      siteId: site.id,
       blogPath: site.blogPath ?? null,
       rendererUrl,
       defaultAuthorIds,
@@ -322,7 +388,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       collectionConfig: cc,
       postConfig: pc,
       recentPostsCount: 5,
-      baseUrl
+      baseUrl,
+      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
     }
 
     console.log(`[config] GET ${siteKey} ok (${reqId})`)

@@ -1,11 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -25,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
   Eye,
   TrendingUp,
@@ -39,221 +36,122 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
+import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
-// Mock data for analytics
-const pageViewsData = [
-  { date: "Mar 1", views: 2400, uniqueVisitors: 1800 },
-  { date: "Mar 3", views: 3200, uniqueVisitors: 2200 },
-  { date: "Mar 5", views: 2800, uniqueVisitors: 1900 },
-  { date: "Mar 7", views: 3800, uniqueVisitors: 2600 },
-  { date: "Mar 9", views: 4200, uniqueVisitors: 3100 },
-  { date: "Mar 11", views: 3600, uniqueVisitors: 2400 },
-  { date: "Mar 13", views: 4800, uniqueVisitors: 3400 },
-  { date: "Mar 15", views: 5200, uniqueVisitors: 3800 },
-  { date: "Mar 17", views: 4600, uniqueVisitors: 3200 },
-  { date: "Mar 19", views: 5400, uniqueVisitors: 4000 },
-  { date: "Mar 21", views: 6100, uniqueVisitors: 4500 },
-  { date: "Mar 23", views: 5800, uniqueVisitors: 4200 },
-  { date: "Mar 25", views: 6400, uniqueVisitors: 4800 },
-  { date: "Mar 27", views: 7200, uniqueVisitors: 5400 },
-  { date: "Mar 29", views: 6800, uniqueVisitors: 5000 },
-];
+interface AnalyticsData {
+  keyMetrics: {
+    totalPageViews: number;
+    uniqueVisitors: number;
+    avgTimeOnPage: string;
+    avgReadPercent: number;
+    pctChange: number;
+  };
+  pageViewsData: Array<{ date: string; views: number; uniqueVisitors: number }>;
+  mostReadPosts: Array<{
+    postId: string;
+    title: string;
+    views: number;
+    readPercent: number;
+    avgTimeOnPage: string;
+    author: string;
+  }>;
+  clickTrackingData: Array<{ element: string; clicks: number; ctr: number }>;
+  searchAnalyticsData: Array<{ term: string; searches: number; clicks: number; ctr: number }>;
+  authorAnalyticsData: Array<{
+    name: string;
+    posts: number;
+    totalViews: number;
+    avgReadPercent: number;
+    avgTimeOnPage: string;
+    engagement: number;
+  }>;
+  readPercentDistribution: Array<{ range: string; count: number; color: string }>;
+}
 
-const searchAnalyticsData = [
-  { term: "productivity tips", searches: 142, clicks: 89, ctr: 62.7 },
-  { term: "remote work", searches: 128, clicks: 76, ctr: 59.4 },
-  { term: "morning routine", searches: 95, clicks: 71, ctr: 74.7 },
-  { term: "minimalism", searches: 87, clicks: 52, ctr: 59.8 },
-  { term: "slow living", searches: 73, clicks: 58, ctr: 79.5 },
-  { term: "creativity", searches: 64, clicks: 41, ctr: 64.1 },
-  { term: "work life balance", searches: 58, clicks: 44, ctr: 75.9 },
-  { term: "wellness", searches: 52, clicks: 35, ctr: 67.3 },
-];
-
-const mostReadPostsLastWeek = [
-  {
-    title: "Finding balance in a busy creative life",
-    views: 2847,
-    readPercent: 78,
-    avgTimeOnPage: "4:32",
-    author: "Sarah Clarke",
+const emptyAnalytics: AnalyticsData = {
+  keyMetrics: {
+    totalPageViews: 0,
+    uniqueVisitors: 0,
+    avgTimeOnPage: "0:00",
+    avgReadPercent: 0,
+    pctChange: 0,
   },
-  {
-    title: "My morning ritual and why it works",
-    views: 2103,
-    readPercent: 82,
-    avgTimeOnPage: "3:18",
-    author: "Sarah Clarke",
-  },
-  {
-    title: "The case for slow living",
-    views: 1894,
-    readPercent: 65,
-    avgTimeOnPage: "5:12",
-    author: "Sarah Clarke",
-  },
-  {
-    title: "On creative blocks and how to overcome them",
-    views: 1652,
-    readPercent: 71,
-    avgTimeOnPage: "4:05",
-    author: "Michael Chen",
-  },
-  {
-    title: "Tools that changed my workflow",
-    views: 1438,
-    readPercent: 88,
-    avgTimeOnPage: "2:54",
-    author: "Emily Rodriguez",
-  },
-];
-
-const mostReadPostsLast30Days = [
-  {
-    title: "Finding balance in a busy creative life",
-    views: 12847,
-    readPercent: 76,
-    avgTimeOnPage: "4:28",
-    author: "Sarah Clarke",
-  },
-  {
-    title: "The ultimate guide to minimalist design",
-    views: 9834,
-    readPercent: 69,
-    avgTimeOnPage: "6:42",
-    author: "Michael Chen",
-  },
-  {
-    title: "My morning ritual and why it works",
-    views: 8921,
-    readPercent: 81,
-    avgTimeOnPage: "3:22",
-    author: "Sarah Clarke",
-  },
-  {
-    title: "Building sustainable habits",
-    views: 7654,
-    readPercent: 74,
-    avgTimeOnPage: "5:01",
-    author: "Emily Rodriguez",
-  },
-  {
-    title: "Remote work: 2 years later",
-    views: 6892,
-    readPercent: 67,
-    avgTimeOnPage: "4:15",
-    author: "Sarah Clarke",
-  },
-];
-
-const mostReadPostsAllTime = [
-  {
-    title: "The ultimate guide to minimalist design",
-    views: 45821,
-    readPercent: 72,
-    avgTimeOnPage: "6:38",
-    author: "Michael Chen",
-  },
-  {
-    title: "Finding balance in a busy creative life",
-    views: 38942,
-    readPercent: 77,
-    avgTimeOnPage: "4:31",
-    author: "Sarah Clarke",
-  },
-  {
-    title: "My journey to becoming a full-time creator",
-    views: 32156,
-    readPercent: 85,
-    avgTimeOnPage: "7:14",
-    author: "Sarah Clarke",
-  },
-  {
-    title: "Building sustainable habits",
-    views: 28734,
-    readPercent: 75,
-    avgTimeOnPage: "5:08",
-    author: "Emily Rodriguez",
-  },
-  {
-    title: "The tools I use every day",
-    views: 25198,
-    readPercent: 91,
-    avgTimeOnPage: "3:42",
-    author: "Michael Chen",
-  },
-];
-
-const authorAnalyticsData = [
-  {
-    name: "Sarah Clarke",
-    posts: 28,
-    totalViews: 142580,
-    avgReadPercent: 76,
-    avgTimeOnPage: "4:42",
-    engagement: 8.4,
-  },
-  {
-    name: "Michael Chen",
-    posts: 18,
-    totalViews: 98340,
-    avgReadPercent: 71,
-    avgTimeOnPage: "5:28",
-    engagement: 7.2,
-  },
-  {
-    name: "Emily Rodriguez",
-    posts: 15,
-    totalViews: 76220,
-    avgReadPercent: 79,
-    avgTimeOnPage: "4:18",
-    engagement: 9.1,
-  },
-  {
-    name: "Alex Thompson",
-    posts: 12,
-    totalViews: 54890,
-    avgReadPercent: 68,
-    avgTimeOnPage: "3:52",
-    engagement: 6.8,
-  },
-];
-
-const clickTrackingData = [
-  { element: "Related Posts Widget", clicks: 3842, ctr: 18.4 },
-  { element: "Author Bio Link", clicks: 2956, ctr: 14.2 },
-  { element: "Social Share - Twitter", clicks: 2103, ctr: 10.1 },
-  { element: "TOC Links", clicks: 1847, ctr: 8.9 },
-  { element: "Category Tags", clicks: 1624, ctr: 7.8 },
-  { element: "Social Share - Facebook", clicks: 1389, ctr: 6.7 },
-  { element: "Newsletter CTA", clicks: 1205, ctr: 5.8 },
-  { element: "Breadcrumb Navigation", clicks: 982, ctr: 4.7 },
-];
-
-const readPercentDistribution = [
-  { range: "0-25%", count: 2847, color: "#ef4444" },
-  { range: "26-50%", count: 3621, color: "#f59e0b" },
-  { range: "51-75%", count: 5234, color: "#10B981" },
-  { range: "76-100%", count: 8912, color: "#5B4FE8" },
-];
+  pageViewsData: [],
+  mostReadPosts: [],
+  clickTrackingData: [],
+  searchAnalyticsData: [],
+  authorAnalyticsData: [],
+  readPercentDistribution: [
+    { range: "0-25%", count: 0, color: "#ef4444" },
+    { range: "26-50%", count: 0, color: "#f59e0b" },
+    { range: "51-75%", count: 0, color: "#10B981" },
+    { range: "76-100%", count: 0, color: "#5B4FE8" },
+  ],
+};
 
 export default function Analytics() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const siteKey = searchParams.get("siteKey");
+  const [me, setMe] = useState<DashboardMe | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [timeRange, setTimeRange] = useState("30d");
-  const [mostReadPeriod, setMostReadPeriod] = useState("week");
+  const [mostReadPeriod, setMostReadPeriod] = useState("30days");
   const [gaConnected, setGaConnected] = useState(false);
 
-  const getMostReadData = () => {
-    switch (mostReadPeriod) {
-      case "week":
-        return mostReadPostsLastWeek;
-      case "30days":
-        return mostReadPostsLast30Days;
-      case "alltime":
-        return mostReadPostsAllTime;
-      default:
-        return mostReadPostsLastWeek;
+  useEffect(() => {
+    getDashboardMe().then((data) => {
+      setMe(data ?? null);
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!me || me.sites.length === 0) return;
+    if (!siteKey) {
+      setSearchParams({ siteKey: me.sites[0].siteKey }, { replace: true });
+      return;
     }
-  };
+    const validSite = me.sites.some((s) => s.siteKey === siteKey);
+    if (!validSite) {
+      setSearchParams({ siteKey: me.sites[0].siteKey }, { replace: true });
+    }
+  }, [me, siteKey, setSearchParams]);
+
+  useEffect(() => {
+    if (!siteKey) return;
+    setLoading(true);
+    const params = new URLSearchParams({ timeRange, mostReadPeriod });
+    fetch(`/api/analytics/${encodeURIComponent(siteKey)}?${params}`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        setAnalytics(data ?? emptyAnalytics);
+      })
+      .catch(() => setAnalytics(emptyAnalytics))
+      .finally(() => setLoading(false));
+  }, [siteKey, timeRange, mostReadPeriod]);
+
+  const data = analytics ?? emptyAnalytics;
+
+  if (loading && !analytics) {
+    return (
+      <div className="min-h-screen bg-[#f7f6f3] p-6 flex items-center justify-center">
+        <div className="text-[#6b6b6b]">Loading analytics…</div>
+      </div>
+    );
+  }
+
+  if (!me?.sites.length) {
+    return (
+      <div className="min-h-screen bg-[#f7f6f3] p-6 flex items-center justify-center">
+        <div className="text-[#6b6b6b] text-center">
+          Add a blog in the dashboard to view analytics.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f6f3] p-6 space-y-6">
@@ -265,7 +163,24 @@ export default function Analytics() {
             Track your blog's performance and reader engagement
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {me && me.sites.length > 1 && (
+            <Select
+              value={siteKey ?? undefined}
+              onValueChange={(v) => setSearchParams({ siteKey: v })}
+            >
+              <SelectTrigger className="w-[180px] bg-white border-[#e4e3de]">
+                <SelectValue placeholder="Select blog" />
+              </SelectTrigger>
+              <SelectContent>
+                {me.sites.map((s) => (
+                  <SelectItem key={s.id} value={s.siteKey}>
+                    {s.name || s.url || "Unnamed blog"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={timeRange} onValueChange={setTimeRange}>
             <SelectTrigger className="w-[160px] bg-white border-[#e4e3de]">
               <SelectValue placeholder="Select period" />
@@ -339,9 +254,17 @@ export default function Analytics() {
             <div className="w-10 h-10 rounded-lg bg-[#5B4FE8]/10 flex items-center justify-center">
               <Eye className="w-5 h-5 text-[#5B4FE8]" />
             </div>
-            <span className="text-xs text-[#10B981] font-medium">+12.4%</span>
+            {data.keyMetrics.totalPageViews > 0 && (
+              <span className={`text-xs font-medium ${data.keyMetrics.pctChange >= 0 ? "text-[#10B981]" : "text-[#ef4444]"}`}>
+                {data.keyMetrics.pctChange >= 0 ? "+" : ""}{data.keyMetrics.pctChange}%
+              </span>
+            )}
           </div>
-          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">127.4k</div>
+          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">
+            {data.keyMetrics.totalPageViews >= 1000
+              ? (data.keyMetrics.totalPageViews / 1000).toFixed(1) + "k"
+              : data.keyMetrics.totalPageViews.toLocaleString()}
+          </div>
           <div className="text-sm text-[#6b6b6b]">Total Page Views</div>
         </Card>
 
@@ -350,9 +273,12 @@ export default function Analytics() {
             <div className="w-10 h-10 rounded-lg bg-[#10B981]/10 flex items-center justify-center">
               <Users className="w-5 h-5 text-[#10B981]" />
             </div>
-            <span className="text-xs text-[#10B981] font-medium">+8.2%</span>
           </div>
-          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">89.2k</div>
+          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">
+            {data.keyMetrics.uniqueVisitors >= 1000
+              ? (data.keyMetrics.uniqueVisitors / 1000).toFixed(1) + "k"
+              : data.keyMetrics.uniqueVisitors.toLocaleString()}
+          </div>
           <div className="text-sm text-[#6b6b6b]">Unique Visitors</div>
         </Card>
 
@@ -361,9 +287,10 @@ export default function Analytics() {
             <div className="w-10 h-10 rounded-lg bg-[#8F86F0]/10 flex items-center justify-center">
               <Clock className="w-5 h-5 text-[#8F86F0]" />
             </div>
-            <span className="text-xs text-[#10B981] font-medium">+5.1%</span>
           </div>
-          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">4:28</div>
+          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">
+            {data.keyMetrics.totalPageViews > 0 ? data.keyMetrics.avgTimeOnPage : "—"}
+          </div>
           <div className="text-sm text-[#6b6b6b]">Avg. Time on Page</div>
         </Card>
 
@@ -372,9 +299,10 @@ export default function Analytics() {
             <div className="w-10 h-10 rounded-lg bg-[#10B981]/10 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-[#10B981]" />
             </div>
-            <span className="text-xs text-[#10B981] font-medium">+18.7%</span>
           </div>
-          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">76%</div>
+          <div className="font-heading text-3xl text-[#0a0a0a] mb-1">
+            {data.keyMetrics.totalPageViews > 0 ? `${data.keyMetrics.avgReadPercent}%` : "—"}
+          </div>
           <div className="text-sm text-[#6b6b6b]">Avg. Read Percent</div>
         </Card>
       </div>
@@ -385,7 +313,25 @@ export default function Analytics() {
           Page Views & Visitors
         </h3>
         <ResponsiveContainer width="100%" height={350}>
-          <AreaChart data={pageViewsData}>
+          <AreaChart
+            data={
+              data.pageViewsData.length > 0
+                ? data.pageViewsData
+                : (() => {
+                    const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : timeRange === "90d" ? 90 : 365;
+                    const points = Math.min(days, 14);
+                    return Array.from({ length: points }, (_, i) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() - (points - 1 - i));
+                      return {
+                        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                        views: 0,
+                        uniqueVisitors: 0,
+                      };
+                    });
+                  })()
+            }
+          >
             <defs>
               <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#5B4FE8" stopOpacity={0.3} />
@@ -447,7 +393,16 @@ export default function Analytics() {
           </Tabs>
         </div>
         <div className="space-y-4">
-          {getMostReadData().map((post, index) => (
+          {data.mostReadPosts.length === 0 ? (
+            <div className="flex items-center gap-4 p-4 rounded-lg border border-dashed border-[#e4e3de] bg-[#f7f6f3]/50">
+              <div className="w-8 h-8 rounded-full bg-[#e4e3de] flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="h-4 bg-[#e4e3de] rounded w-3/4 mb-2" />
+                <div className="h-3 bg-[#e4e3de] rounded w-1/2" />
+              </div>
+              <div className="text-[#6b6b6b] text-sm">No data available</div>
+            </div>
+          ) : data.mostReadPosts.map((post, index) => (
             <div
               key={index}
               className="flex items-center gap-4 p-4 rounded-lg border border-[#e4e3de] hover:border-[#5B4FE8] transition-colors"
@@ -457,7 +412,7 @@ export default function Analytics() {
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="font-medium text-[#0a0a0a] mb-1 truncate">
-                  {post.title}
+                  {post.title || "Untitled"}
                 </h4>
                 <div className="flex items-center gap-4 text-xs text-[#6b6b6b]">
                   <span>By {post.author}</span>
@@ -497,7 +452,20 @@ export default function Analytics() {
             <h3 className="font-heading text-xl text-[#0a0a0a]">Click Tracking</h3>
           </div>
           <div className="space-y-3">
-            {clickTrackingData.map((item, index) => (
+            {data.clickTrackingData.length === 0 ? (
+              <div className="space-y-4 py-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="flex justify-between">
+                      <div className="h-4 bg-[#e4e3de] rounded w-24" />
+                      <div className="h-4 bg-[#e4e3de] rounded w-16" />
+                    </div>
+                    <div className="h-2 bg-[#f7f6f3] rounded-full" />
+                  </div>
+                ))}
+                <div className="pt-4 text-center text-[#6b6b6b] text-sm">No data available</div>
+              </div>
+            ) : data.clickTrackingData.map((item, index) => (
               <div key={index} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-[#0a0a0a] font-medium">
@@ -528,21 +496,28 @@ export default function Analytics() {
           <h3 className="font-heading text-xl text-[#0a0a0a] mb-6">
             Read Percent Distribution
           </h3>
+          {data.readPercentDistribution.every((d) => d.count === 0) ? (
+            <div className="h-[300px] flex flex-col items-center justify-center">
+              <div className="w-[200px] h-[200px] rounded-full border-2 border-dashed border-[#e4e3de] bg-[#f7f6f3]/50 flex items-center justify-center">
+                <span className="text-[#6b6b6b] text-sm text-center px-4">No data available</span>
+              </div>
+            </div>
+          ) : (
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={readPercentDistribution}
+                data={data.readPercentDistribution}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ range, count }) =>
+                label={({ range, count }: { range: string; count: number }) =>
                   `${range}: ${count.toLocaleString()}`
                 }
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="count"
               >
-                {readPercentDistribution.map((entry, index) => (
+                {data.readPercentDistribution.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
@@ -555,6 +530,7 @@ export default function Analytics() {
               />
             </PieChart>
           </ResponsiveContainer>
+          )}
         </Card>
       </div>
 
@@ -583,7 +559,13 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody>
-              {searchAnalyticsData.map((item, index) => (
+              {data.searchAnalyticsData.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-[#6b6b6b]">
+                    No data available
+                  </td>
+                </tr>
+              ) : data.searchAnalyticsData.map((item, index) => (
                 <tr
                   key={index}
                   className="border-b border-[#e4e3de] hover:bg-[#f7f6f3] transition-colors"
@@ -642,7 +624,13 @@ export default function Analytics() {
               </tr>
             </thead>
             <tbody>
-              {authorAnalyticsData.map((author, index) => (
+              {data.authorAnalyticsData.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-[#6b6b6b]">
+                    No data available
+                  </td>
+                </tr>
+              ) : data.authorAnalyticsData.map((author, index) => (
                 <tr
                   key={index}
                   className="border-b border-[#e4e3de] hover:bg-[#f7f6f3] transition-colors"

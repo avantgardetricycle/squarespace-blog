@@ -12,6 +12,7 @@ import checkoutRoutes from './routes/checkout.js'
 import stripeWebhookRoutes from './routes/stripe-webhook.js'
 import blogAuthorsRoutes from './routes/blog-authors.js'
 import leadsRoutes from './routes/leads.js'
+import analyticsRoutes from './routes/analytics.js'
 import { startQueue, stopQueue } from './queue/index.js'
 
 const app = express()
@@ -34,6 +35,8 @@ app.use(cookieParser())
 // Must be after cookieParser so POST /api/config receives the session cookie
 // Must be before general CORS so permissive CORS applies to config routes
 app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
+// Analytics: events come from user blogs (any origin); dashboard fetches with credentials
+app.use('/api/analytics', cors({ origin: true, credentials: true }), analyticsRoutes)
 
 // All other routes: strict CORS (app origin only)
 const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')

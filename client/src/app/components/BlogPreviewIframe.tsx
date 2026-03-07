@@ -11,8 +11,8 @@ export interface RendererConfig {
   progressBarPosition?: string;
   progressBarThickness?: number;
   progressBarColor?: string;
-  leftSidebar?: { show?: boolean; modules?: string[]; width?: number };
-  rightSidebar?: { show?: boolean; modules?: string[]; width?: number };
+  leftSidebar?: { show?: boolean; modules?: string[]; width?: number; spaceAbove?: number; sticky?: boolean };
+  rightSidebar?: { show?: boolean; modules?: string[]; width?: number; spaceAbove?: number; sticky?: boolean };
   headerContent?: { show?: boolean; modules?: string[]; height?: number };
   recentPostsCount?: number;
 }
@@ -89,6 +89,12 @@ export default function BlogPreviewIframe({
     }
   };
 
+  // Strip non-serializable values (e.g. functions) before postMessage - they cannot be cloned
+  const configForPostMessage = (c: RendererConfig) => {
+    const { configUpdateCallback, ...rest } = c as RendererConfig & { configUpdateCallback?: unknown };
+    return rest;
+  };
+
   // Listen for READY from iframe and send config
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -100,7 +106,7 @@ export default function BlogPreviewIframe({
       if (!iframe?.contentWindow) return;
       const latestConfig = configRef.current;
       iframe.contentWindow.postMessage(
-        { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
+        { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(latestConfig) },
         "*"
       );
     };
@@ -118,7 +124,7 @@ export default function BlogPreviewIframe({
       "*"
     );
     iframe.contentWindow.postMessage(
-      { type: MESSAGE_TYPE_CONFIG, config: configRef.current },
+      { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(configRef.current) },
       "*"
     );
   }, [selectPostIndex, config]);
@@ -130,7 +136,7 @@ export default function BlogPreviewIframe({
 
     const latestConfig = configRef.current;
     iframe.contentWindow.postMessage(
-      { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
+      { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(latestConfig) },
       "*"
     );
   }, [config, blogUrl]);
@@ -141,7 +147,7 @@ export default function BlogPreviewIframe({
     if (!iframe?.contentWindow) return;
     try {
       iframe.contentWindow.postMessage(
-        { type: MESSAGE_TYPE_CONFIG, config: configRef.current },
+        { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(configRef.current) },
         "*"
       );
     } catch {

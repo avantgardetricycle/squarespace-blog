@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link, useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, Settings, User, LogOut } from "lucide-react";
+import { LayoutDashboard, Settings, User, LogOut, BarChart3 } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 
@@ -15,6 +15,7 @@ export default function Layout() {
 
   const navItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true },
+    { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics", end: false },
     { to: "/dashboard/configure", icon: Settings, label: "Customize Blog" },
     { to: "/dashboard/account", icon: User, label: "Account" },
   ];

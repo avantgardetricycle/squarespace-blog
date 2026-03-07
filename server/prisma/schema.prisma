@@ -53,13 +53,35 @@ model Site {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @map("updated_at")
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteConfigs  SiteConfig[]
-  blogAuthors  BlogAuthor[]
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteConfigs      SiteConfig[]
+  blogAuthors      BlogAuthor[]
+  analyticsEvents  AnalyticsEvent[]
 
   @@index([siteKey])
   @@index([userId])
   @@map("sites")
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  siteId     String   @map("site_id")
+  eventType  String   @map("event_type") // page_view | scroll_depth | click | search | search_click | time_on_page
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  visitorId  String?  @map("visitor_id")
+  postId     String?  @map("post_id")
+  postIndex  Int?     @map("post_index")
+  url        String?
+
+  payload    Json?
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, eventType, occurredAt])
+  @@index([siteId, postId, occurredAt])
+  @@index([siteId, visitorId, occurredAt])
+  @@map("analytics_events")
 }
 
 enum IngestedFrom {
