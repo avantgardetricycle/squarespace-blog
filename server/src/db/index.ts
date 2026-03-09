@@ -70,6 +70,8 @@ export interface SiteConfigData {
   featuredImage?: FeaturedImageConfig
   collectionConfig?: object
   postConfig?: object
+  collectionTemplateId?: string | null
+  postTemplateId?: string | null
 }
 
 export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
@@ -117,6 +119,8 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         featuredImage: featuredImage as object,
         collectionConfig: (data.collectionConfig && typeof data.collectionConfig === 'object') ? data.collectionConfig as object : undefined,
         postConfig: (data.postConfig && typeof data.postConfig === 'object') ? data.postConfig as object : undefined,
+        collectionTemplateId: data.collectionTemplateId ?? undefined,
+        postTemplateId: data.postTemplateId ?? undefined,
         isActive: true
       }
     })

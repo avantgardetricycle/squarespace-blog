@@ -132,6 +132,233 @@ async function main() {
     }
   }
 
+  // Seed template configs (collection + post templates)
+  const baseCollectionConfig = {
+    showDate: true,
+    showAuthor: false,
+    showReadingTime: false,
+    postSort: 'date' as const,
+    pagination: { show: false, postsPerPage: 10 },
+    leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: true },
+    rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: true },
+    headerContent: { show: false, modules: [] as string[], height: 48 },
+    socialMediaLinks: { show: false, platforms: [] as string[] },
+    featuredImage: {
+      show: true,
+      layoutMode: 'leftJustified' as const,
+      imageWidthPercent: 40,
+      aspectBehavior: 'original' as const,
+      aspectRatio: '16:9' as const,
+      roundedCorners: 'off' as const,
+      shadow: false,
+      showCaption: true,
+      verticalSpacing: 'normal' as const
+    }
+  }
+
+  const basePostConfig = {
+    ...baseCollectionConfig,
+    progressBar: { show: false, position: 'top' as const, thickness: 6, color: '#5B4FE8' }
+  }
+
+  const collectionTemplates = [
+    {
+      templateKey: 'masthead',
+      level: 'collection',
+      name: 'The Masthead',
+      description: 'Hero-style header with full-width featured post and grid layout.',
+      collectionConfig: {
+        ...baseCollectionConfig,
+        collectionLayout: 'grid',
+        gridColumns: 3,
+        filterStyle: 'pills' as const,
+        headerContent: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], height: 48 },
+        rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 240, spaceAbove: 0, sticky: true },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+      },
+      previewLayout: 'masthead'
+    },
+    {
+      templateKey: 'newsroom',
+      level: 'collection',
+      name: 'The Newsroom',
+      description: 'List layout with prominent search and filter tabs.',
+      collectionConfig: {
+        ...baseCollectionConfig,
+        collectionLayout: 'listRows',
+        filterStyle: 'pills' as const,
+        headerContent: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], height: 48 },
+        leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
+        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 }
+      },
+      previewLayout: 'newsroom'
+    },
+    {
+      templateKey: 'digest',
+      level: 'collection',
+      name: 'The Digest',
+      description: 'Featured post at top with sidebar and compact grid.',
+      collectionConfig: {
+        ...baseCollectionConfig,
+        collectionLayout: 'grid',
+        gridColumns: 2,
+        rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 280, spaceAbove: 0, sticky: true },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 40 }
+      },
+      previewLayout: 'digest'
+    },
+    {
+      templateKey: 'showcase',
+      level: 'collection',
+      name: 'The Showcase',
+      description: 'Card grid with alternating image layout.',
+      collectionConfig: {
+        ...baseCollectionConfig,
+        collectionLayout: 'grid',
+        gridColumns: 2,
+        filterStyle: 'pills' as const,
+        headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 }
+      },
+      previewLayout: 'showcase'
+    },
+    {
+      templateKey: 'editorial',
+      level: 'collection',
+      name: 'The Editorial',
+      description: 'Grid layout with filter bar.',
+      collectionConfig: {
+        ...baseCollectionConfig,
+        collectionLayout: 'grid',
+        gridColumns: 3,
+        filterStyle: 'pills' as const,
+        headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+      },
+      previewLayout: 'editorial'
+    }
+  ]
+
+  const postTemplates = [
+    {
+      templateKey: 'feature',
+      level: 'post',
+      name: 'The Feature',
+      description: 'Dual-rail layout with sidebar and featured image.',
+      postConfig: {
+        ...basePostConfig,
+        leftSidebar: { show: true, modules: ['tableOfContents', 'authorProfiles'], width: 220, spaceAbove: 0, sticky: true },
+        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
+        headerContent: { show: true, modules: ['breadcrumbs', 'tableOfContents'], height: 48 },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 40 }
+      },
+      previewLayout: 'feature'
+    },
+    {
+      templateKey: 'publisher',
+      level: 'post',
+      name: 'The Publisher',
+      description: 'Clean layout with sidebar and full-width image.',
+      postConfig: {
+        ...basePostConfig,
+        leftSidebar: { show: true, modules: ['tableOfContents'], width: 200, spaceAbove: 0, sticky: true },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+      },
+      previewLayout: 'publisher'
+    },
+    {
+      templateKey: 'reporter',
+      level: 'post',
+      name: 'The Reporter',
+      description: 'Compact layout with image and metadata.',
+      postConfig: {
+        ...basePostConfig,
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 35 },
+        progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' }
+      },
+      previewLayout: 'reporter'
+    },
+    {
+      templateKey: 'story',
+      level: 'post',
+      name: 'The Story',
+      description: 'Immersive layout with header and footer zones.',
+      postConfig: {
+        ...basePostConfig,
+        headerContent: { show: true, modules: ['breadcrumbs', 'tableOfContents'], height: 56 },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+      },
+      previewLayout: 'story'
+    },
+    {
+      templateKey: 'writer',
+      level: 'post',
+      name: 'The Writer',
+      description: 'Minimal layout focused on content.',
+      postConfig: {
+        ...basePostConfig,
+        leftSidebar: { show: true, modules: ['authorProfiles'], width: 200, spaceAbove: 0, sticky: true },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 }
+      },
+      previewLayout: 'writer'
+    }
+  ]
+
+  for (const t of collectionTemplates) {
+    const { sortOrder, ...rest } = t
+    const config = rest.collectionConfig as object
+    await prisma.templateConfig.upsert({
+      where: {
+        templateKey_level: { templateKey: t.templateKey, level: t.level }
+      },
+      create: {
+        templateKey: t.templateKey,
+        level: t.level,
+        name: t.name,
+        description: t.description,
+        collectionConfig: config,
+        postConfig: null,
+        previewLayout: t.previewLayout,
+        sortOrder
+      },
+      update: {
+        name: t.name,
+        description: t.description,
+        collectionConfig: config,
+        previewLayout: t.previewLayout,
+        sortOrder
+      }
+    })
+  }
+
+  for (const t of postTemplates) {
+    const { sortOrder, ...rest } = t
+    const config = rest.postConfig as object
+    await prisma.templateConfig.upsert({
+      where: {
+        templateKey_level: { templateKey: t.templateKey, level: t.level }
+      },
+      create: {
+        templateKey: t.templateKey,
+        level: t.level,
+        name: t.name,
+        description: t.description,
+        collectionConfig: null,
+        postConfig: config,
+        previewLayout: t.previewLayout,
+        sortOrder
+      },
+      update: {
+        name: t.name,
+        description: t.description,
+        postConfig: config,
+        previewLayout: t.previewLayout,
+        sortOrder
+      }
+    })
+  }
+
   console.log('Seed completed')
 }
 

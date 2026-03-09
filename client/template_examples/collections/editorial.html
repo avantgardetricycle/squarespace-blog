@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection 03 — The Editorial · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+  :root { --accent: #e9007f; --border: #e8e8e8; --bg-light: #f7f6f2; --page-max: 1200px; }
+
+  /* HANDOFF CHROME */
+  .handoff-bar { background: #111; color: #fff; padding: 14px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 200; }
+  .handoff-bar .layout-badge { background: #d97706; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px; }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+  .zone-band { display: flex; align-items: center; gap: 12px; padding: 8px 32px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+  .zone-band .zone-id { font-family: 'Courier New', monospace; font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff; }
+  .zb-nav    { background: #f5f3ff; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-nav .zone-id { background: #4f46e5; }
+  .zb-filter { background: #fdf4ff; color: #7e22ce; border-top: 1px solid #e9d5ff; }
+  .zb-filter .zone-id { background: #7e22ce; }
+  .zb-grid   { background: #fff7ed; color: #c2410c; border-top: 1px solid #fed7aa; }
+  .zb-grid .zone-id { background: #d97706; }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  /* NAV */
+  .site-nav { background: #fff; border-bottom: 2px solid #111; padding: 0 32px; height: 54px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #111; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #555; text-decoration: none; }
+  .nav-link:hover { color: var(--accent); }
+  .nav-cta { font-size: 12px; font-weight: 700; background: #111; color: #fff; padding: 7px 16px; border-radius: 2px; text-decoration: none; margin-left: 8px; }
+
+  /* COLLECTION HEADER */
+  .collection-header { background: var(--bg-light); border-bottom: 1px solid var(--border); padding: 28px 32px; }
+  .collection-header-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .collection-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+  .collection-count { font-size: 13px; color: #aaa; }
+
+  /* FILTER BAR — search tucked in, quieter */
+  .filter-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 0 32px; }
+  .filter-bar-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: center; height: 48px; }
+  .filter-cats { display: flex; flex: 1; }
+  .filter-cat { font-size: 12px; font-weight: 600; color: #999; padding: 0 16px; height: 48px; display: flex; align-items: center; border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; }
+  .filter-cat:hover { color: #111; }
+  .filter-cat.active { color: #111; border-bottom-color: #111; }
+  .filter-divider { width: 1px; background: #f0f0f0; height: 24px; margin: 0 12px; flex-shrink: 0; }
+  .filter-search { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--border); border-radius: 3px; padding: 5px 11px; flex-shrink: 0; cursor: pointer; }
+  .filter-search input { border: none; outline: none; font-family: 'Outfit', sans-serif; font-size: 12px; color: #111; width: 140px; background: transparent; }
+  .filter-search input::placeholder { color: #ccc; }
+
+  /* EDITORIAL MAGAZINE GRID */
+  .mag-section { max-width: var(--page-max); margin: 40px auto 0; padding: 0 32px; }
+
+  /* Row A: big left (2/3) + two stacked right (1/3) */
+  .mag-row-a { display: grid; grid-template-columns: 2fr 1fr; gap: 2px; margin-bottom: 2px; }
+  /* Row B: two stacked left (1/3) + big right (2/3) — flipped */
+  .mag-row-b { display: grid; grid-template-columns: 1fr 2fr; gap: 2px; margin-bottom: 40px; }
+
+  .mag-right-stack { display: flex; flex-direction: column; gap: 2px; }
+
+  /* Large card */
+  .mag-card-lg {
+    position: relative; overflow: hidden;
+    text-decoration: none; color: inherit; display: block;
+    aspect-ratio: 4/3;
+  }
+  .mag-card-lg .card-bg { position: absolute; inset: 0; transition: transform 0.4s; }
+  .mag-card-lg:hover .card-bg { transform: scale(1.03); }
+  .mag-card-lg .card-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 55%, transparent 100%); }
+  .mag-card-lg .card-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px; }
+  .mag-card-lg .card-cat { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .mag-card-lg .card-title { font-size: 22px; font-weight: 800; line-height: 1.2; color: #fff; letter-spacing: -0.3px; }
+  .mag-card-lg:hover .card-title { color: rgba(255,255,255,0.85); }
+  .mag-card-lg .card-meta { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 8px; display: flex; gap: 8px; }
+  .meta-dot { color: rgba(255,255,255,0.3); }
+
+  /* Small card */
+  .mag-card-sm {
+    position: relative; overflow: hidden; flex: 1;
+    text-decoration: none; color: inherit; display: block;
+    min-height: 160px;
+  }
+  .mag-card-sm .card-bg { position: absolute; inset: 0; transition: transform 0.4s; }
+  .mag-card-sm:hover .card-bg { transform: scale(1.04); }
+  .mag-card-sm .card-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 60%, transparent 100%); }
+  .mag-card-sm .card-content { position: absolute; bottom: 0; left: 0; right: 0; padding: 16px 18px; }
+  .mag-card-sm .card-cat { font-size: 9px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+  .mag-card-sm .card-title { font-size: 14px; font-weight: 700; line-height: 1.3; color: #fff; }
+  .mag-card-sm:hover .card-title { color: rgba(255,255,255,0.85); }
+  .mag-card-sm .card-meta { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 5px; }
+
+  /* Image fills */
+  .bg1 { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); }
+  .bg2 { background: linear-gradient(135deg, #2d1b69 0%, #11998e 100%); }
+  .bg3 { background: linear-gradient(135deg, #373b44 0%, #4286f4 100%); }
+  .bg4 { background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); }
+  .bg5 { background: linear-gradient(135deg, #4b1248 0%, #f10711 100%); }
+  .bg6 { background: linear-gradient(135deg, #0d0d0d 0%, #4a4a4a 100%); }
+  .bg7 { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
+  .bg8 { background: linear-gradient(135deg, #11001c 0%, #4a0072 100%); }
+
+  /* Row label */
+  .row-label { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: #111; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #111; display: flex; justify-content: space-between; align-items: center; }
+  .row-label a { font-size: 11px; color: var(--accent); text-decoration: none; font-weight: 600; letter-spacing: 0.5px; }
+
+  /* PAGINATION */
+  .pagination { max-width: var(--page-max); margin: 0 auto 56px; padding: 0 32px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .page-btn { width: 36px; height: 36px; border: 1.5px solid var(--border); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #555; text-decoration: none; transition: all 0.15s; }
+  .page-btn:hover { border-color: #111; color: #111; }
+  .page-btn.active { background: #111; border-color: #111; color: #fff; }
+  .page-btn.arrow { font-size: 16px; color: #bbb; }
+
+  /* SPEC PANEL */
+  .spec-overlay { position: fixed; right: 0; top: 54px; bottom: 0; width: 260px; background: #fff; border-left: 1px solid var(--border); overflow-y: auto; z-index: 100; padding: 20px; display: none; }
+  .spec-overlay.open { display: block; }
+  .spec-toggle { position: fixed; right: 16px; bottom: 24px; background: #111; color: #fff; border: none; border-radius: 24px; padding: 10px 18px; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 90px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-comps { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-n { background: #4f46e5; } .sc-f { background: #7e22ce; } .sc-g { background: #d97706; } .sc-p { background: #059669; }
+  .spec-note { background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px; padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px; }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<div class="handoff-bar">
+  <span class="layout-badge">COLLECTION 03</span>
+  <h1>The Editorial</h1>
+  <p>Asymmetric magazine grid · Alternating rows · Developer handoff</p>
+</div>
+
+<div class="zone-band zb-nav"><span class="zone-id">NAV</span> NAVIGATION — shared across all 5 collection layouts</div>
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Latest</a><a class="nav-link" href="#">AI</a><a class="nav-link" href="#">Tools</a><a class="nav-link" href="#">Guides</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="zone-band zb-filter"><span class="zone-id">FILTER</span> FILTER BAR — search tucked in, less dominant than Newsroom</div>
+<div class="collection-header">
+  <div class="collection-header-inner">
+    <div class="collection-title">All Articles</div>
+    <div class="collection-count">142 posts</div>
+  </div>
+</div>
+<div class="filter-bar">
+  <div class="filter-bar-inner">
+    <div class="filter-cats">
+      <a class="filter-cat active" href="#">All</a>
+      <a class="filter-cat" href="#">AI</a>
+      <a class="filter-cat" href="#">Tools</a>
+      <a class="filter-cat" href="#">Guides</a>
+      <a class="filter-cat" href="#">Policy</a>
+      <a class="filter-cat" href="#">Research</a>
+    </div>
+    <div class="filter-divider"></div>
+    <div class="filter-search">
+      <svg width="13" height="13" fill="none" stroke="#bbb" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search articles…">
+    </div>
+  </div>
+</div>
+
+<div class="zone-band zb-grid"><span class="zone-id">GRID</span> MAGAZINE GRID — Row A: big left + 2 stacked right · Row B: 2 stacked left + big right</div>
+
+<div class="mag-section">
+
+  <!-- ROW A: 2/3 left + 1/3 right stack -->
+  <div class="row-label">Latest <a href="#">View all →</a></div>
+  <div class="mag-row-a">
+    <a class="mag-card-lg" href="#">
+      <div class="card-bg bg1"></div>
+      <div class="card-overlay"></div>
+      <div class="card-content">
+        <div class="card-cat">Deep Dive</div>
+        <div class="card-title">The Lead Story Headline Can Run to Three Lines at This Larger Size</div>
+        <div class="card-meta">Author Name <span class="meta-dot">·</span> Mar 7 <span class="meta-dot">·</span> 12 min</div>
+      </div>
+    </a>
+    <div class="mag-right-stack">
+      <a class="mag-card-sm" href="#">
+        <div class="card-bg bg2"></div>
+        <div class="card-overlay"></div>
+        <div class="card-content">
+          <div class="card-cat">AI</div>
+          <div class="card-title">Second story stacked in the right column</div>
+          <div class="card-meta">Author · Mar 5 · 6 min</div>
+        </div>
+      </a>
+      <a class="mag-card-sm" href="#">
+        <div class="card-bg bg3"></div>
+        <div class="card-overlay"></div>
+        <div class="card-content">
+          <div class="card-cat">Tools</div>
+          <div class="card-title">Third story below in the right column</div>
+          <div class="card-meta">Author · Mar 3 · 4 min</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- ROW B: 1/3 left stack + 2/3 right — flipped -->
+  <div class="mag-row-b">
+    <div class="mag-right-stack">
+      <a class="mag-card-sm" href="#">
+        <div class="card-bg bg4"></div>
+        <div class="card-overlay"></div>
+        <div class="card-content">
+          <div class="card-cat">Guides</div>
+          <div class="card-title">Fourth story opens the second row on the left</div>
+          <div class="card-meta">Author · Feb 28 · 8 min</div>
+        </div>
+      </a>
+      <a class="mag-card-sm" href="#">
+        <div class="card-bg bg5"></div>
+        <div class="card-overlay"></div>
+        <div class="card-content">
+          <div class="card-cat">Policy</div>
+          <div class="card-title">Fifth story stacked below on the left side</div>
+          <div class="card-meta">Author · Feb 25 · 5 min</div>
+        </div>
+      </a>
+    </div>
+    <a class="mag-card-lg" href="#">
+      <div class="card-bg bg6"></div>
+      <div class="card-overlay"></div>
+      <div class="card-content">
+        <div class="card-cat">Research</div>
+        <div class="card-title">The Large Story on the Right Side of the Second Row</div>
+        <div class="card-meta">Author Name <span class="meta-dot">·</span> Feb 22 <span class="meta-dot">·</span> 9 min</div>
+      </div>
+    </a>
+  </div>
+
+</div>
+
+<div class="zone-band zb-footer"><span class="zone-id">PAGINATION</span> PAGINATION — numbered pages</div>
+<div class="pagination">
+  <a class="page-btn arrow" href="#">‹</a>
+  <a class="page-btn active" href="#">1</a>
+  <a class="page-btn" href="#">2</a>
+  <a class="page-btn" href="#">3</a>
+  <a class="page-btn" href="#">4</a>
+  <a class="page-btn arrow" href="#">›</a>
+</div>
+
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Editorial</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>collection-03</code></span></div>
+  <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1200px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Format</span><span class="spec-v">Asymmetric grid</span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">None</span></div>
+  <div class="spec-row"><span class="spec-k">Pagination</span><span class="spec-v">Numbered</span></div>
+  <div class="spec-h">Zones</div>
+  <div class="spec-comps">
+    <div class="spec-comp"><span class="sc-id sc-n">NAV</span> Site navigation</div>
+    <div class="spec-comp"><span class="sc-id sc-f">FILTER</span> Category tabs + inline search</div>
+    <div class="spec-comp"><span class="sc-id sc-g">GRID</span> Alternating magazine rows</div>
+    <div class="spec-comp"><span class="sc-id sc-p">PAGE</span> Numbered pagination</div>
+  </div>
+  <div class="spec-h">Grid Rows</div>
+  <div class="spec-row"><span class="spec-k">Row A</span><span class="spec-v"><code>2fr / 1fr</code> — big left</span></div>
+  <div class="spec-row"><span class="spec-k">Row B</span><span class="spec-v"><code>1fr / 2fr</code> — big right</span></div>
+  <div class="spec-row"><span class="spec-k">Gutter</span><span class="spec-v"><code>2px</code> (tight seam)</span></div>
+  <div class="spec-row"><span class="spec-k">Large card</span><span class="spec-v"><code>4:3</code> aspect ratio</span></div>
+  <div class="spec-row"><span class="spec-k">Small cards</span><span class="spec-v"><code>min-height: 160px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Per page</span><span class="spec-v">6 posts (2 rows × 3)</span></div>
+  <div class="spec-h">Cards</div>
+  <div class="spec-row"><span class="spec-k">Style</span><span class="spec-v">Full-bleed image, text overlay</span></div>
+  <div class="spec-row"><span class="spec-k">Overlay</span><span class="spec-v">Gradient to top, <code>rgba(0,0,0,0.75)</code></span></div>
+  <div class="spec-row"><span class="spec-k">Hover</span><span class="spec-v">Image scales <code>1.03</code></span></div>
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Most visually distinctive.</strong> The alternating big/small rhythm feels curated and intentional — great for blogs with strong visual identity. Requires good imagery. Pairs well with The Publisher or The Story article layouts.</div>
+</div>
+
+</body>
+</html>

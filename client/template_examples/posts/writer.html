@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Layout 03 — The Writer · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+
+  :root {
+    --accent: #e9007f;
+    --border: #e8e8e8;
+    --bg-light: #f7f6f2;
+  }
+
+  /* =============================================
+     HANDOFF CHROME
+  ============================================= */
+  .handoff-bar {
+    background: #111; color: #fff;
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 200;
+  }
+  .handoff-bar .layout-badge {
+    background: #059669;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
+  }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+
+  .zone-band {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 32px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .zone-band .zone-id {
+    font-family: 'Courier New', monospace;
+    font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff;
+  }
+  .zb-header { background: #ede9fe; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-header .zone-id { background: #4f46e5; }
+  .zb-body   { background: #f0f9ff; color: #0369a1; border-top: 1px solid #bae6fd; }
+  .zb-body .zone-id   { background: #0891b2; }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  /* No-sidebar note chip */
+  .no-sidebar-note {
+    background: #f3f4f6; color: #9ca3af;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 2px;
+    letter-spacing: 0.5px; border: 1px solid #e5e7eb;
+  }
+
+  /* =============================================
+     NAV — Minimal / Lora serif
+  ============================================= */
+  .site-nav {
+    background: #fff;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 0 32px; height: 54px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo {
+    font-weight: 700; font-size: 17px; letter-spacing: 0.2px;
+    font-style: italic; font-family: 'Lora', serif;
+    color: #111; text-decoration: none;
+  }
+  .nav-links { display: flex; gap: 28px; align-items: center; }
+  .nav-link { font-size: 13px; color: #777; text-decoration: none; }
+  .nav-link:hover { color: #111; }
+
+  /* =============================================
+     HEADER — PRESET 3 (MINIMAL)
+     Centered, no hero image, serif typography
+  ============================================= */
+  .article-header {
+    background: #fff;
+    padding: 60px 32px 48px;
+    text-align: center;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .breadcrumbs {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 12px; margin-bottom: 20px;
+  }
+  .breadcrumbs a { color: #bbb; text-decoration: none; }
+  .breadcrumbs a:hover { color: #555; }
+  .breadcrumbs .bc-sep { color: #ddd; font-size: 10px; }
+  .breadcrumbs .bc-current { color: #ddd; }
+
+  .header-cat {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: #bbb; margin-bottom: 20px;
+  }
+  .header-title {
+    font-family: 'Lora', serif;
+    font-size: 36px; font-weight: 700;
+    line-height: 1.2; letter-spacing: -0.3px;
+    color: #111; max-width: 640px;
+    margin: 0 auto 18px;
+  }
+  .header-deck {
+    font-family: 'Lora', serif;
+    font-size: 17px; font-style: italic;
+    color: #777; max-width: 520px;
+    margin: 0 auto 28px; line-height: 1.6;
+  }
+  .header-divider {
+    width: 40px; height: 2px;
+    background: #111; margin: 0 auto 20px;
+  }
+  .header-meta {
+    font-size: 13px; color: #aaa;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .header-meta strong { color: #555; }
+  .header-meta-dot { color: #ddd; }
+
+  /* =============================================
+     BODY — Single centered column, no sidebar
+  ============================================= */
+  .page-body {
+    max-width: 660px;
+    margin: 0 auto;
+    padding: 48px 32px 48px;
+  }
+
+  /* Article body (placeholder blocks) */
+  .placeholder-block { background: #f0f0ec; border-radius: 3px; margin-bottom: 10px; }
+  .ph-line    { height: 14px; }
+  .ph-gap     { height: 24px; background: transparent; }
+  .ph-h2      { height: 18px; background: #e4e4de; margin: 28px 0 14px; border-radius: 2px; }
+  .ph-img     {
+    width: 100%; aspect-ratio: 16/9;
+    background: #e8e8e0; border-radius: 3px; margin: 32px 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #bbb; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  /* Pull quote — Minimal layout gets one as a design feature */
+  .ph-pullquote {
+    border-left: 3px solid #111;
+    padding: 4px 0 4px 20px;
+    margin: 28px 0;
+  }
+  .ph-pullquote .ph-line { background: #ddd; }
+
+  /* =============================================
+     POST-FOOTER — Clean, no lead magnet
+  ============================================= */
+  .post-footer {
+    border-top: 1px solid #f0f0f0;
+    max-width: 660px;
+    margin: 0 auto;
+    padding: 48px 32px;
+    display: flex; flex-direction: column; gap: 40px;
+  }
+
+  /* PF-01 Author Bio Card */
+  .pf-author-card {
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 28px; display: flex; gap: 24px; align-items: flex-start;
+  }
+  .pf-avatar {
+    width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 22px;
+  }
+  .pf-author-name { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .pf-author-role { font-size: 12px; color: #aaa; margin-bottom: 10px; }
+  .pf-author-bio { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 12px; }
+  .pf-author-links { display: flex; gap: 10px; }
+  .pf-author-link {
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    text-decoration: none; border: 1.5px solid var(--accent);
+    padding: 4px 12px; border-radius: 2px;
+  }
+  .pf-author-link:hover { background: var(--accent); color: #fff; }
+
+  /* PF-03 Prev / Next Navigation */
+  .pf-prevnext {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .pf-prev, .pf-next {
+    padding: 20px 24px; text-decoration: none; color: inherit;
+    transition: background 0.15s;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .pf-prev { border-right: 1px solid var(--border); }
+  .pf-next { text-align: right; align-items: flex-end; }
+  .pf-prev:hover, .pf-next:hover { background: #fafafa; }
+  .pf-nav-dir {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #bbb;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pf-next .pf-nav-dir { flex-direction: row-reverse; }
+  .pf-nav-arrow { font-size: 14px; color: #ccc; }
+  .pf-nav-cat { font-size: 10px; color: var(--accent); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+  .pf-nav-title {
+    font-family: 'Lora', serif;
+    font-size: 15px; font-weight: 700;
+    color: #111; line-height: 1.35;
+  }
+  .pf-prev:hover .pf-nav-title,
+  .pf-next:hover .pf-nav-title { color: var(--accent); }
+
+  /* =============================================
+     SPEC PANEL
+  ============================================= */
+  .spec-overlay {
+    position: fixed; right: 0; top: 54px; bottom: 0;
+    width: 260px; background: #fff;
+    border-left: 1px solid #e8e8e8;
+    overflow-y: auto; z-index: 100; padding: 20px; display: none;
+  }
+  .spec-overlay.open { display: block; }
+  .spec-toggle {
+    position: fixed; right: 16px; bottom: 24px;
+    background: #111; color: #fff; border: none; border-radius: 24px;
+    padding: 10px 18px; font-family: 'Outfit', sans-serif;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 80px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-components { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-h { background: #4f46e5; }
+  .sc-f { background: #059669; }
+  .sc-none { background: #9ca3af; }
+  .spec-note {
+    background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px;
+    padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px;
+  }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<!-- HANDOFF BAR -->
+<div class="handoff-bar">
+  <span class="layout-badge">LAYOUT 03</span>
+  <h1>The Writer</h1>
+  <p>Minimal header · No sidebar · Prev/Next footer · Developer handoff</p>
+</div>
+
+<!-- ==================== HEADER ZONE ==================== -->
+<div class="zone-band zb-header">
+  <span class="zone-id">P3</span>
+  HEADER ZONE — Minimal (Preset 3)
+</div>
+
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Essays</a>
+    <a class="nav-link" href="#">Archive</a>
+    <a class="nav-link" href="#">About</a>
+    <a class="nav-link" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="article-header">
+  <nav class="breadcrumbs">
+    <a href="#">Home</a><span class="bc-sep">›</span>
+    <a href="#">Essays</a><span class="bc-sep">›</span>
+    <span class="bc-current">Article Title</span>
+  </nav>
+  <div class="header-cat">Category Name</div>
+  <div class="header-title">Article Headline — Longer Form Titles Work Well in This Serif Setting</div>
+  <div class="header-deck">A short subheading or deck in italic serif. Sets the tone for a more literary, contemplative read.</div>
+  <div class="header-divider"></div>
+  <div class="header-meta">
+    By <strong>Author Name</strong>
+    <span class="header-meta-dot">·</span>
+    <span>Published Date</span>
+    <span class="header-meta-dot">·</span>
+    <span>X min read</span>
+  </div>
+</div>
+
+<!-- ==================== BODY ZONE ==================== -->
+<div class="zone-band zb-body">
+  <span class="zone-id">—</span>
+  BODY ZONE — Single centered column · No sidebar
+  <span class="no-sidebar-note">NO SIDEBAR</span>
+</div>
+
+<div class="page-body">
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:95%"></div>
+  <div class="placeholder-block ph-line" style="width:88%"></div>
+  <div class="placeholder-block ph-line" style="width:92%"></div>
+  <div class="placeholder-block ph-line" style="width:72%"></div>
+  <div class="placeholder-block ph-gap"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:96%"></div>
+  <div class="placeholder-block ph-line" style="width:80%"></div>
+  <div class="placeholder-block ph-line" style="width:90%"></div>
+
+  <!-- Pull quote — design feature for Minimal layout -->
+  <div class="ph-pullquote">
+    <div class="placeholder-block ph-line" style="width:90%;background:#ccc"></div>
+    <div class="placeholder-block ph-line" style="width:75%;background:#ccc;margin-top:6px"></div>
+  </div>
+
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:94%"></div>
+  <div class="placeholder-block ph-line" style="width:87%"></div>
+  <div class="placeholder-block ph-h2" style="width:42%"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:91%"></div>
+  <div class="placeholder-block ph-line" style="width:82%"></div>
+  <div class="placeholder-block ph-line" style="width:96%"></div>
+  <div class="placeholder-block ph-line" style="width:70%"></div>
+  <div class="ph-img">Inline Image (optional)</div>
+  <div class="placeholder-block ph-gap"></div>
+  <div class="placeholder-block ph-h2" style="width:35%"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:93%"></div>
+  <div class="placeholder-block ph-line" style="width:88%"></div>
+  <div class="placeholder-block ph-line" style="width:75%"></div>
+  <div class="placeholder-block ph-gap"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:89%"></div>
+  <div class="placeholder-block ph-line" style="width:60%"></div>
+</div>
+
+<!-- ==================== FOOTER ZONE ==================== -->
+<div class="zone-band zb-footer" style="max-width:660px;margin:0 auto;padding-left:0;padding-right:0;border-radius:0">
+  <span class="zone-id">PF-01 · PF-03</span>
+  POST-FOOTER ZONE
+</div>
+
+<div class="post-footer">
+
+  <!-- PF-01: Author Bio Card -->
+  <div class="pf-author-card">
+    <div class="pf-avatar">MP</div>
+    <div>
+      <div class="pf-author-name">Author Name</div>
+      <div class="pf-author-role">Essayist · Contributing Writer</div>
+      <div class="pf-author-bio">A longer bio than the sidebar version. 2–3 sentences about background, focus areas, and what they cover. Can include publication history or notable work that builds credibility with readers.</div>
+      <div class="pf-author-links">
+        <a class="pf-author-link" href="#">All Essays</a>
+        <a class="pf-author-link" href="#">Twitter</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- PF-03: Prev / Next Navigation -->
+  <div class="pf-prevnext">
+    <a class="pf-prev" href="#">
+      <div class="pf-nav-dir">
+        <span class="pf-nav-arrow">←</span>
+        Previous
+      </div>
+      <div class="pf-nav-cat">Category</div>
+      <div class="pf-nav-title">Title of the Previous Article in This Series or Publication</div>
+    </a>
+    <a class="pf-next" href="#">
+      <div class="pf-nav-dir">
+        Next
+        <span class="pf-nav-arrow">→</span>
+      </div>
+      <div class="pf-nav-cat">Category</div>
+      <div class="pf-nav-title">Title of the Next Article in This Series or Publication</div>
+    </a>
+  </div>
+
+</div>
+
+<!-- SPEC TOGGLE -->
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+
+<!-- SPEC PANEL -->
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Writer</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>layout-03</code></span></div>
+  <div class="spec-row"><span class="spec-k">Body width</span><span class="spec-v"><code>660px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Alignment</span><span class="spec-v">Centered</span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">None</span></div>
+
+  <div class="spec-h">Components</div>
+  <div class="spec-components">
+    <div class="spec-comp"><span class="sc-id sc-h">P3</span> Minimal Header</div>
+    <div class="spec-comp"><span class="sc-id sc-none">—</span> No sidebar</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-01</span> Author Bio Card</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-03</span> Prev / Next Nav</div>
+  </div>
+
+  <div class="spec-h">Header (P3)</div>
+  <div class="spec-row"><span class="spec-k">Background</span><span class="spec-v"><code>#ffffff</code></span></div>
+  <div class="spec-row"><span class="spec-k">Alignment</span><span class="spec-v">Centered</span></div>
+  <div class="spec-row"><span class="spec-k">Title font</span><span class="spec-v">Lora serif</span></div>
+  <div class="spec-row"><span class="spec-k">Title size</span><span class="spec-v"><code>36px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Max width</span><span class="spec-v"><code>640px</code> (title)</span></div>
+  <div class="spec-row"><span class="spec-k">Deck font</span><span class="spec-v">Lora italic</span></div>
+  <div class="spec-row"><span class="spec-k">Divider</span><span class="spec-v">40px × 2px #111</span></div>
+  <div class="spec-row"><span class="spec-k">No image</span><span class="spec-v">Typography only</span></div>
+
+  <div class="spec-h">Body</div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>660px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Margins</span><span class="spec-v">Equal whitespace both sides</span></div>
+  <div class="spec-row"><span class="spec-k">Pull quote</span><span class="spec-v">Left border 3px #111</span></div>
+
+  <div class="spec-h">Post-Footer</div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>660px</code> — matches body</span></div>
+  <div class="spec-row"><span class="spec-k">Top border</span><span class="spec-v">1px solid #f0f0f0</span></div>
+  <div class="spec-row"><span class="spec-k">Prev/Next</span><span class="spec-v">2-col split panel</span></div>
+  <div class="spec-row"><span class="spec-k">No lead magnet</span><span class="spec-v">Clean exit</span></div>
+
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Intentionally restrained.</strong> No sidebar, no lead magnet, no article grid. Reader comes in, reads, and navigates to next piece. Best for essay-style, long-form, or literary content.</div>
+</div>
+
+</body>
+</html>

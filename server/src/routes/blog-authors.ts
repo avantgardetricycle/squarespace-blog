@@ -22,13 +22,34 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
     orderBy: { name: 'asc' }
   })
 
-  res.json(authors.map((a) => ({ id: a.id, name: a.name, ingestedFrom: a.ingestedFrom, isDefault: a.isDefault })))
+  res.json(
+    authors.map((a) => ({
+      id: a.id,
+      name: a.name,
+      imageUrl: a.imageUrl ?? null,
+      bio: a.bio ?? null,
+      email: a.email ?? null,
+      socialLinks: (a.socialLinks as Record<string, string>) ?? {},
+      ingestedFrom: a.ingestedFrom,
+      isDefault: a.isDefault
+    }))
+  )
 })
 
 // POST /api/blog-authors - Add a new author (requires auth, must own site)
 router.post('/', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { siteKey, name, ingestedFrom, isDefault } = req.body
+  const body = req.body as {
+    siteKey?: string
+    name?: string
+    ingestedFrom?: string
+    isDefault?: boolean
+    imageUrl?: string | null
+    bio?: string | null
+    email?: string | null
+    socialLinks?: Record<string, string> | null
+  }
+  const { siteKey, name, ingestedFrom, isDefault, imageUrl, bio, email, socialLinks } = body
 
   if (!siteKey || typeof name !== 'string' || !name.trim()) {
     res.status(400).json({ error: 'siteKey and name are required' })
@@ -48,7 +69,16 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     where: { siteId_name: { siteId: site.id, name: trimmedName } }
   })
   if (existing) {
-    res.json({ id: existing.id, name: existing.name, ingestedFrom: existing.ingestedFrom, isDefault: existing.isDefault })
+    res.json({
+      id: existing.id,
+      name: existing.name,
+      imageUrl: existing.imageUrl ?? null,
+      bio: existing.bio ?? null,
+      email: existing.email ?? null,
+      socialLinks: (existing.socialLinks as Record<string, string>) ?? {},
+      ingestedFrom: existing.ingestedFrom,
+      isDefault: existing.isDefault
+    })
     return
   }
 
@@ -58,11 +88,88 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       siteId: site.id,
       name: trimmedName,
       ingestedFrom: fromIngestion ? 'SQUARESPACE' : 'BETTER_BLOG',
-      isDefault: fromIngestion ? true : Boolean(isDefault)
+      isDefault: fromIngestion ? true : Boolean(isDefault),
+      imageUrl: typeof imageUrl === 'string' ? imageUrl : null,
+      bio: typeof bio === 'string' ? bio : null,
+      email: typeof email === 'string' ? email : null,
+      socialLinks: socialLinks && typeof socialLinks === 'object' ? socialLinks : {}
     }
   })
 
-  res.status(201).json({ id: author.id, name: author.name, ingestedFrom: author.ingestedFrom, isDefault: author.isDefault })
+  res.status(201).json({
+    id: author.id,
+    name: author.name,
+    imageUrl: author.imageUrl ?? null,
+    bio: author.bio ?? null,
+    email: author.email ?? null,
+    socialLinks: (author.socialLinks as Record<string, string>) ?? {},
+    ingestedFrom: author.ingestedFrom,
+    isDefault: author.isDefault
+  })
+})
+
+// PATCH /api/blog-authors/:id - Update author profile (requires auth, must own site)
+router.patch('/:id', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const authorId = req.params.id as string
+  const body = req.body as {
+    name?: string
+    imageUrl?: string | null
+    bio?: string | null
+    email?: string | null
+    socialLinks?: Record<string, string> | null
+  }
+
+  const author = await prisma.blogAuthor.findUnique({
+    where: { id: authorId },
+    include: { site: true }
+  })
+  if (!author) {
+    res.status(404).json({ error: 'Author not found' })
+    return
+  }
+
+  const site = await prisma.site.findFirst({
+    where: { id: author.siteId, userId: user.id }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Author not found' })
+    return
+  }
+
+  const data: {
+    name?: string
+    imageUrl?: string | null
+    bio?: string | null
+    email?: string | null
+    socialLinks?: object
+  } = {}
+  if (body.name !== undefined && typeof body.name === 'string' && body.name.trim()) {
+    data.name = body.name.trim()
+  }
+  if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl ?? null
+  if (body.bio !== undefined) data.bio = body.bio ?? null
+  if (body.email !== undefined) data.email = body.email ?? null
+  if (body.socialLinks !== undefined) {
+    data.socialLinks =
+      body.socialLinks && typeof body.socialLinks === 'object' ? body.socialLinks : {}
+  }
+
+  const updated = await prisma.blogAuthor.update({
+    where: { id: authorId },
+    data
+  })
+
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    imageUrl: updated.imageUrl ?? null,
+    bio: updated.bio ?? null,
+    email: updated.email ?? null,
+    socialLinks: (updated.socialLinks as Record<string, string>) ?? {},
+    ingestedFrom: updated.ingestedFrom,
+    isDefault: updated.isDefault
+  })
 })
 
 export default router

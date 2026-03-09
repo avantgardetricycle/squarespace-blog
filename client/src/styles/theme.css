@@ -18,9 +18,9 @@
   --secondary: #8F86F0;
   --secondary-foreground: #0a0a0a;
   
-  /* Accent is emerald green for dynamic contrast */
-  --accent: #10B981;
-  --accent-foreground: #ffffff;
+  /* Accent uses purple to match primary brand */
+  --accent: rgba(91, 79, 232, 0.1);
+  --accent-foreground: #5B4FE8;
   
   --muted: #f7f6f3;
   --muted-foreground: #6b6b6b;

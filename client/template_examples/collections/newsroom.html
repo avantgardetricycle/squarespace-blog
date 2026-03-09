@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection 02 — The Newsroom · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+  :root { --accent: #e9007f; --border: #e8e8e8; --bg-light: #f7f6f2; --page-max: 1160px; }
+
+  /* HANDOFF CHROME */
+  .handoff-bar { background: #111; color: #fff; padding: 14px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 200; }
+  .handoff-bar .layout-badge { background: #0891b2; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px; }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+  .zone-band { display: flex; align-items: center; gap: 12px; padding: 8px 32px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+  .zone-band .zone-id { font-family: 'Courier New', monospace; font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff; }
+  .zb-nav    { background: #f5f3ff; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-nav .zone-id { background: #4f46e5; }
+  .zb-filter { background: #fdf4ff; color: #7e22ce; border-top: 1px solid #e9d5ff; }
+  .zb-filter .zone-id { background: #7e22ce; }
+  .zb-list   { background: #f0f9ff; color: #0369a1; border-top: 1px solid #bae6fd; }
+  .zb-list .zone-id { background: #0891b2; }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  /* NAV */
+  .site-nav { background: #fff; border-bottom: 2px solid #111; padding: 0 32px; height: 54px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #111; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #555; text-decoration: none; }
+  .nav-link:hover { color: var(--accent); }
+  .nav-cta { font-size: 12px; font-weight: 700; background: #111; color: #fff; padding: 7px 16px; border-radius: 2px; text-decoration: none; margin-left: 8px; }
+
+  /* COLLECTION HEADER + FILTER */
+  .collection-header { background: var(--bg-light); border-bottom: 1px solid var(--border); padding: 28px 32px; }
+  .collection-header-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: baseline; justify-content: space-between; }
+  .collection-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+  .collection-count { font-size: 13px; color: #aaa; }
+
+  /* SEARCH BAR — Newsroom gets prominent top search */
+  .search-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 16px 32px; }
+  .search-bar-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+  .search-input-wrap { flex: 1; display: flex; align-items: center; gap: 10px; border: 2px solid #111; border-radius: 3px; padding: 10px 16px; transition: border-color 0.15s; }
+  .search-input-wrap:focus-within { border-color: var(--accent); }
+  .search-input-wrap input { flex: 1; border: none; outline: none; font-family: 'Outfit', sans-serif; font-size: 14px; color: #111; background: transparent; }
+  .search-input-wrap input::placeholder { color: #ccc; }
+  .search-btn { background: #111; color: #fff; border: none; border-radius: 3px; padding: 10px 20px; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .search-btn:hover { background: var(--accent); }
+
+  /* FILTER TABS */
+  .filter-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 0 32px; }
+  .filter-bar-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 44px; }
+  .filter-cats { display: flex; }
+  .filter-cat { font-size: 12px; font-weight: 600; color: #999; padding: 0 14px; height: 44px; display: flex; align-items: center; border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; }
+  .filter-cat:hover { color: #111; }
+  .filter-cat.active { color: #111; border-bottom-color: #111; }
+  .filter-sort select { border: none; outline: none; background: transparent; font-family: 'Outfit', sans-serif; font-size: 12px; color: #555; cursor: pointer; }
+
+  /* LIST LAYOUT */
+  .list-section { max-width: var(--page-max); margin: 0 auto; padding: 0 32px; }
+
+  .list-item {
+    display: grid; grid-template-columns: 160px 1fr;
+    gap: 24px; align-items: start;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none; color: inherit;
+    transition: background 0.12s;
+  }
+  .list-item:first-child { border-top: 1px solid var(--border); margin-top: 24px; }
+  .list-item:hover { background: #fafaf8; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .list-item:hover .list-title { color: var(--accent); }
+
+  .list-thumb {
+    width: 160px; aspect-ratio: 16/9;
+    border-radius: 3px; overflow: hidden; flex-shrink: 0;
+  }
+  .list-thumb-inner { width: 100%; height: 100%; transition: transform 0.3s; }
+  .list-item:hover .list-thumb-inner { transform: scale(1.04); }
+
+  .pt1 { background: linear-gradient(135deg, #f5576c44, #f5576c99); }
+  .pt2 { background: linear-gradient(135deg, #4facfe44, #4facfe99); }
+  .pt3 { background: linear-gradient(135deg, #43e97b44, #43e97b99); }
+  .pt4 { background: linear-gradient(135deg, #fa709a44, #fee14099); }
+  .pt5 { background: linear-gradient(135deg, #a18cd144, #fbc2eb99); }
+  .pt6 { background: linear-gradient(135deg, #fccb9044, #d57eeb99); }
+  .pt7 { background: linear-gradient(135deg, #84fab044, #8fd3f499); }
+  .pt8 { background: linear-gradient(135deg, #667eea44, #764ba299); }
+
+  .list-content { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+  .list-cat { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); }
+  .list-title { font-size: 17px; font-weight: 700; line-height: 1.3; color: #111; transition: color 0.15s; }
+  .list-excerpt { font-size: 13px; color: #777; line-height: 1.6; }
+  .list-meta { font-size: 11px; color: #bbb; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .list-meta strong { color: #555; font-weight: 600; }
+  .meta-dot { color: #ddd; }
+  .list-read-time { margin-left: auto; font-size: 11px; color: #ccc; font-weight: 500; white-space: nowrap; }
+
+  /* LOAD MORE */
+  .load-more-wrap { max-width: var(--page-max); margin: 32px auto 56px; padding: 0 32px; display: flex; align-items: center; gap: 20px; }
+  .load-more-btn { border: 2px solid #111; background: #fff; color: #111; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 28px; border-radius: 3px; cursor: pointer; transition: all 0.15s; }
+  .load-more-btn:hover { background: #111; color: #fff; }
+  .load-more-meta { font-size: 12px; color: #bbb; }
+
+  /* SPEC PANEL */
+  .spec-overlay { position: fixed; right: 0; top: 54px; bottom: 0; width: 260px; background: #fff; border-left: 1px solid var(--border); overflow-y: auto; z-index: 100; padding: 20px; display: none; }
+  .spec-overlay.open { display: block; }
+  .spec-toggle { position: fixed; right: 16px; bottom: 24px; background: #111; color: #fff; border: none; border-radius: 24px; padding: 10px 18px; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 90px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-comps { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-n { background: #4f46e5; } .sc-f { background: #7e22ce; } .sc-s { background: #0891b2; } .sc-l { background: #0891b2; } .sc-p { background: #059669; }
+  .spec-note { background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px; padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px; }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<div class="handoff-bar">
+  <span class="layout-badge">COLLECTION 02</span>
+  <h1>The Newsroom</h1>
+  <p>Prominent search · List format · High density · Developer handoff</p>
+</div>
+
+<div class="zone-band zb-nav"><span class="zone-id">NAV</span> NAVIGATION — shared across all 5 collection layouts</div>
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Latest</a>
+    <a class="nav-link" href="#">AI</a>
+    <a class="nav-link" href="#">Tools</a>
+    <a class="nav-link" href="#">Guides</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="zone-band zb-filter"><span class="zone-id">SEARCH</span> SEARCH BAR — prominent, scoped to blog only · sits above filter tabs</div>
+<div class="collection-header">
+  <div class="collection-header-inner">
+    <div class="collection-title">All Articles</div>
+    <div class="collection-count">142 posts</div>
+  </div>
+</div>
+<div class="search-bar">
+  <div class="search-bar-inner">
+    <div class="search-input-wrap">
+      <svg width="16" height="16" fill="none" stroke="#bbb" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search articles…">
+    </div>
+    <button class="search-btn">Search</button>
+  </div>
+</div>
+<div class="filter-bar">
+  <div class="filter-bar-inner">
+    <div class="filter-cats">
+      <a class="filter-cat active" href="#">All</a>
+      <a class="filter-cat" href="#">AI</a>
+      <a class="filter-cat" href="#">Tools</a>
+      <a class="filter-cat" href="#">Guides</a>
+      <a class="filter-cat" href="#">Policy</a>
+      <a class="filter-cat" href="#">Research</a>
+    </div>
+    <div class="filter-sort">
+      <select><option>Newest first</option><option>Oldest first</option><option>Most popular</option></select>
+    </div>
+  </div>
+</div>
+
+<div class="zone-band zb-list"><span class="zone-id">LIST</span> POST LIST — horizontal cards · image left · text right · rule-separated</div>
+<div class="list-section">
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt1"></div></div>
+    <div class="list-content">
+      <div class="list-cat">Deep Dive</div>
+      <div class="list-title">The Featured Article Headline Goes Here and Can Run to Two Lines Comfortably</div>
+      <div class="list-excerpt">A short excerpt or deck giving the reader context to decide whether to click. One to two sentences works best here.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Mar 7, 2026<span class="meta-dot">·</span>12 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt2"></div></div>
+    <div class="list-content">
+      <div class="list-cat">AI</div>
+      <div class="list-title">Second Article With a Punchy Shorter Headline</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Mar 5, 2026<span class="meta-dot">·</span>6 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt3"></div></div>
+    <div class="list-content">
+      <div class="list-cat">Tools</div>
+      <div class="list-title">Third Post — List Format Shows More Posts Per Scroll Than a Grid</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Mar 3, 2026<span class="meta-dot">·</span>4 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt4"></div></div>
+    <div class="list-content">
+      <div class="list-cat">Guides</div>
+      <div class="list-title">Fourth Article — Great for Frequent Publishers With a Lot of Content</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Mar 1, 2026<span class="meta-dot">·</span>8 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt5"></div></div>
+    <div class="list-content">
+      <div class="list-cat">Policy</div>
+      <div class="list-title">Fifth Item in the List — Readers Can Scan Many Headlines Quickly</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Feb 28, 2026<span class="meta-dot">·</span>5 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt6"></div></div>
+    <div class="list-content">
+      <div class="list-cat">Research</div>
+      <div class="list-title">Sixth Article Closing Out the First Page of Results</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Feb 25, 2026<span class="meta-dot">·</span>7 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt7"></div></div>
+    <div class="list-content">
+      <div class="list-cat">AI</div>
+      <div class="list-title">Seventh Post — Notice How Much More Content Fits Versus a Grid</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Feb 22, 2026<span class="meta-dot">·</span>3 min read</div>
+    </div>
+  </a>
+
+  <a class="list-item" href="#">
+    <div class="list-thumb"><div class="list-thumb-inner pt8"></div></div>
+    <div class="list-content">
+      <div class="list-cat">Tools</div>
+      <div class="list-title">Eighth Item Before the Load More Button</div>
+      <div class="list-excerpt">Short excerpt previewing the content without giving it all away.</div>
+      <div class="list-meta"><strong>Author Name</strong><span class="meta-dot">·</span>Feb 19, 2026<span class="meta-dot">·</span>9 min read</div>
+    </div>
+  </a>
+
+</div>
+
+<div class="zone-band zb-footer"><span class="zone-id">LOAD MORE</span> PAGINATION — load more button · shows count of remaining posts</div>
+<div class="load-more-wrap">
+  <button class="load-more-btn">Load More</button>
+  <span class="load-more-meta">Showing 8 of 142 posts</span>
+</div>
+
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Newsroom</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>collection-02</code></span></div>
+  <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1160px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Format</span><span class="spec-v">Horizontal list</span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">None</span></div>
+  <div class="spec-row"><span class="spec-k">Pagination</span><span class="spec-v">Load more</span></div>
+  <div class="spec-h">Zones</div>
+  <div class="spec-comps">
+    <div class="spec-comp"><span class="sc-id sc-n">NAV</span> Site navigation</div>
+    <div class="spec-comp"><span class="sc-id sc-f">SEARCH</span> Prominent search + filter tabs</div>
+    <div class="spec-comp"><span class="sc-id sc-l">LIST</span> Horizontal post list</div>
+    <div class="spec-comp"><span class="sc-id sc-p">LOAD</span> Load more + count</div>
+  </div>
+  <div class="spec-h">Search Bar</div>
+  <div class="spec-row"><span class="spec-k">Position</span><span class="spec-v">Above filter tabs</span></div>
+  <div class="spec-row"><span class="spec-k">Border</span><span class="spec-v"><code>2px solid #111</code></span></div>
+  <div class="spec-row"><span class="spec-k">Focus</span><span class="spec-v">Border → accent color</span></div>
+  <div class="spec-row"><span class="spec-k">Scope</span><span class="spec-v">Blog posts only</span></div>
+  <div class="spec-h">List Items</div>
+  <div class="spec-row"><span class="spec-k">Grid</span><span class="spec-v"><code>160px</code> thumb + <code>1fr</code></span></div>
+  <div class="spec-row"><span class="spec-k">Gap</span><span class="spec-v"><code>24px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Separator</span><span class="spec-v"><code>1px solid #e8e8e8</code></span></div>
+  <div class="spec-row"><span class="spec-k">Hover</span><span class="spec-v">Row bg tints, title → accent</span></div>
+  <div class="spec-row"><span class="spec-k">Thumb ratio</span><span class="spec-v"><code>16:9</code></span></div>
+  <div class="spec-row"><span class="spec-k">Per page</span><span class="spec-v">8 (configurable)</span></div>
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Best for high-frequency publishers.</strong> Shows ~8 posts above the fold vs ~3 in a grid. Readers scan headlines fast. Strong pairing with The Reporter or The Writer article styles.</div>
+</div>
+
+</body>
+</html>

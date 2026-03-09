@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection 01 — The Masthead · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+
+  :root {
+    --accent: #e9007f;
+    --border: #e8e8e8;
+    --bg-light: #f7f6f2;
+    --page-max: 1200px;
+  }
+
+  /* =============================================
+     HANDOFF CHROME
+  ============================================= */
+  .handoff-bar {
+    background: #111; color: #fff;
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 200;
+  }
+  .handoff-bar .layout-badge {
+    background: #2563eb;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
+  }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+
+  .zone-band {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 32px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .zone-band .zone-id {
+    font-family: 'Courier New', monospace;
+    font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff;
+  }
+  .zb-nav    { background: #f8fafc; color: #475569; border-top: 1px solid #e2e8f0; }
+  .zb-nav .zone-id    { background: #475569; }
+  .zb-hero   { background: #ede9fe; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-hero .zone-id   { background: #4f46e5; }
+  .zb-filter { background: #fef9c3; color: #854d0e; border-top: 1px solid #fde68a; }
+  .zb-filter .zone-id { background: #ca8a04; }
+  .zb-grid   { background: #f0f9ff; color: #0369a1; border-top: 1px solid #bae6fd; }
+  .zb-grid .zone-id   { background: #0891b2; }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  /* =============================================
+     NAV
+  ============================================= */
+  .site-nav {
+    background: #fff;
+    border-bottom: 2px solid #111;
+    padding: 0 32px; height: 54px;
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 100%;
+  }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #111; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #555; text-decoration: none; }
+  .nav-link:hover { color: var(--accent); }
+  .nav-link.active { color: #111; border-bottom: 2px solid #111; padding-bottom: 2px; }
+  .nav-cta {
+    font-size: 12px; font-weight: 700;
+    background: #111; color: #fff;
+    padding: 7px 16px; border-radius: 2px; text-decoration: none; margin-left: 8px;
+  }
+  .nav-cta:hover { background: var(--accent); }
+
+  /* =============================================
+     HERO — Full-width featured post
+  ============================================= */
+  .hero {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 21/8;
+    background: linear-gradient(160deg, #1a1a2e 0%, #2d1a3a 45%, #0f2027 100%);
+    overflow: hidden;
+    display: flex; align-items: flex-end;
+    cursor: pointer;
+  }
+  /* Texture */
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 3px,
+      rgba(255,255,255,0.018) 3px, rgba(255,255,255,0.018) 4px
+    );
+  }
+  .hero-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.25) 55%, transparent 100%);
+  }
+  /* "Featured" badge top left */
+  .hero-badge {
+    position: absolute; top: 28px; left: 40px; z-index: 3;
+    background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; padding: 4px 10px; border-radius: 2px;
+  }
+  .hero-content {
+    position: relative; z-index: 2;
+    padding: 32px 40px; width: 100%; max-width: 780px;
+  }
+  .hero-cat {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: rgba(255,255,255,0.5);
+    margin-bottom: 12px;
+  }
+  .hero-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 36px; font-weight: 900;
+    line-height: 1.08; letter-spacing: -0.8px;
+    color: #fff; margin-bottom: 14px;
+  }
+  .hero-deck {
+    font-size: 15px; color: rgba(255,255,255,0.6);
+    line-height: 1.6; margin-bottom: 18px; max-width: 560px;
+  }
+  .hero-meta {
+    font-size: 12px; color: rgba(255,255,255,0.4);
+    display: flex; gap: 10px; align-items: center;
+  }
+  .hero-meta strong { color: rgba(255,255,255,0.75); }
+  .hero-meta-dot { color: rgba(255,255,255,0.2); }
+  .hero-read {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 16px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: #fff;
+    border-bottom: 1.5px solid rgba(255,255,255,0.3);
+    padding-bottom: 2px; text-decoration: none;
+    transition: border-color 0.15s;
+  }
+  .hero-read:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* =============================================
+     FILTER + SEARCH BAR
+  ============================================= */
+  .filter-bar {
+    border-bottom: 1px solid var(--border);
+    background: #fff;
+    padding: 0 32px;
+  }
+  .filter-bar-inner {
+    max-width: var(--page-max);
+    margin: 0 auto;
+    height: 52px;
+    display: flex; align-items: center; gap: 0;
+  }
+  /* Category pills */
+  .filter-cats { display: flex; gap: 0; flex: 1; overflow: hidden; }
+  .filter-cat {
+    font-size: 12px; font-weight: 600;
+    padding: 0 18px; height: 52px;
+    display: flex; align-items: center;
+    color: #888; text-decoration: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: all 0.12s;
+  }
+  .filter-cat:hover { color: #111; }
+  .filter-cat.active { color: #111; border-bottom-color: #111; font-weight: 700; }
+  .filter-cat-count {
+    font-size: 10px; color: #ccc; font-weight: 500;
+    margin-left: 5px;
+  }
+
+  /* Sort dropdown */
+  .filter-sort {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: #888; font-weight: 500;
+    padding: 0 16px;
+    border-left: 1px solid var(--border);
+    height: 52px; cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-sort:hover { color: #111; }
+  .filter-sort select {
+    border: none; font-family: 'Outfit', sans-serif;
+    font-size: 12px; color: #555; font-weight: 600;
+    background: transparent; cursor: pointer; outline: none;
+  }
+
+  /* Search — expands on focus */
+  .filter-search {
+    display: flex; align-items: center; gap: 8px;
+    height: 52px; padding: 0 16px;
+    border-left: 1px solid var(--border);
+  }
+  .filter-search-icon { color: #bbb; flex-shrink: 0; }
+  .filter-search input {
+    border: none; outline: none; background: transparent;
+    font-family: 'Outfit', sans-serif; font-size: 13px;
+    color: #111; width: 160px;
+    transition: width 0.2s;
+  }
+  .filter-search input::placeholder { color: #ccc; }
+  .filter-search input:focus { width: 220px; }
+
+  /* =============================================
+     POST GRID
+  ============================================= */
+  .post-grid-wrap {
+    max-width: var(--page-max);
+    margin: 0 auto;
+    padding: 40px 32px 56px;
+  }
+
+  .grid-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .grid-header-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: #111;
+  }
+  .grid-header-count { font-size: 12px; color: #bbb; }
+
+  .post-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+
+  .post-card { text-decoration: none; color: inherit; display: block; }
+  .post-card:hover .post-card-title { color: var(--accent); }
+
+  .post-card-thumb {
+    width: 100%; aspect-ratio: 16/9;
+    border-radius: 3px; margin-bottom: 14px;
+    position: relative; overflow: hidden;
+  }
+  .post-card-thumb-img {
+    width: 100%; height: 100%;
+    transition: transform 0.3s ease;
+  }
+  .post-card:hover .post-card-thumb-img { transform: scale(1.03); }
+
+  /* Thumb placeholder colors */
+  .thumb-a { background: linear-gradient(135deg, #667eea33, #764ba233); }
+  .thumb-b { background: linear-gradient(135deg, #f093fb33, #f5576c33); }
+  .thumb-c { background: linear-gradient(135deg, #4facfe33, #00f2fe33); }
+  .thumb-d { background: linear-gradient(135deg, #43e97b33, #38f9d733); }
+  .thumb-e { background: linear-gradient(135deg, #fa709a33, #fee14033); }
+  .thumb-f { background: linear-gradient(135deg, #a18cd133, #fbc2eb33); }
+  .thumb-g { background: linear-gradient(135deg, #ffecd233, #fcb69f33); }
+  .thumb-h { background: linear-gradient(135deg, #84fab033, #8fd3f433); }
+  .thumb-i { background: linear-gradient(135deg, #d4fc7933, #96e6a133); }
+
+  /* Thumb label */
+  .post-card-thumb-img {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: rgba(0,0,0,0.2); text-transform: uppercase;
+    letter-spacing: 0.5px; font-weight: 600; font-family: 'Outfit', sans-serif;
+  }
+
+  .post-card-cat {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+  }
+  .post-card-title {
+    font-size: 16px; font-weight: 700; line-height: 1.3;
+    color: #111; margin-bottom: 8px; transition: color 0.15s;
+  }
+  .post-card-excerpt {
+    font-size: 13px; color: #888; line-height: 1.55;
+    margin-bottom: 10px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .post-card-meta {
+    font-size: 11px; color: #bbb;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .post-card-meta-dot { color: #e0e0e0; }
+  .post-card-meta-author { font-weight: 600; color: #888; }
+
+  /* Load more */
+  .load-more-wrap {
+    max-width: var(--page-max);
+    margin: 0 auto;
+    padding: 0 32px 64px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .load-more-btn {
+    padding: 12px 32px;
+    border: 2px solid #111; border-radius: 2px;
+    background: transparent; color: #111;
+    font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.5px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .load-more-btn:hover { background: #111; color: #fff; }
+  .load-more-count { font-size: 12px; color: #ccc; }
+
+  /* =============================================
+     FOOTER NEWSLETTER
+  ============================================= */
+  .collection-footer {
+    background: #f7f6f2;
+    border-top: 1px solid var(--border);
+    padding: 56px 32px;
+  }
+  .collection-footer-inner {
+    max-width: var(--page-max);
+    margin: 0 auto;
+    display: flex; align-items: center; gap: 48px;
+  }
+  .cf-left { flex: 1; }
+  .cf-eyebrow {
+    font-size: 10px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+  }
+  .cf-headline { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; }
+  .cf-sub { font-size: 14px; color: #777; line-height: 1.6; }
+  .cf-right { flex-shrink: 0; }
+  .cf-form { display: flex; gap: 8px; }
+  .cf-input {
+    width: 240px; padding: 11px 14px;
+    border: 1.5px solid #ddd; border-radius: 2px;
+    font-family: 'Outfit', sans-serif; font-size: 13px; outline: none;
+  }
+  .cf-input:focus { border-color: #111; }
+  .cf-btn {
+    padding: 11px 22px; background: #111; color: #fff;
+    border: none; border-radius: 2px;
+    font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .cf-btn:hover { background: var(--accent); }
+  .cf-fine { font-size: 11px; color: #bbb; margin-top: 8px; }
+
+  /* =============================================
+     SPEC PANEL
+  ============================================= */
+  .spec-overlay {
+    position: fixed; right: 0; top: 54px; bottom: 0;
+    width: 260px; background: #fff;
+    border-left: 1px solid #e8e8e8;
+    overflow-y: auto; z-index: 100; padding: 20px; display: none;
+  }
+  .spec-overlay.open { display: block; }
+  .spec-toggle {
+    position: fixed; right: 16px; bottom: 24px;
+    background: #111; color: #fff; border: none; border-radius: 24px;
+    padding: 10px 18px; font-family: 'Outfit', sans-serif;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 90px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-note {
+    background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px;
+    padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px;
+  }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<div class="handoff-bar">
+  <span class="layout-badge">COLLECTION 01</span>
+  <h1>The Masthead</h1>
+  <p>Full-width hero · Filter bar + search · 3-col grid · Developer handoff</p>
+</div>
+
+<!-- ==================== NAV ==================== -->
+<div class="zone-band zb-nav">
+  <span class="zone-id">NAV</span>
+  Navigation — same component as article pages
+</div>
+
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link active" href="#">Blog</a>
+    <a class="nav-link" href="#">AI</a>
+    <a class="nav-link" href="#">Tools</a>
+    <a class="nav-link" href="#">Guides</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<!-- ==================== HERO ==================== -->
+<div class="zone-band zb-hero">
+  <span class="zone-id">HERO</span>
+  Featured post — latest or manually pinned
+</div>
+
+<a class="hero" href="#">
+  <div class="hero-overlay"></div>
+  <span class="hero-badge">Featured</span>
+  <div class="hero-content">
+    <div class="hero-cat">Category Name</div>
+    <div class="hero-title">The Featured Article Headline Goes Here — Big, Bold, and Hard to Ignore</div>
+    <div class="hero-deck">A short deck that adds context. One or two sentences that give the reader a reason to click through to the full piece.</div>
+    <div class="hero-meta">
+      By <strong>Author Name</strong>
+      <span class="hero-meta-dot">·</span>
+      <span>March 7, 2026</span>
+      <span class="hero-meta-dot">·</span>
+      <span>8 min read</span>
+    </div>
+    <span class="hero-read">Read Article →</span>
+  </div>
+</a>
+
+<!-- ==================== FILTER + SEARCH ==================== -->
+<div class="zone-band zb-filter">
+  <span class="zone-id">FILTER</span>
+  Category tabs · Sort · Search articles
+</div>
+
+<div class="filter-bar">
+  <div class="filter-bar-inner">
+    <nav class="filter-cats">
+      <a class="filter-cat active" href="#">All <span class="filter-cat-count">142</span></a>
+      <a class="filter-cat" href="#">AI <span class="filter-cat-count">48</span></a>
+      <a class="filter-cat" href="#">Tools <span class="filter-cat-count">31</span></a>
+      <a class="filter-cat" href="#">Guides <span class="filter-cat-count">27</span></a>
+      <a class="filter-cat" href="#">Opinion <span class="filter-cat-count">19</span></a>
+      <a class="filter-cat" href="#">News <span class="filter-cat-count">17</span></a>
+    </nav>
+
+    <div class="filter-sort">
+      Sort:
+      <select>
+        <option>Latest</option>
+        <option>Most Popular</option>
+        <option>Oldest</option>
+      </select>
+    </div>
+
+    <div class="filter-search">
+      <svg class="filter-search-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" placeholder="Search articles…">
+    </div>
+  </div>
+</div>
+
+<!-- ==================== GRID ==================== -->
+<div class="zone-band zb-grid">
+  <span class="zone-id">GRID</span>
+  Post cards — 3 columns · 9 per page
+</div>
+
+<div class="post-grid-wrap">
+  <div class="grid-header">
+    <span class="grid-header-title">Latest Articles</span>
+    <span class="grid-header-count">Showing 1–9 of 141</span>
+  </div>
+
+  <div class="post-grid">
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-a">Image</div></div>
+      <div class="post-card-cat">AI</div>
+      <div class="post-card-title">Why Every AI Benchmark Is Lying to You Right Now</div>
+      <div class="post-card-excerpt">The metrics look impressive until you understand what they're actually measuring — and what they're hiding.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Mar 6</span><span class="post-card-meta-dot">·</span><span>6 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-b">Image</div></div>
+      <div class="post-card-cat">Tools</div>
+      <div class="post-card-title">The Quiet Automation Tools That Are Actually Saving Solopreneurs Time</div>
+      <div class="post-card-excerpt">Not the ones everyone talks about — the unglamorous workflows that actually stick.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Mar 5</span><span class="post-card-meta-dot">·</span><span>8 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-c">Image</div></div>
+      <div class="post-card-cat">Opinion</div>
+      <div class="post-card-title">The Productivity Industrial Complex Has Failed Us</div>
+      <div class="post-card-excerpt">Forty years of efficiency advice and we're working more hours than ever. It's time to ask harder questions.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Mar 4</span><span class="post-card-meta-dot">·</span><span>5 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-d">Image</div></div>
+      <div class="post-card-cat">Guides</div>
+      <div class="post-card-title">Building a Second Brain on a Budget: The Complete 2026 Guide</div>
+      <div class="post-card-excerpt">You don't need expensive software. Here's a system that costs nothing and actually works.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Mar 3</span><span class="post-card-meta-dot">·</span><span>12 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-e">Image</div></div>
+      <div class="post-card-cat">AI</div>
+      <div class="post-card-title">Google's Quiet Retreat and What It Means for the Rest of Us</div>
+      <div class="post-card-excerpt">Reading between the lines of an earnings call that revealed more than intended.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Mar 2</span><span class="post-card-meta-dot">·</span><span>7 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-f">Image</div></div>
+      <div class="post-card-cat">News</div>
+      <div class="post-card-title">The Startup That's Quietly Rebuilding How Newsletters Get Made</div>
+      <div class="post-card-excerpt">Nobody noticed the pivot. Three months later, they have the attention of every major publisher.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Mar 1</span><span class="post-card-meta-dot">·</span><span>4 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-g">Image</div></div>
+      <div class="post-card-cat">Tools</div>
+      <div class="post-card-title">Notion vs. Obsidian vs. Everything Else: The 2026 Verdict</div>
+      <div class="post-card-excerpt">After switching six times in three years, here's where I landed — and why I'm staying.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Feb 28</span><span class="post-card-meta-dot">·</span><span>9 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-h">Image</div></div>
+      <div class="post-card-cat">Guides</div>
+      <div class="post-card-title">How to Write an Article That Actually Gets Read in 2026</div>
+      <div class="post-card-excerpt">Attention is the scarcest resource on the internet. Here's how to earn it in the first 200 words.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Feb 27</span><span class="post-card-meta-dot">·</span><span>10 min</span></div>
+    </a>
+
+    <a class="post-card" href="#">
+      <div class="post-card-thumb"><div class="post-card-thumb-img thumb-i">Image</div></div>
+      <div class="post-card-cat">Opinion</div>
+      <div class="post-card-title">The Creator Economy Is Consolidating. Here's Who Wins.</div>
+      <div class="post-card-excerpt">The middle is being squeezed out. Understanding the new power dynamics before it's too late.</div>
+      <div class="post-card-meta"><span class="post-card-meta-author">Author Name</span><span class="post-card-meta-dot">·</span><span>Feb 26</span><span class="post-card-meta-dot">·</span><span>6 min</span></div>
+    </a>
+
+  </div>
+</div>
+
+<!-- Load more -->
+<div class="load-more-wrap">
+  <button class="load-more-btn">Load More Articles</button>
+  <span class="load-more-count">Showing 9 of 141 articles</span>
+</div>
+
+<!-- ==================== FOOTER NEWSLETTER ==================== -->
+<div class="zone-band zb-footer">
+  <span class="zone-id">FOOTER</span>
+  Newsletter signup — collection page footer
+</div>
+
+<div class="collection-footer">
+  <div class="collection-footer-inner">
+    <div class="cf-left">
+      <div class="cf-eyebrow">Free Newsletter</div>
+      <div class="cf-headline">Never Miss a Story</div>
+      <div class="cf-sub">Get the week's best articles delivered every Tuesday. No spam, unsubscribe anytime.</div>
+    </div>
+    <div class="cf-right">
+      <div class="cf-form">
+        <input class="cf-input" type="email" placeholder="your@email.com">
+        <button class="cf-btn">Subscribe</button>
+      </div>
+      <div class="cf-fine">Join 40,000+ readers · Free forever</div>
+    </div>
+  </div>
+</div>
+
+<!-- SPEC TOGGLE -->
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Masthead</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>collection-01</code></span></div>
+  <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1200px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Grid</span><span class="spec-v">3 columns</span></div>
+  <div class="spec-row"><span class="spec-k">Per page</span><span class="spec-v">9 posts</span></div>
+  <div class="spec-row"><span class="spec-k">Pagination</span><span class="spec-v">Load more button</span></div>
+
+  <div class="spec-h">Hero</div>
+  <div class="spec-row"><span class="spec-k">Ratio</span><span class="spec-v"><code>21:8</code> full width</span></div>
+  <div class="spec-row"><span class="spec-k">Source</span><span class="spec-v">Latest post or pinned</span></div>
+  <div class="spec-row"><span class="spec-k">Badge</span><span class="spec-v">"Featured" — pink, top left</span></div>
+  <div class="spec-row"><span class="spec-k">Overlay</span><span class="spec-v">Dark gradient, bottom-heavy</span></div>
+  <div class="spec-row"><span class="spec-k">Entire area</span><span class="spec-v">Is a link</span></div>
+
+  <div class="spec-h">Filter Bar</div>
+  <div class="spec-row"><span class="spec-k">Height</span><span class="spec-v"><code>52px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Categories</span><span class="spec-v">From blog tags/cats</span></div>
+  <div class="spec-row"><span class="spec-k">Active state</span><span class="spec-v">2px black underline</span></div>
+  <div class="spec-row"><span class="spec-k">Sort</span><span class="spec-v">Latest / Popular / Oldest</span></div>
+  <div class="spec-row"><span class="spec-k">Search</span><span class="spec-v">Expands <code>160→220px</code> on focus</span></div>
+  <div class="spec-row"><span class="spec-k">Scope</span><span class="spec-v">Blog posts only</span></div>
+
+  <div class="spec-h">Post Card</div>
+  <div class="spec-row"><span class="spec-k">Thumb ratio</span><span class="spec-v"><code>16:9</code></span></div>
+  <div class="spec-row"><span class="spec-k">Thumb hover</span><span class="spec-v">Scale <code>1.03</code></span></div>
+  <div class="spec-row"><span class="spec-k">Excerpt</span><span class="spec-v">2 lines, clamped</span></div>
+  <div class="spec-row"><span class="spec-k">Title hover</span><span class="spec-v">Tints accent pink</span></div>
+  <div class="spec-row"><span class="spec-k">Entire card</span><span class="spec-v">Is a link</span></div>
+
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Most versatile collection layout.</strong> The hero gives the most important post maximum visibility. Works with any article layout. Good default choice for general-purpose blogs.</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Layout 05 — The Story · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+
+  :root {
+    --accent: #e9007f;
+    --border: #e8e8e8;
+    --bg-light: #f7f6f2;
+  }
+
+  /* =============================================
+     HANDOFF CHROME
+  ============================================= */
+  .handoff-bar {
+    background: #111; color: #fff;
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 200;
+  }
+  .handoff-bar .layout-badge {
+    background: #7c3aed;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
+  }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+
+  .zone-band {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 32px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .zone-band .zone-id {
+    font-family: 'Courier New', monospace;
+    font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff;
+  }
+  .zb-header { background: #ede9fe; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-header .zone-id { background: #4f46e5; }
+  .zb-body   { background: #f0f9ff; color: #0369a1; border-top: 1px solid #bae6fd; }
+  .zb-body .zone-id   { background: #0891b2; }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  .no-sidebar-note {
+    background: #f3f4f6; color: #9ca3af;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 2px;
+    letter-spacing: 0.5px; border: 1px solid #e5e7eb;
+  }
+
+  /* =============================================
+     NAV — Dark, Split Reverse style
+  ============================================= */
+  .site-nav {
+    background: #1a1a1a;
+    padding: 0 32px; height: 54px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #fff; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: rgba(255,255,255,0.5); text-decoration: none;
+  }
+  .nav-link:hover { color: #fff; }
+  .nav-cta {
+    font-size: 12px; font-weight: 700;
+    background: var(--accent); color: #fff;
+    padding: 7px 16px; border-radius: 2px; text-decoration: none; margin-left: 8px;
+  }
+
+  /* =============================================
+     HEADER — PRESET 5 (SPLIT REVERSE)
+     Image left 58% / dark text panel right 42%
+  ============================================= */
+  .article-header {
+    display: grid;
+    grid-template-columns: 58% 42%;
+    min-height: 340px;
+  }
+  .header-img {
+    background: linear-gradient(160deg, #2a2035 0%, #1a2a35 50%, #251a2a 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.2); font-size: 12px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    position: relative; overflow: hidden;
+  }
+  /* Subtle texture on the image placeholder */
+  .header-img::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      45deg, transparent, transparent 40px,
+      rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 80px
+    );
+  }
+  .header-img-label {
+    position: relative; z-index: 1;
+    text-align: center; line-height: 1.6;
+  }
+
+  .header-text-panel {
+    background: #1a1a1a;
+    padding: 40px 36px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .breadcrumbs {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; margin-bottom: 20px;
+  }
+  .breadcrumbs a { color: rgba(255,255,255,0.35); text-decoration: none; }
+  .breadcrumbs a:hover { color: rgba(255,255,255,0.7); }
+  .breadcrumbs .bc-sep { color: rgba(255,255,255,0.2); font-size: 10px; }
+  .breadcrumbs .bc-current { color: rgba(255,255,255,0.2); }
+
+  .header-cat {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 14px;
+  }
+  .header-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 26px; font-weight: 800;
+    line-height: 1.15; letter-spacing: -0.3px;
+    color: #fff; margin-bottom: 14px;
+  }
+  .header-deck {
+    font-size: 14px; color: rgba(255,255,255,0.5);
+    line-height: 1.6; margin-bottom: 20px;
+  }
+  .header-meta {
+    font-size: 12px; color: rgba(255,255,255,0.35);
+    display: flex; flex-wrap: wrap; gap: 8px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 16px; align-items: center;
+  }
+  .header-meta strong { color: rgba(255,255,255,0.7); }
+  .header-meta-dot { color: rgba(255,255,255,0.15); }
+  .header-actions {
+    display: flex; gap: 14px; margin-top: 14px; font-size: 12px;
+  }
+  .header-action {
+    color: rgba(255,255,255,0.35); text-decoration: none;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .header-action:hover { color: rgba(255,255,255,0.8); }
+
+  /* =============================================
+     BODY — Single wide centered column, no sidebar
+  ============================================= */
+  .page-body {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 48px 32px;
+  }
+
+  /* Article body (placeholder blocks) */
+  .placeholder-block { background: #f0f0ec; border-radius: 3px; margin-bottom: 10px; }
+  .ph-line    { height: 14px; }
+  .ph-gap     { height: 24px; background: transparent; }
+  .ph-h2      { height: 18px; background: #e4e4de; margin: 28px 0 14px; border-radius: 2px; }
+  .ph-img     {
+    width: 100%; aspect-ratio: 16/9;
+    background: #e8e8e0; border-radius: 3px; margin: 32px 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #bbb; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  /* Full-bleed inline image — a feature of immersive layouts */
+  .ph-img-bleed {
+    width: calc(100% + 64px);
+    margin-left: -32px;
+    aspect-ratio: 21/9;
+    background: linear-gradient(160deg, #2a2035 0%, #1a2a35 100%);
+    margin-top: 32px; margin-bottom: 32px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* =============================================
+     POST-FOOTER
+  ============================================= */
+  .post-footer {
+    border-top: 1px solid #f0f0f0;
+    padding: 48px 32px;
+    max-width: 700px;
+    margin: 0 auto;
+    display: flex; flex-direction: column; gap: 40px;
+  }
+
+  /* PF-01 Author Bio Card */
+  .pf-author-card {
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 28px; display: flex; gap: 24px; align-items: flex-start;
+  }
+  .pf-avatar {
+    width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 22px;
+  }
+  .pf-author-name { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .pf-author-role { font-size: 12px; color: #aaa; margin-bottom: 10px; }
+  .pf-author-bio { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 12px; }
+  .pf-author-links { display: flex; gap: 10px; }
+  .pf-author-link {
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    text-decoration: none; border: 1.5px solid var(--accent);
+    padding: 4px 12px; border-radius: 2px;
+  }
+  .pf-author-link:hover { background: var(--accent); color: #fff; }
+
+  /* PF-06 Lead Magnet */
+  .pf-lead-magnet {
+    display: flex; align-items: stretch;
+    background: #111; border-radius: 4px; overflow: hidden;
+    flex-wrap: wrap;
+  }
+  .pf-lm-icon {
+    flex-shrink: 0; padding: 0 24px;
+    display: flex; align-items: center; justify-content: center;
+    align-self: stretch; background: rgba(233,0,127,0.2);
+    border-right: 1px solid rgba(255,255,255,0.07);
+  }
+  .pf-lm-icon-inner {
+    width: 32px; height: 32px; background: var(--accent);
+    border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .pf-lm-middle {
+    flex: 1; min-width: 180px; padding: 16px 20px;
+    display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  }
+  .pf-lm-title { font-size: 14px; font-weight: 700; color: #fff; }
+  .pf-lm-bullets { list-style: none; display: flex; gap: 20px; flex-wrap: wrap; }
+  .pf-lm-bullets li { font-size: 12px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .pf-lm-bullets li::before { content: "✓"; color: var(--accent); font-weight: 700; font-size: 10px; }
+  .pf-lm-right {
+    flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 14px 20px; border-left: 1px solid rgba(255,255,255,0.07);
+  }
+  .pf-lm-input {
+    width: 150px; min-width: 100px; padding: 8px 12px;
+    border: 1.5px solid rgba(255,255,255,0.15); border-radius: 3px;
+    font-family: 'Outfit', sans-serif; font-size: 12px;
+    background: rgba(255,255,255,0.07); color: #fff; outline: none;
+  }
+  .pf-lm-input::placeholder { color: rgba(255,255,255,0.3); }
+  .pf-lm-btn {
+    padding: 8px 18px; background: var(--accent); color: #fff;
+    border: none; border-radius: 3px;
+    font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .pf-lm-btn:hover { background: #ff2d96; }
+
+  /* PF-05 Read Next Feature Card — full bleed, last module */
+  /* Intentionally breaks out of the 700px container — full page width */
+  .read-next-breakout {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    margin-bottom: 0;
+  }
+  .pf-read-next {
+    position: relative;
+    overflow: hidden;
+    min-height: 260px;
+    display: flex; align-items: flex-end;
+    text-decoration: none; color: inherit;
+    cursor: pointer;
+  }
+  .pf-rn-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #1a1a2e 0%, #2d1a3a 40%, #1a2535 100%);
+  }
+  /* Subtle texture overlay */
+  .pf-rn-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      45deg, transparent, transparent 60px,
+      rgba(255,255,255,0.012) 60px, rgba(255,255,255,0.012) 120px
+    );
+  }
+  .pf-rn-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+  }
+  /* "Read Next" label floats top-right */
+  .pf-rn-badge {
+    position: absolute; top: 24px; right: 32px; z-index: 3;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 4px 10px; border-radius: 2px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pf-rn-badge::after { content: '→'; color: rgba(255,255,255,0.3); }
+  .pf-rn-content {
+    position: relative; z-index: 2;
+    padding: 32px 40px; width: 100%; max-width: 720px;
+  }
+  .pf-rn-eyebrow {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  .pf-rn-title {
+    font-size: 26px; font-weight: 800;
+    color: #fff; line-height: 1.15;
+    letter-spacing: -0.3px; max-width: 560px; margin-bottom: 12px;
+  }
+  .pf-read-next:hover .pf-rn-title { color: #ffd0e8; }
+  .pf-rn-meta {
+    font-size: 12px; color: rgba(255,255,255,0.35);
+    display: flex; gap: 10px; align-items: center;
+  }
+  .pf-rn-meta-dot { color: rgba(255,255,255,0.15); }
+  /* Animated arrow on hover */
+  .pf-rn-arrow {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    border-radius: 50%; margin-left: auto;
+    color: rgba(255,255,255,0.4); font-size: 16px;
+    align-self: flex-end; flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .pf-read-next:hover .pf-rn-arrow {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateX(4px);
+  }
+  .pf-rn-inner { display: flex; align-items: flex-end; width: 100%; }
+
+  /* =============================================
+     SPEC PANEL
+  ============================================= */
+  .spec-overlay {
+    position: fixed; right: 0; top: 54px; bottom: 0;
+    width: 260px; background: #fff;
+    border-left: 1px solid #e8e8e8;
+    overflow-y: auto; z-index: 100; padding: 20px; display: none;
+  }
+  .spec-overlay.open { display: block; }
+  .spec-toggle {
+    position: fixed; right: 16px; bottom: 24px;
+    background: #111; color: #fff; border: none; border-radius: 24px;
+    padding: 10px 18px; font-family: 'Outfit', sans-serif;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 90px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-components { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-h { background: #4f46e5; }
+  .sc-f { background: #059669; }
+  .sc-none { background: #9ca3af; }
+  .spec-note {
+    background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px;
+    padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px;
+  }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<!-- HANDOFF BAR -->
+<div class="handoff-bar">
+  <span class="layout-badge">LAYOUT 05</span>
+  <h1>The Story</h1>
+  <p>Split Reverse header · No sidebar · Immersive Read Next footer · Developer handoff</p>
+</div>
+
+<!-- ==================== HEADER ZONE ==================== -->
+<div class="zone-band zb-header">
+  <span class="zone-id">P5</span>
+  HEADER ZONE — Split Reverse (Preset 5)
+</div>
+
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Stories</a>
+    <a class="nav-link" href="#">Series</a>
+    <a class="nav-link" href="#">Podcast</a>
+    <a class="nav-link" href="#">About</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="article-header">
+  <!-- Left: image (58%) -->
+  <div class="header-img">
+    <div class="header-img-label">Hero Image<br>58% width · min-height 340px</div>
+  </div>
+  <!-- Right: dark text panel (42%) -->
+  <div class="header-text-panel">
+    <nav class="breadcrumbs">
+      <a href="#">Home</a><span class="bc-sep">›</span>
+      <a href="#">Stories</a><span class="bc-sep">›</span>
+      <span class="bc-current">Article Title</span>
+    </nav>
+    <div class="header-cat">Long Read</div>
+    <div class="header-title">Article Headline Goes Here — Visual, Narrative, and Story-Driven Pieces</div>
+    <div class="header-deck">A subheading that sets up the tone. Works best for photo-forward, lifestyle, or narrative content.</div>
+    <div class="header-meta">
+      By <strong>Author Name</strong>
+      <span class="header-meta-dot">·</span>
+      <span>Published Date</span>
+      <span class="header-meta-dot">·</span>
+      <span>8 min read</span>
+    </div>
+    <div class="header-actions">
+      <a class="header-action" href="#">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+        Save
+      </a>
+      <a class="header-action" href="#">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== BODY ZONE ==================== -->
+<div class="zone-band zb-body">
+  <span class="zone-id">—</span>
+  BODY ZONE — Single centered column · No sidebar
+  <span class="no-sidebar-note">NO SIDEBAR</span>
+</div>
+
+<div class="page-body">
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:95%"></div>
+  <div class="placeholder-block ph-line" style="width:88%"></div>
+  <div class="placeholder-block ph-line" style="width:92%"></div>
+  <div class="placeholder-block ph-line" style="width:72%"></div>
+  <div class="placeholder-block ph-gap"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:96%"></div>
+  <div class="placeholder-block ph-line" style="width:80%"></div>
+  <div class="placeholder-block ph-line" style="width:90%"></div>
+  <div class="placeholder-block ph-line" style="width:65%"></div>
+
+  <!-- Full-bleed inline image — signature feature of The Story layout -->
+  <div class="ph-img-bleed">Full-bleed inline image · 21:9 · breaks out of column</div>
+
+  <div class="placeholder-block ph-h2" style="width:48%"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:94%"></div>
+  <div class="placeholder-block ph-line" style="width:87%"></div>
+  <div class="placeholder-block ph-line" style="width:91%"></div>
+  <div class="placeholder-block ph-gap"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:82%"></div>
+  <div class="placeholder-block ph-line" style="width:96%"></div>
+  <div class="placeholder-block ph-line" style="width:70%"></div>
+  <div class="placeholder-block ph-gap"></div>
+  <div class="placeholder-block ph-h2" style="width:35%"></div>
+  <div class="placeholder-block ph-line" style="width:100%"></div>
+  <div class="placeholder-block ph-line" style="width:93%"></div>
+  <div class="placeholder-block ph-line" style="width:88%"></div>
+  <div class="placeholder-block ph-line" style="width:60%"></div>
+</div>
+
+<!-- ==================== FOOTER ZONE ==================== -->
+<div class="zone-band zb-footer" style="max-width:700px;margin:0 auto;padding-left:0;padding-right:0;">
+  <span class="zone-id">PF-01 · PF-06 · PF-05</span>
+  POST-FOOTER ZONE
+</div>
+
+<div class="post-footer">
+
+  <!-- PF-01: Author Bio Card -->
+  <div class="pf-author-card">
+    <div class="pf-avatar">MP</div>
+    <div>
+      <div class="pf-author-name">Author Name</div>
+      <div class="pf-author-role">Features Writer · Photography &amp; Culture</div>
+      <div class="pf-author-bio">A longer bio than the sidebar version. 2–3 sentences about background, focus areas, and what they cover. Can include publication history or notable work that builds credibility with readers.</div>
+      <div class="pf-author-links">
+        <a class="pf-author-link" href="#">All Stories</a>
+        <a class="pf-author-link" href="#">Instagram</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- PF-06: Lead Magnet -->
+  <div class="pf-lead-magnet">
+    <div class="pf-lm-icon">
+      <div class="pf-lm-icon-inner">📄</div>
+    </div>
+    <div class="pf-lm-middle">
+      <div class="pf-lm-title">Free Download: Resource Title Here</div>
+      <ul class="pf-lm-bullets">
+        <li>Benefit one</li>
+        <li>Benefit two</li>
+        <li>Benefit three</li>
+      </ul>
+    </div>
+    <div class="pf-lm-right">
+      <input class="pf-lm-input" type="email" placeholder="your@email.com">
+      <button class="pf-lm-btn">Get Free Access</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- PF-05: Read Next Feature Card — full bleed breakout, outside post-footer container -->
+<div class="read-next-breakout">
+  <a class="pf-read-next" href="#">
+    <div class="pf-rn-bg"></div>
+    <div class="pf-rn-overlay"></div>
+    <div class="pf-rn-badge">Read Next</div>
+    <div class="pf-rn-inner">
+      <div class="pf-rn-content">
+        <div class="pf-rn-eyebrow">Up Next</div>
+        <div class="pf-rn-title">The Next Article Title Goes Here — Pulls Readers Directly Into the Next Story</div>
+        <div class="pf-rn-meta">
+          Category
+          <span class="pf-rn-meta-dot">·</span>
+          Author Name
+          <span class="pf-rn-meta-dot">·</span>
+          6 min read
+        </div>
+      </div>
+      <div class="pf-rn-arrow">→</div>
+    </div>
+  </a>
+</div>
+
+<!-- SPEC TOGGLE -->
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+
+<!-- SPEC PANEL -->
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Story</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>layout-05</code></span></div>
+  <div class="spec-row"><span class="spec-k">Body width</span><span class="spec-v"><code>700px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">None</span></div>
+  <div class="spec-row"><span class="spec-k">Nav bg</span><span class="spec-v"><code>#1a1a1a</code></span></div>
+
+  <div class="spec-h">Components</div>
+  <div class="spec-components">
+    <div class="spec-comp"><span class="sc-id sc-h">P5</span> Split Reverse Header</div>
+    <div class="spec-comp"><span class="sc-id sc-none">—</span> No sidebar</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-01</span> Author Bio Card</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-06</span> Lead Magnet</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-05</span> Read Next Card</div>
+  </div>
+
+  <div class="spec-h">Header (P5)</div>
+  <div class="spec-row"><span class="spec-k">Grid</span><span class="spec-v"><code>58% / 42%</code></span></div>
+  <div class="spec-row"><span class="spec-k">Image side</span><span class="spec-v">Left</span></div>
+  <div class="spec-row"><span class="spec-k">Text panel bg</span><span class="spec-v"><code>#1a1a1a</code></span></div>
+  <div class="spec-row"><span class="spec-k">Min-height</span><span class="spec-v"><code>340px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Breadcrumbs</span><span class="spec-v">White/dim, in text panel</span></div>
+  <div class="spec-row"><span class="spec-k">Nav bg</span><span class="spec-v">Matches panel: <code>#1a1a1a</code></span></div>
+
+  <div class="spec-h">Body</div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>700px</code> max, centered</span></div>
+  <div class="spec-row"><span class="spec-k">Full-bleed img</span><span class="spec-v"><code>100vw</code>, <code>ml: -50vw+50%</code></span></div>
+  <div class="spec-row"><span class="spec-k">Inline img ratio</span><span class="spec-v"><code>21:9</code></span></div>
+
+  <div class="spec-h">Read Next (PF-05)</div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v">Full bleed, <code>100vw</code></span></div>
+  <div class="spec-row"><span class="spec-k">Breakout</span><span class="spec-v"><code>ml: calc(-50vw + 50%)</code></span></div>
+  <div class="spec-row"><span class="spec-k">Min-height</span><span class="spec-v"><code>260px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Overlay</span><span class="spec-v">Dark gradient, bottom-up</span></div>
+  <div class="spec-row"><span class="spec-k">Entire card</span><span class="spec-v">Is a link (<code>&lt;a&gt;</code>)</span></div>
+  <div class="spec-row"><span class="spec-k">Image source</span><span class="spec-v">Next post's hero image</span></div>
+  <div class="spec-row"><span class="spec-k">Hover</span><span class="spec-v">Title tints pink, arrow shifts</span></div>
+
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Immersive exit.</strong> The Read Next card is the last thing the reader sees — it's full-page-width, dark, and drives directly to the next article. No article grid here. The goal is a clean, cinematic handoff to the next story.</div>
+</div>
+
+</body>
+</html>

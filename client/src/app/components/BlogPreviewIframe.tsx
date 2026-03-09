@@ -95,17 +95,18 @@ export default function BlogPreviewIframe({
     return rest;
   };
 
-  // Listen for READY from iframe and send config
+  // Listen for READY from iframe and send config.
+  // Use event.source (the iframe window that sent READY) for reliable delivery.
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type !== MESSAGE_TYPE_READY) return;
       const targetOrigin = getTargetOrigin();
       if (targetOrigin !== "*" && event.origin !== targetOrigin) return;
 
-      const iframe = iframeRef.current;
-      if (!iframe?.contentWindow) return;
+      const target = event.source as Window | null;
+      if (!target || typeof target.postMessage !== "function") return;
       const latestConfig = configRef.current;
-      iframe.contentWindow.postMessage(
+      target.postMessage(
         { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(latestConfig) },
         "*"
       );
@@ -129,16 +130,34 @@ export default function BlogPreviewIframe({
     );
   }, [selectPostIndex, config]);
 
-  // Send config whenever it changes (iframe must be loaded)
+  // Send config whenever it changes (iframe must be loaded).
+  // Retry when contentWindow is temporarily null (e.g. iframe reloading, browser throttling).
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe?.contentWindow) return;
+    const sendConfig = (): boolean => {
+      const iframe = iframeRef.current;
+      if (!iframe?.contentWindow) return false;
+      try {
+        const latestConfig = configForPostMessage(configRef.current);
+        iframe.contentWindow.postMessage(
+          { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
+          "*"
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    };
 
-    const latestConfig = configRef.current;
-    iframe.contentWindow.postMessage(
-      { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(latestConfig) },
-      "*"
-    );
+    if (sendConfig()) return;
+
+    const delays = [100, 300, 600];
+    const timeouts: number[] = [];
+    for (const delay of delays) {
+      timeouts.push(
+        window.setTimeout(() => sendConfig(), delay)
+      );
+    }
+    return () => timeouts.forEach((t) => window.clearTimeout(t));
   }, [config, blogUrl]);
 
   // Send config when iframe loads (renderer may not be ready yet, but READY will trigger another send)

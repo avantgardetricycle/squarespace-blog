@@ -271,7 +271,17 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         })
       : []
     const authorMap: Record<string, string> = {}
-    for (const a of authors) authorMap[a.id] = a.name
+    const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; email: string | null; socialLinks: Record<string, string> }> = {}
+    for (const a of authors) {
+      authorMap[a.id] = a.name
+      authorProfiles[a.id] = {
+        name: a.name,
+        imageUrl: a.imageUrl ?? null,
+        bio: a.bio ?? null,
+        email: a.email ?? null,
+        socialLinks: (a.socialLinks as Record<string, string>) ?? {}
+      }
+    }
 
     // Derive renderer URL from request host so loader gets a URL it can fetch (avoids
     // localhost/loopback when API is reached via tunnel - Private Network Access blocks
@@ -377,6 +387,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       }
     }
 
+    const siteConfigTyped = siteConfig as { collectionTemplateId?: string | null; postTemplateId?: string | null }
     const configData = {
       siteKey,
       siteId: site.id,
@@ -385,8 +396,11 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       defaultAuthorIds,
       postAuthorOverrides: authorSettings.postAuthorOverrides ?? {},
       authorMap,
+      authorProfiles,
       collectionConfig: cc,
       postConfig: pc,
+      collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
+      postTemplateId: siteConfigTyped.postTemplateId ?? null,
       recentPostsCount: 5,
       baseUrl,
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
@@ -429,6 +443,8 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const authorSettings = (c as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> })
     const cc = c.collectionConfig as object | undefined
     const pc = c.postConfig as object | undefined
+    const collectionTemplateId = c.collectionTemplateId as string | null | undefined
+    const postTemplateId = c.postTemplateId as string | null | undefined
     const data: SiteConfigData = {
       showDate: true,
       showAuthor: false,
@@ -442,6 +458,8 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       recentPostsSidebar: { show: false, position: 'left' },
       collectionConfig: cc && typeof cc === 'object' ? cc : undefined,
       postConfig: pc && typeof pc === 'object' ? pc : undefined,
+      collectionTemplateId: collectionTemplateId ?? undefined,
+      postTemplateId: postTemplateId ?? undefined,
     }
     await upsertSiteConfig(site.id, data)
     res.json({ success: true })

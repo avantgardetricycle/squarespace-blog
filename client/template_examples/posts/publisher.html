@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Layout 02 — The Publisher · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,700;1,400&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+
+  :root {
+    --accent: #e9007f;
+    --border: #e8e8e8;
+    --bg-light: #f7f6f2;
+  }
+
+  /* =============================================
+     HANDOFF CHROME
+  ============================================= */
+  .handoff-bar {
+    background: #111;
+    color: #fff;
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 200;
+  }
+  .handoff-bar .layout-badge {
+    background: #dc2626;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
+  }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+
+  .zone-band {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 32px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .zone-band .zone-id {
+    font-family: 'Courier New', monospace;
+    font-size: 10px; padding: 2px 7px;
+    border-radius: 2px; color: #fff;
+  }
+  .zb-header { background: #ede9fe; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-header .zone-id { background: #4f46e5; }
+  .zb-body   { background: #f0f9ff; color: #0369a1; border-top: 1px solid #bae6fd; }
+  .zb-body .zone-id   { background: #0891b2; }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  /* =============================================
+     NAV — Magazine style (light, minimal border)
+  ============================================= */
+  .site-nav {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0 32px;
+    height: 54px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #111; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link {
+    font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: #555; text-decoration: none;
+  }
+  .nav-link:hover { color: var(--accent); }
+  .nav-cta {
+    font-size: 12px; font-weight: 700;
+    background: var(--accent); color: #fff;
+    padding: 7px 16px; border-radius: 2px;
+    text-decoration: none; margin-left: 8px;
+  }
+
+  /* =============================================
+     HEADER — PRESET 2 (MAGAZINE)
+     Full-width image, title overlaid at bottom
+  ============================================= */
+  .article-header {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 21/9;
+    background: #2a2a3a;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+  }
+  .header-img-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(160deg, #1a1a2e 0%, #2d2d44 40%, #1a2a1a 100%);
+    opacity: 0.85;
+  }
+  .header-img-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 3px,
+      rgba(255,255,255,0.02) 3px, rgba(255,255,255,0.02) 4px
+    );
+  }
+  .header-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 50%, transparent 100%);
+  }
+  /* Breadcrumbs float top-left over image */
+  .breadcrumbs {
+    position: absolute;
+    top: 16px; left: 40px;
+    z-index: 3;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px;
+  }
+  .breadcrumbs a { color: rgba(255,255,255,0.6); text-decoration: none; }
+  .breadcrumbs a:hover { color: #fff; }
+  .breadcrumbs .bc-sep { color: rgba(255,255,255,0.3); font-size: 10px; }
+  .breadcrumbs .bc-current { color: rgba(255,255,255,0.4); }
+
+  /* Content block sits bottom-left */
+  .header-content {
+    position: relative; z-index: 2;
+    padding: 32px 40px;
+    width: 100%; max-width: 820px;
+  }
+  .header-cat {
+    display: inline-block;
+    background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 2px; margin-bottom: 14px;
+  }
+  .header-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 32px; font-weight: 800;
+    line-height: 1.1; letter-spacing: -0.5px;
+    color: #fff; margin-bottom: 12px;
+  }
+  .header-meta {
+    font-size: 12px; color: rgba(255,255,255,0.6);
+    display: flex; gap: 12px; align-items: center;
+  }
+  .header-meta strong { color: rgba(255,255,255,0.9); }
+  .header-meta-dot { color: rgba(255,255,255,0.3); }
+  .header-actions {
+    display: flex; gap: 16px; margin-top: 12px;
+    font-size: 12px;
+  }
+  .header-action {
+    color: rgba(255,255,255,0.5); text-decoration: none;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .header-action:hover { color: #fff; }
+
+  /* =============================================
+     BODY LAYOUT — Article + Right Sidebar
+  ============================================= */
+  .page-body {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 48px;
+    align-items: start;
+  }
+
+  /* =============================================
+     ARTICLE BODY (placeholder blocks)
+  ============================================= */
+  .article-body { padding: 40px 0; }
+  .placeholder-block { background: #f0f0ec; border-radius: 3px; margin-bottom: 10px; }
+  .ph-line    { height: 14px; }
+  .ph-gap     { height: 24px; background: transparent; }
+  .ph-h2      { height: 18px; background: #e4e4de; margin: 24px 0 12px; border-radius: 2px; }
+  .ph-img     {
+    width: 100%; aspect-ratio: 16/9;
+    background: #e8e8e0; border-radius: 3px; margin: 28px 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #bbb; text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* =============================================
+     SIDEBAR — Discovery-heavy
+  ============================================= */
+  .sidebar {
+    padding-top: 40px;
+    display: flex; flex-direction: column; gap: 32px;
+  }
+  .sidebar-widget { border-top: 2px solid #111; padding-top: 16px; }
+  .widget-title {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 1.8px; text-transform: uppercase;
+    color: #111; padding: 0 0 12px 12px;
+    border-left: 3px solid var(--accent);
+    margin-bottom: 14px;
+  }
+
+  /* SW-04 Popular Posts */
+  .sw-popular-item {
+    display: flex; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid #f5f5f5;
+    align-items: baseline; text-decoration: none; color: inherit;
+  }
+  .sw-popular-item:last-child { border-bottom: none; }
+  .sw-popular-num {
+    font-size: 20px; font-weight: 800;
+    color: #e8e8e8; flex-shrink: 0; width: 26px; line-height: 1;
+  }
+  .sw-popular-title { font-size: 12px; font-weight: 600; color: #111; line-height: 1.4; }
+  .sw-popular-item:hover .sw-popular-title { color: var(--accent); }
+
+  /* SW-02 Related Posts */
+  .sw-related-post {
+    display: flex; gap: 10px; margin-bottom: 12px;
+    text-decoration: none; color: inherit; align-items: flex-start;
+  }
+  .sw-related-post:last-child { margin-bottom: 0; }
+  .sw-related-thumb {
+    width: 58px; height: 58px; border-radius: 3px; flex-shrink: 0;
+  }
+  .sw-rt1 { background: linear-gradient(135deg, #f093fb55, #f5576c55); }
+  .sw-rt2 { background: linear-gradient(135deg, #4facfe55, #00f2fe55); }
+  .sw-rt3 { background: linear-gradient(135deg, #43e97b55, #38f9d755); }
+  .sw-related-title { font-size: 13px; font-weight: 600; color: #111; line-height: 1.35; margin-bottom: 3px; }
+  .sw-related-post:hover .sw-related-title { color: var(--accent); }
+  .sw-related-meta { font-size: 10px; color: #bbb; }
+
+  /* SW-05 Tags */
+  .sw-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sw-tag {
+    font-size: 11px; font-weight: 500;
+    padding: 4px 10px; border: 1.5px solid #ddd;
+    border-radius: 2px; color: #666; text-decoration: none;
+  }
+  .sw-tag:hover { border-color: #111; color: #111; }
+
+  /* SW-03 Newsletter */
+  .sw-newsletter { background: var(--bg-light); padding: 16px; border-radius: 3px; }
+  .sw-newsletter .widget-title { border-left-color: #ccc; color: #888; }
+  .sw-newsletter-blurb { font-size: 12px; color: #777; line-height: 1.5; margin-bottom: 12px; }
+  .sw-newsletter input {
+    width: 100%; padding: 8px 10px;
+    border: 1.5px solid #ddd; border-radius: 3px;
+    font-family: 'Outfit', sans-serif; font-size: 12px;
+    background: #fff; margin-bottom: 7px; outline: none;
+  }
+  .sw-newsletter button {
+    width: 100%; padding: 8px;
+    background: #111; color: #fff; border: none; border-radius: 3px;
+    font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .sw-newsletter button:hover { background: var(--accent); }
+
+  /* =============================================
+     POST-FOOTER
+  ============================================= */
+  .post-footer {
+    border-top: 2px solid #e8e8e8;
+    padding: 48px 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex; flex-direction: column; gap: 40px;
+  }
+
+  /* PF-01 Author Bio Card */
+  .pf-author-card {
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 28px; display: flex; gap: 24px; align-items: flex-start;
+  }
+  .pf-avatar {
+    width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 22px;
+  }
+  .pf-author-name { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .pf-author-role { font-size: 12px; color: #aaa; margin-bottom: 10px; }
+  .pf-author-bio { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 12px; }
+  .pf-author-links { display: flex; gap: 10px; }
+  .pf-author-link {
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    text-decoration: none; border: 1.5px solid var(--accent);
+    padding: 4px 12px; border-radius: 2px;
+  }
+  .pf-author-link:hover { background: var(--accent); color: #fff; }
+
+  /* PF-02 Article Grid — visual, larger thumbnails */
+  .pf-grid-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.8px;
+    text-transform: uppercase; color: #111;
+    margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #111;
+  }
+  .pf-article-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .pf-article-card { text-decoration: none; color: inherit; }
+  .pf-article-thumb { width: 100%; aspect-ratio: 16/9; border-radius: 3px; margin-bottom: 10px; }
+  .pf-thumb-1 { background: linear-gradient(135deg, #f5576c33, #f09 33%); }
+  .pf-thumb-2 { background: linear-gradient(135deg, #4facfe33, #0f233); }
+  .pf-thumb-3 { background: linear-gradient(135deg, #43e97b33, #38f9d733); }
+  .pf-article-cat { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); margin-bottom: 5px; }
+  .pf-article-title { font-size: 14px; font-weight: 700; line-height: 1.35; color: #111; margin-bottom: 5px; }
+  .pf-article-card:hover .pf-article-title { color: var(--accent); }
+  .pf-article-meta { font-size: 11px; color: #bbb; }
+
+  /* PF-06 Lead Magnet */
+  .pf-lead-magnet {
+    display: flex; align-items: stretch;
+    background: #111; border-radius: 4px; overflow: hidden;
+    flex-wrap: wrap;
+  }
+  .pf-lm-icon {
+    flex-shrink: 0; padding: 0 24px;
+    display: flex; align-items: center; justify-content: center;
+    align-self: stretch; background: rgba(233,0,127,0.2);
+    border-right: 1px solid rgba(255,255,255,0.07);
+  }
+  .pf-lm-icon-inner {
+    width: 32px; height: 32px; background: var(--accent);
+    border-radius: 3px; display: flex; align-items: center;
+    justify-content: center; font-size: 16px;
+  }
+  .pf-lm-middle {
+    flex: 1; min-width: 180px; padding: 16px 20px;
+    display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  }
+  .pf-lm-title { font-size: 14px; font-weight: 700; color: #fff; }
+  .pf-lm-bullets { list-style: none; display: flex; gap: 20px; flex-wrap: wrap; }
+  .pf-lm-bullets li { font-size: 12px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .pf-lm-bullets li::before { content: "✓"; color: var(--accent); font-weight: 700; font-size: 10px; }
+  .pf-lm-right {
+    flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 14px 20px; border-left: 1px solid rgba(255,255,255,0.07);
+  }
+  .pf-lm-input {
+    width: 150px; min-width: 100px; padding: 8px 12px;
+    border: 1.5px solid rgba(255,255,255,0.15); border-radius: 3px;
+    font-family: 'Outfit', sans-serif; font-size: 12px;
+    background: rgba(255,255,255,0.07); color: #fff; outline: none;
+  }
+  .pf-lm-input::placeholder { color: rgba(255,255,255,0.3); }
+  .pf-lm-btn {
+    padding: 8px 18px; background: var(--accent); color: #fff;
+    border: none; border-radius: 3px;
+    font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .pf-lm-btn:hover { background: #ff2d96; }
+
+  /* =============================================
+     SPEC PANEL
+  ============================================= */
+  .spec-overlay {
+    position: fixed; right: 0; top: 54px; bottom: 0;
+    width: 260px; background: #fff;
+    border-left: 1px solid #e8e8e8;
+    overflow-y: auto; z-index: 100; padding: 20px; display: none;
+  }
+  .spec-overlay.open { display: block; }
+  .spec-toggle {
+    position: fixed; right: 16px; bottom: 24px;
+    background: #111; color: #fff; border: none; border-radius: 24px;
+    padding: 10px 18px; font-family: 'Outfit', sans-serif;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 80px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-components { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-h { background: #4f46e5; }
+  .sc-s { background: #0891b2; }
+  .sc-f { background: #059669; }
+  body.spec-open .page-body { padding-right: 292px; }
+  body.spec-open .post-footer { padding-right: 292px; }
+</style>
+</head>
+<body>
+
+<!-- HANDOFF BAR -->
+<div class="handoff-bar">
+  <span class="layout-badge">LAYOUT 02</span>
+  <h1>The Publisher</h1>
+  <p>Magazine header · Discovery sidebar · Visual grid footer · Developer handoff</p>
+</div>
+
+<!-- ==================== HEADER ZONE ==================== -->
+<div class="zone-band zb-header">
+  <span class="zone-id">P2</span>
+  HEADER ZONE — Magazine (Preset 2)
+</div>
+
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Latest</a>
+    <a class="nav-link" href="#">AI</a>
+    <a class="nav-link" href="#">Tools</a>
+    <a class="nav-link" href="#">Guides</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="article-header">
+  <div class="header-img-bg"></div>
+  <div class="header-overlay"></div>
+  <nav class="breadcrumbs">
+    <a href="#">Home</a><span class="bc-sep">›</span>
+    <a href="#">Blog</a><span class="bc-sep">›</span>
+    <a href="#">Category</a><span class="bc-sep">›</span>
+    <span class="bc-current">Article Title</span>
+  </nav>
+  <div class="header-content">
+    <div class="header-cat">Category Name</div>
+    <div class="header-title">Article Headline Goes Here — Can Run to Two Lines Across the Bottom</div>
+    <div class="header-meta">
+      By <strong>Author Name</strong>
+      <span class="header-meta-dot">·</span>
+      <span>Published Date</span>
+      <span class="header-meta-dot">·</span>
+      <span>X min read</span>
+    </div>
+    <div class="header-actions">
+      <a class="header-action" href="#">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+        Save
+      </a>
+      <a class="header-action" href="#">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        12 Comments
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== BODY ZONE ==================== -->
+<div class="zone-band zb-body">
+  <span class="zone-id">SW-04 · SW-02 · SW-05 · SW-03</span>
+  BODY ZONE — Article + Right Sidebar (Discovery)
+</div>
+
+<div class="page-body">
+
+  <!-- Article body (placeholder) -->
+  <div class="article-body">
+    <div class="placeholder-block ph-line" style="width:100%"></div>
+    <div class="placeholder-block ph-line" style="width:95%"></div>
+    <div class="placeholder-block ph-line" style="width:88%"></div>
+    <div class="placeholder-block ph-line" style="width:92%"></div>
+    <div class="placeholder-block ph-line" style="width:72%"></div>
+    <div class="placeholder-block ph-gap"></div>
+    <div class="placeholder-block ph-line" style="width:100%"></div>
+    <div class="placeholder-block ph-line" style="width:96%"></div>
+    <div class="placeholder-block ph-line" style="width:80%"></div>
+    <div class="placeholder-block ph-line" style="width:90%"></div>
+    <div class="placeholder-block ph-h2" style="width:45%"></div>
+    <div class="placeholder-block ph-line" style="width:100%"></div>
+    <div class="placeholder-block ph-line" style="width:94%"></div>
+    <div class="placeholder-block ph-line" style="width:87%"></div>
+    <div class="ph-img">Inline Image (optional)</div>
+    <div class="placeholder-block ph-line" style="width:100%"></div>
+    <div class="placeholder-block ph-line" style="width:91%"></div>
+    <div class="placeholder-block ph-line" style="width:82%"></div>
+    <div class="placeholder-block ph-line" style="width:96%"></div>
+    <div class="placeholder-block ph-line" style="width:70%"></div>
+    <div class="placeholder-block ph-gap"></div>
+    <div class="placeholder-block ph-h2" style="width:38%"></div>
+    <div class="placeholder-block ph-line" style="width:100%"></div>
+    <div class="placeholder-block ph-line" style="width:93%"></div>
+    <div class="placeholder-block ph-line" style="width:88%"></div>
+    <div class="placeholder-block ph-line" style="width:75%"></div>
+    <div class="placeholder-block ph-gap"></div>
+    <div class="placeholder-block ph-line" style="width:100%"></div>
+    <div class="placeholder-block ph-line" style="width:89%"></div>
+    <div class="placeholder-block ph-line" style="width:60%"></div>
+  </div>
+
+  <!-- Sidebar — Discovery focused -->
+  <aside class="sidebar">
+
+    <!-- SW-04: Popular Posts -->
+    <div class="sidebar-widget">
+      <div class="widget-title">Popular This Week</div>
+      <a class="sw-popular-item" href="#"><span class="sw-popular-num">01</span><span class="sw-popular-title">The Real Reason AI Assistants Keep Getting Worse</span></a>
+      <a class="sw-popular-item" href="#"><span class="sw-popular-num">02</span><span class="sw-popular-title">Google Just Quietly Killed Its Most Ambitious Product</span></a>
+      <a class="sw-popular-item" href="#"><span class="sw-popular-num">03</span><span class="sw-popular-title">Inside the Startup Terrifying Everyone in Logistics</span></a>
+      <a class="sw-popular-item" href="#"><span class="sw-popular-num">04</span><span class="sw-popular-title">Why Every AI Demo Is Lying to You</span></a>
+    </div>
+
+    <!-- SW-02: Related Posts -->
+    <div class="sidebar-widget">
+      <div class="widget-title">Related Posts</div>
+      <a class="sw-related-post" href="#">
+        <div class="sw-related-thumb sw-rt1"></div>
+        <div>
+          <div class="sw-related-title">Related article title that may run to two lines</div>
+          <div class="sw-related-meta">Mar 3, 2026 · 4 min read</div>
+        </div>
+      </a>
+      <a class="sw-related-post" href="#">
+        <div class="sw-related-thumb sw-rt2"></div>
+        <div>
+          <div class="sw-related-title">Another related article title here</div>
+          <div class="sw-related-meta">Feb 28, 2026 · 6 min read</div>
+        </div>
+      </a>
+      <a class="sw-related-post" href="#">
+        <div class="sw-related-thumb sw-rt3"></div>
+        <div>
+          <div class="sw-related-title">Third related article to complete the set</div>
+          <div class="sw-related-meta">Feb 14, 2026 · 5 min read</div>
+        </div>
+      </a>
+    </div>
+
+    <!-- SW-05: Tags -->
+    <div class="sidebar-widget">
+      <div class="widget-title">Topics</div>
+      <div class="sw-tags">
+        <a class="sw-tag" href="#">AI</a>
+        <a class="sw-tag" href="#">Policy</a>
+        <a class="sw-tag" href="#">Robotics</a>
+        <a class="sw-tag" href="#">Startups</a>
+        <a class="sw-tag" href="#">OpenAI</a>
+        <a class="sw-tag" href="#">Defense Tech</a>
+        <a class="sw-tag" href="#">Tools</a>
+        <a class="sw-tag" href="#">Research</a>
+      </div>
+    </div>
+
+    <!-- SW-03: Newsletter -->
+    <div class="sidebar-widget">
+      <div class="sw-newsletter">
+        <div class="widget-title">Stay in the Loop</div>
+        <div class="sw-newsletter-blurb">Get the best stories delivered to your inbox twice a week.</div>
+        <input type="email" placeholder="your@email.com">
+        <button>Subscribe Free</button>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- ==================== FOOTER ZONE ==================== -->
+<div class="zone-band zb-footer">
+  <span class="zone-id">PF-01 · PF-02 · PF-06</span>
+  POST-FOOTER ZONE
+</div>
+
+<div class="post-footer">
+
+  <!-- PF-01: Author Bio Card -->
+  <div class="pf-author-card">
+    <div class="pf-avatar">MP</div>
+    <div>
+      <div class="pf-author-name">Author Name</div>
+      <div class="pf-author-role">Staff Reporter · Tech &amp; AI</div>
+      <div class="pf-author-bio">A longer bio than the sidebar version. 2–3 sentences about background, focus areas, and what they cover. Can include publication history or notable work that builds credibility with readers.</div>
+      <div class="pf-author-links">
+        <a class="pf-author-link" href="#">All Articles</a>
+        <a class="pf-author-link" href="#">Twitter</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- PF-02: Article Grid — Visual emphasis -->
+  <div>
+    <div class="pf-grid-label">More to Read</div>
+    <div class="pf-article-grid">
+      <a class="pf-article-card" href="#">
+        <div class="pf-article-thumb pf-thumb-1"></div>
+        <div class="pf-article-cat">Category</div>
+        <div class="pf-article-title">Article title that can run to two lines in the grid</div>
+        <div class="pf-article-meta">Mar 3, 2026 · 4 min read</div>
+      </a>
+      <a class="pf-article-card" href="#">
+        <div class="pf-article-thumb pf-thumb-2"></div>
+        <div class="pf-article-cat">Category</div>
+        <div class="pf-article-title">Second article title in the three-column grid</div>
+        <div class="pf-article-meta">Feb 28, 2026 · 6 min read</div>
+      </a>
+      <a class="pf-article-card" href="#">
+        <div class="pf-article-thumb pf-thumb-3"></div>
+        <div class="pf-article-cat">Category</div>
+        <div class="pf-article-title">Third article completes the row of three</div>
+        <div class="pf-article-meta">Feb 14, 2026 · 5 min read</div>
+      </a>
+    </div>
+  </div>
+
+  <!-- PF-06: Lead Magnet -->
+  <div class="pf-lead-magnet">
+    <div class="pf-lm-icon">
+      <div class="pf-lm-icon-inner">📄</div>
+    </div>
+    <div class="pf-lm-middle">
+      <div class="pf-lm-title">Free Download: Resource Title Here</div>
+      <ul class="pf-lm-bullets">
+        <li>Benefit one</li>
+        <li>Benefit two</li>
+        <li>Benefit three</li>
+      </ul>
+    </div>
+    <div class="pf-lm-right">
+      <input class="pf-lm-input" type="email" placeholder="your@email.com">
+      <button class="pf-lm-btn">Get Free Access</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- SPEC TOGGLE -->
+<button class="spec-toggle" onclick="document.body.classList.toggle('spec-open'); document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.body.classList.contains('spec-open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+
+<!-- SPEC PANEL -->
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Publisher</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>layout-02</code></span></div>
+  <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1200px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Body grid</span><span class="spec-v"><code>1fr + 300px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Body gap</span><span class="spec-v"><code>48px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">Right rail, sticky</span></div>
+
+  <div class="spec-h">Components</div>
+  <div class="spec-components">
+    <div class="spec-comp"><span class="sc-id sc-h">P2</span> Magazine Header</div>
+    <div class="spec-comp"><span class="sc-id sc-s">SW-04</span> Popular Posts</div>
+    <div class="spec-comp"><span class="sc-id sc-s">SW-02</span> Related Posts</div>
+    <div class="spec-comp"><span class="sc-id sc-s">SW-05</span> Tags Cloud</div>
+    <div class="spec-comp"><span class="sc-id sc-s">SW-03</span> Newsletter</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-01</span> Author Bio Card</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-02</span> Article Grid</div>
+    <div class="spec-comp"><span class="sc-id sc-f">PF-06</span> Lead Magnet</div>
+  </div>
+
+  <div class="spec-h">Header (P2)</div>
+  <div class="spec-row"><span class="spec-k">Type</span><span class="spec-v">Full-width image</span></div>
+  <div class="spec-row"><span class="spec-k">Ratio</span><span class="spec-v"><code>21:9</code></span></div>
+  <div class="spec-row"><span class="spec-k">Overlay</span><span class="spec-v">Dark gradient, bottom-heavy</span></div>
+  <div class="spec-row"><span class="spec-k">Breadcrumbs</span><span class="spec-v">Top-left, over image</span></div>
+  <div class="spec-row"><span class="spec-k">Text pos</span><span class="spec-v">Bottom-left, z-index 2</span></div>
+  <div class="spec-row"><span class="spec-k">Nav border</span><span class="spec-v">1px light</span></div>
+
+  <div class="spec-h">Sidebar</div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>300px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Focus</span><span class="spec-v">Discovery (popular, tags)</span></div>
+  <div class="spec-row"><span class="spec-k">Author bio</span><span class="spec-v">Footer only, not sidebar</span></div>
+  <div class="spec-row"><span class="spec-k">Widget gap</span><span class="spec-v"><code>32px</code></span></div>
+
+  <div class="spec-h">Post-Footer</div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v">Full page width</span></div>
+  <div class="spec-row"><span class="spec-k">Top border</span><span class="spec-v">2px solid #e8e8e8</span></div>
+  <div class="spec-row"><span class="spec-k">Module gap</span><span class="spec-v"><code>40px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Grid cols</span><span class="spec-v">3 (article grid)</span></div>
+</div>
+
+</body>
+</html>

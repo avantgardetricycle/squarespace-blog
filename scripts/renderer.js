@@ -370,6 +370,17 @@
     },
 
     /**
+     * Get author IDs for a post (for author profiles module)
+     */
+    _getAuthorIdsForPost: function(post, cfg) {
+      var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
+      var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object') ? cfg.postAuthorOverrides : {};
+      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds) ? cfg.defaultAuthorIds : [];
+      var ids = (postId && postId in overrides) ? overrides[postId] : (defaultIds.length > 0 ? defaultIds : null);
+      return Array.isArray(ids) ? ids : [];
+    },
+
+    /**
      * Estimate reading time in minutes from HTML body (~200 wpm)
      */
     _getReadingTimeMinutes: function(html) {
@@ -557,20 +568,81 @@
     },
 
     /**
-     * Create Filter by Category module (chips + dropdown, multi-select)
+     * Create Filter by Category module (chips + dropdown, multi-select, or pills when filterStyle === 'pills')
      */
-    _createFilterByCategoryModule: function(items, width) {
+    _createFilterByCategoryModule: function(items, width, noLabel, filterStyle) {
       var self = this;
       var categories = this._getAllCategories(items);
+      var usePills = filterStyle === 'pills';
+
+      if (usePills && categories.length >= 0) {
+        var pillsWrap = document.createElement('div');
+        pillsWrap.style.display = 'flex';
+        pillsWrap.style.flexWrap = 'wrap';
+        pillsWrap.style.gap = '0';
+        pillsWrap.style.alignItems = 'center';
+        pillsWrap.style.width = width ? (width + 'px') : 'auto';
+        var selected = Array.isArray(self._categoryFilter) ? self._categoryFilter.slice() : [];
+        var activeVal = selected.length === 1 ? selected[0] : (selected.length > 1 ? selected[0] : null);
+        var totalCount = items.length;
+        var countByCat = {};
+        for (var ci = 0; ci < categories.length; ci++) {
+          var cname = categories[ci];
+          var filtered = self._filterPostsByCategory(items, [cname]);
+          countByCat[cname] = filtered.length;
+        }
+        function renderPills() {
+          pillsWrap.innerHTML = '';
+          var allBtn = document.createElement('button');
+          allBtn.type = 'button';
+          allBtn.textContent = 'All' + (totalCount > 0 ? ' ' + totalCount : '');
+          allBtn.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;';
+          if (!activeVal) {
+            allBtn.style.color = '#111';
+            allBtn.style.borderBottomColor = '#111';
+          }
+          allBtn.onclick = function() {
+            self._categoryFilter = [];
+            self._currentPage = 1;
+            self._renderContent(self.items);
+          };
+          pillsWrap.appendChild(allBtn);
+          for (var pi = 0; pi < categories.length; pi++) {
+            var cat = categories[pi];
+            var cnt = countByCat[cat] || 0;
+            var pill = document.createElement('button');
+            pill.type = 'button';
+            pill.textContent = cat + (cnt > 0 ? ' ' + cnt : '');
+            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;';
+            if (activeVal === cat) {
+              pill.style.color = '#111';
+              pill.style.borderBottomColor = '#111';
+            }
+            (function(c) {
+              pill.onclick = function() {
+                self._categoryFilter = [c];
+                self._currentPage = 1;
+                self._renderContent(self.items);
+              };
+            })(cat);
+            pillsWrap.appendChild(pill);
+          }
+        }
+        renderPills();
+        return pillsWrap;
+      }
+
       var wrap = document.createElement('div');
       wrap.style.width = (width || 200) + 'px';
-      var label = document.createElement('label');
-      label.textContent = 'Filter by Category';
-      label.style.fontWeight = '600';
-      label.style.fontSize = '0.9rem';
-      label.style.marginBottom = '8px';
-      label.style.display = 'block';
-      wrap.appendChild(label);
+      if (!noLabel) {
+        var label = document.createElement('label');
+        label.textContent = 'Filter by Category';
+        label.style.fontWeight = '600';
+        label.style.fontSize = '0.9rem';
+        label.style.marginBottom = '8px';
+        label.style.display = 'block';
+        wrap.appendChild(label);
+      }
       var chipsWrap = document.createElement('div');
       chipsWrap.style.display = 'flex';
       chipsWrap.style.flexWrap = 'wrap';
@@ -657,20 +729,81 @@
     },
 
     /**
-     * Create Filter by Tag module (chips + dropdown, multi-select)
+     * Create Filter by Tag module (chips + dropdown, multi-select, or pills when filterStyle === 'pills')
      */
-    _createFilterByTagModule: function(items, width) {
+    _createFilterByTagModule: function(items, width, noLabel, filterStyle) {
       var self = this;
       var tags = this._getAllTags(items);
+      var usePills = filterStyle === 'pills';
+
+      if (usePills && tags.length >= 0) {
+        var pillsWrap = document.createElement('div');
+        pillsWrap.style.display = 'flex';
+        pillsWrap.style.flexWrap = 'wrap';
+        pillsWrap.style.gap = '0';
+        pillsWrap.style.alignItems = 'center';
+        pillsWrap.style.width = width ? (width + 'px') : 'auto';
+        var selected = Array.isArray(self._tagFilter) ? self._tagFilter.slice() : [];
+        var activeVal = selected.length === 1 ? selected[0] : (selected.length > 1 ? selected[0] : null);
+        var totalCount = items.length;
+        var countByTag = {};
+        for (var ti = 0; ti < tags.length; ti++) {
+          var tname = tags[ti];
+          var filtered = self._filterPostsByTag(items, [tname]);
+          countByTag[tname] = filtered.length;
+        }
+        function renderPills() {
+          pillsWrap.innerHTML = '';
+          var allBtn = document.createElement('button');
+          allBtn.type = 'button';
+          allBtn.textContent = 'All' + (totalCount > 0 ? ' ' + totalCount : '');
+          allBtn.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;';
+          if (!activeVal) {
+            allBtn.style.color = '#111';
+            allBtn.style.borderBottomColor = '#111';
+          }
+          allBtn.onclick = function() {
+            self._tagFilter = [];
+            self._currentPage = 1;
+            self._renderContent(self.items);
+          };
+          pillsWrap.appendChild(allBtn);
+          for (var pi = 0; pi < tags.length; pi++) {
+            var tag = tags[pi];
+            var cnt = countByTag[tag] || 0;
+            var pill = document.createElement('button');
+            pill.type = 'button';
+            pill.textContent = tag + (cnt > 0 ? ' ' + cnt : '');
+            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;';
+            if (activeVal === tag) {
+              pill.style.color = '#111';
+              pill.style.borderBottomColor = '#111';
+            }
+            (function(t) {
+              pill.onclick = function() {
+                self._tagFilter = [t];
+                self._currentPage = 1;
+                self._renderContent(self.items);
+              };
+            })(tag);
+            pillsWrap.appendChild(pill);
+          }
+        }
+        renderPills();
+        return pillsWrap;
+      }
+
       var wrap = document.createElement('div');
       wrap.style.width = (width || 200) + 'px';
-      var label = document.createElement('label');
-      label.textContent = 'Filter by Tag';
-      label.style.fontWeight = '600';
-      label.style.fontSize = '0.9rem';
-      label.style.marginBottom = '8px';
-      label.style.display = 'block';
-      wrap.appendChild(label);
+      if (!noLabel) {
+        var label = document.createElement('label');
+        label.textContent = 'Filter by Tag';
+        label.style.fontWeight = '600';
+        label.style.fontSize = '0.9rem';
+        label.style.marginBottom = '8px';
+        label.style.display = 'block';
+        wrap.appendChild(label);
+      }
       var chipsWrap = document.createElement('div');
       chipsWrap.style.display = 'flex';
       chipsWrap.style.flexWrap = 'wrap';
@@ -759,17 +892,19 @@
     /**
      * Create Sort Posts module (dropdown for collection level)
      */
-    _createPostSortModule: function(cfg, width) {
+    _createPostSortModule: function(cfg, width, noLabel) {
       var self = this;
       var wrap = document.createElement('div');
       wrap.style.width = (width || 200) + 'px';
-      var label = document.createElement('label');
-      label.textContent = 'Sort Posts';
-      label.style.fontWeight = '600';
-      label.style.fontSize = '0.9rem';
-      label.style.marginBottom = '8px';
-      label.style.display = 'block';
-      wrap.appendChild(label);
+      if (!noLabel) {
+        var label = document.createElement('label');
+        label.textContent = 'Sort Posts';
+        label.style.fontWeight = '600';
+        label.style.fontSize = '0.9rem';
+        label.style.marginBottom = '8px';
+        label.style.display = 'block';
+        wrap.appendChild(label);
+      }
       var select = document.createElement('select');
       select.style.width = '100%';
       select.style.padding = '8px 12px';
@@ -807,6 +942,132 @@
       };
       wrap.appendChild(select);
       return wrap;
+    },
+
+    /**
+     * Create Author Profiles module (post level - shows profile for post authors)
+     */
+    _createAuthorProfilesModule: function(post, cfg, width) {
+      var self = this;
+      var authorIds = this._getAuthorIdsForPost(post, cfg);
+      var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object') ? cfg.authorProfiles : {};
+      if (authorIds.length === 0) return null;
+      var headerText = authorIds.length > 1 ? 'About the Authors' : 'About the Author';
+      var content = document.createElement('div');
+      content.className = 'blog-overlay-author-profiles';
+      content.style.width = (width || 200) + 'px';
+      function getInitials(name) {
+        if (!name || !name.trim()) return '?';
+        var parts = name.trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        return name.slice(0, 2).toUpperCase();
+      }
+      function socialIconSvg(platform) {
+        var w = 18; var h = 18;
+        var svgs = {
+          instagram: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>',
+          x: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+          linkedin: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
+          facebook: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+          email: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+          website: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+        };
+        return svgs[platform] || '';
+      }
+      var platforms = ['instagram', 'facebook', 'linkedin', 'x', 'email', 'website'];
+      for (var i = 0; i < authorIds.length; i++) {
+        var id = authorIds[i];
+        var p = profiles[id];
+        var name = (p && p.name) || (cfg.authorMap && cfg.authorMap[id]) || 'Author';
+        var imageUrl = (p && p.imageUrl) || null;
+        var bio = (p && p.bio) || null;
+        var email = (p && p.email) || null;
+        var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
+        var card = document.createElement('div');
+        card.style.marginBottom = i < authorIds.length - 1 ? '20px' : '0';
+        var topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.gap = '12px';
+        topRow.style.alignItems = 'flex-start';
+        topRow.style.marginBottom = '8px';
+        var avatarWrap = document.createElement('div');
+        avatarWrap.style.width = '48px';
+        avatarWrap.style.height = '48px';
+        avatarWrap.style.borderRadius = '50%';
+        avatarWrap.style.overflow = 'hidden';
+        avatarWrap.style.flexShrink = '0';
+        avatarWrap.style.background = 'rgba(91,79,232,0.15)';
+        avatarWrap.style.display = 'flex';
+        avatarWrap.style.alignItems = 'center';
+        avatarWrap.style.justifyContent = 'center';
+        avatarWrap.style.fontSize = '1rem';
+        avatarWrap.style.fontWeight = '600';
+        avatarWrap.style.color = '#5B4FE8';
+        if (imageUrl) {
+          var img = document.createElement('img');
+          img.src = imageUrl;
+          img.alt = name;
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'cover';
+          avatarWrap.appendChild(img);
+        } else {
+          avatarWrap.textContent = getInitials(name);
+        }
+        topRow.appendChild(avatarWrap);
+        var rightCol = document.createElement('div');
+        rightCol.style.flex = '1';
+        rightCol.style.minWidth = '0';
+        rightCol.style.display = 'flex';
+        rightCol.style.flexDirection = 'column';
+        rightCol.style.gap = '6px';
+        var nameEl = document.createElement('div');
+        nameEl.textContent = name;
+        nameEl.style.fontWeight = '600';
+        nameEl.style.fontSize = '0.95rem';
+        nameEl.style.color = '#1a1a1a';
+        nameEl.style.lineHeight = 1.3;
+        rightCol.appendChild(nameEl);
+        var linksWrap = document.createElement('div');
+        linksWrap.style.display = 'flex';
+        linksWrap.style.flexWrap = 'wrap';
+        linksWrap.style.gap = '8px';
+        linksWrap.style.alignItems = 'center';
+        for (var j = 0; j < platforms.length; j++) {
+          var platform = platforms[j];
+          var url = platform === 'email' ? (email ? 'mailto:' + email : null) : (socialLinks[platform] || null);
+          if (url && typeof url === 'string') {
+            var a = document.createElement('a');
+            a.href = url;
+            a.target = platform === 'email' ? '_self' : '_blank';
+            a.rel = platform === 'email' ? '' : 'noopener noreferrer';
+            a.innerHTML = socialIconSvg(platform);
+            a.style.display = 'inline-flex';
+            a.style.color = '#5B4FE8';
+            a.style.textDecoration = 'none';
+            a.setAttribute('aria-label', platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1));
+            linksWrap.appendChild(a);
+          }
+        }
+        if (linksWrap.childNodes.length > 0) {
+          rightCol.appendChild(linksWrap);
+        } else {
+          rightCol.style.minHeight = '48px';
+          rightCol.style.justifyContent = 'center';
+        }
+        topRow.appendChild(rightCol);
+        card.appendChild(topRow);
+        if (bio) {
+          var bioEl = document.createElement('div');
+          bioEl.textContent = bio;
+          bioEl.style.fontSize = '0.8rem';
+          bioEl.style.color = '#6b6b6b';
+          bioEl.style.lineHeight = 1.4;
+          card.appendChild(bioEl);
+        }
+        content.appendChild(card);
+      }
+      return { header: headerText, content: content };
     },
 
     /**
@@ -1382,6 +1643,14 @@
       main.style.flex = '1';
       main.style.minWidth = '0';
 
+      var collectionLayout = !isSinglePost && (cfg.collectionLayout === 'grid' || cfg.collectionLayout === 'listRows') ? cfg.collectionLayout : 'stack';
+      var gridColumns = !isSinglePost && collectionLayout === 'grid' ? Math.min(3, Math.max(2, parseInt(cfg.gridColumns, 10) || 3)) : 3;
+      if (collectionLayout === 'grid') {
+        main.style.display = 'grid';
+        main.style.gridTemplateColumns = 'repeat(' + gridColumns + ', 1fr)';
+        main.style.gap = '24px';
+      }
+
       var progressTrackForPreview = null;
       var pb = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
@@ -1452,21 +1721,33 @@
         main.appendChild(backLink);
       }
 
+      function createSidebarSection(headerText, content) {
+        var section = document.createElement('div');
+        section.className = 'blog-overlay-sidebar-section';
+        section.style.marginBottom = '20px';
+        var header = document.createElement('div');
+        header.textContent = headerText;
+        header.style.fontSize = '0.7rem';
+        header.style.fontWeight = '600';
+        header.style.letterSpacing = '0.08em';
+        header.style.textTransform = 'uppercase';
+        header.style.color = '#6b6b6b';
+        header.style.marginBottom = '8px';
+        section.appendChild(header);
+        var bar = document.createElement('div');
+        bar.style.height = '1px';
+        bar.style.background = '#e5e4e0';
+        bar.style.marginBottom = '12px';
+        section.appendChild(bar);
+        section.appendChild(content);
+        return section;
+      }
       function createTocModule(sidebarWidth) {
         if (items.length === 0) return null;
         var el = document.createElement('nav');
         el.className = 'blog-overlay-toc';
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 200) + 'px';
-        el.style.padding = '12px';
-        el.style.background = '#f5f5f5';
-        el.style.borderRadius = '8px';
-        var tocTitle = document.createElement('div');
-        tocTitle.textContent = 'Table of Contents';
-        tocTitle.style.fontWeight = '600';
-        tocTitle.style.marginBottom = '8px';
-        tocTitle.style.fontSize = '0.9rem';
-        el.appendChild(tocTitle);
 
         if (isSinglePost && selectedIndex >= 0 && selectedIndex < items.length) {
           var post = items[selectedIndex];
@@ -1531,7 +1812,7 @@
         scrollTarget.addEventListener('scroll', self._tocScrollHandler, { passive: true });
         self._tocScrollTarget = scrollTarget;
         requestAnimationFrame(function() { self._updateTocHighlight(); });
-        return el;
+        return createSidebarSection('Table of Contents', el);
       }
       function createRecentPostsModule(sidebarWidth) {
         if (items.length === 0) return null;
@@ -1539,15 +1820,6 @@
         el.className = 'blog-overlay-recent-posts';
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 220) + 'px';
-        el.style.padding = '12px';
-        el.style.background = '#f5f5f5';
-        el.style.borderRadius = '8px';
-        var rpTitle = document.createElement('div');
-        rpTitle.textContent = 'Recent Posts';
-        rpTitle.style.fontWeight = '600';
-        rpTitle.style.marginBottom = '8px';
-        rpTitle.style.fontSize = '0.9rem';
-        el.appendChild(rpTitle);
         var recentItems = items.slice(0, recentPostsCount);
         for (var r = 0; r < recentItems.length; r++) {
           var rpPost = recentItems[r];
@@ -1572,7 +1844,7 @@
           rpEntry.appendChild(rpExcerpt);
           el.appendChild(rpEntry);
         }
-        return el;
+        return createSidebarSection('Recent Posts', el);
       }
       function createRelevantPostsModule(sidebarWidth) {
         if (items.length === 0) return null;
@@ -1580,15 +1852,6 @@
         el.className = 'blog-overlay-relevant-posts';
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 220) + 'px';
-        el.style.padding = '12px';
-        el.style.background = '#f5f5f5';
-        el.style.borderRadius = '8px';
-        var rpTitle = document.createElement('div');
-        rpTitle.textContent = 'Relevant Posts';
-        rpTitle.style.fontWeight = '600';
-        rpTitle.style.marginBottom = '8px';
-        rpTitle.style.fontSize = '0.9rem';
-        el.appendChild(rpTitle);
         var relevantItems = isSinglePost && selectedIndex >= 0 ? items.filter(function(_, i) { return i !== selectedIndex; }).slice(0, 5) : items.slice(0, 5);
         for (var r = 0; r < relevantItems.length; r++) {
           var rpIdx = items.indexOf(relevantItems[r]);
@@ -1608,7 +1871,7 @@
           rpEntry.appendChild(rpLink);
           el.appendChild(rpEntry);
         }
-        return el;
+        return createSidebarSection('Relevant Posts', el);
       }
       function buildSidebarModules(sidebarCfg) {
         if (!sidebarCfg || !sidebarCfg.show || !Array.isArray(sidebarCfg.modules) || sidebarCfg.modules.length === 0) return [];
@@ -1651,23 +1914,26 @@
             searchInput.onkeydown = function(e) { if (e.key === 'Escape') { searchInput.value = ''; self._searchQuery = ''; self._currentPage = 1; self._renderContent(self.items); searchInput.blur(); } };
             searchInput.className = 'blog-overlay-search-input';
             searchWrap.appendChild(searchInput);
-            el = searchWrap;
+            el = createSidebarSection('Search Posts', searchWrap);
           } else if (mod === 'filterByCategory') {
-            el = self._createFilterByCategoryModule(items, width || 200);
+            el = createSidebarSection('Filter by Category', self._createFilterByCategoryModule(items, width || 200, true, cfg.filterStyle));
           } else if (mod === 'filterByTag') {
-            el = self._createFilterByTagModule(items, width || 200);
+            el = createSidebarSection('Filter by Tag', self._createFilterByTagModule(items, width || 200, true, cfg.filterStyle));
           } else if (mod === 'filterByTagsAndCategories') {
             var wrap = document.createElement('div');
             wrap.style.display = 'flex';
             wrap.style.flexDirection = 'column';
             wrap.style.gap = '12px';
-            var catEl = self._createFilterByCategoryModule(items, width || 200);
-            var tagEl = self._createFilterByTagModule(items, width || 200);
+            var catEl = self._createFilterByCategoryModule(items, width || 200, true, cfg.filterStyle);
+            var tagEl = self._createFilterByTagModule(items, width || 200, true, cfg.filterStyle);
             if (catEl) wrap.appendChild(catEl);
             if (tagEl) wrap.appendChild(tagEl);
-            el = wrap.childNodes.length > 0 ? wrap : null;
+            el = wrap.childNodes.length > 0 ? createSidebarSection('Filter by Tags & Categories', wrap) : null;
           } else if (mod === 'postSort') {
-            el = self._createPostSortModule(cfg, width || 200);
+            el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
+          } else if (mod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
+            var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, width || 200);
+            el = authorResult ? createSidebarSection(authorResult.header, authorResult.content) : null;
           }
           if (el) mods.push(el);
         }
@@ -1682,6 +1948,10 @@
             var fiShow = Boolean(fiCfg.show !== false);
             var fiLayout = fiCfg.layoutMode === 'fullBleed' ? 'fullBleed' : fiCfg.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified';
             var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
+            if (collectionLayout === 'listRows' && fiShow && (post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl))) {
+              fiLayout = 'leftJustified';
+              fiImageWidth = 28;
+            }
             var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
             var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : '16:9');
             var fiRounded = (fiCfg.roundedCorners === 'small' ? 'small' : fiCfg.roundedCorners === 'large' ? 'large' : 'off');
@@ -1829,7 +2099,19 @@
 
             var body = document.createElement('div');
             body.className = 'blog-overlay-body';
-            body.innerHTML = post.body || '';
+            if (isSinglePost) {
+              body.innerHTML = post.body || '';
+            } else if (collectionLayout === 'listRows') {
+              var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
+              if (excerptText) {
+                body.textContent = excerptText;
+                body.style.fontSize = '0.9rem';
+                body.style.color = '#666';
+                body.style.lineHeight = '1.5';
+              }
+            } else {
+              body.innerHTML = post.body || '';
+            }
             if (isSinglePost) {
               var headings = body.querySelectorAll('h1, h2, h3, h4, h5, h6');
               if (headings.length > 0) {
@@ -2102,20 +2384,20 @@
                   searchWrap.appendChild(searchInput);
                   headerEl.appendChild(searchWrap);
                 } else if (mod === 'filterByCategory') {
-                  var catMod = self._createFilterByCategoryModule(items, 200);
+                  var catMod = self._createFilterByCategoryModule(items, 200, false, cfg.filterStyle);
                   if (catMod) {
                     catMod.style.display = 'inline-block';
                     headerEl.appendChild(catMod);
                   }
                 } else if (mod === 'filterByTag') {
-                  var tagMod = self._createFilterByTagModule(items, 200);
+                  var tagMod = self._createFilterByTagModule(items, 200, false, cfg.filterStyle);
                   if (tagMod) {
                     tagMod.style.display = 'inline-block';
                     headerEl.appendChild(tagMod);
                   }
                 } else if (mod === 'filterByTagsAndCategories') {
-                  var catMod = self._createFilterByCategoryModule(items, 200);
-                  var tagMod = self._createFilterByTagModule(items, 200);
+                  var catMod = self._createFilterByCategoryModule(items, 200, false, cfg.filterStyle);
+                  var tagMod = self._createFilterByTagModule(items, 200, false, cfg.filterStyle);
                   if (catMod) {
                     catMod.style.display = 'inline-block';
                     catMod.style.marginRight = '16px';

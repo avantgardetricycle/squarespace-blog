@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection 04 — The Showcase · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+  :root { --accent: #e9007f; --border: #e8e8e8; --bg-light: #f7f6f2; --page-max: 1120px; }
+
+  /* HANDOFF CHROME */
+  .handoff-bar { background: #111; color: #fff; padding: 14px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 200; }
+  .handoff-bar .layout-badge { background: #059669; font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px; }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+  .zone-band { display: flex; align-items: center; gap: 12px; padding: 8px 32px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+  .zone-band .zone-id { font-family: 'Courier New', monospace; font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff; }
+  .zb-nav    { background: #f5f3ff; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-nav .zone-id { background: #4f46e5; }
+  .zb-filter { background: #fdf4ff; color: #7e22ce; border-top: 1px solid #e9d5ff; }
+  .zb-filter .zone-id { background: #7e22ce; }
+  .zb-cards  { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-cards .zone-id { background: #059669; }
+  .zb-footer { background: #f0f9ff; color: #0369a1; border-top: 1px solid #bae6fd; }
+  .zb-footer .zone-id { background: #0891b2; }
+
+  /* NAV */
+  .site-nav { background: #fff; border-bottom: 2px solid #111; padding: 0 32px; height: 54px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #111; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #555; text-decoration: none; }
+  .nav-link:hover { color: var(--accent); }
+  .nav-cta { font-size: 12px; font-weight: 700; background: #111; color: #fff; padding: 7px 16px; border-radius: 2px; text-decoration: none; margin-left: 8px; }
+
+  /* COLLECTION HEADER */
+  .collection-header { background: var(--bg-light); border-bottom: 1px solid var(--border); padding: 28px 32px; }
+  .collection-header-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: baseline; justify-content: space-between; }
+  .collection-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+  .collection-count { font-size: 13px; color: #aaa; }
+
+  /* FILTER — minimal, icon search only */
+  .filter-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 0 32px; }
+  .filter-bar-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: center; height: 48px; gap: 0; }
+  .filter-cats { display: flex; flex: 1; }
+  .filter-cat { font-size: 12px; font-weight: 600; color: #999; padding: 0 16px; height: 48px; display: flex; align-items: center; border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; }
+  .filter-cat:hover { color: #111; }
+  .filter-cat.active { color: #111; border-bottom-color: #111; }
+  /* Icon-only search trigger */
+  .search-icon-btn { border: none; background: none; cursor: pointer; padding: 8px; color: #bbb; display: flex; align-items: center; transition: color 0.15s; flex-shrink: 0; }
+  .search-icon-btn:hover { color: #111; }
+
+  /* SHOWCASE CARDS — full-width alternating */
+  .showcase-section { max-width: var(--page-max); margin: 40px auto 0; padding: 0 32px; display: flex; flex-direction: column; gap: 0; }
+
+  .showcase-card {
+    display: grid;
+    gap: 0;
+    text-decoration: none; color: inherit;
+    margin-bottom: 48px;
+  }
+  /* Odd: image left */
+  .showcase-card.img-left  { grid-template-columns: 58% 42%; }
+  /* Even: image right */
+  .showcase-card.img-right { grid-template-columns: 42% 58%; }
+
+  .showcase-card .sc-img {
+    overflow: hidden; border-radius: 4px;
+    min-height: 320px;
+  }
+  .showcase-card.img-right .sc-img { order: 2; }
+  .showcase-card.img-right .sc-body { order: 1; }
+
+  .sc-img-inner { width: 100%; height: 100%; transition: transform 0.5s; }
+  .showcase-card:hover .sc-img-inner { transform: scale(1.03); }
+
+  .sc-body {
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 48px 56px;
+  }
+  .showcase-card.img-right .sc-body { padding-left: 0; padding-right: 56px; }
+  .showcase-card.img-left  .sc-body { padding-right: 0; padding-left: 56px; }
+
+  .sc-cat { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+  .sc-title { font-size: 28px; font-weight: 800; line-height: 1.15; letter-spacing: -0.4px; color: #111; margin-bottom: 14px; }
+  .showcase-card:hover .sc-title { color: var(--accent); }
+  .sc-excerpt { font-size: 14px; color: #666; line-height: 1.7; margin-bottom: 20px; }
+  .sc-meta { font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sc-meta strong { color: #555; }
+  .meta-dot { color: #ddd; }
+  .sc-read { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #111; border-bottom: 2px solid #111; padding-bottom: 1px; margin-top: 18px; align-self: flex-start; }
+  .showcase-card:hover .sc-read { color: var(--accent); border-color: var(--accent); }
+
+  /* Divider between cards */
+  .showcase-divider { border: none; border-top: 1px solid var(--border); margin-bottom: 48px; }
+
+  /* Image bg fills */
+  .bg1 { background: linear-gradient(135deg, #1a1a2e, #0f3460); }
+  .bg2 { background: linear-gradient(135deg, #2d1b69, #11998e); }
+  .bg3 { background: linear-gradient(135deg, #4b1248, #f10711); }
+  .bg4 { background: linear-gradient(135deg, #0d0d0d, #4a4a4a); }
+
+  /* LOAD MORE */
+  .load-more-wrap { max-width: var(--page-max); margin: 0 auto 56px; padding: 0 32px; display: flex; align-items: center; gap: 20px; }
+  .load-more-btn { border: 2px solid #111; background: #fff; color: #111; font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 28px; border-radius: 3px; cursor: pointer; transition: all 0.15s; }
+  .load-more-btn:hover { background: #111; color: #fff; }
+  .load-more-meta { font-size: 12px; color: #bbb; }
+
+  /* SPEC PANEL */
+  .spec-overlay { position: fixed; right: 0; top: 54px; bottom: 0; width: 260px; background: #fff; border-left: 1px solid var(--border); overflow-y: auto; z-index: 100; padding: 20px; display: none; }
+  .spec-overlay.open { display: block; }
+  .spec-toggle { position: fixed; right: 16px; bottom: 24px; background: #111; color: #fff; border: none; border-radius: 24px; padding: 10px 18px; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 90px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-comps { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-n { background: #4f46e5; } .sc-f { background: #7e22ce; } .sc-c { background: #059669; } .sc-p { background: #0891b2; }
+  .spec-note { background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px; padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px; }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<div class="handoff-bar">
+  <span class="layout-badge">COLLECTION 04</span>
+  <h1>The Showcase</h1>
+  <p>Alternating full-width cards · Generous whitespace · Developer handoff</p>
+</div>
+
+<div class="zone-band zb-nav"><span class="zone-id">NAV</span> NAVIGATION — shared across all 5 collection layouts</div>
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Latest</a><a class="nav-link" href="#">AI</a><a class="nav-link" href="#">Tools</a><a class="nav-link" href="#">Guides</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="zone-band zb-filter"><span class="zone-id">FILTER</span> FILTER BAR — icon-only search to avoid interrupting visual rhythm</div>
+<div class="collection-header">
+  <div class="collection-header-inner">
+    <div class="collection-title">All Articles</div>
+    <div class="collection-count">142 posts</div>
+  </div>
+</div>
+<div class="filter-bar">
+  <div class="filter-bar-inner">
+    <div class="filter-cats">
+      <a class="filter-cat active" href="#">All</a>
+      <a class="filter-cat" href="#">AI</a>
+      <a class="filter-cat" href="#">Tools</a>
+      <a class="filter-cat" href="#">Guides</a>
+      <a class="filter-cat" href="#">Policy</a>
+      <a class="filter-cat" href="#">Research</a>
+    </div>
+    <button class="search-icon-btn" title="Search articles">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="zone-band zb-cards"><span class="zone-id">CARDS</span> SHOWCASE CARDS — full-width · alternating image left / right · generous padding</div>
+
+<div class="showcase-section">
+
+  <a class="showcase-card img-left" href="#">
+    <div class="sc-img"><div class="sc-img-inner bg1"></div></div>
+    <div class="sc-body">
+      <div class="sc-cat">Deep Dive</div>
+      <div class="sc-title">The First Article Headline — Large and Prominent at This Scale</div>
+      <div class="sc-excerpt">A longer excerpt works here because each card has its own generous space. Two to three sentences gives the reader real context before they click.</div>
+      <div class="sc-meta">By <strong>Author Name</strong><span class="meta-dot">·</span>Mar 7, 2026<span class="meta-dot">·</span>12 min read</div>
+      <span class="sc-read">Read Article →</span>
+    </div>
+  </a>
+
+  <hr class="showcase-divider">
+
+  <a class="showcase-card img-right" href="#">
+    <div class="sc-body">
+      <div class="sc-cat">AI</div>
+      <div class="sc-title">Second Article — Image Swaps to the Right Side on Even Cards</div>
+      <div class="sc-excerpt">The alternating rhythm creates a visual cadence down the page. It keeps readers scanning without fatigue, and gives every post equal weight.</div>
+      <div class="sc-meta">By <strong>Author Name</strong><span class="meta-dot">·</span>Mar 5, 2026<span class="meta-dot">·</span>6 min read</div>
+      <span class="sc-read">Read Article →</span>
+    </div>
+    <div class="sc-img"><div class="sc-img-inner bg2"></div></div>
+  </a>
+
+  <hr class="showcase-divider">
+
+  <a class="showcase-card img-left" href="#">
+    <div class="sc-img"><div class="sc-img-inner bg3"></div></div>
+    <div class="sc-body">
+      <div class="sc-cat">Tools</div>
+      <div class="sc-title">Third Card Returns to Image Left — Pattern Repeats</div>
+      <div class="sc-excerpt">Works especially well for lifestyle, photography, travel, or design blogs where the image is a primary reason to click. Every post gets its moment.</div>
+      <div class="sc-meta">By <strong>Author Name</strong><span class="meta-dot">·</span>Mar 3, 2026<span class="meta-dot">·</span>8 min read</div>
+      <span class="sc-read">Read Article →</span>
+    </div>
+  </a>
+
+  <hr class="showcase-divider">
+
+  <a class="showcase-card img-right" href="#">
+    <div class="sc-body">
+      <div class="sc-cat">Research</div>
+      <div class="sc-title">Fourth Article Before the Load More Button</div>
+      <div class="sc-excerpt">Notice how much breathing room each card has. This layout slows the reader down in a good way — they linger on each post rather than skimming past.</div>
+      <div class="sc-meta">By <strong>Author Name</strong><span class="meta-dot">·</span>Feb 28, 2026<span class="meta-dot">·</span>5 min read</div>
+      <span class="sc-read">Read Article →</span>
+    </div>
+    <div class="sc-img"><div class="sc-img-inner bg4"></div></div>
+  </a>
+
+</div>
+
+<div class="zone-band zb-footer"><span class="zone-id">LOAD MORE</span> PAGINATION — load more · fewer posts per page than other layouts</div>
+<div class="load-more-wrap">
+  <button class="load-more-btn">Load More</button>
+  <span class="load-more-meta">Showing 4 of 142 posts</span>
+</div>
+
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Showcase</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>collection-04</code></span></div>
+  <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1120px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Format</span><span class="spec-v">Alternating full-width</span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">None</span></div>
+  <div class="spec-row"><span class="spec-k">Pagination</span><span class="spec-v">Load more</span></div>
+  <div class="spec-h">Zones</div>
+  <div class="spec-comps">
+    <div class="spec-comp"><span class="sc-id sc-n">NAV</span> Site navigation</div>
+    <div class="spec-comp"><span class="sc-id sc-f">FILTER</span> Category tabs + icon search</div>
+    <div class="spec-comp"><span class="sc-id sc-c">CARDS</span> Alternating showcase cards</div>
+    <div class="spec-comp"><span class="sc-id sc-p">LOAD</span> Load more + count</div>
+  </div>
+  <div class="spec-h">Cards</div>
+  <div class="spec-row"><span class="spec-k">Odd cards</span><span class="spec-v">Image left <code>58%</code></span></div>
+  <div class="spec-row"><span class="spec-k">Even cards</span><span class="spec-v">Image right <code>58%</code></span></div>
+  <div class="spec-row"><span class="spec-k">Body padding</span><span class="spec-v"><code>48px 56px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Min-height</span><span class="spec-v"><code>320px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Img hover</span><span class="spec-v">Slow scale <code>1.03</code> / <code>0.5s</code></span></div>
+  <div class="spec-row"><span class="spec-k">Per page</span><span class="spec-v">4 (fewer = more quality feel)</span></div>
+  <div class="spec-h">Search</div>
+  <div class="spec-row"><span class="spec-k">Trigger</span><span class="spec-v">Icon button — expands inline or opens modal</span></div>
+  <div class="spec-row"><span class="spec-k">Reason</span><span class="spec-v">Full search bar disrupts visual rhythm of this layout</span></div>
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Best for visual-first blogs.</strong> Every post gets equal prominence. Slower pace works well for lifestyle, photography, travel. Requires strong hero images — avoid if most posts don't have one.</div>
+</div>
+
+</body>
+</html>

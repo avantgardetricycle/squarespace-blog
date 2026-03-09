@@ -7,6 +7,7 @@ interface RendererConfigOverrides {
   defaultAuthorIds?: string[];
   postAuthorOverrides?: Record<string, string[]>;
   authorMap?: Record<string, string>;
+  authorProfiles?: Record<string, { name: string; imageUrl: string | null; bio: string | null; email: string | null; socialLinks: Record<string, string> }>;
   collectionConfig?: Record<string, unknown>;
   postConfig?: Record<string, unknown>;
   recentPostsCount?: number;
@@ -24,6 +25,7 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     defaultAuthorIds: overrides?.defaultAuthorIds ?? [],
     postAuthorOverrides: overrides?.postAuthorOverrides ?? {},
     authorMap: overrides?.authorMap ?? {},
+    authorProfiles: overrides?.authorProfiles ?? {},
     collectionConfig: overrides?.collectionConfig ?? undefined,
     postConfig: overrides?.postConfig ?? undefined,
     recentPostsCount: overrides?.recentPostsCount ?? 5,
@@ -101,8 +103,6 @@ export default function BlogPreviewRenderer({
   // Live preview: push config updates to renderer without full re-init
   useEffect(() => {
     if (!window.BlogOverlayRenderer?.updateConfig || !configOverrides) return;
-    // Only push updates after renderer has loaded items (avoids clearing content during initial fetch)
-    if (!window.BlogOverlayRenderer.items?.length) return;
     const config = buildRendererConfig(configOverrides);
     window.BlogOverlayRenderer.updateConfig(config);
   }, [configOverrides]);

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Collection 05 — The Digest · Developer Handoff</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Outfit', sans-serif; background: #fff; color: #111; }
+  :root { --accent: #e9007f; --border: #e8e8e8; --bg-light: #f7f6f2; --page-max: 1200px; }
+
+  /* HANDOFF CHROME */
+  .handoff-bar { background: #111; color: #fff; padding: 14px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 200; }
+  .handoff-bar .layout-badge { background: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: 2px; }
+  .handoff-bar h1 { font-size: 15px; font-weight: 700; }
+  .handoff-bar p { font-size: 12px; color: #666; margin-left: auto; }
+  .zone-band { display: flex; align-items: center; gap: 12px; padding: 8px 32px; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+  .zone-band .zone-id { font-family: 'Courier New', monospace; font-size: 10px; padding: 2px 7px; border-radius: 2px; color: #fff; }
+  .zb-nav    { background: #f5f3ff; color: #4f46e5; border-top: 1px solid #ddd6fe; }
+  .zb-nav .zone-id { background: #4f46e5; }
+  .zb-filter { background: #fdf4ff; color: #7e22ce; border-top: 1px solid #e9d5ff; }
+  .zb-filter .zone-id { background: #7e22ce; }
+  .zb-body   { background: #fff0f5; color: #9d174d; border-top: 1px solid #fbcfe8; }
+  .zb-body .zone-id { background: var(--accent); }
+  .zb-footer { background: #ecfdf5; color: #065f46; border-top: 1px solid #a7f3d0; }
+  .zb-footer .zone-id { background: #059669; }
+
+  /* NAV */
+  .site-nav { background: #fff; border-bottom: 2px solid #111; padding: 0 32px; height: 54px; display: flex; align-items: center; justify-content: space-between; }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; color: #111; text-decoration: none; }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-link { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #555; text-decoration: none; }
+  .nav-link:hover { color: var(--accent); }
+  .nav-cta { font-size: 12px; font-weight: 700; background: #111; color: #fff; padding: 7px 16px; border-radius: 2px; text-decoration: none; margin-left: 8px; }
+
+  /* COLLECTION HEADER */
+  .collection-header { background: var(--bg-light); border-bottom: 1px solid var(--border); padding: 28px 32px; }
+  .collection-header-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: baseline; justify-content: space-between; }
+  .collection-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+  .collection-count { font-size: 13px; color: #aaa; }
+
+  /* FILTER BAR */
+  .filter-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 0 32px; }
+  .filter-bar-inner { max-width: var(--page-max); margin: 0 auto; display: flex; align-items: center; height: 48px; }
+  .filter-cats { display: flex; flex: 1; }
+  .filter-cat { font-size: 12px; font-weight: 600; color: #999; padding: 0 16px; height: 48px; display: flex; align-items: center; border-bottom: 2px solid transparent; text-decoration: none; white-space: nowrap; }
+  .filter-cat:hover { color: #111; }
+  .filter-cat.active { color: #111; border-bottom-color: #111; }
+  .filter-divider { width: 1px; background: #f0f0f0; height: 24px; margin: 0 12px; flex-shrink: 0; }
+  .filter-search { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--border); border-radius: 3px; padding: 5px 11px; flex-shrink: 0; }
+  .filter-search input { border: none; outline: none; font-family: 'Outfit', sans-serif; font-size: 12px; color: #111; width: 140px; background: transparent; }
+  .filter-search input::placeholder { color: #ccc; }
+
+  /* PAGE BODY — 2-col: main + sidebar */
+  .page-body { max-width: var(--page-max); margin: 0 auto; padding: 40px 32px; display: grid; grid-template-columns: 1fr 300px; gap: 56px; align-items: start; }
+
+  /* MAIN COLUMN */
+  /* Featured post at top of main */
+  .featured-card {
+    display: grid; grid-template-columns: 1fr; margin-bottom: 32px;
+    border: 1px solid var(--border); border-radius: 5px; overflow: hidden;
+    text-decoration: none; color: inherit; transition: box-shadow 0.2s;
+  }
+  .featured-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.07); }
+  .featured-img { width: 100%; aspect-ratio: 21/9; overflow: hidden; }
+  .featured-img-inner { width: 100%; height: 100%; transition: transform 0.4s; background: linear-gradient(135deg, #1a1a2e, #2d1a3a 50%, #1a2535); }
+  .featured-card:hover .featured-img-inner { transform: scale(1.02); }
+  .featured-content { padding: 24px 28px; background: var(--bg-light); }
+  .featured-badge { display: inline-block; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; margin-bottom: 10px; }
+  .featured-cat { font-size: 10px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .featured-title { font-size: 20px; font-weight: 800; line-height: 1.2; letter-spacing: -0.3px; margin-bottom: 8px; }
+  .featured-card:hover .featured-title { color: var(--accent); }
+  .featured-excerpt { font-size: 13px; color: #666; line-height: 1.6; }
+  .featured-meta { font-size: 11px; color: #aaa; margin-top: 10px; display: flex; gap: 8px; }
+  .meta-dot { color: #ddd; }
+
+  /* 2-col mini grid below featured */
+  .mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .mini-card { text-decoration: none; color: inherit; display: flex; flex-direction: column; }
+  .mini-card:hover .mini-title { color: var(--accent); }
+  .mini-thumb { width: 100%; aspect-ratio: 16/9; border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+  .mini-thumb-inner { width: 100%; height: 100%; transition: transform 0.3s; }
+  .mini-card:hover .mini-thumb-inner { transform: scale(1.04); }
+  .pt1 { background: linear-gradient(135deg, #f5576c44, #f5576c99); }
+  .pt2 { background: linear-gradient(135deg, #4facfe44, #4facfe99); }
+  .pt3 { background: linear-gradient(135deg, #43e97b44, #43e97b99); }
+  .pt4 { background: linear-gradient(135deg, #fa709a44, #fee14099); }
+  .pt5 { background: linear-gradient(135deg, #a18cd144, #fbc2eb99); }
+  .pt6 { background: linear-gradient(135deg, #fccb9044, #d57eeb99); }
+  .mini-cat { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+  .mini-title { font-size: 14px; font-weight: 700; line-height: 1.3; color: #111; margin-bottom: 6px; transition: color 0.15s; }
+  .mini-meta { font-size: 11px; color: #bbb; margin-top: auto; }
+
+  /* SIDEBAR */
+  .sidebar { display: flex; flex-direction: column; gap: 32px; position: sticky; top: 72px; }
+
+  .widget-title { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; color: #111; padding-bottom: 10px; border-bottom: 2px solid #111; margin-bottom: 14px; }
+
+  /* Search widget */
+  .sw-search { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--border); border-radius: 3px; padding: 9px 12px; }
+  .sw-search:focus-within { border-color: #111; }
+  .sw-search input { flex: 1; border: none; outline: none; font-family: 'Outfit', sans-serif; font-size: 12px; color: #111; background: transparent; }
+  .sw-search input::placeholder { color: #ccc; }
+  .sw-search-btn { background: #111; color: #fff; border: none; border-radius: 2px; padding: 5px 10px; font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+  .sw-search-btn:hover { background: var(--accent); }
+
+  /* Newsletter widget */
+  .sw-newsletter { background: var(--bg-light); border-radius: 4px; padding: 20px; }
+  .sw-newsletter .widget-title { border-bottom-color: #ddd; color: #888; }
+  .sw-nl-desc { font-size: 13px; color: #666; line-height: 1.55; margin-bottom: 12px; }
+  .sw-nl-input { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 3px; font-family: 'Outfit', sans-serif; font-size: 12px; color: #111; margin-bottom: 8px; outline: none; }
+  .sw-nl-input:focus { border-color: #111; }
+  .sw-nl-btn { width: 100%; padding: 9px; background: #111; color: #fff; border: none; border-radius: 3px; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .sw-nl-btn:hover { background: var(--accent); }
+
+  /* Popular posts widget */
+  .sw-popular-list { list-style: none; display: flex; flex-direction: column; gap: 0; }
+  .sw-popular-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-bottom: 1px solid #f4f4f4; text-decoration: none; color: inherit; }
+  .sw-popular-item:last-child { border-bottom: none; }
+  .sw-popular-item:hover .sw-pop-title { color: var(--accent); }
+  .sw-pop-num { font-size: 22px; font-weight: 800; color: #ebebeb; line-height: 1; flex-shrink: 0; width: 28px; font-variant-numeric: tabular-nums; }
+  .sw-pop-title { font-size: 13px; font-weight: 600; line-height: 1.35; color: #111; transition: color 0.15s; margin-bottom: 3px; }
+  .sw-pop-meta { font-size: 11px; color: #ccc; }
+
+  /* Tags widget */
+  .sw-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sw-tag { font-size: 11px; font-weight: 600; color: #555; padding: 4px 10px; border: 1.5px solid var(--border); border-radius: 2px; text-decoration: none; transition: all 0.15s; }
+  .sw-tag:hover { border-color: #111; color: #111; }
+
+  /* PAGINATION */
+  .pagination-wrap { max-width: var(--page-max); margin: 0 auto 56px; padding: 0 32px; }
+  .pagination { display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
+  .page-btn { width: 36px; height: 36px; border: 1.5px solid var(--border); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #555; text-decoration: none; transition: all 0.15s; }
+  .page-btn:hover { border-color: #111; color: #111; }
+  .page-btn.active { background: #111; border-color: #111; color: #fff; }
+  .page-btn.arrow { font-size: 16px; color: #bbb; }
+
+  /* SPEC PANEL */
+  .spec-overlay { position: fixed; right: 0; top: 54px; bottom: 0; width: 260px; background: #fff; border-left: 1px solid var(--border); overflow-y: auto; z-index: 100; padding: 20px; display: none; }
+  .spec-overlay.open { display: block; }
+  .spec-toggle { position: fixed; right: 16px; bottom: 24px; background: #111; color: #fff; border: none; border-radius: 24px; padding: 10px 18px; font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; z-index: 101; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .spec-toggle:hover { background: var(--accent); }
+  .spec-h { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #bbb; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+  .spec-h:first-child { margin-top: 0; }
+  .spec-row { display: flex; gap: 8px; margin-bottom: 5px; font-size: 12px; }
+  .spec-k { color: #aaa; flex-shrink: 0; width: 90px; }
+  .spec-v { color: #111; font-weight: 500; }
+  .spec-v code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: 'Courier New', monospace; font-size: 10px; }
+  .spec-comps { display: flex; flex-direction: column; gap: 5px; }
+  .spec-comp { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 5px 7px; background: #fafafa; border-radius: 3px; border: 1px solid #f0f0f0; }
+  .sc-id { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 700; color: #fff; padding: 2px 5px; border-radius: 2px; }
+  .sc-n { background: #4f46e5; } .sc-f { background: #7e22ce; } .sc-m { background: var(--accent); } .sc-s { background: #d97706; } .sc-p { background: #059669; }
+  .spec-note { background: #f9fafb; border: 1px solid #f0f0f0; border-radius: 3px; padding: 10px 12px; font-size: 12px; color: #777; line-height: 1.5; margin-top: 4px; }
+  .spec-note strong { color: #111; }
+</style>
+</head>
+<body>
+
+<div class="handoff-bar">
+  <span class="layout-badge">COLLECTION 05</span>
+  <h1>The Digest</h1>
+  <p>Featured + 2-col grid · Persistent sidebar · Discovery-first · Developer handoff</p>
+</div>
+
+<div class="zone-band zb-nav"><span class="zone-id">NAV</span> NAVIGATION — shared across all 5 collection layouts</div>
+<nav class="site-nav">
+  <a class="nav-logo" href="#">Inkwell</a>
+  <div class="nav-links">
+    <a class="nav-link" href="#">Latest</a><a class="nav-link" href="#">AI</a><a class="nav-link" href="#">Tools</a><a class="nav-link" href="#">Guides</a>
+    <a class="nav-cta" href="#">Subscribe</a>
+  </div>
+</nav>
+
+<div class="zone-band zb-filter"><span class="zone-id">FILTER</span> FILTER BAR — categories + inline search (search also lives in sidebar)</div>
+<div class="collection-header">
+  <div class="collection-header-inner">
+    <div class="collection-title">All Articles</div>
+    <div class="collection-count">142 posts</div>
+  </div>
+</div>
+<div class="filter-bar">
+  <div class="filter-bar-inner">
+    <div class="filter-cats">
+      <a class="filter-cat active" href="#">All</a>
+      <a class="filter-cat" href="#">AI</a>
+      <a class="filter-cat" href="#">Tools</a>
+      <a class="filter-cat" href="#">Guides</a>
+      <a class="filter-cat" href="#">Policy</a>
+    </div>
+    <div class="filter-divider"></div>
+    <div class="filter-search">
+      <svg width="13" height="13" fill="none" stroke="#bbb" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Search articles…">
+    </div>
+  </div>
+</div>
+
+<div class="zone-band zb-body"><span class="zone-id">BODY</span> MAIN + SIDEBAR — featured post · 2-col mini grid · sticky right sidebar</div>
+
+<div class="page-body">
+  <!-- MAIN CONTENT -->
+  <div class="main-col">
+
+    <a class="featured-card" href="#">
+      <div class="featured-img"><div class="featured-img-inner"></div></div>
+      <div class="featured-content">
+        <span class="featured-badge">Featured</span>
+        <div class="featured-cat">Deep Dive</div>
+        <div class="featured-title">The Lead Post Headline — Featured at the Top of the Main Column</div>
+        <div class="featured-excerpt">A slightly longer excerpt works here since this post gets the most real estate. Two sentences gives the reader real context.</div>
+        <div class="featured-meta">By <strong>Author Name</strong><span class="meta-dot">·</span>Mar 7, 2026<span class="meta-dot">·</span>12 min read</div>
+      </div>
+    </a>
+
+    <div class="mini-grid">
+      <a class="mini-card" href="#"><div class="mini-thumb"><div class="mini-thumb-inner pt1"></div></div><div class="mini-cat">AI</div><div class="mini-title">Second post in the mini grid below the featured card</div><div class="mini-meta">Author · Mar 5 · 6 min</div></a>
+      <a class="mini-card" href="#"><div class="mini-thumb"><div class="mini-thumb-inner pt2"></div></div><div class="mini-cat">Tools</div><div class="mini-title">Third post completing the first row of the mini grid</div><div class="mini-meta">Author · Mar 3 · 4 min</div></a>
+      <a class="mini-card" href="#"><div class="mini-thumb"><div class="mini-thumb-inner pt3"></div></div><div class="mini-cat">Guides</div><div class="mini-title">Fourth post beginning the second row here</div><div class="mini-meta">Author · Feb 28 · 8 min</div></a>
+      <a class="mini-card" href="#"><div class="mini-thumb"><div class="mini-thumb-inner pt4"></div></div><div class="mini-cat">Policy</div><div class="mini-title">Fifth post rounds out the second mini grid row</div><div class="mini-meta">Author · Feb 25 · 5 min</div></a>
+      <a class="mini-card" href="#"><div class="mini-thumb"><div class="mini-thumb-inner pt5"></div></div><div class="mini-cat">Research</div><div class="mini-title">Sixth post before the pagination below</div><div class="mini-meta">Author · Feb 22 · 7 min</div></a>
+      <a class="mini-card" href="#"><div class="mini-thumb"><div class="mini-thumb-inner pt6"></div></div><div class="mini-cat">AI</div><div class="mini-title">Seventh post closes out this page of results</div><div class="mini-meta">Author · Feb 19 · 3 min</div></a>
+    </div>
+
+  </div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- Search widget -->
+    <div class="sw-search-widget">
+      <div class="widget-title">Search</div>
+      <div class="sw-search">
+        <svg width="13" height="13" fill="none" stroke="#bbb" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" placeholder="Search articles…">
+        <button class="sw-search-btn">Go</button>
+      </div>
+    </div>
+
+    <!-- Newsletter -->
+    <div class="sw-newsletter">
+      <div class="widget-title">Newsletter</div>
+      <div class="sw-nl-desc">Get new articles delivered to your inbox every week.</div>
+      <input class="sw-nl-input" type="email" placeholder="Your email address">
+      <button class="sw-nl-btn">Subscribe →</button>
+    </div>
+
+    <!-- Popular posts -->
+    <div>
+      <div class="widget-title">Popular This Week</div>
+      <ul class="sw-popular-list">
+        <li class="sw-popular-item" href="#"><div class="sw-pop-num">01</div><div><div class="sw-pop-title">The most popular article this week by page views</div><div class="sw-pop-meta">Mar 7 · 12 min read</div></div></li>
+        <li class="sw-popular-item" href="#"><div class="sw-pop-num">02</div><div><div class="sw-pop-title">Second most-read article of the week</div><div class="sw-pop-meta">Mar 5 · 6 min read</div></div></li>
+        <li class="sw-popular-item" href="#"><div class="sw-pop-num">03</div><div><div class="sw-pop-title">Third popular post for this period</div><div class="sw-pop-meta">Mar 3 · 4 min read</div></div></li>
+        <li class="sw-popular-item" href="#"><div class="sw-pop-num">04</div><div><div class="sw-pop-title">Fourth article rounding out the top posts</div><div class="sw-pop-meta">Feb 28 · 8 min read</div></div></li>
+      </ul>
+    </div>
+
+    <!-- Tags -->
+    <div>
+      <div class="widget-title">Topics</div>
+      <div class="sw-tags">
+        <a class="sw-tag" href="#">AI</a>
+        <a class="sw-tag" href="#">Tools</a>
+        <a class="sw-tag" href="#">Guides</a>
+        <a class="sw-tag" href="#">Policy</a>
+        <a class="sw-tag" href="#">Research</a>
+        <a class="sw-tag" href="#">Tutorials</a>
+        <a class="sw-tag" href="#">Opinion</a>
+        <a class="sw-tag" href="#">News</a>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<div class="zone-band zb-footer"><span class="zone-id">PAGINATION</span> PAGINATION — numbered · left-aligned to match main column</div>
+<div class="pagination-wrap">
+  <div class="pagination">
+    <a class="page-btn arrow" href="#">‹</a>
+    <a class="page-btn active" href="#">1</a>
+    <a class="page-btn" href="#">2</a>
+    <a class="page-btn" href="#">3</a>
+    <a class="page-btn" href="#">4</a>
+    <a class="page-btn" href="#">5</a>
+    <a class="page-btn arrow" href="#">›</a>
+  </div>
+</div>
+
+<button class="spec-toggle" onclick="document.querySelector('.spec-overlay').classList.toggle('open'); this.textContent = document.querySelector('.spec-overlay').classList.contains('open') ? '✕ Close Specs' : '⚙ View Specs'">⚙ View Specs</button>
+<div class="spec-overlay">
+  <div class="spec-h">Layout</div>
+  <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Digest</span></div>
+  <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>collection-05</code></span></div>
+  <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1200px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Grid</span><span class="spec-v"><code>1fr + 300px</code>, <code>56px</code> gap</span></div>
+  <div class="spec-row"><span class="spec-k">Sidebar</span><span class="spec-v">Right · sticky <code>top: 72px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Pagination</span><span class="spec-v">Numbered, left-aligned</span></div>
+  <div class="spec-h">Zones</div>
+  <div class="spec-comps">
+    <div class="spec-comp"><span class="sc-id sc-n">NAV</span> Site navigation</div>
+    <div class="spec-comp"><span class="sc-id sc-f">FILTER</span> Category tabs + inline search</div>
+    <div class="spec-comp"><span class="sc-id sc-m">MAIN</span> Featured card + mini grid</div>
+    <div class="spec-comp"><span class="sc-id sc-s">SIDEBAR</span> Search · Newsletter · Popular · Tags</div>
+    <div class="spec-comp"><span class="sc-id sc-p">PAGE</span> Numbered pagination</div>
+  </div>
+  <div class="spec-h">Main Column</div>
+  <div class="spec-row"><span class="spec-k">Featured</span><span class="spec-v">Full-width, <code>21:9</code> image ratio</span></div>
+  <div class="spec-row"><span class="spec-k">Mini grid</span><span class="spec-v">2-col, <code>20px</code> gap</span></div>
+  <div class="spec-row"><span class="spec-k">Per page</span><span class="spec-v">1 featured + 6 grid</span></div>
+  <div class="spec-h">Sidebar Widgets</div>
+  <div class="spec-row"><span class="spec-k">Search</span><span class="spec-v">Input + Go button</span></div>
+  <div class="spec-row"><span class="spec-k">Newsletter</span><span class="spec-v">Email input + Subscribe</span></div>
+  <div class="spec-row"><span class="spec-k">Popular</span><span class="spec-v">4 posts, numbered</span></div>
+  <div class="spec-row"><span class="spec-k">Tags</span><span class="spec-v">Pill tags, border style</span></div>
+  <div class="spec-row"><span class="spec-k">Sticky</span><span class="spec-v"><code>top: 72px</code> (below nav)</span></div>
+  <div class="spec-h">Search</div>
+  <div class="spec-row"><span class="spec-k">Placement</span><span class="spec-v">Both filter bar + sidebar</span></div>
+  <div class="spec-row"><span class="spec-k">Note</span><span class="spec-v">Both should trigger same search — keep state in sync</span></div>
+  <div class="spec-h">Design Note</div>
+  <div class="spec-note"><strong>Only collection layout with a sidebar.</strong> Discovery is baked in — readers browsing the index get newsletter, popular posts, and tags without having to go anywhere. Best for content-heavy blogs with 50+ posts. Pairs well with The Feature or The Publisher article layouts.</div>
+</div>
+
+</body>
+</html>

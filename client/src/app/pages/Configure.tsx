@@ -9,6 +9,7 @@ import {
   Undo2,
   Plus,
   X,
+  Pencil,
   ChevronDown,
   ChevronRight,
   GripVertical,
@@ -35,12 +36,20 @@ import {
   DialogTrigger,
 } from "@/app/components/ui/dialog";
 import { ScrollArea } from "@/app/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import BlogPreviewIframe, {
   buildBlogPreviewUrl,
   isSquarespaceUrl,
 } from "@/app/components/BlogPreviewIframe";
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
+import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
+import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
 const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
@@ -48,17 +57,43 @@ const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader
 export interface BlogAuthorOption {
   id: string;
   name: string;
+  imageUrl?: string | null;
+  bio?: string | null;
+  email?: string | null;
+  socialLinks?: Record<string, string>;
 }
 
-export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "searchPosts", "postSort"] as const;
+export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
-export const SIDEBAR_POST_MODULES = ["tableOfContents"] as const;
+export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
-export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "searchPosts", "postSort"] as const;
+export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
 export type HeaderCollectionModuleType = (typeof HEADER_COLLECTION_MODULES)[number];
 export const HEADER_POST_MODULES = ["breadcrumbs", "tableOfContents"] as const;
 export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
+
+/** Position for a discovery/navigation module */
+export type ModulePosition = "header" | "leftSidebar" | "rightSidebar" | "none";
+
+/** Filter type: which filter module to show */
+export type FilterTypeOption = "category" | "tag" | "tagsAndCategories";
+
+export type FilterStyleOption = "dropdown" | "pills";
+
+/** Explicit config for collection-level discovery modules */
+export interface CollectionModulesConfig {
+  filter: { enabled: boolean; filterType: FilterTypeOption; style: FilterStyleOption; position: ModulePosition };
+  sort: { enabled: boolean; position: ModulePosition };
+  search: { enabled: boolean; position: ModulePosition };
+}
+
+/** Explicit config for post-level discovery modules */
+export interface PostModulesConfig {
+  tableOfContents: { enabled: boolean; position: ModulePosition };
+  breadcrumbs: { enabled: boolean; position: ModulePosition };
+  authorProfiles: { enabled: boolean; position: ModulePosition };
+}
 
 export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
@@ -87,9 +122,9 @@ export interface BaseLevelConfig {
   showDate: boolean;
   showAuthor: boolean;
   showReadingTime: boolean;
-  leftSidebar: { show: boolean; modules: string[]; width: number; spaceAbove: number; sticky: boolean };
-  rightSidebar: { show: boolean; modules: string[]; width: number; spaceAbove: number; sticky: boolean };
-  headerContent: { show: boolean; modules: string[]; height: number };
+  leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
+  rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
+  headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
 }
@@ -98,13 +133,27 @@ export type PostSortOption = "date" | "az" | "popularity";
 
 export type PostsPerPageOption = 5 | 10 | 20;
 
+export type CollectionLayoutMode = "stack" | "grid" | "listRows";
+
+export type GridColumnsOption = 2 | 3;
+
+/** Map filterType to the actual module ID used by renderer */
+export function filterTypeToModuleId(t: FilterTypeOption): string {
+  return t === "category" ? "filterByCategory" : t === "tag" ? "filterByTag" : "filterByTagsAndCategories";
+}
+
 export interface CollectionLevelConfig extends BaseLevelConfig {
   postSort?: PostSortOption;
   pagination?: { show: boolean; postsPerPage: PostsPerPageOption };
+  collectionLayout?: CollectionLayoutMode;
+  gridColumns?: GridColumnsOption;
+  filterStyle?: FilterStyleOption;
+  collectionModules?: CollectionModulesConfig;
 }
 
 export interface PostLevelConfig extends BaseLevelConfig {
   progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
+  postModules?: PostModulesConfig;
 }
 
 export interface SiteConfigForm {
@@ -112,6 +161,8 @@ export interface SiteConfigForm {
   postAuthorOverrides: Record<string, string[]>;
   collectionConfig: CollectionLevelConfig;
   postConfig: PostLevelConfig;
+  collectionTemplateId?: string | null;
+  postTemplateId?: string | null;
 }
 
 const defaultFeaturedImage: FeaturedImageConfig = {
@@ -126,24 +177,41 @@ const defaultFeaturedImage: FeaturedImageConfig = {
   verticalSpacing: "normal",
 };
 
+const defaultCollectionModules: CollectionModulesConfig = {
+  filter: { enabled: false, filterType: "category", style: "dropdown", position: "none" },
+  sort: { enabled: false, position: "none" },
+  search: { enabled: false, position: "none" },
+};
+
+const defaultPostModules: PostModulesConfig = {
+  tableOfContents: { enabled: false, position: "none" },
+  breadcrumbs: { enabled: false, position: "none" },
+  authorProfiles: { enabled: false, position: "none" },
+};
+
 const defaultCollectionConfig: CollectionLevelConfig = {
   showDate: true,
   showAuthor: false,
   showReadingTime: false,
   postSort: "date",
   pagination: { show: false, postsPerPage: 10 },
-  leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-  rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-  headerContent: { show: false, modules: [], height: 48 },
+  collectionLayout: "stack",
+  gridColumns: 3,
+  filterStyle: "dropdown",
+  collectionModules: defaultCollectionModules,
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   socialMediaLinks: { show: false, platforms: [] },
   featuredImage: defaultFeaturedImage,
 };
 
 const defaultPostConfig: PostLevelConfig = {
   ...defaultCollectionConfig,
-  leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-  rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-  headerContent: { show: false, modules: [], height: 48 },
+  postModules: defaultPostModules,
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
 };
 
@@ -152,7 +220,178 @@ const defaultSiteConfig: SiteConfigForm = {
   postAuthorOverrides: {},
   collectionConfig: defaultCollectionConfig,
   postConfig: defaultPostConfig,
+  collectionTemplateId: null,
+  postTemplateId: null,
 };
+
+/**
+ * Derive modules arrays for each zone from explicit collectionModules config + moduleOrder.
+ * Returns the module IDs in order for header, leftSidebar, rightSidebar.
+ */
+function deriveCollectionModules(
+  cm: CollectionModulesConfig,
+  headerOrder: string[],
+  leftOrder: string[],
+  rightOrder: string[]
+): { header: string[]; left: string[]; right: string[] } {
+  const filterId = filterTypeToModuleId(cm.filter.filterType);
+  const header: string[] = [];
+  const left: string[] = [];
+  const right: string[] = [];
+  if (cm.filter.enabled && cm.filter.position !== "none") {
+    if (cm.filter.position === "header") header.push(filterId);
+    else if (cm.filter.position === "leftSidebar") left.push(filterId);
+    else if (cm.filter.position === "rightSidebar") right.push(filterId);
+  }
+  if (cm.sort.enabled && cm.sort.position !== "none") {
+    if (cm.sort.position === "header") header.push("postSort");
+    else if (cm.sort.position === "leftSidebar") left.push("postSort");
+    else if (cm.sort.position === "rightSidebar") right.push("postSort");
+  }
+  if (cm.search.enabled && cm.search.position !== "none") {
+    if (cm.search.position === "header") header.push("searchPosts");
+    else if (cm.search.position === "leftSidebar") left.push("searchPosts");
+    else if (cm.search.position === "rightSidebar") right.push("searchPosts");
+  }
+  const orderModules = (order: string[], available: string[]): string[] => {
+    const set = new Set(available);
+    const fromOrder = order.filter((m) => set.has(m));
+    const remaining = available.filter((m) => !order.includes(m));
+    return [...fromOrder, ...remaining];
+  };
+  return {
+    header: orderModules(headerOrder, header),
+    left: orderModules(leftOrder, left),
+    right: orderModules(rightOrder, right),
+  };
+}
+
+/**
+ * Derive modules arrays for each zone from explicit postModules config + moduleOrder.
+ */
+function derivePostModules(
+  pm: PostModulesConfig,
+  headerOrder: string[],
+  leftOrder: string[],
+  rightOrder: string[]
+): { header: string[]; left: string[]; right: string[] } {
+  const header: string[] = [];
+  const left: string[] = [];
+  const right: string[] = [];
+  if (pm.tableOfContents.enabled && pm.tableOfContents.position !== "none") {
+    if (pm.tableOfContents.position === "header") header.push("tableOfContents");
+    else if (pm.tableOfContents.position === "leftSidebar") left.push("tableOfContents");
+    else if (pm.tableOfContents.position === "rightSidebar") right.push("tableOfContents");
+  }
+  if (pm.breadcrumbs.enabled && pm.breadcrumbs.position !== "none") {
+    if (pm.breadcrumbs.position === "header") header.push("breadcrumbs");
+    else if (pm.breadcrumbs.position === "leftSidebar") left.push("breadcrumbs");
+    else if (pm.breadcrumbs.position === "rightSidebar") right.push("breadcrumbs");
+  }
+  if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none") {
+    if (pm.authorProfiles.position === "header") header.push("authorProfiles");
+    else if (pm.authorProfiles.position === "leftSidebar") left.push("authorProfiles");
+    else if (pm.authorProfiles.position === "rightSidebar") right.push("authorProfiles");
+  }
+  const orderModules = (order: string[], available: string[]): string[] => {
+    const set = new Set(available);
+    const fromOrder = order.filter((m) => set.has(m));
+    const remaining = available.filter((m) => !order.includes(m));
+    return [...fromOrder, ...remaining];
+  };
+  return {
+    header: orderModules(headerOrder, header),
+    left: orderModules(leftOrder, left),
+    right: orderModules(rightOrder, right),
+  };
+}
+
+/**
+ * Sync moduleOrder in each zone when explicit module config changes.
+ * Adds/removes module IDs from zone moduleOrder based on position.
+ */
+function syncModuleOrderFromExplicit(
+  cc?: CollectionLevelConfig,
+  cm?: CollectionModulesConfig,
+  pc?: PostLevelConfig,
+  pm?: PostModulesConfig
+): CollectionLevelConfig | PostLevelConfig {
+  const cfg = (cc ?? pc) as CollectionLevelConfig | PostLevelConfig;
+  if (!cfg) return cfg;
+  const addToOrder = (order: string[], modId: string): string[] =>
+    order.includes(modId) ? order : [...order, modId];
+  const removeFromOrder = (order: string[], modId: string): string[] =>
+    order.filter((m) => m !== modId);
+  if (cm && cc) {
+    const filterId = filterTypeToModuleId(cm.filter.filterType);
+    let h = cc.headerContent.moduleOrder ?? [];
+    let l = cc.leftSidebar.moduleOrder ?? [];
+    let r = cc.rightSidebar.moduleOrder ?? [];
+    [h, l, r] = [h, l, r].map((o) => removeFromOrder(removeFromOrder(removeFromOrder(o, filterId), "postSort"), "searchPosts"));
+    if (cm.filter.enabled && cm.filter.position === "header") h = addToOrder(h, filterId);
+    else if (cm.filter.enabled && cm.filter.position === "leftSidebar") l = addToOrder(l, filterId);
+    else if (cm.filter.enabled && cm.filter.position === "rightSidebar") r = addToOrder(r, filterId);
+    if (cm.sort.enabled && cm.sort.position === "header") h = addToOrder(h, "postSort");
+    else if (cm.sort.enabled && cm.sort.position === "leftSidebar") l = addToOrder(l, "postSort");
+    else if (cm.sort.enabled && cm.sort.position === "rightSidebar") r = addToOrder(r, "postSort");
+    if (cm.search.enabled && cm.search.position === "header") h = addToOrder(h, "searchPosts");
+    else if (cm.search.enabled && cm.search.position === "leftSidebar") l = addToOrder(l, "searchPosts");
+    else if (cm.search.enabled && cm.search.position === "rightSidebar") r = addToOrder(r, "searchPosts");
+    return { ...cc, collectionModules: cm, headerContent: { ...cc.headerContent, moduleOrder: h }, leftSidebar: { ...cc.leftSidebar, moduleOrder: l }, rightSidebar: { ...cc.rightSidebar, moduleOrder: r } };
+  }
+  if (pm && pc) {
+    let h = pc.headerContent.moduleOrder ?? [];
+    let l = pc.leftSidebar.moduleOrder ?? [];
+    let r = pc.rightSidebar.moduleOrder ?? [];
+    [h, l, r] = [h, l, r].map((o) => removeFromOrder(removeFromOrder(removeFromOrder(o, "tableOfContents"), "breadcrumbs"), "authorProfiles"));
+    if (pm.tableOfContents.enabled && pm.tableOfContents.position === "header") h = addToOrder(h, "tableOfContents");
+    else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "leftSidebar") l = addToOrder(l, "tableOfContents");
+    else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "rightSidebar") r = addToOrder(r, "tableOfContents");
+    if (pm.breadcrumbs.enabled && pm.breadcrumbs.position === "header") h = addToOrder(h, "breadcrumbs");
+    else if (pm.breadcrumbs.enabled && pm.breadcrumbs.position === "leftSidebar") l = addToOrder(l, "breadcrumbs");
+    else if (pm.breadcrumbs.enabled && pm.breadcrumbs.position === "rightSidebar") r = addToOrder(r, "breadcrumbs");
+    if (pm.authorProfiles.enabled && pm.authorProfiles.position === "header") h = addToOrder(h, "authorProfiles");
+    else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "leftSidebar") l = addToOrder(l, "authorProfiles");
+    else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "rightSidebar") r = addToOrder(r, "authorProfiles");
+    return { ...pc, postModules: pm, headerContent: { ...pc.headerContent, moduleOrder: h }, leftSidebar: { ...pc.leftSidebar, moduleOrder: l }, rightSidebar: { ...pc.rightSidebar, moduleOrder: r } };
+  }
+  return cfg;
+}
+
+/**
+ * Apply derived modules to config for renderer. Mutates in place for collection/post config.
+ */
+function applyDerivedModules(config: SiteConfigForm): void {
+  const cc = config.collectionConfig;
+  const pc = config.postConfig;
+  const cm = cc.collectionModules ?? defaultCollectionModules;
+  const pm = pc.postModules ?? defaultPostModules;
+  const coll = deriveCollectionModules(
+    cm,
+    cc.headerContent.moduleOrder ?? cc.headerContent.modules ?? [],
+    cc.leftSidebar.moduleOrder ?? cc.leftSidebar.modules ?? [],
+    cc.rightSidebar.moduleOrder ?? cc.rightSidebar.modules ?? []
+  );
+  cc.headerContent.modules = coll.header;
+  cc.leftSidebar.modules = coll.left;
+  cc.rightSidebar.modules = coll.right;
+  cc.headerContent.show = coll.header.length > 0;
+  cc.leftSidebar.show = coll.left.length > 0;
+  cc.rightSidebar.show = coll.right.length > 0;
+  cc.filterStyle = cm.filter.style;
+  const post = derivePostModules(
+    pm,
+    pc.headerContent.moduleOrder ?? pc.headerContent.modules ?? [],
+    pc.leftSidebar.moduleOrder ?? pc.leftSidebar.modules ?? [],
+    pc.rightSidebar.moduleOrder ?? pc.rightSidebar.modules ?? []
+  );
+  pc.headerContent.modules = post.header;
+  pc.leftSidebar.modules = post.left;
+  pc.rightSidebar.modules = post.right;
+  pc.headerContent.show = post.header.length > 0;
+  pc.leftSidebar.show = post.left.length > 0;
+  pc.rightSidebar.show = post.right.length > 0;
+}
 
 function parseLevelConfig(
   raw: Record<string, unknown> | null,
@@ -174,9 +413,9 @@ function parseLevelConfig(
     showCaption: Boolean(fi.showCaption ?? true),
     verticalSpacing: (fi.verticalSpacing === "tight" ? "tight" : fi.verticalSpacing === "spacious" ? "spacious" : "normal") as FeaturedImageVerticalSpacing,
   } : defaultFeaturedImage;
-  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
-  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
-  const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; height?: number } : null;
+  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
+  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
+  const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is SidebarCollectionModuleType => SIDEBAR_COLLECTION_MODULES.includes(m as SidebarCollectionModuleType)) : [];
   const validSidebarPost = (arr: unknown): SidebarPostModuleType[] =>
@@ -185,30 +424,111 @@ function parseLevelConfig(
     Array.isArray(arr) ? arr.filter((m): m is HeaderCollectionModuleType => HEADER_COLLECTION_MODULES.includes(m as HeaderCollectionModuleType)) : [];
   const validHeaderPost = (arr: unknown): HeaderPostModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is HeaderPostModuleType => HEADER_POST_MODULES.includes(m as HeaderPostModuleType)) : [];
+  const lsModules = level === "collection" ? validSidebarCollection(ls?.modules) : validSidebarPost(ls?.modules);
+  const rsModules = level === "collection" ? validSidebarCollection(rs?.modules) : validSidebarPost(rs?.modules);
+  const hcModules = level === "collection" ? validHeaderCollection(hc?.modules) : validHeaderPost(hc?.modules);
+  const lsModuleOrder = Array.isArray(ls?.moduleOrder) ? (level === "collection" ? validSidebarCollection(ls.moduleOrder) : validSidebarPost(ls.moduleOrder)) : lsModules;
+  const rsModuleOrder = Array.isArray(rs?.moduleOrder) ? (level === "collection" ? validSidebarCollection(rs.moduleOrder) : validSidebarPost(rs.moduleOrder)) : rsModules;
+  const hcModuleOrder = Array.isArray(hc?.moduleOrder) ? (level === "collection" ? validHeaderCollection(hc.moduleOrder) : validHeaderPost(hc.moduleOrder)) : hcModules;
   const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: level === "collection" ? validSidebarCollection(ls.modules) : validSidebarPost(ls.modules), width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky !== false }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], width: 240, spaceAbove: 0, sticky: true };
+    ? { show: Boolean(ls.show ?? false), modules: lsModules, moduleOrder: lsModuleOrder, width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky !== false }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
   const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: level === "collection" ? validSidebarCollection(rs.modules) : validSidebarPost(rs.modules), width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky !== false }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], width: 240, spaceAbove: 0, sticky: true };
+    ? { show: Boolean(rs.show ?? false), modules: rsModules, moduleOrder: rsModuleOrder, width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky !== false }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
   const headerContent = hc
-    ? { show: Boolean(hc.show ?? false), modules: level === "collection" ? validHeaderCollection(hc.modules) : validHeaderPost(hc.modules), height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
-    : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], height: 48 };
+    ? { show: Boolean(hc.show ?? false), modules: hcModules, moduleOrder: hcModuleOrder, height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
+    : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
   const postSort = (raw?.postSort === "az" || raw?.postSort === "popularity") ? raw.postSort as PostSortOption : "date";
   const pagRaw = raw?.pagination && typeof raw.pagination === "object" ? raw.pagination as { show?: boolean; postsPerPage?: number } : null;
   const validPostsPerPage = (v: unknown): PostsPerPageOption => (v === 5 || v === 10 || v === 20) ? v : 10;
   const pagination = pagRaw
     ? { show: Boolean(pagRaw.show ?? false), postsPerPage: validPostsPerPage(pagRaw.postsPerPage) }
     : { show: false, postsPerPage: 10 as PostsPerPageOption };
+  const validCollectionLayout = (v: unknown): CollectionLayoutMode =>
+    (v === "grid" || v === "listRows") ? v : "stack";
+  const validGridColumns = (v: unknown): GridColumnsOption =>
+    (v === 2 || v === 3) ? v : 3;
+  const validFilterStyle = (v: unknown): FilterStyleOption =>
+    v === "pills" ? "pills" : "dropdown";
+  const validModulePosition = (v: unknown): ModulePosition =>
+    (v === "header" || v === "leftSidebar" || v === "rightSidebar") ? v : "none";
+  const validFilterType = (v: unknown): FilterTypeOption =>
+    (v === "tag" || v === "tagsAndCategories") ? v : "category";
+  const collectionLayout = validCollectionLayout(raw?.collectionLayout);
+  const gridColumns = validGridColumns(raw?.gridColumns);
+  const filterStyle = validFilterStyle(raw?.filterStyle);
+  const cmRaw = raw?.collectionModules && typeof raw.collectionModules === "object" ? raw.collectionModules as Record<string, unknown> : null;
+  const pmRaw = raw?.postModules && typeof raw.postModules === "object" ? raw.postModules as Record<string, unknown> : null;
+  const parseCollectionModules = (): CollectionModulesConfig => {
+    if (cmRaw) {
+      const f = cmRaw.filter && typeof cmRaw.filter === "object" ? cmRaw.filter as Record<string, unknown> : {};
+      const s = cmRaw.sort && typeof cmRaw.sort === "object" ? cmRaw.sort as Record<string, unknown> : {};
+      const sr = cmRaw.search && typeof cmRaw.search === "object" ? cmRaw.search as Record<string, unknown> : {};
+      return {
+        filter: {
+          enabled: Boolean(f.enabled ?? false),
+          filterType: validFilterType(f.filterType),
+          style: validFilterStyle(f.style ?? raw?.filterStyle),
+          position: validModulePosition(f.position),
+        },
+        sort: { enabled: Boolean(s.enabled ?? false), position: validModulePosition(s.position) },
+        search: { enabled: Boolean(sr.enabled ?? false), position: validModulePosition(sr.position) },
+      };
+    }
+    const mods: string[] = [...(hcModules as string[]), ...(lsModules as string[]), ...(rsModules as string[])];
+    const filterMod = mods.find((m) => ["filterByCategory", "filterByTag", "filterByTagsAndCategories"].includes(m));
+    const filterType: FilterTypeOption = filterMod === "filterByTagsAndCategories" ? "tagsAndCategories" : filterMod === "filterByTag" ? "tag" : "category";
+    const h = hcModules as string[];
+    const l = lsModules as string[];
+    const r = rsModules as string[];
+    const filterPos: ModulePosition = h.includes(filterMod ?? "") ? "header" : l.includes(filterMod ?? "") ? "leftSidebar" : r.includes(filterMod ?? "") ? "rightSidebar" : "none";
+    const sortPos: ModulePosition = h.includes("postSort") ? "header" : l.includes("postSort") ? "leftSidebar" : r.includes("postSort") ? "rightSidebar" : "none";
+    const searchPos: ModulePosition = h.includes("searchPosts") ? "header" : l.includes("searchPosts") ? "leftSidebar" : r.includes("searchPosts") ? "rightSidebar" : "none";
+    return {
+      filter: { enabled: !!filterMod, filterType, style: filterStyle, position: filterPos },
+      sort: { enabled: sortPos !== "none", position: sortPos },
+      search: { enabled: searchPos !== "none", position: searchPos },
+    };
+  };
+  const parsePostModules = (): PostModulesConfig => {
+    if (pmRaw) {
+      const toc = pmRaw.tableOfContents && typeof pmRaw.tableOfContents === "object" ? pmRaw.tableOfContents as Record<string, unknown> : {};
+      const bc = pmRaw.breadcrumbs && typeof pmRaw.breadcrumbs === "object" ? pmRaw.breadcrumbs as Record<string, unknown> : {};
+      const ap = pmRaw.authorProfiles && typeof pmRaw.authorProfiles === "object" ? pmRaw.authorProfiles as Record<string, unknown> : {};
+      return {
+        tableOfContents: { enabled: Boolean(toc.enabled ?? false), position: validModulePosition(toc.position) },
+        breadcrumbs: { enabled: Boolean(bc.enabled ?? false), position: validModulePosition(bc.position) },
+        authorProfiles: { enabled: Boolean(ap.enabled ?? false), position: validModulePosition(ap.position) },
+      };
+    }
+    const modsPost: string[] = [...(hcModules as string[]), ...(lsModules as string[]), ...(rsModules as string[])];
+    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((hcModules as string[]).includes("tableOfContents") ? "header" : (lsModules as string[]).includes("tableOfContents") ? "leftSidebar" : "rightSidebar") : "none";
+    const bcPos: ModulePosition = modsPost.includes("breadcrumbs") ? ((hcModules as string[]).includes("breadcrumbs") ? "header" : (lsModules as string[]).includes("breadcrumbs") ? "leftSidebar" : "rightSidebar") : "none";
+    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((hcModules as string[]).includes("authorProfiles") ? "header" : (lsModules as string[]).includes("authorProfiles") ? "leftSidebar" : "rightSidebar") : "none";
+    return {
+      tableOfContents: { enabled: tocPos !== "none", position: tocPos },
+      breadcrumbs: { enabled: bcPos !== "none", position: bcPos },
+      authorProfiles: { enabled: apPos !== "none", position: apPos },
+    };
+  };
+  const collectionModules = parseCollectionModules();
+  const postModules = level === "post" ? parsePostModules() : defaultPostModules;
+  const collDerived = deriveCollectionModules(collectionModules, hcModuleOrder, lsModuleOrder, rsModuleOrder);
+  const postDerived = derivePostModules(postModules, hcModuleOrder, lsModuleOrder, rsModuleOrder);
   const base: CollectionLevelConfig = {
     showDate: Boolean(raw?.showDate ?? true),
     showAuthor: Boolean(raw?.showAuthor ?? false),
     showReadingTime: Boolean(raw?.showReadingTime ?? false),
     postSort,
     pagination,
-    leftSidebar: leftSidebar as { show: boolean; modules: SidebarCollectionModuleType[]; width: number; spaceAbove: number; sticky: boolean },
-    rightSidebar: rightSidebar as { show: boolean; modules: SidebarCollectionModuleType[]; width: number; spaceAbove: number; sticky: boolean },
-    headerContent: headerContent as { show: boolean; modules: HeaderCollectionModuleType[]; height: number },
+    collectionLayout,
+    gridColumns,
+    filterStyle: collectionModules.filter.style,
+    collectionModules,
+    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: lsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: rsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+    headerContent: { ...headerContent, modules: collDerived.header, moduleOrder: hcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
     socialMediaLinks,
     featuredImage,
   };
@@ -216,9 +536,10 @@ function parseLevelConfig(
     const pb = raw?.progressBar && typeof raw.progressBar === "object" ? raw.progressBar as { show?: boolean; position?: string; thickness?: number; color?: string } : null;
     return {
       ...base,
-      leftSidebar: leftSidebar as { show: boolean; modules: SidebarPostModuleType[]; width: number; spaceAbove: number; sticky: boolean },
-      rightSidebar: rightSidebar as { show: boolean; modules: SidebarPostModuleType[]; width: number; spaceAbove: number; sticky: boolean },
-      headerContent: headerContent as { show: boolean; modules: HeaderPostModuleType[]; height: number },
+      postModules,
+      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: lsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: rsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+      headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: hcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
       progressBar: pb ? {
         show: Boolean(pb.show ?? false),
         position: (pb.position === "bottom" ? "bottom" : "top") as "top" | "bottom",
@@ -237,11 +558,15 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   const cc = data.collectionConfig && typeof data.collectionConfig === "object" ? data.collectionConfig as Record<string, unknown> : null;
   const pc = data.postConfig && typeof data.postConfig === "object" ? data.postConfig as Record<string, unknown> : null;
   if (cc && pc) {
+    const collectionTemplateId = data.collectionTemplateId as string | null | undefined;
+    const postTemplateId = data.postTemplateId as string | null | undefined;
     return {
       defaultAuthorIds,
       postAuthorOverrides,
       collectionConfig: parseLevelConfig(cc, "collection"),
       postConfig: parseLevelConfig(pc, "post") as PostLevelConfig,
+      collectionTemplateId: collectionTemplateId ?? null,
+      postTemplateId: postTemplateId ?? null,
     };
   }
   const legacy: Record<string, unknown> = {
@@ -264,29 +589,79 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   const rsObj = legacy.rightSidebar && typeof legacy.rightSidebar === "object" ? legacy.rightSidebar as Record<string, unknown> : {};
   const hcObj = legacy.headerContent && typeof legacy.headerContent === "object" ? legacy.headerContent as Record<string, unknown> : {};
   const migratedPost = { ...legacy, leftSidebar: { ...lsObj, modules: hasToc ? ["tableOfContents"] : [] }, rightSidebar: { ...rsObj, modules: hasToc ? ["tableOfContents"] : [] }, headerContent: { ...hcObj, modules: [...(hasBreadcrumbs ? ["breadcrumbs"] : []), ...(hasToc ? ["tableOfContents"] : [])] } };
+  const collectionTemplateId = data.collectionTemplateId as string | null | undefined;
+  const postTemplateId = data.postTemplateId as string | null | undefined;
   return {
     defaultAuthorIds,
     postAuthorOverrides,
     collectionConfig: parseLevelConfig(legacy, "collection"),
     postConfig: parseLevelConfig(migratedPost, "post") as PostLevelConfig,
+    collectionTemplateId: collectionTemplateId ?? null,
+    postTemplateId: postTemplateId ?? null,
   };
 }
 
+function ModuleSettingSection({
+  title,
+  checked,
+  onCheckedChange,
+  expanded,
+  onToggle,
+  content,
+}: {
+  title: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+  expanded: boolean;
+  onToggle: () => void;
+  content: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-[#e5e4e0]">
+      <div className="flex items-center justify-between py-3">
+        <span className="font-medium">{title}</span>
+        <div className="flex items-center gap-1">
+          <Switch checked={checked} onCheckedChange={onCheckedChange} />
+          <button
+            type="button"
+            onClick={() => checked && onToggle()}
+            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!checked ? "invisible pointer-events-none" : ""}`}
+            aria-label={expanded ? "Collapse" : "Expand"}
+          >
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+      <Collapsible open={checked && expanded}>
+        <CollapsibleContent>
+          <div className="pb-4 space-y-3">{content}</div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
+}
+
 function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
+  const copy = JSON.parse(JSON.stringify(config)) as SiteConfigForm;
+  applyDerivedModules(copy);
   return {
-    defaultAuthorIds: config.defaultAuthorIds,
-    postAuthorOverrides: config.postAuthorOverrides,
-    collectionConfig: config.collectionConfig,
-    postConfig: config.postConfig,
+    defaultAuthorIds: copy.defaultAuthorIds,
+    postAuthorOverrides: copy.postAuthorOverrides,
+    collectionConfig: copy.collectionConfig,
+    postConfig: copy.postConfig,
+    collectionTemplateId: copy.collectionTemplateId ?? null,
+    postTemplateId: copy.postTemplateId ?? null,
   };
 }
 
 function configToRendererConfig(config: SiteConfigForm): Record<string, unknown> {
+  const copy = JSON.parse(JSON.stringify(config)) as SiteConfigForm;
+  applyDerivedModules(copy);
   return {
-    defaultAuthorIds: config.defaultAuthorIds,
-    postAuthorOverrides: config.postAuthorOverrides,
-    collectionConfig: config.collectionConfig,
-    postConfig: config.postConfig,
+    defaultAuthorIds: copy.defaultAuthorIds,
+    postAuthorOverrides: copy.postAuthorOverrides,
+    collectionConfig: copy.collectionConfig,
+    postConfig: copy.postConfig,
     recentPostsCount: 5,
   };
 }
@@ -323,8 +698,17 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
   const postSortEqual = (a as CollectionLevelConfig).postSort === (b as CollectionLevelConfig).postSort;
   const pagEqual = (a as CollectionLevelConfig).pagination?.show === (b as CollectionLevelConfig).pagination?.show &&
     (a as CollectionLevelConfig).pagination?.postsPerPage === (b as CollectionLevelConfig).pagination?.postsPerPage;
+  const collLayoutEqual = (a as CollectionLevelConfig).collectionLayout === (b as CollectionLevelConfig).collectionLayout;
+  const gridColsEqual = (a as CollectionLevelConfig).gridColumns === (b as CollectionLevelConfig).gridColumns;
+  const filterStyleEqual = (a as CollectionLevelConfig).filterStyle === (b as CollectionLevelConfig).filterStyle;
+  const cmEqual = JSON.stringify((a as CollectionLevelConfig).collectionModules ?? defaultCollectionModules) === JSON.stringify((b as CollectionLevelConfig).collectionModules ?? defaultCollectionModules);
+  const pmEqual = JSON.stringify((a as PostLevelConfig).postModules ?? defaultPostModules) === JSON.stringify((b as PostLevelConfig).postModules ?? defaultPostModules);
+  const moduleOrderEqual =
+    (a.leftSidebar.moduleOrder ?? []).every((m, i) => m === (b.leftSidebar.moduleOrder ?? [])[i]) &&
+    (a.rightSidebar.moduleOrder ?? []).every((m, i) => m === (b.rightSidebar.moduleOrder ?? [])[i]) &&
+    (a.headerContent.moduleOrder ?? []).every((m, i) => m === (b.headerContent.moduleOrder ?? [])[i]);
   const base = a.showDate === b.showDate && a.showAuthor === b.showAuthor && a.showReadingTime === b.showReadingTime &&
-    postSortEqual && pagEqual && lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
+    postSortEqual && pagEqual && collLayoutEqual && gridColsEqual && filterStyleEqual && cmEqual && pmEqual && moduleOrderEqual && lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
   if ("progressBar" in a && "progressBar" in b) {
     const pa = (a as PostLevelConfig).progressBar;
     const pb = (b as PostLevelConfig).progressBar;
@@ -342,7 +726,10 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     const bb = b.postAuthorOverrides[key] ?? [];
     return aa.length === bb.length && aa.every((id, i) => id === bb[i]);
   });
-  return defaultIdsEqual && overridesEqual &&
+  const templateIdsEqual =
+    (a.collectionTemplateId ?? null) === (b.collectionTemplateId ?? null) &&
+    (a.postTemplateId ?? null) === (b.postTemplateId ?? null);
+  return defaultIdsEqual && overridesEqual && templateIdsEqual &&
     levelConfigsEqual(a.collectionConfig, b.collectionConfig) &&
     levelConfigsEqual(a.postConfig, b.postConfig);
 }
@@ -361,17 +748,32 @@ export default function Configure() {
   const [authors, setAuthors] = useState<BlogAuthorOption[]>([]);
   const [blogItems, setBlogItems] = useState<{ id: string; title: string; author?: { displayName?: string } }[]>([]);
   const [newAuthorName, setNewAuthorName] = useState("");
+  const [newAuthorImageUrl, setNewAuthorImageUrl] = useState<string | null>(null);
+  const [newAuthorBio, setNewAuthorBio] = useState("");
+  const [newAuthorEmail, setNewAuthorEmail] = useState("");
+  const [newAuthorSocials, setNewAuthorSocials] = useState<Record<string, string>>({});
   const [addAuthorModalOpen, setAddAuthorModalOpen] = useState(false);
   const [addAuthorContext, setAddAuthorContext] = useState<"default" | { postId: string }>("default");
   const [addAuthorAsDefault, setAddAuthorAsDefault] = useState(true);
+  const [editAuthor, setEditAuthor] = useState<BlogAuthorOption | null>(null);
+  const [authorDropdownOpen, setAuthorDropdownOpen] = useState(false);
   const [installationModalOpen, setInstallationModalOpen] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
   const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
+    authorProfiles: false,
     progressBar: false,
     pagination: false,
+    collectionLayout: false,
     featuredImage: false,
+    filtering: false,
+    sorting: false,
+    search: false,
+    tableOfContents: false,
+    breadcrumbs: false,
+    authorProfilesModule: false,
     leftSidebar: false,
     rightSidebar: false,
     headerContent: false,
@@ -436,6 +838,17 @@ export default function Configure() {
       .then((data) => setAuthors(Array.isArray(data) ? data : []))
       .catch(() => setAuthors([]));
   }, [effectiveSiteKey]);
+
+  const openEditAuthor = useCallback((author: BlogAuthorOption) => {
+    setEditAuthor(author);
+    setAddAuthorContext("default");
+    setNewAuthorName(author.name);
+    setNewAuthorImageUrl(author.imageUrl ?? null);
+    setNewAuthorBio(author.bio ?? "");
+    setNewAuthorEmail(author.email ?? "");
+    setNewAuthorSocials(author.socialLinks ?? {});
+    setAddAuthorModalOpen(true);
+  }, []);
 
   // Fetch blog JSON and sync authors from Squarespace; add ingested authors as default (runs after config loads)
   useEffect(() => {
@@ -505,10 +918,21 @@ export default function Configure() {
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
-    for (const a of authors) authorMap[a.id] = a.name;
+    const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; email: string | null; socialLinks: Record<string, string> }> = {};
+    for (const a of authors) {
+      authorMap[a.id] = a.name;
+      authorProfiles[a.id] = {
+        name: a.name,
+        imageUrl: a.imageUrl ?? null,
+        bio: a.bio ?? null,
+        email: a.email ?? null,
+        socialLinks: a.socialLinks ?? {},
+      };
+    }
     return {
       ...base,
       authorMap,
+      authorProfiles,
       baseUrl: typeof window !== "undefined" ? window.location.origin : "",
       siteKey: effectiveSiteKey ?? undefined,
       siteId: effectiveSite?.id ?? undefined,
@@ -552,6 +976,27 @@ export default function Configure() {
     toast.info("Changes reverted.");
   };
 
+  const handleSelectTemplate = useCallback(
+    (template: Template, level: "collection" | "post") => {
+      if (level === "collection" && template.collectionConfig && typeof template.collectionConfig === "object") {
+        setConfig((prev) => ({
+          ...prev,
+          collectionConfig: parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection"),
+          collectionTemplateId: template.id,
+        }));
+        toast.success(`Applied "${template.name}" collection template.`);
+      } else if (level === "post" && template.postConfig && typeof template.postConfig === "object") {
+        setConfig((prev) => ({
+          ...prev,
+          postConfig: parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig,
+          postTemplateId: template.id,
+        }));
+        toast.success(`Applied "${template.name}" post template.`);
+      }
+    },
+    []
+  );
+
   const updateConfigRef = useRef<(path: string, value: unknown) => void>(() => {});
   const updateConfig = (path: string, value: unknown) => {
     setConfig((prev) => {
@@ -567,7 +1012,8 @@ export default function Configure() {
       } else if (path.startsWith("postConfig.")) {
         const sub = path.slice("postConfig.".length);
         next.postConfig = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
-      }
+      } else if (path === "collectionTemplateId") next.collectionTemplateId = value as string | null;
+      else if (path === "postTemplateId") next.postTemplateId = value as string | null;
       return next;
     });
   };
@@ -593,6 +1039,36 @@ export default function Configure() {
     if (path === "postSort" && "postSort" in cfg) return { ...cfg, postSort: value as PostSortOption };
     if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, postsPerPage: 10 }), show: value as boolean } };
     if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
+    if (path === "collectionLayout" && "collectionLayout" in cfg) return { ...cfg, collectionLayout: value as CollectionLayoutMode };
+    if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
+    if (path === "filterStyle" && "filterStyle" in cfg) return { ...cfg, filterStyle: value as FilterStyleOption };
+    if (path.startsWith("collectionModules.") && "collectionModules" in cfg) {
+      const cm = { ...(cfg as CollectionLevelConfig).collectionModules } as CollectionModulesConfig;
+      if (path === "collectionModules.filter.enabled") cm.filter = { ...cm.filter, enabled: value as boolean };
+      else if (path === "collectionModules.filter.filterType") cm.filter = { ...cm.filter, filterType: value as FilterTypeOption };
+      else if (path === "collectionModules.filter.style") cm.filter = { ...cm.filter, style: value as FilterStyleOption };
+      else if (path === "collectionModules.filter.position") cm.filter = { ...cm.filter, position: value as ModulePosition };
+      else if (path === "collectionModules.sort.enabled") cm.sort = { ...cm.sort, enabled: value as boolean };
+      else if (path === "collectionModules.sort.position") cm.sort = { ...cm.sort, position: value as ModulePosition };
+      else if (path === "collectionModules.search.enabled") cm.search = { ...cm.search, enabled: value as boolean };
+      else if (path === "collectionModules.search.position") cm.search = { ...cm.search, position: value as ModulePosition };
+      else return cfg;
+      return syncModuleOrderFromExplicit(cfg as CollectionLevelConfig, cm, undefined) as typeof cfg;
+    }
+    if (path.startsWith("postModules.") && "postModules" in cfg) {
+      const pm = { ...(cfg as PostLevelConfig).postModules } as PostModulesConfig;
+      if (path === "postModules.tableOfContents.enabled") pm.tableOfContents = { ...pm.tableOfContents, enabled: value as boolean };
+      else if (path === "postModules.tableOfContents.position") pm.tableOfContents = { ...pm.tableOfContents, position: value as ModulePosition };
+      else if (path === "postModules.breadcrumbs.enabled") pm.breadcrumbs = { ...pm.breadcrumbs, enabled: value as boolean };
+      else if (path === "postModules.breadcrumbs.position") pm.breadcrumbs = { ...pm.breadcrumbs, position: value as ModulePosition };
+      else if (path === "postModules.authorProfiles.enabled") pm.authorProfiles = { ...pm.authorProfiles, enabled: value as boolean };
+      else if (path === "postModules.authorProfiles.position") pm.authorProfiles = { ...pm.authorProfiles, position: value as ModulePosition };
+      else return cfg;
+      return syncModuleOrderFromExplicit(undefined, undefined, cfg as PostLevelConfig, pm) as typeof cfg;
+    }
+    if (path === "leftSidebar.moduleOrder") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, moduleOrder: value as string[] } };
+    if (path === "rightSidebar.moduleOrder") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, moduleOrder: value as string[] } };
+    if (path === "headerContent.moduleOrder") return { ...cfg, headerContent: { ...cfg.headerContent, moduleOrder: value as string[] } };
     if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
     if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
     if (path === "socialMediaLinks.platforms") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, platforms: value as SocialPlatform[] } };
@@ -713,6 +1189,14 @@ export default function Configure() {
                 Post
               </button>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setTemplateModalOpen(true)}
+            >
+              Use a template
+            </Button>
           </div>
           {effectiveSiteKey && (
             <Dialog open={installationModalOpen} onOpenChange={setInstallationModalOpen}>
@@ -773,6 +1257,11 @@ export default function Configure() {
               </DialogContent>
             </Dialog>
           )}
+          <TemplateModal
+            open={templateModalOpen}
+            onOpenChange={setTemplateModalOpen}
+            onSelectTemplate={handleSelectTemplate}
+          />
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
 
@@ -809,6 +1298,72 @@ export default function Configure() {
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
                     </div>
+
+                    {selectedLevel === "collection" && (
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium">Collection Layout</span>
+                          <span className="text-xs text-[#6b6b6b] truncate">
+                            {(() => {
+                              const layout = (effectiveConfig as CollectionLevelConfig).collectionLayout ?? "stack";
+                              const cols = (effectiveConfig as CollectionLevelConfig).gridColumns ?? 3;
+                              if (layout === "stack") return "Stack (vertical list)";
+                              if (layout === "grid") return `Grid · ${cols} columns`;
+                              return "List rows (thumb left)";
+                            })()}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSectionExpanded((p) => ({ ...p, collectionLayout: !p.collectionLayout }))}
+                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                          aria-label={sectionExpanded.collectionLayout ? "Collapse" : "Expand"}
+                        >
+                          {sectionExpanded.collectionLayout ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <Collapsible open={sectionExpanded.collectionLayout}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-3">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Layout</Label>
+                              <Select
+                                value={(effectiveConfig as CollectionLevelConfig).collectionLayout ?? "stack"}
+                                onValueChange={(v) => updateLevelConfigPath("collectionLayout", v as CollectionLayoutMode)}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="stack">Stack (vertical list)</SelectItem>
+                                  <SelectItem value="grid">Grid</SelectItem>
+                                  <SelectItem value="listRows">List rows (thumb left)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {((effectiveConfig as CollectionLevelConfig).collectionLayout ?? "stack") === "grid" && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Grid columns</Label>
+                                <Select
+                                  value={String((effectiveConfig as CollectionLevelConfig).gridColumns ?? 3)}
+                                  onValueChange={(v) => updateLevelConfigPath("gridColumns", parseInt(v, 10) as GridColumnsOption)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="2">2 columns</SelectItem>
+                                    <SelectItem value="3">3 columns</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                    )}
 
                     {selectedLevel === "collection" && (
                     <div className="border-b border-[#e5e4e0]">
@@ -970,6 +1525,14 @@ export default function Configure() {
                                           {author?.name ?? id}
                                           <button
                                             type="button"
+                                            onClick={() => author && openEditAuthor(author)}
+                                            className="hover:opacity-70"
+                                            aria-label="Edit author"
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </button>
+                                          <button
+                                            type="button"
                                             onClick={() =>
                                               updateConfig(
                                                 `postAuthorOverrides.${postId}`,
@@ -983,35 +1546,55 @@ export default function Configure() {
                                         </span>
                                       );
                                     })}
-                                    <Select
-                                      value=""
-                                      onValueChange={(v) => {
-                                        if (v && v !== "__add_new__" && !displayIds.includes(v)) {
-                                          updateConfig(`postAuthorOverrides.${postId}`, [...displayIds, v]);
-                                        }
-                                        if (v === "__add_new__") {
-                                      setAddAuthorContext({ postId });
-                                      setAddAuthorAsDefault(false);
-                                      setAddAuthorModalOpen(true);
-                                    }
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 w-28 text-xs">
-                                        <SelectValue placeholder="+ Add" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {authors.filter((a) => !displayIds.includes(a.id)).map((a) => (
-                                          <SelectItem key={a.id} value={a.id}>
-                                            {a.name}
-                                          </SelectItem>
+                                    <DropdownMenu open={authorDropdownOpen} onOpenChange={setAuthorDropdownOpen}>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="h-8 w-28 text-xs flex items-center justify-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
+                                        >
+                                          <Plus className="h-3 w-3" /> Add
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="min-w-[180px]">
+                                        {authors.map((a) => (
+                                          <DropdownMenuItem
+                                            key={a.id}
+                                            onSelect={() => {
+                                              if (!displayIds.includes(a.id)) {
+                                                updateConfig(`postAuthorOverrides.${postId}`, [...displayIds, a.id]);
+                                              }
+                                            }}
+                                            className="flex items-center justify-between gap-2"
+                                          >
+                                            <span className="truncate">{a.name}</span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                openEditAuthor(a);
+                                                setAuthorDropdownOpen(false);
+                                              }}
+                                              className="shrink-0 p-0.5 rounded hover:bg-[#e5e4e0]/50"
+                                              aria-label={`Edit ${a.name}`}
+                                            >
+                                              <Pencil className="h-3 w-3" />
+                                            </button>
+                                          </DropdownMenuItem>
                                         ))}
-                                        <SelectItem value="__add_new__">
-                                          <span className="flex items-center gap-1">
-                                            <Plus className="h-3 w-3" /> Add New Author
-                                          </span>
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                        <DropdownMenuItem
+                                          onSelect={() => {
+                                            setEditAuthor(null);
+                                            setAddAuthorContext({ postId });
+                                            setAddAuthorAsDefault(false);
+                                            setAddAuthorModalOpen(true);
+                                          }}
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                          Add New Author
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 </>
                               );
@@ -1060,6 +1643,14 @@ export default function Configure() {
                                         {author?.name ?? id}
                                         <button
                                           type="button"
+                                          onClick={() => author && openEditAuthor(author)}
+                                          className="hover:opacity-70"
+                                          aria-label="Edit author"
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </button>
+                                        <button
+                                          type="button"
                                           onClick={() =>
                                             updateConfig(
                                               "defaultAuthorIds",
@@ -1074,38 +1665,56 @@ export default function Configure() {
                                     );
                                   })}
                                 </div>
-                                <Select
-                                  value=""
-                                  onValueChange={(v) => {
-                                  if (v === "__add_new__") {
-                                    setAddAuthorContext("default");
-                                    setAddAuthorAsDefault(true);
-                                    setAddAuthorModalOpen(true);
-                                    return;
-                                  }
-                                    if (v && !config.defaultAuthorIds.includes(v)) {
-                                      updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, v]);
-                                    }
-                                  }}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Add author…" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {authors
-                                      .filter((a) => !config.defaultAuthorIds.includes(a.id))
-                                      .map((a) => (
-                                        <SelectItem key={a.id} value={a.id}>
-                                          {a.name}
-                                        </SelectItem>
-                                      ))}
-                                    <SelectItem value="__add_new__">
-                                      <span className="flex items-center gap-1">
-                                        <Plus className="h-3 w-3" /> Add New Author
-                                      </span>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <DropdownMenu open={authorDropdownOpen} onOpenChange={setAuthorDropdownOpen}>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="w-full h-9 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                    >
+                                      <span>Add author…</span>
+                                      <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
+                                    {authors.map((a) => (
+                                      <DropdownMenuItem
+                                        key={a.id}
+                                        onSelect={() => {
+                                          if (!config.defaultAuthorIds.includes(a.id)) {
+                                            updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, a.id]);
+                                          }
+                                        }}
+                                        className="flex items-center justify-between gap-2"
+                                      >
+                                        <span className="truncate">{a.name}</span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            openEditAuthor(a);
+                                            setAuthorDropdownOpen(false);
+                                          }}
+                                          className="shrink-0 p-0.5 rounded hover:bg-[#e5e4e0]/50"
+                                          aria-label={`Edit ${a.name}`}
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </button>
+                                      </DropdownMenuItem>
+                                    ))}
+                                    <DropdownMenuItem
+                                      onSelect={() => {
+                                        setEditAuthor(null);
+                                        setAddAuthorContext("default");
+                                        setAddAuthorAsDefault(true);
+                                        setAddAuthorModalOpen(true);
+                                      }}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                      Add New Author
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                           </CollapsibleContent>
                         </Collapsible>
@@ -1259,32 +1868,189 @@ export default function Configure() {
                       </Collapsible>
                     </div>
 
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Header Content</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionExpanded((p) => ({ ...p, headerContent: !p.headerContent }))}
+                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                          aria-label={sectionExpanded.headerContent ? "Collapse" : "Expand"}
+                        >
+                          {sectionExpanded.headerContent ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <Collapsible open={sectionExpanded.headerContent}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-3">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Height</Label>
+                              <div className="flex items-center gap-3">
+                                <Slider
+                                  value={[effectiveConfig.headerContent.height]}
+                                  onValueChange={([v]) => updateLevelConfigPath("headerContent.height", v ?? 48)}
+                                  min={32}
+                                  max={120}
+                                  step={8}
+                                  className="flex-1"
+                                />
+                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.headerContent.height}px</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Module order</Label>
+                              <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
+                              {(() => {
+                                const headerDerived = selectedLevel === "collection"
+                                  ? deriveCollectionModules(
+                                      (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules,
+                                      effectiveConfig.headerContent.moduleOrder ?? [],
+                                      effectiveConfig.leftSidebar.moduleOrder ?? [],
+                                      effectiveConfig.rightSidebar.moduleOrder ?? []
+                                    ).header
+                                  : derivePostModules(
+                                      (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
+                                      effectiveConfig.headerContent.moduleOrder ?? [],
+                                      effectiveConfig.leftSidebar.moduleOrder ?? [],
+                                      effectiveConfig.rightSidebar.moduleOrder ?? []
+                                    ).header;
+                                const headerModules = headerDerived;
+                                const order = effectiveConfig.headerContent.moduleOrder ?? [];
+                                const orderedHeader = (() => {
+                                  const set = new Set(headerModules);
+                                  const fromOrder = order.filter((m) => set.has(m));
+                                  const remaining = headerModules.filter((m) => !order.includes(m));
+                                  return [...fromOrder, ...remaining];
+                                })();
+                                const moveModule = (fromIdx: number, toIdx: number) => {
+                                  const valid = order.filter((m) => headerModules.includes(m));
+                                  const [removed] = valid.splice(fromIdx, 1);
+                                  valid.splice(toIdx, 0, removed);
+                                  updateLevelConfigPath("headerContent.moduleOrder", valid);
+                                };
+                                const handleRemoveHeader = (moduleId: string) => {
+                                  if (selectedLevel === "collection") {
+                                    const cm = (effectiveConfig as CollectionLevelConfig).collectionModules;
+                                    if (["filterByCategory", "filterByTag", "filterByTagsAndCategories"].includes(moduleId) && cm?.filter) {
+                                      updateLevelConfigPath("collectionModules.filter.enabled", false);
+                                    } else if (moduleId === "postSort" && cm?.sort) {
+                                      updateLevelConfigPath("collectionModules.sort.enabled", false);
+                                    } else if (moduleId === "searchPosts" && cm?.search) {
+                                      updateLevelConfigPath("collectionModules.search.enabled", false);
+                                    }
+                                  } else {
+                                    const pm = (effectiveConfig as PostLevelConfig).postModules;
+                                    if (moduleId === "tableOfContents" && pm?.tableOfContents) {
+                                      updateLevelConfigPath("postModules.tableOfContents.enabled", false);
+                                    } else if (moduleId === "breadcrumbs" && pm?.breadcrumbs) {
+                                      updateLevelConfigPath("postModules.breadcrumbs.enabled", false);
+                                    } else if (moduleId === "authorProfiles" && pm?.authorProfiles) {
+                                      updateLevelConfigPath("postModules.authorProfiles.enabled", false);
+                                    }
+                                  }
+                                };
+                                const HEADER_LABELS: Record<string, string> = {
+                                  tableOfContents: "Table of Contents",
+                                  breadcrumbs: "Breadcrumbs",
+                                  filterByCategory: "Filter by Category",
+                                  filterByTag: "Filter by Tag",
+                                  filterByTagsAndCategories: "Filter by Tags & Categories",
+                                  searchPosts: "Search Posts",
+                                  postSort: "Sort Posts",
+                                  authorProfiles: "Author Profiles",
+                                };
+                                return (
+                                  <div className="space-y-1.5">
+                                    {orderedHeader.length === 0 ? (
+                                      <p className="text-xs text-[#6b6b6b] py-2">No modules in header. Enable modules in Navigation &amp; Discovery and choose header position.</p>
+                                    ) : (
+                                      orderedHeader.map((m, idx) => (
+                                        <div
+                                          key={`${m}-${idx}`}
+                                          draggable
+                                          onDragStart={(e) => {
+                                            e.dataTransfer.setData("text/plain", String(idx));
+                                            e.dataTransfer.effectAllowed = "move";
+                                          }}
+                                          onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = "move";
+                                          }}
+                                          onDrop={(e) => {
+                                            e.preventDefault();
+                                            const fromIdx = Number(e.dataTransfer.getData("text/plain"));
+                                            if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
+                                          }}
+                                          onDragEnd={(e) => { e.dataTransfer.clearData(); }}
+                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                        >
+                                          <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
+                                          <span className="flex-1 min-w-0 truncate">{HEADER_LABELS[m] ?? m}</span>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveHeader(m); }}
+                                            className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
+                                            aria-label={`Remove ${HEADER_LABELS[m] ?? m}`}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+
                     {(() => {
                       const SIDEBAR_MODULE_LABELS: Record<string, string> = {
                         filterByCategory: "Filter by Category",
                         filterByTag: "Filter by Tag",
+                        filterByTagsAndCategories: "Filter by Tags & Categories",
                         searchPosts: "Search Posts",
                         postSort: "Sort Posts",
                         tableOfContents: "Table of Contents",
+                        authorProfiles: "Author Profiles",
                       };
-                      const SIDEBAR_MODULES = selectedLevel === "collection" ? SIDEBAR_COLLECTION_MODULES : SIDEBAR_POST_MODULES;
+                      const derivedModules =
+                        selectedLevel === "collection"
+                          ? deriveCollectionModules(
+                              (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules,
+                              effectiveConfig.headerContent.moduleOrder ?? [],
+                              effectiveConfig.leftSidebar.moduleOrder ?? [],
+                              effectiveConfig.rightSidebar.moduleOrder ?? []
+                            )
+                          : derivePostModules(
+                              (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
+                              effectiveConfig.headerContent.moduleOrder ?? [],
+                              effectiveConfig.leftSidebar.moduleOrder ?? [],
+                              effectiveConfig.rightSidebar.moduleOrder ?? []
+                            );
+                      const zoneModules = (side: "left" | "right") => (side === "left" ? derivedModules.left : derivedModules.right);
                       const SidebarSection = ({ side }: { side: "left" | "right" }) => {
                         const cfg = side === "left" ? effectiveConfig.leftSidebar : effectiveConfig.rightSidebar;
+                        const modules = zoneModules(side);
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
                         const moveModule = (fromIdx: number, toIdx: number) => {
-                          const arr = [...cfg.modules];
-                          const [removed] = arr.splice(fromIdx, 1);
-                          arr.splice(toIdx, 0, removed);
-                          updateLevelConfigPath(`${subPath}.modules`, arr);
+                          const order = [...(cfg.moduleOrder ?? [])];
+                          const valid = order.filter((m) => modules.includes(m));
+                          const [removed] = valid.splice(fromIdx, 1);
+                          valid.splice(toIdx, 0, removed);
+                          updateLevelConfigPath(`${subPath}.moduleOrder`, valid);
                         };
-                        const addModule = (m: string) => {
-                          if (!cfg.modules.includes(m)) updateLevelConfigPath(`${subPath}.modules`, [...cfg.modules, m]);
-                        };
-                        const removeModule = (idx: number) => {
-                          updateLevelConfigPath(`${subPath}.modules`, cfg.modules.filter((_, i) => i !== idx));
-                        };
+                        const orderedModules = (() => {
+                          const order = cfg.moduleOrder ?? [];
+                          const set = new Set(modules);
+                          const fromOrder = order.filter((m) => set.has(m));
+                          const remaining = modules.filter((m) => !order.includes(m));
+                          return [...fromOrder, ...remaining];
+                        })();
                         const handleDragOver = (e: React.DragEvent) => {
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
@@ -1298,29 +2064,41 @@ export default function Configure() {
                           e.dataTransfer.setData("text/plain", String(idx));
                           e.dataTransfer.effectAllowed = "move";
                         };
+                        const handleRemove = (moduleId: string) => {
+                          if (selectedLevel === "collection") {
+                            const cm = (effectiveConfig as CollectionLevelConfig).collectionModules;
+                            if (["filterByCategory", "filterByTag", "filterByTagsAndCategories"].includes(moduleId) && cm?.filter) {
+                              updateLevelConfigPath("collectionModules.filter.enabled", false);
+                            } else if (moduleId === "postSort" && cm?.sort) {
+                              updateLevelConfigPath("collectionModules.sort.enabled", false);
+                            } else if (moduleId === "searchPosts" && cm?.search) {
+                              updateLevelConfigPath("collectionModules.search.enabled", false);
+                            }
+                          } else {
+                            const pm = (effectiveConfig as PostLevelConfig).postModules;
+                            if (moduleId === "tableOfContents" && pm?.tableOfContents) {
+                              updateLevelConfigPath("postModules.tableOfContents.enabled", false);
+                            } else if (moduleId === "breadcrumbs" && pm?.breadcrumbs) {
+                              updateLevelConfigPath("postModules.breadcrumbs.enabled", false);
+                            } else if (moduleId === "authorProfiles" && pm?.authorProfiles) {
+                              updateLevelConfigPath("postModules.authorProfiles.enabled", false);
+                            }
+                          }
+                        };
                         return (
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">{side === "left" ? "Left Sidebar" : "Right Sidebar"}</span>
-                              <div className="flex items-center gap-1">
-                                <Switch
-                                  checked={cfg.show}
-                                  onCheckedChange={(v) => {
-                                    updateLevelConfigPath(`${subPath}.show`, v);
-                                    setExpanded(v);
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => cfg.show && setExpanded(!expanded)}
-                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!cfg.show ? "invisible pointer-events-none" : ""}`}
-                                  aria-label={expanded ? "Collapse" : "Expand"}
-                                >
-                                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setExpanded(!expanded)}
+                                className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                                aria-label={expanded ? "Collapse" : "Expand"}
+                              >
+                                {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
                             </div>
-                            <Collapsible open={cfg.show && expanded}>
+                            <Collapsible open={expanded}>
                               <CollapsibleContent>
                                 <div className="pb-4 space-y-3">
                                   <div className="space-y-2">
@@ -1359,60 +2137,35 @@ export default function Configure() {
                                     />
                                   </div>
                                   <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Modules</Label>
-                                    <Select
-                                      key={cfg.modules.join(",")}
-                                      value=""
-                                      onValueChange={(v) => {
-                                        if (v && SIDEBAR_MODULES.includes(v as never)) {
-                                          addModule(v);
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger
-                                        className="h-8 w-full justify-start text-xs focus:bg-[#5B4FE8]/10 focus:text-[#5B4FE8]"
-                                        disabled={cfg.modules.length >= SIDEBAR_MODULES.length}
-                                      >
-                                        <Plus className="h-3 w-3 shrink-0" />
-                                        <SelectValue
-                                          placeholder={
-                                            cfg.modules.length >= SIDEBAR_MODULES.length
-                                              ? "All modules added"
-                                              : "Add Module"
-                                          }
-                                        />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {SIDEBAR_MODULES.filter((m) => !cfg.modules.includes(m)).map((m) => (
-                                          <SelectItem key={m} value={m}>
-                                            {SIDEBAR_MODULE_LABELS[m]}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
+                                    <Label className="text-xs text-[#6b6b6b]">Module order</Label>
+                                    <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
                                     <div className="space-y-1.5">
-                                      {cfg.modules.map((m, idx) => (
-                                        <div
-                                          key={`${m}-${idx}`}
-                                          draggable
-                                          onDragStart={(e) => handleDragStart(e, idx)}
-                                          onDragOver={handleDragOver}
-                                          onDrop={(e) => handleDrop(e, idx)}
-                                          onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
-                                        >
-                                          <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
-                                          <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m]}</span>
-                                          <button
-                                            type="button"
-                                            onClick={() => removeModule(idx)}
-                                            className="p-0.5 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                                            aria-label="Remove"
+                                      {orderedModules.length === 0 ? (
+                                        <p className="text-xs text-[#6b6b6b] py-2">No modules in this sidebar. Enable modules above and choose this position.</p>
+                                      ) : (
+                                        orderedModules.map((m, idx) => (
+                                          <div
+                                            key={`${m}-${idx}`}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, idx)}
+                                            onDragOver={handleDragOver}
+                                            onDrop={(e) => handleDrop(e, idx)}
+                                            onDragEnd={(e) => { e.dataTransfer.clearData(); }}
+                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
                                           >
-                                            <X className="h-3.5 w-3.5" />
-                                          </button>
-                                        </div>
-                                      ))}
+                                            <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
+                                            <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m] ?? m}</span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
+                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
+                                              aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </button>
+                                          </div>
+                                        ))
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -1429,132 +2182,229 @@ export default function Configure() {
                           <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#1a7a5e] border-b border-[rgba(26,122,94,0.2)]">
                             Navigation & Discovery
                           </div>
-                          <div className="border-b border-[#e5e4e0]">
-                            <div className="flex items-center justify-between py-3">
-                              <span className="font-medium">Header Content</span>
-                              <div className="flex items-center gap-1">
-                                <Switch
-                                  checked={effectiveConfig.headerContent.show}
-                                  onCheckedChange={(v) => {
-                                    updateLevelConfigPath("headerContent.show", v);
-                                    setSectionExpanded((p) => ({ ...p, headerContent: v }));
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => effectiveConfig.headerContent.show && setSectionExpanded((p) => ({ ...p, headerContent: !p.headerContent }))}
-                                  className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!effectiveConfig.headerContent.show ? "invisible pointer-events-none" : ""}`}
-                                  aria-label={sectionExpanded.headerContent ? "Collapse" : "Expand"}
-                                >
-                                  {sectionExpanded.headerContent ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                </button>
-                              </div>
-                            </div>
-                            <Collapsible open={effectiveConfig.headerContent.show && sectionExpanded.headerContent}>
-                              <CollapsibleContent>
-                                <div className="pb-4 space-y-3">
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Height</Label>
-                                    <div className="flex items-center gap-3">
-                                      <Slider
-                                        value={[effectiveConfig.headerContent.height]}
-                                        onValueChange={([v]) => updateLevelConfigPath("headerContent.height", v ?? 48)}
-                                        min={32}
-                                        max={120}
-                                        step={8}
-                                        className="flex-1"
-                                      />
-                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.headerContent.height}px</span>
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Modules</Label>
-                                    <Select
-                                      key={effectiveConfig.headerContent.modules.join(",")}
-                                      value=""
-                                      onValueChange={(v) => {
-                                        if (v && (selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).includes(v as never)) {
-                                          const addModule = (m: string) => {
-                                            if (!effectiveConfig.headerContent.modules.includes(m)) {
-                                              updateLevelConfigPath("headerContent.modules", [...effectiveConfig.headerContent.modules, m]);
-                                            }
-                                          };
-                                          addModule(v);
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger
-                                        className="h-8 w-full justify-start text-xs focus:bg-[#5B4FE8]/10 focus:text-[#5B4FE8]"
-                                        disabled={effectiveConfig.headerContent.modules.length >= (selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).length}
-                                      >
-                                        <Plus className="h-3 w-3 shrink-0" />
-                                        <SelectValue
-                                          placeholder={
-                                            effectiveConfig.headerContent.modules.length >= (selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).length
-                                              ? "All modules added"
-                                              : "Add Module"
-                                          }
-                                        />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {(selectedLevel === "collection" ? HEADER_COLLECTION_MODULES : HEADER_POST_MODULES).filter((m) => !effectiveConfig.headerContent.modules.includes(m)).map((m) => (
-                                          <SelectItem key={m} value={m}>
-                                            {m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "filterByCategory" ? "Filter by Category" : m === "filterByTag" ? "Filter by Tag" : m === "searchPosts" ? "Search Posts" : m === "postSort" ? "Sort Posts" : m}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                    <div className="space-y-1.5">
-                                      {effectiveConfig.headerContent.modules.map((m, idx) => {
-                                        const moveModule = (fromIdx: number, toIdx: number) => {
-                                          const arr = [...effectiveConfig.headerContent.modules];
-                                          const [removed] = arr.splice(fromIdx, 1);
-                                          arr.splice(toIdx, 0, removed);
-                                          updateLevelConfigPath("headerContent.modules", arr);
-                                        };
-                                        const removeModule = (i: number) => {
-                                          updateLevelConfigPath("headerContent.modules", effectiveConfig.headerContent.modules.filter((_, j) => j !== i));
-                                        };
-                                        const label = m === "tableOfContents" ? "Table of Contents" : m === "breadcrumbs" ? "Breadcrumbs" : m === "searchPosts" ? "Search Posts" : m === "filterByCategory" ? "Filter by Category" : m === "filterByTag" ? "Filter by Tag" : m === "postSort" ? "Sort Posts" : "Filter by Tags & Categories";
-                                        return (
-                                          <div
-                                            key={`${m}-${idx}`}
-                                            draggable
-                                            onDragStart={(e) => {
-                                              e.dataTransfer.setData("text/plain", String(idx));
-                                              e.dataTransfer.effectAllowed = "move";
-                                            }}
-                                            onDragOver={(e) => {
-                                              e.preventDefault();
-                                              e.dataTransfer.dropEffect = "move";
-                                            }}
-                                            onDrop={(e) => {
-                                              e.preventDefault();
-                                              const fromIdx = Number(e.dataTransfer.getData("text/plain"));
-                                              if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
-                                            }}
-                                            onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                          {selectedLevel === "collection" && (
+                            <>
+                              <ModuleSettingSection
+                                title="Filtering"
+                                checked={(effectiveConfig as CollectionLevelConfig).collectionModules?.filter.enabled ?? false}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("collectionModules.filter.enabled", v);
+                                  if (v) {
+                                    const cm = (effectiveConfig as CollectionLevelConfig).collectionModules?.filter;
+                                    if (cm?.position === "none") updateLevelConfigPath("collectionModules.filter.position", "header");
+                                    setSectionExpanded((p) => ({ ...p, filtering: true }));
+                                  }
+                                }}
+                                expanded={sectionExpanded.filtering}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, filtering: !p.filtering }))}
+                                content={
+                                  <>
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Filter type</Label>
+                                          <Select
+                                            value={(effectiveConfig as CollectionLevelConfig).collectionModules?.filter.filterType ?? "category"}
+                                            onValueChange={(v) => updateLevelConfigPath("collectionModules.filter.filterType", v as FilterTypeOption)}
                                           >
-                                            <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
-                                            <span className="flex-1 min-w-0 truncate">{label}</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => removeModule(idx)}
-                                              className="p-0.5 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                                              aria-label="Remove"
-                                            >
-                                              <X className="h-3.5 w-3.5" />
-                                            </button>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="category">Category</SelectItem>
+                                              <SelectItem value="tag">Tag</SelectItem>
+                                              <SelectItem value="tagsAndCategories">Tags & Categories</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label className="text-xs text-[#6b6b6b]">Style</Label>
+                                          <Select
+                                            value={(effectiveConfig as CollectionLevelConfig).collectionModules?.filter.style ?? "dropdown"}
+                                            onValueChange={(v) => updateLevelConfigPath("collectionModules.filter.style", v as FilterStyleOption)}
+                                          >
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="dropdown">Dropdown (multi-select)</SelectItem>
+                                              <SelectItem value="pills">Pills (single-select with counts)</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                                          <Select
+                                            value={(effectiveConfig as CollectionLevelConfig).collectionModules?.filter.position ?? "none"}
+                                            onValueChange={(v) => updateLevelConfigPath("collectionModules.filter.position", v as ModulePosition)}
+                                          >
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="none">Hidden</SelectItem>
+                                              <SelectItem value="header">Header</SelectItem>
+                                              <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
+                                              <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                  </>
+                                }
+                              />
+                              <ModuleSettingSection
+                                title="Sorting"
+                                checked={(effectiveConfig as CollectionLevelConfig).collectionModules?.sort.enabled ?? false}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("collectionModules.sort.enabled", v);
+                                  if (v) {
+                                    const cm = (effectiveConfig as CollectionLevelConfig).collectionModules?.sort;
+                                    if (cm?.position === "none") updateLevelConfigPath("collectionModules.sort.position", "header");
+                                    setSectionExpanded((p) => ({ ...p, sorting: true }));
+                                  }
+                                }}
+                                expanded={sectionExpanded.sorting}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, sorting: !p.sorting }))}
+                                content={
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                                        <Select
+                                          value={(effectiveConfig as CollectionLevelConfig).collectionModules?.sort.position ?? "none"}
+                                          onValueChange={(v) => updateLevelConfigPath("collectionModules.sort.position", v as ModulePosition)}
+                                        >
+                                          <SelectTrigger><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">Hidden</SelectItem>
+                                            <SelectItem value="header">Header</SelectItem>
+                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
+                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                   </div>
-                                </div>
-                              </CollapsibleContent>
-                            </Collapsible>
-                          </div>
+                                }
+                              />
+                              <ModuleSettingSection
+                                title="Search"
+                                checked={(effectiveConfig as CollectionLevelConfig).collectionModules?.search.enabled ?? false}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("collectionModules.search.enabled", v);
+                                  if (v) {
+                                    const cm = (effectiveConfig as CollectionLevelConfig).collectionModules?.search;
+                                    if (cm?.position === "none") updateLevelConfigPath("collectionModules.search.position", "header");
+                                    setSectionExpanded((p) => ({ ...p, search: true }));
+                                  }
+                                }}
+                                expanded={sectionExpanded.search}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, search: !p.search }))}
+                                content={
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                                        <Select
+                                          value={(effectiveConfig as CollectionLevelConfig).collectionModules?.search.position ?? "none"}
+                                          onValueChange={(v) => updateLevelConfigPath("collectionModules.search.position", v as ModulePosition)}
+                                        >
+                                          <SelectTrigger><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">Hidden</SelectItem>
+                                            <SelectItem value="header">Header</SelectItem>
+                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
+                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                  </div>
+                                }
+                              />
+                            </>
+                          )}
+                          {selectedLevel === "post" && (
+                            <>
+                              <ModuleSettingSection
+                                title="Table of Contents"
+                                checked={(effectiveConfig as PostLevelConfig).postModules?.tableOfContents.enabled ?? false}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("postModules.tableOfContents.enabled", v);
+                                  if (v) {
+                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.tableOfContents;
+                                    if (pm?.position === "none") updateLevelConfigPath("postModules.tableOfContents.position", "leftSidebar");
+                                    setSectionExpanded((p) => ({ ...p, tableOfContents: true }));
+                                  }
+                                }}
+                                expanded={sectionExpanded.tableOfContents}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, tableOfContents: !p.tableOfContents }))}
+                                content={
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                                        <Select
+                                          value={(effectiveConfig as PostLevelConfig).postModules?.tableOfContents.position ?? "none"}
+                                          onValueChange={(v) => updateLevelConfigPath("postModules.tableOfContents.position", v as ModulePosition)}
+                                        >
+                                          <SelectTrigger><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">Hidden</SelectItem>
+                                            <SelectItem value="header">Header</SelectItem>
+                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
+                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSection
+                                title="Breadcrumbs"
+                                checked={(effectiveConfig as PostLevelConfig).postModules?.breadcrumbs.enabled ?? false}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("postModules.breadcrumbs.enabled", v);
+                                  if (v) {
+                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.breadcrumbs;
+                                    if (pm?.position === "none") updateLevelConfigPath("postModules.breadcrumbs.position", "header");
+                                    setSectionExpanded((p) => ({ ...p, breadcrumbs: true }));
+                                  }
+                                }}
+                                expanded={sectionExpanded.breadcrumbs}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, breadcrumbs: !p.breadcrumbs }))}
+                                content={
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                                        <Select
+                                          value={(effectiveConfig as PostLevelConfig).postModules?.breadcrumbs.position ?? "none"}
+                                          onValueChange={(v) => updateLevelConfigPath("postModules.breadcrumbs.position", v as ModulePosition)}
+                                        >
+                                          <SelectTrigger><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">Hidden</SelectItem>
+                                            <SelectItem value="header">Header</SelectItem>
+                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
+                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSection
+                                title="Author Profiles"
+                                checked={(effectiveConfig as PostLevelConfig).postModules?.authorProfiles.enabled ?? false}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("postModules.authorProfiles.enabled", v);
+                                  if (v) {
+                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.authorProfiles;
+                                    if (pm?.position === "none") updateLevelConfigPath("postModules.authorProfiles.position", "rightSidebar");
+                                    setSectionExpanded((p) => ({ ...p, authorProfilesModule: true }));
+                                  }
+                                }}
+                                expanded={sectionExpanded.authorProfilesModule}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, authorProfilesModule: !p.authorProfilesModule }))}
+                                content={
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                                        <Select
+                                          value={(effectiveConfig as PostLevelConfig).postModules?.authorProfiles.position ?? "none"}
+                                          onValueChange={(v) => updateLevelConfigPath("postModules.authorProfiles.position", v as ModulePosition)}
+                                        >
+                                          <SelectTrigger><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="none">Hidden</SelectItem>
+                                            <SelectItem value="header">Header</SelectItem>
+                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
+                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                  </div>
+                                }
+                              />
+                            </>
+                          )}
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">Social Media Links</span>
@@ -1622,96 +2472,191 @@ export default function Configure() {
           </div>
         </ScrollArea>
 
-        <Dialog open={addAuthorModalOpen} onOpenChange={(open) => { setAddAuthorModalOpen(open); if (!open) setNewAuthorName(""); }}>
+        <Dialog
+          open={addAuthorModalOpen}
+          onOpenChange={(open) => {
+            setAddAuthorModalOpen(open);
+            if (!open) {
+              setEditAuthor(null);
+              setNewAuthorName("");
+              setNewAuthorImageUrl(null);
+              setNewAuthorBio("");
+              setNewAuthorEmail("");
+              setNewAuthorSocials({});
+            }
+          }}
+        >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Add New Author</DialogTitle>
+              <DialogTitle>{editAuthor ? "Edit Author" : "Add New Author"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="flex gap-2">
-              <Input
-                value={newAuthorName}
-                onChange={(e) => setNewAuthorName(e.target.value)}
-                placeholder="Author name"
-                className="flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const name = newAuthorName.trim();
-                    if (name && effectiveSiteKey) {
-                      const apiBase = typeof window !== "undefined" ? window.location.origin : "";
-                      fetch(`${apiBase}/api/blog-authors`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "include",
-                        body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "BETTER_BLOG", isDefault: addAuthorContext === "default" ? true : addAuthorAsDefault }),
-                      })
-                        .then((res) => res.json())
-                        .then((data) => {
-                          if (data?.id) {
-                            setAuthors((prev) => [...prev, { id: data.id, name: data.name }]);
-                            if (addAuthorContext === "default") {
-                              updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, data.id]);
-                            } else {
-                              const overrideIds = config.postAuthorOverrides[addAuthorContext.postId] ?? [];
-                              updateConfig(`postAuthorOverrides.${addAuthorContext.postId}`, [...overrideIds, data.id]);
-                              if (addAuthorAsDefault) {
-                                updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, data.id]);
-                              }
-                            }
-                            setNewAuthorName("");
-                            setAddAuthorModalOpen(false);
+            <form
+              className="space-y-4 pt-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = newAuthorName.trim();
+                if (!name || !effectiveSiteKey) return;
+                const socialLinks: Record<string, string> = {};
+                for (const k of ["instagram", "facebook", "linkedin"] as const) {
+                  const v = newAuthorSocials[k]?.trim();
+                  if (v) socialLinks[k] = v;
+                }
+                const apiBase = typeof window !== "undefined" ? window.location.origin : "";
+                if (editAuthor) {
+                  fetch(`${apiBase}/api/blog-authors/${editAuthor.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      name,
+                      imageUrl: newAuthorImageUrl,
+                      bio: newAuthorBio.trim() || null,
+                      email: newAuthorEmail.trim() || null,
+                      socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
+                    }),
+                  })
+                    .then((res) => (res.ok ? res.json() : null))
+                    .then((data) => {
+                      if (data) {
+                        setAuthors((prev) =>
+                          prev.map((a) => (a.id === editAuthor.id ? { ...a, ...data } : a))
+                        );
+                        setEditAuthor(null);
+                        setNewAuthorName("");
+                        setNewAuthorImageUrl(null);
+                        setNewAuthorBio("");
+                        setNewAuthorEmail("");
+                        setNewAuthorSocials({});
+                        setAddAuthorModalOpen(false);
+                      }
+                    });
+                } else {
+                  fetch(`${apiBase}/api/blog-authors`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      siteKey: effectiveSiteKey,
+                      name,
+                      ingestedFrom: "BETTER_BLOG",
+                      isDefault: addAuthorContext === "default" ? true : addAuthorAsDefault,
+                      imageUrl: newAuthorImageUrl,
+                      bio: newAuthorBio.trim() || null,
+                      email: newAuthorEmail.trim() || null,
+                      socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
+                    }),
+                  })
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data?.id) {
+                        setAuthors((prev) => [
+                          ...prev,
+                          {
+                            id: data.id,
+                            name: data.name,
+                            imageUrl: data.imageUrl ?? null,
+                            bio: data.bio ?? null,
+                            email: data.email ?? null,
+                            socialLinks: data.socialLinks ?? {},
+                          },
+                        ]);
+                        if (addAuthorContext === "default") {
+                          updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, data.id]);
+                        } else {
+                          const overrideIds = config.postAuthorOverrides[addAuthorContext.postId] ?? [];
+                          updateConfig(`postAuthorOverrides.${addAuthorContext.postId}`, [...overrideIds, data.id]);
+                          if (addAuthorAsDefault) {
+                            updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, data.id]);
                           }
-                        });
-                    }
-                  }
-                }}
-              />
-              <Button
-                onClick={() => {
-                  const name = newAuthorName.trim();
-                  if (name && effectiveSiteKey) {
-                    const apiBase = typeof window !== "undefined" ? window.location.origin : "";
-                    fetch(`${apiBase}/api/blog-authors`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      credentials: "include",
-                      body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "BETTER_BLOG", isDefault: addAuthorContext === "default" ? true : addAuthorAsDefault }),
-                    })
-                      .then((res) => res.json())
-                      .then((data) => {
-                        if (data?.id) {
-                            setAuthors((prev) => [...prev, { id: data.id, name: data.name }]);
-                            if (addAuthorContext === "default") {
-                              updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, data.id]);
-                            } else {
-                              const overrideIds = config.postAuthorOverrides[addAuthorContext.postId] ?? [];
-                              updateConfig(`postAuthorOverrides.${addAuthorContext.postId}`, [...overrideIds, data.id]);
-                              if (addAuthorAsDefault) {
-                                updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, data.id]);
-                              }
-                            }
-                          setNewAuthorName("");
-                          setAddAuthorModalOpen(false);
                         }
-                      });
-                  }
-                }}
-              >
-                Add
-              </Button>
-            </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox
-                  checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
-                  onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
-                  disabled={addAuthorContext === "default"}
+                        setNewAuthorName("");
+                        setNewAuthorImageUrl(null);
+                        setNewAuthorBio("");
+                        setNewAuthorEmail("");
+                        setNewAuthorSocials({});
+                        setAddAuthorModalOpen(false);
+                      }
+                    });
+                }
+              }}
+            >
+              <div className="space-y-2">
+                <Label className="text-xs text-[#6b6b6b]">Name</Label>
+                <Input
+                  value={newAuthorName}
+                  onChange={(e) => setNewAuthorName(e.target.value)}
+                  placeholder="Author name"
+                  className="flex-1"
                 />
-                <span className="text-sm">
-                  {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
-                </span>
-              </label>
-            </div>
+              </div>
+              <AuthorImageUpload
+                value={newAuthorImageUrl}
+                onChange={setNewAuthorImageUrl}
+                authorName={newAuthorName}
+              />
+              <div className="space-y-2">
+                <Label className="text-xs text-[#6b6b6b]">Short bio (max 200 characters)</Label>
+                <textarea
+                  value={newAuthorBio}
+                  onChange={(e) => setNewAuthorBio(e.target.value.slice(0, 200))}
+                  placeholder="A brief description..."
+                  className="w-full min-h-[60px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
+                  maxLength={200}
+                />
+                <span className="text-xs text-[#6b6b6b]">{newAuthorBio.length}/200</span>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-[#6b6b6b]">Email</Label>
+                <Input
+                  type="email"
+                  value={newAuthorEmail}
+                  onChange={(e) => setNewAuthorEmail(e.target.value)}
+                  placeholder="author@example.com"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-[#6b6b6b]">Social links (optional)</Label>
+                <div className="space-y-1.5">
+                  {(["instagram", "facebook", "linkedin"] as const).map((platform) => (
+                    <div key={platform} className="flex items-center gap-2">
+                      <span className="text-xs text-[#6b6b6b] w-20 shrink-0 capitalize">
+                        {platform === "instagram" ? "Instagram" : platform === "facebook" ? "Facebook" : "LinkedIn"}
+                      </span>
+                      <Input
+                        value={newAuthorSocials[platform] ?? ""}
+                        onChange={(e) =>
+                          setNewAuthorSocials((p) => ({ ...p, [platform]: e.target.value }))
+                        }
+                        placeholder={
+                          platform === "instagram"
+                            ? "https://instagram.com/username"
+                            : platform === "facebook"
+                              ? "https://facebook.com/username"
+                              : "https://linkedin.com/in/username"
+                        }
+                        className="h-8 text-sm flex-1"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {!editAuthor && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
+                    onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
+                    disabled={addAuthorContext === "default"}
+                  />
+                  <span className="text-sm">
+                    {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
+                  </span>
+                </label>
+              )}
+              <Button type="submit" className="w-full" disabled={!newAuthorName.trim()}>
+                {editAuthor ? "Save Changes" : "Add Author"}
+              </Button>
+            </form>
           </DialogContent>
         </Dialog>
       </aside>
@@ -1775,7 +2720,11 @@ export default function Configure() {
             `}
           >
             <div className="h-full w-full overflow-hidden overflow-y-auto">
-              {effectiveSite && (() => {
+              {configLoading ? (
+                <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
+                  Loading settings…
+                </div>
+              ) : effectiveSite && (() => {
                 const previewUrl = buildBlogPreviewUrl(effectiveSite);
                 if (!previewUrl) {
                   return (
