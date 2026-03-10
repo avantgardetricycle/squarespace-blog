@@ -24,12 +24,20 @@ async function forwardEventsToGA(
   referrer: string | undefined
 ): Promise<void> {
   const apiSecret = process.env.GA_API_SECRET
-  if (!apiSecret) return
+  if (!apiSecret) {
+    console.log('[analytics] GA forward skipped: GA_API_SECRET not set')
+    return
+  }
 
   const ga = await prisma.siteGoogleAnalytics.findUnique({
     where: { siteId }
   })
-  if (!ga || !ga.measurementId || rows.length === 0) return
+  if (!ga || !ga.measurementId || rows.length === 0) {
+    if (!ga) console.log('[analytics] GA forward skipped: no GA config for site', siteId)
+    else if (!ga.measurementId) console.log('[analytics] GA forward skipped: no measurementId for site', siteId)
+    else if (rows.length === 0) console.log('[analytics] GA forward skipped: no events to send')
+    return
+  }
 
   const clientId = visitorId ?? `anon_${siteId}_${Date.now()}`
   const includeReferrer = ga.metricsEnabled.length === 0 || ga.metricsEnabled.includes('top_referrers') || ga.metricsEnabled.includes('traffic_sources')
@@ -45,11 +53,15 @@ async function forwardEventsToGA(
   })
 
   const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(ga.measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`
-  await fetch(url, {
+  console.log('[analytics] GA forward:', ga.measurementId, 'events:', events.map((e) => e.name).join(', '))
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: clientId, events })
   })
+  if (!res.ok) {
+    console.warn('[analytics] GA forward HTTP', res.status, await res.text())
+  }
 }
 
 // POST /api/analytics/events - Ingest events from renderer (no auth, validated by siteKey)
