@@ -620,9 +620,9 @@ function ContentLine({ className = "" }: { className?: string }) {
   return <div className={`h-[9px] bg-[#f0f0f4] rounded-[3px] mb-[7px] ${className}`}></div>;
 }
 
-function FeatureCallout({ children }: { children: React.ReactNode }) {
+function FeatureCallout({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="inline-flex items-center gap-[5px] bg-[#FFD700] text-[#7a5800] text-[0.58rem] font-semibold tracking-[0.08em] px-[10px] py-[3px] rounded-full mb-[6px]">
+    <div className={`inline-flex items-center gap-[5px] bg-[#FFD700] text-[#7a5800] text-[0.58rem] font-semibold tracking-[0.08em] px-[10px] py-[3px] rounded-full mb-[6px] ${className}`}>
       {children}
     </div>
   );
