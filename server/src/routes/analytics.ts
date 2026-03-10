@@ -17,6 +17,41 @@ function parseTimeRange(range: string): { days: number } {
   }
 }
 
+async function forwardEventsToGA(
+  siteId: string,
+  rows: Array<{ eventType: string; visitorId: string | null; postId: string | null; postIndex: number | null; url: string | null; payload: object }>,
+  visitorId: string | null,
+  referrer: string | undefined
+): Promise<void> {
+  const apiSecret = process.env.GA_API_SECRET
+  if (!apiSecret) return
+
+  const ga = await prisma.siteGoogleAnalytics.findUnique({
+    where: { siteId }
+  })
+  if (!ga || !ga.measurementId || rows.length === 0) return
+
+  const clientId = visitorId ?? `anon_${siteId}_${Date.now()}`
+  const includeReferrer = ga.metricsEnabled.length === 0 || ga.metricsEnabled.includes('top_referrers') || ga.metricsEnabled.includes('traffic_sources')
+  const events = rows.map((r) => {
+    const base: { name: string; params?: Record<string, unknown> } = { name: r.eventType === 'page_view' ? 'page_view' : r.eventType }
+    const params: Record<string, unknown> = { site_id: siteId }
+    if (referrer && includeReferrer) params.page_referrer = referrer
+    if (r.postId) params.post_id = r.postId
+    if (r.postIndex != null) params.post_index = r.postIndex
+    if ((r.payload as Record<string, unknown>)?.postTitle) params.page_title = (r.payload as Record<string, unknown>).postTitle
+    base.params = params
+    return base
+  })
+
+  const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(ga.measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, events })
+  })
+}
+
 // POST /api/analytics/events - Ingest events from renderer (no auth, validated by siteKey)
 router.post('/events', async (req: Request, res: Response) => {
   const body = req.body as { siteKey?: string; siteId?: string; visitorId?: string; events?: Array<{ type: string; postId?: string; postIndex?: number; payload?: object }> }
@@ -77,7 +112,107 @@ router.post('/events', async (req: Request, res: Response) => {
     return
   }
 
+  // Forward to GA4 Measurement Protocol if connected (fire-and-forget)
+  forwardEventsToGA(resolvedSiteId, rows, visitorId, url).catch((e) =>
+    console.error('[analytics] GA forward error:', e)
+  )
+
   res.status(204).send()
+})
+
+const GA_METRICS = ['traffic_sources', 'top_referrers', 'new_vs_returning'] as const
+
+// GET /api/analytics/ga/:siteKey - Get Google Analytics config (requires auth)
+router.get('/ga/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id },
+    include: { googleAnalytics: true }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const ga = site.googleAnalytics
+  if (!ga) {
+    res.json({ connected: false, measurementId: null, metricsEnabled: [] })
+    return
+  }
+  res.json({
+    connected: true,
+    measurementId: ga.measurementId,
+    metricsEnabled: ga.metricsEnabled
+  })
+})
+
+// PUT /api/analytics/ga/:siteKey - Save Google Analytics config (requires auth)
+router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const body = req.body as { measurementId?: string; metricsEnabled?: string[] }
+  const measurementId = typeof body.measurementId === 'string' ? body.measurementId.trim() : ''
+  const metricsEnabled = Array.isArray(body.metricsEnabled)
+    ? body.metricsEnabled.filter((m): m is string => typeof m === 'string' && GA_METRICS.includes(m as (typeof GA_METRICS)[number]))
+    : []
+
+  if (!measurementId || !/^G-[A-Z0-9]+$/i.test(measurementId)) {
+    res.status(400).json({ error: 'Valid GA4 Measurement ID (G-XXXXXXXXX) is required' })
+    return
+  }
+
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id },
+    include: { googleAnalytics: true }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  try {
+    if (site.googleAnalytics) {
+      await prisma.siteGoogleAnalytics.update({
+        where: { siteId: site.id },
+        data: {
+          measurementId,
+          metricsEnabled: metricsEnabled.length > 0 ? metricsEnabled : GA_METRICS.slice()
+        }
+      })
+    } else {
+      await prisma.siteGoogleAnalytics.create({
+        data: {
+          siteId: site.id,
+          measurementId,
+          metricsEnabled: metricsEnabled.length > 0 ? metricsEnabled : GA_METRICS.slice()
+        }
+      })
+    }
+    res.json({ success: true })
+  } catch (err) {
+    console.error('[analytics] GA save error:', err)
+    res.status(500).json({ error: 'Failed to save Google Analytics config' })
+  }
+})
+
+// DELETE /api/analytics/ga/:siteKey - Disconnect Google Analytics (requires auth)
+router.delete('/ga/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id },
+    include: { googleAnalytics: true }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  if (site.googleAnalytics) {
+    await prisma.siteGoogleAnalytics.delete({
+      where: { siteId: site.id }
+    })
+  }
+  res.json({ success: true })
 })
 
 // GET /api/analytics/:siteKey - Dashboard aggregates (requires auth, must own site)

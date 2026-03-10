@@ -37,6 +37,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { GoogleAnalyticsModal, type GAConfig } from "@/app/components/GoogleAnalyticsModal";
 
 interface AnalyticsData {
   keyMetrics: {
@@ -97,7 +98,8 @@ export default function Analytics() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [timeRange, setTimeRange] = useState("30d");
   const [mostReadPeriod, setMostReadPeriod] = useState("30days");
-  const [gaConnected, setGaConnected] = useState(false);
+  const [gaConfig, setGaConfig] = useState<GAConfig | null>(null);
+  const [gaModalOpen, setGaModalOpen] = useState(false);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -132,6 +134,14 @@ export default function Analytics() {
       .catch(() => setAnalytics(emptyAnalytics))
       .finally(() => setLoading(false));
   }, [siteKey, timeRange, mostReadPeriod]);
+
+  useEffect(() => {
+    if (!siteKey) return;
+    fetch(`/api/analytics/ga/${encodeURIComponent(siteKey)}`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setGaConfig(data ?? { connected: false, measurementId: null, metricsEnabled: [] }))
+      .catch(() => setGaConfig({ connected: false, measurementId: null, metricsEnabled: [] }));
+  }, [siteKey]);
 
   const data = analytics ?? emptyAnalytics;
 
@@ -197,9 +207,9 @@ export default function Analytics() {
 
       {/* Google Analytics Integration Card */}
       <Card className="bg-white border-[#e4e3de] p-6">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-lg bg-[#f7f6f3] flex items-center justify-center">
+            <div className="w-12 h-12 rounded-lg bg-[#f7f6f3] flex items-center justify-center shrink-0">
               <BarChart3 className="w-6 h-6 text-[#5B4FE8]" />
             </div>
             <div>
@@ -207,14 +217,29 @@ export default function Analytics() {
                 Google Analytics Integration
               </h3>
               <p className="text-sm text-[#6b6b6b] mb-3">
-                {gaConnected
+                {gaConfig?.connected
                   ? "Your Google Analytics is connected and syncing data"
-                  : "Connect your Google Analytics account to see enhanced metrics"}
+                  : "Connect your Google Analytics account to see Traffic Sources, Top Referrers, and New vs. Returning Visitors"}
               </p>
-              {gaConnected ? (
-                <div className="flex items-center gap-2 text-sm text-[#10B981]">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span className="font-medium">Connected to GA4 Property</span>
+              {gaConfig?.connected ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-[#10B981]">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="font-medium">Connected</span>
+                  </div>
+                  <div className="text-sm text-[#6b6b6b] font-mono">
+                    {gaConfig.measurementId}
+                  </div>
+                  {gaConfig.metricsEnabled.length > 0 && (
+                    <div className="text-xs text-[#6b6b6b] mt-1">
+                      Tracking: {gaConfig.metricsEnabled.map((m) => {
+                        if (m === "traffic_sources") return "Traffic Sources";
+                        if (m === "top_referrers") return "Top Referrers";
+                        if (m === "new_vs_returning") return "New vs. Returning";
+                        return m;
+                      }).join(", ")}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-sm text-[#6b6b6b]">
@@ -225,17 +250,17 @@ export default function Analytics() {
             </div>
           </div>
           <Button
-            onClick={() => setGaConnected(!gaConnected)}
+            onClick={() => setGaModalOpen(true)}
             className={
-              gaConnected
-                ? "bg-[#f7f6f3] text-[#6b6b6b] hover:bg-[#e4e3de] border border-[#e4e3de]"
-                : "bg-[#5B4FE8] text-white hover:bg-[#4a3fd4]"
+              gaConfig?.connected
+                ? "bg-[#f7f6f3] text-[#6b6b6b] hover:bg-[#e4e3de] border border-[#e4e3de] shrink-0"
+                : "bg-[#5B4FE8] text-white hover:bg-[#4a3fd4] shrink-0"
             }
           >
-            {gaConnected ? (
+            {gaConfig?.connected ? (
               <>
                 <Settings className="w-4 h-4 mr-2" />
-                Manage
+                Edit
               </>
             ) : (
               <>
@@ -246,6 +271,20 @@ export default function Analytics() {
           </Button>
         </div>
       </Card>
+
+      <GoogleAnalyticsModal
+        open={gaModalOpen}
+        onOpenChange={setGaModalOpen}
+        siteKey={siteKey ?? ""}
+        config={gaConfig}
+        onSaved={() => {
+          if (!siteKey) return;
+          fetch(`/api/analytics/ga/${encodeURIComponent(siteKey)}`, { credentials: "include" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => setGaConfig(data ?? { connected: false, measurementId: null, metricsEnabled: [] }))
+            .catch(() => setGaConfig({ connected: false, measurementId: null, metricsEnabled: [] }));
+        }}
+      />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

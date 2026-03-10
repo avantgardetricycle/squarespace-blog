@@ -57,10 +57,24 @@ model Site {
   siteConfigs      SiteConfig[]
   blogAuthors      BlogAuthor[]
   analyticsEvents  AnalyticsEvent[]
+  googleAnalytics  SiteGoogleAnalytics?
 
   @@index([siteKey])
   @@index([userId])
   @@map("sites")
+}
+
+model SiteGoogleAnalytics {
+  id              String   @id @default(uuid())
+  siteId          String   @unique @map("site_id")
+  measurementId   String   @map("measurement_id") // G-XXXXXXXXXX, prompted per-site
+  metricsEnabled  String[] @map("metrics_enabled") // traffic_sources | top_referrers | new_vs_returning
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_google_analytics")
 }
 
 model AnalyticsEvent {
