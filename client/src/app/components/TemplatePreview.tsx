@@ -73,12 +73,11 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
     case "masthead":
       return (
         <div className={cn("flex flex-col gap-1.5 p-2 text-[9px]", className)}>
-          <div className={cn(imgPlaceholder, "h-10 w-full flex items-end p-1.5 shrink-0")}>
-            <div>
-              <div className="text-[7px] text-white/70 uppercase tracking-wider">Category</div>
-              <div className="text-white font-bold text-[8px] line-clamp-1">Featured Post Headline Goes Here</div>
-              <div className="text-white/80 text-[7px] line-clamp-1">By Author · Mar 7 · 8 min</div>
-            </div>
+          <div className={cn(imgPlaceholder, "h-10 w-full shrink-0 rounded")} />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[7px] text-[#6b6b6b] font-medium uppercase">Category</span>
+            <div className="font-bold text-[8px] text-[#111] line-clamp-1">Featured Post Headline Goes Here</div>
+            <div className="text-[7px] text-[#6b6b6b]">By Author · Mar 7 · 8 min</div>
           </div>
           <FilterBar />
           <div className="grid grid-cols-3 gap-1.5 min-h-0">

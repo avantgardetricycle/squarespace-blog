@@ -200,10 +200,10 @@ async function main() {
       description: 'Featured post at top with sidebar and compact grid.',
       collectionConfig: {
         ...baseCollectionConfig,
-        collectionLayout: 'grid',
+        collectionLayout: 'digest',
         gridColumns: 2,
         rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 280, spaceAbove: 0, sticky: true },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 40 }
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 }
       },
       previewLayout: 'digest'
     },
@@ -214,7 +214,7 @@ async function main() {
       description: 'Card grid with alternating image layout.',
       collectionConfig: {
         ...baseCollectionConfig,
-        collectionLayout: 'grid',
+        collectionLayout: 'showcase',
         gridColumns: 2,
         headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 }
@@ -225,10 +225,10 @@ async function main() {
       templateKey: 'editorial',
       level: 'collection',
       name: 'The Editorial',
-      description: 'Grid layout with filter bar.',
+      description: 'Irregular brick-tile magazine layout.',
       collectionConfig: {
         ...baseCollectionConfig,
-        collectionLayout: 'grid',
+        collectionLayout: 'editorial',
         gridColumns: 3,
         headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }

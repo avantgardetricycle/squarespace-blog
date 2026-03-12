@@ -22,6 +22,7 @@ interface BlogPreviewRendererProps {
 function buildRendererConfig(overrides: RendererConfigOverrides | null | undefined) {
   return {
     previewMode: true,
+    baseUrl: typeof window !== "undefined" ? window.location.origin : "",
     defaultAuthorIds: overrides?.defaultAuthorIds ?? [],
     postAuthorOverrides: overrides?.postAuthorOverrides ?? {},
     authorMap: overrides?.authorMap ?? {},

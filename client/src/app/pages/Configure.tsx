@@ -140,7 +140,7 @@ export type PostsPerPageOption = 5 | 10 | 20;
 
 export type PaginationMode = "pages" | "infiniteScroll";
 
-export type CollectionLayoutMode = "stack" | "grid" | "listRows";
+export type CollectionLayoutMode = "grid" | "listRows" | "editorial" | "showcase" | "digest";
 
 export type GridColumnsOption = 2 | 3;
 
@@ -222,7 +222,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   showReadingTime: false,
   postSort: "date",
   pagination: { show: false, mode: "pages" as PaginationMode, postsPerPage: 10 },
-  collectionLayout: "stack",
+  collectionLayout: "grid",
   gridColumns: 3,
   collectionModules: defaultCollectionModules,
   featuredArticle: defaultFeaturedArticle,
@@ -556,7 +556,7 @@ function parseLevelConfig(
     ? { show: Boolean(pagRaw.show ?? false), mode: validPaginationMode(pagRaw.mode), postsPerPage: validPostsPerPage(pagRaw.postsPerPage) }
     : { show: false, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
   const validCollectionLayout = (v: unknown): CollectionLayoutMode =>
-    (v === "grid" || v === "listRows") ? v : "stack";
+    (v === "grid" || v === "listRows" || v === "editorial" || v === "showcase" || v === "digest") ? v : "grid";
   const validGridColumns = (v: unknown): GridColumnsOption =>
     (v === 2 || v === 3) ? v : 3;
   const validModulePosition = (v: unknown): ModulePosition =>
@@ -1517,11 +1517,13 @@ export default function Configure() {
                           <span className="font-medium">Collection Layout</span>
                           <span className="text-xs text-[#6b6b6b] truncate">
                             {(() => {
-                              const layout = (effectiveConfig as CollectionLevelConfig).collectionLayout ?? "stack";
-                              const cols = (effectiveConfig as CollectionLevelConfig).gridColumns ?? 3;
-                              if (layout === "stack") return "Stack (vertical list)";
-                              if (layout === "grid") return `Grid · ${cols} columns`;
-                              return "List rows (thumb left)";
+                              const layout = (effectiveConfig as CollectionLevelConfig).collectionLayout ?? "grid";
+                              if (layout === "grid") return "Masthead";
+                              if (layout === "listRows") return "Newsroom";
+                              if (layout === "editorial") return "Editorial";
+                              if (layout === "showcase") return "Showcase";
+                              if (layout === "digest") return "Digest";
+                              return "Masthead";
                             })()}
                           </span>
                         </div>
@@ -1540,36 +1542,21 @@ export default function Configure() {
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Layout</Label>
                               <Select
-                                value={(effectiveConfig as CollectionLevelConfig).collectionLayout ?? "stack"}
+                                value={(effectiveConfig as CollectionLevelConfig).collectionLayout ?? "grid"}
                                 onValueChange={(v) => updateLevelConfigPath("collectionLayout", v as CollectionLayoutMode)}
                               >
                                 <SelectTrigger className="w-full">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="stack">Stack (vertical list)</SelectItem>
-                                  <SelectItem value="grid">Grid</SelectItem>
-                                  <SelectItem value="listRows">List rows (thumb left)</SelectItem>
+                                  <SelectItem value="grid">Masthead</SelectItem>
+                                  <SelectItem value="listRows">Newsroom</SelectItem>
+                                  <SelectItem value="editorial">Editorial</SelectItem>
+                                  <SelectItem value="showcase">Showcase</SelectItem>
+                                  <SelectItem value="digest">Digest</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
-                            {((effectiveConfig as CollectionLevelConfig).collectionLayout ?? "stack") === "grid" && (
-                              <div className="space-y-2">
-                                <Label className="text-xs text-[#6b6b6b]">Grid columns</Label>
-                                <Select
-                                  value={String((effectiveConfig as CollectionLevelConfig).gridColumns ?? 3)}
-                                  onValueChange={(v) => updateLevelConfigPath("gridColumns", parseInt(v, 10) as GridColumnsOption)}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="2">2 columns</SelectItem>
-                                    <SelectItem value="3">3 columns</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -1677,11 +1664,6 @@ export default function Configure() {
                                   <SelectItem value="inLayout">In-layout (at top with indicator)</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <p className="text-[10px] text-[#6b6b6b]">
-                                {((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).position === "header"
-                                  ? "Article image as hero with title, date, and author overlaid."
-                                  : "Featured article appears at top of the layout with a Featured badge."}
-                              </p>
                             </div>
                           </div>
                         </CollapsibleContent>
@@ -2032,6 +2014,8 @@ export default function Configure() {
                       <Collapsible open={effectiveConfig.featuredImage.show && sectionExpanded.featuredImage}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-4">
+                            {selectedLevel !== "collection" && (
+                            <>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Layout mode</Label>
                               <Select
@@ -2065,6 +2049,8 @@ export default function Configure() {
                                   </span>
                                 </div>
                               </div>
+                            )}
+                            </>
                             )}
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>

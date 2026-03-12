@@ -205,6 +205,46 @@ router.get('/share/:siteKey/:postIndex', async (req: Request, res: Response) => 
   res.type('html').send(html)
 })
 
+// POST /api/config/check-placeholder-images - Batch check image URLs for Squarespace placeholder (no CORS)
+router.post('/check-placeholder-images', async (req: Request, res: Response) => {
+  const body = req.body as { urls?: string[] }
+  const raw = Array.isArray(body?.urls) ? body.urls : []
+  const urls = raw.slice(0, 100)
+  if (urls.length === 0) {
+    res.json({ placeholders: {} })
+    return
+  }
+  const placeholders: Record<string, boolean> = {}
+  const PLACEHOLDER_MARKERS = ['no-image.png', 'configuration/no-image']
+
+  function isPlaceholderUrl (url: string): boolean {
+    const u = url.toLowerCase()
+    return PLACEHOLDER_MARKERS.some((m) => u.includes(m))
+  }
+
+  await Promise.all(
+    urls.map(async (url) => {
+      if (!url || typeof url !== 'string') {
+        placeholders[url] = true
+        return
+      }
+      if (isPlaceholderUrl(url)) {
+        placeholders[url] = true
+        return
+      }
+      try {
+        const r = await fetch(url, { method: 'HEAD', redirect: 'follow' })
+        const finalUrl = r.url || url
+        placeholders[url] = isPlaceholderUrl(finalUrl)
+      } catch {
+        placeholders[url] = false
+      }
+    })
+  )
+
+  res.json({ placeholders })
+})
+
 // GET /api/config/:siteKey - Public endpoint for loader.js
 // Uses internal subscription record only (no Stripe API calls) - gated on status
 router.get('/:siteKey', async (req: Request, res: Response) => {
