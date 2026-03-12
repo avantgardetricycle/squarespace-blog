@@ -77,13 +77,23 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
       for (const item of items) allItems.push(item)
 
       const coll = json?.collection && typeof json.collection === 'object' ? json.collection as Record<string, unknown> : null
-      const nextPageUrl = (coll?.nextPageUrl ?? coll?.nextPage ?? json?.nextPageUrl ?? json?.nextPage) as string | undefined
+      const pag = (json?.pagination && typeof json.pagination === 'object' ? json.pagination : coll?.pagination && typeof coll.pagination === 'object' ? coll.pagination : null) as { nextPageUrl?: string } | null
+      const nextPageUrl = (pag?.nextPageUrl ?? coll?.nextPageUrl ?? coll?.nextPage ?? json?.nextPageUrl ?? json?.nextPage) as string | undefined
       if (nextPageUrl && typeof nextPageUrl === 'string' && nextPageUrl.startsWith('http')) {
-        nextUrl = appendPasswordToUrl(nextPageUrl, site.blogPassword)
+        try {
+          const u = new URL(nextPageUrl)
+          if (!u.searchParams.has('format')) u.searchParams.set('format', 'json')
+          nextUrl = appendPasswordToUrl(u.toString(), site.blogPassword)
+        } catch {
+          nextUrl = appendPasswordToUrl(nextPageUrl, site.blogPassword)
+        }
       } else if (nextPageUrl && typeof nextPageUrl === 'string' && nextPageUrl.startsWith('/')) {
         try {
           const base = new URL(urlWithPassword)
-          nextUrl = appendPasswordToUrl(base.origin + nextPageUrl, site.blogPassword)
+          const fullNext = base.origin + nextPageUrl
+          const u = new URL(fullNext)
+          if (!u.searchParams.has('format')) u.searchParams.set('format', 'json')
+          nextUrl = appendPasswordToUrl(u.toString(), site.blogPassword)
         } catch {
           nextUrl = null
         }

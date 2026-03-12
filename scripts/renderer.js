@@ -2061,9 +2061,15 @@
           for (var pi = 0; pi < pageItems.length; pi++) allItems.push(pageItems[pi]);
           if (!firstJson) firstJson = json;
           var coll = json && json.collection && typeof json.collection === 'object' ? json.collection : null;
-          var nextUrl = (coll && (coll.nextPageUrl || coll.nextPage)) || (json.nextPageUrl || json.nextPage);
+          var pag = json && json.pagination && typeof json.pagination === 'object' ? json.pagination : (coll && coll.pagination && typeof coll.pagination === 'object' ? coll.pagination : null);
+          var nextUrl = (pag && pag.nextPageUrl) || (coll && (coll.nextPageUrl || coll.nextPage)) || (json.nextPageUrl || json.nextPage);
           if (nextUrl && typeof nextUrl === 'string') {
             var absUrl = nextUrl.indexOf('http') === 0 ? nextUrl : (typeof window !== 'undefined' && window.location ? new URL(nextUrl, window.location.origin).href : nextUrl);
+            try {
+              var u = new URL(absUrl);
+              if (!u.searchParams.has('format')) u.searchParams.set('format', 'json');
+              absUrl = u.toString();
+            } catch (e) {}
             return fetchNext(appendPassword(absUrl, self.config && self.config.blogPassword));
           }
           return Promise.resolve();
@@ -3258,7 +3264,7 @@
             paginationEl.setAttribute('aria-label', 'Pagination');
             paginationEl.style.display = 'flex';
             paginationEl.style.alignItems = 'center';
-            paginationEl.style.justifyContent = paginationMode === 'infiniteScroll' ? 'center' : 'space-between';
+            paginationEl.style.justifyContent = 'center';
             paginationEl.style.flexWrap = 'wrap';
             paginationEl.style.gap = '12px';
             paginationEl.style.marginTop = '24px';
@@ -3284,37 +3290,55 @@
               };
               paginationEl.appendChild(loadMoreBtn);
             } else {
-              var pagInfo = document.createElement('span');
-              pagInfo.style.fontSize = '0.9rem';
-              pagInfo.style.color = '#666';
-              var start = (currentPage - 1) * postsPerPage + 1;
-              var end = Math.min(currentPage * postsPerPage, totalFiltered);
-              pagInfo.textContent = 'Showing ' + start + '–' + end + ' of ' + totalFiltered;
-              paginationEl.appendChild(pagInfo);
               var pagBtns = document.createElement('div');
               pagBtns.style.display = 'flex';
-              pagBtns.style.gap = '8px';
-              var makePageBtn = function(label, page, disabled) {
+              pagBtns.style.alignItems = 'center';
+              pagBtns.style.justifyContent = 'center';
+              pagBtns.style.gap = '6px';
+              pagBtns.style.flexWrap = 'wrap';
+              var makePageBtn = function(pageNum, isCurrent) {
                 var btn = document.createElement('button');
                 btn.type = 'button';
-                btn.textContent = label;
+                btn.textContent = String(pageNum);
+                btn.setAttribute('aria-label', 'Page ' + pageNum);
+                btn.setAttribute('aria-current', isCurrent ? 'page' : 'false');
                 btn.style.padding = '6px 12px';
                 btn.style.fontSize = '0.9rem';
-                btn.style.border = '1px solid #ddd';
+                btn.style.minWidth = '36px';
+                btn.style.border = '1px solid ' + (isCurrent ? '#5B4FE8' : '#ddd');
                 btn.style.borderRadius = '6px';
-                btn.style.background = disabled ? '#f5f5f5' : 'white';
-                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
-                btn.style.color = disabled ? '#999' : '#333';
-                if (!disabled) {
+                btn.style.background = isCurrent ? '#5B4FE8' : 'white';
+                btn.style.cursor = 'pointer';
+                btn.style.color = isCurrent ? 'white' : '#333';
+                if (!isCurrent) {
                   btn.onclick = function() {
-                    self._currentPage = page;
+                    self._currentPage = pageNum;
                     self._renderContent(self.items);
                   };
                 }
                 return btn;
               };
-              pagBtns.appendChild(makePageBtn('Previous', currentPage - 1, currentPage <= 1));
-              pagBtns.appendChild(makePageBtn('Next', currentPage + 1, currentPage >= totalPages));
+              var addEllipsis = function() {
+                var span = document.createElement('span');
+                span.textContent = '…';
+                span.style.padding = '0 4px';
+                span.style.fontSize = '0.9rem';
+                span.style.color = '#999';
+                pagBtns.appendChild(span);
+              };
+              if (totalPages <= 4) {
+                for (var p = 1; p <= totalPages; p++) pagBtns.appendChild(makePageBtn(p, p === currentPage));
+              } else {
+                for (var p1 = 1; p1 <= 3; p1++) pagBtns.appendChild(makePageBtn(p1, p1 === currentPage));
+                if (currentPage > 3 && currentPage < totalPages) {
+                  addEllipsis();
+                  pagBtns.appendChild(makePageBtn(currentPage, true));
+                  if (currentPage < totalPages - 1) addEllipsis();
+                } else {
+                  addEllipsis();
+                }
+                pagBtns.appendChild(makePageBtn(totalPages, totalPages === currentPage));
+              }
               paginationEl.appendChild(pagBtns);
             }
             main.appendChild(paginationEl);
