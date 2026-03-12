@@ -35,6 +35,8 @@ import {
   Settings,
   CheckCircle2,
   AlertCircle,
+  Mail,
+  Download,
 } from "lucide-react";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { GoogleAnalyticsModal, type GAConfig } from "@/app/components/GoogleAnalyticsModal";
@@ -100,6 +102,10 @@ export default function Analytics() {
   const [mostReadPeriod, setMostReadPeriod] = useState("30days");
   const [gaConfig, setGaConfig] = useState<GAConfig | null>(null);
   const [gaModalOpen, setGaModalOpen] = useState(false);
+  const [leadsData, setLeadsData] = useState<{
+    summary: { totalNewsletter: number; totalLeadMagnet: number; total: number };
+    leads: Array<{ id: string; email: string; name: string | null; type: string; resourceTitle: string | null; createdAt: string }>;
+  } | null>(null);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -142,6 +148,15 @@ export default function Analytics() {
       .then((data) => setGaConfig(data ?? { connected: false, measurementId: null, metricsEnabled: [] }))
       .catch(() => setGaConfig({ connected: false, measurementId: null, metricsEnabled: [] }));
   }, [siteKey]);
+
+  useEffect(() => {
+    if (!siteKey) return;
+    const params = new URLSearchParams({ timeRange, format: "json" });
+    fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setLeadsData(data ?? { summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] }))
+      .catch(() => setLeadsData({ summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] }));
+  }, [siteKey, timeRange]);
 
   const data = analytics ?? emptyAnalytics;
 
@@ -285,6 +300,99 @@ export default function Analytics() {
             .catch(() => setGaConfig({ connected: false, measurementId: null, metricsEnabled: [] }));
         }}
       />
+
+      {/* Leads & Subscribers */}
+      <Card className="bg-white border-[#e4e3de] p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-lg bg-[#f7f6f3] flex items-center justify-center shrink-0">
+              <Mail className="w-6 h-6 text-[#5B4FE8]" />
+            </div>
+            <div>
+              <h3 className="font-heading text-xl text-[#0a0a0a] mb-1">
+                Leads & Subscribers
+              </h3>
+              <p className="text-sm text-[#6b6b6b] mb-3">
+                Newsletter subscribers and lead magnet signups from your blog
+              </p>
+              {leadsData && (
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="text-[#0a0a0a] font-medium">
+                    {leadsData.summary.totalNewsletter} newsletter
+                  </span>
+                  <span className="text-[#0a0a0a] font-medium">
+                    {leadsData.summary.totalLeadMagnet} lead magnet
+                  </span>
+                  <span className="text-[#6b6b6b]">
+                    {leadsData.summary.total} total
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-[#e4e3de]"
+            onClick={() => {
+              if (!siteKey) return;
+              const params = new URLSearchParams({ timeRange, format: "csv" });
+              fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include" })
+                .then((res) => res.ok ? res.text() : null)
+                .then((csv) => {
+                  if (csv) {
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `leads-${siteKey}-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                });
+            }}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download CSV
+          </Button>
+        </div>
+        {leadsData && leadsData.leads.length > 0 && (
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#e4e3de]">
+                  <th className="text-left py-2 pr-4 font-medium text-[#6b6b6b]">Email</th>
+                  <th className="text-left py-2 pr-4 font-medium text-[#6b6b6b]">Name</th>
+                  <th className="text-left py-2 pr-4 font-medium text-[#6b6b6b]">Type</th>
+                  <th className="text-left py-2 pr-4 font-medium text-[#6b6b6b]">Resource</th>
+                  <th className="text-left py-2 font-medium text-[#6b6b6b]">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leadsData.leads.slice(0, 20).map((lead) => (
+                  <tr key={lead.id} className="border-b border-[#e4e3de]/50">
+                    <td className="py-2 pr-4">{lead.email}</td>
+                    <td className="py-2 pr-4">{lead.name || "—"}</td>
+                    <td className="py-2 pr-4 capitalize">{lead.type.replace("_", " ")}</td>
+                    <td className="py-2 pr-4">{lead.resourceTitle || "—"}</td>
+                    <td className="py-2">{new Date(lead.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {leadsData.leads.length > 20 && (
+              <p className="text-xs text-[#6b6b6b] mt-2">
+                Showing 20 of {leadsData.leads.length}. Download CSV for full list.
+              </p>
+            )}
+          </div>
+        )}
+        {leadsData && leadsData.leads.length === 0 && (
+          <p className="text-sm text-[#6b6b6b] mt-4">
+            No leads or subscribers yet. Add Email Capture or Lead Magnet modules in Configure to start collecting.
+          </p>
+        )}
+      </Card>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

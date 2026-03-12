@@ -14,6 +14,7 @@ import blogAuthorsRoutes from './routes/blog-authors.js'
 import templatesRoutes from './routes/templates.js'
 import leadsRoutes from './routes/leads.js'
 import analyticsRoutes from './routes/analytics.js'
+import captureRoutes from './routes/capture.js'
 import { startQueue, stopQueue } from './queue/index.js'
 
 const app = express()
@@ -38,6 +39,8 @@ app.use(cookieParser())
 app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
 // Analytics: events come from user blogs (any origin); dashboard fetches with credentials
 app.use('/api/analytics', cors({ origin: true, credentials: true }), analyticsRoutes)
+// Capture: newsletter/lead magnet submissions from Squarespace (any origin)
+app.use('/api/capture', cors({ origin: true, credentials: true }), captureRoutes)
 
 // All other routes: strict CORS (app origin only)
 const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')

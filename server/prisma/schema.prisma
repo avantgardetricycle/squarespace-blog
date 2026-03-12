@@ -58,6 +58,7 @@ model Site {
   blogAuthors      BlogAuthor[]
   analyticsEvents  AnalyticsEvent[]
   googleAnalytics  SiteGoogleAnalytics?
+  leadCaptures     LeadCapture[]
 
   @@index([siteKey])
   @@index([userId])
@@ -272,4 +273,21 @@ model CustomerLead {
 
   @@unique([email])
   @@map("customer_leads")
+}
+
+model LeadCapture {
+  id            String   @id @default(uuid())
+  siteId        String   @map("site_id")
+  email         String
+  name          String?
+  type          String   // newsletter | lead_magnet
+  resourceTitle String?  @map("resource_title") // for lead_magnet: which resource; empty for newsletter
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, email, type, resourceTitle])
+  @@index([siteId, type])
+  @@index([siteId, createdAt])
+  @@map("lead_captures")
 }

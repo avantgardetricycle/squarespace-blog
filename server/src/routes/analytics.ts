@@ -224,7 +224,108 @@ router.delete('/ga/:siteKey', requireSession, async (req: Request, res: Response
       where: { siteId: site.id }
     })
   }
-  res.json({ success: true })
+    res.json({ success: true })
+})
+
+function parseLeadsTimeRange(range: string): { since: Date } {
+  switch (range) {
+    case '7d': {
+      const since = new Date()
+      since.setDate(since.getDate() - 7)
+      return { since }
+    }
+    case '30d': {
+      const since = new Date()
+      since.setDate(since.getDate() - 30)
+      return { since }
+    }
+    case '90d': {
+      const since = new Date()
+      since.setDate(since.getDate() - 90)
+      return { since }
+    }
+    case '12m': {
+      const since = new Date()
+      since.setDate(since.getDate() - 365)
+      return { since }
+    }
+    case 'all':
+      return { since: new Date(0) }
+    default: {
+      const since = new Date()
+      since.setDate(since.getDate() - 30)
+      return { since }
+    }
+  }
+}
+
+// GET /api/analytics/:siteKey/leads - Leads & subscribers (requires auth, must own site)
+router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const format = (req.query.format as string) === 'csv' ? 'csv' : 'json'
+  const typeFilter = req.query.type as string | undefined
+  const timeRange = (req.query.timeRange as string) || '30d'
+
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  const { since } = parseLeadsTimeRange(timeRange)
+
+  const where: { siteId: string; createdAt?: { gte: Date }; type?: string } = {
+    siteId: site.id,
+    createdAt: { gte: since }
+  }
+  if (typeFilter === 'newsletter' || typeFilter === 'lead_magnet') {
+    where.type = typeFilter
+  }
+
+  const leads = await prisma.leadCapture.findMany({
+    where,
+    orderBy: { createdAt: 'desc' }
+  })
+
+  const newsletterCount = leads.filter((l) => l.type === 'newsletter').length
+  const leadMagnetCount = leads.filter((l) => l.type === 'lead_magnet').length
+
+  if (format === 'csv') {
+    const header = 'email,name,type,resourceTitle,createdAt'
+    const rows = leads.map((l) => {
+      const escaped = (s: string) => {
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return '"' + s.replace(/"/g, '""') + '"'
+        }
+        return s
+      }
+      return [l.email, l.name ?? '', l.type, l.resourceTitle ?? '', l.createdAt.toISOString()].map(escaped).join(',')
+    })
+    const csv = [header, ...rows].join('\n')
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', `attachment; filename="leads-${siteKey}-${new Date().toISOString().slice(0, 10)}.csv"`)
+    res.send(csv)
+    return
+  }
+
+  res.json({
+    summary: {
+      totalNewsletter: newsletterCount,
+      totalLeadMagnet: leadMagnetCount,
+      total: leads.length
+    },
+    leads: leads.map((l) => ({
+      id: l.id,
+      email: l.email,
+      name: l.name,
+      type: l.type,
+      resourceTitle: l.resourceTitle,
+      createdAt: l.createdAt.toISOString()
+    }))
+  })
 })
 
 // GET /api/analytics/:siteKey - Dashboard aggregates (requires auth, must own site)

@@ -354,12 +354,16 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       socialMediaLinks: sm,
       featuredImage
     }
-    const ccPagination = (ccBase as { pagination?: { show?: boolean; postsPerPage?: number } }).pagination
+    const ccPagination = (ccBase as { pagination?: { show?: boolean; mode?: string; postsPerPage?: number } }).pagination
     const cc = {
       ...ccBase,
       pagination: ccPagination && typeof ccPagination === 'object'
-        ? { show: ccPagination.show ?? false, postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10 }
-        : { show: false, postsPerPage: 10 }
+        ? {
+            show: ccPagination.show ?? false,
+            mode: ccPagination.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages',
+            postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10
+          }
+        : { show: false, mode: 'pages', postsPerPage: 10 }
     }
     const pc = postConfig && typeof postConfig === 'object' ? postConfig : {
       ...cc,

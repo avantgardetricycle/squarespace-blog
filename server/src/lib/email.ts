@@ -124,3 +124,80 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
     }
   }
 }
+
+/** Send notification to site owner: new newsletter subscriber */
+export async function sendNewSubscriberNotification(
+  to: string,
+  siteName: string,
+  subscriberEmail: string,
+  subscriberName?: string
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  const displayName = subscriberName?.trim() ? `${subscriberName} (${subscriberEmail})` : subscriberEmail
+  const siteLabel = siteName?.trim() || 'your blog'
+
+  if (!apiKey) {
+    console.log(`[Capture] SENDGRID_API_KEY not set. New subscriber for ${siteLabel}: ${displayName}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  const html = `
+    <h2>New newsletter subscriber</h2>
+    <p>You have a new subscriber on ${siteLabel}:</p>
+    <p><strong>${displayName}</strong></p>
+    <p>You can view and download your subscribers in the Analytics dashboard.</p>
+  `
+
+  try {
+    await sgMail.send({
+      to,
+      from: mailFrom,
+      subject: `New newsletter subscriber on ${siteLabel}`,
+      html,
+      trackingSettings: { clickTracking: { enable: false } },
+    })
+  } catch (err) {
+    console.error('[Capture] SendGrid error sending subscriber notification:', err)
+  }
+}
+
+/** Send notification to site owner: new lead magnet signup */
+export async function sendNewLeadMagnetNotification(
+  to: string,
+  siteName: string,
+  subscriberEmail: string,
+  resourceTitle: string,
+  subscriberName?: string
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  const displayName = subscriberName?.trim() ? `${subscriberName} (${subscriberEmail})` : subscriberEmail
+  const siteLabel = siteName?.trim() || 'your blog'
+
+  if (!apiKey) {
+    console.log(`[Capture] SENDGRID_API_KEY not set. New lead magnet signup for "${resourceTitle}" on ${siteLabel}: ${displayName}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  const html = `
+    <h2>New lead magnet signup</h2>
+    <p>Someone signed up for <strong>${resourceTitle}</strong> on ${siteLabel}:</p>
+    <p><strong>${displayName}</strong></p>
+    <p>You can view and download your leads in the Analytics dashboard.</p>
+  `
+
+  try {
+    await sgMail.send({
+      to,
+      from: mailFrom,
+      subject: `New lead magnet signup: ${resourceTitle}`,
+      html,
+      trackingSettings: { clickTracking: { enable: false } },
+    })
+  } catch (err) {
+    console.error('[Capture] SendGrid error sending lead magnet notification:', err)
+  }
+}

@@ -171,10 +171,10 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'grid',
         gridColumns: 3,
-        filterStyle: 'pills' as const,
         headerContent: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], height: 48 },
         rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 240, spaceAbove: 0, sticky: true },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredArticle: { show: true, position: 'header' }
       },
       previewLayout: 'masthead'
     },
@@ -186,7 +186,6 @@ async function main() {
       collectionConfig: {
         ...baseCollectionConfig,
         collectionLayout: 'listRows',
-        filterStyle: 'pills' as const,
         headerContent: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], height: 48 },
         leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
@@ -217,7 +216,6 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'grid',
         gridColumns: 2,
-        filterStyle: 'pills' as const,
         headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 }
       },
@@ -232,7 +230,6 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'grid',
         gridColumns: 3,
-        filterStyle: 'pills' as const,
         headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
       },
