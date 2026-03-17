@@ -91,6 +91,133 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
     </div>
   );
 
+  const Breadcrumbs = ({ align = "left", light }: { align?: "left" | "center"; light?: boolean } = {}) => (
+    <div className={cn("text-[9px]", align === "center" ? "text-center" : "")}>
+      <span className={light ? "text-white/80" : textMuted}>Home › Blog › </span>
+      <span className={light ? "text-white" : "text-[#333]"}>Article</span>
+    </div>
+  );
+
+  const AuthorProfile = ({ compact = true }: { compact?: boolean }) => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>About the author</div>
+      <div className="flex gap-1.5 mt-0.5">
+        <div className={cn(imgPlaceholder, "w-6 h-6 rounded-full shrink-0")} />
+        <div className="text-[10px] font-medium">Author Name</div>
+      </div>
+      <div className={cn(textMuted, "text-[9px] line-clamp-2 mt-0.5")}>Short bio here.</div>
+    </div>
+  );
+
+  const AuthorProfileLong = () => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>About the author</div>
+      <div className="flex gap-2 mt-0.5">
+        <div className={cn(imgPlaceholder, "w-10 h-10 rounded-full shrink-0")} />
+        <div>
+          <div className="text-[10px] font-medium">Author Name</div>
+          <div className={cn(textMuted, "text-[9px] mt-0.5 line-clamp-3")}>Longer author bio with more detail about their background and expertise.</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const RelatedPosts = () => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Related</div>
+      <div className={cn(textMuted, "text-[9px] mt-0.5 space-y-0.5")}>
+        <div className="line-clamp-1">Related post title</div>
+        <div className="line-clamp-1">Another related</div>
+      </div>
+    </div>
+  );
+
+  const MoreToRead = () => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>More to read</div>
+      <div className={cn(textMuted, "text-[9px] mt-0.5 space-y-0.5")}>
+        <div className="line-clamp-1">Related post title</div>
+        <div className="line-clamp-1">Another related</div>
+      </div>
+    </div>
+  );
+
+  const EmailCapture = () => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Newsletter</div>
+      <div className="flex gap-1 mt-0.5">
+        <div className="flex-1 h-5 rounded border border-[#e5e4e0] bg-white" />
+        <div className="w-12 h-5 rounded bg-[#5B4FE8]" />
+      </div>
+    </div>
+  );
+
+  const LeadMagnet = () => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Lead magnet</div>
+      <div className={cn(textMuted, "text-[9px] mt-0.5")}>Free resource</div>
+    </div>
+  );
+
+  const PopularPosts = () => (
+    <div>
+      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Popular this week</div>
+      <div className={cn(textMuted, "text-[9px] mt-0.5 space-y-0.5")}>
+        <div className="line-clamp-1">Popular post 1</div>
+        <div className="line-clamp-1">Popular post 2</div>
+      </div>
+    </div>
+  );
+
+  const BodyParas = () => (
+    <div className="space-y-1">
+      <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
+      <div className="h-1.5 bg-[#e5e4e0] rounded w-11/12" />
+      <div className="h-1.5 bg-[#e5e4e0] rounded w-4/5" />
+      <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
+      <div className="h-1.5 bg-[#e5e4e0] rounded w-3/4" />
+    </div>
+  );
+
+  const BodyParasLong = () => (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-11/12" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-4/5" />
+      </div>
+      <div className="space-y-1">
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-5/6" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-3/4" />
+      </div>
+      <div className="space-y-1">
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-11/12" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-2/3" />
+      </div>
+      <div className="space-y-1">
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
+        <div className="h-1.5 bg-[#e5e4e0] rounded w-4/5" />
+      </div>
+    </div>
+  );
+
+  const PrevNextButtons = () => (
+    <div className="flex justify-between gap-2 pt-2 border-t border-[#e5e4e0]">
+      <span className={cn(textMuted, "text-[9px]")}>← Previous</span>
+      <span className={cn(textMuted, "text-[9px]")}>Next →</span>
+    </div>
+  );
+
+  const FilterBarTags = () => (
+    <div className="flex flex-wrap gap-1">
+      <span className="text-[9px] font-medium px-2 py-0.5 rounded-full bg-[#e5e4e0] text-[#333]">All</span>
+      <span className={cn(textMuted, "text-[9px] px-2 py-0.5 rounded-full border border-[#e5e4e0]")}>Cat</span>
+      <span className={cn(textMuted, "text-[9px] px-2 py-0.5 rounded-full border border-[#e5e4e0]")}>Tag</span>
+    </div>
+  );
+
   switch (layout) {
     case "masthead":
       return (
@@ -261,71 +388,143 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
           <Pagination />
         </div>
       );
-    case "feature":
+    case "reporter":
       return (
-        <div className={cn("flex gap-4 p-4 min-h-0", className)}>
-          <div className="w-[22%] min-w-[100px] shrink-0 py-1 space-y-0.5">
-            <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>In this article</div>
-            <div className={cn(textMuted, "text-[10px]")}>Introduction</div>
-            <div className="text-[10px] font-medium text-[#333] border-l-2 border-[#5B4FE8] pl-1">Section One</div>
-            <div className={cn(textMuted, "text-[10px]")}>Section Two</div>
-            <div className={cn(textMuted, "text-[10px]")}>Conclusion</div>
+        <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
+          <div className="flex gap-3 shrink-0">
+            <div className="flex-1 min-w-0">
+              <Breadcrumbs align="left" />
+              <div className="text-[10px] text-[#6b6b6b] mt-0.5">Category</div>
+              <div className="text-[11px] font-bold text-[#333] mt-0.5">Article Headline Goes Here</div>
+              <div className={cn(textMuted, "text-[9px] mt-0.5")}>By Author · Mar 7 · 8 min</div>
+            </div>
+            <div className={cn(imgPlaceholder, "w-[45%] aspect-[3/2] shrink-0 rounded")} />
           </div>
-          <div className="flex-1 flex flex-col gap-2 min-w-0">
-            <div className={cn(imgPlaceholder, "h-16 w-full rounded")} />
-            <div className="space-y-1">
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-11/12" />
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-4/5" />
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-3/4" />
+          <div className="flex gap-3 min-h-0 mt-2">
+            <div className="flex-1 min-w-0">
+              <BodyParas />
+            </div>
+            <div className="w-[28%] min-w-[80px] shrink-0 flex flex-col gap-2 py-1 pl-2 border-l border-[#e5e4e0] space-y-2">
+              <AuthorProfile />
+              <RelatedPosts />
+              <EmailCapture />
             </div>
           </div>
-          <div className="w-[22%] min-w-[100px] shrink-0 py-1 space-y-2">
-            <div>
-              <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>About the author</div>
-              <div className="flex gap-1.5 mt-0.5">
-                <div className={cn(imgPlaceholder, "w-7 h-7 rounded-full shrink-0")} />
-                <div className="text-[10px] font-medium">Author Name</div>
-              </div>
-              <div className={cn(textMuted, "text-[9px] line-clamp-2 mt-0.5")}>Short bio here.</div>
-            </div>
-            <div>
-              <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Related</div>
-              <div className={cn(textMuted, "text-[10px] line-clamp-1 mt-0.5")}>Related post title</div>
-              <div className={cn(textMuted, "text-[10px] line-clamp-1")}>Another related</div>
-            </div>
+          <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
+            <AuthorProfile />
+            <RelatedPosts />
+            <LeadMagnet />
           </div>
         </div>
       );
     case "publisher":
-    case "reporter":
-    case "story":
+      return (
+        <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
+          <div className={cn("relative shrink-0 overflow-hidden rounded", imgPlaceholder)}>
+            <div className="aspect-[5/2] w-full" />
+            <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent rounded-b">
+              <Breadcrumbs align="left" light />
+              <div className="text-[10px] text-white/90 font-bold mt-0.5">Article Headline Goes Here</div>
+              <div className="text-[9px] text-white/80">By Author · Mar 7 · 8 min</div>
+            </div>
+          </div>
+          <div className="flex gap-3 min-h-0 mt-2">
+            <div className="flex-1 min-w-0">
+              <BodyParas />
+            </div>
+            <div className="w-[28%] min-w-[80px] shrink-0 flex flex-col gap-2 py-1 pl-2 border-l border-[#e5e4e0] space-y-2">
+              <PopularPosts />
+              <RelatedPosts />
+              <div>
+                <div className={cn(textMuted, "text-[9px] font-medium uppercase mb-0.5")}>Filters</div>
+                <FilterBarTags />
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
+            <AuthorProfileLong />
+            <MoreToRead />
+            <LeadMagnet />
+          </div>
+        </div>
+      );
     case "writer":
+      return (
+        <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
+          <div className="flex flex-col items-center gap-0.5 shrink-0">
+            <Breadcrumbs align="center" />
+            <div className={cn(textMuted, "text-[9px]")}>Category</div>
+            <div className="text-[11px] font-bold text-[#333]">Article Headline Goes Here</div>
+            <div className={cn(textMuted, "text-[9px]")}>By Author · Mar 7 · 8 min</div>
+          </div>
+          <div className="min-h-0 mt-2">
+            <BodyParasLong />
+          </div>
+          <div className="border-t border-[#e5e4e0] pt-2 pl-3 shrink-0">
+            <AuthorProfile />
+          </div>
+          <PrevNextButtons />
+        </div>
+      );
+    case "feature":
+      return (
+        <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
+          <div className="flex flex-col items-center gap-0.5 shrink-0">
+            <Breadcrumbs align="center" />
+            <div className="text-[11px] font-bold text-[#333]">Article Headline Goes Here</div>
+            <div className={cn(textMuted, "text-[9px]")}>By Author · Mar 7 · 8 min</div>
+          </div>
+          <div className={cn(imgPlaceholder, "w-full aspect-[5/2] rounded shrink-0")} />
+          <div className="flex gap-3 min-h-0 mt-2">
+            <div className="w-[20%] min-w-[70px] shrink-0 py-1 space-y-0.5">
+              <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>In this article</div>
+              <div className={cn(textMuted, "text-[9px]")}>Introduction</div>
+              <div className="text-[9px] font-medium text-[#333] border-l-2 border-[#5B4FE8] pl-1">Section One</div>
+              <div className={cn(textMuted, "text-[9px]")}>Section Two</div>
+              <div className={cn(textMuted, "text-[9px]")}>Conclusion</div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <BodyParas />
+            </div>
+            <div className="w-[24%] min-w-[80px] shrink-0 flex flex-col gap-2 py-1 pl-2 border-l border-[#e5e4e0] space-y-2">
+              <AuthorProfile />
+              <RelatedPosts />
+              <PopularPosts />
+            </div>
+          </div>
+          <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
+            <AuthorProfile />
+            <MoreToRead />
+            <EmailCapture />
+            <LeadMagnet />
+          </div>
+        </div>
+      );
+    case "story":
+      return (
+        <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
+          <div className="flex gap-3 shrink-0">
+            <div className={cn(imgPlaceholder, "w-[40%] aspect-[3/2] shrink-0 rounded")} />
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-bold text-[#333]">Article Headline Goes Here</div>
+              <div className={cn(textMuted, "text-[9px] mt-0.5")}>By Author · Mar 7 · 8 min</div>
+              <Breadcrumbs align="left" />
+            </div>
+          </div>
+          <div className="min-h-0 mt-2">
+            <BodyParas />
+          </div>
+          <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
+            <AuthorProfile />
+            <LeadMagnet />
+          </div>
+        </div>
+      );
     default:
       return (
-        <div className={cn("flex gap-4 p-4 min-h-0", className)}>
-          <div className="w-[22%] min-w-[100px] shrink-0 py-1 space-y-2">
-            <div>
-              <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Contents</div>
-              <div className={cn(textMuted, "text-[10px] mt-0.5")}>Section one</div>
-              <div className={cn(textMuted, "text-[10px]")}>Section two</div>
-            </div>
-            <div>
-              <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Related</div>
-              <div className={cn(textMuted, "text-[10px] line-clamp-1 mt-0.5")}>Related post</div>
-            </div>
-          </div>
-          <div className="flex-1 flex flex-col gap-2">
-            <div className={cn(imgPlaceholder, "h-12 w-2/3 rounded")} />
-            <div className="text-[11px] font-bold text-[#333]">Article Headline Goes Here</div>
-            <div className={cn(textMuted, "text-[10px]")}>By Author · Mar 7, 2026 · 8 min read</div>
-            <div className="space-y-1 mt-1">
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-full" />
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-5/6" />
-              <div className="h-1.5 bg-[#e5e4e0] rounded w-3/4" />
-            </div>
-          </div>
+        <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
+          <div className="text-[11px] font-bold text-[#333]">Article Headline</div>
+          <BodyParas />
         </div>
       );
   }
