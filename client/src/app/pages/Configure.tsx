@@ -103,6 +103,14 @@ export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit"
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
 export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";
+
+export type PostHeaderImagePosition = "fullBleed" | "leftOfInfo" | "rightOfInfo" | "belowInfo";
+export type PostHeaderContentAlignment = "left" | "center" | "right";
+
+export interface PostHeaderConfig {
+  imagePosition: PostHeaderImagePosition;
+  contentAlignment: PostHeaderContentAlignment;
+}
 export type FeaturedImageAspectBehavior = "original" | "cropped";
 export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
 export type FeaturedImageRoundedCorners = "off" | "small" | "large";
@@ -170,6 +178,7 @@ export interface CollectionLevelConfig extends BaseLevelConfig {
 export interface PostLevelConfig extends BaseLevelConfig {
   progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
   postModules?: PostModulesConfig;
+  postHeader?: PostHeaderConfig;
 }
 
 export interface SiteConfigForm {
@@ -234,9 +243,15 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   featuredImage: defaultFeaturedImage,
 };
 
+const defaultPostHeader: PostHeaderConfig = {
+  imagePosition: "fullBleed",
+  contentAlignment: "left",
+};
+
 const defaultPostConfig: PostLevelConfig = {
   ...defaultCollectionConfig,
   postModules: defaultPostModules,
+  postHeader: defaultPostHeader,
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
@@ -333,11 +348,7 @@ function derivePostModules(
     else if (pm.tableOfContents.position === "leftSidebar") left.push("tableOfContents");
     else if (pm.tableOfContents.position === "rightSidebar") right.push("tableOfContents");
   }
-  if (pm.breadcrumbs.enabled && pm.breadcrumbs.position !== "none") {
-    if (pm.breadcrumbs.position === "header") header.push("breadcrumbs");
-    else if (pm.breadcrumbs.position === "leftSidebar") left.push("breadcrumbs");
-    else if (pm.breadcrumbs.position === "rightSidebar") right.push("breadcrumbs");
-  }
+  if (pm.breadcrumbs.enabled) header.push("breadcrumbs");
   if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none") {
     if (pm.authorProfiles.position === "header") header.push("authorProfiles");
     else if (pm.authorProfiles.position === "leftSidebar") left.push("authorProfiles");
@@ -432,9 +443,7 @@ function syncModuleOrderFromExplicit(
     if (pm.tableOfContents.enabled && pm.tableOfContents.position === "header") h = addToOrder(h, "tableOfContents");
     else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "leftSidebar") l = addToOrder(l, "tableOfContents");
     else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "rightSidebar") r = addToOrder(r, "tableOfContents");
-    if (pm.breadcrumbs.enabled && pm.breadcrumbs.position === "header") h = addToOrder(h, "breadcrumbs");
-    else if (pm.breadcrumbs.enabled && pm.breadcrumbs.position === "leftSidebar") l = addToOrder(l, "breadcrumbs");
-    else if (pm.breadcrumbs.enabled && pm.breadcrumbs.position === "rightSidebar") r = addToOrder(r, "breadcrumbs");
+    if (pm.breadcrumbs.enabled) h = addToOrder(h, "breadcrumbs");
     if (pm.authorProfiles.enabled && pm.authorProfiles.position === "header") h = addToOrder(h, "authorProfiles");
     else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "leftSidebar") l = addToOrder(l, "authorProfiles");
     else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "rightSidebar") r = addToOrder(r, "authorProfiles");
@@ -700,9 +709,19 @@ function parseLevelConfig(
   }
   if (level === "post") {
     const pb = raw?.progressBar && typeof raw.progressBar === "object" ? raw.progressBar as { show?: boolean; position?: string; thickness?: number; color?: string } : null;
+    const phRaw = raw?.postHeader && typeof raw.postHeader === "object" ? raw.postHeader as Record<string, unknown> : null;
+    const validImagePosition = (v: unknown): PostHeaderImagePosition =>
+      (v === "fullBleed" || v === "leftOfInfo" || v === "rightOfInfo" || v === "belowInfo") ? v : "fullBleed";
+    const validContentAlignment = (v: unknown): PostHeaderContentAlignment =>
+      (v === "left" || v === "center" || v === "right") ? v : "left";
+    const postHeader: PostHeaderConfig = phRaw ? {
+      imagePosition: validImagePosition(phRaw.imagePosition),
+      contentAlignment: validContentAlignment(phRaw.contentAlignment),
+    } : defaultPostHeader;
     return {
       ...base,
       postModules,
+      postHeader,
       leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: lsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
       rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: rsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
       headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: hcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
@@ -888,7 +907,10 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
   if ("progressBar" in a && "progressBar" in b) {
     const pa = (a as PostLevelConfig).progressBar;
     const pb = (b as PostLevelConfig).progressBar;
-    return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color;
+    const phA = (a as PostLevelConfig).postHeader ?? defaultPostHeader;
+    const phB = (b as PostLevelConfig).postHeader ?? defaultPostHeader;
+    const phEqual = phA.imagePosition === phB.imagePosition && phA.contentAlignment === phB.contentAlignment;
+    return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color && phEqual;
   }
   return base;
 }
@@ -960,6 +982,7 @@ export default function Configure() {
     headerContent: false,
     footerContent: false,
     socialMediaLinks: false,
+    postHeader: false,
   });
 
   useEffect(() => {
@@ -1121,6 +1144,12 @@ export default function Configure() {
       configUpdateCallback: (path: string, value: unknown) => updateConfigRef.current(path, value),
     };
   }, [config, authors, effectiveSiteKey, effectiveSite]);
+
+  // Stable signature so preview components reliably detect config changes (avoids stale effect deps)
+  const configSignature = useMemo(
+    () => JSON.stringify({ post: config.postConfig, collection: config.collectionConfig }),
+    [config.postConfig, config.collectionConfig]
+  );
 
   const handleSave = useCallback(async () => {
     const keyToSave = effectiveSiteKey ?? siteKey;
@@ -1296,6 +1325,8 @@ export default function Configure() {
     if (path === "progressBar.position" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, position: value as "top" | "bottom" } };
     if (path === "progressBar.thickness" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, thickness: value as number } };
     if (path === "progressBar.color" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, color: value as string } };
+    if (path === "postHeader.imagePosition" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, imagePosition: value as PostHeaderImagePosition } };
+    if (path === "postHeader.contentAlignment" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, contentAlignment: value as PostHeaderContentAlignment } };
     return cfg;
   }
 
@@ -1986,6 +2017,170 @@ export default function Configure() {
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#5B4FE8] border-b border-[rgba(91,79,232,0.2)]">
                       Layout & Design
                     </div>
+                    {selectedLevel === "post" && (
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Post Header</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionExpanded((p) => ({ ...p, postHeader: !p.postHeader }))}
+                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                          aria-label={sectionExpanded.postHeader ? "Collapse" : "Expand"}
+                        >
+                          {sectionExpanded.postHeader ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <Collapsible open={sectionExpanded.postHeader}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Image position</Label>
+                              <Select
+                                value={(effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed"}
+                                onValueChange={(v) => updateLevelConfigPath("postHeader.imagePosition", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="fullBleed">Full bleed (text overlays image)</SelectItem>
+                                  <SelectItem value="leftOfInfo">Left of post info</SelectItem>
+                                  <SelectItem value="rightOfInfo">Right of post info</SelectItem>
+                                  <SelectItem value="belowInfo">Below post info</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-xs text-[#6b6b6b]">Show featured image</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Display the post's featured image in the header</p>
+                              </div>
+                              <Switch
+                                checked={effectiveConfig.featuredImage.show}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
+                              />
+                            </div>
+                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
+                              <>
+                                {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" || (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Image width</Label>
+                                    <div className="flex items-center gap-3">
+                                      <Slider
+                                        value={[effectiveConfig.featuredImage.imageWidthPercent]}
+                                        onValueChange={([v]) => updateLevelConfigPath("featuredImage.imageWidthPercent", v ?? 40)}
+                                        min={25}
+                                        max={60}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
+                                        {effectiveConfig.featuredImage.imageWidthPercent}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="space-y-2">
+                                  <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
+                                  <Select
+                                    value={effectiveConfig.featuredImage.aspectBehavior}
+                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="original">Original ratio</SelectItem>
+                                      <SelectItem value="cropped">Cropped</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {effectiveConfig.featuredImage.aspectBehavior === "cropped" && (
+                                    <Select
+                                      value={effectiveConfig.featuredImage.aspectRatio}
+                                      onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
+                                    >
+                                      <SelectTrigger className="mt-1">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="16:9">16:9</SelectItem>
+                                        <SelectItem value="3:2">3:2</SelectItem>
+                                        <SelectItem value="1:1">1:1</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
+                                  <Select
+                                    value={effectiveConfig.featuredImage.roundedCorners}
+                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="off">Off</SelectItem>
+                                      <SelectItem value="small">Small</SelectItem>
+                                      <SelectItem value="large">Large</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
+                                  <Switch
+                                    checked={effectiveConfig.featuredImage.shadow}
+                                    onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
+                                  <Switch
+                                    checked={effectiveConfig.featuredImage.showCaption}
+                                    onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
+                                  <Select
+                                    value={effectiveConfig.featuredImage.verticalSpacing}
+                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="tight">Tight</SelectItem>
+                                      <SelectItem value="normal">Normal</SelectItem>
+                                      <SelectItem value="spacious">Spacious</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </>
+                            )}
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Content alignment</Label>
+                              <p className="text-[10px] text-[#6b6b6b]">Breadcrumbs and post info (title, author, date, etc.)</p>
+                              <Select
+                                value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
+                                onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="left">Left</SelectItem>
+                                  <SelectItem value="center">Center</SelectItem>
+                                  <SelectItem value="right">Right</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                    )}
+                    {selectedLevel === "collection" && (
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Featured Image</span>
@@ -2014,7 +2209,7 @@ export default function Configure() {
                       <Collapsible open={effectiveConfig.featuredImage.show && sectionExpanded.featuredImage}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-4">
-                            {selectedLevel !== "collection" && (
+                            {selectedLevel === "collection" && (
                             <>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Layout mode</Label>
@@ -2132,7 +2327,8 @@ export default function Configure() {
                         </CollapsibleContent>
                       </Collapsible>
                     </div>
-
+                    )}
+                    {selectedLevel === "collection" && (
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Header Content</span>
@@ -2285,6 +2481,7 @@ export default function Configure() {
                         </CollapsibleContent>
                       </Collapsible>
                     </div>
+                    )}
 
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
@@ -2911,30 +3108,12 @@ export default function Configure() {
                                 checked={(effectiveConfig as PostLevelConfig).postModules?.breadcrumbs.enabled ?? false}
                                 onCheckedChange={(v) => {
                                   updateLevelConfigPath("postModules.breadcrumbs.enabled", v);
-                                  if (v) {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.breadcrumbs;
-                                    if (pm?.position === "none") updateLevelConfigPath("postModules.breadcrumbs.position", "header");
-                                    setSectionExpanded((p) => ({ ...p, breadcrumbs: true }));
-                                  }
+                                  if (v) updateLevelConfigPath("postModules.breadcrumbs.position", "header");
+                                  setSectionExpanded((p) => ({ ...p, breadcrumbs: true }));
                                 }}
                                 expanded={sectionExpanded.breadcrumbs}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, breadcrumbs: !p.breadcrumbs }))}
-                                content={
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                                        <Select
-                                          value={(effectiveConfig as PostLevelConfig).postModules?.breadcrumbs.position === "none" ? "header" : ((effectiveConfig as PostLevelConfig).postModules?.breadcrumbs.position ?? "header")}
-                                          onValueChange={(v) => updateLevelConfigPath("postModules.breadcrumbs.position", v as ModulePosition)}
-                                        >
-                                          <SelectTrigger><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="header">Header</SelectItem>
-                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
-                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                  </div>
-                                }
+                                content={null}
                               />
                               <ModuleSettingSection
                                 title="Author Profiles"
@@ -3435,7 +3614,11 @@ export default function Configure() {
                   Loading settings…
                 </div>
               ) : effectiveSite && (() => {
-                const previewUrl = buildBlogPreviewUrl(effectiveSite);
+                const previewDebug =
+                  typeof window !== "undefined" &&
+                  (window.location.search.includes("bbPreviewDebug=1") ||
+                    sessionStorage.getItem("bbPreviewDebug") === "1");
+                const previewUrl = buildBlogPreviewUrl(effectiveSite, undefined, previewDebug);
                 if (!previewUrl) {
                   return (
                     <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
@@ -3453,6 +3636,7 @@ export default function Configure() {
                         <BlogPreviewRenderer
                           siteKey={effectiveSite.siteKey}
                           config={rendererConfig}
+                          configSignature={configSignature}
                           className="min-h-full"
                         />
                       </div>
@@ -3464,6 +3648,7 @@ export default function Configure() {
                     key={effectiveSite.siteKey}
                     blogUrl={previewUrl}
                     config={rendererConfig}
+                    configSignature={configSignature}
                     selectPostIndex={
                       selectedLevel === "post" && selectedPostIndex === -1 && blogItems.length > 0
                         ? 0

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
 
@@ -16,6 +16,8 @@ interface RendererConfigOverrides {
 interface BlogPreviewRendererProps {
   siteKey: string;
   config?: RendererConfigOverrides | null;
+  /** Stable string that changes when config changes; ensures effect runs on every config update */
+  configSignature?: string;
   className?: string;
 }
 
@@ -41,6 +43,7 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
 export default function BlogPreviewRenderer({
   siteKey,
   config: configOverrides,
+  configSignature,
   className = "",
 }: BlogPreviewRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -48,6 +51,13 @@ export default function BlogPreviewRenderer({
   configRef.current = configOverrides;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const pushConfig = useCallback(() => {
+    const current = configRef.current;
+    if (!current || !window.BlogOverlayRenderer?.updateConfig) return false;
+    window.BlogOverlayRenderer.updateConfig(buildRendererConfig(current));
+    return true;
+  }, []);
 
   // Init renderer when siteKey/container ready
   useEffect(() => {
@@ -69,6 +79,7 @@ export default function BlogPreviewRenderer({
       try {
         window.BlogOverlayRenderer.init(config);
         setLoading(false);
+        pushConfig();
       } catch (e) {
         console.error("[BlogPreview] Init error:", e);
         setError("Failed to initialize preview");
@@ -101,12 +112,16 @@ export default function BlogPreviewRenderer({
     };
   }, [siteKey]);
 
-  // Live preview: push config updates to renderer without full re-init
+  // Live preview: push config updates to renderer without full re-init.
+  // Use configSignature so effect runs on every config change. pushConfig uses configRef
+  // so timeouts always push latest config. Retry with backoff if renderer not ready yet.
   useEffect(() => {
-    if (!window.BlogOverlayRenderer?.updateConfig || !configOverrides) return;
-    const config = buildRendererConfig(configOverrides);
-    window.BlogOverlayRenderer.updateConfig(config);
-  }, [configOverrides]);
+    if (!configOverrides) return;
+    if (pushConfig()) return;
+    const delays = [50, 150, 400, 800];
+    const timeouts = delays.map((d) => window.setTimeout(pushConfig, d));
+    return () => timeouts.forEach((t) => window.clearTimeout(t));
+  }, [configOverrides, configSignature, pushConfig]);
 
   return (
     <div className={`relative w-full min-h-[400px] ${className}`}>

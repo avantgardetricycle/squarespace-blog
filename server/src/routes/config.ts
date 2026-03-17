@@ -422,7 +422,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         position: progressBar.position ?? 'top',
         thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
         color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
-      }
+      },
+      postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left' }
     }
     // When postSort is "popularity", fetch post view counts from analytics for the renderer
     let postViewCounts: Record<string, number> = {}

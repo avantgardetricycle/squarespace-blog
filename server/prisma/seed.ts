@@ -158,6 +158,7 @@ async function main() {
 
   const basePostConfig = {
     ...baseCollectionConfig,
+    postHeader: { imagePosition: 'fullBleed' as const, contentAlignment: 'left' as const },
     progressBar: { show: false, position: 'top' as const, thickness: 6, color: '#5B4FE8' }
   }
 
@@ -245,6 +246,7 @@ async function main() {
       description: 'Dual-rail layout with sidebar and featured image.',
       postConfig: {
         ...basePostConfig,
+        postHeader: { imagePosition: 'leftOfInfo', contentAlignment: 'left' },
         leftSidebar: { show: true, modules: ['tableOfContents', 'authorProfiles'], width: 220, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         headerContent: { show: true, modules: ['breadcrumbs', 'tableOfContents'], height: 48 },
@@ -259,6 +261,7 @@ async function main() {
       description: 'Clean layout with sidebar and full-width image.',
       postConfig: {
         ...basePostConfig,
+        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left' },
         leftSidebar: { show: true, modules: ['tableOfContents'], width: 200, spaceAbove: 0, sticky: true },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
       },
@@ -271,6 +274,7 @@ async function main() {
       description: 'Compact layout with image and metadata.',
       postConfig: {
         ...basePostConfig,
+        postHeader: { imagePosition: 'leftOfInfo', contentAlignment: 'left' },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 35 },
         progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' }
       },
@@ -283,6 +287,7 @@ async function main() {
       description: 'Immersive layout with header and footer zones.',
       postConfig: {
         ...basePostConfig,
+        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'center' },
         headerContent: { show: true, modules: ['breadcrumbs', 'tableOfContents'], height: 56 },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
       },
@@ -295,6 +300,7 @@ async function main() {
       description: 'Minimal layout focused on content.',
       postConfig: {
         ...basePostConfig,
+        postHeader: { imagePosition: 'leftOfInfo', contentAlignment: 'left' },
         leftSidebar: { show: true, modules: ['authorProfiles'], width: 200, spaceAbove: 0, sticky: true },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 }
       },
