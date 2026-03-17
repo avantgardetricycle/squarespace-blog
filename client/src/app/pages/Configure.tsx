@@ -140,7 +140,7 @@ export interface BaseLevelConfig {
   leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
-  footerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number; sideMargin: number };
+  footerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number; contentAlignment: "left" | "center" | "right"; leftPadding: number; rightPadding: number };
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
 }
@@ -241,7 +241,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], height: 48, sideMargin: 0 },
+  footerContent: { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 },
   socialMediaLinks: { show: false, platforms: [] },
   featuredImage: defaultFeaturedImage,
 };
@@ -261,7 +261,7 @@ const defaultPostConfig: PostLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], height: 48, sideMargin: 0 },
+  footerContent: { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
 };
 
@@ -335,8 +335,12 @@ function deriveCollectionModules(
   };
 }
 
+const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+
 /**
  * Derive modules arrays for each zone from explicit postModules config + moduleOrder.
+ * For post level: left/right/footer use zone moduleOrder directly (zone-driven). Header still uses postModules + postHeader.
  */
 function derivePostModules(
   pm: PostModulesConfig,
@@ -347,51 +351,27 @@ function derivePostModules(
   footerOrder: string[]
 ): { header: string[]; left: string[]; right: string[]; footer: string[] } {
   const header: string[] = [];
-  const left: string[] = [];
-  const right: string[] = [];
-  const footer: string[] = [];
-  if (pm.tableOfContents.enabled && pm.tableOfContents.position !== "none") {
-    if (pm.tableOfContents.position === "header") header.push("tableOfContents");
-    else if (pm.tableOfContents.position === "leftSidebar") left.push("tableOfContents");
-    else if (pm.tableOfContents.position === "rightSidebar") right.push("tableOfContents");
-  }
-  var ph = pc?.postHeader;
+  const ph = pc?.postHeader;
   if (ph && ph.showBreadcrumbs) header.push("breadcrumbs");
-  if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none") {
-    if (pm.authorProfiles.position === "header") header.push("authorProfiles");
-    else if (pm.authorProfiles.position === "leftSidebar") left.push("authorProfiles");
-    else if (pm.authorProfiles.position === "rightSidebar") right.push("authorProfiles");
-    else if (pm.authorProfiles.position === "footer") footer.push("authorProfiles");
-  }
-  if (pm.relevantPosts.enabled && pm.relevantPosts.position !== "none") {
-    if (pm.relevantPosts.position === "header") header.push("relevantPosts");
-    else if (pm.relevantPosts.position === "leftSidebar") left.push("relevantPosts");
-    else if (pm.relevantPosts.position === "rightSidebar") right.push("relevantPosts");
-    else if (pm.relevantPosts.position === "footer") footer.push("relevantPosts");
-  }
-  if (pm.emailCapture.enabled && pm.emailCapture.position !== "none") {
-    if (pm.emailCapture.position === "header") header.push("emailCapture");
-    else if (pm.emailCapture.position === "leftSidebar") left.push("emailCapture");
-    else if (pm.emailCapture.position === "rightSidebar") right.push("emailCapture");
-    else if (pm.emailCapture.position === "footer") footer.push("emailCapture");
-  }
-  if (pm.leadMagnet.enabled && pm.leadMagnet.position !== "none") {
-    if (pm.leadMagnet.position === "header") header.push("leadMagnet");
-    else if (pm.leadMagnet.position === "leftSidebar") left.push("leadMagnet");
-    else if (pm.leadMagnet.position === "rightSidebar") right.push("leadMagnet");
-    else if (pm.leadMagnet.position === "footer") footer.push("leadMagnet");
-  }
+  if (pm.tableOfContents.enabled && pm.tableOfContents.position !== "none" && pm.tableOfContents.position === "header") header.push("tableOfContents");
+  if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none" && pm.authorProfiles.position === "header") header.push("authorProfiles");
+  if (pm.relevantPosts.enabled && pm.relevantPosts.position !== "none" && pm.relevantPosts.position === "header") header.push("relevantPosts");
+  if (pm.emailCapture.enabled && pm.emailCapture.position !== "none" && pm.emailCapture.position === "header") header.push("emailCapture");
+  if (pm.leadMagnet.enabled && pm.leadMagnet.position !== "none" && pm.leadMagnet.position === "header") header.push("leadMagnet");
   const orderModules = (order: string[], available: string[]): string[] => {
     const set = new Set(available);
     const fromOrder = order.filter((m) => set.has(m));
     const remaining = available.filter((m) => !order.includes(m));
     return [...fromOrder, ...remaining];
   };
+  const left = leftOrder.filter((m): m is string => POST_SIDEBAR_MODULES.includes(m as (typeof POST_SIDEBAR_MODULES)[number]));
+  const right = rightOrder.filter((m): m is string => POST_SIDEBAR_MODULES.includes(m as (typeof POST_SIDEBAR_MODULES)[number]));
+  const footer = footerOrder.filter((m): m is string => POST_FOOTER_MODULES.includes(m as (typeof POST_FOOTER_MODULES)[number]));
   return {
     header: orderModules(headerOrder, header),
-    left: orderModules(leftOrder, left),
-    right: orderModules(rightOrder, right),
-    footer: orderModules(footerOrder, footer),
+    left,
+    right,
+    footer,
   };
 }
 
@@ -439,36 +419,20 @@ function syncModuleOrderFromExplicit(
     else if (cm.leadMagnet.enabled && cm.leadMagnet.position === "leftSidebar") l = addToOrder(l, "leadMagnet");
     else if (cm.leadMagnet.enabled && cm.leadMagnet.position === "rightSidebar") r = addToOrder(r, "leadMagnet");
     else if (cm.leadMagnet.enabled && cm.leadMagnet.position === "footer") f = addToOrder(f, "leadMagnet");
-    return { ...cc, collectionModules: cm, headerContent: { ...cc.headerContent, moduleOrder: h }, leftSidebar: { ...cc.leftSidebar, moduleOrder: l }, rightSidebar: { ...cc.rightSidebar, moduleOrder: r }, footerContent: { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, sideMargin: 0 }), moduleOrder: f } };
+    return { ...cc, collectionModules: cm, headerContent: { ...cc.headerContent, moduleOrder: h }, leftSidebar: { ...cc.leftSidebar, moduleOrder: l }, rightSidebar: { ...cc.rightSidebar, moduleOrder: r }, footerContent: { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), moduleOrder: f } };
   }
   if (pm && pc) {
+    // Post level: left/right/footer are zone-driven (moduleOrder is source of truth). Only sync header from postModules.
     let h = pc.headerContent.moduleOrder ?? [];
-    let l = pc.leftSidebar.moduleOrder ?? [];
-    let r = pc.rightSidebar.moduleOrder ?? [];
-    let f = pc.footerContent?.moduleOrder ?? [];
-    [h, l, r, f] = [h, l, r, f].map((o) => removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(o, "tableOfContents"), "breadcrumbs"), "authorProfiles"), "emailCapture"), "leadMagnet"));
-    f = removeFromOrder(f, "relevantPosts");
+    h = removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(h, "tableOfContents"), "breadcrumbs"), "authorProfiles"), "emailCapture"), "leadMagnet");
+    h = removeFromOrder(h, "relevantPosts");
     if (pm.tableOfContents.enabled && pm.tableOfContents.position === "header") h = addToOrder(h, "tableOfContents");
-    else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "leftSidebar") l = addToOrder(l, "tableOfContents");
-    else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "rightSidebar") r = addToOrder(r, "tableOfContents");
     if (pc.postHeader?.showBreadcrumbs) h = addToOrder(h, "breadcrumbs");
     if (pm.authorProfiles.enabled && pm.authorProfiles.position === "header") h = addToOrder(h, "authorProfiles");
-    else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "leftSidebar") l = addToOrder(l, "authorProfiles");
-    else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "rightSidebar") r = addToOrder(r, "authorProfiles");
-    else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "footer") f = addToOrder(f, "authorProfiles");
     if (pm.relevantPosts.enabled && pm.relevantPosts.position === "header") h = addToOrder(h, "relevantPosts");
-    else if (pm.relevantPosts.enabled && pm.relevantPosts.position === "leftSidebar") l = addToOrder(l, "relevantPosts");
-    else if (pm.relevantPosts.enabled && pm.relevantPosts.position === "rightSidebar") r = addToOrder(r, "relevantPosts");
-    else if (pm.relevantPosts.enabled && pm.relevantPosts.position === "footer") f = addToOrder(f, "relevantPosts");
     if (pm.emailCapture.enabled && pm.emailCapture.position === "header") h = addToOrder(h, "emailCapture");
-    else if (pm.emailCapture.enabled && pm.emailCapture.position === "leftSidebar") l = addToOrder(l, "emailCapture");
-    else if (pm.emailCapture.enabled && pm.emailCapture.position === "rightSidebar") r = addToOrder(r, "emailCapture");
-    else if (pm.emailCapture.enabled && pm.emailCapture.position === "footer") f = addToOrder(f, "emailCapture");
     if (pm.leadMagnet.enabled && pm.leadMagnet.position === "header") h = addToOrder(h, "leadMagnet");
-    else if (pm.leadMagnet.enabled && pm.leadMagnet.position === "leftSidebar") l = addToOrder(l, "leadMagnet");
-    else if (pm.leadMagnet.enabled && pm.leadMagnet.position === "rightSidebar") r = addToOrder(r, "leadMagnet");
-    else if (pm.leadMagnet.enabled && pm.leadMagnet.position === "footer") f = addToOrder(f, "leadMagnet");
-    return { ...pc, postModules: pm, headerContent: { ...pc.headerContent, moduleOrder: h }, leftSidebar: { ...pc.leftSidebar, moduleOrder: l }, rightSidebar: { ...pc.rightSidebar, moduleOrder: r }, footerContent: { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, sideMargin: 0 }), moduleOrder: f } };
+    return { ...pc, postModules: pm, headerContent: { ...pc.headerContent, moduleOrder: h } };
   }
   return cfg;
 }
@@ -491,7 +455,7 @@ function applyDerivedModules(config: SiteConfigForm): void {
   cc.headerContent.modules = coll.header;
   cc.leftSidebar.modules = coll.left;
   cc.rightSidebar.modules = coll.right;
-  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, sideMargin: 0 }), modules: coll.footer, show: coll.footer.length > 0 };
+  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: coll.footer, show: coll.footer.length > 0 };
   cc.headerContent.show = coll.header.length > 0;
   cc.leftSidebar.show = coll.left.length > 0;
   cc.rightSidebar.show = coll.right.length > 0;
@@ -506,7 +470,7 @@ function applyDerivedModules(config: SiteConfigForm): void {
   pc.headerContent.modules = post.header;
   pc.leftSidebar.modules = post.left;
   pc.rightSidebar.modules = post.right;
-  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, sideMargin: 0 }), modules: post.footer, show: post.footer.length > 0 };
+  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: post.footer, show: post.footer.length > 0 };
   pc.headerContent.show = post.header.length > 0;
   pc.leftSidebar.show = post.left.length > 0;
   pc.rightSidebar.show = post.right.length > 0;
@@ -535,7 +499,7 @@ function parseLevelConfig(
   const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
-  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number; sideMargin?: number } : null;
+  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number; contentAlignment?: string; leftPadding?: number; rightPadding?: number; sideMargin?: number } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is SidebarCollectionModuleType => SIDEBAR_COLLECTION_MODULES.includes(m as SidebarCollectionModuleType)) : [];
   const validSidebarPost = (arr: unknown): SidebarPostModuleType[] =>
@@ -563,9 +527,10 @@ function parseLevelConfig(
   const validFooterPost = (arr: unknown): string[] => Array.isArray(arr) ? arr.filter((m): m is string => m === "relevantPosts" || m === "authorProfiles" || m === "emailCapture" || m === "leadMagnet") : [];
   const fcModules = level === "collection" ? validFooterCollection(fc?.modules) : validFooterPost(fc?.modules);
   const fcModuleOrder = Array.isArray(fc?.moduleOrder) ? (level === "collection" ? validFooterCollection(fc.moduleOrder) : validFooterPost(fc.moduleOrder)) : fcModules;
+  const validFooterContentAlignment = (v: unknown): "left" | "center" | "right" => (v === "center" || v === "right") ? v : "left";
   const footerContent = fc
-    ? { show: Boolean(fc.show ?? false), modules: fcModules, moduleOrder: fcModuleOrder, height: Math.min(120, Math.max(32, Number(fc.height) || 48)), sideMargin: Math.min(80, Math.max(0, Number(fc.sideMargin) ?? 0)) }
-    : { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48, sideMargin: 0 };
+    ? { show: Boolean(fc.show ?? false), modules: fcModules, moduleOrder: fcModuleOrder, height: Math.min(120, Math.max(32, Number(fc.height) || 48)), contentAlignment: validFooterContentAlignment(fc.contentAlignment ?? (fc as { contentAlignment?: string }).contentAlignment), leftPadding: Math.min(80, Math.max(0, Number(fc.leftPadding ?? fc.sideMargin) ?? 0)), rightPadding: Math.min(80, Math.max(0, Number(fc.rightPadding ?? fc.sideMargin) ?? 0)) }
+    : { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48, contentAlignment: "left" as const, leftPadding: 0, rightPadding: 0 };
   const postSort = (raw?.postSort === "az" || raw?.postSort === "popularity") ? raw.postSort as PostSortOption : "date";
   const pagRaw = raw?.pagination && typeof raw.pagination === "object" ? raw.pagination as { show?: boolean; mode?: string; postsPerPage?: number } : null;
   const validPostsPerPage = (v: unknown): PostsPerPageOption => (v === 5 || v === 10 || v === 20) ? v : 10;
@@ -719,7 +684,7 @@ function parseLevelConfig(
     leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: lsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
     rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: rsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
     headerContent: { ...headerContent, modules: collDerived.header, moduleOrder: hcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
-    footerContent: { ...footerContent, modules: collDerived.footer, moduleOrder: fcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number; sideMargin: number },
+    footerContent: { ...footerContent, modules: collDerived.footer, moduleOrder: fcModuleOrder },
     socialMediaLinks,
     featuredImage,
   };
@@ -740,7 +705,7 @@ function parseLevelConfig(
       leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: lsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
       rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: rsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
       headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: hcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
-      footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: fcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number; sideMargin: number },
+      footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: fcModuleOrder },
       progressBar: pb ? {
         show: Boolean(pb.show ?? false),
         position: (pb.position === "bottom" ? "bottom" : "top") as "top" | "bottom",
@@ -848,6 +813,40 @@ function ModuleSettingSection({
   );
 }
 
+/** Module section with only expand/collapse (no on/off toggle). For zone-driven modules. */
+function ModuleSettingSectionCollapseOnly({
+  title,
+  expanded,
+  onToggle,
+  content,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  content: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-[#e5e4e0]">
+      <div className="flex items-center justify-between py-3">
+        <span className="font-medium">{title}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+          aria-label={expanded ? "Collapse" : "Expand"}
+        >
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </button>
+      </div>
+      <Collapsible open={expanded}>
+        <CollapsibleContent>
+          <div className="pb-4 space-y-3">{content}</div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
+}
+
 function configToApiPayload(config: SiteConfigForm): Record<string, unknown> {
   const copy = JSON.parse(JSON.stringify(config)) as SiteConfigForm;
   applyDerivedModules(copy);
@@ -892,7 +891,9 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     a.headerContent.modules.every((m, i) => m === b.headerContent.modules[i]);
   const fcEqual = (a.footerContent?.show ?? false) === (b.footerContent?.show ?? false) &&
     (a.footerContent?.height ?? 48) === (b.footerContent?.height ?? 48) &&
-    (a.footerContent?.sideMargin ?? 0) === (b.footerContent?.sideMargin ?? 0) &&
+    (a.footerContent?.contentAlignment ?? "left") === (b.footerContent?.contentAlignment ?? "left") &&
+    (a.footerContent?.leftPadding ?? 0) === (b.footerContent?.leftPadding ?? 0) &&
+    (a.footerContent?.rightPadding ?? 0) === (b.footerContent?.rightPadding ?? 0) &&
     (a.footerContent?.modules?.length ?? 0) === (b.footerContent?.modules?.length ?? 0) &&
     (a.footerContent?.modules ?? []).every((m, i) => m === (b.footerContent?.modules ?? [])[i]);
   const smEqual = a.socialMediaLinks.show === b.socialMediaLinks.show &&
@@ -1331,7 +1332,9 @@ export default function Configure() {
     if (path === "rightSidebar.moduleOrder") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, moduleOrder: value as string[] } };
     if (path === "headerContent.moduleOrder") return { ...cfg, headerContent: { ...cfg.headerContent, moduleOrder: value as string[] } };
     if (path === "footerContent.height") return { ...cfg, footerContent: { ...cfg.footerContent, height: value as number } };
-    if (path === "footerContent.sideMargin") return { ...cfg, footerContent: { ...cfg.footerContent, sideMargin: value as number } };
+    if (path === "footerContent.contentAlignment") return { ...cfg, footerContent: { ...cfg.footerContent, contentAlignment: value as "left" | "center" | "right" } };
+    if (path === "footerContent.leftPadding") return { ...cfg, footerContent: { ...cfg.footerContent, leftPadding: value as number } };
+    if (path === "footerContent.rightPadding") return { ...cfg, footerContent: { ...cfg.footerContent, rightPadding: value as number } };
     if (path === "footerContent.moduleOrder") return { ...cfg, footerContent: { ...cfg.footerContent, moduleOrder: value as string[] } };
     if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
     if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
@@ -1557,6 +1560,20 @@ export default function Configure() {
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
                     </div>
+
+                    {selectedLevel === "post" && (
+                    <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
+                      <span className="font-medium">Show Author(s)</span>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          id="show-author-post"
+                          checked={effectiveConfig.showAuthor}
+                          onCheckedChange={(v) => updateLevelConfigPath("showAuthor", v)}
+                        />
+                        <span className="w-6 h-6 shrink-0" aria-hidden />
+                      </div>
+                    </div>
+                    )}
 
                     {selectedLevel === "collection" && (
                     <div className="border-b border-[#e5e4e0]">
@@ -2561,17 +2578,45 @@ export default function Configure() {
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Side margin</Label>
+                              <Label className="text-xs text-[#6b6b6b]">Content alignment</Label>
+                              <Select
+                                value={(effectiveConfig.footerContent?.contentAlignment ?? "left")}
+                                onValueChange={(v) => updateLevelConfigPath("footerContent.contentAlignment", v as "left" | "center" | "right")}
+                              >
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="left">Left</SelectItem>
+                                  <SelectItem value="center">Center</SelectItem>
+                                  <SelectItem value="right">Right</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Left padding</Label>
                               <div className="flex items-center gap-3">
                                 <Slider
-                                  value={[effectiveConfig.footerContent?.sideMargin ?? 0]}
-                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.sideMargin", v ?? 0)}
+                                  value={[effectiveConfig.footerContent?.leftPadding ?? 0]}
+                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.leftPadding", v ?? 0)}
                                   min={0}
                                   max={80}
                                   step={4}
                                   className="flex-1"
                                 />
-                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.sideMargin ?? 0}px</span>
+                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.leftPadding ?? 0}px</span>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Right padding</Label>
+                              <div className="flex items-center gap-3">
+                                <Slider
+                                  value={[effectiveConfig.footerContent?.rightPadding ?? 0]}
+                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.rightPadding", v ?? 0)}
+                                  min={0}
+                                  max={80}
+                                  step={4}
+                                  className="flex-1"
+                                />
+                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.rightPadding ?? 0}px</span>
                               </div>
                             </div>
                             <div className="space-y-2">
@@ -2610,16 +2655,19 @@ export default function Configure() {
                                 };
                                 const handleRemoveFooter = (moduleId: string) => {
                                   if (selectedLevel === "post") {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules;
-                                    if (moduleId === "relevantPosts" && pm?.relevantPosts) updateLevelConfigPath("postModules.relevantPosts.enabled", false);
-                                    else if (moduleId === "authorProfiles" && pm?.authorProfiles) updateLevelConfigPath("postModules.authorProfiles.enabled", false);
-                                    else if (moduleId === "emailCapture" && pm?.emailCapture) updateLevelConfigPath("postModules.emailCapture.enabled", false);
-                                    else if (moduleId === "leadMagnet" && pm?.leadMagnet) updateLevelConfigPath("postModules.leadMagnet.enabled", false);
+                                    const order = effectiveConfig.footerContent?.moduleOrder ?? [];
+                                    updateLevelConfigPath("footerContent.moduleOrder", order.filter((m) => m !== moduleId));
                                   } else {
                                     const cm = (effectiveConfig as CollectionLevelConfig).collectionModules;
                                     if (moduleId === "emailCapture" && cm?.emailCapture) updateLevelConfigPath("collectionModules.emailCapture.enabled", false);
                                     else if (moduleId === "leadMagnet" && cm?.leadMagnet) updateLevelConfigPath("collectionModules.leadMagnet.enabled", false);
                                   }
+                                };
+                                const handleAddFooter = (moduleId: string) => {
+                                  if (selectedLevel !== "post") return;
+                                  const order = effectiveConfig.footerContent?.moduleOrder ?? [];
+                                  if (order.includes(moduleId)) return;
+                                  updateLevelConfigPath("footerContent.moduleOrder", [...order, moduleId]);
                                 };
                                 const FOOTER_LABELS: Record<string, string> = {
                                   relevantPosts: "Related Posts",
@@ -2627,10 +2675,28 @@ export default function Configure() {
                                   emailCapture: "Email Capture",
                                   leadMagnet: "Lead Magnet",
                                 };
+                                const footerAvailable = selectedLevel === "post" ? [...POST_FOOTER_MODULES].filter((m) => !order.includes(m)) : [];
                                 return (
                                   <div className="space-y-1.5">
+                                    {selectedLevel === "post" && footerAvailable.length > 0 && (
+                                      <div className="flex items-center gap-2">
+                                        <Select
+                                          value=""
+                                          onValueChange={(v) => { if (v) handleAddFooter(v); }}
+                                        >
+                                          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Add module…" /></SelectTrigger>
+                                          <SelectContent>
+                                            {footerAvailable.map((m) => (
+                                              <SelectItem key={m} value={m}>{FOOTER_LABELS[m] ?? m}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    )}
                                     {orderedFooter.length === 0 ? (
-                                      <p className="text-xs text-[#6b6b6b] py-2">No modules in footer. Enable modules in Navigation &amp; Discovery and choose footer position.</p>
+                                      <p className="text-xs text-[#6b6b6b] py-2">
+                                        {selectedLevel === "post" ? "No modules in footer. Add modules above." : "No modules in footer. Enable modules in Navigation & Discovery and choose footer position."}
+                                      </p>
                                     ) : (
                                       orderedFooter.map((m, idx) => (
                                         <div
@@ -2752,17 +2818,15 @@ export default function Configure() {
                               updateLevelConfigPath("collectionModules.recentPosts.enabled", false);
                             }
                           } else {
-                            const pm = (effectiveConfig as PostLevelConfig).postModules;
-                            if (moduleId === "tableOfContents" && pm?.tableOfContents) {
-                              updateLevelConfigPath("postModules.tableOfContents.enabled", false);
-                            } else if (moduleId === "breadcrumbs") {
-                              updateLevelConfigPath("postHeader.showBreadcrumbs", false);
-                            } else if (moduleId === "authorProfiles" && pm?.authorProfiles) {
-                              updateLevelConfigPath("postModules.authorProfiles.enabled", false);
-                            } else if (moduleId === "relevantPosts" && pm?.relevantPosts) {
-                              updateLevelConfigPath("postModules.relevantPosts.enabled", false);
-                            }
+                            const order = [...(cfg.moduleOrder ?? [])];
+                            updateLevelConfigPath(`${subPath}.moduleOrder`, order.filter((m) => m !== moduleId));
                           }
+                        };
+                        const handleAddSidebar = (moduleId: string) => {
+                          if (selectedLevel !== "post") return;
+                          const order = cfg.moduleOrder ?? [];
+                          if (order.includes(moduleId)) return;
+                          updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
                         };
                         return (
                           <div className="border-b border-[#e5e4e0]">
@@ -2818,9 +2882,24 @@ export default function Configure() {
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
                                     <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
+                                    {selectedLevel === "post" && (() => {
+                                      const available = [...POST_SIDEBAR_MODULES].filter((m) => !orderedModules.includes(m));
+                                      return available.length > 0 ? (
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <Select value="" onValueChange={(v) => { if (v) handleAddSidebar(v); }}>
+                                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Add module…" /></SelectTrigger>
+                                            <SelectContent>
+                                              {available.map((m) => (
+                                                <SelectItem key={m} value={m}>{SIDEBAR_MODULE_LABELS[m] ?? m}</SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      ) : null;
+                                    })()}
                                     <div className="space-y-1.5">
                                       {orderedModules.length === 0 ? (
-                                        <p className="text-xs text-[#6b6b6b] py-2">No modules in this sidebar. Enable modules above and choose this position.</p>
+                                        <p className="text-xs text-[#6b6b6b] py-2">{selectedLevel === "post" ? "No modules in this sidebar. Add modules above." : "No modules in this sidebar. Enable modules above and choose this position."}</p>
                                       ) : (
                                         orderedModules.map((m, idx) => (
                                           <div
@@ -3123,128 +3202,12 @@ export default function Configure() {
                           )}
                           {selectedLevel === "post" && (
                             <>
-                              <ModuleSettingSection
-                                title="Table of Contents"
-                                checked={(effectiveConfig as PostLevelConfig).postModules?.tableOfContents.enabled ?? false}
-                                onCheckedChange={(v) => {
-                                  updateLevelConfigPath("postModules.tableOfContents.enabled", v);
-                                  if (v) {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.tableOfContents;
-                                    if (pm?.position === "none") updateLevelConfigPath("postModules.tableOfContents.position", "leftSidebar");
-                                    setSectionExpanded((p) => ({ ...p, tableOfContents: true }));
-                                  }
-                                }}
-                                expanded={sectionExpanded.tableOfContents}
-                                onToggle={() => setSectionExpanded((p) => ({ ...p, tableOfContents: !p.tableOfContents }))}
-                                content={
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                                        <Select
-                                          value={(effectiveConfig as PostLevelConfig).postModules?.tableOfContents.position === "none" ? "leftSidebar" : ((effectiveConfig as PostLevelConfig).postModules?.tableOfContents.position ?? "leftSidebar")}
-                                          onValueChange={(v) => updateLevelConfigPath("postModules.tableOfContents.position", v as ModulePosition)}
-                                        >
-                                          <SelectTrigger><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="header">Header</SelectItem>
-                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
-                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                  </div>
-                                }
-                              />
-                              <ModuleSettingSection
-                                title="Author Profiles"
-                                checked={(effectiveConfig as PostLevelConfig).postModules?.authorProfiles.enabled ?? false}
-                                onCheckedChange={(v) => {
-                                  updateLevelConfigPath("postModules.authorProfiles.enabled", v);
-                                  if (v) {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.authorProfiles;
-                                    if (pm?.position === "none") updateLevelConfigPath("postModules.authorProfiles.position", "rightSidebar");
-                                    setSectionExpanded((p) => ({ ...p, authorProfilesModule: true }));
-                                  }
-                                }}
-                                expanded={sectionExpanded.authorProfilesModule}
-                                onToggle={() => setSectionExpanded((p) => ({ ...p, authorProfilesModule: !p.authorProfilesModule }))}
-                                content={
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                                        <Select
-                                          value={(effectiveConfig as PostLevelConfig).postModules?.authorProfiles.position === "none" ? "rightSidebar" : ((effectiveConfig as PostLevelConfig).postModules?.authorProfiles.position ?? "rightSidebar")}
-                                          onValueChange={(v) => updateLevelConfigPath("postModules.authorProfiles.position", v as ModulePosition)}
-                                        >
-                                          <SelectTrigger><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="header">Header</SelectItem>
-                                            <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
-                                            <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
-                                            <SelectItem value="footer">Footer</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                  </div>
-                                }
-                              />
-                              <ModuleSettingSection
-                                title="Related Posts"
-                                checked={(effectiveConfig as PostLevelConfig).postModules?.relevantPosts.enabled ?? false}
-                                onCheckedChange={(v) => {
-                                  updateLevelConfigPath("postModules.relevantPosts.enabled", v);
-                                  if (v) {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.relevantPosts;
-                                    if (pm?.position === "none") updateLevelConfigPath("postModules.relevantPosts.position", "footer");
-                                    setSectionExpanded((p) => ({ ...p, relevantPosts: true }));
-                                  }
-                                }}
-                                expanded={sectionExpanded.relevantPosts}
-                                onToggle={() => setSectionExpanded((p) => ({ ...p, relevantPosts: !p.relevantPosts }))}
-                                content={
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                                    <Select
-                                      value={(effectiveConfig as PostLevelConfig).postModules?.relevantPosts.position === "none" ? "rightSidebar" : ((effectiveConfig as PostLevelConfig).postModules?.relevantPosts.position ?? "rightSidebar")}
-                                      onValueChange={(v) => updateLevelConfigPath("postModules.relevantPosts.position", v as ModulePosition)}
-                                    >
-                                      <SelectTrigger><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="header">Header</SelectItem>
-                                        <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
-                                        <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
-                                        <SelectItem value="footer">Footer</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                }
-                              />
-                              <ModuleSettingSection
+                              <ModuleSettingSectionCollapseOnly
                                 title="Email Capture"
-                                checked={(effectiveConfig as PostLevelConfig).postModules?.emailCapture.enabled ?? false}
-                                onCheckedChange={(v) => {
-                                  updateLevelConfigPath("postModules.emailCapture.enabled", v);
-                                  if (v) {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.emailCapture;
-                                    if (pm?.position === "none") updateLevelConfigPath("postModules.emailCapture.position", "footer");
-                                    setSectionExpanded((p) => ({ ...p, emailCapture: true }));
-                                  }
-                                }}
                                 expanded={sectionExpanded.emailCapture}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                                      <Select
-                                        value={(effectiveConfig as PostLevelConfig).postModules?.emailCapture.position === "none" ? "footer" : ((effectiveConfig as PostLevelConfig).postModules?.emailCapture.position ?? "footer")}
-                                        onValueChange={(v) => updateLevelConfigPath("postModules.emailCapture.position", v as ModulePosition)}
-                                      >
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="header">Header</SelectItem>
-                                          <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
-                                          <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
-                                          <SelectItem value="footer">Footer</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -3272,36 +3235,12 @@ export default function Configure() {
                                   </div>
                                 }
                               />
-                              <ModuleSettingSection
+                              <ModuleSettingSectionCollapseOnly
                                 title="Lead Magnet"
-                                checked={(effectiveConfig as PostLevelConfig).postModules?.leadMagnet.enabled ?? false}
-                                onCheckedChange={(v) => {
-                                  updateLevelConfigPath("postModules.leadMagnet.enabled", v);
-                                  if (v) {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules?.leadMagnet;
-                                    if (pm?.position === "none") updateLevelConfigPath("postModules.leadMagnet.position", "footer");
-                                    setSectionExpanded((p) => ({ ...p, leadMagnet: true }));
-                                  }
-                                }}
                                 expanded={sectionExpanded.leadMagnet}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                                      <Select
-                                        value={(effectiveConfig as PostLevelConfig).postModules?.leadMagnet.position === "none" ? "footer" : ((effectiveConfig as PostLevelConfig).postModules?.leadMagnet.position ?? "footer")}
-                                        onValueChange={(v) => updateLevelConfigPath("postModules.leadMagnet.position", v as ModulePosition)}
-                                      >
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="header">Header</SelectItem>
-                                          <SelectItem value="leftSidebar">Left Sidebar</SelectItem>
-                                          <SelectItem value="rightSidebar">Right Sidebar</SelectItem>
-                                          <SelectItem value="footer">Footer</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input

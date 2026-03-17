@@ -82,7 +82,7 @@ export function TemplateModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-7xl w-[98vw] max-h-[95vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Use a template</DialogTitle>
         </DialogHeader>
@@ -95,7 +95,7 @@ export function TemplateModal({
             <TabsTrigger value="collection">Collection</TabsTrigger>
             <TabsTrigger value="post">Post</TabsTrigger>
           </TabsList>
-          <TabsContent value="collection" className="flex-1 min-h-0 flex flex-col mt-4 data-[state=inactive]:hidden">
+          <TabsContent value="collection" className="flex-1 min-h-0 flex flex-col mt-2 data-[state=inactive]:hidden">
             {loading ? (
               <div className="text-sm text-muted-foreground py-8">Loading templates…</div>
             ) : templates.length === 0 ? (
@@ -112,7 +112,7 @@ export function TemplateModal({
               />
             )}
           </TabsContent>
-          <TabsContent value="post" className="flex-1 min-h-0 flex flex-col mt-4 data-[state=inactive]:hidden">
+          <TabsContent value="post" className="flex-1 min-h-0 flex flex-col mt-2 data-[state=inactive]:hidden">
             {loading ? (
               <div className="text-sm text-muted-foreground py-8">Loading templates…</div>
             ) : templates.length === 0 ? (
@@ -155,37 +155,37 @@ function TemplateCarousel({
   if (!template) return null;
 
   return (
-    <div className="flex flex-col gap-4 flex-1 min-h-0">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="font-semibold text-base">{template.name}</h3>
+    <div className="flex flex-col gap-2 flex-1 min-h-0">
+      <div className="flex items-center justify-between gap-2 shrink-0">
+        <h3 className="font-semibold text-base truncate">{template.name}</h3>
         <span className="text-xs text-muted-foreground shrink-0">
           {index + 1} of {total}
         </span>
       </div>
       {template.description && (
-        <p className="text-sm text-muted-foreground">{template.description}</p>
+        <p className="text-sm text-muted-foreground line-clamp-1 shrink-0">{template.description}</p>
       )}
-      <div className="flex items-center gap-2 flex-1 min-h-0">
+      <div className="flex items-center gap-3 flex-1 min-h-[50vh]">
         <Button
           variant="outline"
           size="icon"
-          className="shrink-0 h-8 w-8"
+          className="shrink-0 h-9 w-9"
           onClick={onPrev}
           disabled={index <= 0}
           aria-label="Previous template"
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1 min-w-0 min-h-[200px] max-h-[280px] border rounded-lg bg-[#f7f6f3] overflow-auto shrink-0">
+        <div className="flex-1 min-w-0 min-h-[50vh] max-h-[50vh] border rounded-lg bg-[#f7f6f3] overflow-auto">
           <TemplatePreview
             previewLayout={template.previewLayout}
-            className="min-h-[200px] w-full"
+            className="min-w-full"
           />
         </div>
         <Button
           variant="outline"
           size="icon"
-          className="shrink-0 h-8 w-8"
+          className="shrink-0 h-9 w-9"
           onClick={onNext}
           disabled={index >= total - 1}
           aria-label="Next template"

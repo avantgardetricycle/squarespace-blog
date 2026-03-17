@@ -1950,8 +1950,9 @@
      * @param {string[]} platforms - Platform keys
      * @param {string} baseUrl - Base URL (unused)
      * @param {string} [imageUrl] - Optional image URL for Pinterest
+     * @param {boolean} [lightVariant] - Use light icon color (e.g. for full-bleed overlay)
      */
-    _createShareLinks: function(shareUrl, title, platforms, baseUrl, imageUrl) {
+    _createShareLinks: function(shareUrl, title, platforms, baseUrl, imageUrl, lightVariant) {
       if (!platforms || platforms.length === 0) return null;
       console.log('[BlogOverlay] _createShareLinks: shareUrl (input)=', JSON.stringify(shareUrl));
       var normalized = this._normalizeShareUrl(shareUrl || '');
@@ -1990,7 +1991,7 @@
         a.setAttribute('data-analytics-element', 'share' + (platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1)));
         var svg = this._shareIconSvg(platform);
         if (svg) {
-          a.style.color = '#666';
+          a.style.color = lightVariant ? 'rgba(255,255,255,0.9)' : '#666';
           a.innerHTML = svg;
         }
         wrap.appendChild(a);
@@ -2723,17 +2724,29 @@
           main.insertBefore(heroLink, main.firstChild);
       }
 
-      function createSidebarSection(headerText, content) {
+      function createSidebarSection(headerText, content, styled) {
         var section = document.createElement('div');
         section.className = 'blog-overlay-sidebar-section';
         section.style.marginBottom = '20px';
+        if (styled) {
+          var lineAbove = document.createElement('div');
+          lineAbove.style.height = '1px';
+          lineAbove.style.background = '#e5e4e0';
+          lineAbove.style.marginBottom = '10px';
+          section.appendChild(lineAbove);
+        }
         var header = document.createElement('div');
         header.textContent = headerText;
         header.style.fontSize = '0.7rem';
         header.style.fontWeight = '600';
         header.style.letterSpacing = '0.08em';
-        header.style.textTransform = 'uppercase';
         header.style.color = '#6b6b6b';
+        if (styled) {
+          header.style.fontVariant = 'small-caps';
+          header.style.textTransform = 'none';
+        } else {
+          header.style.textTransform = 'uppercase';
+        }
         header.style.marginBottom = '8px';
         section.appendChild(header);
         var bar = document.createElement('div');
@@ -2791,7 +2804,7 @@
           scrollTarget.addEventListener('scroll', self._tocScrollHandler, { passive: true });
           self._tocScrollTarget = scrollTarget;
           requestAnimationFrame(function() { self._updateTocHighlight(); });
-          return el;
+          return createSidebarSection('Table of Contents', el, isSinglePost);
         }
 
         for (var i = 0; i < items.length; i++) {
@@ -2814,7 +2827,7 @@
         scrollTarget.addEventListener('scroll', self._tocScrollHandler, { passive: true });
         self._tocScrollTarget = scrollTarget;
         requestAnimationFrame(function() { self._updateTocHighlight(); });
-        return createSidebarSection('Table of Contents', el);
+        return createSidebarSection('Table of Contents', el, isSinglePost);
       }
       function createRecentPostsModule(sidebarWidth) {
         if (items.length === 0) return null;
@@ -2873,20 +2886,22 @@
           rpEntry.appendChild(rpLink);
           el.appendChild(rpEntry);
         }
-        return createSidebarSection('Relevant Posts', el);
+        return createSidebarSection('Related Posts', el, isSinglePost);
       }
-      function createEmailCaptureForm(ecCfg, width) {
+      function createEmailCaptureForm(ecCfg, width, hideHeader) {
         if (!ecCfg || !ecCfg.header) return null;
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-email-capture';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
-        var headerEl = document.createElement('div');
-        headerEl.textContent = ecCfg.header || 'Subscribe to our newsletter';
-        headerEl.style.fontSize = '0.95rem';
-        headerEl.style.fontWeight = '600';
-        headerEl.style.marginBottom = '8px';
-        wrap.appendChild(headerEl);
+        if (!hideHeader) {
+          var headerEl = document.createElement('div');
+          headerEl.textContent = ecCfg.header || 'Subscribe to our newsletter';
+          headerEl.style.fontSize = '0.95rem';
+          headerEl.style.fontWeight = '600';
+          headerEl.style.marginBottom = '8px';
+          wrap.appendChild(headerEl);
+        }
         if (ecCfg.byline && ecCfg.byline.trim()) {
           var bylineEl = document.createElement('div');
           bylineEl.textContent = ecCfg.byline;
@@ -2974,18 +2989,20 @@
         };
         return wrap;
       }
-      function createLeadMagnetForm(lmCfg, width) {
+      function createLeadMagnetForm(lmCfg, width, hideHeader) {
         if (!lmCfg || !lmCfg.resourceTitle || !lmCfg.resourceTitle.trim()) return null;
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
-        var titleEl = document.createElement('div');
-        titleEl.textContent = lmCfg.resourceTitle;
-        titleEl.style.fontSize = '0.95rem';
-        titleEl.style.fontWeight = '600';
-        titleEl.style.marginBottom = '8px';
-        wrap.appendChild(titleEl);
+        if (!hideHeader) {
+          var titleEl = document.createElement('div');
+          titleEl.textContent = lmCfg.resourceTitle;
+          titleEl.style.fontSize = '0.95rem';
+          titleEl.style.fontWeight = '600';
+          titleEl.style.marginBottom = '8px';
+          wrap.appendChild(titleEl);
+        }
         if (lmCfg.description && lmCfg.description.trim()) {
           var descEl = document.createElement('div');
           descEl.textContent = lmCfg.description;
@@ -3130,13 +3147,13 @@
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
             var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, width || 200);
-            el = authorResult ? createSidebarSection(authorResult.header, authorResult.content) : null;
+            el = authorResult ? createSidebarSection(authorResult.header, authorResult.content, isSinglePost) : null;
           } else if (mod === 'emailCapture' && ecCfg) {
-            var ecForm = createEmailCaptureForm(ecCfg, width);
-            el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm) : null;
+            var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);
+            el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm, isSinglePost) : null;
           } else if (mod === 'leadMagnet' && lmCfg && lmCfg.resourceTitle) {
-            var lmForm = createLeadMagnetForm(lmCfg, width);
-            el = lmForm ? createSidebarSection(lmCfg.resourceTitle, lmForm) : null;
+            var lmForm = createLeadMagnetForm(lmCfg, width, isSinglePost);
+            el = lmForm ? createSidebarSection(lmCfg.resourceTitle, lmForm, isSinglePost) : null;
           }
           if (el) mods.push(el);
         }
@@ -3625,14 +3642,6 @@
               if (tagsCatsWrap.childNodes.length > 0) (postInfoWrap || appendTo).appendChild(tagsCatsWrap);
             }
 
-            var metaRow = document.createElement('div');
-            metaRow.className = 'blog-overlay-meta-row';
-            metaRow.style.display = 'flex';
-            metaRow.style.justifyContent = 'space-between';
-            metaRow.style.alignItems = 'center';
-            metaRow.style.marginBottom = '8px';
-            metaRow.style.gap = '12px';
-            metaRow.style.flexWrap = 'wrap';
             var metaParts = [];
             if (showDate) {
               var dateStr = self._getDate(post);
@@ -3647,10 +3656,14 @@
               metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
             }
             if (metaParts.length > 0) {
+              var metaRow = document.createElement('div');
+              metaRow.className = 'blog-overlay-meta-row';
+              metaRow.style.marginBottom = '8px';
               var meta = document.createElement('div');
               meta.className = 'blog-overlay-meta';
               meta.textContent = metaParts.join(' · ');
               metaRow.appendChild(meta);
+              (postInfoWrap || appendTo).appendChild(metaRow);
             }
             var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
             var showShare = smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
@@ -3659,12 +3672,14 @@
               shareUrl = window.location.origin + window.location.pathname + (window.location.search || '') + '#post-' + postIndex;
             }
             var shareImageUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
-            var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl) : null;
+            var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleed) : null;
             if (shareLinks) {
-              shareLinks.style.marginLeft = 'auto';
-              metaRow.appendChild(shareLinks);
+              var shareRow = document.createElement('div');
+              shareRow.className = 'blog-overlay-share-row';
+              shareRow.style.marginBottom = '8px';
+              shareRow.appendChild(shareLinks);
+              (postInfoWrap || appendTo).appendChild(shareRow);
             }
-            if (metaRow.childNodes.length > 0) (postInfoWrap || appendTo).appendChild(metaRow);
 
             if (isSinglePost && postInfoWrap) {
               var deckText = self._stripHtml(post.excerpt || post.body || '');
@@ -3918,7 +3933,7 @@
               headerEl.style.minHeight = headerHeight + 'px';
               for (var hm = 0; hm < hcModules.length; hm++) {
                 var mod = hcModules[hm];
-                if (mod === 'breadcrumbs' && !isSinglePost) continue;
+                if (mod === 'breadcrumbs' && isSinglePost) continue;
                 if (mod === 'breadcrumbs') {
                   var breadcrumbEl = document.createElement('nav');
                   breadcrumbEl.setAttribute('aria-label', 'Breadcrumb');
@@ -4113,19 +4128,20 @@
             var fcModules = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
             if (fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
-              var footerSideMargin = Math.min(80, Math.max(0, parseInt(footerContentCfg.sideMargin, 10) || 0));
+              var footerLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              var footerRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              var fcAlign = footerContentCfg.contentAlignment === 'center' || footerContentCfg.contentAlignment === 'right' ? footerContentCfg.contentAlignment : 'left';
               var footerEl = document.createElement('div');
               footerEl.className = 'blog-overlay-footer-content';
               footerEl.style.marginTop = '24px';
-              footerEl.style.marginLeft = footerSideMargin + 'px';
-              footerEl.style.marginRight = footerSideMargin + 'px';
+              footerEl.style.paddingLeft = footerLeftPad + 'px';
+              footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = '16px';
               footerEl.style.borderTop = '1px solid #eee';
               footerEl.style.display = 'flex';
-              footerEl.style.flexDirection = 'row';
-              footerEl.style.flexWrap = 'wrap';
+              footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
-              footerEl.style.alignItems = 'flex-start';
+              footerEl.style.alignItems = fcAlign === 'center' ? 'center' : fcAlign === 'right' ? 'flex-end' : 'flex-start';
               footerEl.style.minHeight = footerHeight + 'px';
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
