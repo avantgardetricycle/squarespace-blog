@@ -110,6 +110,9 @@ export type PostHeaderContentAlignment = "left" | "center" | "right";
 export interface PostHeaderConfig {
   imagePosition: PostHeaderImagePosition;
   contentAlignment: PostHeaderContentAlignment;
+  showBreadcrumbs?: boolean;
+  showTags?: boolean;
+  showCategories?: boolean;
 }
 export type FeaturedImageAspectBehavior = "original" | "cropped";
 export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
@@ -246,6 +249,9 @@ const defaultCollectionConfig: CollectionLevelConfig = {
 const defaultPostHeader: PostHeaderConfig = {
   imagePosition: "fullBleed",
   contentAlignment: "left",
+  showBreadcrumbs: false,
+  showTags: false,
+  showCategories: false,
 };
 
 const defaultPostConfig: PostLevelConfig = {
@@ -334,6 +340,7 @@ function deriveCollectionModules(
  */
 function derivePostModules(
   pm: PostModulesConfig,
+  pc: { postHeader?: PostHeaderConfig } | undefined,
   headerOrder: string[],
   leftOrder: string[],
   rightOrder: string[],
@@ -348,7 +355,8 @@ function derivePostModules(
     else if (pm.tableOfContents.position === "leftSidebar") left.push("tableOfContents");
     else if (pm.tableOfContents.position === "rightSidebar") right.push("tableOfContents");
   }
-  if (pm.breadcrumbs.enabled) header.push("breadcrumbs");
+  var ph = pc?.postHeader;
+  if (ph && ph.showBreadcrumbs) header.push("breadcrumbs");
   if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none") {
     if (pm.authorProfiles.position === "header") header.push("authorProfiles");
     else if (pm.authorProfiles.position === "leftSidebar") left.push("authorProfiles");
@@ -443,7 +451,7 @@ function syncModuleOrderFromExplicit(
     if (pm.tableOfContents.enabled && pm.tableOfContents.position === "header") h = addToOrder(h, "tableOfContents");
     else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "leftSidebar") l = addToOrder(l, "tableOfContents");
     else if (pm.tableOfContents.enabled && pm.tableOfContents.position === "rightSidebar") r = addToOrder(r, "tableOfContents");
-    if (pm.breadcrumbs.enabled) h = addToOrder(h, "breadcrumbs");
+    if (pc.postHeader?.showBreadcrumbs) h = addToOrder(h, "breadcrumbs");
     if (pm.authorProfiles.enabled && pm.authorProfiles.position === "header") h = addToOrder(h, "authorProfiles");
     else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "leftSidebar") l = addToOrder(l, "authorProfiles");
     else if (pm.authorProfiles.enabled && pm.authorProfiles.position === "rightSidebar") r = addToOrder(r, "authorProfiles");
@@ -489,6 +497,7 @@ function applyDerivedModules(config: SiteConfigForm): void {
   cc.rightSidebar.show = coll.right.length > 0;
   const post = derivePostModules(
     pm,
+    pc,
     pc.headerContent.moduleOrder ?? pc.headerContent.modules ?? [],
     pc.leftSidebar.moduleOrder ?? pc.leftSidebar.modules ?? [],
     pc.rightSidebar.moduleOrder ?? pc.rightSidebar.modules ?? [],
@@ -682,8 +691,22 @@ function parseLevelConfig(
   };
   const collectionModules = parseCollectionModules();
   const postModules = level === "post" ? parsePostModules() : defaultPostModules;
+  const phRaw = level === "post" && raw?.postHeader && typeof raw.postHeader === "object" ? raw.postHeader as Record<string, unknown> : null;
+  const validImagePosition = (v: unknown): PostHeaderImagePosition =>
+    (v === "fullBleed" || v === "leftOfInfo" || v === "rightOfInfo" || v === "belowInfo") ? v : "fullBleed";
+  const validContentAlignment = (v: unknown): PostHeaderContentAlignment =>
+    (v === "left" || v === "center" || v === "right") ? v : "left";
+  const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
+    ? (phRaw ? {
+        imagePosition: validImagePosition(phRaw.imagePosition),
+        contentAlignment: validContentAlignment(phRaw.contentAlignment),
+        showBreadcrumbs: Boolean(phRaw.showBreadcrumbs ?? false),
+        showTags: Boolean(phRaw.showTags ?? false),
+        showCategories: Boolean(phRaw.showCategories ?? false),
+      } : defaultPostHeader)
+    : undefined;
   const collDerived = deriveCollectionModules(collectionModules, hcModuleOrder, lsModuleOrder, rsModuleOrder, fcModuleOrder);
-  const postDerived = derivePostModules(postModules, hcModuleOrder, lsModuleOrder, rsModuleOrder, fcModuleOrder);
+  const postDerived = derivePostModules(postModules, postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, hcModuleOrder, lsModuleOrder, rsModuleOrder, fcModuleOrder);
   const base: CollectionLevelConfig = {
     showDate: Boolean(raw?.showDate ?? true),
     showAuthor: Boolean(raw?.showAuthor ?? false),
@@ -709,15 +732,7 @@ function parseLevelConfig(
   }
   if (level === "post") {
     const pb = raw?.progressBar && typeof raw.progressBar === "object" ? raw.progressBar as { show?: boolean; position?: string; thickness?: number; color?: string } : null;
-    const phRaw = raw?.postHeader && typeof raw.postHeader === "object" ? raw.postHeader as Record<string, unknown> : null;
-    const validImagePosition = (v: unknown): PostHeaderImagePosition =>
-      (v === "fullBleed" || v === "leftOfInfo" || v === "rightOfInfo" || v === "belowInfo") ? v : "fullBleed";
-    const validContentAlignment = (v: unknown): PostHeaderContentAlignment =>
-      (v === "left" || v === "center" || v === "right") ? v : "left";
-    const postHeader: PostHeaderConfig = phRaw ? {
-      imagePosition: validImagePosition(phRaw.imagePosition),
-      contentAlignment: validContentAlignment(phRaw.contentAlignment),
-    } : defaultPostHeader;
+    const postHeader: PostHeaderConfig = postHeaderForDerive ?? defaultPostHeader;
     return {
       ...base,
       postModules,
@@ -774,7 +789,13 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   const lsObj = legacy.leftSidebar && typeof legacy.leftSidebar === "object" ? legacy.leftSidebar as Record<string, unknown> : {};
   const rsObj = legacy.rightSidebar && typeof legacy.rightSidebar === "object" ? legacy.rightSidebar as Record<string, unknown> : {};
   const hcObj = legacy.headerContent && typeof legacy.headerContent === "object" ? legacy.headerContent as Record<string, unknown> : {};
-  const migratedPost = { ...legacy, leftSidebar: { ...lsObj, modules: hasToc ? ["tableOfContents"] : [] }, rightSidebar: { ...rsObj, modules: hasToc ? ["tableOfContents"] : [] }, headerContent: { ...hcObj, modules: [...(hasBreadcrumbs ? ["breadcrumbs"] : []), ...(hasToc ? ["tableOfContents"] : [])] } };
+  const migratedPost = {
+    ...legacy,
+    leftSidebar: { ...lsObj, modules: hasToc ? ["tableOfContents"] : [] },
+    rightSidebar: { ...rsObj, modules: hasToc ? ["tableOfContents"] : [] },
+    headerContent: { ...hcObj, modules: [...(hasBreadcrumbs ? ["breadcrumbs"] : []), ...(hasToc ? ["tableOfContents"] : [])] },
+    postHeader: hasBreadcrumbs ? { ...defaultPostHeader, showBreadcrumbs: true } : undefined,
+  };
   const collectionTemplateId = data.collectionTemplateId as string | null | undefined;
   const postTemplateId = data.postTemplateId as string | null | undefined;
   return {
@@ -909,7 +930,10 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     const pb = (b as PostLevelConfig).progressBar;
     const phA = (a as PostLevelConfig).postHeader ?? defaultPostHeader;
     const phB = (b as PostLevelConfig).postHeader ?? defaultPostHeader;
-    const phEqual = phA.imagePosition === phB.imagePosition && phA.contentAlignment === phB.contentAlignment;
+    const phEqual = phA.imagePosition === phB.imagePosition && phA.contentAlignment === phB.contentAlignment &&
+      (phA.showBreadcrumbs ?? false) === (phB.showBreadcrumbs ?? false) &&
+      (phA.showTags ?? false) === (phB.showTags ?? false) &&
+      (phA.showCategories ?? false) === (phB.showCategories ?? false);
     return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color && phEqual;
   }
   return base;
@@ -1327,6 +1351,9 @@ export default function Configure() {
     if (path === "progressBar.color" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, color: value as string } };
     if (path === "postHeader.imagePosition" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, imagePosition: value as PostHeaderImagePosition } };
     if (path === "postHeader.contentAlignment" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, contentAlignment: value as PostHeaderContentAlignment } };
+    if (path === "postHeader.showBreadcrumbs" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showBreadcrumbs: value as boolean } };
+    if (path === "postHeader.showTags" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showTags: value as boolean } };
+    if (path === "postHeader.showCategories" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showCategories: value as boolean } };
     return cfg;
   }
 
@@ -1356,16 +1383,6 @@ export default function Configure() {
       window.removeEventListener("message", handleMessage);
     };
   }, []);
-
-  // When switching to Post config level with no post selected, switch preview to single-post view
-  // (BlogPreviewRenderer uses window hash; BlogPreviewIframe uses selectPostIndex prop)
-  useEffect(() => {
-    if (selectedLevel !== "post" || selectedPostIndex >= 0 || blogItems.length === 0 || !effectiveSite) return;
-    const previewUrl = buildBlogPreviewUrl(effectiveSite);
-    if (previewUrl && isSquarespaceUrl(previewUrl)) {
-      window.location.hash = "#post-0";
-    }
-  }, [selectedLevel, selectedPostIndex, blogItems.length, effectiveSite]);
 
   if (loading) {
     return (
@@ -2175,6 +2192,36 @@ export default function Configure() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-xs text-[#6b6b6b]">Show breadcrumbs</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Display breadcrumb trail above the post title</p>
+                              </div>
+                              <Switch
+                                checked={(effectiveConfig as PostLevelConfig).postHeader?.showBreadcrumbs ?? false}
+                                onCheckedChange={(v) => updateLevelConfigPath("postHeader.showBreadcrumbs", v)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Show Tags & Categories</Label>
+                              <p className="text-[10px] text-[#6b6b6b]">Display tags and categories under the post title</p>
+                              <div className="flex items-center gap-6">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={(effectiveConfig as PostLevelConfig).postHeader?.showTags ?? false}
+                                    onCheckedChange={(v) => updateLevelConfigPath("postHeader.showTags", Boolean(v))}
+                                  />
+                                  <span className="text-xs text-[#6b6b6b]">Tags</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={(effectiveConfig as PostLevelConfig).postHeader?.showCategories ?? false}
+                                    onCheckedChange={(v) => updateLevelConfigPath("postHeader.showCategories", Boolean(v))}
+                                  />
+                                  <span className="text-xs text-[#6b6b6b]">Categories</span>
+                                </label>
+                              </div>
+                            </div>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -2372,6 +2419,7 @@ export default function Configure() {
                                     ).header
                                   : derivePostModules(
                                       (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
+                                      effectiveConfig as PostLevelConfig,
                                       effectiveConfig.headerContent.moduleOrder ?? [],
                                       effectiveConfig.leftSidebar.moduleOrder ?? [],
                                       effectiveConfig.rightSidebar.moduleOrder ?? [],
@@ -2409,8 +2457,8 @@ export default function Configure() {
                                     const pm = (effectiveConfig as PostLevelConfig).postModules;
                                     if (moduleId === "tableOfContents" && pm?.tableOfContents) {
                                       updateLevelConfigPath("postModules.tableOfContents.enabled", false);
-                                    } else if (moduleId === "breadcrumbs" && pm?.breadcrumbs) {
-                                      updateLevelConfigPath("postModules.breadcrumbs.enabled", false);
+                                    } else if (moduleId === "breadcrumbs") {
+                                      updateLevelConfigPath("postHeader.showBreadcrumbs", false);
                                     } else if (moduleId === "authorProfiles" && pm?.authorProfiles) {
                                       updateLevelConfigPath("postModules.authorProfiles.enabled", false);
                                     } else if (moduleId === "relevantPosts" && pm?.relevantPosts) {
@@ -2540,6 +2588,7 @@ export default function Configure() {
                                     ).footer
                                   : derivePostModules(
                                       (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
+                                      effectiveConfig as PostLevelConfig,
                                       effectiveConfig.headerContent.moduleOrder ?? [],
                                       effectiveConfig.leftSidebar.moduleOrder ?? [],
                                       effectiveConfig.rightSidebar.moduleOrder ?? [],
@@ -2650,6 +2699,7 @@ export default function Configure() {
                             )
                           : derivePostModules(
                               (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
+                              effectiveConfig as PostLevelConfig,
                               effectiveConfig.headerContent.moduleOrder ?? [],
                               effectiveConfig.leftSidebar.moduleOrder ?? [],
                               effectiveConfig.rightSidebar.moduleOrder ?? [],
@@ -2705,8 +2755,8 @@ export default function Configure() {
                             const pm = (effectiveConfig as PostLevelConfig).postModules;
                             if (moduleId === "tableOfContents" && pm?.tableOfContents) {
                               updateLevelConfigPath("postModules.tableOfContents.enabled", false);
-                            } else if (moduleId === "breadcrumbs" && pm?.breadcrumbs) {
-                              updateLevelConfigPath("postModules.breadcrumbs.enabled", false);
+                            } else if (moduleId === "breadcrumbs") {
+                              updateLevelConfigPath("postHeader.showBreadcrumbs", false);
                             } else if (moduleId === "authorProfiles" && pm?.authorProfiles) {
                               updateLevelConfigPath("postModules.authorProfiles.enabled", false);
                             } else if (moduleId === "relevantPosts" && pm?.relevantPosts) {
@@ -3102,18 +3152,6 @@ export default function Configure() {
                                         </Select>
                                   </div>
                                 }
-                              />
-                              <ModuleSettingSection
-                                title="Breadcrumbs"
-                                checked={(effectiveConfig as PostLevelConfig).postModules?.breadcrumbs.enabled ?? false}
-                                onCheckedChange={(v) => {
-                                  updateLevelConfigPath("postModules.breadcrumbs.enabled", v);
-                                  if (v) updateLevelConfigPath("postModules.breadcrumbs.position", "header");
-                                  setSectionExpanded((p) => ({ ...p, breadcrumbs: true }));
-                                }}
-                                expanded={sectionExpanded.breadcrumbs}
-                                onToggle={() => setSectionExpanded((p) => ({ ...p, breadcrumbs: !p.breadcrumbs }))}
-                                content={null}
                               />
                               <ModuleSettingSection
                                 title="Author Profiles"
@@ -3649,11 +3687,7 @@ export default function Configure() {
                     blogUrl={previewUrl}
                     config={rendererConfig}
                     configSignature={configSignature}
-                    selectPostIndex={
-                      selectedLevel === "post" && selectedPostIndex === -1 && blogItems.length > 0
-                        ? 0
-                        : undefined
-                    }
+                    selectPostIndex={selectedLevel === "collection" ? -1 : selectedPostIndex}
                     className="min-h-full"
                   />
                 );

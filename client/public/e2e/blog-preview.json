@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "id": "post-1",
+      "title": "First Fixture Post",
+      "fullUrl": "/e2e/fixture-post-1",
+      "excerpt": "First fixture excerpt.",
+      "body": "<p>First fixture body paragraph.</p>",
+      "publishedOn": "2025-01-01T12:00:00.000Z",
+      "author": { "displayName": "Fixture Author" },
+      "categories": ["Testing"],
+      "tags": ["E2E", "Preview"]
+    },
+    {
+      "id": "post-2",
+      "title": "Second Fixture Post",
+      "fullUrl": "/e2e/fixture-post-2",
+      "excerpt": "Second fixture excerpt.",
+      "body": "<p>Second fixture body paragraph.</p>",
+      "publishedOn": "2025-01-02T12:00:00.000Z",
+      "author": { "displayName": "Fixture Author" },
+      "categories": ["Automation"],
+      "tags": ["Playwright"]
+    },
+    {
+      "id": "post-3",
+      "title": "Third Fixture Post",
+      "fullUrl": "/e2e/fixture-post-3",
+      "excerpt": "Third fixture excerpt.",
+      "body": "<p>Third fixture body paragraph.</p>",
+      "publishedOn": "2025-01-03T12:00:00.000Z",
+      "author": { "displayName": "Fixture Author" },
+      "categories": ["Regression"],
+      "tags": ["Stability"]
+    }
+  ],
+  "pagination": {
+    "hasNextPage": false
+  },
+  "collection": {
+    "siteTitle": "E2E Site",
+    "blogName": "Fixture Blog"
+  }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 export interface RendererConfig {
   showDate?: boolean;
@@ -30,6 +30,7 @@ interface BlogPreviewIframeProps {
 const MESSAGE_TYPE_READY = "BETTERBLOG_PREVIEW_READY";
 const MESSAGE_TYPE_CONFIG = "BETTERBLOG_PREVIEW_CONFIG";
 const MESSAGE_TYPE_SELECT_POST = "BETTERBLOG_PREVIEW_SELECT_POST";
+const MESSAGE_TYPE_REQUEST_READY = "BETTERBLOG_PREVIEW_REQUEST_READY";
 
 const DEBUG =
   typeof window !== "undefined" &&
@@ -143,9 +144,9 @@ export default function BlogPreviewIframe({
   };
 
   // Listen for READY from iframe and send config.
+  // Use useLayoutEffect so listener is attached before iframe can load and send READY (avoids race after nav/reload).
   // Use event.source (the iframe window that sent READY) for reliable delivery.
-  // Use target's origin as targetOrigin for postMessage (more reliable than "*").
-  useEffect(() => {
+  useLayoutEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type !== MESSAGE_TYPE_READY) return;
       const expectedOrigin = getTargetOrigin();
@@ -166,9 +167,10 @@ export default function BlogPreviewIframe({
     return () => window.removeEventListener("message", handleMessage);
   }, [blogUrl]);
 
-  // Tell iframe to switch to single-post view when selectPostIndex is set (e.g. user switched to Post config level)
+  // Tell iframe to switch views when selectPostIndex changes.
+  // -1 => collection/list view, >=0 => single-post view
   useEffect(() => {
-    if (typeof selectPostIndex !== "number" || selectPostIndex < 0) return;
+    if (typeof selectPostIndex !== "number") return;
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     const targetOrigin = getEffectiveTargetOrigin();
@@ -176,58 +178,84 @@ export default function BlogPreviewIframe({
       { type: MESSAGE_TYPE_SELECT_POST, postIndex: selectPostIndex },
       targetOrigin
     );
-    iframe.contentWindow.postMessage(
-      { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(configRef.current) },
-      targetOrigin
-    );
-  }, [selectPostIndex, config]);
+  }, [selectPostIndex, blogUrl]);
 
   // Reset resolved origin when blogUrl changes (e.g. user switched sites)
   useEffect(() => {
     resolvedTargetOriginRef.current = null;
   }, [blogUrl]);
 
-  // Use resolved origin from READY when available (iframe may redirect www↔non-www)
+  // Use resolved origin from READY when available (iframe may redirect www↔non-www).
+  // When null (e.g. missed READY after nav/reload), use "*" so config still gets through.
   const getEffectiveTargetOrigin = () =>
-    resolvedTargetOriginRef.current || getTargetOrigin() || "*";
+    resolvedTargetOriginRef.current ?? "*";
 
-  // Send config whenever it changes. Use configSignature so effect reliably runs on every config update.
-  useEffect(() => {
-    const sendConfig = () => {
-      const iframe = iframeRef.current;
-      if (!iframe?.contentWindow) return;
-      try {
-        const targetOrigin = getEffectiveTargetOrigin();
-        const latestConfig = configForPostMessage(configRef.current);
-        iframe.contentWindow.postMessage(
-          { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
-          targetOrigin
-        );
-      } catch {
-        // ignore
-      }
-    };
-
-    sendConfig();
-    const delays = [100, 250, 500, 900];
-    const timeouts = delays.map((d) => window.setTimeout(sendConfig, d));
-    return () => timeouts.forEach((t) => window.clearTimeout(t));
-  }, [config, configSignature, blogUrl]);
-
-  // Send config when iframe loads (renderer may not be ready yet, so READY will trigger another send)
-  const handleIframeLoad = () => {
+  const sendConfig = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     try {
-      const targetOrigin = getEffectiveTargetOrigin();
-      if (DEBUG) console.log("[BlogPreviewIframe] iframe onLoad, sending config", { targetOrigin });
+      const targetOrigin = resolvedTargetOriginRef.current ?? "*";
+      const latestConfig = configForPostMessage(configRef.current);
       iframe.contentWindow.postMessage(
-        { type: MESSAGE_TYPE_CONFIG, config: configForPostMessage(configRef.current) },
+        { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
         targetOrigin
       );
+      if (DEBUG) console.log("[BlogPreviewIframe] sent config");
     } catch {
       // ignore
     }
+  }, []);
+
+  const requestReady = useCallback(() => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    try {
+      iframe.contentWindow.postMessage({ type: MESSAGE_TYPE_REQUEST_READY }, "*");
+      if (DEBUG) console.log("[BlogPreviewIframe] sent REQUEST_READY");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Send config whenever it changes. Use configSignature so effect reliably runs on every config update.
+  // When we don't have resolved origin, request READY first so iframe responds and we can use correct origin.
+  useEffect(() => {
+    if (!resolvedTargetOriginRef.current) requestReady();
+    sendConfig();
+    const delays = [100, 250, 500, 900, 1500, 2500];
+    const timeouts = delays.map((d) => window.setTimeout(() => {
+      if (!resolvedTargetOriginRef.current) requestReady();
+      sendConfig();
+    }, d));
+    return () => timeouts.forEach((t) => window.clearTimeout(t));
+  }, [config, configSignature, blogUrl, sendConfig, requestReady]);
+
+  // Re-send config when page becomes visible (e.g. bfcache restore, tab focus). Fixes iframe not updating after nav-back.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        if (!resolvedTargetOriginRef.current) requestReady();
+        sendConfig();
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        if (!resolvedTargetOriginRef.current) requestReady();
+        sendConfig();
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [sendConfig, requestReady]);
+
+  // Send config when iframe loads (renderer may not be ready yet, so READY will trigger another send)
+  const handleIframeLoad = () => {
+    if (DEBUG) console.log("[BlogPreviewIframe] iframe onLoad, sending config");
+    sendConfig();
   };
 
   return (

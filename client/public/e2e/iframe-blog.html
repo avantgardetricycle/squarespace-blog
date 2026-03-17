@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iframe Blog Fixture</title>
+    <style>
+      body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+      .nav { display: flex; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #ddd; }
+      .nav a { color: #444; text-decoration: none; font-size: 14px; }
+      #preview-root { padding: 0 16px; }
+    </style>
+  </head>
+  <body>
+    <nav class="nav">
+      <a id="blog-nav-link" href="/e2e/iframe-blog.html">Blog</a>
+      <a href="/">Home</a>
+    </nav>
+    <main id="preview-root"></main>
+    <script>
+      (function iframePreviewFixture() {
+        var root = document.getElementById("preview-root");
+        var state = { view: "list", selected: -1, showDateCollection: true, showDatePost: true };
+        var items = [
+          { id: "post-1", title: "First Fixture Post", date: "Jan 1, 2025", body: "First body." },
+          { id: "post-2", title: "Second Fixture Post", date: "Jan 2, 2025", body: "Second body." },
+          { id: "post-3", title: "Third Fixture Post", date: "Jan 3, 2025", body: "Third body." }
+        ];
+
+        function isPreview() {
+          try { return new URLSearchParams(window.location.search).get("bbPreview") === "1"; } catch (e) { return false; }
+        }
+
+        function emitReady() {
+          if (window.parent !== window) window.parent.postMessage({ type: "BETTERBLOG_PREVIEW_READY" }, "*");
+        }
+
+        function emitSelected() {
+          if (window.parent !== window) window.parent.postMessage({ type: "BETTERBLOG_PREVIEW_POST_SELECTED", postIndex: state.selected }, "*");
+        }
+
+        function currentShowDate() {
+          return state.view === "post" ? state.showDatePost : state.showDateCollection;
+        }
+
+        function renderList() {
+          var html = '<section><h1>Fixture Blog</h1><div>';
+          for (var i = 0; i < items.length; i++) {
+            html += '<article data-index="' + i + '"><h2><a href="#post-' + i + '" data-post-index="' + i + '">' + items[i].title + '</a></h2>';
+            if (currentShowDate()) html += '<div class="blog-overlay-meta">' + items[i].date + '</div>';
+            html += '<p>' + items[i].body + '</p></article>';
+          }
+          html += "</div></section>";
+          root.innerHTML = html;
+          var links = root.querySelectorAll("a[data-post-index]");
+          for (var li = 0; li < links.length; li++) {
+            links[li].addEventListener("click", function(e) {
+              e.preventDefault();
+              var idx = parseInt(this.getAttribute("data-post-index"), 10);
+              if (isNaN(idx)) return;
+              state.view = "post";
+              state.selected = idx;
+              emitSelected();
+              render();
+            });
+          }
+        }
+
+        function renderPost() {
+          var item = items[state.selected] || items[0];
+          var html = '<article data-index="' + state.selected + '"><h2>' + item.title + '</h2>';
+          if (currentShowDate()) html += '<div class="blog-overlay-meta">' + item.date + '</div>';
+          html += '<p>' + item.body + '</p></article>';
+          root.innerHTML = html;
+        }
+
+        function render() {
+          if (state.view === "post" && state.selected >= 0) renderPost();
+          else renderList();
+        }
+
+        window.addEventListener("message", function(event) {
+          var data = event.data || {};
+          if (data.type === "BETTERBLOG_PREVIEW_REQUEST_READY") {
+            emitReady();
+            return;
+          }
+          if (data.type === "BETTERBLOG_PREVIEW_CONFIG" && data.config) {
+            var cfg = data.config || {};
+            state.showDateCollection = !(cfg.collectionConfig && cfg.collectionConfig.showDate === false);
+            state.showDatePost = !(cfg.postConfig && cfg.postConfig.showDate === false);
+            render();
+            return;
+          }
+          if (data.type === "BETTERBLOG_PREVIEW_SELECT_POST" && typeof data.postIndex === "number") {
+            if (data.postIndex < 0) {
+              state.view = "list";
+              state.selected = -1;
+            } else {
+              state.view = "post";
+              state.selected = data.postIndex;
+            }
+            emitSelected();
+            render();
+          }
+        });
+
+        var nav = document.getElementById("blog-nav-link");
+        nav.addEventListener("click", function(e) {
+          e.preventDefault();
+          var target = new URL(this.href, window.location.href);
+          target.searchParams.set("bbPreview", "1");
+          window.location.assign(target.toString());
+        });
+
+        render();
+        if (isPreview()) {
+          emitReady();
+          setTimeout(emitReady, 100);
+          setTimeout(emitReady, 400);
+          emitSelected();
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -77,6 +77,30 @@ npm run dev --workspace=client
 curl http://localhost:3001/api/config/demo-site-key
 ```
 
+### Iframe Preview E2E
+
+Run the full iframe preview E2E suite:
+
+```bash
+npm run test:e2e
+```
+
+Helpful local variants:
+
+```bash
+npm run test:e2e:headed
+npm run test:e2e:ui
+```
+
+Failure triage checklist:
+
+1. Open `playwright-report/index.html` and inspect the first failing assertion.
+2. Review trace/video for message ordering between parent and iframe (`BETTERBLOG_PREVIEW_*`).
+3. Re-run only the iframe suite in headed mode:
+   - `npx playwright test e2e/iframe-preview.spec.ts --headed --project=chromium`
+4. Prefer behavior-based polling assertions (`expect.poll`) when fixing timing flakes.
+5. In CI, download the `playwright-report` artifact from the workflow run.
+
 ## Squarespace Integration
 
 Add the following to your Squarespace site's Code Injection (Settings > Advanced > Code Injection):
