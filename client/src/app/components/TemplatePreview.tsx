@@ -98,7 +98,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
     </div>
   );
 
-  const AuthorProfile = ({ compact = true }: { compact?: boolean }) => (
+  const AuthorProfile = () => (
     <div>
       <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>About the author</div>
       <div className="flex gap-1.5 mt-0.5">
