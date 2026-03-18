@@ -1754,8 +1754,9 @@
     /**
      * Create Author Profiles module (post level - shows profile for post authors)
      */
-    _createAuthorProfilesModule: function(post, cfg, width) {
+    _createAuthorProfilesModule: function(post, cfg, width, opts) {
       var self = this;
+      var useLongBio = opts && opts.useLongBio === true;
       var authorIds = this._getAuthorIdsForPost(post, cfg);
       var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object') ? cfg.authorProfiles : {};
       if (authorIds.length === 0) return null;
@@ -1787,7 +1788,7 @@
         var p = profiles[id];
         var name = (p && p.name) || (cfg.authorMap && cfg.authorMap[id]) || 'Author';
         var imageUrl = (p && p.imageUrl) || null;
-        var bio = (p && p.bio) || null;
+        var bio = useLongBio && (p && p.bioLong) ? (p.bioLong) : ((p && p.bio) || null);
         var email = (p && p.email) || null;
         var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
         var card = document.createElement('div');
@@ -2181,10 +2182,14 @@
     },
 
     _updateTocHighlight: function() {
-      var tocLinks = document.querySelectorAll('.blog-overlay-toc a');
+      var tocEl = document.querySelector('.blog-overlay-toc');
+      if (!tocEl) return;
+      var tocStyle = tocEl.getAttribute('data-toc-style') || 'numbered';
+      var themeColor = '#5B4FE8';
+      var tocLinks = tocEl.querySelectorAll('a');
       if (!tocLinks.length) return;
 
-      var headingLinks = document.querySelectorAll('.blog-overlay-toc a[data-heading-index]');
+      var headingLinks = tocEl.querySelectorAll('a[data-heading-index]');
       if (headingLinks.length > 0) {
         var viewportTop = 120;
         var activeIdx = -1;
@@ -2200,22 +2205,44 @@
         }
         if (activeIdx < 0) activeIdx = 0;
         for (var hj = 0; hj < headingLinks.length; hj++) {
-          var idx = parseInt(headingLinks[hj].getAttribute('data-heading-index'), 10);
-          if (idx === activeIdx) {
-            headingLinks[hj].classList.add('blog-overlay-toc-active');
-            headingLinks[hj].style.fontWeight = '600';
-            headingLinks[hj].style.color = '#333';
-          } else {
-            headingLinks[hj].classList.remove('blog-overlay-toc-active');
-            headingLinks[hj].style.fontWeight = '';
-            headingLinks[hj].style.color = '';
+          var link = headingLinks[hj];
+          var idx = parseInt(link.getAttribute('data-heading-index'), 10);
+          var isActive = idx === activeIdx;
+          link.classList.toggle('blog-overlay-toc-active', isActive);
+          link.style.fontWeight = isActive ? '600' : '';
+          link.style.color = isActive ? '#333' : '';
+          if (tocStyle === 'bookmark') {
+            link.style.backgroundColor = isActive ? (themeColor + '20') : '';
+            link.style.borderLeft = isActive ? ('3px solid ' + themeColor) : '3px solid transparent';
+          }
+          if (tocStyle === 'connectedDots') {
+            var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
+            if (dot) dot.style.background = (idx <= activeIdx) ? themeColor : '#e5e4e0';
+          }
+        }
+        if (tocStyle === 'connectedDots') {
+          var lineFill = tocEl.querySelector('.blog-overlay-toc-line-fill');
+          var dots = tocEl.querySelectorAll('.blog-overlay-toc-dot');
+          if (lineFill && dots.length > 0) {
+            var lineEl = tocEl.querySelector('.blog-overlay-toc-line');
+            var lastReadIdx = Math.min(activeIdx, dots.length - 1);
+            if (lastReadIdx >= 0 && lineEl) {
+              var lineRect = lineEl.getBoundingClientRect();
+              var lastReadDot = dots[lastReadIdx];
+              var dotRect = lastReadDot.getBoundingClientRect();
+              var dotCenterY = dotRect.top + dotRect.height / 2;
+              var fillHeight = Math.max(0, dotCenterY - lineRect.top);
+              lineFill.style.height = fillHeight + 'px';
+            } else {
+              lineFill.style.height = '0';
+            }
           }
         }
         return;
       }
 
       var articles = document.querySelectorAll('#blog-overlay-list article');
-      var postLinks = document.querySelectorAll('.blog-overlay-toc a[data-post-index]');
+      var postLinks = tocEl.querySelectorAll('a[data-post-index]');
       if (!articles.length || !postLinks.length) return;
 
       var viewportTop = 100;
@@ -2230,15 +2257,37 @@
       if (activeIndex < 0) activeIndex = 0;
 
       for (var j = 0; j < postLinks.length; j++) {
-        var idx = parseInt(postLinks[j].getAttribute('data-post-index'), 10);
-        if (idx === activeIndex) {
-          postLinks[j].classList.add('blog-overlay-toc-active');
-          postLinks[j].style.fontWeight = '600';
-          postLinks[j].style.color = '#333';
-        } else {
-          postLinks[j].classList.remove('blog-overlay-toc-active');
-          postLinks[j].style.fontWeight = '';
-          postLinks[j].style.color = '';
+        var link = postLinks[j];
+        var idx = parseInt(link.getAttribute('data-post-index'), 10);
+        var isActive = idx === activeIndex;
+        link.classList.toggle('blog-overlay-toc-active', isActive);
+        link.style.fontWeight = isActive ? '600' : '';
+        link.style.color = isActive ? '#333' : '';
+        if (tocStyle === 'bookmark') {
+          link.style.backgroundColor = isActive ? (themeColor + '20') : '';
+          link.style.borderLeft = isActive ? ('3px solid ' + themeColor) : '3px solid transparent';
+        }
+        if (tocStyle === 'connectedDots') {
+          var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
+          if (dot) dot.style.background = (idx <= activeIndex) ? themeColor : '#e5e4e0';
+        }
+      }
+      if (tocStyle === 'connectedDots') {
+        var lineFill = tocEl.querySelector('.blog-overlay-toc-line-fill');
+        var dots = tocEl.querySelectorAll('.blog-overlay-toc-dot');
+        if (lineFill && dots.length > 0) {
+          var lineEl = tocEl.querySelector('.blog-overlay-toc-line');
+          var lastReadIdx = Math.min(activeIndex, dots.length - 1);
+          if (lastReadIdx >= 0 && lineEl) {
+            var lineRect = lineEl.getBoundingClientRect();
+            var lastReadDot = dots[lastReadIdx];
+            var dotRect = lastReadDot.getBoundingClientRect();
+            var dotCenterY = dotRect.top + dotRect.height / 2;
+            var fillHeight = Math.max(0, dotCenterY - lineRect.top);
+            lineFill.style.height = fillHeight + 'px';
+          } else {
+            lineFill.style.height = '0';
+          }
         }
       }
     },
@@ -2759,10 +2808,83 @@
       }
       function createTocModule(sidebarWidth) {
         if (items.length === 0) return null;
+        var tocStyle = (cfg.postModules && cfg.postModules.tableOfContents && cfg.postModules.tableOfContents.style) || 'numbered';
+        var themeColor = '#5B4FE8';
         var el = document.createElement('nav');
         el.className = 'blog-overlay-toc';
+        el.setAttribute('data-toc-style', tocStyle);
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 200) + 'px';
+        if (tocStyle === 'connectedDots') {
+          el.style.position = 'relative';
+          el.style.paddingLeft = '18px';
+          var line = document.createElement('div');
+          line.className = 'blog-overlay-toc-line';
+          line.style.position = 'absolute';
+          line.style.left = '3px';
+          line.style.top = '10px';
+          line.style.bottom = '10px';
+          line.style.width = '2px';
+          line.style.background = '#e5e4e0';
+          line.style.borderRadius = '1px';
+          line.style.pointerEvents = 'none';
+          el.appendChild(line);
+          var lineFill = document.createElement('div');
+          lineFill.className = 'blog-overlay-toc-line-fill';
+          lineFill.style.position = 'absolute';
+          lineFill.style.left = '3px';
+          lineFill.style.top = '10px';
+          lineFill.style.width = '2px';
+          lineFill.style.background = '#5B4FE8';
+          lineFill.style.borderRadius = '1px';
+          lineFill.style.pointerEvents = 'none';
+          lineFill.style.transition = 'height 0.15s ease';
+          el.appendChild(lineFill);
+        }
+
+        function addTocLink(link, level, prefix) {
+          link.style.display = 'block';
+          link.style.padding = '4px 0';
+          link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
+          link.style.textDecoration = 'none';
+          link.style.lineHeight = '1.3';
+          link.style.color = '#333';
+          if (tocStyle === 'numbered') {
+            link.style.paddingLeft = ((level - 1) * 8) + 'px';
+            if (prefix) link.textContent = prefix + ' ' + (link.textContent || '');
+          } else if (tocStyle === 'connectedDots') {
+            var row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.gap = '10px';
+            row.style.marginLeft = '-18px';
+            var dot = document.createElement('div');
+            dot.style.width = '8px';
+            dot.style.height = '8px';
+            dot.style.borderRadius = '50%';
+            dot.style.background = '#e5e4e0';
+            dot.style.flexShrink = '0';
+            dot.style.position = 'relative';
+            dot.style.zIndex = '1';
+            dot.className = 'blog-overlay-toc-dot';
+            row.appendChild(dot);
+            row.appendChild(link);
+            link.style.padding = '4px 0';
+            link.style.flex = '1';
+            link.style.minWidth = '0';
+            el.appendChild(row);
+            return;
+          } else if (tocStyle === 'bookmark') {
+            link.style.paddingLeft = ((level - 1) * 8) + 'px';
+            link.style.paddingRight = '8px';
+            link.style.paddingTop = '6px';
+            link.style.paddingBottom = '6px';
+            link.style.marginLeft = '0';
+            link.style.marginRight = '0';
+            link.style.borderRadius = '4px';
+          }
+          el.appendChild(link);
+        }
 
         if (isSinglePost && selectedIndex >= 0 && selectedIndex < items.length) {
           var post = items[selectedIndex];
@@ -2779,25 +2901,15 @@
               tocLink.setAttribute('data-heading-index', String(hi));
               tocLink.setAttribute('data-analytics-element', 'toc');
               tocLink.textContent = (h.textContent || '').trim() || 'Section ' + (hi + 1);
-              tocLink.style.display = 'block';
-              tocLink.style.padding = '4px 0';
-              tocLink.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
-              tocLink.style.textDecoration = 'none';
-              tocLink.style.lineHeight = '1.3';
-              tocLink.style.paddingLeft = ((level - 1) * 8) + 'px';
-              el.appendChild(tocLink);
+              var prefix = tocStyle === 'numbered' ? (hi + 1) + '.' : null;
+              addTocLink(tocLink, level, prefix);
             }
           } else {
             var titleLink = document.createElement('a');
             titleLink.href = '#toc-0';
             titleLink.setAttribute('data-analytics-element', 'toc');
             titleLink.textContent = post.title || 'Untitled';
-            titleLink.style.display = 'block';
-            titleLink.style.padding = '4px 0';
-            titleLink.style.fontSize = '0.85rem';
-            titleLink.style.textDecoration = 'none';
-            titleLink.style.lineHeight = '1.3';
-            el.appendChild(titleLink);
+            addTocLink(titleLink, 1, tocStyle === 'numbered' ? '1.' : null);
           }
           self._tocScrollHandler = function() { self._updateTocHighlight(); };
           var scrollTarget = self._getScrollContainer() || window;
@@ -2815,12 +2927,8 @@
           tocLink.setAttribute('data-post-index', String(i));
           tocLink.setAttribute('data-analytics-element', 'toc');
           tocLink.textContent = tocItem.title || 'Untitled';
-          tocLink.style.display = 'block';
-          tocLink.style.padding = '4px 0';
-          tocLink.style.fontSize = '0.85rem';
-          tocLink.style.textDecoration = 'none';
-          tocLink.style.lineHeight = '1.3';
-          el.appendChild(tocLink);
+          var prefix = tocStyle === 'numbered' ? (i + 1) + '.' : null;
+          addTocLink(tocLink, 1, prefix);
         }
         self._tocScrollHandler = function() { self._updateTocHighlight(); };
         var scrollTarget = self._getScrollContainer() || window;
@@ -3686,6 +3794,7 @@
               var deckSentences = deckText ? deckText.match(/[^.!?]*[.!?]/g) : null;
               var deck = deckSentences && deckSentences.length > 0 ? deckSentences[0].trim() : '';
               if (!deck) deck = self._truncateText(post.excerpt || post.body || '', 200);
+              if (deck) deck = deck.replace(/^Section\s+\d+\s*/i, '').trim();
               if (deck) {
                 var deckEl = document.createElement('p');
                 deckEl.className = 'blog-overlay-deck';
@@ -4155,7 +4264,7 @@
                     fmodEl.style.flex = '1 1 200px';
                   }
                 } else if (fmod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
-                  var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, 220);
+                  var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, 220, { useLongBio: true });
                   fmodEl = authorResult ? createSidebarSection(authorResult.header, authorResult.content) : null;
                   if (fmodEl) {
                     fmodEl.style.width = 'auto';

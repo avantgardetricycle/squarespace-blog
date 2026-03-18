@@ -110,6 +110,7 @@ model BlogAuthor {
   name         String
   imageUrl     String?      @map("image_url") @db.Text
   bio          String?      @db.Text
+  bioLong      String?      @map("bio_long") @db.Text
   email        String?
   socialLinks  Json?        @map("social_links")
   ingestedFrom IngestedFrom @default(BETTER_BLOG) @map("ingested_from")

@@ -28,6 +28,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
       name: a.name,
       imageUrl: a.imageUrl ?? null,
       bio: a.bio ?? null,
+      bioLong: a.bioLong ?? null,
       email: a.email ?? null,
       socialLinks: (a.socialLinks as Record<string, string>) ?? {},
       ingestedFrom: a.ingestedFrom,
@@ -46,10 +47,11 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     isDefault?: boolean
     imageUrl?: string | null
     bio?: string | null
+    bioLong?: string | null
     email?: string | null
     socialLinks?: Record<string, string> | null
   }
-  const { siteKey, name, ingestedFrom, isDefault, imageUrl, bio, email, socialLinks } = body
+  const { siteKey, name, ingestedFrom, isDefault, imageUrl, bio, bioLong, email, socialLinks } = body
 
   if (!siteKey || typeof name !== 'string' || !name.trim()) {
     res.status(400).json({ error: 'siteKey and name are required' })
@@ -74,6 +76,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       name: existing.name,
       imageUrl: existing.imageUrl ?? null,
       bio: existing.bio ?? null,
+      bioLong: existing.bioLong ?? null,
       email: existing.email ?? null,
       socialLinks: (existing.socialLinks as Record<string, string>) ?? {},
       ingestedFrom: existing.ingestedFrom,
@@ -83,6 +86,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
   }
 
   const fromIngestion = ingestedFrom === 'SQUARESPACE'
+  const bioLongTrimmed = typeof bioLong === 'string' ? bioLong.slice(0, 1000) : null
   const author = await prisma.blogAuthor.create({
     data: {
       siteId: site.id,
@@ -91,6 +95,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       isDefault: fromIngestion ? true : Boolean(isDefault),
       imageUrl: typeof imageUrl === 'string' ? imageUrl : null,
       bio: typeof bio === 'string' ? bio : null,
+      bioLong: bioLongTrimmed || null,
       email: typeof email === 'string' ? email : null,
       socialLinks: socialLinks && typeof socialLinks === 'object' ? socialLinks : {}
     }
@@ -101,6 +106,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     name: author.name,
     imageUrl: author.imageUrl ?? null,
     bio: author.bio ?? null,
+    bioLong: author.bioLong ?? null,
     email: author.email ?? null,
     socialLinks: (author.socialLinks as Record<string, string>) ?? {},
     ingestedFrom: author.ingestedFrom,
@@ -116,6 +122,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     name?: string
     imageUrl?: string | null
     bio?: string | null
+    bioLong?: string | null
     email?: string | null
     socialLinks?: Record<string, string> | null
   }
@@ -141,6 +148,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     name?: string
     imageUrl?: string | null
     bio?: string | null
+    bioLong?: string | null
     email?: string | null
     socialLinks?: object
   } = {}
@@ -149,6 +157,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   }
   if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl ?? null
   if (body.bio !== undefined) data.bio = body.bio ?? null
+  if (body.bioLong !== undefined) data.bioLong = body.bioLong != null ? String(body.bioLong).slice(0, 1000) : null
   if (body.email !== undefined) data.email = body.email ?? null
   if (body.socialLinks !== undefined) {
     data.socialLinks =
@@ -165,6 +174,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     name: updated.name,
     imageUrl: updated.imageUrl ?? null,
     bio: updated.bio ?? null,
+    bioLong: updated.bioLong ?? null,
     email: updated.email ?? null,
     socialLinks: (updated.socialLinks as Record<string, string>) ?? {},
     ingestedFrom: updated.ingestedFrom,
