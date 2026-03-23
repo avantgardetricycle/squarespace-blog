@@ -53,12 +53,15 @@ model Site {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @map("updated_at")
 
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  siteConfigs      SiteConfig[]
-  blogAuthors      BlogAuthor[]
-  analyticsEvents  AnalyticsEvent[]
-  googleAnalytics  SiteGoogleAnalytics?
-  leadCaptures     LeadCapture[]
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  siteConfigs            SiteConfig[]
+  blogAuthors           BlogAuthor[]
+  analyticsEvents       AnalyticsEvent[]
+  googleAnalytics       SiteGoogleAnalytics?
+  leadCaptures          LeadCapture[]
+  blogCommentSettings   BlogCommentSettings?
+  cachedPosts           CachedPost[]
+  comments              Comment[]
 
   @@index([siteKey])
   @@index([userId])
@@ -291,4 +294,78 @@ model LeadCapture {
   @@index([siteId, type])
   @@index([siteId, createdAt])
   @@map("lead_captures")
+}
+
+model CachedPost {
+  siteId        String   @map("site_id")
+  externalPostId String  @map("external_post_id") // Squarespace post ID or fullUrl
+  title         String   @db.Text
+  publishedAt   DateTime @map("published_at")
+  url           String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, externalPostId])
+  @@map("cached_posts")
+}
+
+model Comment {
+  id                  String    @id @default(uuid())
+  siteId              String    @map("site_id")
+  postId              String    @map("post_id") // Squarespace post ID or fullUrl
+  parentId            String?   @map("parent_id")
+  displayName         String    @map("display_name")
+  email               String?   @db.Text
+  verifiedSubscriber  Boolean   @default(false) @map("verified_subscriber")
+  squarespaceProfileId String?  @map("squarespace_profile_id") @db.Text
+  body                String    @db.Text
+  status              String    @default("pending") // pending | approved | spam | deleted
+  autoApproved        Boolean   @default(false) @map("auto_approved")
+  ipAddress           String?   @map("ip_address") @db.VarChar(45)
+  userAgent           String?   @map("user_agent") @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @default(now()) @map("updated_at")
+
+  site         Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  parent       Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies      Comment[]     @relation("CommentReplies")
+  commentLikes CommentLike[]
+
+  @@index([siteId])
+  @@index([postId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+model CommentLike {
+  commentId   String   @map("comment_id")
+  fingerprint String   @map("fingerprint")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, fingerprint])
+  @@map("comment_likes")
+}
+
+model BlogCommentSettings {
+  siteId                   String   @id @map("site_id")
+  commentsEnabled          Boolean  @default(true) @map("comments_enabled")
+  allowAnonymousComments   Boolean  @default(true) @map("allow_anonymous_comments")
+  subscriberCommentsEnabled Boolean @default(false) @map("subscriber_comments_enabled")
+  squarespaceApiKeyEnc     String?  @map("squarespace_api_key_enc") @db.Text
+  requireApproval          Boolean  @default(false) @map("require_approval")
+  autoCloseAfterDays       Int?     @map("auto_close_after_days")
+  notifyEmail              Boolean  @default(true) @map("notify_email")
+  notificationEmail       String?  @map("notification_email") @db.Text
+  allowLikes               Boolean  @default(true) @map("allow_likes")
+  allowThreadedReplies     Boolean  @default(true) @map("allow_threaded_replies")
+  sortOrder                String   @default("newest") @map("sort_order") // newest | oldest | most_liked
+  updatedAt                DateTime @default(now()) @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("blog_comment_settings")
 }

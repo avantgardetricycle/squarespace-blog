@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
+import dashboardCommentsRoutes from './dashboard-comments.js'
 import { getPlanPriceDisplay } from '../lib/pricing.js'
 import { getAppUrl } from '../lib/url.js'
 import { randomBytes } from 'crypto'
@@ -67,6 +69,9 @@ function generateSiteKey(): string {
   }
   return key
 }
+
+router.use('/settings/comments', dashboardCommentSettingsRoutes)
+router.use('/comments', dashboardCommentsRoutes)
 
 // GET /api/dashboard/me - Current user, plan, sites
 router.get('/me', requireSession, async (req: Request, res: Response) => {

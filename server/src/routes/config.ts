@@ -264,7 +264,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
             take: 1
           }
         }
-      }
+      },
+      blogCommentSettings: true
     }
   })
 
@@ -443,6 +444,22 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     }
 
     const siteConfigTyped = siteConfig as { collectionTemplateId?: string | null; postTemplateId?: string | null }
+    const cs = site.blogCommentSettings
+    const commentSettings =
+      cs?.commentsEnabled === true
+        ? {
+            commentsEnabled: true,
+            allowAnonymousComments: cs.allowAnonymousComments,
+            subscriberCommentsEnabled: cs.subscriberCommentsEnabled,
+            requireApproval: cs.requireApproval,
+            autoCloseAfterDays: cs.autoCloseAfterDays,
+            allowLikes: cs.allowLikes,
+            allowThreadedReplies: cs.allowThreadedReplies,
+            sortOrder: cs.sortOrder,
+            hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
+          }
+        : { commentsEnabled: false }
+
     const configData = {
       siteKey,
       siteId: site.id,
@@ -458,6 +475,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       postTemplateId: siteConfigTyped.postTemplateId ?? null,
       recentPostsCount: 5,
       baseUrl,
+      commentSettings,
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
     }
 

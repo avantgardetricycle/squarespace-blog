@@ -944,6 +944,25 @@ export default function Configure() {
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
   const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
+  const [commentSettings, setCommentSettings] = useState<{
+    commentsEnabled: boolean;
+    allowAnonymousComments: boolean;
+    subscriberCommentsEnabled: boolean;
+    apiKeyVerified: boolean;
+    requireApproval: boolean;
+    autoCloseAfterDays: number | null;
+    notifyEmail: boolean;
+    notificationEmail: string | null;
+    allowLikes: boolean;
+    allowThreadedReplies: boolean;
+    sortOrder: "newest" | "oldest" | "most_liked";
+  } | null>(null);
+  const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
+  const [commentSettingsSaving, setCommentSettingsSaving] = useState(false);
+  const [commentApiKeyInput, setCommentApiKeyInput] = useState("");
+  const [commentApiKeyStatus, setCommentApiKeyStatus] = useState<
+    "unverified" | "verifying" | "verified" | "invalid" | "missing_permission"
+  >("unverified");
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     authorProfiles: false,
@@ -968,6 +987,7 @@ export default function Configure() {
     footerContent: false,
     socialMediaLinks: false,
     postHeader: false,
+    comments: false,
   });
 
   useEffect(() => {
@@ -1019,6 +1039,65 @@ export default function Configure() {
       ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
+
+  useEffect(() => {
+    if (!effectiveSiteKey) return;
+    setCommentSettingsLoading(true);
+    fetch(`/api/dashboard/settings/comments?siteKey=${encodeURIComponent(effectiveSiteKey)}`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data === "object") {
+          setCommentSettings({
+            commentsEnabled: data.commentsEnabled ?? true,
+            allowAnonymousComments: data.allowAnonymousComments ?? true,
+            subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
+            apiKeyVerified: data.apiKeyVerified ?? false,
+            requireApproval: data.requireApproval ?? false,
+            autoCloseAfterDays: data.autoCloseAfterDays ?? null,
+            notifyEmail: data.notifyEmail ?? true,
+            notificationEmail: data.notificationEmail ?? null,
+            allowLikes: data.allowLikes ?? true,
+            allowThreadedReplies: data.allowThreadedReplies ?? true,
+            sortOrder: ["newest", "oldest", "most_liked"].includes(data.sortOrder)
+              ? data.sortOrder
+              : "newest",
+          });
+          setCommentApiKeyStatus(data.apiKeyVerified ? "verified" : "unverified");
+        } else {
+          setCommentSettings({
+            commentsEnabled: true,
+            allowAnonymousComments: true,
+            subscriberCommentsEnabled: false,
+            apiKeyVerified: false,
+            requireApproval: false,
+            autoCloseAfterDays: null,
+            notifyEmail: true,
+            notificationEmail: null,
+            allowLikes: true,
+            allowThreadedReplies: true,
+            sortOrder: "newest",
+          });
+        }
+      })
+      .catch(() =>
+        setCommentSettings({
+          commentsEnabled: true,
+          allowAnonymousComments: true,
+          subscriberCommentsEnabled: false,
+          apiKeyVerified: false,
+          requireApproval: false,
+          autoCloseAfterDays: null,
+          notifyEmail: true,
+          notificationEmail: null,
+          allowLikes: true,
+          allowThreadedReplies: true,
+          sortOrder: "newest",
+        })
+      )
+      .finally(() => setCommentSettingsLoading(false));
+  }, [effectiveSiteKey]);
 
   // Fetch blog authors for the site
   useEffect(() => {
@@ -1997,6 +2076,233 @@ export default function Configure() {
                         </Collapsible>
                       </div>
                     )}
+
+                    {/* Comments */}
+                    {selectedLevel === "post" && (
+                    <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
+                      Comments
+                    </div>
+                    )}
+                    {selectedLevel === "post" && (commentSettingsLoading ? (
+                      <div className="border-b border-[#e5e4e0] py-4 text-sm text-[#6b6b6b]">Loading comment settings…</div>
+                    ) : commentSettings && (
+                    <div className="border-b border-[#e5e4e0] pb-4">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Enable Comments</span>
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={commentSettings.commentsEnabled}
+                            onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, commentsEnabled: v } : p)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSectionExpanded((p) => ({ ...p, comments: !p.comments }))}
+                            className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                            aria-label={sectionExpanded.comments ? "Collapse" : "Expand"}
+                          >
+                            {sectionExpanded.comments ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+                      <Collapsible open={commentSettings.commentsEnabled && sectionExpanded.comments}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow Anonymous Comments</Label>
+                                <Switch
+                                  checked={commentSettings.allowAnonymousComments}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowAnonymousComments: v } : p)}
+                                />
+                              </div>
+                              <p className="text-xs text-[#6b6b6b]">Readers can comment with name only.</p>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Verified Subscriber Comments</Label>
+                                <Switch
+                                  checked={commentSettings.subscriberCommentsEnabled}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: v } : p)}
+                                />
+                              </div>
+                              <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
+                              <div className="rounded border border-[#e5e4e0] p-3 space-y-2 bg-[#f7f6f3]/50">
+                                <Label className="text-xs text-[#6b6b6b]">Your Squarespace API Key</Label>
+                                <p className="text-xs text-[#6b6b6b]">Create your API key in Squarespace (Settings → Advanced → Developer API Keys), then enter it below. Required permissions: Profiles (Read).</p>
+                                <div className="flex gap-2">
+                                  <Input
+                                    type="password"
+                                    placeholder={commentSettings.apiKeyVerified ? "••••••••••••••••" : "Paste your Squarespace API key"}
+                                    value={commentApiKeyInput}
+                                    onChange={(e) => {
+                                      setCommentApiKeyInput(e.target.value);
+                                      setCommentApiKeyStatus("unverified");
+                                    }}
+                                    className="flex-1 font-mono text-sm"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={!commentApiKeyInput.trim() || commentApiKeyStatus === "verifying"}
+                                    onClick={async () => {
+                                      if (!effectiveSiteKey || !commentApiKeyInput.trim()) return;
+                                      setCommentApiKeyStatus("verifying");
+                                      const res = await fetch("/api/dashboard/settings/comments/verify-api-key", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        credentials: "include",
+                                        body: JSON.stringify({ siteKey: effectiveSiteKey, apiKey: commentApiKeyInput.trim() }),
+                                      });
+                                      const data = await res.json();
+                                      if (data?.valid) {
+                                        setCommentApiKeyStatus("verified");
+                                        setCommentSettings((p) => p ? { ...p, apiKeyVerified: true } : p);
+                                      } else if (data?.error === "MISSING_PERMISSION") {
+                                        setCommentApiKeyStatus("missing_permission");
+                                      } else {
+                                        setCommentApiKeyStatus("invalid");
+                                      }
+                                    }}
+                                  >
+                                    {commentApiKeyStatus === "verifying" ? "Verifying…" : "Verify"}
+                                  </Button>
+                                </div>
+                                <p className="text-xs">
+                                  {commentApiKeyStatus === "verified" && <span className="text-green-600">Verified ✓</span>}
+                                  {commentApiKeyStatus === "invalid" && <span className="text-red-600">Invalid key ✗</span>}
+                                  {commentApiKeyStatus === "missing_permission" && <span className="text-red-600">Missing Profiles permission ✗</span>}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Require Approval Before Publishing</Label>
+                                <Switch
+                                  checked={commentSettings.requireApproval}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, requireApproval: v } : p)}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-sm">Close Comments After</Label>
+                              <div className="flex items-center gap-3">
+                                <Slider
+                                  value={[commentSettings.autoCloseAfterDays ?? 0]}
+                                  onValueChange={([v]) => setCommentSettings((p) => p ? { ...p, autoCloseAfterDays: v === 0 ? null : v } : p)}
+                                  min={0}
+                                  max={365}
+                                  step={1}
+                                  className="flex-1"
+                                />
+                                <span className="text-xs text-[#6b6b6b] w-20 shrink-0">
+                                  {commentSettings.autoCloseAfterDays === null || commentSettings.autoCloseAfterDays === 0
+                                    ? "Never"
+                                    : `${commentSettings.autoCloseAfterDays} days`}
+                                </span>
+                              </div>
+                              <p className="text-xs text-[#6b6b6b]">0 = Never, 1–365 = days after publish</p>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Email me new comments</Label>
+                                <Switch
+                                  checked={commentSettings.notifyEmail}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, notifyEmail: v } : p)}
+                                />
+                              </div>
+                              {commentSettings.notifyEmail && (
+                                <Input
+                                  type="email"
+                                  placeholder="Notify address (defaults to account email)"
+                                  value={commentSettings.notificationEmail ?? ""}
+                                  onChange={(e) => setCommentSettings((p) => p ? { ...p, notificationEmail: e.target.value || null } : p)}
+                                  className="h-8 text-sm"
+                                />
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow Comment Likes</Label>
+                                <Switch
+                                  checked={commentSettings.allowLikes}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowLikes: v } : p)}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow Threaded Replies</Label>
+                                <Switch
+                                  checked={commentSettings.allowThreadedReplies}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowThreadedReplies: v } : p)}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-sm">Default Sort</Label>
+                              <Select
+                                value={commentSettings.sortOrder}
+                                onValueChange={(v) => setCommentSettings((p) => p ? { ...p, sortOrder: v as "newest" | "oldest" | "most_liked" } : p)}
+                              >
+                                <SelectTrigger className="w-[180px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="newest">Newest First</SelectItem>
+                                  <SelectItem value="oldest">Oldest First</SelectItem>
+                                  <SelectItem value="most_liked">Most Liked</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              disabled={commentSettingsSaving || !effectiveSiteKey}
+                              onClick={async () => {
+                                if (!effectiveSiteKey || !commentSettings) return;
+                                setCommentSettingsSaving(true);
+                                try {
+                                  const res = await fetch("/api/dashboard/settings/comments", {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json" },
+                                    credentials: "include",
+                                    body: JSON.stringify({
+                                      siteKey: effectiveSiteKey,
+                                      commentsEnabled: commentSettings.commentsEnabled,
+                                      allowAnonymousComments: commentSettings.allowAnonymousComments,
+                                      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled,
+                                      requireApproval: commentSettings.requireApproval,
+                                      autoCloseAfterDays: commentSettings.autoCloseAfterDays,
+                                      notifyEmail: commentSettings.notifyEmail,
+                                      notificationEmail: commentSettings.notificationEmail,
+                                      allowLikes: commentSettings.allowLikes,
+                                      allowThreadedReplies: commentSettings.allowThreadedReplies,
+                                      sortOrder: commentSettings.sortOrder,
+                                      ...(commentApiKeyInput.trim() ? { squarespaceApiKey: commentApiKeyInput.trim() } : {}),
+                                    }),
+                                  });
+                                  if (res.ok) {
+                                    toast.success("Comment settings saved!");
+                                    setCommentApiKeyInput("");
+                                    if (commentApiKeyStatus === "verified") {
+                                      setCommentSettings((p) => p ? { ...p, apiKeyVerified: true } : p);
+                                    }
+                                  } else {
+                                    const data = await res.json().catch(() => ({}));
+                                    toast.error(data?.error ?? "Failed to save");
+                                  }
+                                } finally {
+                                  setCommentSettingsSaving(false);
+                                }
+                              }}
+                            >
+                              {commentSettingsSaving ? "Saving…" : "Save Comment Settings"}
+                            </Button>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                    ))}
 
                     {/* Layout & Design */}
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#5B4FE8] border-b border-[rgba(91,79,232,0.2)]">

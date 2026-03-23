@@ -160,6 +160,233 @@
       return false;
     },
 
+    _initComments: function(container, post, cfg) {
+      var self = this;
+      var cs = (cfg && cfg.commentSettings) || {};
+      if (!cs.commentsEnabled) return;
+      var baseUrl = (cfg && cfg.baseUrl) || '';
+      var siteKey = (cfg && cfg.siteKey) || '';
+      if (!baseUrl || !siteKey) return;
+      var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
+      if (!postId) return;
+
+      var style = document.getElementById('bb-comments-styles');
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'bb-comments-styles';
+        style.textContent = '.squarespace-comments .comment-form,.squarespace-comments .comment-form-wrapper,[data-block-type="comments"] form,.comment-count-link{display:none!important}';
+        document.head.appendChild(style);
+      }
+
+      var nativeBlock = document.querySelector('.squarespace-comments, [data-block-type="comments"]');
+      if (nativeBlock && nativeBlock.querySelectorAll('.comment').length > 0) {
+        var label = document.createElement('p');
+        label.className = 'bb-legacy-label';
+        label.textContent = 'Earlier comments';
+        label.style.fontSize = '0.85rem';
+        label.style.color = '#666';
+        label.style.marginBottom = '8px';
+        nativeBlock.insertAdjacentElement('beforebegin', label);
+        nativeBlock.classList.add('bb-legacy-comments');
+      }
+
+      var existing = document.getElementById('bb-comments');
+      if (existing) existing.remove();
+
+      var bbDiv = document.createElement('div');
+      bbDiv.id = 'bb-comments';
+      bbDiv.style.marginTop = '32px';
+      bbDiv.style.paddingTop = '24px';
+      bbDiv.style.borderTop = '1px solid #eee';
+
+      var apiUrl = baseUrl.replace(/\/+$/, '') + '/api/comments';
+
+      var renderComments = function(comments, total) {
+        var listEl = bbDiv.querySelector('.bb-comments-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        var list = (comments || []).slice();
+        var addComment = function(c, isReply) {
+          var wrap = document.createElement('div');
+          wrap.className = 'bb-comment' + (isReply ? ' bb-comment-reply' : '');
+          wrap.style.marginBottom = isReply ? '12px' : '20px';
+          wrap.style.paddingLeft = isReply ? '20px' : '0';
+          var initials = (c.display_name || '?').slice(0, 2).toUpperCase();
+          var avatar = document.createElement('span');
+          avatar.className = 'bb-comment-avatar';
+          avatar.textContent = initials;
+          avatar.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#5B4FE8;color:#fff;font-size:12px;font-weight:600;margin-right:10px;vertical-align:middle';
+          var meta = document.createElement('span');
+          meta.style.fontSize = '0.9rem';
+          meta.style.color = '#333';
+          meta.innerHTML = (c.display_name || 'Anonymous') + (c.verified_subscriber ? ' <span style="color:#5B4FE8;font-size:11px">✓</span>' : '');
+          var time = document.createElement('span');
+          time.style.fontSize = '0.8rem';
+          time.style.color = '#999';
+          time.style.marginLeft = '8px';
+          var d = c.created_at ? new Date(c.created_at) : new Date();
+          var now = new Date();
+          var diff = (now - d) / 1000 / 60 / 60;
+          time.textContent = diff < 24 ? (diff < 1 ? (d.getMinutes() === now.getMinutes() ? 'Just now' : Math.round(diff * 60) + ' min ago') : Math.round(diff) + ' hours ago') : d.toLocaleDateString();
+          var row1 = document.createElement('div');
+          row1.style.marginBottom = '4px';
+          row1.appendChild(avatar);
+          row1.appendChild(meta);
+          row1.appendChild(time);
+          wrap.appendChild(row1);
+          var body = document.createElement('div');
+          body.textContent = c.body || '';
+          body.style.marginBottom = '6px';
+          body.style.fontSize = '0.95rem';
+          body.style.lineHeight = '1.5';
+          wrap.appendChild(body);
+          var actions = document.createElement('div');
+          actions.style.fontSize = '0.8rem';
+          actions.style.color = '#999';
+          var likeBtn = document.createElement('button');
+          likeBtn.type = 'button';
+          likeBtn.style.background = 'none';
+          likeBtn.style.border = 'none';
+          likeBtn.style.cursor = 'pointer';
+          likeBtn.style.color = 'inherit';
+          likeBtn.textContent = (c.like_count || 0) + ' 👍';
+          if (cs.allowLikes !== false) {
+            likeBtn.onclick = function() {
+              fetch(apiUrl + '/' + c.id + '/like', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify({ siteKey: siteKey }),
+                credentials: 'omit'
+              }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data && typeof data.like_count === 'number') {
+                  likeBtn.textContent = data.like_count + ' 👍';
+                }
+              });
+            };
+          }
+          actions.appendChild(likeBtn);
+          wrap.appendChild(actions);
+          listEl.appendChild(wrap);
+          (c.replies || []).forEach(function(r) { addComment(r, true); });
+        };
+        list.forEach(function(c) { addComment(c, false); });
+      };
+
+      var listEl = document.createElement('div');
+      listEl.className = 'bb-comments-list';
+      listEl.style.marginBottom = '24px';
+      bbDiv.appendChild(listEl);
+
+      fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data && data.comments) renderComments(data.comments, data.total || 0);
+        })
+        .catch(function() {});
+
+      var formWrap = document.createElement('div');
+      formWrap.className = 'bb-comment-form-wrap';
+      formWrap.style.marginTop = '16px';
+
+      var heading = document.createElement('h3');
+      heading.textContent = 'Leave a comment';
+      heading.style.fontSize = '1.1rem';
+      heading.style.margin = '0 0 12px 0';
+      formWrap.appendChild(heading);
+
+      var nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'Name (required)';
+      nameInput.setAttribute('maxlength', '100');
+      nameInput.style.cssText = 'display:block;width:100%;max-width:400px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+      formWrap.appendChild(nameInput);
+
+      var bodyArea = document.createElement('textarea');
+      bodyArea.placeholder = 'Comment (required)';
+      bodyArea.setAttribute('maxlength', '5000');
+      bodyArea.rows = 4;
+      bodyArea.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+      formWrap.appendChild(bodyArea);
+
+      var submitBtn = document.createElement('button');
+      submitBtn.type = 'button';
+      submitBtn.textContent = 'Post Comment';
+      submitBtn.style.cssText = 'padding:10px 24px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:pointer';
+      submitBtn.onclick = function() {
+        var name = (nameInput.value || '').trim();
+        var body = (bodyArea.value || '').trim();
+        if (!name) { nameInput.focus(); return; }
+        if (!body) { bodyArea.focus(); return; }
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Posting…';
+        var payload = {
+          post_id: postId,
+          display_name: name,
+          body: body,
+          siteKey: siteKey,
+          post_title: (post && post.title) || null,
+          post_published_at: (post && post.publishDate) || (post && post.publishedOn) || null,
+          post_url: (post && (post.fullUrl || post.url)) || null
+        };
+        if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
+          try {
+            var token = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
+            if (token) payload.hcaptcha_token = token;
+          } catch (e) {}
+        }
+        fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+          body: JSON.stringify(payload),
+          credentials: 'omit'
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Post Comment';
+            if (data && data.id) {
+              if (data.status === 'pending') {
+                bodyArea.value = '';
+                var msg = document.createElement('p');
+                msg.style.color = '#666';
+                msg.style.fontSize = '0.9rem';
+                msg.textContent = 'Your comment is awaiting moderation.';
+                formWrap.appendChild(msg);
+              } else {
+                bodyArea.value = '';
+                nameInput.value = '';
+                var c = { id: data.id, display_name: data.display_name, verified_subscriber: data.verified_subscriber, body: data.body, like_count: 0, created_at: data.created_at, replies: [] };
+                var list = bbDiv.querySelector('.bb-comments-list');
+                if (list) {
+                  var wrap = document.createElement('div');
+                  wrap.className = 'bb-comment';
+                  wrap.style.marginBottom = '20px';
+                  wrap.innerHTML = '<div style="margin-bottom:4px"><span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#5B4FE8;color:#fff;font-size:12px;font-weight:600;margin-right:10px;vertical-align:middle">' + (data.display_name || '?').slice(0, 2).toUpperCase() + '</span><span style="font-size:0.9rem;color:#333">' + (data.display_name || 'Anonymous') + '</span><span style="font-size:0.8rem;color:#999;margin-left:8px">Just now</span></div><div style="margin-bottom:6px;font-size:0.95rem;line-height:1.5">' + (data.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+                  list.appendChild(wrap);
+                }
+              }
+            } else {
+              var err = (data && data.error) || 'Failed to post';
+              submitBtn.textContent = err;
+              setTimeout(function() { submitBtn.textContent = 'Post Comment'; }, 3000);
+            }
+          })
+          .catch(function() {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Post Comment';
+          });
+      };
+      formWrap.appendChild(submitBtn);
+
+      bbDiv.appendChild(formWrap);
+
+      if (nativeBlock) {
+        nativeBlock.insertAdjacentElement('afterend', bbDiv);
+      } else {
+        container.appendChild(bbDiv);
+      }
+    },
+
     /**
      * Initialize the renderer with user config
      * @param {Object} config - User configuration from the API
@@ -4297,6 +4524,14 @@
           if (leftSidebarEl.childNodes.length) wrapper.appendChild(leftSidebarEl);
           wrapper.appendChild(main);
           if (rightSidebarEl.childNodes.length) wrapper.appendChild(rightSidebarEl);
+
+          if (isSinglePost && selectedIndex >= 0 && items[selectedIndex] && cfg && cfg.commentSettings && cfg.commentSettings.commentsEnabled) {
+            try {
+              self._initComments(main, items[selectedIndex], cfg);
+            } catch (e) {
+              console.error('[BlogOverlay] Comments init error:', e);
+            }
+          }
 
           root.prepend(wrapper);
 

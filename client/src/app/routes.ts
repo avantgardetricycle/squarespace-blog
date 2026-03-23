@@ -5,6 +5,7 @@ import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import Configure from "./pages/Configure";
+import Comments from "./pages/Comments";
 import Checkout from "./pages/Checkout";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Analytics from "./pages/Analytics";
@@ -60,6 +61,10 @@ export const router = createBrowserRouter([
       {
         path: "configure",
         Component: Configure,
+      },
+      {
+        path: "comments",
+        Component: Comments,
       },
       {
         path: "analytics",

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { render } from '@react-email/render'
 import { InviteEmail } from './InviteEmail.js'
 import { MagicLinkEmail } from './MagicLinkEmail.js'
+import { CommentNotificationEmail } from './CommentNotificationEmail.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const logoPath = join(__dirname, 'logo-email.png')
@@ -19,4 +20,15 @@ export async function renderInviteEmail(magicLink: string): Promise<string> {
 
 export async function renderMagicLinkEmail(magicLink: string): Promise<string> {
   return render(MagicLinkEmail({ magicLink }))
+}
+
+export async function renderCommentNotificationEmail(props: {
+  displayName: string
+  postTitle: string
+  commentExcerpt: string
+  approveUrl: string
+  viewUrl: string
+  spamUrl: string
+}): Promise<string> {
+  return render(CommentNotificationEmail(props))
 }

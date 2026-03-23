@@ -1,6 +1,6 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail } from '../emails/index.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -199,5 +199,45 @@ export async function sendNewLeadMagnetNotification(
     })
   } catch (err) {
     console.error('[Capture] SendGrid error sending lead magnet notification:', err)
+  }
+}
+
+/** Send notification to blogger: new comment or comment approved */
+export async function sendCommentNotificationEmail(
+  to: string,
+  displayName: string,
+  postTitle: string,
+  commentExcerpt: string,
+  approveUrl: string,
+  viewUrl: string,
+  spamUrl: string
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[Comment] SENDGRID_API_KEY not set. New comment from ${displayName} on "${postTitle}"`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  const html = await renderCommentNotificationEmail({
+    displayName,
+    postTitle,
+    commentExcerpt,
+    approveUrl,
+    viewUrl,
+    spamUrl,
+  })
+
+  try {
+    await sgMail.send({
+      to,
+      from: mailFrom,
+      subject: `New comment on "${postTitle}"`,
+      html,
+      trackingSettings: { clickTracking: { enable: false } },
+    })
+  } catch (err) {
+    console.error('[Comment] SendGrid error sending comment notification:', err)
   }
 }

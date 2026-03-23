@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link, useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, Settings, User, LogOut, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 
@@ -7,6 +7,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isConfigure = location.pathname === "/dashboard/configure";
+  const isComments = location.pathname === "/dashboard/comments";
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -15,6 +16,7 @@ export default function Layout() {
 
   const navItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true },
+    { to: "/dashboard/comments", icon: MessageSquare, label: "Comments", end: false },
     { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics", end: false },
     { to: "/dashboard/configure", icon: Settings, label: "Customize Blog" },
     { to: "/dashboard/account", icon: User, label: "Account" },
@@ -64,7 +66,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        {isConfigure ? (
+        {isConfigure || isComments ? (
           <Outlet />
         ) : (
           <div className="container mx-auto max-w-5xl p-8">

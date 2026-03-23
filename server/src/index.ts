@@ -15,6 +15,8 @@ import templatesRoutes from './routes/templates.js'
 import leadsRoutes from './routes/leads.js'
 import analyticsRoutes from './routes/analytics.js'
 import captureRoutes from './routes/capture.js'
+import commentsRoutes from './routes/comments.js'
+import commentActionsRoutes from './routes/comment-actions.js'
 import { startQueue, stopQueue } from './queue/index.js'
 
 const app = express()
@@ -41,6 +43,8 @@ app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
 app.use('/api/analytics', cors({ origin: true, credentials: true }), analyticsRoutes)
 // Capture: newsletter/lead magnet submissions from Squarespace (any origin)
 app.use('/api/capture', cors({ origin: true, credentials: true }), captureRoutes)
+// Comments: reader-facing comment API from overlay (any origin)
+app.use('/api/comments', cors({ origin: true, credentials: true }), commentsRoutes)
 
 // All other routes: strict CORS (app origin only)
 const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
@@ -51,6 +55,7 @@ app.use(
   })
 )
 app.use('/api/auth', authRoutes)
+app.use('/api/comment-actions', commentActionsRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/blog-authors', blogAuthorsRoutes)
 app.use('/api/templates', templatesRoutes)
