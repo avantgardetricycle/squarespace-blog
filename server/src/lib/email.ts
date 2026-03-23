@@ -208,9 +208,7 @@ export async function sendCommentNotificationEmail(
   displayName: string,
   postTitle: string,
   commentExcerpt: string,
-  approveUrl: string,
-  viewUrl: string,
-  spamUrl: string
+  viewUrl: string
 ): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
@@ -224,9 +222,7 @@ export async function sendCommentNotificationEmail(
     displayName,
     postTitle,
     commentExcerpt,
-    approveUrl,
     viewUrl,
-    spamUrl,
   })
 
   try {

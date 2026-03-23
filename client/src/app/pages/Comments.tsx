@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router";
 import {
   MessageCircle,
   ThumbsUp,
   Trash2,
   Check,
   Reply,
+  Eye,
   EyeOff,
   Flag,
   Search,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import {
   Select,
@@ -19,13 +22,16 @@ import {
 } from "@/app/components/ui/select";
 import { Input } from "@/app/components/ui/input";
 import { Button } from "@/app/components/ui/button";
+import { Label } from "@/app/components/ui/label";
+import { Switch } from "@/app/components/ui/switch";
+import { Slider } from "@/app/components/ui/slider";
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
 // API statuses: pending, approved, spam, deleted
-// UI statuses: published (approved), awaiting (pending), spam, blocked (deleted)
+// UI statuses: published (approved), awaiting (pending), spam, hidden (deleted)
 type ApiStatus = "pending" | "approved" | "spam" | "deleted";
-type UiStatus = "published" | "awaiting" | "blocked" | "spam";
+type UiStatus = "published" | "awaiting" | "hidden" | "spam";
 
 interface Comment {
   id: string;
@@ -45,14 +51,14 @@ interface Comment {
 function apiToUiStatus(s: ApiStatus): UiStatus {
   if (s === "approved") return "published";
   if (s === "pending") return "awaiting";
-  if (s === "deleted") return "blocked";
+  if (s === "deleted") return "hidden";
   return "spam";
 }
 
 function uiToApiStatus(s: UiStatus): ApiStatus {
   if (s === "published") return "approved";
   if (s === "awaiting") return "pending";
-  if (s === "blocked") return "deleted";
+  if (s === "hidden") return "deleted";
   return "spam";
 }
 
@@ -64,9 +70,16 @@ interface Counts {
 }
 
 interface CommentSettings {
+  commentsEnabled: boolean;
+  allowAnonymousComments: boolean;
+  subscriberCommentsEnabled: boolean;
+  apiKeyVerified: boolean;
   requireApproval: boolean;
+  autoCloseAfterDays: number | null;
   notifyEmail: boolean;
-  subscriberCommentsEnabled?: boolean;
+  allowLikes: boolean;
+  allowThreadedReplies: boolean;
+  sortOrder: "newest" | "oldest" | "most_liked";
 }
 
 export default function Comments() {
@@ -139,9 +152,18 @@ export default function Comments() {
       .then((data) => {
         if (data)
           setSettings({
-            requireApproval: data.requireApproval ?? false,
-            notifyEmail: data.notifyEmail ?? true,
+            commentsEnabled: data.commentsEnabled ?? true,
+            allowAnonymousComments: data.allowAnonymousComments ?? true,
             subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
+            apiKeyVerified: data.apiKeyVerified ?? false,
+            requireApproval: data.requireApproval ?? false,
+            autoCloseAfterDays: data.autoCloseAfterDays ?? null,
+            notifyEmail: data.notifyEmail ?? true,
+            allowLikes: data.allowLikes ?? true,
+            allowThreadedReplies: data.allowThreadedReplies ?? true,
+            sortOrder: ["newest", "oldest", "most_liked"].includes(data.sortOrder)
+              ? data.sortOrder
+              : "newest",
           });
       });
   }, [siteKey]);
@@ -236,6 +258,23 @@ export default function Comments() {
     handleDelete(c);
   };
 
+  const handleUnhide = (c: Comment) => {
+    fetch(`/api/dashboard/comments/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status: "approved" }),
+    }).then((r) => {
+      if (r.ok) {
+        toast.success("Comment unhidden");
+        setComments((prev) =>
+          prev.map((x) => (x.id === c.id ? { ...x, status: "approved" as ApiStatus } : x))
+        );
+        refreshCounts();
+      }
+    });
+  };
+
   const handleReply = async (commentId: string) => {
     if (replyingTo === commentId) {
       if (!replyText.trim()) return;
@@ -270,18 +309,26 @@ export default function Comments() {
     else setSelectedComments(new Set(comments.map((c) => c.id)));
   };
 
-  const updateSetting = async (key: keyof CommentSettings, value: boolean) => {
+  const updateSetting = async <K extends keyof CommentSettings>(
+    key: K,
+    value: CommentSettings[K]
+  ) => {
     if (!siteKey || !settings) return;
     const next = { ...settings, [key]: value };
     setSettings(next);
     setSettingsSaving(true);
-    const payload: Record<string, unknown> = {
+    const payload = {
       siteKey,
+      commentsEnabled: next.commentsEnabled,
+      allowAnonymousComments: next.allowAnonymousComments,
+      subscriberCommentsEnabled: next.subscriberCommentsEnabled,
       requireApproval: next.requireApproval,
+      autoCloseAfterDays: next.autoCloseAfterDays,
       notifyEmail: next.notifyEmail,
+      allowLikes: next.allowLikes,
+      allowThreadedReplies: next.allowThreadedReplies,
+      sortOrder: next.sortOrder,
     };
-    if (next.subscriberCommentsEnabled !== undefined)
-      payload.subscriberCommentsEnabled = next.subscriberCommentsEnabled;
     const r = await fetch("/api/dashboard/settings/comments", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -291,7 +338,8 @@ export default function Comments() {
     setSettingsSaving(false);
     if (!r.ok) {
       setSettings(settings);
-      toast.error("Failed to save settings");
+      const data = await r.json().catch(() => ({}));
+      toast.error(data?.error ?? "Failed to save settings");
     } else {
       toast.success("Settings saved");
     }
@@ -303,7 +351,7 @@ export default function Comments() {
         return "bg-emerald-50 text-emerald-700 border-emerald-200";
       case "awaiting":
         return "bg-amber-50 text-amber-700 border-amber-200";
-      case "blocked":
+      case "hidden":
         return "bg-red-50 text-red-700 border-red-200";
       case "spam":
         return "bg-neutral-100 text-neutral-600 border-neutral-300";
@@ -317,22 +365,13 @@ export default function Comments() {
       year: "numeric",
     });
 
-  const filteredCount =
-    selectedFilter === "all"
-      ? counts.pending + counts.approved + counts.spam + counts.deleted
-      : selectedFilter === "published"
-        ? counts.approved
-        : selectedFilter === "awaiting"
-          ? counts.pending
-          : selectedFilter === "blocked"
-            ? counts.deleted
-            : counts.spam;
+  const totalCount = counts.pending + counts.approved + counts.spam + counts.deleted;
 
   const filters: { value: "all" | UiStatus; label: string; count: number }[] = [
-    { value: "all", label: "All Comments", count: filteredCount },
+    { value: "all", label: "All Comments", count: totalCount },
     { value: "published", label: "Published", count: counts.approved },
     { value: "awaiting", label: "Awaiting Review", count: counts.pending },
-    { value: "blocked", label: "Blocked", count: counts.deleted },
+    { value: "hidden", label: "Hidden", count: counts.deleted },
     { value: "spam", label: "Spam", count: counts.spam },
   ];
 
@@ -589,7 +628,34 @@ export default function Comments() {
                                   Hide
                                 </button>
                               )}
-                              {(uiStatus === "awaiting" || uiStatus === "spam") && (
+                              {uiStatus === "hidden" && (
+                                <button
+                                  onClick={() => handleUnhide(comment)}
+                                  className="text-sm font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Unhide
+                                </button>
+                              )}
+                              {uiStatus === "spam" && (
+                                <>
+                                  <button
+                                    onClick={() => handleApprove(comment)}
+                                    className="text-sm font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    Publish
+                                  </button>
+                                  <button
+                                    onClick={() => handleHide(comment)}
+                                    className="text-sm font-medium text-neutral-600 hover:text-neutral-700 flex items-center gap-1.5"
+                                  >
+                                    <EyeOff className="w-4 h-4" />
+                                    Hide
+                                  </button>
+                                </>
+                              )}
+                              {uiStatus !== "spam" && (
                                 <button
                                   onClick={() => handleSpam(comment)}
                                   className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center gap-1.5"
@@ -690,7 +756,7 @@ export default function Comments() {
           </div>
           <div className="p-4 bg-red-50 rounded-lg border border-red-200">
             <div className="text-xs font-medium text-red-700 uppercase tracking-wider mb-1">
-              Blocked
+              Hidden
             </div>
             <div className="font-heading text-3xl text-red-900">{counts.deleted}</div>
           </div>
@@ -703,41 +769,141 @@ export default function Comments() {
         </div>
 
         <div className="mt-6 pt-6 border-t border-neutral-200">
-          <h3 className="font-medium text-sm text-[#0a0a0a] mb-3">Settings</h3>
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!settings?.requireApproval}
-                onChange={(e) => updateSetting("requireApproval", !e.target.checked)}
+          <h3 className="font-medium text-sm text-[#0a0a0a] mb-4">Settings</h3>
+          {!settings && siteKey ? (
+            <p className="text-sm text-neutral-500">Loading settings…</p>
+          ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Enable Comments</Label>
+              <Switch
+                checked={settings?.commentsEnabled ?? true}
+                onCheckedChange={(v) => settings && updateSetting("commentsEnabled", v)}
                 disabled={settingsSaving}
-                className="w-4 h-4 text-[#5B4FE8] border-neutral-300 rounded focus:ring-[#5B4FE8]"
               />
-              <span className="text-sm text-neutral-700">Auto-approve comments</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings?.subscriberCommentsEnabled ?? false}
-                onChange={(e) =>
-                  settings && updateSetting("subscriberCommentsEnabled", e.target.checked)
+            </div>
+            {(settings?.commentsEnabled ?? true) && (
+            <>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Allow Anonymous Comments</Label>
+                <Switch
+                  checked={settings?.allowAnonymousComments ?? true}
+                  onCheckedChange={(v) => settings && updateSetting("allowAnonymousComments", v)}
+                  disabled={settingsSaving}
+                />
+              </div>
+              <p className="text-xs text-neutral-500">Readers can comment with name only.</p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Verified Subscriber Comments</Label>
+                <Switch
+                  checked={settings?.subscriberCommentsEnabled ?? false}
+                  onCheckedChange={(v) => settings && updateSetting("subscriberCommentsEnabled", v)}
+                  disabled={settingsSaving}
+                />
+              </div>
+              <p className="text-xs text-neutral-500">Require email for paywalled posts, verified against your Squarespace member list.</p>
+              {settings?.apiKeyVerified && (
+                <div className="flex items-center gap-2 text-sm mt-1">
+                  <span className="font-mono text-neutral-500">••••••••••••••••</span>
+                  <Link
+                    to="/dashboard/configure"
+                    className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
+                    aria-label="Edit API key in Customize Blog"
+                    title="Manage API key in Customize Blog"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
+              {!settings?.apiKeyVerified && settings && (
+                <Link to="/dashboard/configure" className="text-xs text-[#5B4FE8] hover:underline">
+                  Set up API key in Customize Blog
+                </Link>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Require Approval Before Publishing</Label>
+              <Switch
+                checked={settings?.requireApproval ?? false}
+                onCheckedChange={(v) => settings && updateSetting("requireApproval", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Close Comments After</Label>
+              <div className="flex items-center gap-3">
+                <Slider
+                  value={[settings?.autoCloseAfterDays ?? 0]}
+                  onValueChange={([v]) =>
+                    settings && updateSetting("autoCloseAfterDays", v === 0 ? null : v)
+                  }
+                  min={0}
+                  max={365}
+                  step={1}
+                  className="flex-1"
+                />
+                <span className="text-xs text-neutral-500 w-14 shrink-0">
+                  {(settings?.autoCloseAfterDays ?? 0) === 0
+                    ? "Never"
+                    : `${settings?.autoCloseAfterDays} days`}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500">0 = Never, 1–365 = days after publish</p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Email me new comments</Label>
+                <Switch
+                  checked={settings?.notifyEmail ?? true}
+                  onCheckedChange={(v) => settings && updateSetting("notifyEmail", v)}
+                  disabled={settingsSaving}
+                />
+              </div>
+              <p className="text-xs text-neutral-500">Notifications go to your account email.</p>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Allow Comment Likes</Label>
+              <Switch
+                checked={settings?.allowLikes ?? true}
+                onCheckedChange={(v) => settings && updateSetting("allowLikes", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Allow Threaded Replies</Label>
+              <Switch
+                checked={settings?.allowThreadedReplies ?? true}
+                onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm">Default Sort</Label>
+              <Select
+                value={settings?.sortOrder ?? "newest"}
+                onValueChange={(v) =>
+                  settings &&
+                  updateSetting("sortOrder", v as "newest" | "oldest" | "most_liked")
                 }
                 disabled={settingsSaving}
-                className="w-4 h-4 text-[#5B4FE8] border-neutral-300 rounded focus:ring-[#5B4FE8]"
-              />
-              <span className="text-sm text-neutral-700">Require email verification (paywalled)</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings?.notifyEmail ?? true}
-                onChange={(e) => updateSetting("notifyEmail", e.target.checked)}
-                disabled={settingsSaving}
-                className="w-4 h-4 text-[#5B4FE8] border-neutral-300 rounded focus:ring-[#5B4FE8]"
-              />
-              <span className="text-sm text-neutral-700">Email me for new comments</span>
-            </label>
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="most_liked">Most Liked</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            </>
+            )}
           </div>
+          )}
         </div>
       </aside>
     </div>

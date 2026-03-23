@@ -357,18 +357,14 @@ router.post('/', async (req: Request, res: Response) => {
     const notifyTo = settings.notificationEmail || siteWithUser?.user?.email
     if (notifyTo) {
       const appUrl = getAppUrl()
-      const approveToken = signCommentActionToken(comment.id, 'approve')
       const viewToken = signCommentActionToken(comment.id, 'view')
-      const spamToken = signCommentActionToken(comment.id, 'spam')
       const excerpt = commentBody.slice(0, 200) + (commentBody.length > 200 ? '…' : '')
       sendCommentNotificationEmail(
         notifyTo,
         displayName,
         postTitle,
         excerpt,
-        `${appUrl}/api/comment-actions/approve?token=${approveToken}`,
-        `${appUrl}/api/comment-actions/view?token=${viewToken}`,
-        `${appUrl}/api/comment-actions/spam?token=${spamToken}`
+        `${appUrl}/api/comment-actions/view?token=${viewToken}`
       ).catch((err) => console.error('[comments] Notification send error:', err))
     }
   }

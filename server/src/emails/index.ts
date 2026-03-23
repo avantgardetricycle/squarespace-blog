@@ -26,9 +26,7 @@ export async function renderCommentNotificationEmail(props: {
   displayName: string
   postTitle: string
   commentExcerpt: string
-  approveUrl: string
   viewUrl: string
-  spamUrl: string
 }): Promise<string> {
   return render(CommentNotificationEmail(props))
 }

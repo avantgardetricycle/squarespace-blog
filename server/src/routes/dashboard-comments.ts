@@ -165,18 +165,14 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
         const notifyTo = settings.notificationEmail || siteWithUser?.user?.email
         if (notifyTo) {
           const appUrl = getAppUrl()
-          const approveToken = signCommentActionToken(comment.id, 'approve')
           const viewToken = signCommentActionToken(comment.id, 'view')
-          const spamToken = signCommentActionToken(comment.id, 'spam')
           const excerpt = comment.body.slice(0, 200) + (comment.body.length > 200 ? '…' : '')
           sendCommentNotificationEmail(
             notifyTo,
             comment.displayName,
             'Your post',
             excerpt,
-            `${appUrl}/api/comment-actions/approve?token=${approveToken}`,
-            `${appUrl}/api/comment-actions/view?token=${viewToken}`,
-            `${appUrl}/api/comment-actions/spam?token=${spamToken}`
+            `${appUrl}/api/comment-actions/view?token=${viewToken}`
           ).catch((err) => console.error('[dashboard-comments] Notification send error:', err))
         }
       }

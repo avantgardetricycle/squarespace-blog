@@ -5,18 +5,14 @@ interface CommentNotificationEmailProps {
   displayName: string
   postTitle: string
   commentExcerpt: string
-  approveUrl: string
   viewUrl: string
-  spamUrl: string
 }
 
 export function CommentNotificationEmail({
   displayName = 'A reader',
   postTitle = 'Untitled',
   commentExcerpt = '',
-  approveUrl = '#',
   viewUrl = '#',
-  spamUrl = '#',
 }: CommentNotificationEmailProps) {
   return (
     <Html>
@@ -42,22 +38,7 @@ export function CommentNotificationEmail({
               </Text>
             </Section>
 
-            <Section style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
-              <Link
-                href={approveUrl}
-                style={{
-                  display: 'inline-block',
-                  backgroundColor: '#22c55e',
-                  color: '#ffffff',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  padding: '12px 20px',
-                  borderRadius: 6,
-                  textDecoration: 'none',
-                }}
-              >
-                Approve Comment
-              </Link>
+            <Section style={{ marginBottom: 24 }}>
               <Link
                 href={viewUrl}
                 style={{
@@ -72,21 +53,6 @@ export function CommentNotificationEmail({
                 }}
               >
                 View in Dashboard
-              </Link>
-              <Link
-                href={spamUrl}
-                style={{
-                  display: 'inline-block',
-                  backgroundColor: '#6b6b6b',
-                  color: '#ffffff',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  padding: '12px 20px',
-                  borderRadius: 6,
-                  textDecoration: 'none',
-                }}
-              >
-                Mark as Spam
               </Link>
             </Section>
 
