@@ -44,13 +44,14 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   }
 
   const s = site.blogCommentSettings
+  const rawAutoClose = s?.autoCloseAfterDays ?? DEFAULT_SETTINGS.autoCloseAfterDays
   const settings = {
     commentsEnabled: s?.commentsEnabled ?? DEFAULT_SETTINGS.commentsEnabled,
     allowAnonymousComments: s?.allowAnonymousComments ?? DEFAULT_SETTINGS.allowAnonymousComments,
     subscriberCommentsEnabled: s?.subscriberCommentsEnabled ?? DEFAULT_SETTINGS.subscriberCommentsEnabled,
     apiKeyVerified: !!s?.squarespaceApiKeyEnc,
     requireApproval: s?.requireApproval ?? DEFAULT_SETTINGS.requireApproval,
-    autoCloseAfterDays: s?.autoCloseAfterDays ?? DEFAULT_SETTINGS.autoCloseAfterDays,
+    autoCloseAfterDays: rawAutoClose === 0 ? null : rawAutoClose,
     notifyEmail: s?.notifyEmail ?? DEFAULT_SETTINGS.notifyEmail,
     notificationEmail: s?.notificationEmail ?? DEFAULT_SETTINGS.notificationEmail,
     allowLikes: s?.allowLikes ?? DEFAULT_SETTINGS.allowLikes,
@@ -96,7 +97,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     allowAnonymousComments: body.allowAnonymousComments ?? site.blogCommentSettings?.allowAnonymousComments ?? true,
     subscriberCommentsEnabled: body.subscriberCommentsEnabled ?? site.blogCommentSettings?.subscriberCommentsEnabled ?? false,
     requireApproval: body.requireApproval ?? site.blogCommentSettings?.requireApproval ?? false,
-    autoCloseAfterDays: body.autoCloseAfterDays !== undefined ? body.autoCloseAfterDays : site.blogCommentSettings?.autoCloseAfterDays,
+    autoCloseAfterDays: body.autoCloseAfterDays !== undefined ? body.autoCloseAfterDays : (site.blogCommentSettings?.autoCloseAfterDays ?? null),
     notifyEmail: body.notifyEmail ?? site.blogCommentSettings?.notifyEmail ?? true,
     notificationEmail: body.notificationEmail !== undefined ? body.notificationEmail : site.blogCommentSettings?.notificationEmail,
     allowLikes: body.allowLikes ?? site.blogCommentSettings?.allowLikes ?? true,
@@ -119,7 +120,12 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     return
   }
 
-  if (updates.autoCloseAfterDays !== null && (typeof updates.autoCloseAfterDays !== 'number' || updates.autoCloseAfterDays < 1 || updates.autoCloseAfterDays > 365)) {
+  // Normalize 0 and undefined to null (UI uses 0 for "Never"; modal omits field)
+  const raw = updates.autoCloseAfterDays
+  if (raw === 0 || raw === undefined || raw === null) {
+    updates.autoCloseAfterDays = null
+  } else if (typeof raw !== 'number' || raw < 1 || raw > 365) {
+    console.error('[comment-settings] Invalid autoCloseAfterDays:', { raw, type: typeof raw })
     res.status(400).json({ error: 'autoCloseAfterDays must be null or between 1 and 365' })
     return
   }
@@ -213,9 +219,50 @@ router.post('/verify-api-key', requireSession, async (req: Request, res: Respons
       return
     }
 
-    const auth = (await resAuth.json()) as { permissions?: string[] }
-    const perms = auth?.permissions ?? []
-    if (!perms.some((p: string) => p.toLowerCase().includes('profile'))) {
+    const auth = (await resAuth.json()) as Record<string, unknown>
+    const authForLog = JSON.stringify(auth, null, 2)
+    console.log('[comment-settings] Squarespace authorization response:', authForLog)
+
+    // Support both API key flows: Developer Tools (newer) and Advanced (older).
+    // Permissions may be in different shapes: permissions[], scopes[], or nested [{ api, level }].
+    const permsRaw: string[] = []
+    const arraysToCheck = [auth?.permissions, auth?.scopes, auth?.grantedPermissions].filter(Array.isArray)
+    for (const arr of arraysToCheck) {
+      for (const p of arr as Array<string | Record<string, unknown>>) {
+        if (typeof p === 'string') permsRaw.push(p)
+        else if (p && typeof p === 'object' && 'api' in p) permsRaw.push(String((p as { api?: string }).api))
+      }
+    }
+
+    const hasProfilePermission = permsRaw.some((p: string) =>
+      p && typeof p === 'string' && p.toLowerCase().replace(/[-_:]/g, '').includes('profile')
+    )
+
+    if (!hasProfilePermission) {
+      // Fallback: try Profiles API directly (keys from newer Developer Tools flow may use different auth format)
+      console.log('[comment-settings] No profile permission in auth response, trying Profiles API fallback')
+      try {
+        // Commerce Profiles API: GET /1.0/profiles, filter=email,{encoded} (comma-separated per Squarespace docs)
+        const testEmail = encodeURIComponent('__verify_nonexistent@test.betterblog')
+        const resProfiles = await fetch(
+          `https://api.squarespace.com/1.0/profiles?filter=email,${testEmail}`,
+          { headers: { Authorization: `Bearer ${apiKey}` } }
+        )
+        if (resProfiles.ok) {
+          console.log('[comment-settings] Profiles API fallback: key accepted (200)')
+          res.json({ valid: true })
+          return
+        }
+        if (resProfiles.status === 401) {
+          console.log('[comment-settings] Profiles API fallback: 401 Unauthorized (invalid key)')
+        } else if (resProfiles.status === 403) {
+          console.log('[comment-settings] Profiles API fallback: 403 Forbidden (missing Profiles permission)')
+        } else {
+          console.log('[comment-settings] Profiles API fallback: status', resProfiles.status)
+        }
+      } catch (fallbackErr) {
+        console.error('[comment-settings] Profiles API fallback error:', fallbackErr)
+      }
       res.json({ valid: false, error: 'MISSING_PERMISSION' })
       return
     }

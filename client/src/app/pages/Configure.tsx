@@ -31,6 +31,8 @@ import { Collapsible, CollapsibleContent } from "@/app/components/ui/collapsible
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -959,7 +961,9 @@ export default function Configure() {
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
   const [commentSettingsSaving, setCommentSettingsSaving] = useState(false);
+  const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
   const [commentApiKeyInput, setCommentApiKeyInput] = useState("");
+  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<false | "setup" | "edit">(false);
   const [commentApiKeyStatus, setCommentApiKeyStatus] = useState<
     "unverified" | "verifying" | "verified" | "invalid" | "missing_permission"
   >("unverified");
@@ -1048,54 +1052,52 @@ export default function Configure() {
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data && typeof data === "object") {
-          setCommentSettings({
-            commentsEnabled: data.commentsEnabled ?? true,
-            allowAnonymousComments: data.allowAnonymousComments ?? true,
-            subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
-            apiKeyVerified: data.apiKeyVerified ?? false,
-            requireApproval: data.requireApproval ?? false,
-            autoCloseAfterDays: data.autoCloseAfterDays ?? null,
-            notifyEmail: data.notifyEmail ?? true,
-            notificationEmail: data.notificationEmail ?? null,
-            allowLikes: data.allowLikes ?? true,
-            allowThreadedReplies: data.allowThreadedReplies ?? true,
-            sortOrder: ["newest", "oldest", "most_liked"].includes(data.sortOrder)
-              ? data.sortOrder
-              : "newest",
-          });
-          setCommentApiKeyStatus(data.apiKeyVerified ? "verified" : "unverified");
-        } else {
-          setCommentSettings({
-            commentsEnabled: true,
-            allowAnonymousComments: true,
-            subscriberCommentsEnabled: false,
-            apiKeyVerified: false,
-            requireApproval: false,
-            autoCloseAfterDays: null,
-            notifyEmail: true,
-            notificationEmail: null,
-            allowLikes: true,
-            allowThreadedReplies: true,
-            sortOrder: "newest",
-          });
-        }
-      })
-      .catch(() =>
-        setCommentSettings({
+        const settings = data && typeof data === "object" ? {
+          commentsEnabled: data.commentsEnabled ?? true,
+          allowAnonymousComments: data.allowAnonymousComments ?? true,
+          subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
+          apiKeyVerified: data.apiKeyVerified ?? false,
+          requireApproval: data.requireApproval ?? false,
+          autoCloseAfterDays: (data.autoCloseAfterDays ?? null) as number | null,
+          notifyEmail: data.notifyEmail ?? true,
+          notificationEmail: (data.notificationEmail ?? null) as string | null,
+          allowLikes: data.allowLikes ?? true,
+          allowThreadedReplies: data.allowThreadedReplies ?? true,
+          sortOrder: (["newest", "oldest", "most_liked"].includes(data.sortOrder) ? data.sortOrder : "newest") as "newest" | "oldest" | "most_liked",
+        } : {
           commentsEnabled: true,
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
           requireApproval: false,
-          autoCloseAfterDays: null,
+          autoCloseAfterDays: null as number | null,
           notifyEmail: true,
-          notificationEmail: null,
+          notificationEmail: null as string | null,
           allowLikes: true,
           allowThreadedReplies: true,
-          sortOrder: "newest",
-        })
-      )
+          sortOrder: "newest" as "newest" | "oldest" | "most_liked",
+        };
+        setCommentSettings(settings);
+        setSavedCommentSettings(settings);
+        setCommentApiKeyStatus(settings.apiKeyVerified ? "verified" : "unverified");
+      })
+      .catch(() => {
+        const settings = {
+          commentsEnabled: true,
+          allowAnonymousComments: true,
+          subscriberCommentsEnabled: false,
+          apiKeyVerified: false,
+          requireApproval: false,
+          autoCloseAfterDays: null as number | null,
+          notifyEmail: true,
+          notificationEmail: null as string | null,
+          allowLikes: true,
+          allowThreadedReplies: true,
+          sortOrder: "newest" as "newest" | "oldest" | "most_liked",
+        };
+        setCommentSettings(settings);
+        setSavedCommentSettings(settings);
+      })
       .finally(() => setCommentSettingsLoading(false));
   }, [effectiveSiteKey]);
 
@@ -1181,7 +1183,17 @@ export default function Configure() {
       .catch(() => {});
   }, [effectiveSiteKey, effectiveSite, configLoading]);
 
-  const isDirty = !configsEqual(config, savedConfig);
+  const commentSettingsDirty = commentSettings && savedCommentSettings &&
+    (commentSettings.commentsEnabled !== savedCommentSettings.commentsEnabled ||
+     commentSettings.allowAnonymousComments !== savedCommentSettings.allowAnonymousComments ||
+     commentSettings.subscriberCommentsEnabled !== savedCommentSettings.subscriberCommentsEnabled ||
+     commentSettings.requireApproval !== savedCommentSettings.requireApproval ||
+     (commentSettings.autoCloseAfterDays ?? null) !== (savedCommentSettings.autoCloseAfterDays ?? null) ||
+     commentSettings.notifyEmail !== savedCommentSettings.notifyEmail ||
+     commentSettings.allowLikes !== savedCommentSettings.allowLikes ||
+     commentSettings.allowThreadedReplies !== savedCommentSettings.allowThreadedReplies ||
+     commentSettings.sortOrder !== savedCommentSettings.sortOrder);
+  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty;
   const effectiveConfig = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
@@ -1221,35 +1233,61 @@ export default function Configure() {
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
     setSaving(true);
+    const apiBase = typeof window !== "undefined" ? window.location.origin : "";
     try {
-      // Use absolute URL so the request always targets the app origin (avoids iframe base URL issues)
-      const apiBase = typeof window !== "undefined" ? window.location.origin : "";
-      const res = await fetch(`${apiBase}/api/config`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          siteKey: keyToSave,
-          config: configToApiPayload(config),
+      const [configRes, commentsRes] = await Promise.all([
+        fetch(`${apiBase}/api/config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ siteKey: keyToSave, config: configToApiPayload(config) }),
         }),
-      });
-      if (res.ok) {
-        setSavedConfig(config);
+        commentSettings
+          ? fetch(`${apiBase}/api/dashboard/settings/comments`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                siteKey: keyToSave,
+                commentsEnabled: commentSettings.commentsEnabled,
+                allowAnonymousComments: commentSettings.allowAnonymousComments,
+                subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled,
+                requireApproval: commentSettings.requireApproval,
+                autoCloseAfterDays: commentSettings.autoCloseAfterDays,
+                notifyEmail: commentSettings.notifyEmail,
+                notificationEmail: null,
+                allowLikes: commentSettings.allowLikes,
+                allowThreadedReplies: commentSettings.allowThreadedReplies,
+                sortOrder: commentSettings.sortOrder,
+              }),
+            })
+          : Promise.resolve({ ok: true } as Response),
+      ]);
+      const configOk = configRes.ok;
+      const commentsOk = !commentSettings || (commentsRes as Response).ok;
+      if (configOk) setSavedConfig(config);
+      if (commentsOk && commentSettings) setSavedCommentSettings(commentSettings);
+      if (configOk && commentsOk) {
         toast.success("Configuration saved successfully!");
       } else {
-        const data = await res.json().catch(() => ({}));
-        const message = data?.error ?? "Failed to save configuration.";
-        toast.error(message);
+        if (!configOk) {
+          const data = await configRes.json().catch(() => ({}));
+          toast.error(data?.error ?? "Failed to save configuration.");
+        } else if (!commentsOk && commentSettings) {
+          const data = await (commentsRes as Response).json().catch(() => ({}));
+          toast.error(data?.error ?? "Failed to save comment settings.");
+        }
       }
     } catch {
       toast.error("Failed to save configuration.");
     } finally {
       setSaving(false);
     }
-  }, [effectiveSiteKey, siteKey, config]);
+  }, [effectiveSiteKey, siteKey, config, commentSettings]);
 
   const handleReset = () => {
     setConfig(savedConfig);
+    if (savedCommentSettings) setCommentSettings(savedCommentSettings);
     toast.info("Changes reverted.");
   };
 
@@ -2122,58 +2160,33 @@ export default function Configure() {
                                 <Label className="text-sm">Verified Subscriber Comments</Label>
                                 <Switch
                                   checked={commentSettings.subscriberCommentsEnabled}
-                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: v } : p)}
+                                  onCheckedChange={(v) => {
+                                    if (v) {
+                                      if (commentSettings.apiKeyVerified) {
+                                        setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: true } : p);
+                                      } else {
+                                        setSquarespaceApiKeyModalOpen("setup");
+                                      }
+                                    } else {
+                                      setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: false } : p);
+                                    }
+                                  }}
                                 />
                               </div>
                               <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
-                              <div className="rounded border border-[#e5e4e0] p-3 space-y-2 bg-[#f7f6f3]/50">
-                                <Label className="text-xs text-[#6b6b6b]">Your Squarespace API Key</Label>
-                                <p className="text-xs text-[#6b6b6b]">Create your API key in Squarespace (Settings → Advanced → Developer API Keys), then enter it below. Required permissions: Profiles (Read).</p>
-                                <div className="flex gap-2">
-                                  <Input
-                                    type="password"
-                                    placeholder={commentSettings.apiKeyVerified ? "••••••••••••••••" : "Paste your Squarespace API key"}
-                                    value={commentApiKeyInput}
-                                    onChange={(e) => {
-                                      setCommentApiKeyInput(e.target.value);
-                                      setCommentApiKeyStatus("unverified");
-                                    }}
-                                    className="flex-1 font-mono text-sm"
-                                  />
-                                  <Button
+                              {commentSettings.apiKeyVerified && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
+                                  <button
                                     type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={!commentApiKeyInput.trim() || commentApiKeyStatus === "verifying"}
-                                    onClick={async () => {
-                                      if (!effectiveSiteKey || !commentApiKeyInput.trim()) return;
-                                      setCommentApiKeyStatus("verifying");
-                                      const res = await fetch("/api/dashboard/settings/comments/verify-api-key", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        credentials: "include",
-                                        body: JSON.stringify({ siteKey: effectiveSiteKey, apiKey: commentApiKeyInput.trim() }),
-                                      });
-                                      const data = await res.json();
-                                      if (data?.valid) {
-                                        setCommentApiKeyStatus("verified");
-                                        setCommentSettings((p) => p ? { ...p, apiKeyVerified: true } : p);
-                                      } else if (data?.error === "MISSING_PERMISSION") {
-                                        setCommentApiKeyStatus("missing_permission");
-                                      } else {
-                                        setCommentApiKeyStatus("invalid");
-                                      }
-                                    }}
+                                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                    className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
+                                    aria-label="Edit API key"
                                   >
-                                    {commentApiKeyStatus === "verifying" ? "Verifying…" : "Verify"}
-                                  </Button>
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
                                 </div>
-                                <p className="text-xs">
-                                  {commentApiKeyStatus === "verified" && <span className="text-green-600">Verified ✓</span>}
-                                  {commentApiKeyStatus === "invalid" && <span className="text-red-600">Invalid key ✗</span>}
-                                  {commentApiKeyStatus === "missing_permission" && <span className="text-red-600">Missing Profiles permission ✗</span>}
-                                </p>
-                              </div>
+                              )}
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
@@ -2211,15 +2224,6 @@ export default function Configure() {
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, notifyEmail: v } : p)}
                                 />
                               </div>
-                              {commentSettings.notifyEmail && (
-                                <Input
-                                  type="email"
-                                  placeholder="Notify address (defaults to account email)"
-                                  value={commentSettings.notificationEmail ?? ""}
-                                  onChange={(e) => setCommentSettings((p) => p ? { ...p, notificationEmail: e.target.value || null } : p)}
-                                  className="h-8 text-sm"
-                                />
-                              )}
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
@@ -2255,49 +2259,6 @@ export default function Configure() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <Button
-                              type="button"
-                              disabled={commentSettingsSaving || !effectiveSiteKey}
-                              onClick={async () => {
-                                if (!effectiveSiteKey || !commentSettings) return;
-                                setCommentSettingsSaving(true);
-                                try {
-                                  const res = await fetch("/api/dashboard/settings/comments", {
-                                    method: "PUT",
-                                    headers: { "Content-Type": "application/json" },
-                                    credentials: "include",
-                                    body: JSON.stringify({
-                                      siteKey: effectiveSiteKey,
-                                      commentsEnabled: commentSettings.commentsEnabled,
-                                      allowAnonymousComments: commentSettings.allowAnonymousComments,
-                                      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled,
-                                      requireApproval: commentSettings.requireApproval,
-                                      autoCloseAfterDays: commentSettings.autoCloseAfterDays,
-                                      notifyEmail: commentSettings.notifyEmail,
-                                      notificationEmail: commentSettings.notificationEmail,
-                                      allowLikes: commentSettings.allowLikes,
-                                      allowThreadedReplies: commentSettings.allowThreadedReplies,
-                                      sortOrder: commentSettings.sortOrder,
-                                      ...(commentApiKeyInput.trim() ? { squarespaceApiKey: commentApiKeyInput.trim() } : {}),
-                                    }),
-                                  });
-                                  if (res.ok) {
-                                    toast.success("Comment settings saved!");
-                                    setCommentApiKeyInput("");
-                                    if (commentApiKeyStatus === "verified") {
-                                      setCommentSettings((p) => p ? { ...p, apiKeyVerified: true } : p);
-                                    }
-                                  } else {
-                                    const data = await res.json().catch(() => ({}));
-                                    toast.error(data?.error ?? "Failed to save");
-                                  }
-                                } finally {
-                                  setCommentSettingsSaving(false);
-                                }
-                              }}
-                            >
-                              {commentSettingsSaving ? "Saving…" : "Save Comment Settings"}
-                            </Button>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -3676,6 +3637,146 @@ export default function Configure() {
               <Button type="submit" className="w-full" disabled={!newAuthorName.trim()}>
                 {editAuthor ? "Save Changes" : "Add Author"}
               </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Squarespace API Key Modal */}
+        <Dialog
+          open={squarespaceApiKeyModalOpen !== false}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSquarespaceApiKeyModalOpen(false);
+              setCommentApiKeyInput("");
+              setCommentApiKeyStatus("unverified");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {squarespaceApiKeyModalOpen === "setup" ? "Connect Squarespace API" : "Update Squarespace API Key"}
+              </DialogTitle>
+              <DialogDescription>
+                {squarespaceApiKeyModalOpen === "setup"
+                  ? "Connect your Squarespace API to verify subscriber emails for paywalled comment threads."
+                  : "Replace your Squarespace API key."}
+              </DialogDescription>
+            </DialogHeader>
+            {squarespaceApiKeyModalOpen === "edit" && (
+              <p className="text-sm text-[#6b6b6b] -mt-2">Required permission: Profiles (Read).</p>
+            )}
+            {squarespaceApiKeyModalOpen === "setup" && (
+              <div className="text-sm text-[#6b6b6b] space-y-2 -mt-2">
+                <p>To generate an API key:</p>
+                <ol className="list-decimal list-inside space-y-1 pl-1">
+                  <li>In Squarespace, go to Settings → Developer Tools → Developer API Keys (or Settings → Advanced → Developer API Keys)</li>
+                  <li>Generate a new API key</li>
+                  <li>Enable the <strong>Profiles (Read)</strong> permission</li>
+                  <li>Copy the key and paste it below</li>
+                </ol>
+              </div>
+            )}
+            <form
+              className="space-y-4 pt-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!effectiveSiteKey || !commentApiKeyInput.trim() || commentApiKeyStatus !== "verified") return;
+                setCommentSettingsSaving(true);
+                try {
+                  const res = await fetch("/api/dashboard/settings/comments", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      siteKey: effectiveSiteKey,
+                      squarespaceApiKey: commentApiKeyInput.trim(),
+                      ...(squarespaceApiKeyModalOpen === "setup" ? { subscriberCommentsEnabled: true } : {}),
+                    }),
+                  });
+                  if (res.ok) {
+                    toast.success(squarespaceApiKeyModalOpen === "setup" ? "Squarespace API connected!" : "API key updated!");
+                    setCommentSettings((p) =>
+                      p ? { ...p, apiKeyVerified: true, subscriberCommentsEnabled: squarespaceApiKeyModalOpen === "setup" ? true : p.subscriberCommentsEnabled } : p
+                    );
+                    setSquarespaceApiKeyModalOpen(false);
+                    setCommentApiKeyInput("");
+                    setCommentApiKeyStatus("unverified");
+                  } else {
+                    const data = await res.json().catch(() => ({}));
+                    toast.error(data?.error ?? "Failed to save");
+                  }
+                } finally {
+                  setCommentSettingsSaving(false);
+                }
+              }}
+            >
+              <div className="space-y-2">
+                <Label className="text-sm">Squarespace API Key</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    placeholder="Paste your Squarespace API key"
+                    value={commentApiKeyInput}
+                    onChange={(e) => {
+                      setCommentApiKeyInput(e.target.value);
+                      setCommentApiKeyStatus("unverified");
+                    }}
+                    className="flex-1 font-mono text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!commentApiKeyInput.trim() || commentApiKeyStatus === "verifying"}
+                    onClick={async () => {
+                      if (!effectiveSiteKey || !commentApiKeyInput.trim()) return;
+                      setCommentApiKeyStatus("verifying");
+                      const res = await fetch("/api/dashboard/settings/comments/verify-api-key", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ siteKey: effectiveSiteKey, apiKey: commentApiKeyInput.trim() }),
+                      });
+                      const data = await res.json();
+                      if (data?.valid) {
+                        setCommentApiKeyStatus("verified");
+                      } else if (data?.error === "MISSING_PERMISSION") {
+                        setCommentApiKeyStatus("missing_permission");
+                      } else {
+                        setCommentApiKeyStatus("invalid");
+                      }
+                    }}
+                  >
+                    {commentApiKeyStatus === "verifying" ? "Verifying…" : "Verify"}
+                  </Button>
+                </div>
+                <p className="text-xs">
+                  {commentApiKeyStatus === "verified" && <span className="text-green-600">Verified ✓</span>}
+                  {commentApiKeyStatus === "invalid" && <span className="text-red-600">Invalid key ✗</span>}
+                  {commentApiKeyStatus === "missing_permission" && <span className="text-red-600">Missing Profiles permission ✗</span>}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSquarespaceApiKeyModalOpen(false);
+                    setCommentApiKeyInput("");
+                    setCommentApiKeyStatus("unverified");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={commentApiKeyStatus !== "verified" || commentSettingsSaving}
+                >
+                  {commentSettingsSaving ? "Saving…" : squarespaceApiKeyModalOpen === "setup" ? "Connect" : "Save Key"}
+                </Button>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>

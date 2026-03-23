@@ -307,15 +307,16 @@ router.post('/', async (req: Request, res: Response) => {
   if (settings.subscriberCommentsEnabled && email && settings.squarespaceApiKeyEnc) {
     try {
       const apiKey = decrypt(settings.squarespaceApiKeyEnc)
+      // Squarespace Profiles API: GET /1.0/profiles, filter=email,{encoded} (comma-separated per docs)
       const resProfiles = await fetch(
-        `https://api.squarespace.com/1.0/commerce/profiles?filter=email:${encodeURIComponent(email)}`,
+        `https://api.squarespace.com/1.0/profiles?filter=email,${encodeURIComponent(email)}`,
         {
           headers: { Authorization: `Bearer ${apiKey}` },
         }
       )
       if (resProfiles.ok) {
-        const profiles = (await resProfiles.json()) as { profiles?: Array<{ id?: string; hasAccount?: boolean; firstName?: string }> }
-        const profile = profiles?.profiles?.[0]
+        const data = (await resProfiles.json()) as { Profiles?: Array<{ id?: string; hasAccount?: boolean; firstName?: string }> }
+        const profile = data?.Profiles?.[0]
         if (profile?.hasAccount) {
           verifiedSubscriber = true
           squarespaceProfileId = profile.id ?? null
