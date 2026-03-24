@@ -36,6 +36,7 @@ import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { toast } from "sonner";
 import { getDashboardMe, createSite, deleteSite, type DashboardMe, type CreatedSite } from "@/api/auth";
+import { getPlanDisplayName } from "@/lib/planLabels";
 
 const LOADER_URL =
   "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
@@ -61,7 +62,10 @@ export default function Dashboard() {
   }, []);
 
   const blogLimit = me?.subscription?.maxSites ?? 3;
-  const userPlan = me?.subscription?.plan ?? "Pro";
+  const userPlan =
+    me?.subscription != null
+      ? me.subscription.planDisplay ?? getPlanDisplayName(me.subscription.plan)
+      : "Professional";
   const sites = me?.sites ?? [];
 
   const handleCopy = (siteKey: string) => {

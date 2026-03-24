@@ -216,7 +216,7 @@ model Plan {
   planKey           String   @map("plan_key") // starter | pro | agency
   cadence           String   // monthly | annual
   stripePriceId     String   @map("stripe_price_id")
-  stripePriceLabel  String   @map("stripe_price_label") // better_blog_<tier>_<cadence>_usd
+  stripePriceLabel  String   @map("stripe_price_label") // e.g. better_blog_essentials_monthly_usd (UI: Essentials / Professional / Publication)
   maxSites          Int?     @map("max_sites") // 1 | 3 | null (unlimited)
   stripeEnvironment String   @map("stripe_environment") // sandbox | live
 

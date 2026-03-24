@@ -4,6 +4,8 @@ export interface DashboardMe {
   user: { id: number; email: string; name: string | null; createdAt: string }
   subscription: {
     plan: string
+    /** Display name: Essentials, Professional, Publication (server adds; client falls back if missing) */
+    planDisplay?: string
     cadence: string
     priceDisplay: string
     status: string

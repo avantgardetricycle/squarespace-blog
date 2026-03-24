@@ -23,6 +23,7 @@ import { Label } from "@/app/components/ui/label";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardMe, updateProfile, cancelSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
+import { getPlanDisplayName } from "@/lib/planLabels";
 
 export default function Account() {
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -116,7 +117,8 @@ export default function Account() {
   }
 
   const planKey = me.subscription?.plan ?? "pro";
-  const planDisplay = planKey.charAt(0).toUpperCase() + planKey.slice(1);
+  const planDisplay =
+    me.subscription?.planDisplay ?? getPlanDisplayName(planKey);
   const cadence = me.subscription?.cadence ?? "monthly";
   const cadenceDisplay = cadence.charAt(0).toUpperCase() + cadence.slice(1);
   const priceDisplay = me.subscription?.priceDisplay ?? "—";

@@ -17,25 +17,25 @@ import { Logo } from "@/app/components/Logo";
 
 const pricingPlans = {
   starter: {
-    name: "Starter",
-    description: "Perfect for personal blogs",
+    name: "Essentials",
+    description: "Fix the basics on your Squarespace blog",
     monthlyPrice: 15,
     annualPrice: 12,
-    features: ["1 Blog", "Basic Customization", "Standard Layouts", "Email Support"],
+    features: ["1 blog", "Core layouts & modules", "Standard support"],
   },
   pro: {
-    name: "Pro",
-    description: "For serious content creators",
+    name: "Professional",
+    description: "A real blog—discoverable, navigable, readable",
     monthlyPrice: 29,
     annualPrice: 24,
-    features: ["3 Blogs", "Advanced Customization", "All Premium Layouts", "Priority Support", "Custom CSS Injection"],
+    features: ["Up to 3 blogs", "Advanced customization", "Priority support"],
   },
   agency: {
-    name: "Agency",
-    description: "Manage multiple client sites",
+    name: "Publication",
+    description: "Serious publication tools and higher limits",
     monthlyPrice: 79,
     annualPrice: 65,
-    features: ["10 Blogs", "White Labeling", "API Access", "Dedicated Success Manager", "Team Collaboration"],
+    features: ["Unlimited blogs (fair use)", "Publication-focused features", "Priority support"],
   },
 };
 

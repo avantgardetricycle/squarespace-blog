@@ -55,6 +55,15 @@ git push heroku main
 # or, for pipeline: connect GitHub and use automatic deploys
 ```
 
+## Stripe plan prices (`plans` table)
+
+Sandbox price IDs and `stripe_price_label` values for Essentials / Professional / Publication are updated via:
+
+- `server/prisma/seed.ts` (local `npm run db:seed` or equivalent), and/or
+- `server/prisma/migrations/update_plans_sandbox_stripe_2025.sql` (run manually on Heroku Postgres when you cannot re-seed).
+
+Internal `plan_key` values remain `starter`, `pro`, and `agency`.
+
 ## Stripe Webhooks
 
 Create separate webhook endpoints for staging and prod:

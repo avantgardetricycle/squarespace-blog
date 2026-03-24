@@ -5,6 +5,7 @@ import { requireSession, SessionUser } from '../middleware/session.js'
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
 import dashboardCommentsRoutes from './dashboard-comments.js'
 import { getPlanPriceDisplay } from '../lib/pricing.js'
+import { getPlanDisplayName } from '../lib/planLabels.js'
 import { getAppUrl } from '../lib/url.js'
 import { randomBytes } from 'crypto'
 
@@ -126,6 +127,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
       subscription: subscription
         ? {
             plan: subscription.plan,
+            planDisplay: getPlanDisplayName(subscription.plan),
             cadence,
             priceDisplay: getPlanPriceDisplay(subscription.plan, cadence),
             status: subscription.status,

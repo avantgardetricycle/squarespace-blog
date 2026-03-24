@@ -50,7 +50,7 @@ export default function LandingPage() {
   const pricingTiers = [
     {
       name: "Essentials",
-      tier: "Starter",
+      tier: "Essentials",
       planKey: "starter" as const,
       description: "Fix the basics. Everything Squarespace should have included from day one.",
       monthlyPrice: 12,
@@ -67,13 +67,13 @@ export default function LandingPage() {
     },
     {
       name: "Professional",
-      tier: "Core",
+      tier: "Professional",
       planKey: "pro" as const,
       description: "A real blog. Discoverable, navigable, and genuinely readable.",
       monthlyPrice: 19,
       annualPrice: 14,
       features: [
-        "Everything in Starter, plus",
+        "Everything in Essentials, plus",
         "2 sidebars",
         "Breadcrumb navigation",
         "Post filtering & search",
@@ -86,13 +86,13 @@ export default function LandingPage() {
     },
     {
       name: "Publication",
-      tier: "Pro",
+      tier: "Publication",
       planKey: "agency" as const,
       description: "A serious publication. Beautiful, branded, fully under your control.",
       monthlyPrice: 39,
       annualPrice: 29,
       features: [
-        "Everything in Core, plus",
+        "Everything in Professional, plus",
         "Custom designed templates",
         "Expanded post banner layouts",
         "Multiple authors",
@@ -114,7 +114,7 @@ export default function LandingPage() {
     annualPrice: 99,
     features: [
       "Unlimited client sites",
-      "All Pro features included",
+      "All Professional features included",
       "Client management dashboard",
       "White-label options",
       "Team member access",

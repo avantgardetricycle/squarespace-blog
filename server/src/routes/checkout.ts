@@ -3,6 +3,7 @@ import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { optionalSession, SessionUser } from '../middleware/session.js'
 import { getAppUrl } from '../lib/url.js'
+import { getPlanDisplayName } from '../lib/planLabels.js'
 
 const router = Router()
 const TRIAL_DAYS = 7
@@ -169,7 +170,7 @@ router.get('/session/:sessionId', async (req: Request, res: Response) => {
     const metadata = session.metadata ?? {}
     const planKey = (metadata.plan_key as string) ?? 'pro'
     const cadence = (metadata.cadence as string) ?? 'monthly'
-    const planDisplay = planKey.charAt(0).toUpperCase() + planKey.slice(1)
+    const planDisplay = getPlanDisplayName(planKey)
 
     let priceDisplay = '$0'
     const lineItems = session.line_items?.data

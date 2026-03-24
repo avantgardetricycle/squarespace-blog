@@ -3,6 +3,7 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../src/lib/db-connection.js'
+import { buildStripePriceLabel } from '../src/lib/planLabels.js'
 
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
@@ -21,12 +22,12 @@ const defaultUserConfig = {
 }
 
 const SANDBOX_PLANS = [
-  { planKey: 'starter', cadence: 'monthly', stripePriceId: 'price_1T3n4I8ZBrL80ZhKCBhjfxN6', maxSites: 1 },
-  { planKey: 'starter', cadence: 'annual', stripePriceId: 'price_1T3n4I8ZBrL80ZhKU3trEwlH', maxSites: 1 },
-  { planKey: 'pro', cadence: 'monthly', stripePriceId: 'price_1T3n6Z8ZBrL80ZhKp1l74rkZ', maxSites: 3 },
-  { planKey: 'pro', cadence: 'annual', stripePriceId: 'price_1T3n6x8ZBrL80ZhKYlDlh55g', maxSites: 3 },
-  { planKey: 'agency', cadence: 'monthly', stripePriceId: 'price_1T3n7f8ZBrL80ZhK4dECtOgR', maxSites: null },
-  { planKey: 'agency', cadence: 'annual', stripePriceId: 'price_1T3n8F8ZBrL80ZhKriIEl6H9', maxSites: null },
+  { planKey: 'starter', cadence: 'monthly', stripePriceId: 'price_1TEaw1FNhpDahMYtkTRXKh6q', maxSites: 1 },
+  { planKey: 'starter', cadence: 'annual', stripePriceId: 'price_1TEbDwFNhpDahMYtRctRNNaK', maxSites: 1 },
+  { planKey: 'pro', cadence: 'monthly', stripePriceId: 'price_1TEbF1FNhpDahMYtETj6pLFZ', maxSites: 3 },
+  { planKey: 'pro', cadence: 'annual', stripePriceId: 'price_1TEbFWFNhpDahMYtVN7ItqqY', maxSites: 3 },
+  { planKey: 'agency', cadence: 'monthly', stripePriceId: 'price_1TEbGEFNhpDahMYtW1NRSMNP', maxSites: null },
+  { planKey: 'agency', cadence: 'annual', stripePriceId: 'price_1TEbGhFNhpDahMYt5ghEqi90', maxSites: null },
 ] as const
 
 const defaultSiteConfig = {
@@ -44,7 +45,7 @@ const defaultSiteConfig = {
 async function main() {
   // Seed plans (sandbox)
   for (const p of SANDBOX_PLANS) {
-    const stripePriceLabel = `better_blog_${p.planKey}_${p.cadence}_usd`
+    const stripePriceLabel = buildStripePriceLabel(p.planKey, p.cadence)
     await prisma.plan.upsert({
       where: {
         planKey_cadence_stripeEnvironment: {
