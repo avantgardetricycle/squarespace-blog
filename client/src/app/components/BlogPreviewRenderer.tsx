@@ -11,6 +11,8 @@ interface RendererConfigOverrides {
   collectionConfig?: Record<string, unknown>;
   postConfig?: Record<string, unknown>;
   recentPostsCount?: number;
+  /** Configure preview only: -1 = list/collection view, >=0 = single-post index (path/hash ignored in previewMode) */
+  previewSelectedPostIndex?: number;
 }
 
 interface BlogPreviewRendererProps {
@@ -32,6 +34,9 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     collectionConfig: overrides?.collectionConfig ?? undefined,
     postConfig: overrides?.postConfig ?? undefined,
     recentPostsCount: overrides?.recentPostsCount ?? 5,
+    ...(typeof overrides?.previewSelectedPostIndex === "number"
+      ? { previewSelectedPostIndex: overrides.previewSelectedPostIndex }
+      : {}),
   };
 }
 

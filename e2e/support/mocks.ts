@@ -80,6 +80,7 @@ const configResponse = {
       tableOfContents: { enabled: false, position: "none" },
       breadcrumbs: { enabled: false, position: "none" },
       authorProfiles: { enabled: false, position: "none" },
+      popularPosts: { enabled: false, position: "none", count: 5 },
       relevantPosts: { enabled: false, position: "none" },
       emailCapture: { enabled: false, position: "none", header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { enabled: false, position: "none", resourceTitle: "", description: "", buttonText: "Get it free" },
@@ -132,6 +133,24 @@ const configurePreviewResponse = {
   ],
 };
 
+const checkoutPlanPrices = {
+  currency: "usd",
+  plans: {
+    starter: {
+      monthly: { perMonth: 12 },
+      annual: { perMonth: 9, perYear: 108 },
+    },
+    pro: {
+      monthly: { perMonth: 19 },
+      annual: { perMonth: 14, perYear: 168 },
+    },
+    agency: {
+      monthly: { perMonth: 39 },
+      annual: { perMonth: 29, perYear: 348 },
+    },
+  },
+};
+
 const authorsResponse = [
   {
     id: "author-1",
@@ -159,6 +178,7 @@ export async function setupApiMocks(page: Page): Promise<void> {
     const path = url.pathname;
 
     if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, dashboardMe);
+    if (method === "GET" && path === "/api/checkout/prices") return json(route, 200, checkoutPlanPrices);
     if (method === "GET" && path === `/api/config/${siteKey}`) return json(route, 200, configResponse);
     if (method === "POST" && path === "/api/config") return json(route, 200, { ok: true });
     if (method === "GET" && path === `/api/config/blog-preview/${siteKey}`) return json(route, 200, configurePreviewResponse);

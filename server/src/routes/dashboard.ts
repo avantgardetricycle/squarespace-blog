@@ -4,8 +4,12 @@ import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
 import dashboardCommentsRoutes from './dashboard-comments.js'
-import { getPlanPriceDisplay } from '../lib/pricing.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
+import {
+  formatPricePerMo,
+  getStripePriceDisplayForPriceId,
+  loadPublicPlanPrices
+} from '../lib/stripePlanPrices.js'
 import { getAppUrl } from '../lib/url.js'
 import { randomBytes } from 'crypto'
 
@@ -117,6 +121,23 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         : null
     const cadence = planRecord?.cadence ?? 'monthly'
 
+    let priceDisplay = '—'
+    if (subscription) {
+      try {
+        if (subscription.stripePriceId) {
+          priceDisplay = await getStripePriceDisplayForPriceId(subscription.stripePriceId)
+        } else {
+          const pub = await loadPublicPlanPrices()
+          const tier = pub.plans[subscription.plan] ?? pub.plans.pro
+          const perMonth = cadence === 'annual' ? tier.annual.perMonth : tier.monthly.perMonth
+          priceDisplay = formatPricePerMo(perMonth, pub.currency)
+        }
+      } catch (err) {
+        console.error('Subscription price display error:', err)
+        priceDisplay = '—'
+      }
+    }
+
     res.json({
       user: {
         id: userWithRelations.id,
@@ -129,7 +150,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             plan: subscription.plan,
             planDisplay: getPlanDisplayName(subscription.plan),
             cadence,
-            priceDisplay: getPlanPriceDisplay(subscription.plan, cadence),
+            priceDisplay,
             status: subscription.status,
             maxSites: subscription.maxSites,
             currentPeriodEnd: subscription.currentPeriodEnd,

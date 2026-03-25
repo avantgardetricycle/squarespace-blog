@@ -56,6 +56,11 @@ import { getDashboardMe, type DashboardMe } from "@/api/auth";
 
 const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
 
+function isPreviewDebugEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.location.search.includes("bbPreviewDebug=1") || sessionStorage.getItem("bbPreviewDebug") === "1";
+}
+
 export interface BlogAuthorOption {
   id: string;
   name: string;
@@ -68,7 +73,7 @@ export interface BlogAuthorOption {
 
 export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
-export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
 export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "emailCapture", "leadMagnet"] as const;
@@ -99,6 +104,7 @@ export interface PostModulesConfig {
   tableOfContents: { enabled: boolean; position: ModulePosition; style: TocStyle };
   breadcrumbs: { enabled: boolean; position: ModulePosition };
   authorProfiles: { enabled: boolean; position: ModulePosition };
+  popularPosts: { enabled: boolean; position: ModulePosition; count: number };
   relevantPosts: { enabled: boolean; position: ModulePosition };
   emailCapture: { enabled: boolean; position: ModulePosition; header: string; byline?: string; buttonText: string };
   leadMagnet: { enabled: boolean; position: ModulePosition; resourceTitle: string; description: string; buttonText: string };
@@ -223,6 +229,7 @@ const defaultPostModules: PostModulesConfig = {
   tableOfContents: { enabled: false, position: "none", style: "numbered" as TocStyle },
   breadcrumbs: { enabled: false, position: "none" },
   authorProfiles: { enabled: false, position: "none" },
+  popularPosts: { enabled: false, position: "none", count: 5 },
   relevantPosts: { enabled: false, position: "none" },
   emailCapture: { enabled: false, position: "none", header: "Subscribe to our newsletter", buttonText: "Subscribe" },
   leadMagnet: { enabled: false, position: "none", resourceTitle: "", description: "", buttonText: "Get it free" },
@@ -279,13 +286,24 @@ const defaultSiteConfig: SiteConfigForm = {
   postTemplateId: null,
 };
 
-const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
 
 const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "emailCapture", "leadMagnet"] as const;
 const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
 const COLLECTION_FOOTER_MODULES = ["emailCapture", "leadMagnet"] as const;
 const COLLECTION_FILTER_IDS = ["filterByCategory", "filterByTag", "filterByTagsAndCategories"] as const;
+
+/**
+ * Zone list for derive: prefer non-empty moduleOrder. If moduleOrder is [] or missing, use modules.
+ * (Empty array is not nullish, so `moduleOrder ?? modules` incorrectly kept [] and dropped all sidebar/footer modules.)
+ */
+function effectiveZoneModuleOrder(moduleOrder: string[] | undefined, modules: string[] | undefined): string[] {
+  if (Array.isArray(moduleOrder) && moduleOrder.length > 0) return moduleOrder;
+  if (Array.isArray(modules) && modules.length > 0) return modules;
+  if (Array.isArray(moduleOrder)) return moduleOrder;
+  return [];
+}
 
 /**
  * Derive modules arrays for each zone from zone moduleOrder (zone-driven). For collection, filter ID is resolved from filter config.
@@ -407,30 +425,36 @@ function applyDerivedModules(config: SiteConfigForm): void {
   const pm = pc.postModules ?? defaultPostModules;
   const coll = deriveCollectionModules(
     cm,
-    cc.headerContent.moduleOrder ?? cc.headerContent.modules ?? [],
-    cc.leftSidebar.moduleOrder ?? cc.leftSidebar.modules ?? [],
-    cc.rightSidebar.moduleOrder ?? cc.rightSidebar.modules ?? [],
-    cc.footerContent?.moduleOrder ?? cc.footerContent?.modules ?? []
+    effectiveZoneModuleOrder(cc.headerContent.moduleOrder, cc.headerContent.modules),
+    effectiveZoneModuleOrder(cc.leftSidebar.moduleOrder, cc.leftSidebar.modules),
+    effectiveZoneModuleOrder(cc.rightSidebar.moduleOrder, cc.rightSidebar.modules),
+    effectiveZoneModuleOrder(cc.footerContent?.moduleOrder, cc.footerContent?.modules)
   );
   cc.headerContent.modules = coll.header;
+  cc.headerContent.moduleOrder = [...coll.header];
   cc.leftSidebar.modules = coll.left;
+  cc.leftSidebar.moduleOrder = [...coll.left];
   cc.rightSidebar.modules = coll.right;
-  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: coll.footer, show: coll.footer.length > 0 };
+  cc.rightSidebar.moduleOrder = [...coll.right];
+  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: coll.footer, moduleOrder: [...coll.footer], show: coll.footer.length > 0 };
   cc.headerContent.show = coll.header.length > 0;
   cc.leftSidebar.show = coll.left.length > 0;
   cc.rightSidebar.show = coll.right.length > 0;
   const post = derivePostModules(
     pm,
     pc,
-    pc.headerContent.moduleOrder ?? pc.headerContent.modules ?? [],
-    pc.leftSidebar.moduleOrder ?? pc.leftSidebar.modules ?? [],
-    pc.rightSidebar.moduleOrder ?? pc.rightSidebar.modules ?? [],
-    pc.footerContent?.moduleOrder ?? pc.footerContent?.modules ?? []
+    effectiveZoneModuleOrder(pc.headerContent.moduleOrder, pc.headerContent.modules),
+    effectiveZoneModuleOrder(pc.leftSidebar.moduleOrder, pc.leftSidebar.modules),
+    effectiveZoneModuleOrder(pc.rightSidebar.moduleOrder, pc.rightSidebar.modules),
+    effectiveZoneModuleOrder(pc.footerContent?.moduleOrder, pc.footerContent?.modules)
   );
   pc.headerContent.modules = post.header;
+  pc.headerContent.moduleOrder = [...post.header];
   pc.leftSidebar.modules = post.left;
+  pc.leftSidebar.moduleOrder = [...post.left];
   pc.rightSidebar.modules = post.right;
-  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: post.footer, show: post.footer.length > 0 };
+  pc.rightSidebar.moduleOrder = [...post.right];
+  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: post.footer, moduleOrder: [...post.footer], show: post.footer.length > 0 };
   pc.headerContent.show = post.header.length > 0;
   pc.leftSidebar.show = post.left.length > 0;
   pc.rightSidebar.show = post.right.length > 0;
@@ -468,28 +492,40 @@ function parseLevelConfig(
     Array.isArray(arr) ? arr.filter((m): m is HeaderCollectionModuleType => HEADER_COLLECTION_MODULES.includes(m as HeaderCollectionModuleType)) : [];
   const validHeaderPost = (arr: unknown): HeaderPostModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is HeaderPostModuleType => HEADER_POST_MODULES.includes(m as HeaderPostModuleType)) : [];
-  const lsModules = level === "collection" ? validSidebarCollection(ls?.modules) : validSidebarPost(ls?.modules);
-  const rsModules = level === "collection" ? validSidebarCollection(rs?.modules) : validSidebarPost(rs?.modules);
-  const hcModules = level === "collection" ? validHeaderCollection(hc?.modules) : validHeaderPost(hc?.modules);
-  const lsModuleOrder = Array.isArray(ls?.moduleOrder) ? (level === "collection" ? validSidebarCollection(ls.moduleOrder) : validSidebarPost(ls.moduleOrder)) : lsModules;
-  const rsModuleOrder = Array.isArray(rs?.moduleOrder) ? (level === "collection" ? validSidebarCollection(rs.moduleOrder) : validSidebarPost(rs.moduleOrder)) : rsModules;
-  const hcModuleOrder = Array.isArray(hc?.moduleOrder) ? (level === "collection" ? validHeaderCollection(hc.moduleOrder) : validHeaderPost(hc.moduleOrder)) : hcModules;
+  const lsOrderSource = effectiveZoneModuleOrder(
+    Array.isArray(ls?.moduleOrder) ? ls.moduleOrder as string[] : undefined,
+    Array.isArray(ls?.modules) ? ls.modules as string[] : undefined
+  );
+  const lsModuleOrder = level === "collection" ? validSidebarCollection(lsOrderSource) : validSidebarPost(lsOrderSource);
+  const rsOrderSource = effectiveZoneModuleOrder(
+    Array.isArray(rs?.moduleOrder) ? rs.moduleOrder as string[] : undefined,
+    Array.isArray(rs?.modules) ? rs.modules as string[] : undefined
+  );
+  const rsModuleOrder = level === "collection" ? validSidebarCollection(rsOrderSource) : validSidebarPost(rsOrderSource);
+  const hcOrderSource = effectiveZoneModuleOrder(
+    Array.isArray(hc?.moduleOrder) ? hc.moduleOrder as string[] : undefined,
+    Array.isArray(hc?.modules) ? hc.modules as string[] : undefined
+  );
+  const hcModuleOrder = level === "collection" ? validHeaderCollection(hcOrderSource) : validHeaderPost(hcOrderSource);
   const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: lsModules, moduleOrder: lsModuleOrder, width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky !== false }
+    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky !== false }
     : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
   const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: rsModules, moduleOrder: rsModuleOrder, width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky !== false }
+    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky !== false }
     : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
   const headerContent = hc
-    ? { show: Boolean(hc.show ?? false), modules: hcModules, moduleOrder: hcModuleOrder, height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
+    ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
     : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
   const validFooterCollection = (arr: unknown): string[] => Array.isArray(arr) ? arr.filter((m): m is string => m === "emailCapture" || m === "leadMagnet") : [];
   const validFooterPost = (arr: unknown): string[] => Array.isArray(arr) ? arr.filter((m): m is string => m === "relevantPosts" || m === "authorProfiles" || m === "emailCapture" || m === "leadMagnet") : [];
-  const fcModules = level === "collection" ? validFooterCollection(fc?.modules) : validFooterPost(fc?.modules);
-  const fcModuleOrder = Array.isArray(fc?.moduleOrder) ? (level === "collection" ? validFooterCollection(fc.moduleOrder) : validFooterPost(fc.moduleOrder)) : fcModules;
+  const fcOrderSource = effectiveZoneModuleOrder(
+    Array.isArray(fc?.moduleOrder) ? fc.moduleOrder as string[] : undefined,
+    Array.isArray(fc?.modules) ? fc.modules as string[] : undefined
+  );
+  const fcModuleOrder = level === "collection" ? validFooterCollection(fcOrderSource) : validFooterPost(fcOrderSource);
   const validFooterContentAlignment = (v: unknown): "left" | "center" | "right" => (v === "center" || v === "right") ? v : "left";
   const footerContent = fc
-    ? { show: Boolean(fc.show ?? false), modules: fcModules, moduleOrder: fcModuleOrder, height: Math.min(120, Math.max(32, Number(fc.height) || 48)), contentAlignment: validFooterContentAlignment(fc.contentAlignment ?? (fc as { contentAlignment?: string }).contentAlignment), leftPadding: Math.min(80, Math.max(0, Number(fc.leftPadding ?? fc.sideMargin) ?? 0)), rightPadding: Math.min(80, Math.max(0, Number(fc.rightPadding ?? fc.sideMargin) ?? 0)) }
+    ? { show: Boolean(fc.show ?? false), modules: fcModuleOrder, moduleOrder: fcModuleOrder, height: Math.min(120, Math.max(32, Number(fc.height) || 48)), contentAlignment: validFooterContentAlignment(fc.contentAlignment ?? (fc as { contentAlignment?: string }).contentAlignment), leftPadding: Math.min(80, Math.max(0, Number(fc.leftPadding ?? fc.sideMargin) ?? 0)), rightPadding: Math.min(80, Math.max(0, Number(fc.rightPadding ?? fc.sideMargin) ?? 0)) }
     : { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48, contentAlignment: "left" as const, leftPadding: 0, rightPadding: 0 };
   const postSort = (raw?.postSort === "az" || raw?.postSort === "popularity") ? raw.postSort as PostSortOption : "date";
   const pagRaw = raw?.pagination && typeof raw.pagination === "object" ? raw.pagination as { show?: boolean; mode?: string; postsPerPage?: number } : null;
@@ -535,7 +571,7 @@ function parseLevelConfig(
         },
       };
     }
-    const mods: string[] = [...(hcModules as string[]), ...(lsModules as string[]), ...(rsModules as string[]), ...(fcModules as string[])];
+    const mods: string[] = [...(hcModuleOrder as string[]), ...(lsModuleOrder as string[]), ...(rsModuleOrder as string[]), ...(fcModuleOrder as string[])];
     const hasFilterByCategory = mods.includes("filterByCategory");
     const hasFilterByTag = mods.includes("filterByTag");
     const hasFilterByTagsAndCategories = mods.includes("filterByTagsAndCategories");
@@ -609,6 +645,7 @@ function parseLevelConfig(
       const toc = pmRaw.tableOfContents && typeof pmRaw.tableOfContents === "object" ? pmRaw.tableOfContents as Record<string, unknown> : {};
       const bc = pmRaw.breadcrumbs && typeof pmRaw.breadcrumbs === "object" ? pmRaw.breadcrumbs as Record<string, unknown> : {};
       const ap = pmRaw.authorProfiles && typeof pmRaw.authorProfiles === "object" ? pmRaw.authorProfiles as Record<string, unknown> : {};
+      const pop = pmRaw.popularPosts && typeof pmRaw.popularPosts === "object" ? pmRaw.popularPosts as Record<string, unknown> : {};
       const rel = pmRaw.relevantPosts && typeof pmRaw.relevantPosts === "object" ? pmRaw.relevantPosts as Record<string, unknown> : {};
       const ec = pmRaw.emailCapture && typeof pmRaw.emailCapture === "object" ? pmRaw.emailCapture as Record<string, unknown> : {};
       const lm = pmRaw.leadMagnet && typeof pmRaw.leadMagnet === "object" ? pmRaw.leadMagnet as Record<string, unknown> : {};
@@ -617,6 +654,11 @@ function parseLevelConfig(
         tableOfContents: { enabled: Boolean(toc.enabled ?? false), position: validModulePosition(toc.position), style: validTocStyle(toc.style) },
         breadcrumbs: { enabled: Boolean(bc.enabled ?? false), position: validModulePosition(bc.position) },
         authorProfiles: { enabled: Boolean(ap.enabled ?? false), position: validModulePosition(ap.position) },
+        popularPosts: {
+          enabled: Boolean(pop.enabled ?? false),
+          position: validModulePosition(pop.position),
+          count: Math.min(20, Math.max(1, Number(pop.count) || 5)),
+        },
         relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: validModulePosition(rel.position) },
         emailCapture: {
           enabled: Boolean(ec.enabled ?? false),
@@ -634,17 +676,19 @@ function parseLevelConfig(
         },
       };
     }
-    const modsPost: string[] = [...(hcModules as string[]), ...(lsModules as string[]), ...(rsModules as string[]), ...(fcModules as string[])];
-    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((hcModules as string[]).includes("tableOfContents") ? "header" : (lsModules as string[]).includes("tableOfContents") ? "leftSidebar" : "rightSidebar") : "none";
-    const bcPos: ModulePosition = modsPost.includes("breadcrumbs") ? ((hcModules as string[]).includes("breadcrumbs") ? "header" : (lsModules as string[]).includes("breadcrumbs") ? "leftSidebar" : "rightSidebar") : "none";
-    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((hcModules as string[]).includes("authorProfiles") ? "header" : (lsModules as string[]).includes("authorProfiles") ? "leftSidebar" : (rsModules as string[]).includes("authorProfiles") ? "rightSidebar" : (fcModules as string[]).includes("authorProfiles") ? "footer" : "none") : "none";
-    const relPos: ModulePosition = modsPost.includes("relevantPosts") ? ((hcModules as string[]).includes("relevantPosts") ? "header" : (lsModules as string[]).includes("relevantPosts") ? "leftSidebar" : (rsModules as string[]).includes("relevantPosts") ? "rightSidebar" : (fcModules as string[]).includes("relevantPosts") ? "footer" : "none") : "none";
-    const ecPos: ModulePosition = modsPost.includes("emailCapture") ? ((hcModules as string[]).includes("emailCapture") ? "header" : (lsModules as string[]).includes("emailCapture") ? "leftSidebar" : (rsModules as string[]).includes("emailCapture") ? "rightSidebar" : (fcModules as string[]).includes("emailCapture") ? "footer" : "none") : "none";
-    const lmPos: ModulePosition = modsPost.includes("leadMagnet") ? ((hcModules as string[]).includes("leadMagnet") ? "header" : (lsModules as string[]).includes("leadMagnet") ? "leftSidebar" : (rsModules as string[]).includes("leadMagnet") ? "rightSidebar" : (fcModules as string[]).includes("leadMagnet") ? "footer" : "none") : "none";
+    const modsPost: string[] = [...(hcModuleOrder as string[]), ...(lsModuleOrder as string[]), ...(rsModuleOrder as string[]), ...(fcModuleOrder as string[])];
+    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((hcModuleOrder as string[]).includes("tableOfContents") ? "header" : (lsModuleOrder as string[]).includes("tableOfContents") ? "leftSidebar" : "rightSidebar") : "none";
+    const bcPos: ModulePosition = modsPost.includes("breadcrumbs") ? ((hcModuleOrder as string[]).includes("breadcrumbs") ? "header" : (lsModuleOrder as string[]).includes("breadcrumbs") ? "leftSidebar" : "rightSidebar") : "none";
+    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((hcModuleOrder as string[]).includes("authorProfiles") ? "header" : (lsModuleOrder as string[]).includes("authorProfiles") ? "leftSidebar" : (rsModuleOrder as string[]).includes("authorProfiles") ? "rightSidebar" : (fcModuleOrder as string[]).includes("authorProfiles") ? "footer" : "none") : "none";
+    const popPos: ModulePosition = modsPost.includes("popularPosts") ? ((hcModuleOrder as string[]).includes("popularPosts") ? "header" : (lsModuleOrder as string[]).includes("popularPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("popularPosts") ? "rightSidebar" : "none") : "none";
+    const relPos: ModulePosition = modsPost.includes("relevantPosts") ? ((hcModuleOrder as string[]).includes("relevantPosts") ? "header" : (lsModuleOrder as string[]).includes("relevantPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("relevantPosts") ? "rightSidebar" : (fcModuleOrder as string[]).includes("relevantPosts") ? "footer" : "none") : "none";
+    const ecPos: ModulePosition = modsPost.includes("emailCapture") ? ((hcModuleOrder as string[]).includes("emailCapture") ? "header" : (lsModuleOrder as string[]).includes("emailCapture") ? "leftSidebar" : (rsModuleOrder as string[]).includes("emailCapture") ? "rightSidebar" : (fcModuleOrder as string[]).includes("emailCapture") ? "footer" : "none") : "none";
+    const lmPos: ModulePosition = modsPost.includes("leadMagnet") ? ((hcModuleOrder as string[]).includes("leadMagnet") ? "header" : (lsModuleOrder as string[]).includes("leadMagnet") ? "leftSidebar" : (rsModuleOrder as string[]).includes("leadMagnet") ? "rightSidebar" : (fcModuleOrder as string[]).includes("leadMagnet") ? "footer" : "none") : "none";
     return {
       tableOfContents: { enabled: tocPos !== "none", position: tocPos, style: "numbered" as TocStyle },
       breadcrumbs: { enabled: bcPos !== "none", position: bcPos },
       authorProfiles: { enabled: apPos !== "none", position: apPos },
+      popularPosts: { enabled: popPos !== "none", position: popPos, count: 5 },
       relevantPosts: { enabled: relPos !== "none", position: relPos },
       emailCapture: { enabled: ecPos !== "none", position: ecPos, header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { enabled: lmPos !== "none", position: lmPos, resourceTitle: "", description: "", buttonText: "Get it free" },
@@ -703,10 +747,10 @@ function parseLevelConfig(
       ...base,
       postModules,
       postHeader,
-      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: lsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: rsModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-      headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: hcModuleOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
-      footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: fcModuleOrder },
+      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: [...postDerived.left] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: [...postDerived.right] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+      headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: [...postDerived.header] } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
+      footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: [...postDerived.footer] },
       progressBar: pb ? {
         show: Boolean(pb.show ?? false),
         position: (pb.position === "bottom" ? "bottom" : "top") as "top" | "bottom",
@@ -979,6 +1023,7 @@ export default function Configure() {
     sorting: false,
     search: false,
     recentPosts: false,
+    popularPosts: false,
     relevantPosts: false,
     emailCapture: false,
     leadMagnet: false,
@@ -993,6 +1038,7 @@ export default function Configure() {
     postHeader: false,
     comments: false,
   });
+  const previewDebugEnabled = useMemo(() => isPreviewDebugEnabled(), []);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -1197,6 +1243,9 @@ export default function Configure() {
   const effectiveConfig = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
+  /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
+  const previewSelectedPostIndex =
+    selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
@@ -1219,15 +1268,36 @@ export default function Configure() {
       baseUrl: typeof window !== "undefined" ? window.location.origin : "",
       siteKey: effectiveSiteKey ?? undefined,
       siteId: effectiveSite?.id ?? undefined,
+      previewSelectedPostIndex,
       configUpdateCallback: (path: string, value: unknown) => updateConfigRef.current(path, value),
     };
-  }, [config, authors, effectiveSiteKey, effectiveSite]);
+  }, [config, authors, effectiveSiteKey, effectiveSite, previewSelectedPostIndex]);
 
   // Stable signature so preview components reliably detect config changes (avoids stale effect deps)
   const configSignature = useMemo(
-    () => JSON.stringify({ post: config.postConfig, collection: config.collectionConfig }),
-    [config.postConfig, config.collectionConfig]
+    () =>
+      JSON.stringify({
+        post: config.postConfig,
+        collection: config.collectionConfig,
+        previewSelectedPostIndex,
+      }),
+    [config.postConfig, config.collectionConfig, previewSelectedPostIndex]
   );
+
+  useEffect(() => {
+    if (!previewDebugEnabled) return;
+    const levelCfg = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
+    console.log("[Configure] Preview state", {
+      selectedLevel,
+      selectedPostIndex,
+      previewSelectedPostIndex,
+      configSignature,
+      leftSidebar: levelCfg.leftSidebar,
+      rightSidebar: levelCfg.rightSidebar,
+      headerContent: levelCfg.headerContent,
+      footerContent: levelCfg.footerContent,
+    });
+  }, [previewDebugEnabled, selectedLevel, selectedPostIndex, previewSelectedPostIndex, configSignature, config.collectionConfig, config.postConfig]);
 
   const handleSave = useCallback(async () => {
     const keyToSave = effectiveSiteKey ?? siteKey;
@@ -1294,22 +1364,46 @@ export default function Configure() {
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
       if (level === "collection" && template.collectionConfig && typeof template.collectionConfig === "object") {
+        const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection");
         setConfig((prev) => ({
           ...prev,
-          collectionConfig: parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection"),
+          collectionConfig: parsedCollection,
           collectionTemplateId: template.id,
         }));
+        if (previewDebugEnabled) {
+          const cc = parsedCollection as CollectionLevelConfig;
+          console.log("[Configure] Applied collection template", {
+            templateId: template.id,
+            templateName: template.name,
+            leftSidebar: cc.leftSidebar,
+            rightSidebar: cc.rightSidebar,
+            headerContent: cc.headerContent,
+            footerContent: cc.footerContent,
+          });
+        }
         toast.success(`Applied "${template.name}" collection template.`);
       } else if (level === "post" && template.postConfig && typeof template.postConfig === "object") {
+        const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
         setConfig((prev) => ({
           ...prev,
-          postConfig: parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig,
+          postConfig: parsedPost,
           postTemplateId: template.id,
         }));
+        if (previewDebugEnabled) {
+          console.log("[Configure] Applied post template", {
+            templateId: template.id,
+            templateName: template.name,
+            leftSidebar: parsedPost.leftSidebar,
+            rightSidebar: parsedPost.rightSidebar,
+            headerContent: parsedPost.headerContent,
+            footerContent: parsedPost.footerContent,
+            postHeader: parsedPost.postHeader,
+          });
+        }
         toast.success(`Applied "${template.name}" post template.`);
       }
     },
-    []
+    [previewDebugEnabled]
   );
 
   const updateConfigRef = useRef<(path: string, value: unknown) => void>(() => {});
@@ -1381,6 +1475,9 @@ export default function Configure() {
       else if (path === "postModules.breadcrumbs.position") pm.breadcrumbs = { ...pm.breadcrumbs, position: value as ModulePosition };
       else if (path === "postModules.authorProfiles.enabled") pm.authorProfiles = { ...pm.authorProfiles, enabled: value as boolean };
       else if (path === "postModules.authorProfiles.position") pm.authorProfiles = { ...pm.authorProfiles, position: value as ModulePosition };
+      else if (path === "postModules.popularPosts.enabled") pm.popularPosts = { ...pm.popularPosts, enabled: value as boolean };
+      else if (path === "postModules.popularPosts.position") pm.popularPosts = { ...pm.popularPosts, position: value as ModulePosition };
+      else if (path === "postModules.popularPosts.count") pm.popularPosts = { ...pm.popularPosts, count: Math.min(20, Math.max(1, Number(value) || 5)) };
       else if (path === "postModules.relevantPosts.enabled") pm.relevantPosts = { ...pm.relevantPosts, enabled: value as boolean };
       else if (path === "postModules.relevantPosts.position") pm.relevantPosts = { ...pm.relevantPosts, position: value as ModulePosition };
       else if (path === "postModules.emailCapture.enabled") pm.emailCapture = { ...pm.emailCapture, enabled: value as boolean };
@@ -2984,6 +3081,7 @@ export default function Configure() {
                         searchPosts: "Search Posts",
                         postSort: "Sort Posts",
                         recentPosts: "Recent Posts",
+                        popularPosts: "Popular Posts",
                         relevantPosts: "Related Posts",
                         tableOfContents: "Table of Contents",
                         authorProfiles: "Author Profiles",
@@ -3297,6 +3395,34 @@ export default function Configure() {
                                         {((effectiveConfig as PostLevelConfig).postModules?.tableOfContents.style ?? "numbered") === "bookmark" && "Current section highlighted with theme color"}
                                       </p>
                                     </div>
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSectionCollapseOnly
+                                title="Popular Posts"
+                                expanded={sectionExpanded.popularPosts}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
+                                content={
+                                  <div className="space-y-3">
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 5]}
+                                          onValueChange={([v]) => updateLevelConfigPath("postModules.popularPosts.count", v ?? 5)}
+                                          min={1}
+                                          max={20}
+                                          step={1}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
+                                          {(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 5}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts. Add the Popular Posts module to a sidebar under Left/Right Sidebar.
+                                    </p>
                                   </div>
                                 }
                               />
@@ -3881,7 +4007,7 @@ export default function Configure() {
                     blogUrl={previewUrl}
                     config={rendererConfig}
                     configSignature={configSignature}
-                    selectPostIndex={selectedLevel === "collection" ? -1 : selectedPostIndex}
+                    selectPostIndex={previewSelectedPostIndex}
                     className="min-h-full"
                   />
                 );

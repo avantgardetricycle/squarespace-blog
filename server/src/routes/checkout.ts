@@ -4,6 +4,7 @@ import prisma from '../db/index.js'
 import { optionalSession, SessionUser } from '../middleware/session.js'
 import { getAppUrl } from '../lib/url.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
+import { loadPublicPlanPrices } from '../lib/stripePlanPrices.js'
 
 const router = Router()
 const TRIAL_DAYS = 7
@@ -27,6 +28,18 @@ router.post('/check-email', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Check email error:', err)
     res.status(500).json({ error: 'Failed to check email' })
+  }
+})
+
+// GET /api/checkout/prices — amounts from Stripe (for landing + pre-checkout UI)
+router.get('/prices', async (_req: Request, res: Response) => {
+  try {
+    const data = await loadPublicPlanPrices()
+    res.json(data)
+  } catch (err) {
+    console.error('Checkout prices error:', err)
+    const message = err instanceof Error ? err.message : 'Failed to load prices'
+    res.status(500).json({ error: message })
   }
 })
 

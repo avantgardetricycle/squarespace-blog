@@ -143,6 +143,39 @@
     _progressScrollTarget: null,
     _tocScrollHandler: null,
     _tocScrollTarget: null,
+    _renderSeq: 0,
+
+    _isDebugEnabled: function() {
+      try {
+        var params = new URLSearchParams(window.location.search || '');
+        return params.get('bbPreviewDebug') === '1';
+      } catch (e) {
+        return false;
+      }
+    },
+
+    _debugLog: function(label, payload) {
+      if (!this._isDebugEnabled()) return;
+      if (payload !== undefined) console.log('[BlogOverlay][debug] ' + label, payload);
+      else console.log('[BlogOverlay][debug] ' + label);
+    },
+
+    _warnDuplicateValues: function(label, arr) {
+      if (!this._isDebugEnabled() || !Array.isArray(arr) || arr.length < 2) return;
+      var seen = {};
+      var dups = [];
+      for (var i = 0; i < arr.length; i++) {
+        var key = String(arr[i]);
+        if (seen[key]) dups.push(key);
+        seen[key] = true;
+      }
+      if (dups.length > 0) {
+        console.warn('[BlogOverlay][debug] Duplicate modules in ' + label, {
+          duplicates: dups,
+          modules: arr
+        });
+      }
+    },
 
     /**
      * Check if current path is a blog route (exact path or post sub-path)
@@ -422,6 +455,18 @@
       this._previewMode = previewMode;
       this._bbPreview = bbPreview;
       console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
+      this._debugLog('init', {
+        previewMode: previewMode,
+        bbPreview: bbPreview,
+        path: typeof window !== 'undefined' ? window.location.pathname + window.location.hash : '',
+        rootTag: root && root.tagName ? root.tagName : null,
+        rootId: root && root.id ? root.id : null,
+        hasCollectionConfig: Boolean(this.config && this.config.collectionConfig),
+        hasPostConfig: Boolean(this.config && this.config.postConfig),
+        previewSelectedPostIndex: this.config && typeof this.config.previewSelectedPostIndex === 'number'
+          ? this.config.previewSelectedPostIndex
+          : null
+      });
 
       var self = this;
       window.addEventListener('hashchange', function() {
@@ -538,6 +583,14 @@
       var prevSig = this._lastConfigSignature;
       var nextSig = JSON.stringify(newConfig);
       this.config = Object.assign({}, this.config || {}, newConfig);
+      this._debugLog('updateConfig', {
+        sameSignatureAsPrevious: prevSig === nextSig && Boolean(this._lastConfigSignature),
+        previewSelectedPostIndex: this.config && typeof this.config.previewSelectedPostIndex === 'number'
+          ? this.config.previewSelectedPostIndex
+          : null,
+        hasCollectionConfig: Boolean(this.config && this.config.collectionConfig),
+        hasPostConfig: Boolean(this.config && this.config.postConfig)
+      });
       if (prevSig === nextSig && this._lastConfigSignature) return;
       this._lastConfigSignature = nextSig;
       if (this.items.length) {
@@ -2322,6 +2375,17 @@
      * Get selected post index: path first (actual post URLs), then hash (legacy)
      */
     _getSelectedIndex: function(items) {
+      var cfg = this.config || {};
+      if (this._previewMode && typeof cfg.previewSelectedPostIndex === 'number') {
+        var p = cfg.previewSelectedPostIndex;
+        this._debugLog('selected index from previewSelectedPostIndex', {
+          previewSelectedPostIndex: p,
+          itemCount: items && items.length ? items.length : 0
+        });
+        if (p < 0) return -1;
+        if (!items || items.length === 0) return 0;
+        return Math.min(Math.max(0, p), items.length - 1);
+      }
       var fromPath = this._getSelectedIndexFromPath(items);
       if (fromPath >= 0) return fromPath;
       return this._getSelectedIndexFromHash();
@@ -2612,10 +2676,16 @@
         this._tocScrollTarget = null;
       }
 
-      var existing = root.querySelector('#blog-overlay-list');
-      if (existing) existing.remove();
-      var existingProgress = root.querySelector('#blog-overlay-progress');
-      if (existingProgress) existingProgress.remove();
+      var existingLists = root.querySelectorAll('#blog-overlay-list');
+      for (var elIdx = 0; elIdx < existingLists.length; elIdx++) existingLists[elIdx].remove();
+      var existingProgressBars = root.querySelectorAll('#blog-overlay-progress');
+      for (var pbIdx = 0; pbIdx < existingProgressBars.length; pbIdx++) existingProgressBars[pbIdx].remove();
+      if (existingLists.length > 1 || existingProgressBars.length > 1) {
+        this._debugLog('removed duplicate overlay nodes before render', {
+          listNodesRemoved: existingLists.length,
+          progressNodesRemoved: existingProgressBars.length
+        });
+      }
 
       /* Replace original content with our overlay (avoids duplicate content, keeps root for style inheritance) */
       var toRemove = [];
@@ -2717,6 +2787,17 @@
       var isSinglePost = displayItems.length === 1 && selectedIndex >= 0 && !hasAnyFilter;
       var levelCfg = isSinglePost ? (baseCfg.postConfig && typeof baseCfg.postConfig === 'object' ? baseCfg.postConfig : baseCfg) : (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' ? baseCfg.collectionConfig : baseCfg);
       var cfg = Object.assign({}, baseCfg, levelCfg);
+      this._renderSeq += 1;
+      this._debugLog('render start', {
+        renderSeq: this._renderSeq,
+        selectedIndex: selectedIndex,
+        isSinglePost: isSinglePost,
+        hasAnyFilter: hasAnyFilter,
+        usingLevel: isSinglePost ? 'postConfig' : 'collectionConfig',
+        leftSidebarModules: cfg.leftSidebar && Array.isArray(cfg.leftSidebar.modules) ? cfg.leftSidebar.modules.slice() : [],
+        rightSidebarModules: cfg.rightSidebar && Array.isArray(cfg.rightSidebar.modules) ? cfg.rightSidebar.modules.slice() : [],
+        footerModules: cfg.footerContent && Array.isArray(cfg.footerContent.modules) ? cfg.footerContent.modules.slice() : []
+      });
       var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
       var leftSidebarCfg = cfg.leftSidebar && typeof cfg.leftSidebar === 'object' ? cfg.leftSidebar : null;
       var rightSidebarCfg = cfg.rightSidebar && typeof cfg.rightSidebar === 'object' ? cfg.rightSidebar : null;
@@ -3164,6 +3245,57 @@
         requestAnimationFrame(function() { self._updateTocHighlight(); });
         return createSidebarSection('Table of Contents', el, isSinglePost);
       }
+      function createPopularPostsModule(sidebarWidth) {
+        if (items.length === 0) return null;
+        var pmPop = cfg.postModules && cfg.postModules.popularPosts && typeof cfg.postModules.popularPosts === 'object' ? cfg.postModules.popularPosts : null;
+        var count = Math.max(1, Math.min(20, parseInt(pmPop && pmPop.count, 10) || 5));
+        var el = document.createElement('aside');
+        el.className = 'blog-overlay-popular-posts';
+        el.style.flexShrink = '0';
+        el.style.width = (sidebarWidth || 220) + 'px';
+        var others = [];
+        for (var oi = 0; oi < items.length; oi++) {
+          if (!(isSinglePost && selectedIndex >= 0 && oi === selectedIndex)) others.push(items[oi]);
+        }
+        if (others.length === 0) return null;
+        var ranked = others.slice();
+        var pvc = postViewCounts;
+        if (pvc && typeof pvc === 'object' && Object.keys(pvc).length > 0) {
+          ranked.sort(function(a, b) {
+            var idA = String(a.id || a.fullUrl || a.title || '');
+            var idB = String(b.id || b.fullUrl || b.title || '');
+            var viewsA = idA ? (parseInt(pvc[idA], 10) || 0) : 0;
+            var viewsB = idB ? (parseInt(pvc[idB], 10) || 0) : 0;
+            return viewsB - viewsA;
+          });
+        } else {
+          ranked.sort(function(a, b) {
+            var tsA = a.publishedOn || a.publishOn || a.addedOn || 0;
+            var tsB = b.publishedOn || b.publishOn || b.addedOn || 0;
+            return (tsB || 0) - (tsA || 0);
+          });
+        }
+        var popularItems = ranked.slice(0, count);
+        for (var r = 0; r < popularItems.length; r++) {
+          var ppPost = popularItems[r];
+          var ppIdx = items.indexOf(ppPost);
+          if (ppIdx < 0) ppIdx = r;
+          var ppUrl = self._getPostUrl(ppPost);
+          var ppEntry = document.createElement('div');
+          ppEntry.style.marginBottom = '12px';
+          var ppLink = document.createElement('a');
+          ppLink.href = ppUrl || '#post-' + ppIdx;
+          ppLink.setAttribute('data-analytics-element', 'popularPosts');
+          ppLink.textContent = ppPost.title || 'Untitled';
+          ppLink.style.display = 'block';
+          ppLink.style.fontSize = '0.9rem';
+          ppLink.style.fontWeight = '500';
+          ppLink.style.textDecoration = 'none';
+          ppEntry.appendChild(ppLink);
+          el.appendChild(ppEntry);
+        }
+        return createSidebarSection('Popular Posts', el, isSinglePost);
+      }
       function createRecentPostsModule(sidebarWidth) {
         if (items.length === 0) return null;
         var el = document.createElement('aside');
@@ -3429,15 +3561,17 @@
       var lmCfg = (cfg.collectionModules && cfg.collectionModules.leadMagnet) || (cfg.postModules && cfg.postModules.leadMagnet);
       function buildSidebarModules(sidebarCfg) {
         if (!sidebarCfg || !sidebarCfg.show || !Array.isArray(sidebarCfg.modules) || sidebarCfg.modules.length === 0) return [];
+        self._warnDuplicateValues('sidebar', sidebarCfg.modules);
         var width = Math.min(400, Math.max(160, sidebarCfg.width || 240));
         var mods = [];
         var hidePostLists = self._bbPreview && isSinglePost;
         for (var m = 0; m < sidebarCfg.modules.length; m++) {
           var mod = sidebarCfg.modules[m];
-          if (hidePostLists && (mod === 'recentPosts' || mod === 'relevantPosts')) continue;
+          if (hidePostLists && (mod === 'recentPosts' || mod === 'relevantPosts' || mod === 'popularPosts')) continue;
           var el = null;
           if (mod === 'tableOfContents') el = createTocModule(width);
           else if (mod === 'recentPosts') el = createRecentPostsModule(width);
+          else if (mod === 'popularPosts') el = createPopularPostsModule(width);
           else if (mod === 'relevantPosts') el = createRelevantPostsModule(width);
           else if (mod === 'searchPosts' || mod === 'postSearch') {
             var searchWrap = document.createElement('div');
@@ -3753,10 +3887,12 @@
               fullBleedHeaderBlock.style.backgroundImage = 'url(' + imgUrl + ')';
               fullBleedHeaderBlock.style.backgroundSize = 'cover';
               fullBleedHeaderBlock.style.backgroundPosition = 'center';
-              fullBleedHeaderBlock.style.minHeight = '320px';
-              fullBleedHeaderBlock.style.marginLeft = '-16px';
-              fullBleedHeaderBlock.style.marginRight = '-16px';
-              fullBleedHeaderBlock.style.width = 'calc(100% + 32px)';
+              fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
+              fullBleedHeaderBlock.style.width = '100vw';
+              fullBleedHeaderBlock.style.maxWidth = '100vw';
+              fullBleedHeaderBlock.style.marginLeft = 'calc(50% - 50vw)';
+              fullBleedHeaderBlock.style.marginRight = 'calc(50% - 50vw)';
+              fullBleedHeaderBlock.style.position = 'relative';
               fullBleedHeaderBlock.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
               fullBleedHeaderBlock.style.display = 'flex';
               fullBleedHeaderBlock.style.alignItems = 'flex-end';
@@ -3997,6 +4133,11 @@
               var meta = document.createElement('div');
               meta.className = 'blog-overlay-meta';
               meta.textContent = metaParts.join(' · ');
+              if (singlePostFullBleed) {
+                meta.style.color = 'rgba(255,255,255,0.92)';
+                meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+                metaRow.style.color = 'rgba(255,255,255,0.92)';
+              }
               metaRow.appendChild(meta);
               (postInfoWrap || appendTo).appendChild(metaRow);
             }
@@ -4255,6 +4396,7 @@
               if (headerContentCfg.tableOfContents) hcModules.push('tableOfContents');
               if (headerContentCfg.breadcrumbs) hcModules.push('breadcrumbs');
             }
+            self._warnDuplicateValues('header', hcModules);
             var headerHeight = Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48));
             if (hcModules.length > 0) {
               var headerEl = document.createElement('div');
@@ -4462,6 +4604,7 @@
 
           if (footerContentCfg && footerContentCfg.show) {
             var fcModules = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+            self._warnDuplicateValues('footer', fcModules);
             if (fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
               var footerLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
@@ -4534,6 +4677,10 @@
           }
 
           root.prepend(wrapper);
+          var overlayCount = root.querySelectorAll('#blog-overlay-list').length;
+          if (overlayCount > 1) {
+            self._debugLog('multiple overlay roots detected after render', { overlayCount: overlayCount });
+          }
 
       if (typeof self._scrollToFirstNewPostIndex === 'number') {
         var scrollIdx = self._scrollToFirstNewPostIndex;

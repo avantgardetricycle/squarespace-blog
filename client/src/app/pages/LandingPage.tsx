@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Logo } from "@/app/components/Logo";
@@ -10,12 +10,19 @@ import { FeatureExplorer } from "@/app/components/FeatureExplorer_new";
 import HowItWorks from "@/app/components/HowItWorks";
 import { InterestModal } from "@/app/components/InterestModal";
 import { getDashboardMe } from "@/api/auth";
+import {
+  fetchPublicPlanPrices,
+  formatCurrencyAmount,
+  formatMajorAmount,
+  type PublicPlanPricesResponse,
+} from "@/api/planPrices";
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLive, setIsLive] = useState<boolean | null>(null);
   const [interestModalOpen, setInterestModalOpen] = useState(false);
+  const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
 
   useEffect(() => {
     getDashboardMe().then((me) => setIsAuthenticated(!!me));
@@ -27,6 +34,24 @@ export default function LandingPage() {
       .then((data) => setIsLive(data.isLive === true))
       .catch(() => setIsLive(false));
   }, []);
+
+  useEffect(() => {
+    fetchPublicPlanPrices()
+      .then(setStripePrices)
+      .catch(() => setStripePrices(null));
+  }, []);
+
+  const priceCurrency = stripePrices?.currency ?? "usd";
+
+  const annualSavePercentPro = useMemo(() => {
+    const pro = stripePrices?.plans?.pro;
+    if (!pro) return null;
+    const m = pro.monthly.perMonth;
+    const y = pro.annual.perYear;
+    if (m <= 0) return null;
+    const pct = Math.round((1 - y / (m * 12)) * 100);
+    return pct > 0 ? pct : null;
+  }, [stripePrices]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -53,8 +78,6 @@ export default function LandingPage() {
       tier: "Essentials",
       planKey: "starter" as const,
       description: "Fix the basics. Everything Squarespace should have included from day one.",
-      monthlyPrice: 12,
-      annualPrice: 9,
       features: [
         "1 sidebar",
         "Numbered pagination",
@@ -70,8 +93,6 @@ export default function LandingPage() {
       tier: "Professional",
       planKey: "pro" as const,
       description: "A real blog. Discoverable, navigable, and genuinely readable.",
-      monthlyPrice: 19,
-      annualPrice: 14,
       features: [
         "Everything in Essentials, plus",
         "2 sidebars",
@@ -89,8 +110,6 @@ export default function LandingPage() {
       tier: "Publication",
       planKey: "agency" as const,
       description: "A serious publication. Beautiful, branded, fully under your control.",
-      monthlyPrice: 39,
-      annualPrice: 29,
       features: [
         "Everything in Professional, plus",
         "Custom designed templates",
@@ -293,14 +312,16 @@ export default function LandingPage() {
                 )}
               >
                 Annual 
-                <span className={cn(
-                  "text-[9.5px] font-bold px-1.5 py-0.5 rounded-full tracking-wide",
-                  isAnnual 
-                    ? "bg-white/20 text-white" 
-                    : "bg-[#eaf7f2] text-[#10B981]"
-                )}>
-                  Save 25%
-                </span>
+                {annualSavePercentPro != null && (
+                  <span className={cn(
+                    "text-[9.5px] font-bold px-1.5 py-0.5 rounded-full tracking-wide",
+                    isAnnual 
+                      ? "bg-white/20 text-white" 
+                      : "bg-[#eaf7f2] text-[#10B981]"
+                  )}>
+                    Save {annualSavePercentPro}%
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -312,7 +333,17 @@ export default function LandingPage() {
 
           {/* 3-Card Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 mb-3.5">
-            {pricingTiers.map((tier, idx) => (
+            {pricingTiers.map((tier, idx) => {
+              const tierStripe = stripePrices?.plans?.[tier.planKey];
+              const perMo =
+                tierStripe == null
+                  ? null
+                  : isAnnual
+                    ? tierStripe.annual.perMonth
+                    : tierStripe.monthly.perMonth;
+              const annualYearTotal = tierStripe?.annual.perYear ?? null;
+
+              return (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 16 }}
@@ -357,14 +388,16 @@ export default function LandingPage() {
                   <div className="flex items-baseline gap-0.5">
                     <span className="text-[17px] font-semibold text-[#0a0a0a] pb-1.5">$</span>
                     <span className="font-heading text-[50px] leading-none text-[#0a0a0a]">
-                      {isAnnual ? tier.annualPrice : tier.monthlyPrice}
+                      {perMo != null ? formatMajorAmount(perMo) : "—"}
                     </span>
                     <span className="text-[13px] text-neutral-400 pb-1 ml-1">/mo</span>
                   </div>
                   <p className="text-[11.5px] text-neutral-400 mt-1 min-h-[16px]">
-                    {isAnnual 
-                      ? `Billed $${(isAnnual ? tier.annualPrice : tier.monthlyPrice) * 12}/year`
-                      : 'Billed monthly'}
+                    {!isAnnual
+                      ? "Billed monthly"
+                      : annualYearTotal != null
+                        ? `Billed ${formatCurrencyAmount(annualYearTotal, priceCurrency)}/year`
+                        : "Loading prices…"}
                   </p>
                 </div>
 
@@ -425,7 +458,8 @@ export default function LandingPage() {
                   </Button>
                 )}
               </motion.div>
-            ))}
+            );
+            })}
           </div>
 
           {/* Studio Divider */}

@@ -423,9 +423,8 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
           <div className={cn("relative shrink-0 overflow-hidden rounded", imgPlaceholder)}>
             <div className="aspect-[5/2] w-full" />
             <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent rounded-b">
-              <Breadcrumbs align="left" light />
-              <div className="text-[10px] text-white/90 font-bold mt-0.5">Article Headline Goes Here</div>
-              <div className="text-[9px] text-white/80">By Author · Mar 7 · 8 min</div>
+              <div className="text-[10px] text-white/90 font-bold">Article Headline Goes Here</div>
+              <div className="text-[9px] text-white/80 mt-0.5">By Author · Mar 7 · 8 min</div>
             </div>
           </div>
           <div className="flex gap-3 min-h-0 mt-2">

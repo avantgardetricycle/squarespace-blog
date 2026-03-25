@@ -10,6 +10,51 @@ import { requireSession, SessionUser } from '../middleware/session.js'
 
 const router = Router()
 
+/** Collection-only zone keys — never copy these into synthesized postConfig (would bleed index layout into single-post view). */
+const POST_CONFIG_ZONE_KEYS = new Set([
+  'leftSidebar',
+  'rightSidebar',
+  'headerContent',
+  'footerContent',
+  'collectionModules'
+])
+
+function collectionFieldsForDefaultPost (cc: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of Object.keys(cc)) {
+    if (!POST_CONFIG_ZONE_KEYS.has(key)) out[key] = cc[key]
+  }
+  return out
+}
+
+function buildDefaultPostConfig (
+  cc: Record<string, unknown>,
+  progressBar: { show?: boolean; position?: string | null; thickness?: number; color?: string | null }
+): Record<string, unknown> {
+  return {
+    ...collectionFieldsForDefaultPost(cc),
+    leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+    rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+    headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
+    footerContent: {
+      show: false,
+      modules: [],
+      moduleOrder: [],
+      height: 48,
+      contentAlignment: 'left',
+      leftPadding: 0,
+      rightPadding: 0
+    },
+    progressBar: {
+      show: progressBar.show ?? false,
+      position: progressBar.position === 'bottom' ? 'bottom' : 'top',
+      thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
+      color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
+    },
+    postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left' }
+  }
+}
+
 function appendPasswordToUrl (url: string, password: string | null | undefined): string {
   if (!password || !password.trim()) return url
   try {
@@ -416,16 +461,9 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           }
         : { show: false, mode: 'pages', postsPerPage: 10 }
     }
-    const pc = postConfig && typeof postConfig === 'object' ? postConfig : {
-      ...cc,
-      progressBar: {
-        show: progressBar.show ?? false,
-        position: progressBar.position ?? 'top',
-        thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
-        color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
-      },
-      postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left' }
-    }
+    const pc = postConfig && typeof postConfig === 'object'
+      ? postConfig
+      : buildDefaultPostConfig(cc as Record<string, unknown>, progressBar)
     // When postSort is "popularity", fetch post view counts from analytics for the renderer
     let postViewCounts: Record<string, number> = {}
     const ccPostSort = (cc as { postSort?: string }).postSort

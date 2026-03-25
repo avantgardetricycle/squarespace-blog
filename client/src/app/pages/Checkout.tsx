@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Check, ArrowRight, Lock } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -14,30 +14,29 @@ import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { toast } from "sonner";
 import { Logo } from "@/app/components/Logo";
+import {
+  fetchPublicPlanPrices,
+  formatCurrencyAmount,
+  type PublicPlanPricesResponse,
+} from "@/api/planPrices";
 
 const pricingPlans = {
   starter: {
     name: "Essentials",
     description: "Fix the basics on your Squarespace blog",
-    monthlyPrice: 15,
-    annualPrice: 12,
     features: ["1 blog", "Core layouts & modules", "Standard support"],
   },
   pro: {
     name: "Professional",
     description: "A real blog—discoverable, navigable, readable",
-    monthlyPrice: 29,
-    annualPrice: 24,
     features: ["Up to 3 blogs", "Advanced customization", "Priority support"],
   },
   agency: {
     name: "Publication",
     description: "Serious publication tools and higher limits",
-    monthlyPrice: 79,
-    annualPrice: 65,
     features: ["Unlimited blogs (fair use)", "Publication-focused features", "Priority support"],
   },
-};
+} as const;
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
@@ -47,11 +46,45 @@ export default function Checkout() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isAnnual, setIsAnnual] = useState(billingParam === "annual");
-  
+  const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
+  const [pricesLoadError, setPricesLoadError] = useState(false);
+
+  useEffect(() => {
+    fetchPublicPlanPrices()
+      .then(setStripePrices)
+      .catch(() => {
+        setPricesLoadError(true);
+        toast.error("Could not load current prices. Refresh the page or try again shortly.");
+      });
+  }, []);
+
   const plan = pricingPlans[planParam as keyof typeof pricingPlans] || pricingPlans.pro;
-  const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
-  const totalPrice = isAnnual ? price * 12 : price;
-  const savings = isAnnual ? (plan.monthlyPrice * 12) - (plan.annualPrice * 12) : 0;
+  const currency = stripePrices?.currency ?? "usd";
+
+  const planPrices = useMemo(() => {
+    if (!stripePrices?.plans) return null;
+    return stripePrices.plans[planParam] ?? stripePrices.plans.pro ?? null;
+  }, [stripePrices, planParam]);
+
+  const monthlyPerMonth = planPrices?.monthly.perMonth ?? null;
+  const annualPerMonth = planPrices?.annual.perMonth ?? null;
+  const annualTotalYear = planPrices?.annual.perYear ?? null;
+
+  const price = isAnnual ? annualPerMonth : monthlyPerMonth;
+  const nextChargeAmount =
+    isAnnual && annualTotalYear != null
+      ? annualTotalYear
+      : monthlyPerMonth != null
+        ? monthlyPerMonth
+        : null;
+  const savings =
+    monthlyPerMonth != null && annualTotalYear != null
+      ? Math.max(0, monthlyPerMonth * 12 - annualTotalYear)
+      : 0;
+  const annualSavingsPercent =
+    monthlyPerMonth != null && annualTotalYear != null && monthlyPerMonth > 0
+      ? Math.max(0, Math.round((1 - annualTotalYear / (monthlyPerMonth * 12)) * 100))
+      : 0;
 
   const trialDays = 7;
   const futureChargeDate = new Date();
@@ -67,6 +100,11 @@ export default function Checkout() {
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!planPrices || price == null) {
+      toast.error("Prices are still loading. Please wait a moment.");
+      return;
+    }
 
     if (!name.trim()) {
       toast.error("Please enter your name");
@@ -187,7 +225,10 @@ export default function Checkout() {
                           : "bg-transparent text-neutral-400 hover:text-[#6b6b6b]"
                       }`}
                     >
-                      Monthly · ${plan.monthlyPrice}/mo
+                      Monthly ·{" "}
+                      {monthlyPerMonth != null
+                        ? `${formatCurrencyAmount(monthlyPerMonth, currency)}/mo`
+                        : "…"}
                     </button>
                     <button
                       type="button"
@@ -198,10 +239,13 @@ export default function Checkout() {
                           : "bg-transparent text-neutral-400 hover:text-[#6b6b6b]"
                       }`}
                     >
-                      Annual · ${plan.annualPrice}/mo
-                      {savings > 0 && (
+                      Annual ·{" "}
+                      {annualPerMonth != null
+                        ? `${formatCurrencyAmount(annualPerMonth, currency)}/mo`
+                        : "…"}
+                      {savings > 0 && annualSavingsPercent > 0 && (
                         <span className={isAnnual ? "ml-1.5 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-white/20" : "ml-1.5 text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-[#eaf7f2] text-[#10B981]"}>
-                          Save 25%
+                          Save {annualSavingsPercent}%
                         </span>
                       )}
                     </button>
@@ -212,7 +256,7 @@ export default function Checkout() {
                   type="submit"
                   className="w-full bg-[#5B4FE8] hover:bg-[#4a3fd4] h-12 text-base font-semibold text-white rounded-[6px]"
                   size="lg"
-                  disabled={checkoutLoading}
+                  disabled={checkoutLoading || !planPrices || pricesLoadError}
                 >
                   <Lock className="w-4 h-4 mr-2" />
                   {checkoutLoading ? "Redirecting..." : "Continue to Secure Checkout"}
@@ -248,7 +292,9 @@ export default function Checkout() {
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold font-heading text-[#5B4FE8]">
-                        ${price}
+                        {price != null
+                          ? formatCurrencyAmount(price, currency)
+                          : "…"}
                       </div>
                       <div className="text-xs text-[#6b6b6b]">
                         per month after trial
@@ -279,7 +325,9 @@ export default function Checkout() {
                       {plan.name} Plan ({isAnnual ? "Annual" : "Monthly"})
                     </span>
                     <span className="font-medium text-[#0a0a0a]">
-                      ${price}/mo
+                      {price != null
+                        ? `${formatCurrencyAmount(price, currency)}/mo`
+                        : "…"}
                     </span>
                   </div>
                   {isAnnual && (
@@ -287,14 +335,16 @@ export default function Checkout() {
                       <div className="flex justify-between text-sm">
                         <span className="text-[#6b6b6b]">Billed annually</span>
                         <span className="font-medium text-[#0a0a0a]">
-                          ${totalPrice}/year
+                          {annualTotalYear != null
+                            ? `${formatCurrencyAmount(annualTotalYear, currency)}/year`
+                            : "…"}
                         </span>
                       </div>
                       {savings > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-[#10B981] font-medium">Annual savings</span>
                           <span className="font-medium text-[#10B981]">
-                            -${savings}
+                            −{formatCurrencyAmount(savings, currency)}
                           </span>
                         </div>
                       )}
@@ -315,7 +365,9 @@ export default function Checkout() {
                     <div className="flex justify-between text-sm">
                       <span className="text-neutral-600">Charged on {formattedChargeDate}</span>
                       <span className="font-medium text-neutral-900">
-                        ${isAnnual ? totalPrice : price}
+                        {nextChargeAmount != null
+                          ? formatCurrencyAmount(nextChargeAmount, currency)
+                          : "…"}
                       </span>
                     </div>
                     <p className="text-xs text-neutral-500">
