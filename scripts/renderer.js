@@ -3457,14 +3457,15 @@
         return wrap;
       }
       function createLeadMagnetForm(lmCfg, width, hideHeader) {
-        if (!lmCfg || !lmCfg.resourceTitle || !lmCfg.resourceTitle.trim()) return null;
+        if (!lmCfg) return null;
+        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
         if (!hideHeader) {
           var titleEl = document.createElement('div');
-          titleEl.textContent = lmCfg.resourceTitle;
+          titleEl.textContent = resourceTitle;
           titleEl.style.fontSize = '0.95rem';
           titleEl.style.fontWeight = '600';
           titleEl.style.marginBottom = '8px';
@@ -3538,7 +3539,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: lmCfg.resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -3557,17 +3558,153 @@
         };
         return wrap;
       }
-      var ecCfg = (cfg.collectionModules && cfg.collectionModules.emailCapture) || (cfg.postModules && cfg.postModules.emailCapture);
-      var lmCfg = (cfg.collectionModules && cfg.collectionModules.leadMagnet) || (cfg.postModules && cfg.postModules.leadMagnet);
+      function createLeadMagnetFooterCard(lmCfg) {
+        if (!lmCfg) return null;
+        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
+        var buttonText = (lmCfg.buttonText && lmCfg.buttonText.trim()) ? lmCfg.buttonText.trim() : 'Get it free';
+        var description = (lmCfg.description && lmCfg.description.trim()) ? lmCfg.description.trim() : '';
+
+        var card = document.createElement('div');
+        card.className = 'blog-overlay-lead-magnet-footer';
+        card.style.width = '100%';
+        card.style.maxWidth = '100%';
+        card.style.boxSizing = 'border-box';
+        card.style.border = '1px solid #e5e4e0';
+        card.style.borderRadius = '10px';
+        card.style.padding = '16px';
+        card.style.display = 'flex';
+        card.style.gap = '16px';
+        card.style.alignItems = 'center';
+        card.style.justifyContent = 'space-between';
+        card.style.flexWrap = 'wrap';
+
+        var left = document.createElement('div');
+        left.style.flex = '1 1 320px';
+        left.style.minWidth = '220px';
+        var title = document.createElement('div');
+        title.textContent = resourceTitle;
+        title.style.fontSize = '0.95rem';
+        title.style.fontWeight = '600';
+        title.style.color = '#1a1a1a';
+        title.style.marginBottom = description ? '6px' : '0';
+        left.appendChild(title);
+        if (description) {
+          var desc = document.createElement('div');
+          desc.textContent = description;
+          desc.style.fontSize = '0.88rem';
+          desc.style.color = '#666';
+          desc.style.lineHeight = '1.45';
+          left.appendChild(desc);
+        }
+        card.appendChild(left);
+
+        var right = document.createElement('div');
+        right.style.flex = '1 1 280px';
+        right.style.minWidth = '240px';
+        right.style.display = 'flex';
+        right.style.flexDirection = 'column';
+        right.style.gap = '8px';
+
+        var formRow = document.createElement('div');
+        formRow.style.display = 'flex';
+        formRow.style.gap = '8px';
+        formRow.style.alignItems = 'center';
+        formRow.style.flexWrap = 'wrap';
+        var emailInput = document.createElement('input');
+        emailInput.type = 'email';
+        emailInput.name = 'bb-lead-magnet-footer-email';
+        emailInput.id = 'bb-lead-magnet-footer-email';
+        emailInput.placeholder = 'you@example.com';
+        emailInput.setAttribute('aria-label', 'Email address');
+        emailInput.style.flex = '1 1 180px';
+        emailInput.style.minWidth = '160px';
+        emailInput.style.padding = '8px 10px';
+        emailInput.style.fontSize = '0.9rem';
+        emailInput.style.border = '1px solid #ddd';
+        emailInput.style.borderRadius = '6px';
+        emailInput.style.outline = 'none';
+        emailInput.style.boxSizing = 'border-box';
+        formRow.appendChild(emailInput);
+
+        var btn = document.createElement('button');
+        btn.textContent = buttonText;
+        btn.type = 'button';
+        btn.style.padding = '8px 14px';
+        btn.style.fontSize = '0.9rem';
+        btn.style.fontWeight = '500';
+        btn.style.background = '#5B4FE8';
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '6px';
+        btn.style.cursor = 'pointer';
+        btn.onmouseover = function() { btn.style.background = '#4a3fd4'; };
+        btn.onmouseout = function() { btn.style.background = '#5B4FE8'; };
+        formRow.appendChild(btn);
+        right.appendChild(formRow);
+
+        var msgEl = document.createElement('div');
+        msgEl.style.fontSize = '0.85rem';
+        right.appendChild(msgEl);
+        card.appendChild(right);
+
+        btn.onclick = function() {
+          var email = (emailInput.value || '').trim().toLowerCase();
+          if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            msgEl.textContent = 'Please enter a valid email address.';
+            msgEl.style.color = '#dc2626';
+            return;
+          }
+          btn.disabled = true;
+          btn.textContent = 'Submitting…';
+          msgEl.textContent = '';
+          var baseUrl = (self.config && self.config.baseUrl) || '';
+          var siteKey = (self.config && self.config.siteKey) || '';
+          if (!baseUrl || !siteKey) {
+            msgEl.textContent = 'Configuration error. Please try again later.';
+            msgEl.style.color = '#dc2626';
+            btn.disabled = false;
+            btn.textContent = buttonText;
+            return;
+          }
+          var url = baseUrl.replace(/\/+$/, '') + '/api/capture';
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            credentials: 'omit'
+          }).then(function(res) {
+            return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+          }).catch(function() { return { ok: false, data: { error: 'Network error' } }; }).then(function(result) {
+            btn.disabled = false;
+            btn.textContent = buttonText;
+            if (result.ok) {
+              msgEl.textContent = 'Thanks! Check your email.';
+              msgEl.style.color = '#10B981';
+              emailInput.value = '';
+            } else {
+              msgEl.textContent = (result.data && result.data.error) || 'Something went wrong. Please try again.';
+              msgEl.style.color = '#dc2626';
+            }
+          });
+        };
+
+        return card;
+      }
+      var ecCfg = isSinglePost
+        ? ((cfg.postModules && cfg.postModules.emailCapture) || (cfg.collectionModules && cfg.collectionModules.emailCapture))
+        : ((cfg.collectionModules && cfg.collectionModules.emailCapture) || (cfg.postModules && cfg.postModules.emailCapture));
+      var lmCfg = isSinglePost
+        ? ((cfg.postModules && cfg.postModules.leadMagnet) || (cfg.collectionModules && cfg.collectionModules.leadMagnet))
+        : ((cfg.collectionModules && cfg.collectionModules.leadMagnet) || (cfg.postModules && cfg.postModules.leadMagnet));
       function buildSidebarModules(sidebarCfg) {
         if (!sidebarCfg || !sidebarCfg.show || !Array.isArray(sidebarCfg.modules) || sidebarCfg.modules.length === 0) return [];
         self._warnDuplicateValues('sidebar', sidebarCfg.modules);
         var width = Math.min(400, Math.max(160, sidebarCfg.width || 240));
         var mods = [];
-        var hidePostLists = self._bbPreview && isSinglePost;
+        var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
         for (var m = 0; m < sidebarCfg.modules.length; m++) {
           var mod = sidebarCfg.modules[m];
-          if (hidePostLists && (mod === 'recentPosts' || mod === 'relevantPosts' || mod === 'popularPosts')) continue;
+          if (hideRecentPostsInBbPreview && mod === 'recentPosts') continue;
           var el = null;
           if (mod === 'tableOfContents') el = createTocModule(width);
           else if (mod === 'recentPosts') el = createRecentPostsModule(width);
@@ -3620,9 +3757,9 @@
           } else if (mod === 'emailCapture' && ecCfg) {
             var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);
             el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm, isSinglePost) : null;
-          } else if (mod === 'leadMagnet' && lmCfg && lmCfg.resourceTitle) {
+          } else if (mod === 'leadMagnet' && lmCfg) {
             var lmForm = createLeadMagnetForm(lmCfg, width, isSinglePost);
-            el = lmForm ? createSidebarSection(lmCfg.resourceTitle, lmForm, isSinglePost) : null;
+            el = lmForm ? createSidebarSection(lmCfg.resourceTitle || 'Lead Magnet', lmForm, isSinglePost) : null;
           }
           if (el) mods.push(el);
         }
@@ -3888,10 +4025,24 @@
               fullBleedHeaderBlock.style.backgroundSize = 'cover';
               fullBleedHeaderBlock.style.backgroundPosition = 'center';
               fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
-              fullBleedHeaderBlock.style.width = '100vw';
-              fullBleedHeaderBlock.style.maxWidth = '100vw';
-              fullBleedHeaderBlock.style.marginLeft = 'calc(50% - 50vw)';
-              fullBleedHeaderBlock.style.marginRight = 'calc(50% - 50vw)';
+              var leftRailHasModules = Boolean(leftSidebarCfg && leftSidebarCfg.show && Array.isArray(leftSidebarCfg.modules) && leftSidebarCfg.modules.length > 0);
+              var rightRailHasModules = Boolean(rightSidebarCfg && rightSidebarCfg.show && Array.isArray(rightSidebarCfg.modules) && rightSidebarCfg.modules.length > 0);
+              var leftRailWidth = leftRailHasModules ? Math.min(400, Math.max(160, leftSidebarCfg.width || 240)) + 24 : 0;
+              var rightRailWidth = rightRailHasModules ? Math.min(400, Math.max(160, rightSidebarCfg.width || 240)) + 24 : 0;
+              var hasSideRails = leftRailHasModules || rightRailHasModules;
+              if (hasSideRails) {
+                // Expand across the entire post row (main + side rails) while staying centered.
+                var wrapperPad = 16;
+                fullBleedHeaderBlock.style.width = 'calc(100% + ' + (leftRailWidth + rightRailWidth + (wrapperPad * 2)) + 'px)';
+                fullBleedHeaderBlock.style.maxWidth = 'none';
+                fullBleedHeaderBlock.style.marginLeft = (-(leftRailWidth + wrapperPad)) + 'px';
+                fullBleedHeaderBlock.style.marginRight = (-(rightRailWidth + wrapperPad)) + 'px';
+              } else {
+                fullBleedHeaderBlock.style.width = '100vw';
+                fullBleedHeaderBlock.style.maxWidth = '100vw';
+                fullBleedHeaderBlock.style.marginLeft = 'calc(50% - 50vw)';
+                fullBleedHeaderBlock.style.marginRight = 'calc(50% - 50vw)';
+              }
               fullBleedHeaderBlock.style.position = 'relative';
               fullBleedHeaderBlock.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
               fullBleedHeaderBlock.style.display = 'flex';
@@ -4358,13 +4509,38 @@
           var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky !== false;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky !== false;
+          var postHeaderCfgForRails = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+          var singlePostRailsBelowHero = Boolean(
+            isSinglePost &&
+            postHeaderCfgForRails &&
+            postHeaderCfgForRails.imagePosition === 'fullBleed'
+          );
+          var railsTopOffset = 0;
+          if (singlePostRailsBelowHero) {
+            var heroEl = main.querySelector('.blog-overlay-post-header-fullbleed');
+            if (heroEl) {
+              var heroMb = 0;
+              try {
+                heroMb = parseFloat((window.getComputedStyle(heroEl).marginBottom || '0').replace('px', '')) || 0;
+              } catch (e) {}
+              railsTopOffset = Math.round((heroEl.offsetHeight || 0) + heroMb + 24);
+            }
+            // In preview, hero can report a tiny/zero height before layout; treat tiny values as invalid.
+            if (railsTopOffset < 140) {
+              // Detached preview DOM can report 0 height before mount; use a conservative fallback.
+              var estimatedHeroHeight = Math.min(480, Math.max(280, Math.round(((typeof window !== 'undefined' ? window.innerWidth : 1200) || 1200) * 0.42)));
+              railsTopOffset = estimatedHeroHeight + 64;
+            }
+          }
+          var leftPadTop = leftSpaceAbove + railsTopOffset;
+          var rightPadTop = rightSpaceAbove + railsTopOffset;
           var leftSidebarEl = document.createElement('div');
           leftSidebarEl.style.display = 'flex';
           leftSidebarEl.style.flexDirection = 'column';
           leftSidebarEl.style.gap = '16px';
           leftSidebarEl.style.flexShrink = '0';
           leftSidebarEl.style.width = leftSidebarWidth + 'px';
-          if (leftSpaceAbove > 0) leftSidebarEl.style.paddingTop = leftSpaceAbove + 'px';
+          if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
           if (leftSticky) {
             leftSidebarEl.style.position = 'sticky';
             leftSidebarEl.style.top = (navbarOffset + 16) + 'px';
@@ -4380,7 +4556,7 @@
           rightSidebarEl.style.gap = '16px';
           rightSidebarEl.style.flexShrink = '0';
           rightSidebarEl.style.width = rightSidebarWidth + 'px';
-          if (rightSpaceAbove > 0) rightSidebarEl.style.paddingTop = rightSpaceAbove + 'px';
+          if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
           if (rightSticky) {
             rightSidebarEl.style.position = 'sticky';
             rightSidebarEl.style.top = (navbarOffset + 16) + 'px';
@@ -4589,7 +4765,7 @@
                     ecHeaderForm.style.minWidth = '200px';
                     headerEl.appendChild(ecHeaderForm);
                   }
-                } else if (mod === 'leadMagnet' && lmCfg && lmCfg.resourceTitle) {
+                } else if (mod === 'leadMagnet' && lmCfg) {
                   var lmHeaderForm = createLeadMagnetForm(lmCfg, 280);
                   if (lmHeaderForm) {
                     lmHeaderForm.style.display = 'inline-block';
@@ -4624,7 +4800,6 @@
               footerEl.style.minHeight = footerHeight + 'px';
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
-                if (self._bbPreview && isSinglePost && fmod === 'relevantPosts') continue;
                 var fmodEl = null;
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220);
@@ -4635,7 +4810,7 @@
                   }
                 } else if (fmod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
                   var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, 220, { useLongBio: true });
-                  fmodEl = authorResult ? createSidebarSection(authorResult.header, authorResult.content) : null;
+                  fmodEl = authorResult ? authorResult.content : null;
                   if (fmodEl) {
                     fmodEl.style.width = 'auto';
                     fmodEl.style.minWidth = '200px';
@@ -4649,13 +4824,13 @@
                     fmodEl.style.minWidth = '200px';
                     fmodEl.style.flex = '1 1 200px';
                   }
-                } else if (fmod === 'leadMagnet' && lmCfg && lmCfg.resourceTitle) {
-                  var lmFooterForm = createLeadMagnetForm(lmCfg, 220);
-                  fmodEl = lmFooterForm ? createSidebarSection(lmCfg.resourceTitle, lmFooterForm) : null;
+                } else if (fmod === 'leadMagnet' && lmCfg) {
+                  fmodEl = createLeadMagnetFooterCard(lmCfg);
                   if (fmodEl) {
-                    fmodEl.style.width = 'auto';
-                    fmodEl.style.minWidth = '200px';
-                    fmodEl.style.flex = '1 1 200px';
+                    fmodEl.style.width = '100%';
+                    fmodEl.style.minWidth = '0';
+                    fmodEl.style.flex = '1 1 100%';
+                    fmodEl.style.alignSelf = 'stretch';
                   }
                 }
                 if (fmodEl) footerEl.appendChild(fmodEl);

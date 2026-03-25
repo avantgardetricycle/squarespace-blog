@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
+const RENDERER_VERSION = "2026-03-24-debug9";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -98,7 +99,7 @@ export default function BlogPreviewRenderer({
     }
 
     const script = document.createElement("script");
-    script.src = RENDERER_URL;
+    script.src = `${RENDERER_URL}?v=${encodeURIComponent(RENDERER_VERSION)}`;
     script.async = true;
     script.onload = initRenderer;
     script.onerror = () => {

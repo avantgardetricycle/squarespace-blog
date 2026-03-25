@@ -77,12 +77,20 @@ const rendererPath = path.join(scriptsDir, 'renderer.js')
 const loaderPath = path.join(scriptsDir, 'loader.js')
 if (fs.existsSync(rendererPath)) {
   app.get('/renderer.js', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.setHeader('Surrogate-Control', 'no-store')
     res.type('application/javascript')
     res.sendFile(rendererPath)
   })
 }
 if (fs.existsSync(loaderPath)) {
   app.get('/loader.js', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.setHeader('Surrogate-Control', 'no-store')
     res.type('application/javascript')
     res.sendFile(loaderPath)
   })
