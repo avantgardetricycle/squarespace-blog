@@ -244,14 +244,71 @@ async function main() {
       templateKey: 'feature',
       level: 'post',
       name: 'The Feature',
-      description: 'Dual-rail layout with sidebar and featured image.',
+      description: 'Centered post header above a full-bleed image, TOC and dual sidebars, rich footer.',
       postConfig: {
         ...basePostConfig,
-        postHeader: { imagePosition: 'leftOfInfo', contentAlignment: 'left' },
-        leftSidebar: { show: true, modules: ['tableOfContents', 'authorProfiles'], width: 220, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-        headerContent: { show: true, modules: ['breadcrumbs', 'tableOfContents'], height: 48 },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 40 }
+        showDate: true,
+        showAuthor: true,
+        showReadingTime: true,
+        postHeader: {
+          imagePosition: 'fullBleed',
+          contentAlignment: 'center',
+          fullBleedLayout: 'stacked',
+          showBreadcrumbs: true,
+          showTags: true,
+          showCategories: true
+        },
+        leftSidebar: {
+          show: true,
+          modules: ['tableOfContents'],
+          moduleOrder: ['tableOfContents'],
+          width: 240,
+          spaceAbove: 0,
+          sticky: true
+        },
+        rightSidebar: {
+          show: true,
+          modules: ['authorProfiles', 'relevantPosts', 'popularPosts'],
+          moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
+          width: 280,
+          spaceAbove: 0,
+          sticky: true
+        },
+        headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
+        footerContent: {
+          show: true,
+          modules: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
+          moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
+          height: 56,
+          contentAlignment: 'left',
+          leftPadding: 0,
+          rightPadding: 0
+        },
+        socialMediaLinks: {
+          show: true,
+          platforms: ['facebook', 'x', 'linkedin', 'email']
+        },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        postModules: {
+          tableOfContents: { enabled: true, position: 'leftSidebar', style: 'bookmark' },
+          breadcrumbs: { enabled: true, position: 'none' },
+          authorProfiles: { enabled: true, position: 'rightSidebar' },
+          popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+          relevantPosts: { enabled: true, position: 'rightSidebar' },
+          emailCapture: {
+            enabled: true,
+            position: 'footer',
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: {
+            enabled: true,
+            position: 'footer',
+            resourceTitle: 'Free resource',
+            description: 'Subscribe to get our guide in your inbox.',
+            buttonText: 'Get it free'
+          }
+        }
       },
       previewLayout: 'feature'
     },
@@ -312,12 +369,62 @@ async function main() {
       templateKey: 'reporter',
       level: 'post',
       name: 'The Reporter',
-      description: 'Compact layout with image and metadata.',
+      description: 'Split header with story stack on the left and feature image on the right; sidebar modules and a conversion footer.',
       postConfig: {
         ...basePostConfig,
-        postHeader: { imagePosition: 'leftOfInfo', contentAlignment: 'left' },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 35 },
-        progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' }
+        showDate: true,
+        showAuthor: true,
+        showReadingTime: true,
+        postHeader: {
+          imagePosition: 'rightOfInfo',
+          contentAlignment: 'left',
+          showBreadcrumbs: true,
+          showTags: true,
+          showCategories: true,
+          showByline: true
+        },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        rightSidebar: {
+          show: true,
+          modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+          moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+          width: 280,
+          spaceAbove: 0,
+          sticky: true
+        },
+        headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
+        footerContent: {
+          show: true,
+          modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+          moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+          height: 56,
+          contentAlignment: 'left',
+          leftPadding: 0,
+          rightPadding: 0
+        },
+        socialMediaLinks: { show: false, platforms: [] },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'rightJustified', imageWidthPercent: 38 },
+        progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' },
+        postModules: {
+          tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
+          breadcrumbs: { enabled: true, position: 'none' },
+          authorProfiles: { enabled: true, position: 'rightSidebar' },
+          popularPosts: { enabled: false, position: 'none', count: 5 },
+          relevantPosts: { enabled: true, position: 'rightSidebar' },
+          emailCapture: {
+            enabled: true,
+            position: 'rightSidebar',
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: {
+            enabled: true,
+            position: 'footer',
+            resourceTitle: 'Free resource',
+            description: 'Subscribe to get our guide in your inbox.',
+            buttonText: 'Get it free'
+          }
+        }
       },
       previewLayout: 'reporter'
     },
@@ -325,12 +432,54 @@ async function main() {
       templateKey: 'story',
       level: 'post',
       name: 'The Story',
-      description: 'Immersive layout with header and footer zones.',
+      description: 'Narrative split header with left feature image and right content stack.',
       postConfig: {
         ...basePostConfig,
-        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'center' },
-        headerContent: { show: true, modules: ['breadcrumbs', 'tableOfContents'], height: 56 },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+        showDate: true,
+        showAuthor: true,
+        showReadingTime: true,
+        postHeader: {
+          imagePosition: 'leftOfInfo',
+          contentAlignment: 'left',
+          showBreadcrumbs: true,
+          showTags: true,
+          showCategories: true,
+          showByline: true
+        },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        headerContent: { show: false, modules: [], moduleOrder: [], height: 56 },
+        footerContent: {
+          show: true,
+          modules: ['authorProfiles', 'leadMagnet'],
+          moduleOrder: ['authorProfiles', 'leadMagnet'],
+          height: 56,
+          contentAlignment: 'left',
+          leftPadding: 0,
+          rightPadding: 0
+        },
+        socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 60 },
+        postModules: {
+          tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
+          breadcrumbs: { enabled: true, position: 'none' },
+          authorProfiles: { enabled: true, position: 'footer' },
+          popularPosts: { enabled: false, position: 'none', count: 5 },
+          relevantPosts: { enabled: false, position: 'none' },
+          emailCapture: {
+            enabled: false,
+            position: 'none',
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: {
+            enabled: true,
+            position: 'footer',
+            resourceTitle: 'Free resource',
+            description: 'Subscribe to get our guide in your inbox.',
+            buttonText: 'Get it free'
+          }
+        }
       },
       previewLayout: 'story'
     },
@@ -341,9 +490,26 @@ async function main() {
       description: 'Minimal layout focused on content.',
       postConfig: {
         ...basePostConfig,
-        postHeader: { imagePosition: 'leftOfInfo', contentAlignment: 'left' },
-        leftSidebar: { show: true, modules: ['authorProfiles'], width: 200, spaceAbove: 0, sticky: true },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 }
+        showDate: true,
+        showAuthor: true,
+        showReadingTime: true,
+        postHeader: { imagePosition: 'belowInfo', contentAlignment: 'center', showBreadcrumbs: true, showTags: false, showCategories: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        footerContent: {
+          show: true,
+          modules: ['authorProfiles', 'prevNextArticle'],
+          moduleOrder: ['authorProfiles', 'prevNextArticle'],
+          height: 56,
+          contentAlignment: 'left',
+          leftPadding: 0,
+          rightPadding: 0
+        },
+        featuredImage: { ...baseCollectionConfig.featuredImage, show: false },
+        postModules: {
+          ...basePostConfig.postModules,
+          authorProfiles: { enabled: true, position: 'footer' }
+        }
       },
       previewLayout: 'writer'
     }

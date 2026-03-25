@@ -2834,8 +2834,7 @@
       var wrapper = document.createElement('div');
       wrapper.id = 'blog-overlay-list';
       wrapper.className = 'blog-overlay-wrapper';
-      wrapper.style.display = 'flex';
-      wrapper.style.gap = '24px';
+      wrapper.style.display = 'block';
       wrapper.style.padding = '16px';
       wrapper.style.margin = '16px 0';
       var navbarOffset = this._getNavbarOffset();
@@ -2848,6 +2847,55 @@
       main.className = 'blog-overlay-posts';
       main.style.flex = '1';
       main.style.minWidth = '0';
+      var mainRowEl = document.createElement('div');
+      mainRowEl.className = 'blog-overlay-main-row';
+      mainRowEl.style.display = 'flex';
+      mainRowEl.style.flexDirection = 'row';
+      mainRowEl.style.alignItems = 'flex-start';
+      mainRowEl.style.gap = '24px';
+      var headerZoneEl = null;
+      var singlePostHeaderZoneEl = null;
+      var singlePostHeaderInnerEl = null;
+      var postHeaderSideGapPx = 24;
+      function ensureSinglePostHeaderInnerEl() {
+        var normalizedSideGap = Math.min(120, Math.max(0, Math.round(postHeaderSideGapPx)));
+        if (!singlePostHeaderZoneEl) {
+          singlePostHeaderZoneEl = document.createElement('div');
+          singlePostHeaderZoneEl.className = 'blog-overlay-header-zone blog-overlay-single-post-header-zone';
+          singlePostHeaderZoneEl.style.position = 'relative';
+          singlePostHeaderZoneEl.style.zIndex = '100';
+          singlePostHeaderZoneEl.style.width = '100vw';
+          singlePostHeaderZoneEl.style.maxWidth = '100vw';
+          singlePostHeaderZoneEl.style.marginLeft = 'calc(50% - 50vw)';
+          singlePostHeaderZoneEl.style.marginRight = 'calc(50% - 50vw)';
+          singlePostHeaderZoneEl.style.paddingTop = '16px';
+          singlePostHeaderZoneEl.style.paddingBottom = '16px';
+          singlePostHeaderZoneEl.style.boxSizing = 'border-box';
+          singlePostHeaderZoneEl.style.background = 'rgba(255,255,255,0.98)';
+          singlePostHeaderZoneEl.style.borderBottom = '1px solid #eee';
+        }
+        singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
+        singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
+        if (!singlePostHeaderInnerEl) {
+          singlePostHeaderInnerEl = document.createElement('div');
+          singlePostHeaderInnerEl.className = 'blog-overlay-single-post-header-inner';
+          singlePostHeaderInnerEl.style.width = '100%';
+          singlePostHeaderInnerEl.style.maxWidth = 'none';
+          singlePostHeaderInnerEl.style.margin = '0 auto';
+          singlePostHeaderInnerEl.style.boxSizing = 'border-box';
+          singlePostHeaderInnerEl.style.display = 'flex';
+          singlePostHeaderInnerEl.style.flexDirection = 'column';
+          singlePostHeaderInnerEl.style.gap = '16px';
+          singlePostHeaderZoneEl.appendChild(singlePostHeaderInnerEl);
+        }
+        return singlePostHeaderInnerEl;
+      }
+      var headerModulesHostEl = null;
+      var footerZoneEl = document.createElement('div');
+      footerZoneEl.className = 'blog-overlay-footer-zone';
+      footerZoneEl.style.position = 'relative';
+      footerZoneEl.style.zIndex = '10';
+      footerZoneEl.style.width = '100%';
 
       var collectionLayout = !isSinglePost && ['grid', 'listRows', 'editorial', 'showcase', 'digest'].indexOf(cfg.collectionLayout) >= 0 ? cfg.collectionLayout : 'grid';
       var gridCols = (collectionLayout === 'grid' || collectionLayout === 'digest') ? 2 : 3;
@@ -2864,6 +2912,37 @@
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
         main.style.gap = '0';
+      }
+      if (!isSinglePost) {
+        var blogMeta = this._blogMeta || {};
+        var blogTitleText = blogMeta.blogName || 'Blog';
+        headerZoneEl = document.createElement('div');
+        headerZoneEl.className = 'blog-overlay-header-zone';
+        headerZoneEl.style.position = 'relative';
+        headerZoneEl.style.zIndex = '100';
+        headerZoneEl.style.width = '100vw';
+        headerZoneEl.style.maxWidth = '100vw';
+        headerZoneEl.style.marginLeft = 'calc(50% - 50vw)';
+        headerZoneEl.style.marginRight = 'calc(50% - 50vw)';
+        headerZoneEl.style.padding = '16px 24px';
+        headerZoneEl.style.boxSizing = 'border-box';
+        headerZoneEl.style.background = 'rgba(255,255,255,0.98)';
+        headerZoneEl.style.borderBottom = '1px solid #eee';
+        var titleEl = document.createElement('h1');
+        titleEl.textContent = blogTitleText;
+        titleEl.style.margin = '0';
+        titleEl.style.fontSize = '1.6rem';
+        titleEl.style.fontWeight = '600';
+        titleEl.style.lineHeight = '1.2';
+        titleEl.style.color = '#1a1a1a';
+        headerZoneEl.appendChild(titleEl);
+        headerModulesHostEl = document.createElement('div');
+        headerModulesHostEl.className = 'blog-overlay-header-modules-host';
+        headerModulesHostEl.style.marginTop = '12px';
+        headerModulesHostEl.style.display = 'flex';
+        headerModulesHostEl.style.flexDirection = 'column';
+        headerModulesHostEl.style.gap = '12px';
+        headerZoneEl.appendChild(headerModulesHostEl);
       }
 
       var progressTrackForPreview = null;
@@ -3354,6 +3433,93 @@
           el.appendChild(rpEntry);
         }
         return createSidebarSection('Related Posts', el, isSinglePost);
+      }
+      function createPrevNextArticleModule() {
+        var activeIdx = -1;
+        if (selectedIndex >= 0 && selectedIndex < items.length) {
+          activeIdx = selectedIndex;
+        } else if (displayItems && displayItems.length === 1) {
+          var idxFromDisplay = items.indexOf(displayItems[0]);
+          if (idxFromDisplay >= 0) activeIdx = idxFromDisplay;
+        } else if (self._previewMode && self.config && typeof self.config.previewSelectedPostIndex === 'number') {
+          activeIdx = Math.min(Math.max(0, self.config.previewSelectedPostIndex), Math.max(0, items.length - 1));
+        }
+        if (activeIdx < 0 || activeIdx >= items.length) return null;
+        var prev = activeIdx > 0 ? items[activeIdx - 1] : null;
+        var next = activeIdx < items.length - 1 ? items[activeIdx + 1] : null;
+        if (!prev && !next) return null;
+
+        var pink = '#db2777';
+        var serif = 'Georgia, "Times New Roman", ui-serif, serif';
+
+        function halfCell(postObj, side) {
+          var cell = document.createElement('div');
+          cell.style.flex = '1 1 50%';
+          cell.style.minWidth = '0';
+          cell.style.padding = '16px 20px';
+          cell.style.boxSizing = 'border-box';
+          cell.style.textAlign = side === 'prev' ? 'left' : 'right';
+          if (side === 'prev') {
+            cell.style.borderRight = '1px solid #e5e5e5';
+          }
+          if (!postObj) {
+            cell.setAttribute('aria-hidden', 'true');
+            return cell;
+          }
+          var navEl = document.createElement('div');
+          navEl.textContent = side === 'prev' ? '← PREVIOUS' : 'NEXT →';
+          navEl.style.fontSize = '0.72rem';
+          navEl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+          navEl.style.textTransform = 'uppercase';
+          navEl.style.letterSpacing = '0.08em';
+          navEl.style.color = '#9ca3af';
+          navEl.style.marginBottom = '6px';
+          cell.appendChild(navEl);
+
+          var cats = self._getPostCategories(postObj);
+          if (cats.length > 0) {
+            var catEl = document.createElement('div');
+            catEl.textContent = String(cats[0]).toUpperCase();
+            catEl.style.fontSize = '0.72rem';
+            catEl.style.fontWeight = '700';
+            catEl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+            catEl.style.textTransform = 'uppercase';
+            catEl.style.letterSpacing = '0.06em';
+            catEl.style.color = pink;
+            catEl.style.marginBottom = '6px';
+            cell.appendChild(catEl);
+          }
+
+          var idx = items.indexOf(postObj);
+          var titleLink = document.createElement('a');
+          titleLink.href = self._getPostUrl(postObj) || '#post-' + idx;
+          titleLink.setAttribute('data-analytics-element', side === 'prev' ? 'previousArticle' : 'nextArticle');
+          titleLink.textContent = postObj.title || 'Untitled';
+          titleLink.style.display = 'block';
+          titleLink.style.fontFamily = serif;
+          titleLink.style.fontSize = '1.05rem';
+          titleLink.style.fontWeight = '700';
+          titleLink.style.color = '#111';
+          titleLink.style.textDecoration = 'none';
+          titleLink.style.lineHeight = '1.35';
+          titleLink.style.wordBreak = 'break-word';
+          cell.appendChild(titleLink);
+          return cell;
+        }
+
+        var el = document.createElement('div');
+        el.className = 'blog-overlay-prev-next-article';
+        el.style.display = 'flex';
+        el.style.flexDirection = 'row';
+        el.style.width = '100%';
+        el.style.maxWidth = '720px';
+        el.style.boxSizing = 'border-box';
+        el.style.border = '1px solid #e5e5e5';
+        el.style.borderRadius = '2px';
+        el.style.background = '#fff';
+        el.appendChild(halfCell(prev, 'prev'));
+        el.appendChild(halfCell(next, 'next'));
+        return el;
       }
       function createEmailCaptureForm(ecCfg, width, hideHeader) {
         if (!ecCfg || !ecCfg.header) return null;
@@ -3959,9 +4125,13 @@
           var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
           var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
           var phAlign = postHeaderCfg && (postHeaderCfg.contentAlignment === 'left' || postHeaderCfg.contentAlignment === 'center' || postHeaderCfg.contentAlignment === 'right') ? postHeaderCfg.contentAlignment : 'left';
+          postHeaderSideGapPx = postHeaderCfg && typeof postHeaderCfg.sideGap === 'number'
+            ? Math.min(120, Math.max(0, Math.round(postHeaderCfg.sideGap)))
+            : 24;
           var phShowBreadcrumbs = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showBreadcrumbs);
           var phShowTags = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showTags);
           var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
+          var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
           for (var j = 0; j < displayItemsForLoop.length; j++) {
             var post = displayItemsForLoop[j];
             var postIndex = isSinglePost ? selectedIndex : items.indexOf(post);
@@ -4015,28 +4185,32 @@
               contentEl.style.flex = '1';
               contentEl.style.minWidth = '0';
             }
-            var singlePostFullBleed = isSinglePost && phImagePos === 'fullBleed' && fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
+            var appendTo = isSideBySide ? contentEl : article;
+            var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
+            var fullBleedLayoutStacked = postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked';
+            var singlePostFullBleedStacked = hasFullBleedImg && fullBleedLayoutStacked;
+            var singlePostFullBleedHero = hasFullBleedImg && !fullBleedLayoutStacked;
             var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
             var fullBleedHeaderBlock = null;
-            if (singlePostFullBleed) {
+            var stackedFullBleedWrap = null;
+            var leftRailHasModules = Boolean(leftSidebarCfg && leftSidebarCfg.show && Array.isArray(leftSidebarCfg.modules) && leftSidebarCfg.modules.length > 0);
+            var rightRailHasModules = Boolean(rightSidebarCfg && rightSidebarCfg.show && Array.isArray(rightSidebarCfg.modules) && rightSidebarCfg.modules.length > 0);
+            var leftRailWidth = leftRailHasModules ? Math.min(400, Math.max(160, leftSidebarCfg.width || 240)) + 24 : 0;
+            var rightRailWidth = rightRailHasModules ? Math.min(400, Math.max(160, rightSidebarCfg.width || 240)) + 24 : 0;
+            var hasSideRails = leftRailHasModules || rightRailHasModules;
+            var fullBleedWrapperPad = 16;
+            if (singlePostFullBleedHero) {
               fullBleedHeaderBlock = document.createElement('div');
               fullBleedHeaderBlock.className = 'blog-overlay-post-header-fullbleed';
               fullBleedHeaderBlock.style.backgroundImage = 'url(' + imgUrl + ')';
               fullBleedHeaderBlock.style.backgroundSize = 'cover';
               fullBleedHeaderBlock.style.backgroundPosition = 'center';
               fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
-              var leftRailHasModules = Boolean(leftSidebarCfg && leftSidebarCfg.show && Array.isArray(leftSidebarCfg.modules) && leftSidebarCfg.modules.length > 0);
-              var rightRailHasModules = Boolean(rightSidebarCfg && rightSidebarCfg.show && Array.isArray(rightSidebarCfg.modules) && rightSidebarCfg.modules.length > 0);
-              var leftRailWidth = leftRailHasModules ? Math.min(400, Math.max(160, leftSidebarCfg.width || 240)) + 24 : 0;
-              var rightRailWidth = rightRailHasModules ? Math.min(400, Math.max(160, rightSidebarCfg.width || 240)) + 24 : 0;
-              var hasSideRails = leftRailHasModules || rightRailHasModules;
               if (hasSideRails) {
-                // Expand across the entire post row (main + side rails) while staying centered.
-                var wrapperPad = 16;
-                fullBleedHeaderBlock.style.width = 'calc(100% + ' + (leftRailWidth + rightRailWidth + (wrapperPad * 2)) + 'px)';
+                fullBleedHeaderBlock.style.width = 'calc(100% + ' + (leftRailWidth + rightRailWidth + (fullBleedWrapperPad * 2)) + 'px)';
                 fullBleedHeaderBlock.style.maxWidth = 'none';
-                fullBleedHeaderBlock.style.marginLeft = (-(leftRailWidth + wrapperPad)) + 'px';
-                fullBleedHeaderBlock.style.marginRight = (-(rightRailWidth + wrapperPad)) + 'px';
+                fullBleedHeaderBlock.style.marginLeft = (-(leftRailWidth + fullBleedWrapperPad)) + 'px';
+                fullBleedHeaderBlock.style.marginRight = (-(rightRailWidth + fullBleedWrapperPad)) + 'px';
               } else {
                 fullBleedHeaderBlock.style.width = '100vw';
                 fullBleedHeaderBlock.style.maxWidth = '100vw';
@@ -4066,9 +4240,59 @@
               fullBleedHeaderContent.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
               fullBleedHeaderBlock.appendChild(fullBleedHeaderContent);
               fullBleedHeaderBlock._contentEl = fullBleedHeaderContent;
-              article.insertBefore(fullBleedHeaderBlock, article.firstChild);
+              if (isSinglePost) {
+                if (!headerZoneEl) {
+                  headerZoneEl = document.createElement('div');
+                  headerZoneEl.className = 'blog-overlay-header-zone';
+                  headerZoneEl.style.position = 'relative';
+                  headerZoneEl.style.zIndex = '100';
+                }
+                headerZoneEl.appendChild(fullBleedHeaderBlock);
+              } else {
+                article.insertBefore(fullBleedHeaderBlock, article.firstChild);
+              }
             }
-            if (fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap) && !singlePostFullBleed) {
+            if (singlePostFullBleedStacked) {
+              stackedFullBleedWrap = document.createElement('div');
+              stackedFullBleedWrap.className = 'blog-overlay-featured-image blog-overlay-featured-image-stacked-fullbleed';
+              stackedFullBleedWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
+              stackedFullBleedWrap.style.width = '100vw';
+              stackedFullBleedWrap.style.maxWidth = '100vw';
+              stackedFullBleedWrap.style.marginLeft = 'calc(50% - 50vw)';
+              stackedFullBleedWrap.style.marginRight = 'calc(50% - 50vw)';
+              var stackFiInner = document.createElement('div');
+              stackFiInner.style.overflow = 'hidden';
+              stackFiInner.style.position = 'relative';
+              if (fiRounded === 'small') stackFiInner.style.borderRadius = '6px';
+              else if (fiRounded === 'large') stackFiInner.style.borderRadius = '12px';
+              if (fiShadow) stackFiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+              if (fiAspect === 'cropped') {
+                stackFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
+                stackFiInner.style.width = '100%';
+              }
+              var stackImg = document.createElement('img');
+              stackImg.src = imgUrl;
+              stackImg.alt = post.title || '';
+              stackImg.style.width = '100%';
+              stackImg.style.height = '100%';
+              stackImg.style.display = 'block';
+              stackImg.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
+              stackImg.style.objectPosition = 'center';
+              stackImg.onerror = function() { if (stackedFullBleedWrap) stackedFullBleedWrap.style.display = 'none'; };
+              stackFiInner.appendChild(stackImg);
+              stackedFullBleedWrap.appendChild(stackFiInner);
+              if (fiCaption && imgCaption) {
+                var stackCap = document.createElement('div');
+                stackCap.className = 'blog-overlay-featured-caption';
+                stackCap.textContent = imgCaption;
+                stackCap.style.fontSize = '0.85rem';
+                stackCap.style.color = '#666';
+                stackCap.style.marginTop = '6px';
+                stackCap.style.fontStyle = 'italic';
+                stackedFullBleedWrap.appendChild(stackCap);
+              }
+            }
+            if (fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
               var fiWrap = document.createElement('div');
               fiWrap.className = 'blog-overlay-featured-image';
               if (fiLayout === 'fullBleed') {
@@ -4134,7 +4358,7 @@
               var bcNav = document.createElement('nav');
               bcNav.setAttribute('aria-label', 'Breadcrumb');
               bcNav.style.fontSize = '0.85rem';
-              bcNav.style.color = singlePostFullBleed ? 'rgba(255,255,255,0.9)' : '#666';
+              bcNav.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.9)' : '#666';
               bcNav.style.display = 'flex';
               bcNav.style.flexWrap = 'wrap';
               bcNav.style.alignItems = 'center';
@@ -4171,11 +4395,54 @@
               else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
               (postInfoWrap || appendTo).appendChild(bcNav);
             }
+
+            if (isSinglePost && (phShowTags || phShowCategories)) {
+              var tagsCatsWrap = document.createElement('div');
+              tagsCatsWrap.className = 'blog-overlay-tags-categories';
+              tagsCatsWrap.style.display = 'flex';
+              tagsCatsWrap.style.flexWrap = 'wrap';
+              tagsCatsWrap.style.gap = '6px';
+              tagsCatsWrap.style.marginBottom = '8px';
+              tagsCatsWrap.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
+              var makeTagEl = function(label, href, onClick) {
+                var span = document.createElement('a');
+                span.textContent = label;
+                span.href = href || '#';
+                span.style.display = 'inline-block';
+                span.style.fontSize = '0.65rem';
+                span.style.fontWeight = '600';
+                span.style.letterSpacing = '0.05em';
+                span.style.textTransform = 'uppercase';
+                span.style.padding = '0 6px';
+                span.style.borderRadius = '3px';
+                span.style.background = singlePostFullBleedHero ? 'rgba(255,255,255,0.2)' : '#f0efec';
+                span.style.color = singlePostFullBleedHero ? '#fff' : '#555';
+                span.style.textDecoration = 'none';
+                if (onClick) span.onclick = function(e) { e.preventDefault(); onClick(); };
+                return span;
+              };
+              if (phShowCategories) {
+                var postCatsForTags = self._getPostCategories(post);
+                for (var cti = 0; cti < postCatsForTags.length; cti++) {
+                  var cat = postCatsForTags[cti];
+                  tagsCatsWrap.appendChild(makeTagEl(cat, '#', (function(c) { return function() { self._categoryFilter = [c]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(cat)));
+                }
+              }
+              if (phShowTags) {
+                var postTagsForTags = self._getPostTags(post);
+                for (var tti = 0; tti < postTagsForTags.length; tti++) {
+                  var tag = postTagsForTags[tti];
+                  tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(t)));
+                }
+              }
+              if (tagsCatsWrap.childNodes.length > 0) (postInfoWrap || appendTo).appendChild(tagsCatsWrap);
+            }
+
             var h2 = document.createElement('h2');
             h2.className = 'blog-overlay-title';
             h2.style.margin = '0 0 8px 0';
-            if (singlePostFullBleed) h2.style.color = '#fff';
-            if (singlePostFullBleed) h2.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+            if (singlePostFullBleedHero) h2.style.color = '#fff';
+            if (singlePostFullBleedHero) h2.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
             if (!isSinglePost) {
               var postUrl = self._getPostUrl(post);
               var titleLink = document.createElement('a');
@@ -4193,7 +4460,6 @@
             } else {
               h2.textContent = post.title || 'Untitled';
             }
-            var appendTo = isSideBySide ? contentEl : article;
             if (isFeaturedInLayout) {
               var titleRow = document.createElement('div');
               titleRow.style.display = 'flex';
@@ -4222,60 +4488,51 @@
               (postInfoWrap || appendTo).appendChild(h2);
             }
 
-            if (isSinglePost && (phShowTags || phShowCategories)) {
-              var tagsCatsWrap = document.createElement('div');
-              tagsCatsWrap.className = 'blog-overlay-tags-categories';
-              tagsCatsWrap.style.display = 'flex';
-              tagsCatsWrap.style.flexWrap = 'wrap';
-              tagsCatsWrap.style.gap = '6px';
-              tagsCatsWrap.style.marginBottom = '8px';
-              tagsCatsWrap.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
-              var makeTagEl = function(label, href, onClick) {
-                var span = document.createElement('a');
-                span.textContent = label;
-                span.href = href || '#';
-                span.style.display = 'inline-block';
-                span.style.fontSize = '0.65rem';
-                span.style.fontWeight = '600';
-                span.style.letterSpacing = '0.05em';
-                span.style.textTransform = 'uppercase';
-                span.style.padding = '0 6px';
-                span.style.borderRadius = '3px';
-                span.style.background = singlePostFullBleed ? 'rgba(255,255,255,0.2)' : '#f0efec';
-                span.style.color = singlePostFullBleed ? '#fff' : '#555';
-                span.style.textDecoration = 'none';
-                if (onClick) span.onclick = function(e) { e.preventDefault(); onClick(); };
-                return span;
-              };
-              if (phShowCategories) {
-                var postCatsForTags = self._getPostCategories(post);
-                for (var cti = 0; cti < postCatsForTags.length; cti++) {
-                  var cat = postCatsForTags[cti];
-                  tagsCatsWrap.appendChild(makeTagEl(cat, '#', (function(c) { return function() { self._categoryFilter = [c]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(cat)));
-                }
+            if (phShowByline && postInfoWrap) {
+              var bylineDeckText = self._stripHtml(post.excerpt || post.body || '');
+              var bylineSentences = bylineDeckText ? bylineDeckText.match(/[^.!?]*[.!?]/g) : null;
+              var bylineText = bylineSentences && bylineSentences.length > 0 ? bylineSentences[0].trim() : '';
+              if (!bylineText) bylineText = self._truncateText(post.excerpt || post.body || '', 200);
+              if (bylineText) bylineText = bylineText.replace(/^Section\s+\d+\s*/i, '').trim();
+              if (bylineText) {
+                var bylineEl = document.createElement('p');
+                bylineEl.className = 'blog-overlay-post-byline';
+                bylineEl.textContent = bylineText;
+                bylineEl.style.margin = '0 0 12px 0';
+                bylineEl.style.fontSize = '1.05rem';
+                bylineEl.style.lineHeight = '1.5';
+                bylineEl.style.color = '#555';
+                postInfoWrap.appendChild(bylineEl);
               }
-              if (phShowTags) {
-                var postTagsForTags = self._getPostTags(post);
-                for (var tti = 0; tti < postTagsForTags.length; tti++) {
-                  var tag = postTagsForTags[tti];
-                  tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(tag)));
-                }
-              }
-              if (tagsCatsWrap.childNodes.length > 0) (postInfoWrap || appendTo).appendChild(tagsCatsWrap);
             }
 
             var metaParts = [];
-            if (showDate) {
-              var dateStr = self._getDate(post);
-              if (dateStr) metaParts.push(dateStr);
-            }
-            if (showAuthor) {
-              var authorStr = self._getAuthorsForPost(post, cfg);
-              if (authorStr) metaParts.push(authorStr);
-            }
-            if (showReadingTime) {
-              var mins = self._getReadingTimeMinutes(post.body);
-              metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
+            if (isSinglePost) {
+              if (showAuthor) {
+                var authorStrSingle = self._getAuthorsForPost(post, cfg);
+                if (authorStrSingle) metaParts.push(authorStrSingle);
+              }
+              if (showDate) {
+                var dateStrSingle = self._getDate(post);
+                if (dateStrSingle) metaParts.push(dateStrSingle);
+              }
+              if (showReadingTime) {
+                var minsSingle = self._getReadingTimeMinutes(post.body);
+                metaParts.push(minsSingle === 1 ? '1 min read' : minsSingle + ' min read');
+              }
+            } else {
+              if (showDate) {
+                var dateStr = self._getDate(post);
+                if (dateStr) metaParts.push(dateStr);
+              }
+              if (showAuthor) {
+                var authorStr = self._getAuthorsForPost(post, cfg);
+                if (authorStr) metaParts.push(authorStr);
+              }
+              if (showReadingTime) {
+                var mins = self._getReadingTimeMinutes(post.body);
+                metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
+              }
             }
             if (metaParts.length > 0) {
               var metaRow = document.createElement('div');
@@ -4284,7 +4541,7 @@
               var meta = document.createElement('div');
               meta.className = 'blog-overlay-meta';
               meta.textContent = metaParts.join(' · ');
-              if (singlePostFullBleed) {
+              if (singlePostFullBleedHero) {
                 meta.style.color = 'rgba(255,255,255,0.92)';
                 meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
                 metaRow.style.color = 'rgba(255,255,255,0.92)';
@@ -4299,11 +4556,14 @@
               shareUrl = window.location.origin + window.location.pathname + (window.location.search || '') + '#post-' + postIndex;
             }
             var shareImageUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
-            var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleed) : null;
+            var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero) : null;
             if (shareLinks) {
               var shareRow = document.createElement('div');
               shareRow.className = 'blog-overlay-share-row';
               shareRow.style.marginBottom = '8px';
+              shareRow.style.display = 'flex';
+              shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
+              shareRow.style.width = '100%';
               shareRow.appendChild(shareLinks);
               (postInfoWrap || appendTo).appendChild(shareRow);
             }
@@ -4314,18 +4574,45 @@
               var deck = deckSentences && deckSentences.length > 0 ? deckSentences[0].trim() : '';
               if (!deck) deck = self._truncateText(post.excerpt || post.body || '', 200);
               if (deck) deck = deck.replace(/^Section\s+\d+\s*/i, '').trim();
-              if (deck) {
+              if (deck && !singlePostFullBleedStacked && !phShowByline) {
                 var deckEl = document.createElement('p');
                 deckEl.className = 'blog-overlay-deck';
                 deckEl.textContent = deck;
                 deckEl.style.margin = '0 0 16px 0';
                 deckEl.style.fontSize = '1.05rem';
                 deckEl.style.lineHeight = '1.5';
-                deckEl.style.color = singlePostFullBleed ? 'rgba(255,255,255,0.95)' : '#555';
+                deckEl.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.95)' : '#555';
                 postInfoWrap.appendChild(deckEl);
               }
-              var postInfoTarget = singlePostFullBleed && fullBleedHeaderBlock && fullBleedHeaderBlock._contentEl ? fullBleedHeaderBlock._contentEl : appendTo;
-              postInfoTarget.appendChild(postInfoWrap);
+              var useDedicatedSinglePostHeaderZone = isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked;
+              var postInfoTarget = useDedicatedSinglePostHeaderZone
+                ? (isSideBySide ? appendTo : ensureSinglePostHeaderInnerEl())
+                : (singlePostFullBleedHero && fullBleedHeaderBlock && fullBleedHeaderBlock._contentEl ? fullBleedHeaderBlock._contentEl : appendTo);
+              if (singlePostFullBleedStacked) {
+                if (!headerZoneEl) {
+                  headerZoneEl = document.createElement('div');
+                  headerZoneEl.className = 'blog-overlay-header-zone';
+                  headerZoneEl.style.position = 'relative';
+                  headerZoneEl.style.zIndex = '100';
+                }
+                var stackedHeaderBlock = document.createElement('div');
+                stackedHeaderBlock.className = 'blog-overlay-post-header-stacked';
+                stackedHeaderBlock.style.width = '100%';
+                stackedHeaderBlock.style.boxSizing = 'border-box';
+                stackedHeaderBlock.style.paddingTop = '8px';
+                stackedHeaderBlock.style.marginBottom = '8px';
+                var stackedInfoWrap = document.createElement('div');
+                stackedInfoWrap.style.maxWidth = '860px';
+                stackedInfoWrap.style.margin = '0 auto';
+                stackedInfoWrap.style.padding = '0 16px';
+                stackedInfoWrap.style.boxSizing = 'border-box';
+                stackedInfoWrap.appendChild(postInfoWrap);
+                stackedHeaderBlock.appendChild(stackedInfoWrap);
+                if (stackedFullBleedWrap) stackedHeaderBlock.appendChild(stackedFullBleedWrap);
+                headerZoneEl.appendChild(stackedHeaderBlock);
+              } else {
+                postInfoTarget.appendChild(postInfoWrap);
+              }
             }
 
             if (singlePostBelowInfo && imgUrl) {
@@ -4366,7 +4653,11 @@
                 belowCap.style.fontStyle = 'italic';
                 belowFiWrap.appendChild(belowCap);
               }
-              article.appendChild(belowFiWrap);
+              if (isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
+                ensureSinglePostHeaderInnerEl().appendChild(belowFiWrap);
+              } else {
+                article.appendChild(belowFiWrap);
+              }
             }
 
             var body = document.createElement('div');
@@ -4402,7 +4693,11 @@
             var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
             if (isSideBySide) {
               rowEl.appendChild(contentEl);
-              article.appendChild(rowEl);
+              if (isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
+                ensureSinglePostHeaderInnerEl().appendChild(rowEl);
+              } else {
+                article.appendChild(rowEl);
+              }
             }
             bodyAppendTo.appendChild(body);
             main.appendChild(article);
@@ -4509,31 +4804,17 @@
           var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky !== false;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky !== false;
-          var postHeaderCfgForRails = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
-          var singlePostRailsBelowHero = Boolean(
-            isSinglePost &&
-            postHeaderCfgForRails &&
-            postHeaderCfgForRails.imagePosition === 'fullBleed'
-          );
-          var railsTopOffset = 0;
-          if (singlePostRailsBelowHero) {
-            var heroEl = main.querySelector('.blog-overlay-post-header-fullbleed');
-            if (heroEl) {
-              var heroMb = 0;
-              try {
-                heroMb = parseFloat((window.getComputedStyle(heroEl).marginBottom || '0').replace('px', '')) || 0;
-              } catch (e) {}
-              railsTopOffset = Math.round((heroEl.offsetHeight || 0) + heroMb + 24);
-            }
-            // In preview, hero can report a tiny/zero height before layout; treat tiny values as invalid.
-            if (railsTopOffset < 140) {
-              // Detached preview DOM can report 0 height before mount; use a conservative fallback.
-              var estimatedHeroHeight = Math.min(480, Math.max(280, Math.round(((typeof window !== 'undefined' ? window.innerWidth : 1200) || 1200) * 0.42)));
-              railsTopOffset = estimatedHeroHeight + 64;
-            }
+          var collectionHeaderStickyOffset = 0;
+          if (!isSinglePost) {
+            var collectionTitleBand = 52;
+            var headerModulesBand = (headerContentCfg && headerContentCfg.show)
+              ? (Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48)) + 16)
+              : 0;
+            collectionHeaderStickyOffset = collectionTitleBand + headerModulesBand;
           }
-          var leftPadTop = leftSpaceAbove + railsTopOffset;
-          var rightPadTop = rightSpaceAbove + railsTopOffset;
+          var postHeaderCfgForRails = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+          var leftPadTop = leftSpaceAbove;
+          var rightPadTop = rightSpaceAbove;
           var leftSidebarEl = document.createElement('div');
           leftSidebarEl.style.display = 'flex';
           leftSidebarEl.style.flexDirection = 'column';
@@ -4543,7 +4824,7 @@
           if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
           if (leftSticky) {
             leftSidebarEl.style.position = 'sticky';
-            leftSidebarEl.style.top = (navbarOffset + 16) + 'px';
+            leftSidebarEl.style.top = (navbarOffset + 16 + collectionHeaderStickyOffset) + 'px';
             leftSidebarEl.style.alignSelf = 'flex-start';
           } else {
             leftSidebarEl.style.position = 'static';
@@ -4559,7 +4840,7 @@
           if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
           if (rightSticky) {
             rightSidebarEl.style.position = 'sticky';
-            rightSidebarEl.style.top = (navbarOffset + 16) + 'px';
+            rightSidebarEl.style.top = (navbarOffset + 16 + collectionHeaderStickyOffset) + 'px';
             rightSidebarEl.style.alignSelf = 'flex-start';
           } else {
             rightSidebarEl.style.position = 'static';
@@ -4774,8 +5055,29 @@
                   }
                 }
               }
-              if (headerEl.childNodes.length > 0) main.insertBefore(headerEl, main.firstChild);
+              if (headerEl.childNodes.length > 0) {
+                if (isSinglePost) {
+                  if (singlePostHeaderZoneEl) {
+                    var headerHost = ensureSinglePostHeaderInnerEl();
+                    headerHost.insertBefore(headerEl, headerHost.firstChild);
+                  } else {
+                    if (!headerZoneEl) {
+                      headerZoneEl = document.createElement('div');
+                      headerZoneEl.className = 'blog-overlay-header-zone';
+                      headerZoneEl.style.position = 'relative';
+                      headerZoneEl.style.zIndex = '100';
+                    }
+                    headerZoneEl.appendChild(headerEl);
+                  }
+                } else if (headerModulesHostEl) {
+                  headerModulesHostEl.appendChild(headerEl);
+                }
+              }
             }
+          }
+          if (!isSinglePost && headerModulesHostEl && headerModulesHostEl.childNodes.length === 0) {
+            headerModulesHostEl.style.display = 'none';
+            headerModulesHostEl.style.marginTop = '0';
           }
 
           if (footerContentCfg && footerContentCfg.show) {
@@ -4785,7 +5087,7 @@
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
               var footerLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
               var footerRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
-              var fcAlign = footerContentCfg.contentAlignment === 'center' || footerContentCfg.contentAlignment === 'right' ? footerContentCfg.contentAlignment : 'left';
+              var footerModMaxPx = '720px';
               var footerEl = document.createElement('div');
               footerEl.className = 'blog-overlay-footer-content';
               footerEl.style.marginTop = '24px';
@@ -4796,7 +5098,7 @@
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
-              footerEl.style.alignItems = fcAlign === 'center' ? 'center' : fcAlign === 'right' ? 'flex-end' : 'flex-start';
+              footerEl.style.alignItems = 'center';
               footerEl.style.minHeight = footerHeight + 'px';
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
@@ -4804,44 +5106,55 @@
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220);
                   if (fmodEl) {
-                    fmodEl.style.width = 'auto';
-                    fmodEl.style.minWidth = '200px';
-                    fmodEl.style.flex = '1 1 200px';
+                    fmodEl.style.width = '100%';
+                    fmodEl.style.maxWidth = footerModMaxPx;
+                    fmodEl.style.minWidth = '0';
+                    fmodEl.style.alignSelf = 'center';
                   }
                 } else if (fmod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
                   var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, 220, { useLongBio: true });
                   fmodEl = authorResult ? authorResult.content : null;
                   if (fmodEl) {
-                    fmodEl.style.width = 'auto';
-                    fmodEl.style.minWidth = '200px';
-                    fmodEl.style.flex = '1 1 200px';
+                    fmodEl.style.width = '100%';
+                    fmodEl.style.maxWidth = footerModMaxPx;
+                    fmodEl.style.minWidth = '0';
+                    fmodEl.style.alignSelf = 'center';
                   }
                 } else if (fmod === 'emailCapture' && ecCfg) {
                   var ecFooterForm = createEmailCaptureForm(ecCfg, 220);
                   fmodEl = ecFooterForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecFooterForm) : null;
                   if (fmodEl) {
-                    fmodEl.style.width = 'auto';
-                    fmodEl.style.minWidth = '200px';
-                    fmodEl.style.flex = '1 1 200px';
+                    fmodEl.style.width = '100%';
+                    fmodEl.style.maxWidth = footerModMaxPx;
+                    fmodEl.style.minWidth = '0';
+                    fmodEl.style.alignSelf = 'center';
                   }
                 } else if (fmod === 'leadMagnet' && lmCfg) {
                   fmodEl = createLeadMagnetFooterCard(lmCfg);
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
+                    fmodEl.style.maxWidth = footerModMaxPx;
                     fmodEl.style.minWidth = '0';
-                    fmodEl.style.flex = '1 1 100%';
-                    fmodEl.style.alignSelf = 'stretch';
+                    fmodEl.style.alignSelf = 'center';
+                  }
+                } else if (fmod === 'prevNextArticle') {
+                  fmodEl = createPrevNextArticleModule();
+                  if (fmodEl) {
+                    fmodEl.style.alignSelf = 'center';
                   }
                 }
                 if (fmodEl) footerEl.appendChild(fmodEl);
               }
-              if (footerEl.childNodes.length > 0) main.appendChild(footerEl);
+              if (footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
             }
           }
 
-          if (leftSidebarEl.childNodes.length) wrapper.appendChild(leftSidebarEl);
-          wrapper.appendChild(main);
-          if (rightSidebarEl.childNodes.length) wrapper.appendChild(rightSidebarEl);
+          if (headerZoneEl && headerZoneEl.childNodes.length) wrapper.appendChild(headerZoneEl);
+          if (singlePostHeaderZoneEl && singlePostHeaderZoneEl.childNodes.length) wrapper.appendChild(singlePostHeaderZoneEl);
+          if (leftSidebarEl.childNodes.length) mainRowEl.appendChild(leftSidebarEl);
+          mainRowEl.appendChild(main);
+          if (rightSidebarEl.childNodes.length) mainRowEl.appendChild(rightSidebarEl);
+          wrapper.appendChild(mainRowEl);
 
           if (isSinglePost && selectedIndex >= 0 && items[selectedIndex] && cfg && cfg.commentSettings && cfg.commentSettings.commentsEnabled) {
             try {
@@ -4850,6 +5163,7 @@
               console.error('[BlogOverlay] Comments init error:', e);
             }
           }
+          if (footerZoneEl.childNodes.length > 0) wrapper.appendChild(footerZoneEl);
 
           root.prepend(wrapper);
           var overlayCount = root.querySelectorAll('#blog-overlay-list').length;

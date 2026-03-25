@@ -71,6 +71,22 @@ export interface BlogAuthorOption {
   socialLinks?: Record<string, string>;
 }
 
+function resolveInitialAuthorForProfileEdit(
+  authorList: BlogAuthorOption[],
+  preferredAuthorId: string | undefined,
+  fallbackAuthorIds: string[] | undefined
+): BlogAuthorOption | null {
+  if (preferredAuthorId) {
+    const preferred = authorList.find((a) => a.id === preferredAuthorId);
+    if (preferred) return preferred;
+  }
+  for (const id of fallbackAuthorIds ?? []) {
+    const hit = authorList.find((a) => a.id === id);
+    if (hit) return hit;
+  }
+  return authorList[0] ?? null;
+}
+
 export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
 export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
@@ -118,12 +134,20 @@ export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJust
 export type PostHeaderImagePosition = "fullBleed" | "leftOfInfo" | "rightOfInfo" | "belowInfo";
 export type PostHeaderContentAlignment = "left" | "center" | "right";
 
+export type PostHeaderFullBleedLayout = "overlay" | "stacked";
+
 export interface PostHeaderConfig {
   imagePosition: PostHeaderImagePosition;
   contentAlignment: PostHeaderContentAlignment;
+  /** When imagePosition is fullBleed: overlay = title on hero image; stacked = title block above full-bleed image */
+  fullBleedLayout?: PostHeaderFullBleedLayout;
+  /** Horizontal padding for single-post header zone when image is side-by-side */
+  sideGap?: number;
   showBreadcrumbs?: boolean;
   showTags?: boolean;
   showCategories?: boolean;
+  /** Lead sentence / excerpt line after title, before byline meta */
+  showByline?: boolean;
 }
 export type FeaturedImageAspectBehavior = "original" | "cropped";
 export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
@@ -261,9 +285,11 @@ const defaultCollectionConfig: CollectionLevelConfig = {
 const defaultPostHeader: PostHeaderConfig = {
   imagePosition: "fullBleed",
   contentAlignment: "left",
+  sideGap: 24,
   showBreadcrumbs: false,
   showTags: false,
   showCategories: false,
+  showByline: false,
 };
 
 const defaultPostConfig: PostLevelConfig = {
@@ -287,7 +313,7 @@ const defaultSiteConfig: SiteConfigForm = {
 };
 
 const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
-const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "prevNextArticle", "emailCapture", "leadMagnet"] as const;
 
 const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "emailCapture", "leadMagnet"] as const;
 const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
@@ -517,7 +543,7 @@ function parseLevelConfig(
     ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
     : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
   const validFooterCollection = (arr: unknown): string[] => Array.isArray(arr) ? arr.filter((m): m is string => m === "emailCapture" || m === "leadMagnet") : [];
-  const validFooterPost = (arr: unknown): string[] => Array.isArray(arr) ? arr.filter((m): m is string => m === "relevantPosts" || m === "authorProfiles" || m === "emailCapture" || m === "leadMagnet") : [];
+  const validFooterPost = (arr: unknown): string[] => Array.isArray(arr) ? arr.filter((m): m is string => m === "relevantPosts" || m === "authorProfiles" || m === "prevNextArticle" || m === "emailCapture" || m === "leadMagnet") : [];
   const fcOrderSource = effectiveZoneModuleOrder(
     Array.isArray(fc?.moduleOrder) ? fc.moduleOrder as string[] : undefined,
     Array.isArray(fc?.modules) ? fc.modules as string[] : undefined
@@ -706,13 +732,19 @@ function parseLevelConfig(
     (v === "fullBleed" || v === "leftOfInfo" || v === "rightOfInfo" || v === "belowInfo") ? v : "fullBleed";
   const validContentAlignment = (v: unknown): PostHeaderContentAlignment =>
     (v === "left" || v === "center" || v === "right") ? v : "left";
+  const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
+    (v === "stacked" || v === "overlay") ? v : undefined;
+  const validSideGap = (v: unknown): number => Math.min(120, Math.max(0, Number(v) || 24));
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
         imagePosition: validImagePosition(phRaw.imagePosition),
         contentAlignment: validContentAlignment(phRaw.contentAlignment),
+        fullBleedLayout: validFullBleedLayout(phRaw.fullBleedLayout),
+        sideGap: validSideGap(phRaw.sideGap),
         showBreadcrumbs: Boolean(phRaw.showBreadcrumbs ?? false),
         showTags: Boolean(phRaw.showTags ?? false),
         showCategories: Boolean(phRaw.showCategories ?? false),
+        showByline: Boolean(phRaw.showByline ?? false),
       } : defaultPostHeader)
     : undefined;
   const collDerived = deriveCollectionModules(collectionModules, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
@@ -937,9 +969,12 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     const phA = (a as PostLevelConfig).postHeader ?? defaultPostHeader;
     const phB = (b as PostLevelConfig).postHeader ?? defaultPostHeader;
     const phEqual = phA.imagePosition === phB.imagePosition && phA.contentAlignment === phB.contentAlignment &&
+      (phA.fullBleedLayout ?? "overlay") === (phB.fullBleedLayout ?? "overlay") &&
+      (phA.sideGap ?? 24) === (phB.sideGap ?? 24) &&
       (phA.showBreadcrumbs ?? false) === (phB.showBreadcrumbs ?? false) &&
       (phA.showTags ?? false) === (phB.showTags ?? false) &&
-      (phA.showCategories ?? false) === (phB.showCategories ?? false);
+      (phA.showCategories ?? false) === (phB.showCategories ?? false) &&
+      (phA.showByline ?? false) === (phB.showByline ?? false);
     return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color && phEqual;
   }
   return base;
@@ -1167,6 +1202,19 @@ export default function Configure() {
     setNewAuthorSocials(author.socialLinks ?? {});
     setAddAuthorModalOpen(true);
   }, []);
+
+  const openEditAuthorProfiles = useCallback(
+    (opts?: { preferredAuthorId?: string; fallbackAuthorIds?: string[] }) => {
+      const author = resolveInitialAuthorForProfileEdit(
+        authors,
+        opts?.preferredAuthorId,
+        opts?.fallbackAuthorIds
+      );
+      if (!author) return;
+      openEditAuthor(author);
+    },
+    [authors, openEditAuthor]
+  );
 
   // Fetch blog JSON and sync authors from Squarespace; add ingested authors as default (runs after config loads)
   useEffect(() => {
@@ -1519,9 +1567,12 @@ export default function Configure() {
     if (path === "progressBar.color" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, color: value as string } };
     if (path === "postHeader.imagePosition" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, imagePosition: value as PostHeaderImagePosition } };
     if (path === "postHeader.contentAlignment" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, contentAlignment: value as PostHeaderContentAlignment } };
+    if (path === "postHeader.fullBleedLayout" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, fullBleedLayout: value as PostHeaderFullBleedLayout } };
+    if (path === "postHeader.sideGap" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, sideGap: value as number } };
     if (path === "postHeader.showBreadcrumbs" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showBreadcrumbs: value as boolean } };
     if (path === "postHeader.showTags" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showTags: value as boolean } };
     if (path === "postHeader.showCategories" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showCategories: value as boolean } };
+    if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
     return cfg;
   }
 
@@ -2005,6 +2056,7 @@ export default function Configure() {
                                   <p className="text-xs text-[#6b6b6b]">
                                     {isOverridden ? "Override the default author(s) for this post." : "Default author(s) for this post. Add or remove to override."}
                                   </p>
+                                  <div className="space-y-2 w-full">
                                   <div className="flex flex-wrap gap-1">
                                     {displayIds.map((id) => {
                                       const author = authors.find((a) => a.id === id);
@@ -2086,6 +2138,19 @@ export default function Configure() {
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full"
+                                    disabled={authors.length === 0}
+                                    onClick={() =>
+                                      openEditAuthorProfiles({ fallbackAuthorIds: displayIds })
+                                    }
+                                  >
+                                    Edit Author Profiles
+                                  </Button>
                                   </div>
                                 </>
                               );
@@ -2206,6 +2271,20 @@ export default function Configure() {
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full"
+                                  disabled={authors.length === 0}
+                                  onClick={() =>
+                                    openEditAuthorProfiles({
+                                      fallbackAuthorIds: config.defaultAuthorIds,
+                                    })
+                                  }
+                                >
+                                  Edit Author Profiles
+                                </Button>
                             </div>
                           </CollapsibleContent>
                         </Collapsible>
@@ -2392,13 +2471,31 @@ export default function Configure() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="fullBleed">Full bleed (text overlays image)</SelectItem>
+                                  <SelectItem value="fullBleed">Full bleed</SelectItem>
                                   <SelectItem value="leftOfInfo">Left of post info</SelectItem>
                                   <SelectItem value="rightOfInfo">Right of post info</SelectItem>
                                   <SelectItem value="belowInfo">Below post info</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
+                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Full bleed layout</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Hero places the title on the image; stacked places it above a full-width image</p>
+                                <Select
+                                  value={(effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay"}
+                                  onValueChange={(v) => updateLevelConfigPath("postHeader.fullBleedLayout", v as PostHeaderFullBleedLayout)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="overlay">Hero (text on image)</SelectItem>
+                                    <SelectItem value="stacked">Stacked (text above image)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between">
                               <div>
                                 <Label className="text-xs text-[#6b6b6b]">Show featured image</Label>
@@ -2412,22 +2509,41 @@ export default function Configure() {
                             {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
                               <>
                                 {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" || (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Image width</Label>
-                                    <div className="flex items-center gap-3">
-                                      <Slider
-                                        value={[effectiveConfig.featuredImage.imageWidthPercent]}
-                                        onValueChange={([v]) => updateLevelConfigPath("featuredImage.imageWidthPercent", v ?? 40)}
-                                        min={25}
-                                        max={60}
-                                        step={5}
-                                        className="flex-1"
-                                      />
-                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
-                                        {effectiveConfig.featuredImage.imageWidthPercent}%
-                                      </span>
+                                  <>
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Image width</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[effectiveConfig.featuredImage.imageWidthPercent]}
+                                          onValueChange={([v]) => updateLevelConfigPath("featuredImage.imageWidthPercent", v ?? 40)}
+                                          min={25}
+                                          max={60}
+                                          step={5}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
+                                          {effectiveConfig.featuredImage.imageWidthPercent}%
+                                        </span>
+                                      </div>
                                     </div>
-                                  </div>
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Side gap</Label>
+                                      <p className="text-[10px] text-[#6b6b6b]">Horizontal space at the left and right edges of the post header zone</p>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)]}
+                                          onValueChange={([v]) => updateLevelConfigPath("postHeader.sideGap", v ?? 24)}
+                                          min={0}
+                                          max={80}
+                                          step={2}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-12 shrink-0">
+                                          {((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)}px
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </>
                                 )}
                                 <div className="space-y-2">
                                   <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
@@ -2534,9 +2650,9 @@ export default function Configure() {
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showBreadcrumbs", v)}
                               />
                             </div>
-                            <div className="space-y-2">
+                              <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Show Tags & Categories</Label>
-                              <p className="text-[10px] text-[#6b6b6b]">Display tags and categories under the post title</p>
+                              <p className="text-[10px] text-[#6b6b6b]">Display tags and categories after breadcrumbs, before the title</p>
                               <div className="flex items-center gap-6">
                                 <label className="flex items-center gap-2 cursor-pointer">
                                   <Checkbox
@@ -2553,6 +2669,16 @@ export default function Configure() {
                                   <span className="text-xs text-[#6b6b6b]">Categories</span>
                                 </label>
                               </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-xs text-[#6b6b6b]">Show post byline</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Lead line from the excerpt after the title, before author and date</p>
+                              </div>
+                              <Switch
+                                checked={(effectiveConfig as PostLevelConfig).postHeader?.showByline ?? false}
+                                onCheckedChange={(v) => updateLevelConfigPath("postHeader.showByline", v)}
+                              />
                             </div>
                           </div>
                         </CollapsibleContent>
@@ -2808,6 +2934,7 @@ export default function Configure() {
                                   postSort: "Sort Posts",
                                   authorProfiles: "Author Profiles",
                                   relevantPosts: "Related Posts",
+                                  prevNextArticle: "Previous/Next Article",
                                   emailCapture: "Email Capture",
                                   leadMagnet: "Lead Magnet",
                                 };
@@ -3004,6 +3131,7 @@ export default function Configure() {
                                 const FOOTER_LABELS: Record<string, string> = {
                                   relevantPosts: "Related Posts",
                                   authorProfiles: "Author Profiles",
+                                  prevNextArticle: "Previous/Next Article",
                                   emailCapture: "Email Capture",
                                   leadMagnet: "Lead Magnet",
                                 };
@@ -3083,6 +3211,7 @@ export default function Configure() {
                         recentPosts: "Recent Posts",
                         popularPosts: "Popular Posts",
                         relevantPosts: "Related Posts",
+                        prevNextArticle: "Previous/Next Article",
                         tableOfContents: "Table of Contents",
                         authorProfiles: "Author Profiles",
                         emailCapture: "Email Capture",
@@ -3580,6 +3709,34 @@ export default function Configure() {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{editAuthor ? "Edit Author" : "Add New Author"}</DialogTitle>
+              {editAuthor && (
+                <Select
+                  value={editAuthor.id}
+                  onValueChange={(id) => {
+                    const a = authors.find((x) => x.id === id);
+                    if (a) {
+                      setEditAuthor(a);
+                      setNewAuthorName(a.name);
+                      setNewAuthorImageUrl(a.imageUrl ?? null);
+                      setNewAuthorBio(a.bio ?? "");
+                      setNewAuthorBioLong(a.bioLong ?? "");
+                      setNewAuthorEmail(a.email ?? "");
+                      setNewAuthorSocials(a.socialLinks ?? {});
+                    }
+                  }}
+                >
+                  <SelectTrigger aria-label="Author to edit" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {authors.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </DialogHeader>
             <form
               className="space-y-4 pt-2"
