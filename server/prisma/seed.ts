@@ -315,6 +315,8 @@ async function main() {
       collectionConfig: {
         ...baseCollectionConfig,
         collectionLayout: 'editorial',
+        showAuthor: true,
+        showReadingTime: true,
         gridColumns: 3,
         headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },

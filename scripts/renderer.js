@@ -3627,13 +3627,107 @@
         }
         return createSidebarSection('Recent Posts', el);
       }
-      function createRelevantPostsModule(sidebarWidth) {
+      function relevantPostFooterFirstLine(post) {
+        var t = self._stripHtml(post.body || post.excerpt || '').replace(/\r/g, '').trim();
+        if (!t) return '';
+        var lines = t.split('\n');
+        for (var li = 0; li < lines.length; li++) {
+          var L = lines[li].trim();
+          if (L) return self._truncateText(L, 160);
+        }
+        return self._truncateText(t, 160);
+      }
+      function createRelevantPostsModule(sidebarWidth, opts) {
+        var isFooter = opts && opts.variant === 'footer';
         if (items.length === 0) return null;
+        var pool = isSinglePost && selectedIndex >= 0
+          ? items.filter(function(_, i) { return i !== selectedIndex; })
+          : items.slice();
+        var limit = isFooter ? 3 : 5;
+        var relevantItems = pool.slice(0, limit);
+        if (relevantItems.length === 0) return null;
+
+        if (isFooter) {
+          var grid = document.createElement('div');
+          grid.className = 'blog-overlay-relevant-posts blog-overlay-relevant-posts--footer';
+          grid.style.display = 'grid';
+          grid.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+          grid.style.gap = '20px';
+          grid.style.width = '100%';
+          grid.style.maxWidth = '100%';
+          grid.style.boxSizing = 'border-box';
+          for (var rf = 0; rf < relevantItems.length; rf++) {
+            var fp = relevantItems[rf];
+            var fIdx = items.indexOf(fp);
+            if (fIdx < 0) continue;
+            var fUrl = self._getPostUrl(fp);
+            var card = document.createElement('a');
+            card.href = fUrl || '#post-' + fIdx;
+            card.setAttribute('data-analytics-element', 'relevantPosts');
+            card.style.textDecoration = 'none';
+            card.style.color = 'inherit';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.gap = '10px';
+            card.style.minWidth = '0';
+            var imgWrap = document.createElement('div');
+            imgWrap.style.borderRadius = '4px';
+            imgWrap.style.overflow = 'hidden';
+            imgWrap.style.aspectRatio = '16 / 9';
+            imgWrap.style.background = '#e8e8e8';
+            var fu = fp.assetUrl || fp.thumbnailUrl || (fp.assets && fp.assets[0] && fp.assets[0].assetUrl) || null;
+            if (fu && self._isPlaceholderWithMap(fu, placeholderMap)) fu = null;
+            if (fu) {
+              var im = document.createElement('img');
+              im.src = fu;
+              im.alt = fp.title || '';
+              im.style.width = '100%';
+              im.style.height = '100%';
+              im.style.objectFit = 'cover';
+              im.style.display = 'block';
+              imgWrap.appendChild(im);
+            }
+            card.appendChild(imgWrap);
+            var tEl = document.createElement('div');
+            tEl.textContent = fp.title || 'Untitled';
+            tEl.style.fontSize = '0.95rem';
+            tEl.style.fontWeight = '600';
+            tEl.style.lineHeight = '1.35';
+            tEl.style.color = '#1a1a1a';
+            card.appendChild(tEl);
+            var deckEl = document.createElement('div');
+            deckEl.textContent = relevantPostFooterFirstLine(fp);
+            deckEl.style.fontSize = '0.85rem';
+            deckEl.style.color = '#555';
+            deckEl.style.lineHeight = '1.45';
+            deckEl.style.whiteSpace = 'nowrap';
+            deckEl.style.textOverflow = 'ellipsis';
+            deckEl.style.overflow = 'hidden';
+            card.appendChild(deckEl);
+            grid.appendChild(card);
+          }
+          var footSection = document.createElement('div');
+          footSection.className = 'blog-overlay-sidebar-section blog-overlay-more-to-read';
+          var footHead = document.createElement('div');
+          footHead.textContent = 'More to Read';
+          footHead.style.fontSize = '1.05rem';
+          footHead.style.fontWeight = '600';
+          footHead.style.color = '#1a1a1a';
+          footHead.style.marginBottom = '4px';
+          footSection.appendChild(footHead);
+          var footRule = document.createElement('div');
+          footRule.style.height = '1px';
+          footRule.style.background = '#e5e4e0';
+          footRule.style.marginBottom = '16px';
+          footSection.appendChild(footRule);
+          footSection.appendChild(grid);
+          return footSection;
+        }
+
         var el = document.createElement('aside');
         el.className = 'blog-overlay-relevant-posts';
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 220) + 'px';
-        var relevantItems = isSinglePost && selectedIndex >= 0 ? items.filter(function(_, i) { return i !== selectedIndex; }).slice(0, 5) : items.slice(0, 5);
         for (var r = 0; r < relevantItems.length; r++) {
           var rpIdx = items.indexOf(relevantItems[r]);
           if (rpIdx < 0) continue;
@@ -5599,7 +5693,7 @@
                 var fmod = fcModules[fm];
                 var fmodEl = null;
                 if (fmod === 'relevantPosts') {
-                  fmodEl = createRelevantPostsModule(220);
+                  fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
                     fmodEl.style.maxWidth = footerModMaxPx;

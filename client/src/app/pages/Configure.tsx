@@ -349,6 +349,14 @@ const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByT
 const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
 const COLLECTION_FOOTER_MODULES = ["emailCapture", "leadMagnet"] as const;
 const COLLECTION_FILTER_IDS = ["filterByCategory", "filterByTag", "filterByTagsAndCategories"] as const;
+type FeatureModuleLocation = Exclude<ModulePosition, "none">;
+type PostHeaderModuleKey = "tableOfContents" | "authorProfiles" | "relevantPosts" | "emailCapture" | "leadMagnet";
+const FEATURE_LOCATION_LABELS: Record<FeatureModuleLocation, string> = {
+  header: "Header",
+  leftSidebar: "Left Sidebar",
+  rightSidebar: "Right Sidebar",
+  footer: "Footer",
+};
 
 /**
  * Zone list for derive: prefer non-empty moduleOrder. If moduleOrder is [] or missing, use modules.
@@ -1401,6 +1409,102 @@ export default function Configure() {
   ]);
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
+  const moduleOrderPathForLocation = useCallback((loc: FeatureModuleLocation): "headerContent.moduleOrder" | "leftSidebar.moduleOrder" | "rightSidebar.moduleOrder" | "footerContent.moduleOrder" => {
+    if (loc === "header") return "headerContent.moduleOrder";
+    if (loc === "leftSidebar") return "leftSidebar.moduleOrder";
+    if (loc === "rightSidebar") return "rightSidebar.moduleOrder";
+    return "footerContent.moduleOrder";
+  }, []);
+  const moduleOrderForLocation = useCallback((cfg: BaseLevelConfig, loc: FeatureModuleLocation): string[] => {
+    if (loc === "header") return cfg.headerContent.moduleOrder ?? [];
+    if (loc === "leftSidebar") return cfg.leftSidebar.moduleOrder ?? [];
+    if (loc === "rightSidebar") return cfg.rightSidebar.moduleOrder ?? [];
+    return cfg.footerContent?.moduleOrder ?? [];
+  }, []);
+  const isModuleInFeatureLocation = useCallback(
+    (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey): boolean => {
+      if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
+        const pm = (effectiveConfig as PostLevelConfig).postModules?.[postHeaderModuleKey];
+        if (!pm || typeof pm !== "object" || !("enabled" in pm) || !("position" in pm)) return false;
+        return Boolean((pm as { enabled?: boolean }).enabled) && (pm as { position?: ModulePosition }).position === "header";
+      }
+      return moduleOrderForLocation(effectiveConfig, loc).includes(moduleId);
+    },
+    [effectiveConfig, moduleOrderForLocation, selectedLevel]
+  );
+  const addFeatureLocation = useCallback(
+    (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
+      if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
+        updateLevelConfigPath(`postModules.${postHeaderModuleKey}.enabled`, true);
+        updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "header");
+        const headerOrder = effectiveConfig.headerContent.moduleOrder ?? [];
+        if (!headerOrder.includes(moduleId)) {
+          updateLevelConfigPath("headerContent.moduleOrder", [moduleId, ...headerOrder.filter((m) => m !== moduleId)]);
+        }
+        return;
+      }
+      const zonePath = moduleOrderPathForLocation(loc);
+      const order = moduleOrderForLocation(effectiveConfig, loc);
+      if (order.includes(moduleId)) return;
+      updateLevelConfigPath(zonePath, [moduleId, ...order.filter((m) => m !== moduleId)]);
+    },
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel]
+  );
+  const removeFeatureLocation = useCallback(
+    (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
+      if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
+        updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "none");
+        return;
+      }
+      const zonePath = moduleOrderPathForLocation(loc);
+      const order = moduleOrderForLocation(effectiveConfig, loc);
+      updateLevelConfigPath(zonePath, order.filter((m) => m !== moduleId));
+    },
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel]
+  );
+  const renderFeatureLocationControl = useCallback((
+    moduleId: string,
+    allowedLocations: FeatureModuleLocation[],
+    postHeaderModuleKey?: PostHeaderModuleKey,
+  ) => {
+    const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
+    const availableLocations = allowedLocations.filter((loc) => !selectedLocations.includes(loc));
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs text-[#6b6b6b]">Location</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedLocations.map((loc) => (
+            <span
+              key={loc}
+              className="inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]"
+            >
+              {FEATURE_LOCATION_LABELS[loc]}
+              <button
+                type="button"
+                onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
+                className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
+                aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {availableLocations.length > 0 && (
+            <Select value="" onValueChange={(v) => v && addFeatureLocation(moduleId, v as FeatureModuleLocation, postHeaderModuleKey)}>
+              <SelectTrigger className="h-8 w-[170px] text-xs">
+                <SelectValue placeholder="Add location..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableLocations.map((loc) => (
+                  <SelectItem key={loc} value={loc}>{FEATURE_LOCATION_LABELS[loc]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+    );
+  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation]);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
@@ -3588,6 +3692,13 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, filtering: !p.filtering }))}
                                 content={
                                   <div className="space-y-2">
+                                    {renderFeatureLocationControl(
+                                      filterConfigToModuleId(
+                                        (effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByTags ?? false,
+                                        (effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByCategories ?? true
+                                      ),
+                                      ["header", "leftSidebar", "rightSidebar"]
+                                    )}
                                     <Label className="text-xs text-[#6b6b6b]">Filter by</Label>
                                     <div className="flex flex-wrap gap-4">
                                       <label className="flex items-center gap-2 cursor-pointer">
@@ -3615,6 +3726,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
+                                    {renderFeatureLocationControl("emailCapture", ["header", "leftSidebar", "rightSidebar", "footer"])}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -3648,6 +3760,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
+                                    {renderFeatureLocationControl("leadMagnet", ["header", "leftSidebar", "rightSidebar", "footer"])}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -3686,6 +3799,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, tableOfContents: !p.tableOfContents }))}
                                 content={
                                   <div className="space-y-3">
+                                    {renderFeatureLocationControl("tableOfContents", ["header", "leftSidebar", "rightSidebar"], "tableOfContents")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Style</Label>
                                       <Select
@@ -3714,6 +3828,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
                                 content={
                                   <div className="space-y-3">
+                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
                                       <div className="flex items-center gap-3">
@@ -3737,11 +3852,32 @@ export default function Configure() {
                                 }
                               />
                               <ModuleSettingSectionCollapseOnly
+                                title="Author Profiles"
+                                expanded={sectionExpanded.authorProfiles}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, authorProfiles: !p.authorProfiles }))}
+                                content={
+                                  <div className="space-y-3">
+                                    {renderFeatureLocationControl("authorProfiles", ["header", "leftSidebar", "rightSidebar", "footer"], "authorProfiles")}
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSectionCollapseOnly
+                                title="Related Posts"
+                                expanded={sectionExpanded.relevantPosts}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, relevantPosts: !p.relevantPosts }))}
+                                content={
+                                  <div className="space-y-3">
+                                    {renderFeatureLocationControl("relevantPosts", ["header", "leftSidebar", "rightSidebar", "footer"], "relevantPosts")}
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSectionCollapseOnly
                                 title="Email Capture"
                                 expanded={sectionExpanded.emailCapture}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
+                                    {renderFeatureLocationControl("emailCapture", ["header", "leftSidebar", "rightSidebar", "footer"], "emailCapture")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -3775,6 +3911,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
+                                    {renderFeatureLocationControl("leadMagnet", ["header", "leftSidebar", "rightSidebar", "footer"], "leadMagnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input

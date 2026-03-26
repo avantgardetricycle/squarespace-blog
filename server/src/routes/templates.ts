@@ -59,6 +59,9 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
 /** Merged onto DB template rows when serving Editorial (brick / magazine layout). */
 const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   collectionLayout: 'editorial' as const,
+  showDate: true,
+  showAuthor: true,
+  showReadingTime: true,
   featuredArticle: { show: true, position: 'inLayout' as const }
 }
 
