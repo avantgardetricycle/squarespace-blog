@@ -188,10 +188,11 @@ async function main() {
       collectionConfig: {
         ...baseCollectionConfig,
         collectionLayout: 'listRows',
-        headerContent: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], height: 48 },
+        headerContent: { show: true, modules: ['filterByTagsAndCategories', 'searchPosts', 'postSort'], height: 48 },
         leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 }
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 },
+        featuredArticle: { show: false, position: 'header' }
       },
       previewLayout: 'newsroom'
     },
@@ -205,7 +206,8 @@ async function main() {
         collectionLayout: 'digest',
         gridColumns: 2,
         rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 280, spaceAbove: 0, sticky: true },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 }
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 },
+        featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'digest'
     },
@@ -216,10 +218,29 @@ async function main() {
       description: 'Card grid with alternating image layout.',
       collectionConfig: {
         ...baseCollectionConfig,
+        showAuthor: true,
+        showReadingTime: true,
         collectionLayout: 'showcase',
         gridColumns: 2,
-        headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 }
+        collectionModules: {
+          filter: { filterByTags: true, filterByCategories: true },
+          sort: {},
+          search: {},
+          recentPosts: {},
+          emailCapture: {
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
+        },
+        headerContent: {
+          show: true,
+          modules: ['filterByTagsAndCategories', 'searchPosts'],
+          moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+          height: 48
+        },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 },
+        featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'showcase'
     },
@@ -233,7 +254,8 @@ async function main() {
         collectionLayout: 'editorial',
         gridColumns: 3,
         headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' }
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'editorial'
     }

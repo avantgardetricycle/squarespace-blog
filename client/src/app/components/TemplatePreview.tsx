@@ -312,9 +312,8 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
           <div className="flex flex-col gap-2 shrink-0">
             <div className="text-[12px] font-semibold text-[#333]">Blog Title</div>
             <SearchBar fullWidth />
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
               <FilterBarTabs />
-              <span className={cn(textMuted, "text-[10px] shrink-0")}>Sort ▾</span>
             </div>
           </div>
           <div className="space-y-3 min-h-0">

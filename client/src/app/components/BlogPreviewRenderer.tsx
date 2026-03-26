@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-03-25-post-header-side-gap-v2";
+const RENDERER_VERSION = "2026-03-25-featured-inlayout-v3";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -14,6 +14,8 @@ interface RendererConfigOverrides {
   recentPostsCount?: number;
   /** Configure preview only: -1 = list/collection view, >=0 = single-post index (path/hash ignored in previewMode) */
   previewSelectedPostIndex?: number;
+  /** Log featured-post resolution (collection keys, item flags) in the browser console */
+  previewFeaturedDebug?: boolean;
 }
 
 interface BlogPreviewRendererProps {
@@ -38,7 +40,15 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     ...(typeof overrides?.previewSelectedPostIndex === "number"
       ? { previewSelectedPostIndex: overrides.previewSelectedPostIndex }
       : {}),
+    ...(overrides?.previewFeaturedDebug ? { previewFeaturedDebug: true } : {}),
   };
+}
+
+function blogPreviewFeaturedDebugQuery(): string {
+  if (typeof window === "undefined") return "";
+  return window.location.search.includes("bbPreviewDebug=1") || sessionStorage.getItem("bbPreviewDebug") === "1"
+    ? "?bbFeaturedDebug=1"
+    : "";
 }
 
 /**
@@ -79,7 +89,7 @@ export default function BlogPreviewRenderer({
       const config = {
         ...buildRendererConfig(configRef.current),
         rootEl: root,
-        previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}`,
+        previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}${blogPreviewFeaturedDebugQuery()}`,
       };
 
       try {

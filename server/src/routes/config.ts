@@ -66,6 +66,66 @@ function appendPasswordToUrl (url: string, password: string | null | undefined):
   }
 }
 
+/** Squarespace blog JSON uses several shapes for “featured”; normalize to `featured: true` for our UI/renderer. */
+function truthyJsonFlag (v: unknown): boolean {
+  if (v === true || v === 1) return true
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase()
+    return s === 'true' || s === '1' || s === 'yes'
+  }
+  return false
+}
+
+function itemHasSquarespaceFeaturedMarker (item: Record<string, unknown>): boolean {
+  const keys = ['featured', 'isFeatured', 'Featured', 'starred', 'isStarred', 'pinned', 'isPinned', 'promoted', 'isPromoted'] as const
+  for (const k of keys) {
+    if (k in item && truthyJsonFlag(item[k])) return true
+  }
+  return false
+}
+
+function collectionFeaturedRefs (collection: Record<string, unknown> | null): string[] {
+  if (!collection) return []
+  const out: string[] = []
+  const keyNames = ['featuredItemId', 'featuredId', 'featuredPostId', 'starredItemId', 'pinnedItemId', 'highlightedItemId', 'featuredItemRecordId'] as const
+  for (const k of keyNames) {
+    const v = collection[k]
+    if (typeof v === 'string' && v.trim()) out.push(v.trim())
+    else if (v && typeof v === 'object' && typeof (v as { id?: unknown }).id === 'string' && String((v as { id: string }).id).trim()) {
+      out.push(String((v as { id: string }).id).trim())
+    }
+  }
+  return out
+}
+
+function itemMatchesFeaturedRef (item: Record<string, unknown>, refs: string[]): boolean {
+  if (refs.length === 0) return false
+  const id = typeof item.id === 'string' ? item.id : ''
+  const fullUrl = typeof item.fullUrl === 'string' ? item.fullUrl : ''
+  const urlId = typeof item.urlId === 'string' ? item.urlId : ''
+  for (const ref of refs) {
+    if (!ref) continue
+    if (id === ref || fullUrl === ref || urlId === ref) return true
+    if (fullUrl && (fullUrl === ref || fullUrl.endsWith(ref) || fullUrl.includes('/' + ref + '/') || fullUrl.includes('/' + ref))) return true
+  }
+  return false
+}
+
+function annotateSquarespaceFeaturedOnItems (items: unknown[], collection: Record<string, unknown> | null): void {
+  const refs = collectionFeaturedRefs(collection)
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') continue
+    const item = raw as Record<string, unknown>
+    if (itemHasSquarespaceFeaturedMarker(item)) {
+      item.featured = true
+      continue
+    }
+    if (itemMatchesFeaturedRef(item, refs)) {
+      item.featured = true
+    }
+  }
+}
+
 // GET /api/blog-preview/:siteKey - Proxy blog JSON for configure page preview
 router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
@@ -145,6 +205,36 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
       } else {
         nextUrl = null
       }
+    }
+
+    const collForFeatured =
+      firstJson?.collection && typeof firstJson.collection === 'object'
+        ? (firstJson.collection as Record<string, unknown>)
+        : null
+    annotateSquarespaceFeaturedOnItems(allItems, collForFeatured)
+
+    const debugFeatured = String(req.query.bbFeaturedDebug ?? '') === '1'
+    if (debugFeatured) {
+      const refs = collectionFeaturedRefs(collForFeatured)
+      console.warn('[blog-preview featured debug]', {
+        siteKey,
+        collectionKeys: collForFeatured ? Object.keys(collForFeatured) : [],
+        collectionFeaturedRefs: refs,
+        items: allItems.map((raw, i) => {
+          if (!raw || typeof raw !== 'object') return { i, type: typeof raw }
+          const it = raw as Record<string, unknown>
+          return {
+            i,
+            title: it.title,
+            id: it.id,
+            urlId: it.urlId,
+            fullUrl: it.fullUrl,
+            markerHit: itemHasSquarespaceFeaturedMarker(it),
+            refHit: itemMatchesFeaturedRef(it, refs),
+            relevantKeys: Object.keys(it).filter((k) => /feat|star|pin|promo|highlight|record/i.test(k))
+          }
+        })
+      })
     }
 
     if (firstJson) {

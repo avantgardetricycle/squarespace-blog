@@ -160,6 +160,56 @@
       else console.log('[BlogOverlay][debug] ' + label);
     },
 
+    _featuredDebugEnabled: function() {
+      return Boolean(this.config && this.config.previewFeaturedDebug) || this._isDebugEnabled();
+    },
+
+    _truthyFeaturedFlag: function(v) {
+      if (v === true || v === 1) return true;
+      if (typeof v === 'string') {
+        var s = v.trim().toLowerCase();
+        return s === 'true' || s === '1' || s === 'yes';
+      }
+      return false;
+    },
+
+    /** Squarespace JSON-T / ?format=json uses several keys for “featured” blog posts */
+    _itemIsSquarespaceFeatured: function(it) {
+      if (!it || typeof it !== 'object') return false;
+      var keys = ['featured', 'isFeatured', 'Featured', 'starred', 'isStarred', 'pinned', 'isPinned', 'promoted', 'isPromoted'];
+      for (var i = 0; i < keys.length; i++) {
+        if (this._truthyFeaturedFlag(it[keys[i]])) return true;
+      }
+      return false;
+    },
+
+    _getCollectionFeaturedRefIds: function() {
+      var coll = this._collection;
+      if (!coll || typeof coll !== 'object') return [];
+      var out = [];
+      var keyNames = ['featuredItemId', 'featuredId', 'featuredPostId', 'starredItemId', 'pinnedItemId', 'highlightedItemId', 'featuredItemRecordId'];
+      for (var ki = 0; ki < keyNames.length; ki++) {
+        var v = coll[keyNames[ki]];
+        if (typeof v === 'string' && v.trim()) out.push(v.trim());
+        else if (v && typeof v === 'object' && typeof v.id === 'string' && v.id.trim()) out.push(v.id.trim());
+      }
+      return out;
+    },
+
+    _itemMatchesFeaturedRef: function(it, refs) {
+      if (!refs || !refs.length || !it) return false;
+      var id = it.id != null ? String(it.id) : '';
+      var fullUrl = it.fullUrl != null ? String(it.fullUrl) : '';
+      var urlId = it.urlId != null ? String(it.urlId) : '';
+      for (var ri = 0; ri < refs.length; ri++) {
+        var ref = refs[ri];
+        if (!ref) continue;
+        if (id === ref || fullUrl === ref || urlId === ref) return true;
+        if (fullUrl && (fullUrl === ref || fullUrl.indexOf(ref) >= 0)) return true;
+      }
+      return false;
+    },
+
     _warnDuplicateValues: function(label, arr) {
       if (!this._isDebugEnabled() || !Array.isArray(arr) || arr.length < 2) return;
       var seen = {};
@@ -578,11 +628,54 @@
       }, true);
     },
 
+    /** Shallow-merge top-level keys of next onto prev, then merge listed nested objects (so partial updates do not wipe headerContent, etc.). */
+    _mergeNestedLevelConfig: function(prev, next, nestedKeys) {
+      var out = Object.assign({}, prev || {}, next || {});
+      for (var i = 0; i < nestedKeys.length; i++) {
+        var key = nestedKeys[i];
+        var p = prev && prev[key];
+        var n = next && next[key];
+        if (p && n && typeof p === 'object' && typeof n === 'object' && !Array.isArray(p) && !Array.isArray(n)) {
+          out[key] = Object.assign({}, p, n);
+        }
+      }
+      return out;
+    },
+
+    /** Match Configure zone ordering: prefer moduleOrder when non-empty, then merge with modules list. */
+    _orderedZoneModules: function(modules, moduleOrder) {
+      var avail = Array.isArray(modules) ? modules.slice() : [];
+      var order = (Array.isArray(moduleOrder) && moduleOrder.length > 0) ? moduleOrder : avail.slice();
+      var inAvail = {};
+      for (var i = 0; i < avail.length; i++) inAvail[avail[i]] = true;
+      var fromOrder = [];
+      for (var j = 0; j < order.length; j++) {
+        if (inAvail[order[j]]) fromOrder.push(order[j]);
+      }
+      var remaining = [];
+      for (var k = 0; k < avail.length; k++) {
+        if (order.indexOf(avail[k]) < 0) remaining.push(avail[k]);
+      }
+      return fromOrder.concat(remaining);
+    },
+
     updateConfig: function(newConfig) {
       if (!newConfig || typeof newConfig !== 'object') return;
       var prevSig = this._lastConfigSignature;
       var nextSig = JSON.stringify(newConfig);
-      this.config = Object.assign({}, this.config || {}, newConfig);
+      var prev = this.config || {};
+      var merged = Object.assign({}, prev, newConfig);
+      if (newConfig.collectionConfig && typeof newConfig.collectionConfig === 'object') {
+        merged.collectionConfig = this._mergeNestedLevelConfig(prev.collectionConfig, newConfig.collectionConfig, [
+          'headerContent', 'footerContent', 'leftSidebar', 'rightSidebar', 'featuredArticle', 'pagination', 'collectionModules', 'featuredImage'
+        ]);
+      }
+      if (newConfig.postConfig && typeof newConfig.postConfig === 'object') {
+        merged.postConfig = this._mergeNestedLevelConfig(prev.postConfig, newConfig.postConfig, [
+          'headerContent', 'footerContent', 'leftSidebar', 'rightSidebar', 'postModules', 'postHeader', 'progressBar', 'featuredImage'
+        ]);
+      }
+      this.config = merged;
       this._debugLog('updateConfig', {
         sameSignatureAsPrevious: prevSig === nextSig && Boolean(this._lastConfigSignature),
         previewSelectedPostIndex: this.config && typeof this.config.previewSelectedPostIndex === 'number'
@@ -2464,6 +2557,18 @@
             blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
           };
           self._collection = collection;
+          if (self._featuredDebugEnabled()) {
+            var collKeys = collection && typeof collection === 'object' ? Object.keys(collection) : [];
+            console.warn('[BlogOverlay][featured-debug] collection keys (sample)', collKeys.slice(0, 100));
+            console.warn('[BlogOverlay][featured-debug] collection featured refs', self._getCollectionFeaturedRefIds());
+            console.warn('[BlogOverlay][featured-debug] items', allItems.map(function(it, idx) {
+              if (!it || typeof it !== 'object') return { idx: idx, type: typeof it };
+              var interesting = Object.keys(it).filter(function(k) { return /feat|star|pin|promo|highlight|record/i.test(k); });
+              var snap = {};
+              for (var ii = 0; ii < interesting.length; ii++) snap[interesting[ii]] = it[interesting[ii]];
+              return { idx: idx, title: it.title, id: it.id, urlId: it.urlId, fullUrl: it.fullUrl, interestingKeys: interesting, snapshot: snap, marker: self._itemIsSquarespaceFeatured(it) };
+            }));
+          }
           self._renderContent(self.items);
           console.log('[BlogOverlay] Rendered', allItems.length, 'posts from blog JSON');
         })
@@ -2940,8 +3045,13 @@
         headerModulesHostEl.className = 'blog-overlay-header-modules-host';
         headerModulesHostEl.style.marginTop = '12px';
         headerModulesHostEl.style.display = 'flex';
-        headerModulesHostEl.style.flexDirection = 'column';
-        headerModulesHostEl.style.gap = '12px';
+        headerModulesHostEl.style.flexDirection = 'row';
+        headerModulesHostEl.style.flexWrap = 'wrap';
+        headerModulesHostEl.style.alignItems = 'center';
+        headerModulesHostEl.style.gap = '12px 16px';
+        headerModulesHostEl.style.width = '100%';
+        headerModulesHostEl.style.maxWidth = '100%';
+        headerModulesHostEl.style.boxSizing = 'border-box';
         headerZoneEl.appendChild(headerModulesHostEl);
       }
 
@@ -3005,18 +3115,66 @@
 
       var featuredPost = null;
       var displayItemsForLoop = displayItems;
-      if (!isSinglePost && faCfg && faCfg.show === true && displayItems.length > 0) {
+      var displayPostKey = function(postObj) {
+        return postObj && (postObj.id || postObj.fullUrl || postObj.title)
+          ? String(postObj.id || postObj.fullUrl || postObj.title)
+          : '';
+      };
+      if (!isSinglePost && faCfg && faCfg.show === true && sortedItems.length > 0) {
+        var bbFeatured = faCfg.featuredPostId;
+        var featuredPool = sortedItems;
         var featuredIdx = -1;
-        for (var fi = 0; fi < displayItems.length; fi++) {
-          var it = displayItems[fi];
-          if (it && (it.featured === true || it.isFeatured === true)) {
-            featuredIdx = fi;
-            break;
+        if (typeof bbFeatured === 'string' && bbFeatured.trim()) {
+          var configuredFeaturedPostId = String(bbFeatured).trim();
+          for (var bi = 0; bi < featuredPool.length; bi++) {
+            if (displayPostKey(featuredPool[bi]) === configuredFeaturedPostId) {
+              featuredIdx = bi;
+              break;
+            }
+          }
+        } else {
+          var refIds = self._getCollectionFeaturedRefIds();
+          for (var fi = 0; fi < featuredPool.length; fi++) {
+            var itSq = featuredPool[fi];
+            if (itSq && (self._itemIsSquarespaceFeatured(itSq) || self._itemMatchesFeaturedRef(itSq, refIds))) {
+              featuredIdx = fi;
+              break;
+            }
           }
         }
-        featuredPost = featuredIdx >= 0 ? displayItems[featuredIdx] : displayItems[0];
-        if (faCfg.position === 'header') {
+        featuredPost = featuredIdx >= 0 ? featuredPool[featuredIdx] : null;
+        if (faCfg.position === 'header' && featuredPost) {
           displayItemsForLoop = displayItems.filter(function(p) { return p !== featuredPost; });
+        } else if (faCfg.position === 'inLayout' && featuredPost) {
+          var inLayoutList = displayItems.slice();
+          var fpK = displayPostKey(featuredPost);
+          var fpPos = -1;
+          for (var ili = 0; ili < inLayoutList.length; ili++) {
+            var lit = inLayoutList[ili];
+            if (lit === featuredPost || (fpK && displayPostKey(lit) === fpK)) {
+              fpPos = ili;
+              break;
+            }
+          }
+          if (fpPos > 0) {
+            var fpItem = inLayoutList.splice(fpPos, 1)[0];
+            inLayoutList.unshift(fpItem);
+            displayItemsForLoop = inLayoutList;
+          } else if (fpPos === 0) {
+            displayItemsForLoop = inLayoutList;
+          } else {
+            displayItemsForLoop = [featuredPost].concat(inLayoutList.filter(function(p) {
+              return p !== featuredPost && (!fpK || displayPostKey(p) !== fpK);
+            }));
+          }
+        }
+        if (self._featuredDebugEnabled()) {
+          console.warn('[BlogOverlay][featured-debug] resolved', {
+            bbFeatured: bbFeatured,
+            featuredTitle: featuredPost && featuredPost.title,
+            poolLen: featuredPool.length,
+            displayLen: displayItems.length
+          });
         }
       }
       var placeholderMap = {};
@@ -3054,10 +3212,11 @@
           heroLink.href = self._getPostUrl(featuredPost) || (self._bbPreview ? '#post-' + items.indexOf(featuredPost) : '#');
           heroLink.style.display = 'block';
           heroLink.style.textDecoration = 'none';
-          heroLink.style.color = 'inherit';
+          heroLink.style.color = '#fff';
           heroLink.style.marginBottom = '24px';
           heroLink.setAttribute('data-analytics-element', 'featuredHero');
           heroLink.className = 'blog-overlay-featured-hero';
+
           var heroInner = document.createElement('div');
           heroInner.style.position = 'relative';
           heroInner.style.width = '100%';
@@ -3065,23 +3224,50 @@
           heroInner.style.overflow = 'hidden';
           heroInner.style.borderRadius = '4px';
           heroInner.style.background = 'linear-gradient(160deg, #1a1a2e 0%, #2d1a3a 45%, #0f2027 100%)';
+          heroInner.style.minHeight = '200px';
+
           var heroImgUrl = featuredPost.assetUrl || featuredPost.thumbnailUrl || (featuredPost.assets && featuredPost.assets[0] && featuredPost.assets[0].assetUrl) || null;
           if (heroImgUrl && self._isPlaceholderWithMap(heroImgUrl, placeholderMap)) heroImgUrl = null;
+          var hasHeroImg = Boolean(heroImgUrl);
           if (heroImgUrl) {
             var heroImg = document.createElement('img');
             heroImg.src = heroImgUrl;
             heroImg.alt = featuredPost.title || '';
+            heroImg.style.position = 'absolute';
+            heroImg.style.left = '0';
+            heroImg.style.top = '0';
             heroImg.style.width = '100%';
             heroImg.style.height = '100%';
             heroImg.style.objectFit = 'cover';
             heroImg.style.display = 'block';
             heroInner.appendChild(heroImg);
           }
-          heroLink.appendChild(heroInner);
+
+          var heroScrim = document.createElement('div');
+          heroScrim.style.position = 'absolute';
+          heroScrim.style.left = '0';
+          heroScrim.style.right = '0';
+          heroScrim.style.top = '0';
+          heroScrim.style.bottom = '0';
+          heroScrim.style.pointerEvents = 'none';
+          heroScrim.style.background = hasHeroImg
+            ? 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0.15) 100%)'
+            : 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)';
+          heroInner.appendChild(heroScrim);
+
           var heroContent = document.createElement('div');
-          heroContent.style.padding = '20px 0 0 0';
-          heroContent.style.width = '100%';
-          heroContent.style.maxWidth = '780px';
+          heroContent.style.position = 'absolute';
+          heroContent.style.left = '0';
+          heroContent.style.right = '0';
+          heroContent.style.bottom = '0';
+          heroContent.style.padding = '28px 32px 32px';
+          heroContent.style.zIndex = '2';
+          heroContent.style.boxSizing = 'border-box';
+          heroContent.style.maxWidth = '100%';
+
+          var heroMuted = 'rgba(255,255,255,0.78)';
+          var heroBody = 'rgba(255,255,255,0.9)';
+
           var heroBadge = document.createElement('span');
           heroBadge.textContent = 'Featured';
           heroBadge.style.display = 'inline-block';
@@ -3103,7 +3289,7 @@
             heroCat.style.fontWeight = '700';
             heroCat.style.letterSpacing = '1.5px';
             heroCat.style.textTransform = 'uppercase';
-            heroCat.style.color = '#6b6b6b';
+            heroCat.style.color = heroMuted;
             heroCat.style.marginBottom = '8px';
             heroContent.appendChild(heroCat);
           }
@@ -3113,7 +3299,7 @@
           heroTitle.style.fontWeight = '900';
           heroTitle.style.lineHeight = '1.08';
           heroTitle.style.letterSpacing = '-0.02em';
-          heroTitle.style.color = 'inherit';
+          heroTitle.style.color = '#fff';
           heroTitle.style.margin = '0 0 10px 0';
           heroContent.appendChild(heroTitle);
           var heroText = self._stripHtml(featuredPost.excerpt || featuredPost.body || '');
@@ -3130,7 +3316,7 @@
             var heroDeckEl = document.createElement('div');
             heroDeckEl.textContent = heroDeck;
             heroDeckEl.style.fontSize = '15px';
-            heroDeckEl.style.color = '#666';
+            heroDeckEl.style.color = heroBody;
             heroDeckEl.style.lineHeight = '1.6';
             heroDeckEl.style.marginBottom = '14px';
             heroDeckEl.style.maxWidth = '560px';
@@ -3153,10 +3339,12 @@
             var heroMeta = document.createElement('div');
             heroMeta.textContent = heroMetaParts.join(' · ');
             heroMeta.style.fontSize = '12px';
-            heroMeta.style.color = '#666';
+            heroMeta.style.color = heroMuted;
             heroContent.appendChild(heroMeta);
           }
-          heroLink.appendChild(heroContent);
+
+          heroInner.appendChild(heroContent);
+          heroLink.appendChild(heroInner);
           main.insertBefore(heroLink, main.firstChild);
       }
 
@@ -4002,6 +4190,27 @@
             title.style.lineHeight = '1.2';
             title.style.color = '#fff';
             title.textContent = p.title || 'Untitled';
+            if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
+              var edFpK = displayPostKey(featuredPost);
+              var edPk = displayPostKey(p);
+              if (p === featuredPost || (edFpK && edPk === edFpK)) {
+                var edBadge = document.createElement('div');
+                edBadge.textContent = 'FEATURED';
+                edBadge.style.position = 'absolute';
+                edBadge.style.top = '14px';
+                edBadge.style.left = '14px';
+                edBadge.style.zIndex = '4';
+                edBadge.style.background = '#5B4FE8';
+                edBadge.style.color = '#fff';
+                edBadge.style.fontSize = '9px';
+                edBadge.style.fontWeight = '700';
+                edBadge.style.letterSpacing = '1.5px';
+                edBadge.style.textTransform = 'uppercase';
+                edBadge.style.padding = '3px 8px';
+                edBadge.style.borderRadius = '2px';
+                link.appendChild(edBadge);
+              }
+            }
             var metaParts = [];
             if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
             if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
@@ -4067,6 +4276,26 @@
           titleEl.className = 'blog-overlay-title';
           titleEl.style.margin = '0 0 8px 0';
           titleEl.textContent = post.title || 'Untitled';
+          if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
+            var shFpK = displayPostKey(featuredPost);
+            var shPk = displayPostKey(post);
+            if (post === featuredPost || (shFpK && shPk === shFpK)) {
+              var shBadge = document.createElement('span');
+              shBadge.textContent = 'FEATURED';
+              shBadge.style.display = 'inline-flex';
+              shBadge.style.alignItems = 'center';
+              shBadge.style.background = '#5B4FE8';
+              shBadge.style.color = '#fff';
+              shBadge.style.fontSize = '9px';
+              shBadge.style.fontWeight = '700';
+              shBadge.style.letterSpacing = '1.5px';
+              shBadge.style.textTransform = 'uppercase';
+              shBadge.style.padding = '2px 6px';
+              shBadge.style.borderRadius = '2px';
+              shBadge.style.marginBottom = '8px';
+              bodyCol.appendChild(shBadge);
+            }
+          }
           var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
           var bodyEl = document.createElement('div');
           bodyEl.className = 'blog-overlay-body';
@@ -4135,7 +4364,7 @@
           for (var j = 0; j < displayItemsForLoop.length; j++) {
             var post = displayItemsForLoop[j];
             var postIndex = isSinglePost ? selectedIndex : items.indexOf(post);
-            var isFeaturedInLayout = !isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && j === 0;
+            var isFeaturedInLayout = !isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && !!featuredPost && post === featuredPost;
             var fiShow = Boolean(fiCfg.show !== false);
             var fiLayout = fiCfg.layoutMode === 'fullBleed' ? 'fullBleed' : fiCfg.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified';
             var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
@@ -4469,7 +4698,7 @@
               titleRow.appendChild(h2);
               var featuredBadge = document.createElement('span');
               featuredBadge.className = 'blog-overlay-featured-badge';
-              featuredBadge.textContent = 'Featured';
+              featuredBadge.textContent = 'FEATURED';
               featuredBadge.style.display = 'inline-flex';
               featuredBadge.style.alignItems = 'center';
               featuredBadge.style.background = '#5B4FE8';
@@ -4848,11 +5077,12 @@
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
 
           if (headerContentCfg && headerContentCfg.show) {
-            var hcModules = Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules : [];
+            var hcModules = Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules.slice() : [];
             if (hcModules.length === 0 && (headerContentCfg.tableOfContents || headerContentCfg.breadcrumbs)) {
               if (headerContentCfg.tableOfContents) hcModules.push('tableOfContents');
               if (headerContentCfg.breadcrumbs) hcModules.push('breadcrumbs');
             }
+            hcModules = self._orderedZoneModules(hcModules, headerContentCfg.moduleOrder);
             self._warnDuplicateValues('header', hcModules);
             var headerHeight = Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48));
             if (hcModules.length > 0) {
@@ -4862,9 +5092,25 @@
               headerEl.style.paddingBottom = '12px';
               headerEl.style.borderBottom = '1px solid #eee';
               headerEl.style.display = 'flex';
-              headerEl.style.flexDirection = 'column';
-              headerEl.style.gap = '16px';
-              headerEl.style.alignItems = 'stretch';
+              var collectionHeaderRow = !isSinglePost;
+              if (collectionHeaderRow) {
+                headerEl.style.flexDirection = 'row';
+                headerEl.style.flexWrap = 'wrap';
+                headerEl.style.alignItems = 'center';
+                headerEl.style.alignContent = 'center';
+                headerEl.style.justifyContent = 'flex-start';
+                headerEl.style.gap = '12px 16px';
+                headerEl.style.width = '100%';
+                headerEl.style.maxWidth = '100%';
+                headerEl.style.boxSizing = 'border-box';
+                headerEl.style.flex = '1 1 100%';
+                headerEl.style.minWidth = '0';
+              } else {
+                headerEl.style.flexDirection = 'column';
+                headerEl.style.flexWrap = 'nowrap';
+                headerEl.style.alignItems = 'stretch';
+                headerEl.style.gap = '16px';
+              }
               headerEl.style.minHeight = headerHeight + 'px';
               for (var hm = 0; hm < hcModules.length; hm++) {
                 var mod = hcModules[hm];
@@ -4962,18 +5208,35 @@
                     breadcrumbEl.appendChild(span);
                   }
                   headerEl.appendChild(breadcrumbEl);
+                  if (collectionHeaderRow) {
+                    breadcrumbEl.style.flex = '1 1 100%';
+                    breadcrumbEl.style.width = '100%';
+                    breadcrumbEl.style.boxSizing = 'border-box';
+                  }
                 } else if (mod === 'tableOfContents' && items.length > 0) {
                   var headerToc = createTocModule(200);
                   if (headerToc) {
                     headerToc.style.position = 'static';
                     headerToc.style.width = 'auto';
                     headerToc.style.display = 'inline-block';
+                    if (collectionHeaderRow) {
+                      headerToc.style.flex = '1 1 100%';
+                      headerToc.style.width = '100%';
+                      headerToc.style.maxWidth = '100%';
+                    }
                     headerEl.appendChild(headerToc);
                   }
                 } else if (mod === 'postSearch' || mod === 'searchPosts') {
                   var searchWrap = document.createElement('div');
-                  searchWrap.style.width = '100%';
-                  searchWrap.style.maxWidth = '320px';
+                  if (collectionHeaderRow) {
+                    searchWrap.style.flex = '0 1 280px';
+                    searchWrap.style.width = 'auto';
+                    searchWrap.style.minWidth = '160px';
+                    searchWrap.style.maxWidth = '320px';
+                  } else {
+                    searchWrap.style.width = '100%';
+                    searchWrap.style.maxWidth = '320px';
+                  }
                   var searchInput = document.createElement('input');
                   searchInput.type = 'text';
                   searchInput.placeholder = 'Search posts…';
@@ -5014,29 +5277,53 @@
                 } else if (mod === 'filterByCategory') {
                   var catMod = self._createFilterByCategoryModule(items, null, false, 'header');
                   if (catMod) {
-                    catMod.style.width = '100%';
-                    catMod.style.minWidth = '0';
+                    if (collectionHeaderRow) {
+                      catMod.style.flex = '1 1 200px';
+                      catMod.style.width = 'auto';
+                      catMod.style.minWidth = '140px';
+                      catMod.style.maxWidth = '100%';
+                    } else {
+                      catMod.style.width = '100%';
+                      catMod.style.minWidth = '0';
+                    }
                     headerEl.appendChild(catMod);
                   }
                 } else if (mod === 'filterByTag') {
                   var tagMod = self._createFilterByTagModule(items, null, false, 'header');
                   if (tagMod) {
-                    tagMod.style.width = '100%';
-                    tagMod.style.minWidth = '0';
+                    if (collectionHeaderRow) {
+                      tagMod.style.flex = '1 1 200px';
+                      tagMod.style.width = 'auto';
+                      tagMod.style.minWidth = '140px';
+                      tagMod.style.maxWidth = '100%';
+                    } else {
+                      tagMod.style.width = '100%';
+                      tagMod.style.minWidth = '0';
+                    }
                     headerEl.appendChild(tagMod);
                   }
                 } else if (mod === 'filterByTagsAndCategories') {
                   var combinedMod = self._createFilterByTagsAndCategoriesModule(items, null, false, 'header');
                   if (combinedMod) {
-                    combinedMod.style.width = '100%';
-                    combinedMod.style.minWidth = '0';
+                    if (collectionHeaderRow) {
+                      combinedMod.style.flex = '1 1 240px';
+                      combinedMod.style.width = 'auto';
+                      combinedMod.style.minWidth = '160px';
+                      combinedMod.style.maxWidth = '100%';
+                    } else {
+                      combinedMod.style.width = '100%';
+                      combinedMod.style.minWidth = '0';
+                    }
                     headerEl.appendChild(combinedMod);
                   }
                 } else if (mod === 'postSort') {
-                  var sortMod = self._createPostSortModule(cfg, 200);
+                  var sortMod = self._createPostSortModule(cfg, 200, true);
                   if (sortMod) {
                     sortMod.style.display = 'inline-block';
-                    sortMod.style.marginRight = '16px';
+                    sortMod.style.marginRight = collectionHeaderRow ? '0' : '16px';
+                    if (collectionHeaderRow) {
+                      sortMod.style.flex = '0 0 auto';
+                    }
                     headerEl.appendChild(sortMod);
                   }
                 } else if (mod === 'emailCapture' && ecCfg) {
@@ -5044,6 +5331,10 @@
                   if (ecHeaderForm) {
                     ecHeaderForm.style.display = 'inline-block';
                     ecHeaderForm.style.minWidth = '200px';
+                    if (collectionHeaderRow) {
+                      ecHeaderForm.style.flex = '1 1 240px';
+                      ecHeaderForm.style.maxWidth = '100%';
+                    }
                     headerEl.appendChild(ecHeaderForm);
                   }
                 } else if (mod === 'leadMagnet' && lmCfg) {
@@ -5051,6 +5342,10 @@
                   if (lmHeaderForm) {
                     lmHeaderForm.style.display = 'inline-block';
                     lmHeaderForm.style.minWidth = '200px';
+                    if (collectionHeaderRow) {
+                      lmHeaderForm.style.flex = '1 1 240px';
+                      lmHeaderForm.style.maxWidth = '100%';
+                    }
                     headerEl.appendChild(lmHeaderForm);
                   }
                 }

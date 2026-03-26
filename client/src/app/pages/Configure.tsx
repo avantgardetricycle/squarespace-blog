@@ -61,6 +61,35 @@ function isPreviewDebugEnabled(): boolean {
   return window.location.search.includes("bbPreviewDebug=1") || sessionStorage.getItem("bbPreviewDebug") === "1";
 }
 
+/** Match renderer.js / blog-preview proxy: Squarespace JSON uses several keys for “featured”. */
+function blogItemLooksSquarespaceFeatured(item: {
+  featured?: unknown;
+  isFeatured?: unknown;
+  Featured?: unknown;
+  starred?: unknown;
+  isStarred?: unknown;
+  pinned?: unknown;
+  isPinned?: unknown;
+  promoted?: unknown;
+  isPromoted?: unknown;
+}): boolean {
+  const truthy = (v: unknown) =>
+    v === true ||
+    v === 1 ||
+    (typeof v === "string" && ["true", "1", "yes"].includes(v.trim().toLowerCase()));
+  return (
+    truthy(item.featured) ||
+    truthy(item.isFeatured) ||
+    truthy(item.Featured) ||
+    truthy(item.starred) ||
+    truthy(item.isStarred) ||
+    truthy(item.pinned) ||
+    truthy(item.isPinned) ||
+    truthy(item.promoted) ||
+    truthy(item.isPromoted)
+  );
+}
+
 export interface BlogAuthorOption {
   id: string;
   name: string;
@@ -195,6 +224,7 @@ export type FeaturedArticlePosition = "header" | "inLayout";
 export interface FeaturedArticleConfig {
   show: boolean;
   position: FeaturedArticlePosition;
+  featuredPostId?: string | null;
 }
 
 /** Map filterByTags + filterByCategories to the actual module ID used by renderer */
@@ -767,10 +797,20 @@ function parseLevelConfig(
   };
   if (level === "collection") {
     const faRaw = raw?.featuredArticle && typeof raw.featuredArticle === "object" ? raw.featuredArticle as Record<string, unknown> : null;
-    (base as CollectionLevelConfig).featuredArticle = faRaw ? {
-      show: Boolean(faRaw.show ?? false),
-      position: (faRaw.position === "inLayout" ? "inLayout" : "header") as FeaturedArticlePosition,
-    } : defaultFeaturedArticle;
+    if (faRaw) {
+      const fa: FeaturedArticleConfig = {
+        show: Boolean(faRaw.show ?? false),
+        position: (faRaw.position === "inLayout" ? "inLayout" : "header") as FeaturedArticlePosition,
+      };
+      if ("featuredPostId" in faRaw) {
+        const v = faRaw.featuredPostId;
+        if (v === null) fa.featuredPostId = null;
+        else if (typeof v === "string" && v.trim()) fa.featuredPostId = v.trim();
+      }
+      (base as CollectionLevelConfig).featuredArticle = fa;
+    } else {
+      (base as CollectionLevelConfig).featuredArticle = defaultFeaturedArticle;
+    }
   }
   if (level === "post") {
     const pb = raw?.progressBar && typeof raw.progressBar === "object" ? raw.progressBar as { show?: boolean; position?: string; thickness?: number; color?: string } : null;
@@ -953,7 +993,9 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
   const gridColsEqual = (a as CollectionLevelConfig).gridColumns === (b as CollectionLevelConfig).gridColumns;
   const faA = (a as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle;
   const faB = (b as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle;
-  const faEqual = faA.show === faB.show && faA.position === faB.position;
+  const faEqual = faA.show === faB.show &&
+    faA.position === faB.position &&
+    faA.featuredPostId === faB.featuredPostId;
   const cmEqual = JSON.stringify((a as CollectionLevelConfig).collectionModules ?? defaultCollectionModules) === JSON.stringify((b as CollectionLevelConfig).collectionModules ?? defaultCollectionModules);
   const pmEqual = JSON.stringify((a as PostLevelConfig).postModules ?? defaultPostModules) === JSON.stringify((b as PostLevelConfig).postModules ?? defaultPostModules);
   const moduleOrderEqual =
@@ -1009,7 +1051,15 @@ export default function Configure() {
   const [saving, setSaving] = useState(false);
   const [copiedSiteKey, setCopiedSiteKey] = useState<string | null>(null);
   const [authors, setAuthors] = useState<BlogAuthorOption[]>([]);
-  const [blogItems, setBlogItems] = useState<{ id: string; title: string; author?: { displayName?: string } }[]>([]);
+  const [blogItems, setBlogItems] = useState<Array<{
+    id?: string;
+    fullUrl?: string;
+    title?: string;
+    featured?: boolean;
+    isFeatured?: boolean;
+    starred?: boolean;
+    author?: { displayName?: string };
+  }>>([]);
   const [newAuthorName, setNewAuthorName] = useState("");
   const [newAuthorImageUrl, setNewAuthorImageUrl] = useState<string | null>(null);
   const [newAuthorBio, setNewAuthorBio] = useState("");
@@ -1220,7 +1270,10 @@ export default function Configure() {
   useEffect(() => {
     if (!effectiveSiteKey || !effectiveSite || configLoading) return;
     Promise.all([
-      fetch(`/api/config/blog-preview/${encodeURIComponent(effectiveSiteKey)}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : null)),
+      fetch(
+        `/api/config/blog-preview/${encodeURIComponent(effectiveSiteKey)}${previewDebugEnabled ? "?bbFeaturedDebug=1" : ""}`,
+        { credentials: "include" }
+      ).then((r) => (r.ok ? r.json() : null)),
       fetch(`/api/blog-authors/${effectiveSiteKey}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])),
     ])
       .then(async ([json, existingAuthors]) => {
@@ -1275,7 +1328,7 @@ export default function Configure() {
         }
       })
       .catch(() => {});
-  }, [effectiveSiteKey, effectiveSite, configLoading]);
+  }, [effectiveSiteKey, effectiveSite, configLoading, previewDebugEnabled]);
 
   const commentSettingsDirty = commentSettings && savedCommentSettings &&
     (commentSettings.commentsEnabled !== savedCommentSettings.commentsEnabled ||
@@ -1294,6 +1347,33 @@ export default function Configure() {
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
+  const getFeaturedPostKey = useCallback((item: { id?: string; fullUrl?: string; title?: string }, idx: number): string => {
+    const key = item.id ?? item.fullUrl ?? item.title;
+    if (typeof key === "string" && key.trim()) return key.trim();
+    return `idx:${idx}`;
+  }, []);
+  const featuredArticleOptions = useMemo(
+    () => blogItems.map((item, idx) => ({
+      value: getFeaturedPostKey(item, idx),
+      label: (item.title && item.title.trim()) ? item.title.trim() : `Untitled post ${idx + 1}`,
+    })),
+    [blogItems, getFeaturedPostKey]
+  );
+  /** When featuredPostId is omitted, renderer uses Squarespace flags; this is the matching option value for the select. */
+  const implicitFeaturedPostKey = useMemo(() => {
+    const idxSq = blogItems.findIndex((item) => blogItemLooksSquarespaceFeatured(item));
+    if (idxSq < 0) return null;
+    return getFeaturedPostKey(blogItems[idxSq], idxSq);
+  }, [blogItems, getFeaturedPostKey]);
+  const featuredPostSelectValue = useMemo(() => {
+    const fpId = (config.collectionConfig.featuredArticle ?? defaultFeaturedArticle).featuredPostId;
+    if (fpId === null) return "__none__";
+    if (typeof fpId === "string" && fpId.trim()) {
+      const idx = blogItems.findIndex((item, i) => getFeaturedPostKey(item, i) === fpId.trim());
+      return idx >= 0 ? getFeaturedPostKey(blogItems[idx], idx) : "__none__";
+    }
+    return implicitFeaturedPostKey ?? "__none__";
+  }, [config.collectionConfig.featuredArticle, blogItems, getFeaturedPostKey, implicitFeaturedPostKey]);
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
@@ -1317,9 +1397,10 @@ export default function Configure() {
       siteKey: effectiveSiteKey ?? undefined,
       siteId: effectiveSite?.id ?? undefined,
       previewSelectedPostIndex,
+      previewFeaturedDebug: previewDebugEnabled,
       configUpdateCallback: (path: string, value: unknown) => updateConfigRef.current(path, value),
     };
-  }, [config, authors, effectiveSiteKey, effectiveSite, previewSelectedPostIndex]);
+  }, [config, authors, effectiveSiteKey, effectiveSite, previewSelectedPostIndex, previewDebugEnabled]);
 
   // Stable signature so preview components reliably detect config changes (avoids stale effect deps)
   const configSignature = useMemo(
@@ -1501,6 +1582,14 @@ export default function Configure() {
     if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
     if (path === "featuredArticle.show" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), show: value as boolean } };
     if (path === "featuredArticle.position" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), position: value as FeaturedArticlePosition } };
+    if (path === "featuredArticle.featuredPostId" && "featuredArticle" in cfg) {
+      const prevFa = { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle) };
+      if (value === undefined) {
+        const { featuredPostId: _omit, ...restFa } = prevFa;
+        return { ...cfg, featuredArticle: restFa };
+      }
+      return { ...cfg, featuredArticle: { ...prevFa, featuredPostId: value as string | null } };
+    }
     if (path.startsWith("collectionModules.") && "collectionModules" in cfg) {
       const cm = { ...(cfg as CollectionLevelConfig).collectionModules } as CollectionModulesConfig;
       if (path === "collectionModules.filter.filterByTags") cm.filter = { ...cm.filter, filterByTags: value as boolean };
@@ -1625,7 +1714,7 @@ export default function Configure() {
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f7f6f3]">
       {/* Configuration Sidebar */}
-      <aside className="w-80 bg-white border-r border-[#e5e4e0] flex flex-col min-h-0 z-10 shadow-sm">
+      <aside className="relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm">
         <div className="p-4 border-b border-[#e5e4e0] space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-[#6b6b6b]">Customizing</Label>
@@ -1743,8 +1832,8 @@ export default function Configure() {
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="p-6 space-y-2">
+        <ScrollArea className="min-h-0 min-w-0 flex-1">
+          <div className="min-w-0 space-y-2 p-6">
                 {configLoading ? (
                   <div className="text-sm text-[#6b6b6b]">Loading settings…</div>
                 ) : (
@@ -1903,7 +1992,7 @@ export default function Configure() {
                     )}
 
                     {selectedLevel === "collection" && (
-                    <div className="border-b border-[#e5e4e0]">
+                    <div className="min-w-0 border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Featured Article</span>
                         <div className="flex items-center gap-1">
@@ -1931,13 +2020,40 @@ export default function Configure() {
                       <Collapsible open={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).show && sectionExpanded.featuredArticle}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-4">
-                            <div className="space-y-2">
+                            <div className="min-w-0 space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Featured post</Label>
+                              <Select
+                                value={featuredPostSelectValue}
+                                onValueChange={(v) => {
+                                  if (v === "__none__") {
+                                    updateLevelConfigPath("featuredArticle.featuredPostId", null);
+                                    return;
+                                  }
+                                  const fpId = ((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).featuredPostId;
+                                  if (fpId === undefined && implicitFeaturedPostKey !== null && v === implicitFeaturedPostKey) {
+                                    return;
+                                  }
+                                  updateLevelConfigPath("featuredArticle.featuredPostId", v);
+                                }}
+                              >
+                                <SelectTrigger className="w-full min-w-0 max-w-full whitespace-normal">
+                                  <SelectValue placeholder="No featured post" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">None</SelectItem>
+                                  {featuredArticleOptions.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="min-w-0 space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Position</Label>
                               <Select
                                 value={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).position}
                                 onValueChange={(v) => updateLevelConfigPath("featuredArticle.position", v as FeaturedArticlePosition)}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger className="w-full min-w-0 max-w-full whitespace-normal">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -2892,10 +3008,13 @@ export default function Configure() {
                                   return [...fromOrder, ...remaining];
                                 })();
                                 const moveModule = (fromIdx: number, toIdx: number) => {
-                                  const valid = order.filter((m) => headerModules.includes(m));
-                                  const [removed] = valid.splice(fromIdx, 1);
-                                  valid.splice(toIdx, 0, removed);
-                                  updateLevelConfigPath("headerContent.moduleOrder", valid);
+                                  // Must reorder the same list as the UI (orderedHeader). Using only `order` filtered
+                                  // by headerModules drops canonical IDs when moduleOrder still has legacy filter ids
+                                  // after a template load — indices then point at the wrong row and a module vanishes.
+                                  const list = orderedHeader.slice();
+                                  const [removed] = list.splice(fromIdx, 1);
+                                  list.splice(toIdx, 0, removed);
+                                  updateLevelConfigPath("headerContent.moduleOrder", list);
                                 };
                                 const handleRemoveHeader = (moduleId: string) => {
                                   if (selectedLevel === "collection") {
@@ -3114,10 +3233,10 @@ export default function Configure() {
                                   return [...fromOrder, ...remaining];
                                 })();
                                 const moveModule = (fromIdx: number, toIdx: number) => {
-                                  const valid = order.filter((m) => footerModules.includes(m));
-                                  const [removed] = valid.splice(fromIdx, 1);
-                                  valid.splice(toIdx, 0, removed);
-                                  updateLevelConfigPath("footerContent.moduleOrder", valid);
+                                  const list = orderedFooter.slice();
+                                  const [removed] = list.splice(fromIdx, 1);
+                                  list.splice(toIdx, 0, removed);
+                                  updateLevelConfigPath("footerContent.moduleOrder", list);
                                 };
                                 const handleRemoveFooter = (moduleId: string) => {
                                   const order = effectiveConfig.footerContent?.moduleOrder ?? [];
@@ -3241,13 +3360,6 @@ export default function Configure() {
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
-                        const moveModule = (fromIdx: number, toIdx: number) => {
-                          const order = [...(cfg.moduleOrder ?? [])];
-                          const valid = order.filter((m) => modules.includes(m));
-                          const [removed] = valid.splice(fromIdx, 1);
-                          valid.splice(toIdx, 0, removed);
-                          updateLevelConfigPath(`${subPath}.moduleOrder`, valid);
-                        };
                         const orderedModules = (() => {
                           const order = cfg.moduleOrder ?? [];
                           const set = new Set(modules);
@@ -3255,6 +3367,12 @@ export default function Configure() {
                           const remaining = modules.filter((m) => !order.includes(m));
                           return [...fromOrder, ...remaining];
                         })();
+                        const moveModule = (fromIdx: number, toIdx: number) => {
+                          const list = orderedModules.slice();
+                          const [removed] = list.splice(fromIdx, 1);
+                          list.splice(toIdx, 0, removed);
+                          updateLevelConfigPath(`${subPath}.moduleOrder`, list);
+                        };
                         const handleDragOver = (e: React.DragEvent) => {
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
@@ -4066,7 +4184,7 @@ export default function Configure() {
       </aside>
 
       {/* Preview Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[#f7f6f3]/50">
+      <main className="isolate flex-1 flex flex-col min-w-0 bg-[#f7f6f3]/50">
         <div className="h-14 border-b border-[#e5e4e0] bg-white px-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-medium text-[#0a0a0a]">Live Preview</span>

@@ -3,6 +3,34 @@ import prisma from '../db/index.js'
 
 const router = Router()
 
+/** Merged onto DB template rows when serving Showcase so Configure/preview match product intent. */
+const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
+  showAuthor: true,
+  showReadingTime: true,
+  featuredArticle: { show: true, position: 'inLayout' as const },
+  headerContent: {
+    show: true,
+    modules: ['filterByTagsAndCategories', 'searchPosts'],
+    moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+    height: 48
+  },
+  collectionModules: {
+    filter: { filterByTags: true, filterByCategories: true },
+    sort: {},
+    search: {},
+    recentPosts: {},
+    emailCapture: {
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      resourceTitle: '',
+      description: '',
+      buttonText: 'Get it free'
+    }
+  }
+}
+
 const CANONICAL_PUBLISHER_POST_TEMPLATE = {
   showDate: true,
   showAuthor: true,
@@ -394,6 +422,18 @@ function normalizeTemplateForResponse (
       postConfig: {
         ...existing,
         ...CANONICAL_STORY_POST_TEMPLATE
+      }
+    }
+  }
+  if (level === 'collection' && template.templateKey === 'showcase') {
+    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
+      ? template.collectionConfig as Record<string, unknown>
+      : {}
+    return {
+      ...template,
+      collectionConfig: {
+        ...existing,
+        ...CANONICAL_SHOWCASE_COLLECTION_TEMPLATE
       }
     }
   }
