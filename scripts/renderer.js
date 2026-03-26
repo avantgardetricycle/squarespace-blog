@@ -144,6 +144,9 @@
     _tocScrollHandler: null,
     _tocScrollTarget: null,
     _renderSeq: 0,
+    _editorModeObserver: null,
+    _suppressedByEditorMode: false,
+    _originalRootChildren: null,
 
     _isDebugEnabled: function() {
       try {
@@ -162,6 +165,90 @@
 
     _featuredDebugEnabled: function() {
       return Boolean(this.config && this.config.previewFeaturedDebug) || this._isDebugEnabled();
+    },
+
+    _hasEditClass: function(el) {
+      if (!el || !el.classList) return false;
+      return el.classList.contains('sqs-edit-mode-active')
+        || el.classList.contains('sqs-edit-mode')
+        || el.classList.contains('sqs-site-styles-editing');
+    },
+
+    _isSquarespaceEditingUi: function() {
+      if (this._previewMode || (this.config && this.config.previewMode) || this._bbPreview || this._hasBbPreviewParam()) return false;
+      if (this._hasEditClass(document.documentElement) || this._hasEditClass(document.body)) return true;
+      var markers = [
+        'iframe#sqs-site-frame',
+        '.sqs-edit-mode',
+        '.sqs-editor-window',
+        '[data-sqs-editor]',
+        '[data-sqs-edit-mode]'
+      ];
+      for (var i = 0; i < markers.length; i++) {
+        try {
+          if (document.querySelector(markers[i])) return true;
+        } catch (e) {}
+      }
+      return false;
+    },
+
+    _removeOverlayNodes: function() {
+      var root = this._root || (this.config && this.config.rootEl) || findBlogContainer() || document.getElementById('blogga-blogga-root');
+      var removeIn = function(node) {
+        if (!node || !node.querySelectorAll) return;
+        var overlays = node.querySelectorAll('#blog-overlay-list, #blog-overlay-progress');
+        for (var i = 0; i < overlays.length; i++) {
+          if (overlays[i] && overlays[i].parentNode) overlays[i].parentNode.removeChild(overlays[i]);
+        }
+      };
+      removeIn(root);
+      if (!root || root !== document) removeIn(document);
+    },
+
+    _restoreOriginalRootChildren: function() {
+      var root = this._root;
+      if (!root || !this._originalRootChildren || this._originalRootChildren.length === 0) return;
+      var hasNonOverlayChildren = false;
+      for (var i = 0; i < root.childNodes.length; i++) {
+        var c = root.childNodes[i];
+        if (c && c.id !== 'blog-overlay-list' && c.id !== 'blog-overlay-progress') {
+          hasNonOverlayChildren = true;
+          break;
+        }
+      }
+      if (hasNonOverlayChildren) return;
+      for (var j = 0; j < this._originalRootChildren.length; j++) {
+        var n = this._originalRootChildren[j];
+        if (n && !n.parentNode) root.appendChild(n);
+      }
+    },
+
+    _onEditorModeChange: function() {
+      if (this._isSquarespaceEditingUi()) {
+        this._suppressedByEditorMode = true;
+        this._removeOverlayNodes();
+        this._restoreOriginalRootChildren();
+        return;
+      }
+      if (this._suppressedByEditorMode) {
+        this._suppressedByEditorMode = false;
+        if (this.items.length > 0) this._renderContent(this.items);
+        else this.render();
+      }
+    },
+
+    _startEditorModeObserver: function() {
+      if (this._editorModeObserver || this._previewMode || this._bbPreview) return;
+      var self = this;
+      this._editorModeObserver = new MutationObserver(function() {
+        self._onEditorModeChange();
+      });
+      if (document.documentElement) {
+        this._editorModeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      }
+      if (document.body) {
+        this._editorModeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      }
     },
 
     _truthyFeaturedFlag: function(v) {
@@ -481,9 +568,13 @@
       this.config = config || {};
       var previewMode = Boolean(this.config.previewMode);
       var bbPreview = this._hasBbPreviewParam();
+      this._previewMode = previewMode;
+      this._bbPreview = bbPreview;
 
-      if (!previewMode && document.body && document.body.classList && document.body.classList.contains('sqs-edit-mode-active')) {
+      if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
+        this._suppressedByEditorMode = true;
+        this._startEditorModeObserver();
         return;
       }
 
@@ -502,8 +593,8 @@
         return;
       }
       this._root = root;
-      this._previewMode = previewMode;
-      this._bbPreview = bbPreview;
+      this._startEditorModeObserver();
+      this._suppressedByEditorMode = false;
       console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
       this._debugLog('init', {
         previewMode: previewMode,
@@ -2490,6 +2581,14 @@
     render: function() {
       var self = this;
       var previewMode = Boolean(this.config && this.config.previewMode);
+      if (!previewMode && !this._hasBbPreviewParam() && this._isSquarespaceEditingUi()) {
+        this._suppressedByEditorMode = true;
+        this._removeOverlayNodes();
+        this._restoreOriginalRootChildren();
+        console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
+        return;
+      }
+      this._suppressedByEditorMode = false;
 
       if (!previewMode) {
         var blogPath = this.config && this.config.blogPath;
@@ -2799,6 +2898,10 @@
         if (child && child.id !== 'blog-overlay-list' && child.id !== 'blog-overlay-progress') {
           toRemove.push(child);
         }
+      }
+      if (!this._originalRootChildren) this._originalRootChildren = [];
+      if (this._originalRootChildren.length === 0 && toRemove.length > 0) {
+        this._originalRootChildren = toRemove.slice();
       }
       for (var r = 0; r < toRemove.length; r++) {
         root.removeChild(toRemove[r]);
