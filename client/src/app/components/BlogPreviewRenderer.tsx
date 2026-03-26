@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-03-25-featured-inlayout-v3";
+const RENDERER_VERSION = "2026-03-25-footer-email-capture-v6";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {

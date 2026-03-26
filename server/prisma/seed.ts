@@ -173,8 +173,35 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'grid',
         gridColumns: 3,
-        headerContent: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], height: 48 },
-        rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 240, spaceAbove: 0, sticky: true },
+        pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        collectionModules: {
+          filter: { filterByTags: true, filterByCategories: true },
+          sort: {},
+          search: {},
+          recentPosts: {},
+          emailCapture: {
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
+        },
+        headerContent: {
+          show: true,
+          modules: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
+          moduleOrder: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
+          height: 48
+        },
+        footerContent: {
+          show: true,
+          modules: ['emailCapture'],
+          moduleOrder: ['emailCapture'],
+          height: 48,
+          contentAlignment: 'left',
+          leftPadding: 0,
+          rightPadding: 0
+        },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
         featuredArticle: { show: true, position: 'header' }
       },

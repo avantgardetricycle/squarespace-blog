@@ -230,11 +230,9 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
                 <div className="text-white/80 text-[10px]">By Author · Mar 7 · 8 min</div>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap border-b border-[#e5e4e0] pb-2">
-              <span className="text-[11px] font-medium text-[#111] px-2 py-1 border-b-2 border-[#111] -mb-px">All</span>
-              <span className={cn(textMuted, "px-2 py-1")}>Category</span>
-              <span className={cn(textMuted, "px-2 py-1")}>Tags</span>
-              <span className={cn(textMuted, "text-[10px]")}>Sort ▾</span>
+            <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e4e0] pb-2">
+              <FilterBarTabs />
+              <span className={cn(textMuted, "text-[10px] shrink-0")}>Sort ▾</span>
               <SearchBar />
             </div>
           </div>
@@ -243,6 +241,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
             <PostCardMini title="Quiet Automation Tools Saving Time" excerpt="Unglamorous workflows." compact />
             <PostCardMini title="Productivity Industrial Complex" excerpt="We're working more hours." compact />
           </div>
+          <InfiniteScrollHint />
           <EmailCaptureFooter />
         </div>
       );

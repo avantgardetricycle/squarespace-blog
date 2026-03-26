@@ -3,6 +3,58 @@ import prisma from '../db/index.js'
 
 const router = Router()
 
+/** Merged onto DB template rows when serving Masthead. */
+const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
+  pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: true
+  },
+  rightSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: true
+  },
+  collectionModules: {
+    filter: { filterByTags: true, filterByCategories: true },
+    sort: {},
+    search: {},
+    recentPosts: {},
+    emailCapture: {
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      resourceTitle: '',
+      description: '',
+      buttonText: 'Get it free'
+    }
+  },
+  headerContent: {
+    show: true,
+    modules: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
+    moduleOrder: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
+    height: 48
+  },
+  footerContent: {
+    show: true,
+    modules: ['emailCapture'],
+    moduleOrder: ['emailCapture'],
+    height: 48,
+    contentAlignment: 'left' as const,
+    leftPadding: 0,
+    rightPadding: 0
+  },
+  featuredArticle: { show: true, position: 'header' as const }
+}
+
 /** Merged onto DB template rows when serving Showcase so Configure/preview match product intent. */
 const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
   showAuthor: true,
@@ -422,6 +474,18 @@ function normalizeTemplateForResponse (
       postConfig: {
         ...existing,
         ...CANONICAL_STORY_POST_TEMPLATE
+      }
+    }
+  }
+  if (level === 'collection' && template.templateKey === 'masthead') {
+    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
+      ? template.collectionConfig as Record<string, unknown>
+      : {}
+    return {
+      ...template,
+      collectionConfig: {
+        ...existing,
+        ...CANONICAL_MASTHEAD_COLLECTION_TEMPLATE
       }
     }
   }

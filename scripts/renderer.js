@@ -3144,7 +3144,12 @@
         }
         featuredPost = featuredIdx >= 0 ? featuredPool[featuredIdx] : null;
         if (faCfg.position === 'header' && featuredPost) {
-          displayItemsForLoop = displayItems.filter(function(p) { return p !== featuredPost; });
+          var headerFpK = displayPostKey(featuredPost);
+          displayItemsForLoop = displayItems.filter(function(p) {
+            if (p === featuredPost) return false;
+            if (headerFpK && displayPostKey(p) === headerFpK) return false;
+            return true;
+          });
         } else if (faCfg.position === 'inLayout' && featuredPost) {
           var inLayoutList = displayItems.slice();
           var fpK = displayPostKey(featuredPost);
@@ -3345,7 +3350,12 @@
 
           heroInner.appendChild(heroContent);
           heroLink.appendChild(heroInner);
-          main.insertBefore(heroLink, main.firstChild);
+          if (!isSinglePost && headerZoneEl && headerModulesHostEl) {
+            heroLink.style.marginTop = '12px';
+            headerZoneEl.insertBefore(heroLink, headerModulesHostEl);
+          } else {
+            main.insertBefore(heroLink, main.firstChild);
+          }
       }
 
       function createSidebarSection(headerText, content, styled) {
@@ -3709,8 +3719,153 @@
         el.appendChild(halfCell(next, 'next'));
         return el;
       }
-      function createEmailCaptureForm(ecCfg, width, hideHeader) {
-        if (!ecCfg || !ecCfg.header) return null;
+      function createEmailCaptureForm(ecCfg, width, hideHeader, placement) {
+        if (!ecCfg) return null;
+        if (placement !== 'footer' && !ecCfg.header) return null;
+
+        function wireEmailCaptureSubmit(emailInput, btn, msgEl) {
+          btn.onclick = function() {
+            var email = (emailInput.value || '').trim().toLowerCase();
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+              msgEl.textContent = 'Please enter a valid email address.';
+              msgEl.style.color = '#dc2626';
+              return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Submitting…';
+            msgEl.textContent = '';
+            var baseUrl = (self.config && self.config.baseUrl) || '';
+            var siteKey = (self.config && self.config.siteKey) || '';
+            if (!baseUrl || !siteKey) {
+              msgEl.textContent = 'Configuration error. Please try again later.';
+              msgEl.style.color = '#dc2626';
+              btn.disabled = false;
+              btn.textContent = ecCfg.buttonText || 'Subscribe';
+              return;
+            }
+            var url = baseUrl.replace(/\/+$/, '') + '/api/capture';
+            fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email }),
+              credentials: 'omit'
+            }).then(function(res) {
+              return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+            }).catch(function() { return { ok: false, data: { error: 'Network error' } }; }).then(function(result) {
+              btn.disabled = false;
+              btn.textContent = ecCfg.buttonText || 'Subscribe';
+              if (result.ok) {
+                msgEl.textContent = 'Thanks for subscribing!';
+                msgEl.style.color = '#10B981';
+                emailInput.value = '';
+              } else {
+                msgEl.textContent = (result.data && result.data.error) || 'Something went wrong. Please try again.';
+                msgEl.style.color = '#dc2626';
+              }
+            });
+          };
+        }
+
+        if (placement === 'footer') {
+          var headerText = ecCfg.header || 'Subscribe to our newsletter';
+          var outer = document.createElement('div');
+          outer.className = 'blog-overlay-email-capture blog-overlay-email-capture-footer';
+          outer.style.width = '100%';
+          outer.style.maxWidth = (typeof width === 'number' ? width : parseInt(width, 10) || 720) + 'px';
+          outer.style.boxSizing = 'border-box';
+          outer.style.border = '1px solid #e5e4e0';
+          outer.style.borderRadius = '10px';
+          outer.style.padding = '16px 20px';
+          outer.style.background = '#fff';
+          outer.style.display = 'flex';
+          outer.style.flexDirection = 'column';
+          outer.style.gap = '10px';
+
+          var row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.flexWrap = 'wrap';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.gap = '16px';
+          row.style.width = '100%';
+
+          var leftCol = document.createElement('div');
+          leftCol.style.flex = '1 1 200px';
+          leftCol.style.minWidth = '0';
+          var titleFooter = document.createElement('div');
+          titleFooter.textContent = headerText;
+          titleFooter.style.fontSize = '0.95rem';
+          titleFooter.style.fontWeight = '600';
+          titleFooter.style.color = '#1a1a1a';
+          titleFooter.style.lineHeight = '1.3';
+          leftCol.appendChild(titleFooter);
+          if (ecCfg.byline && ecCfg.byline.trim()) {
+            var bylineFooter = document.createElement('div');
+            bylineFooter.textContent = ecCfg.byline;
+            bylineFooter.style.fontSize = '0.85rem';
+            bylineFooter.style.color = '#666';
+            bylineFooter.style.marginTop = '6px';
+            bylineFooter.style.lineHeight = '1.45';
+            leftCol.appendChild(bylineFooter);
+          }
+          row.appendChild(leftCol);
+
+          var rightCol = document.createElement('div');
+          rightCol.style.display = 'flex';
+          rightCol.style.flexDirection = 'row';
+          rightCol.style.alignItems = 'center';
+          rightCol.style.justifyContent = 'flex-end';
+          rightCol.style.flexWrap = 'wrap';
+          rightCol.style.gap = '8px';
+          rightCol.style.flex = '1 1 260px';
+          rightCol.style.minWidth = '0';
+
+          var emailInputF = document.createElement('input');
+          emailInputF.type = 'email';
+          emailInputF.name = 'bb-newsletter-email-footer';
+          emailInputF.id = 'bb-newsletter-email-footer';
+          emailInputF.setAttribute('autocomplete', 'section-newsletter email');
+          emailInputF.placeholder = 'you@example.com';
+          emailInputF.setAttribute('aria-label', 'Email address');
+          emailInputF.style.padding = '8px 12px';
+          emailInputF.style.fontSize = '0.9rem';
+          emailInputF.style.border = '1px solid #ddd';
+          emailInputF.style.borderRadius = '6px';
+          emailInputF.style.outline = 'none';
+          emailInputF.style.boxSizing = 'border-box';
+          emailInputF.style.flex = '1 1 160px';
+          emailInputF.style.minWidth = '140px';
+          emailInputF.style.maxWidth = '320px';
+          var btnF = document.createElement('button');
+          btnF.textContent = ecCfg.buttonText || 'Subscribe';
+          btnF.type = 'button';
+          btnF.style.padding = '8px 16px';
+          btnF.style.fontSize = '0.9rem';
+          btnF.style.fontWeight = '500';
+          btnF.style.background = '#5B4FE8';
+          btnF.style.color = 'white';
+          btnF.style.border = 'none';
+          btnF.style.borderRadius = '6px';
+          btnF.style.cursor = 'pointer';
+          btnF.style.flexShrink = '0';
+          btnF.onmouseover = function() { btnF.style.background = '#4a3fd4'; };
+          btnF.onmouseout = function() { btnF.style.background = '#5B4FE8'; };
+          rightCol.appendChild(emailInputF);
+          rightCol.appendChild(btnF);
+          row.appendChild(rightCol);
+
+          outer.appendChild(row);
+
+          var msgFooter = document.createElement('div');
+          msgFooter.style.fontSize = '0.85rem';
+          msgFooter.style.textAlign = 'right';
+          msgFooter.style.width = '100%';
+          outer.appendChild(msgFooter);
+
+          wireEmailCaptureSubmit(emailInputF, btnF, msgFooter);
+          return outer;
+        }
+
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-email-capture';
         wrap.style.width = '100%';
@@ -3768,46 +3923,7 @@
         form.appendChild(btn);
         form.appendChild(msgEl);
         wrap.appendChild(form);
-        btn.onclick = function() {
-          var email = (emailInput.value || '').trim().toLowerCase();
-          if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            msgEl.textContent = 'Please enter a valid email address.';
-            msgEl.style.color = '#dc2626';
-            return;
-          }
-          btn.disabled = true;
-          btn.textContent = 'Submitting…';
-          msgEl.textContent = '';
-          var baseUrl = (self.config && self.config.baseUrl) || '';
-          var siteKey = (self.config && self.config.siteKey) || '';
-          if (!baseUrl || !siteKey) {
-            msgEl.textContent = 'Configuration error. Please try again later.';
-            msgEl.style.color = '#dc2626';
-            btn.disabled = false;
-            btn.textContent = ecCfg.buttonText || 'Subscribe';
-            return;
-          }
-          var url = baseUrl.replace(/\/+$/, '') + '/api/capture';
-          fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email }),
-            credentials: 'omit'
-          }).then(function(res) {
-            return res.json().then(function(data) { return { ok: res.ok, data: data }; });
-          }).catch(function() { return { ok: false, data: { error: 'Network error' } }; }).then(function(result) {
-            btn.disabled = false;
-            btn.textContent = ecCfg.buttonText || 'Subscribe';
-            if (result.ok) {
-              msgEl.textContent = 'Thanks for subscribing!';
-              msgEl.style.color = '#10B981';
-              emailInput.value = '';
-            } else {
-              msgEl.textContent = (result.data && result.data.error) || 'Something went wrong. Please try again.';
-              msgEl.style.color = '#dc2626';
-            }
-          });
-        };
+        wireEmailCaptureSubmit(emailInput, btn, msgEl);
         return wrap;
       }
       function createLeadMagnetForm(lmCfg, width, hideHeader) {
@@ -4526,9 +4642,15 @@
               fiWrap.className = 'blog-overlay-featured-image';
               if (fiLayout === 'fullBleed') {
                 fiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
-                fiWrap.style.marginLeft = '-16px';
-                fiWrap.style.marginRight = '-16px';
-                fiWrap.style.width = 'calc(100% + 32px)';
+                if (!isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
+                  fiWrap.style.marginLeft = '0';
+                  fiWrap.style.marginRight = '0';
+                  fiWrap.style.width = '100%';
+                } else {
+                  fiWrap.style.marginLeft = '-16px';
+                  fiWrap.style.marginRight = '-16px';
+                  fiWrap.style.width = 'calc(100% + 32px)';
+                }
               } else if (isSideBySide) {
                 fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
                 fiWrap.style.minWidth = '0';
@@ -4952,6 +5074,9 @@
             paginationEl.style.paddingTop = '20px';
             paginationEl.style.borderTop = '1px solid #eee';
             if (paginationMode === 'infiniteScroll') {
+              paginationEl.style.width = '100%';
+              paginationEl.style.gridColumn = '1 / -1';
+              paginationEl.style.boxSizing = 'border-box';
               var loadMoreBtn = document.createElement('button');
               loadMoreBtn.type = 'button';
               loadMoreBtn.textContent = 'Load more';
@@ -5416,8 +5541,7 @@
                     fmodEl.style.alignSelf = 'center';
                   }
                 } else if (fmod === 'emailCapture' && ecCfg) {
-                  var ecFooterForm = createEmailCaptureForm(ecCfg, 220);
-                  fmodEl = ecFooterForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecFooterForm) : null;
+                  fmodEl = createEmailCaptureForm(ecCfg, 720, true, 'footer');
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
                     fmodEl.style.maxWidth = footerModMaxPx;
