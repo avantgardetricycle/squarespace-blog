@@ -1073,6 +1073,9 @@ export default function Configure() {
   const [authorDropdownOpen, setAuthorDropdownOpen] = useState(false);
   const [installationModalOpen, setInstallationModalOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  /** Cached API templates for comparing config to applied template (name + equality). */
+  const [templateCatalogCollection, setTemplateCatalogCollection] = useState<Template[]>([]);
+  const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
   const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
   const [commentSettings, setCommentSettings] = useState<{
@@ -1342,6 +1345,60 @@ export default function Configure() {
      commentSettings.sortOrder !== savedCommentSettings.sortOrder);
   const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty;
   const effectiveConfig = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
+
+  useEffect(() => {
+    if (!me || me.sites.length === 0) return;
+    let cancelled = false;
+    Promise.all([
+      fetch("/api/templates?level=collection", { credentials: "include" }).then((r) =>
+        r.ok ? r.json() : { templates: [] }
+      ),
+      fetch("/api/templates?level=post", { credentials: "include" }).then((r) =>
+        r.ok ? r.json() : { templates: [] }
+      ),
+    ])
+      .then(([coll, post]) => {
+        if (cancelled) return;
+        setTemplateCatalogCollection(Array.isArray(coll?.templates) ? coll.templates : []);
+        setTemplateCatalogPost(Array.isArray(post?.templates) ? post.templates : []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTemplateCatalogCollection([]);
+          setTemplateCatalogPost([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [me]);
+
+  const unmodifiedTemplateInUse = useMemo((): { name: string; kind: "collection" | "post" } | null => {
+    if (selectedLevel === "collection") {
+      const tid = config.collectionTemplateId;
+      if (!tid) return null;
+      const t = templateCatalogCollection.find((x) => x.id === tid);
+      if (!t?.collectionConfig || typeof t.collectionConfig !== "object") return null;
+      const parsed = parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection");
+      if (!levelConfigsEqual(config.collectionConfig, parsed)) return null;
+      return { name: t.name, kind: "collection" };
+    }
+    const tid = config.postTemplateId;
+    if (!tid) return null;
+    const t = templateCatalogPost.find((x) => x.id === tid);
+    if (!t?.postConfig || typeof t.postConfig !== "object") return null;
+    const parsed = parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+    if (!levelConfigsEqual(config.postConfig, parsed)) return null;
+    return { name: t.name, kind: "post" };
+  }, [
+    selectedLevel,
+    config.collectionConfig,
+    config.collectionTemplateId,
+    config.postConfig,
+    config.postTemplateId,
+    templateCatalogCollection,
+    templateCatalogPost,
+  ]);
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
@@ -1764,6 +1821,12 @@ export default function Configure() {
             >
               Use a template
             </Button>
+            {unmodifiedTemplateInUse && (
+              <p className="text-xs text-[#6b6b6b] leading-snug">
+                {unmodifiedTemplateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
+                <span className="font-medium text-[#0a0a0a]">{unmodifiedTemplateInUse.name}</span>
+              </p>
+            )}
           </div>
           {effectiveSiteKey && (
             <Dialog open={installationModalOpen} onOpenChange={setInstallationModalOpen}>

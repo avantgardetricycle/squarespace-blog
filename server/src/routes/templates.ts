@@ -5,6 +5,7 @@ const router = Router()
 
 /** Merged onto DB template rows when serving Masthead. */
 const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
+  gridColumns: 3 as const,
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
@@ -55,8 +56,15 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   featuredArticle: { show: true, position: 'header' as const }
 }
 
+/** Merged onto DB template rows when serving Editorial (brick / magazine layout). */
+const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
+  collectionLayout: 'editorial' as const,
+  featuredArticle: { show: true, position: 'inLayout' as const }
+}
+
 /** Merged onto DB template rows when serving Showcase so Configure/preview match product intent. */
 const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
+  collectionLayout: 'showcase' as const,
   showAuthor: true,
   showReadingTime: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
@@ -81,6 +89,64 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
       buttonText: 'Get it free'
     }
   }
+}
+
+/** Merged onto DB template rows when serving Digest. */
+const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
+  featuredArticle: { show: true, position: 'inLayout' as const },
+  pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: true
+  },
+  rightSidebar: {
+    show: true,
+    modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
+    moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
+    width: 280,
+    spaceAbove: 0,
+    sticky: true
+  },
+  headerContent: {
+    show: true,
+    modules: ['filterByTagsAndCategories', 'searchPosts'],
+    moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+    height: 48
+  },
+  footerContent: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    height: 48,
+    contentAlignment: 'left' as const,
+    leftPadding: 0,
+    rightPadding: 0
+  },
+  collectionModules: {
+    filter: { filterByTags: true, filterByCategories: true },
+    sort: {},
+    search: {},
+    recentPosts: {},
+    emailCapture: {
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      resourceTitle: '',
+      description: '',
+      buttonText: 'Get it free'
+    }
+  }
+}
+
+/** Merged onto DB template rows when serving Newsroom. */
+const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
+  showReadingTime: true,
+  featuredArticle: { show: true, position: 'inLayout' as const }
 }
 
 const CANONICAL_PUBLISHER_POST_TEMPLATE = {
@@ -489,6 +555,18 @@ function normalizeTemplateForResponse (
       }
     }
   }
+  if (level === 'collection' && template.templateKey === 'editorial') {
+    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
+      ? template.collectionConfig as Record<string, unknown>
+      : {}
+    return {
+      ...template,
+      collectionConfig: {
+        ...existing,
+        ...CANONICAL_EDITORIAL_COLLECTION_TEMPLATE
+      }
+    }
+  }
   if (level === 'collection' && template.templateKey === 'showcase') {
     const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
       ? template.collectionConfig as Record<string, unknown>
@@ -498,6 +576,30 @@ function normalizeTemplateForResponse (
       collectionConfig: {
         ...existing,
         ...CANONICAL_SHOWCASE_COLLECTION_TEMPLATE
+      }
+    }
+  }
+  if (level === 'collection' && template.templateKey === 'digest') {
+    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
+      ? template.collectionConfig as Record<string, unknown>
+      : {}
+    return {
+      ...template,
+      collectionConfig: {
+        ...existing,
+        ...CANONICAL_DIGEST_COLLECTION_TEMPLATE
+      }
+    }
+  }
+  if (level === 'collection' && template.templateKey === 'newsroom') {
+    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
+      ? template.collectionConfig as Record<string, unknown>
+      : {}
+    return {
+      ...template,
+      collectionConfig: {
+        ...existing,
+        ...CANONICAL_NEWSROOM_COLLECTION_TEMPLATE
       }
     }
   }

@@ -211,15 +211,16 @@ async function main() {
       templateKey: 'newsroom',
       level: 'collection',
       name: 'The Newsroom',
-      description: 'List layout with prominent search and filter tabs.',
+      description: 'List layout with in-layout featured post, search, filters, and sort.',
       collectionConfig: {
         ...baseCollectionConfig,
         collectionLayout: 'listRows',
+        showReadingTime: true,
         headerContent: { show: true, modules: ['filterByTagsAndCategories', 'searchPosts', 'postSort'], height: 48 },
         leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 },
-        featuredArticle: { show: false, position: 'header' }
+        featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'newsroom'
     },
@@ -232,7 +233,42 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'digest',
         gridColumns: 2,
-        rightSidebar: { show: true, modules: ['searchPosts', 'filterByCategory', 'filterByTag', 'postSort'], width: 280, spaceAbove: 0, sticky: true },
+        pagination: { show: true, mode: 'pages', postsPerPage: 10 },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        rightSidebar: {
+          show: true,
+          modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
+          moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
+          width: 280,
+          spaceAbove: 0,
+          sticky: true
+        },
+        collectionModules: {
+          filter: { filterByTags: true, filterByCategories: true },
+          sort: {},
+          search: {},
+          recentPosts: {},
+          emailCapture: {
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
+        },
+        headerContent: {
+          show: true,
+          modules: ['filterByTagsAndCategories', 'searchPosts'],
+          moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+          height: 48
+        },
+        footerContent: {
+          show: false,
+          modules: [],
+          moduleOrder: [],
+          height: 48,
+          contentAlignment: 'left',
+          leftPadding: 0,
+          rightPadding: 0
+        },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 },
         featuredArticle: { show: true, position: 'inLayout' }
       },

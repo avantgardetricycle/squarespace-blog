@@ -2952,6 +2952,7 @@
       main.className = 'blog-overlay-posts';
       main.style.flex = '1';
       main.style.minWidth = '0';
+      var collectionPaginationEl = null;
       var mainRowEl = document.createElement('div');
       mainRowEl.className = 'blog-overlay-main-row';
       mainRowEl.style.display = 'flex';
@@ -3002,21 +3003,42 @@
       footerZoneEl.style.zIndex = '10';
       footerZoneEl.style.width = '100%';
 
-      var collectionLayout = !isSinglePost && ['grid', 'listRows', 'editorial', 'showcase', 'digest'].indexOf(cfg.collectionLayout) >= 0 ? cfg.collectionLayout : 'grid';
-      var gridCols = (collectionLayout === 'grid' || collectionLayout === 'digest') ? 2 : 3;
+      /* Collection post list: one branch per layout — do not combine grid/digest with showcase/listRows/editorial. */
+      var layoutModeKeys = ['grid', 'listRows', 'editorial', 'showcase', 'digest'];
+      var collectionLayoutRaw = cfg.collectionLayout;
+      if ((collectionLayoutRaw == null || collectionLayoutRaw === '') && baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' && baseCfg.collectionConfig.collectionLayout) {
+        collectionLayoutRaw = baseCfg.collectionConfig.collectionLayout;
+      }
+      if (typeof collectionLayoutRaw === 'string') collectionLayoutRaw = collectionLayoutRaw.trim().toLowerCase();
+      var collectionLayout = !isSinglePost && layoutModeKeys.indexOf(collectionLayoutRaw) >= 0 ? collectionLayoutRaw : 'grid';
+      var parsedGridCols = parseInt(cfg.gridColumns, 10);
+      var gridColsFromConfig = (parsedGridCols === 2 || parsedGridCols === 3) ? parsedGridCols : null;
+      var gridColsDigestOrGrid = gridColsFromConfig != null
+        ? gridColsFromConfig
+        : (collectionLayout === 'digest' ? 2 : 3);
       if (isSinglePost) {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
+        main.style.alignItems = 'stretch';
         main.style.gap = '0';
+        main.style.gridTemplateColumns = '';
       } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
         main.style.display = 'grid';
-        main.style.gridTemplateColumns = 'repeat(' + gridCols + ', 1fr)';
+        main.style.gridTemplateColumns = 'repeat(' + gridColsDigestOrGrid + ', 1fr)';
         main.style.gap = '24px';
-      }
-      if (collectionLayout === 'showcase' && !isSinglePost) {
+      } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
+        main.style.alignItems = 'stretch';
         main.style.gap = '0';
+        main.style.gridTemplateColumns = '';
+      } else {
+        /* listRows, editorial, etc. — single column of sections; editorial rows are their own grids. */
+        main.style.display = 'flex';
+        main.style.flexDirection = 'column';
+        main.style.alignItems = 'stretch';
+        main.style.gap = '0';
+        main.style.gridTemplateColumns = '';
       }
       if (!isSinglePost) {
         var blogMeta = this._blogMeta || {};
@@ -4259,13 +4281,18 @@
           row.style.gridTemplateRows = '1fr';
           row.style.gap = '2px';
           row.style.marginBottom = (bi + batchSize < posts.length ? '2px' : '24px');
-          row.style.aspectRatio = '2/1';
-          row.style.minHeight = '0';
+          row.style.width = '100%';
+          row.style.maxWidth = '100%';
+          row.style.boxSizing = 'border-box';
+          row.style.aspectRatio = '2 / 1';
+          row.style.minHeight = '220px';
           var stack = document.createElement('div');
-          stack.style.display = 'flex';
-          stack.style.flexDirection = 'column';
+          stack.style.display = 'grid';
+          stack.style.gridTemplateRows = '1fr 1fr';
           stack.style.gap = '2px';
           stack.style.minHeight = '0';
+          stack.style.height = '100%';
+          stack.style.alignSelf = 'stretch';
           var bigPost = batch[0];
           var smallPosts = batch.slice(1);
           var makeEditorialCard = function(p, isLarge) {
@@ -4282,7 +4309,6 @@
             link.style.width = '100%';
             link.style.height = '100%';
             link.style.minHeight = '0';
-            if (!isLarge) link.style.flex = '1';
             var bg = document.createElement('div');
             bg.style.position = 'absolute';
             bg.style.inset = '0';
@@ -4381,6 +4407,10 @@
           card.style.color = 'inherit';
           card.style.marginBottom = '48px';
           card.style.gridTemplateColumns = '1fr';
+          card.style.width = '100%';
+          card.style.maxWidth = '100%';
+          card.style.boxSizing = 'border-box';
+          card.style.alignSelf = 'stretch';
           if (navbarOffset > 0) card.style.scrollMarginTop = (navbarOffset + 8) + 'px';
           if (displayIdx >= 0) card.setAttribute('data-display-index', String(displayIdx));
           var bodyCol = document.createElement('div');
@@ -4409,6 +4439,9 @@
               shBadge.style.padding = '2px 6px';
               shBadge.style.borderRadius = '2px';
               shBadge.style.marginBottom = '8px';
+              shBadge.style.alignSelf = 'flex-start';
+              shBadge.style.width = 'fit-content';
+              shBadge.style.maxWidth = '100%';
               bodyCol.appendChild(shBadge);
             }
           }
@@ -4480,7 +4513,9 @@
           for (var j = 0; j < displayItemsForLoop.length; j++) {
             var post = displayItemsForLoop[j];
             var postIndex = isSinglePost ? selectedIndex : items.indexOf(post);
-            var isFeaturedInLayout = !isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && !!featuredPost && post === featuredPost;
+            var featLayoutKey = featuredPost ? displayPostKey(featuredPost) : null;
+            var postLayoutKey = displayPostKey(post);
+            var isFeaturedInLayout = !isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && !!featuredPost && (post === featuredPost || (featLayoutKey && postLayoutKey === featLayoutKey));
             var fiShow = Boolean(fiCfg.show !== false);
             var fiLayout = fiCfg.layoutMode === 'fullBleed' ? 'fullBleed' : fiCfg.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified';
             var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
@@ -4512,6 +4547,27 @@
               article.style.scrollMarginTop = (navbarOffset + 8) + 'px';
             }
             if (isFeaturedInLayout) article.classList.add('blog-overlay-featured-article');
+            if (isFeaturedInLayout && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
+              article.style.gridColumn = '1 / span ' + gridColsDigestOrGrid;
+            }
+            var digestFeaturedIntro = null;
+            if (isFeaturedInLayout && collectionLayout === 'digest') {
+              if (!isSinglePost) {
+                article.classList.add('blog-overlay-digest-featured-article');
+                article.style.width = '100%';
+                article.style.maxWidth = '100%';
+                article.style.minWidth = '0';
+                article.style.boxSizing = 'border-box';
+                article.style.display = 'flex';
+                article.style.flexDirection = 'column';
+                article.style.alignItems = 'stretch';
+                digestFeaturedIntro = document.createElement('div');
+                digestFeaturedIntro.className = 'blog-overlay-digest-featured-intro';
+                digestFeaturedIntro.style.width = '100%';
+                digestFeaturedIntro.style.maxWidth = '100%';
+                digestFeaturedIntro.style.boxSizing = 'border-box';
+              }
+            }
 
             var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
             var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && imgUrl;
@@ -4694,6 +4750,10 @@
               }
             }
 
+            if (digestFeaturedIntro) {
+              article.appendChild(digestFeaturedIntro);
+            }
+
             var alignStyle = isSinglePost ? (phAlign === 'center' ? 'center' : phAlign === 'right' ? 'flex-end' : 'flex-start') : null;
             var textAlignStyle = isSinglePost ? (phAlign === 'center' ? 'center' : phAlign === 'right' ? 'right' : 'left') : null;
             var postInfoWrap = null;
@@ -4705,6 +4765,7 @@
               postInfoWrap.style.textAlign = textAlignStyle || 'left';
               postInfoWrap.style.gap = '8px';
             }
+            var headlineMount = postInfoWrap || digestFeaturedIntro || appendTo;
             if (isSinglePost && phShowBreadcrumbs) {
               var bcNav = document.createElement('nav');
               bcNav.setAttribute('aria-label', 'Breadcrumb');
@@ -4744,7 +4805,7 @@
               var pu = self._getPostUrl(post);
               if (pu) bcNav.appendChild(makeLink(pt, pu, null, 'breadcrumb'));
               else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
-              (postInfoWrap || appendTo).appendChild(bcNav);
+              headlineMount.appendChild(bcNav);
             }
 
             if (isSinglePost && (phShowTags || phShowCategories)) {
@@ -4786,7 +4847,7 @@
                   tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(t)));
                 }
               }
-              if (tagsCatsWrap.childNodes.length > 0) (postInfoWrap || appendTo).appendChild(tagsCatsWrap);
+              if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
             }
 
             var h2 = document.createElement('h2');
@@ -4834,9 +4895,9 @@
               featuredBadge.style.borderRadius = '2px';
               featuredBadge.style.flexShrink = '0';
               titleRow.appendChild(featuredBadge);
-              (postInfoWrap || appendTo).appendChild(titleRow);
+              headlineMount.appendChild(titleRow);
             } else {
-              (postInfoWrap || appendTo).appendChild(h2);
+              headlineMount.appendChild(h2);
             }
 
             if (phShowByline && postInfoWrap) {
@@ -4898,7 +4959,7 @@
                 metaRow.style.color = 'rgba(255,255,255,0.92)';
               }
               metaRow.appendChild(meta);
-              (postInfoWrap || appendTo).appendChild(metaRow);
+              headlineMount.appendChild(metaRow);
             }
             var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
             var showShare = smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
@@ -4916,7 +4977,7 @@
               shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
               shareRow.style.width = '100%';
               shareRow.appendChild(shareLinks);
-              (postInfoWrap || appendTo).appendChild(shareRow);
+              headlineMount.appendChild(shareRow);
             }
 
             if (isSinglePost && postInfoWrap) {
@@ -5021,12 +5082,27 @@
                 firstHeading.remove();
               }
             } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
-              var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
-              if (excerptText) {
-                body.textContent = excerptText;
-                body.style.fontSize = '0.9rem';
-                body.style.color = '#666';
-                body.style.lineHeight = '1.5';
+              if (collectionLayout === 'digest' && isFeaturedInLayout) {
+                body.innerHTML = post.body || '';
+                body.style.fontSize = '0.9375rem';
+                body.style.color = '#444';
+                body.style.lineHeight = '1.6';
+                body.style.width = '100%';
+                body.style.maxWidth = '100%';
+                body.style.boxSizing = 'border-box';
+                body.style.columnCount = '2';
+                body.style.columnGap = '28px';
+                body.style.columnFill = 'balance';
+                body.style.overflowWrap = 'break-word';
+                body.style.setProperty('-webkit-column-count', '2');
+              } else {
+                var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
+                if (excerptText) {
+                  body.textContent = excerptText;
+                  body.style.fontSize = '0.9rem';
+                  body.style.color = '#666';
+                  body.style.lineHeight = '1.5';
+                }
               }
             } else {
               body.innerHTML = post.body || '';
@@ -5073,10 +5149,9 @@
             paginationEl.style.marginTop = '24px';
             paginationEl.style.paddingTop = '20px';
             paginationEl.style.borderTop = '1px solid #eee';
+            paginationEl.style.width = '100%';
+            paginationEl.style.boxSizing = 'border-box';
             if (paginationMode === 'infiniteScroll') {
-              paginationEl.style.width = '100%';
-              paginationEl.style.gridColumn = '1 / -1';
-              paginationEl.style.boxSizing = 'border-box';
               var loadMoreBtn = document.createElement('button');
               loadMoreBtn.type = 'button';
               loadMoreBtn.textContent = 'Load more';
@@ -5149,7 +5224,7 @@
               }
               paginationEl.appendChild(pagBtns);
             }
-            main.appendChild(paginationEl);
+            collectionPaginationEl = paginationEl;
           }
 
           var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : 240;
@@ -5574,6 +5649,18 @@
           mainRowEl.appendChild(main);
           if (rightSidebarEl.childNodes.length) mainRowEl.appendChild(rightSidebarEl);
           wrapper.appendChild(mainRowEl);
+
+          if (collectionPaginationEl) {
+            var paginationZoneEl = document.createElement('div');
+            paginationZoneEl.className = 'blog-overlay-pagination-zone';
+            paginationZoneEl.style.width = '100%';
+            paginationZoneEl.style.maxWidth = '100%';
+            paginationZoneEl.style.boxSizing = 'border-box';
+            paginationZoneEl.style.position = 'relative';
+            paginationZoneEl.style.zIndex = '1';
+            paginationZoneEl.appendChild(collectionPaginationEl);
+            wrapper.appendChild(paginationZoneEl);
+          }
 
           if (isSinglePost && selectedIndex >= 0 && items[selectedIndex] && cfg && cfg.commentSettings && cfg.commentSettings.commentsEnabled) {
             try {

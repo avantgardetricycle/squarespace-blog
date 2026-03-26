@@ -3,7 +3,7 @@
 ## Zone order (top to bottom, normal flow)
 1. Header
 2. Main row (left sidebar + post collection + right sidebar)
-3. Pagination (optional — inside the post collection column, directly below it)
+3. Pagination zone (optional — full width of the overlay content area, below the entire main row)
 4. Footer
 
 ## Per-zone rules
@@ -40,23 +40,22 @@
   - Layout style (grid, list, showcase, etc.) is user-configured
   - Never overlaps sidebars or header
 
-**Pagination**
-- Optional — only rendered when user has enabled it
-- Sits directly below the post collection, same width as post collection
-- Is NOT full-width — it does not span the sidebars
-- Is NOT a separate full-width row — it lives in the same column as
-  the post collection, as a block child below it
+**Pagination zone**
+- Optional — only rendered when the user has enabled pagination
+- Its own block in normal flow: **100% width** of the overlay content area (spans the full row beneath left sidebar, post collection, and right sidebar)
+- Placed **directly under the main row**, before the footer
+- Contains the pagination controls (numbered pages, load more, etc.)
 - z-index: 1
 
 **Footer**
 - Full-width block, normal flow
-- Always after the main row (which includes post collection + pagination)
+- Always after the main row and pagination zone
 - Never position: fixed or absolute
 - z-index: 10
 
 ## What must never happen
 - Sidebars must not use top: 0 when sticky — offset must equal header height
-- Pagination must not span full width or sit outside the post collection column
+- Pagination must not be laid out as a grid cell inside the post collection when a dedicated full-width pagination zone is used — it belongs in the pagination zone below the main row
 - Footer must not use position: fixed or absolute
 - Header modules must not render outside the header zone regardless of
   their arrangement — floating filter dropdowns or search bars must be
