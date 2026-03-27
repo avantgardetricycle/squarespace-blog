@@ -1,18 +1,24 @@
 /**
- * Internal plan keys (DB, API, Stripe metadata plan_key) stay starter | pro | agency.
- * Display names: Essentials, Professional, Publication.
+ * Plan keys: essentials | professional | publication (see planKeys.ts).
+ * Legacy keys still map for display when reading old rows.
  */
 const PLAN_DISPLAY_NAMES: Record<string, string> = {
+  essentials: 'Essentials',
+  professional: 'Professional',
+  publication: 'Publication',
   starter: 'Essentials',
   pro: 'Professional',
-  agency: 'Publication',
+  agency: 'Publication'
 }
 
 /** Stripe metadata label segment: better_blog_<segment>_<cadence>_usd */
 const PLAN_LABEL_SLUG: Record<string, string> = {
+  essentials: 'essentials',
+  professional: 'professional',
+  publication: 'publication',
   starter: 'essentials',
   pro: 'professional',
-  agency: 'publication',
+  agency: 'publication'
 }
 
 export function getPlanDisplayName(planKey: string): string {

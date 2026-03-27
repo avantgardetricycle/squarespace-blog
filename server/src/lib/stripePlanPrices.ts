@@ -7,6 +7,27 @@ function getStripe(): Stripe {
   return new Stripe(key)
 }
 
+const PLAN_DB_STRIPE_MISMATCH_HINT =
+  'The `plans` table still has stripe_price_id values from another Stripe account or an old dashboard. ' +
+  'Fix: Stripe Dashboard (same mode as your secret key) → Products → open each subscription price → copy the Price id (`price_…`). ' +
+  'Update rows in `plans` for your STRIPE_ENVIRONMENT value, or edit `SANDBOX_PLANS` in server/prisma/seed.ts and run `npx prisma db seed` from the server directory.'
+
+/** When Stripe returns missing price, explain DB/API key mismatch (used by checkout + pricing). */
+export function planPriceStripeErrorMessage(err: unknown): string | null {
+  if (err instanceof Stripe.errors.StripeInvalidRequestError && err.code === 'resource_missing') {
+    const idMatch = /No such price: '([^']+)'/.exec(err.message)
+    const badId = idMatch?.[1] ?? 'price_…'
+    return `${PLAN_DB_STRIPE_MISMATCH_HINT} Stripe reported: No such price '${badId}'.`
+  }
+  return null
+}
+
+function rethrowIfPlanPriceMissingInStripeAccount(err: unknown): never {
+  const msg = planPriceStripeErrorMessage(err)
+  if (msg) throw new Error(msg)
+  throw err
+}
+
 export function formatMoney(amount: number, currency: string): string {
   const c = currency.toUpperCase()
   return new Intl.NumberFormat('en-US', {
@@ -83,7 +104,12 @@ export async function loadPublicPlanPrices(): Promise<PublicPlanPrices> {
 
   const stripe = getStripe()
   const uniqueIds = [...new Set(rows.map((r) => r.stripePriceId))]
-  const stripePrices = await Promise.all(uniqueIds.map((id) => stripe.prices.retrieve(id)))
+  let stripePrices: Stripe.Price[]
+  try {
+    stripePrices = await Promise.all(uniqueIds.map((id) => stripe.prices.retrieve(id)))
+  } catch (err) {
+    rethrowIfPlanPriceMissingInStripeAccount(err)
+  }
   const byId = new Map(stripePrices.map((p) => [p.id, p]))
 
   const plans: PublicPlanPrices['plans'] = {}
@@ -120,7 +146,12 @@ export async function loadPublicPlanPrices(): Promise<PublicPlanPrices> {
 /** Dashboard / account: label for the subscriber's actual Stripe price. */
 export async function getStripePriceDisplayForPriceId(stripePriceId: string): Promise<string> {
   const stripe = getStripe()
-  const price = await stripe.prices.retrieve(stripePriceId)
+  let price: Stripe.Price
+  try {
+    price = await stripe.prices.retrieve(stripePriceId)
+  } catch (err) {
+    rethrowIfPlanPriceMissingInStripeAccount(err)
+  }
   const { perMonth, currency } = interpretStripePrice(price)
   const c = currency.toUpperCase()
   return formatPricePerMo(perMonth, c)

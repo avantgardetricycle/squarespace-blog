@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import prisma from '../db/index.js'
+import { normalizePlanKey } from './planKeys.js'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -128,7 +129,7 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
         }
       })
     : null
-  const planKey = plan?.planKey ?? existingSub?.plan ?? 'pro'
+  const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
   const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
 
   console.log('[syncSubscriptionFromStripe] upsert payload', {

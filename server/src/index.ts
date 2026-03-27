@@ -118,7 +118,13 @@ const server = app.listen(PORT, HOST, () => {
 
 async function main() {
   await startQueue()
-  console.log('pg-boss queue ready (workers run on separate dyno)')
+  if (process.env.NODE_ENV === 'production') {
+    console.log('pg-boss queue ready (Stripe jobs are processed by start:worker / worker dyno)')
+  } else {
+    console.log(
+      'pg-boss queue ready — Stripe webhooks enqueue jobs only; run `npm run dev:worker` in another terminal with the same .env (especially DATABASE_URL). Magic links use APP_URL; use http://localhost:3000 for local UI.'
+    )
+  }
 }
 
 main().catch((err) => {

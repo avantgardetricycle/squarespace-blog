@@ -43,11 +43,11 @@ export default function LandingPage() {
 
   const priceCurrency = stripePrices?.currency ?? "usd";
 
-  const annualSavePercentPro = useMemo(() => {
-    const pro = stripePrices?.plans?.pro;
-    if (!pro) return null;
-    const m = pro.monthly.perMonth;
-    const y = pro.annual.perYear;
+  const annualSavePercentProfessional = useMemo(() => {
+    const tier = stripePrices?.plans?.professional;
+    if (!tier) return null;
+    const m = tier.monthly.perMonth;
+    const y = tier.annual.perYear;
     if (m <= 0) return null;
     const pct = Math.round((1 - y / (m * 12)) * 100);
     return pct > 0 ? pct : null;
@@ -76,7 +76,7 @@ export default function LandingPage() {
     {
       name: "Essentials",
       tier: "Essentials",
-      planKey: "starter" as const,
+      planKey: "essentials" as const,
       description: "Fix the basics. Everything Squarespace should have included from day one.",
       features: [
         "1 sidebar",
@@ -91,7 +91,7 @@ export default function LandingPage() {
     {
       name: "Professional",
       tier: "Professional",
-      planKey: "pro" as const,
+      planKey: "professional" as const,
       description: "A real blog. Discoverable, navigable, and genuinely readable.",
       features: [
         "Everything in Essentials, plus",
@@ -108,7 +108,7 @@ export default function LandingPage() {
     {
       name: "Publication",
       tier: "Publication",
-      planKey: "agency" as const,
+      planKey: "publication" as const,
       description: "A serious publication. Beautiful, branded, fully under your control.",
       features: [
         "Everything in Professional, plus",
@@ -162,7 +162,7 @@ export default function LandingPage() {
                 <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">Log in</Link>
                 {isLive === true ? (
                   <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
-                    <Link to={`/checkout?plan=pro&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started</Link>
+                    <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started</Link>
                   </Button>
                 ) : (
                   <Button onClick={() => setInterestModalOpen(true)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
@@ -207,7 +207,7 @@ export default function LandingPage() {
                 </Button>
               ) : isLive === true ? (
                 <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
-                  <Link to={`/checkout?plan=pro&billing=${isAnnual ? "annual" : "monthly"}`}>Start Free Trial</Link>
+                  <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Start Free Trial</Link>
                 </Button>
               ) : (
                 <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto">
@@ -312,14 +312,14 @@ export default function LandingPage() {
                 )}
               >
                 Annual 
-                {annualSavePercentPro != null && (
+                {annualSavePercentProfessional != null && (
                   <span className={cn(
                     "text-[9.5px] font-bold px-1.5 py-0.5 rounded-full tracking-wide",
                     isAnnual 
                       ? "bg-white/20 text-white" 
                       : "bg-[#eaf7f2] text-[#10B981]"
                   )}>
-                    Save {annualSavePercentPro}%
+                    Save {annualSavePercentProfessional}%
                   </span>
                 )}
               </button>
@@ -567,7 +567,7 @@ export default function LandingPage() {
           </h2>
           {isLive === true ? (
             <Button size="lg" className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10" asChild>
-              <Link to={`/checkout?plan=pro&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started for Free</Link>
+              <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started for Free</Link>
             </Button>
           ) : (
             <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">

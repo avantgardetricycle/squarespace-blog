@@ -4,7 +4,8 @@ import prisma from '../db/index.js'
 import { optionalSession, SessionUser } from '../middleware/session.js'
 import { getAppUrl } from '../lib/url.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
-import { loadPublicPlanPrices } from '../lib/stripePlanPrices.js'
+import { loadPublicPlanPrices, planPriceStripeErrorMessage } from '../lib/stripePlanPrices.js'
+import { isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
 
 const router = Router()
 const TRIAL_DAYS = 7
@@ -59,12 +60,13 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     return
   }
 
-  const validPlans = ['starter', 'pro', 'agency']
   const validCadences = ['monthly', 'annual']
-  if (!validPlans.includes(planKey) || !validCadences.includes(cadence)) {
+  if (!isRecognizedPlanKeyInput(planKey) || !validCadences.includes(cadence)) {
     res.status(400).json({ error: 'Invalid planKey or cadence' })
     return
   }
+
+  const normalizedPlanKey = normalizePlanKey(planKey)
 
   const customerEmail = typeof email === 'string' && email.includes('@') ? email.trim().toLowerCase() : null
   const customerName = typeof name === 'string' && name.trim() ? name.trim() : null
@@ -73,7 +75,7 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     const plan = await prisma.plan.findUnique({
       where: {
         planKey_cadence_stripeEnvironment: {
-          planKey,
+          planKey: normalizedPlanKey,
           cadence,
           stripeEnvironment: stripeEnv
         }
@@ -89,7 +91,7 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     const appUrl = getAppUrl()
 
     const metadata: Record<string, string> = {
-      plan_key: planKey,
+      plan_key: normalizedPlanKey,
       cadence,
       stripe_price_label: plan.stripePriceLabel
     }
@@ -98,7 +100,7 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     }
 
     const subscriptionMetadata: Record<string, string> = {
-      plan_key: planKey,
+      plan_key: normalizedPlanKey,
       cadence,
       stripe_price_label: plan.stripePriceLabel
     }
@@ -119,7 +121,7 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
         metadata: subscriptionMetadata
       },
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/checkout?plan=${planKey}&billing=${cadence}`,
+      cancel_url: `${appUrl}/checkout?plan=${normalizedPlanKey}&billing=${cadence}`,
       metadata,
       // Collect name on Stripe's form as fallback if our metadata doesn't propagate
       name_collection: { individual: { enabled: true, optional: true } }
@@ -138,7 +140,7 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
         stripeCheckoutSessionId: session.id,
         userId: user?.id ?? null,
         email: emailToUse ?? user?.email ?? null,
-        plan: planKey,
+        plan: normalizedPlanKey,
         stripePriceId: plan.stripePriceId,
         status: 'created',
         metadataJson: JSON.stringify({
@@ -153,6 +155,11 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     res.json({ url: session.url })
   } catch (err) {
     console.error('Checkout session error:', err)
+    const priceMsg = planPriceStripeErrorMessage(err)
+    if (priceMsg) {
+      res.status(500).json({ error: priceMsg })
+      return
+    }
     const message = err instanceof Error ? err.message : 'Failed to create checkout session'
     res.status(500).json({ error: message })
   }
@@ -181,7 +188,7 @@ router.get('/session/:sessionId', async (req: Request, res: Response) => {
 
     const email = session.customer_email ?? session.customer_details?.email ?? null
     const metadata = session.metadata ?? {}
-    const planKey = (metadata.plan_key as string) ?? 'pro'
+    const planKey = normalizePlanKey(metadata.plan_key as string | undefined)
     const cadence = (metadata.cadence as string) ?? 'monthly'
     const planDisplay = getPlanDisplayName(planKey)
 

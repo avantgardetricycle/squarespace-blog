@@ -10,6 +10,7 @@ import {
   getStripePriceDisplayForPriceId,
   loadPublicPlanPrices
 } from '../lib/stripePlanPrices.js'
+import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { randomBytes } from 'crypto'
 
@@ -128,7 +129,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           priceDisplay = await getStripePriceDisplayForPriceId(subscription.stripePriceId)
         } else {
           const pub = await loadPublicPlanPrices()
-          const tier = pub.plans[subscription.plan] ?? pub.plans.pro
+          const tier =
+            pub.plans[normalizePlanKey(subscription.plan)] ?? pub.plans[DEFAULT_PLAN_KEY]
           const perMonth = cadence === 'annual' ? tier.annual.perMonth : tier.monthly.perMonth
           priceDisplay = formatPricePerMo(perMonth, pub.currency)
         }

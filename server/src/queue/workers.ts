@@ -4,6 +4,7 @@ import prisma from '../db/index.js'
 import { hashToken, generateToken } from '../lib/auth.js'
 import { sendInviteEmailViaSendGrid } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
+import { normalizePlanKey } from '../lib/planKeys.js'
 
 const TOKEN_EXPIRY_HOURS = 24
 
@@ -119,7 +120,7 @@ async function handleCheckoutSessionCompleted(
     // Get plan/cadence from Stripe metadata
     const sessionMetadata = ((session.metadata ?? data.metadata) ?? {}) as Record<string, string>
     const subMetadata = (subscription.metadata ?? {}) as Record<string, string>
-    const planKey = subMetadata.plan_key ?? sessionMetadata.plan_key ?? 'pro'
+    const planKey = normalizePlanKey(subMetadata.plan_key ?? sessionMetadata.plan_key)
     const cadence = subMetadata.cadence ?? sessionMetadata.cadence ?? 'monthly'
 
     // Customer name: prefer our CheckoutSession (stored at create-session), then Stripe metadata, then customer_details
@@ -372,7 +373,7 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
       existingSubId: existingSub?.id
     })
 
-    const planKey = plan?.planKey ?? existingSub?.plan ?? 'pro'
+    const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
     const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
 
     if (existingSub) {

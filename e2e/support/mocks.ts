@@ -10,7 +10,7 @@ const dashboardMe = {
     createdAt: "2025-01-01T00:00:00.000Z",
   },
   subscription: {
-    plan: "pro",
+    plan: "professional",
     cadence: "monthly",
     priceDisplay: "$29/mo",
     status: "active",
@@ -136,15 +136,15 @@ const configurePreviewResponse = {
 const checkoutPlanPrices = {
   currency: "usd",
   plans: {
-    starter: {
+    essentials: {
       monthly: { perMonth: 12 },
       annual: { perMonth: 9, perYear: 108 },
     },
-    pro: {
+    professional: {
       monthly: { perMonth: 19 },
       annual: { perMonth: 14, perYear: 168 },
     },
-    agency: {
+    publication: {
       monthly: { perMonth: 39 },
       annual: { perMonth: 29, perYear: 348 },
     },

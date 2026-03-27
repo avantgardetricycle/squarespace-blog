@@ -116,7 +116,7 @@ export default function Account() {
     return null;
   }
 
-  const planKey = me.subscription?.plan ?? "pro";
+  const planKey = me.subscription?.plan ?? "professional";
   const planDisplay =
     me.subscription?.planDisplay ?? getPlanDisplayName(planKey);
   const cadence = me.subscription?.cadence ?? "monthly";

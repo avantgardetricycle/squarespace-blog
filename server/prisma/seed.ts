@@ -22,12 +22,12 @@ const defaultUserConfig = {
 }
 
 const SANDBOX_PLANS = [
-  { planKey: 'starter', cadence: 'monthly', stripePriceId: 'price_1TEaw1FNhpDahMYtkTRXKh6q', maxSites: 1 },
-  { planKey: 'starter', cadence: 'annual', stripePriceId: 'price_1TEbDwFNhpDahMYtRctRNNaK', maxSites: 1 },
-  { planKey: 'pro', cadence: 'monthly', stripePriceId: 'price_1TEbF1FNhpDahMYtETj6pLFZ', maxSites: 3 },
-  { planKey: 'pro', cadence: 'annual', stripePriceId: 'price_1TEbFWFNhpDahMYtVN7ItqqY', maxSites: 3 },
-  { planKey: 'agency', cadence: 'monthly', stripePriceId: 'price_1TEbGEFNhpDahMYtW1NRSMNP', maxSites: null },
-  { planKey: 'agency', cadence: 'annual', stripePriceId: 'price_1TEbGhFNhpDahMYt5ghEqi90', maxSites: null },
+  { planKey: 'essentials', cadence: 'monthly', stripePriceId: 'price_1TEaw1FNhpDahMYtkTRXKh6q', maxSites: 1 },
+  { planKey: 'essentials', cadence: 'annual', stripePriceId: 'price_1TEbDwFNhpDahMYtRctRNNaK', maxSites: 1 },
+  { planKey: 'professional', cadence: 'monthly', stripePriceId: 'price_1TEbF1FNhpDahMYtETj6pLFZ', maxSites: 3 },
+  { planKey: 'professional', cadence: 'annual', stripePriceId: 'price_1TEbFWFNhpDahMYtVN7ItqqY', maxSites: 3 },
+  { planKey: 'publication', cadence: 'monthly', stripePriceId: 'price_1TEbGEFNhpDahMYtW1NRSMNP', maxSites: null },
+  { planKey: 'publication', cadence: 'annual', stripePriceId: 'price_1TEbGhFNhpDahMYt5ghEqi90', maxSites: null },
 ] as const
 
 const defaultSiteConfig = {
@@ -43,6 +43,17 @@ const defaultSiteConfig = {
 }
 
 async function main() {
+  // Migrate legacy plan_key / plan labels (starter/pro/agency → essentials/professional/publication)
+  await prisma.$executeRaw`UPDATE plans SET plan_key = 'essentials' WHERE plan_key = 'starter'`
+  await prisma.$executeRaw`UPDATE plans SET plan_key = 'professional' WHERE plan_key = 'pro'`
+  await prisma.$executeRaw`UPDATE plans SET plan_key = 'publication' WHERE plan_key = 'agency'`
+  await prisma.$executeRaw`UPDATE subscriptions SET plan = 'essentials' WHERE plan = 'starter'`
+  await prisma.$executeRaw`UPDATE subscriptions SET plan = 'professional' WHERE plan = 'pro'`
+  await prisma.$executeRaw`UPDATE subscriptions SET plan = 'publication' WHERE plan = 'agency'`
+  await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'essentials' WHERE plan = 'starter'`
+  await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'professional' WHERE plan = 'pro'`
+  await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'publication' WHERE plan = 'agency'`
+
   // Seed plans (sandbox)
   for (const p of SANDBOX_PLANS) {
     const stripePriceLabel = buildStripePriceLabel(p.planKey, p.cadence)
@@ -88,7 +99,7 @@ async function main() {
       data: {
         userId: demoUser.id,
         stripeCustomerId: `demo_cus_${demoUser.id}`,
-        plan: 'pro',
+        plan: 'professional',
         status: 'active',
         maxSites: 3
       }

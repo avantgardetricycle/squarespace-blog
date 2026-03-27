@@ -19,19 +19,20 @@ import {
   formatCurrencyAmount,
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
+import { DEFAULT_PLAN_KEY, normalizePlanParam } from "@/lib/planLabels";
 
 const pricingPlans = {
-  starter: {
+  essentials: {
     name: "Essentials",
     description: "Fix the basics on your Squarespace blog",
     features: ["1 blog", "Core layouts & modules", "Standard support"],
   },
-  pro: {
+  professional: {
     name: "Professional",
     description: "A real blog—discoverable, navigable, readable",
     features: ["Up to 3 blogs", "Advanced customization", "Priority support"],
   },
-  agency: {
+  publication: {
     name: "Publication",
     description: "Serious publication tools and higher limits",
     features: ["Unlimited blogs (fair use)", "Publication-focused features", "Priority support"],
@@ -40,7 +41,7 @@ const pricingPlans = {
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
-  const planParam = searchParams.get("plan") || "pro";
+  const planParam = normalizePlanParam(searchParams.get("plan"));
   const billingParam = searchParams.get("billing") || "annual";
   
   const [name, setName] = useState("");
@@ -58,12 +59,13 @@ export default function Checkout() {
       });
   }, []);
 
-  const plan = pricingPlans[planParam as keyof typeof pricingPlans] || pricingPlans.pro;
+  const plan =
+    pricingPlans[planParam as keyof typeof pricingPlans] || pricingPlans[DEFAULT_PLAN_KEY];
   const currency = stripePrices?.currency ?? "usd";
 
   const planPrices = useMemo(() => {
     if (!stripePrices?.plans) return null;
-    return stripePrices.plans[planParam] ?? stripePrices.plans.pro ?? null;
+    return stripePrices.plans[planParam] ?? stripePrices.plans[DEFAULT_PLAN_KEY] ?? null;
   }, [stripePrices, planParam]);
 
   const monthlyPerMonth = planPrices?.monthly.perMonth ?? null;
