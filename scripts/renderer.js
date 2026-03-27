@@ -3344,6 +3344,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var hasAnyFilter = vs.hasAnyFilter;
       var postHeaderSideGapPx;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
@@ -3619,7 +3620,7 @@
           bcNav.style.display = 'flex';
           bcNav.style.flexWrap = 'wrap';
           bcNav.style.alignItems = 'center';
-          bcNav.style.gap = '2px';
+          bcNav.style.gap = '0';
           bcNav.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           var meta = self._blogMeta || {};
           var siteTitle = meta.siteTitle || '';
@@ -3631,6 +3632,7 @@
             a.textContent = txt;
             a.href = href || '#';
             a.style.textDecoration = 'none';
+            a.style.setProperty('cursor', 'pointer', 'important');
             if (el) a.setAttribute('data-analytics-element', el);
             a.onclick = function(e) { if (onClick) { e.preventDefault(); onClick(); } };
             return a;
@@ -3644,7 +3646,7 @@
           if (siteTitle) { bcNav.appendChild(makeLink(siteTitle, blogIndexUrl, goToBlogIndex, 'breadcrumb')); bcNav.appendChild(sep()); }
           bcNav.appendChild(makeLink(blogName, blogIndexUrl, goToBlogIndex, 'breadcrumb'));
           var postCats = self._getPostCategories(post);
-          if (postCats.length > 0) { bcNav.appendChild(sep()); for (var ci = 0; ci < postCats.length; ci++) { if (ci > 0) { var c = document.createElement('span'); c.textContent = ', '; bcNav.appendChild(c); } bcNav.appendChild(makeLink(postCats[ci], '#', (function(cat) { return function() { self._categoryFilter = [cat]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(postCats[ci]), 'categoryTag')); } }
+          if (postCats.length > 0) { bcNav.appendChild(sep()); for (var ci = 0; ci < postCats.length; ci++) { if (ci > 0) { var c = document.createElement('span'); c.textContent = ','; c.style.marginRight = '4px'; bcNav.appendChild(c); } bcNav.appendChild(makeLink(postCats[ci], '#', (function(cat) { return function() { self._categoryFilter = [cat]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(postCats[ci]), 'categoryTag')); } }
           bcNav.appendChild(sep());
           var pt = post.title || 'Untitled';
           var pu = self._getPostUrl(post);
@@ -3675,6 +3677,7 @@
             span.style.background = singlePostFullBleedHero ? 'rgba(255,255,255,0.2)' : '#f0efec';
             span.style.color = singlePostFullBleedHero ? '#fff' : '#555';
             span.style.textDecoration = 'none';
+            span.style.setProperty('cursor', 'pointer', 'important');
             if (onClick) span.onclick = function(e) { e.preventDefault(); onClick(); };
             return span;
           };
@@ -3689,7 +3692,7 @@
             var postTagsForTags = self._getPostTags(post);
             for (var tti = 0; tti < postTagsForTags.length; tti++) {
               var tag = postTagsForTags[tti];
-              tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(t)));
+              tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(tag)));
             }
           }
           if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
@@ -3713,6 +3716,23 @@
           titleLink.style.color = 'inherit';
           titleLink.style.textDecoration = 'none';
           titleLink.style.cursor = 'pointer';
+            if (self._bbPreview && hasAnyFilter && postIndex >= 0) {
+              titleLink.onclick = (function(idx) {
+                return function(e) {
+                  e.preventDefault();
+                  self._categoryFilter = [];
+                  self._tagFilter = [];
+                  self._searchQuery = '';
+                  self._currentPage = 1;
+                  var targetHash = '#post-' + idx;
+                  if (window.location.hash !== targetHash) {
+                    window.location.hash = targetHash;
+                  } else {
+                    self._renderContent(self.items);
+                  }
+                };
+              })(postIndex);
+            }
           h2.appendChild(titleLink);
         } else {
           h2.textContent = post.title || 'Untitled';
@@ -3988,6 +4008,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var hasAnyFilter = vs.hasAnyFilter;
 
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
@@ -3999,6 +4020,23 @@
         var card = document.createElement('a');
         var displayIdx = displayItems.indexOf(post);
         card.href = self._getPostUrl(post) || (self._bbPreview ? '#post-' + postIndex : '#');
+        if (self._bbPreview && hasAnyFilter && postIndex >= 0) {
+          card.onclick = (function(idx) {
+            return function(e) {
+              e.preventDefault();
+              self._categoryFilter = [];
+              self._tagFilter = [];
+              self._searchQuery = '';
+              self._currentPage = 1;
+              var targetHash = '#post-' + idx;
+              if (window.location.hash !== targetHash) {
+                window.location.hash = targetHash;
+              } else {
+                self._renderContent(self.items);
+              }
+            };
+          })(postIndex);
+        }
         card.style.display = 'grid';
         card.style.gap = '0';
         card.style.textDecoration = 'none';
@@ -5982,7 +6020,7 @@
                   breadcrumbEl.style.display = 'flex';
                   breadcrumbEl.style.flexWrap = 'wrap';
                   breadcrumbEl.style.alignItems = 'center';
-                  breadcrumbEl.style.gap = '2px';
+                  breadcrumbEl.style.gap = '0';
                   var meta = self._blogMeta || {};
                   var siteTitle = meta.siteTitle || '';
                   var blogName = meta.blogName || 'Blog';
@@ -5998,6 +6036,7 @@
                     a.textContent = text;
                     a.href = href || '#';
                     a.style.textDecoration = 'none';
+                    a.style.setProperty('cursor', 'pointer', 'important');
                     if (analyticsEl) a.setAttribute('data-analytics-element', analyticsEl);
                     a.onclick = function(e) {
                       if (onClick) {
@@ -6032,7 +6071,8 @@
                       for (var ci = 0; ci < catParts.length; ci++) {
                         if (ci > 0) {
                           var comma = document.createElement('span');
-                          comma.textContent = ', ';
+                          comma.textContent = ',';
+                          comma.style.marginRight = '4px';
                           breadcrumbEl.appendChild(comma);
                         }
                         var catName = catParts[ci];
