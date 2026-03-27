@@ -48,10 +48,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     show: true,
     modules: ['emailCapture'],
     moduleOrder: ['emailCapture'],
-    height: 48,
-    contentAlignment: 'left' as const,
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   featuredArticle: { show: true, position: 'header' as const }
 }
@@ -124,10 +121,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     show: false,
     modules: [] as string[],
     moduleOrder: [] as string[],
-    height: 48,
-    contentAlignment: 'left' as const,
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   collectionModules: {
     filter: { filterByTags: true, filterByCategories: true },
@@ -183,10 +177,7 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    height: 56,
-    contentAlignment: 'left',
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   postModules: {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
@@ -243,10 +234,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
-    height: 56,
-    contentAlignment: 'left',
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   socialMediaLinks: {
     show: true,
@@ -316,10 +304,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'prevNextArticle'],
     moduleOrder: ['authorProfiles', 'prevNextArticle'],
-    height: 56,
-    contentAlignment: 'left',
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   featuredImage: {
     show: false
@@ -362,10 +347,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    height: 56,
-    contentAlignment: 'left',
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   socialMediaLinks: { show: false, platforms: [] as string[] },
   featuredImage: {
@@ -435,10 +417,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'leadMagnet'],
-    height: 56,
-    contentAlignment: 'left',
-    leftPadding: 0,
-    rightPadding: 0
+    topPadding: 16
   },
   socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
   featuredImage: {

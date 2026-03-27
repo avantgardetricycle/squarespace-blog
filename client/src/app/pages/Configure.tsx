@@ -204,7 +204,7 @@ export interface BaseLevelConfig {
   leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
-  footerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number; contentAlignment: "left" | "center" | "right"; leftPadding: number; rightPadding: number };
+  footerContent: { show: boolean; modules: string[]; moduleOrder: string[]; topPadding: number };
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
 }
@@ -307,7 +307,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 },
+  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
   socialMediaLinks: { show: false, platforms: [] },
   featuredImage: defaultFeaturedImage,
 };
@@ -329,7 +329,7 @@ const defaultPostConfig: PostLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 },
+  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
 };
 
@@ -461,7 +461,7 @@ function syncModuleOrderFromExplicit(
     const l = replaceFilter(cc.leftSidebar.moduleOrder ?? []);
     const r = replaceFilter(cc.rightSidebar.moduleOrder ?? []);
     const f = cc.footerContent?.moduleOrder ?? [];
-    return { ...cc, collectionModules: cm, headerContent: { ...cc.headerContent, moduleOrder: h }, leftSidebar: { ...cc.leftSidebar, moduleOrder: l }, rightSidebar: { ...cc.rightSidebar, moduleOrder: r }, footerContent: { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), moduleOrder: f } };
+    return { ...cc, collectionModules: cm, headerContent: { ...cc.headerContent, moduleOrder: h }, leftSidebar: { ...cc.leftSidebar, moduleOrder: l }, rightSidebar: { ...cc.rightSidebar, moduleOrder: r }, footerContent: { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), moduleOrder: f } };
   }
   if (pm && pc) {
     // Post level: left/right/footer are zone-driven (moduleOrder is source of truth). Only sync header from postModules.
@@ -500,7 +500,7 @@ function applyDerivedModules(config: SiteConfigForm): void {
   cc.leftSidebar.moduleOrder = [...coll.left];
   cc.rightSidebar.modules = coll.right;
   cc.rightSidebar.moduleOrder = [...coll.right];
-  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: coll.footer, moduleOrder: [...coll.footer], show: coll.footer.length > 0 };
+  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: coll.footer, moduleOrder: [...coll.footer], show: coll.footer.length > 0 };
   cc.headerContent.show = coll.header.length > 0;
   cc.leftSidebar.show = coll.left.length > 0;
   cc.rightSidebar.show = coll.right.length > 0;
@@ -518,7 +518,7 @@ function applyDerivedModules(config: SiteConfigForm): void {
   pc.leftSidebar.moduleOrder = [...post.left];
   pc.rightSidebar.modules = post.right;
   pc.rightSidebar.moduleOrder = [...post.right];
-  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 }), modules: post.footer, moduleOrder: [...post.footer], show: post.footer.length > 0 };
+  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: post.footer, moduleOrder: [...post.footer], show: post.footer.length > 0 };
   pc.headerContent.show = post.header.length > 0;
   pc.leftSidebar.show = post.left.length > 0;
   pc.rightSidebar.show = post.right.length > 0;
@@ -547,7 +547,7 @@ function parseLevelConfig(
   const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
-  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number; contentAlignment?: string; leftPadding?: number; rightPadding?: number; sideMargin?: number } : null;
+  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is SidebarCollectionModuleType => SIDEBAR_COLLECTION_MODULES.includes(m as SidebarCollectionModuleType)) : [];
   const validSidebarPost = (arr: unknown): SidebarPostModuleType[] =>
@@ -587,10 +587,19 @@ function parseLevelConfig(
     Array.isArray(fc?.modules) ? fc.modules as string[] : undefined
   );
   const fcModuleOrder = level === "collection" ? validFooterCollection(fcOrderSource) : validFooterPost(fcOrderSource);
-  const validFooterContentAlignment = (v: unknown): "left" | "center" | "right" => (v === "center" || v === "right") ? v : "left";
+  const topPadding = fc
+    ? (typeof fc.topPadding === "number"
+      ? Math.min(120, Math.max(0, Number(fc.topPadding) || 0))
+      : Math.min(120, Math.max(0, Number(fc.height) || 16)))
+    : 16;
   const footerContent = fc
-    ? { show: Boolean(fc.show ?? false), modules: fcModuleOrder, moduleOrder: fcModuleOrder, height: Math.min(120, Math.max(32, Number(fc.height) || 48)), contentAlignment: validFooterContentAlignment(fc.contentAlignment ?? (fc as { contentAlignment?: string }).contentAlignment), leftPadding: Math.min(80, Math.max(0, Number(fc.leftPadding ?? fc.sideMargin) ?? 0)), rightPadding: Math.min(80, Math.max(0, Number(fc.rightPadding ?? fc.sideMargin) ?? 0)) }
-    : { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48, contentAlignment: "left" as const, leftPadding: 0, rightPadding: 0 };
+    ? {
+        show: Boolean(fc.show ?? false),
+        modules: fcModuleOrder,
+        moduleOrder: fcModuleOrder,
+        topPadding,
+      }
+    : { show: false, modules: [] as string[], moduleOrder: [] as string[], topPadding: 16 };
   const postSort = (raw?.postSort === "az" || raw?.postSort === "popularity") ? raw.postSort as PostSortOption : "date";
   const pagRaw = raw?.pagination && typeof raw.pagination === "object" ? raw.pagination as { show?: boolean; mode?: string; postsPerPage?: number } : null;
   const validPostsPerPage = (v: unknown): PostsPerPageOption => (v === 5 || v === 10 || v === 20) ? v : 10;
@@ -975,10 +984,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     a.headerContent.modules.length === b.headerContent.modules.length &&
     a.headerContent.modules.every((m, i) => m === b.headerContent.modules[i]);
   const fcEqual = (a.footerContent?.show ?? false) === (b.footerContent?.show ?? false) &&
-    (a.footerContent?.height ?? 48) === (b.footerContent?.height ?? 48) &&
-    (a.footerContent?.contentAlignment ?? "left") === (b.footerContent?.contentAlignment ?? "left") &&
-    (a.footerContent?.leftPadding ?? 0) === (b.footerContent?.leftPadding ?? 0) &&
-    (a.footerContent?.rightPadding ?? 0) === (b.footerContent?.rightPadding ?? 0) &&
+    (a.footerContent?.topPadding ?? 16) === (b.footerContent?.topPadding ?? 16) &&
     (a.footerContent?.modules?.length ?? 0) === (b.footerContent?.modules?.length ?? 0) &&
     (a.footerContent?.modules ?? []).every((m, i) => m === (b.footerContent?.modules ?? [])[i]);
   const smEqual = a.socialMediaLinks.show === b.socialMediaLinks.show &&
@@ -1794,10 +1800,7 @@ export default function Configure() {
     if (path === "leftSidebar.moduleOrder") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, moduleOrder: value as string[] } };
     if (path === "rightSidebar.moduleOrder") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, moduleOrder: value as string[] } };
     if (path === "headerContent.moduleOrder") return { ...cfg, headerContent: { ...cfg.headerContent, moduleOrder: value as string[] } };
-    if (path === "footerContent.height") return { ...cfg, footerContent: { ...cfg.footerContent, height: value as number } };
-    if (path === "footerContent.contentAlignment") return { ...cfg, footerContent: { ...cfg.footerContent, contentAlignment: value as "left" | "center" | "right" } };
-    if (path === "footerContent.leftPadding") return { ...cfg, footerContent: { ...cfg.footerContent, leftPadding: value as number } };
-    if (path === "footerContent.rightPadding") return { ...cfg, footerContent: { ...cfg.footerContent, rightPadding: value as number } };
+    if (path === "footerContent.topPadding") return { ...cfg, footerContent: { ...cfg.footerContent, topPadding: value as number } };
     if (path === "footerContent.moduleOrder") return { ...cfg, footerContent: { ...cfg.footerContent, moduleOrder: value as string[] } };
     if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
     if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
@@ -3316,59 +3319,17 @@ export default function Configure() {
                         <CollapsibleContent>
                           <div className="pb-4 space-y-3">
                             <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Height</Label>
+                              <Label className="text-xs text-[#6b6b6b]">Top padding</Label>
                               <div className="flex items-center gap-3">
                                 <Slider
-                                  value={[effectiveConfig.footerContent?.height ?? 48]}
-                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.height", v ?? 48)}
-                                  min={32}
+                                  value={[effectiveConfig.footerContent?.topPadding ?? 16]}
+                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.topPadding", v ?? 16)}
+                                  min={0}
                                   max={120}
-                                  step={8}
-                                  className="flex-1"
-                                />
-                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.height ?? 48}px</span>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Content alignment</Label>
-                              <Select
-                                value={(effectiveConfig.footerContent?.contentAlignment ?? "left")}
-                                onValueChange={(v) => updateLevelConfigPath("footerContent.contentAlignment", v as "left" | "center" | "right")}
-                              >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="left">Left</SelectItem>
-                                  <SelectItem value="center">Center</SelectItem>
-                                  <SelectItem value="right">Right</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Left padding</Label>
-                              <div className="flex items-center gap-3">
-                                <Slider
-                                  value={[effectiveConfig.footerContent?.leftPadding ?? 0]}
-                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.leftPadding", v ?? 0)}
-                                  min={0}
-                                  max={80}
                                   step={4}
                                   className="flex-1"
                                 />
-                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.leftPadding ?? 0}px</span>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Right padding</Label>
-                              <div className="flex items-center gap-3">
-                                <Slider
-                                  value={[effectiveConfig.footerContent?.rightPadding ?? 0]}
-                                  onValueChange={([v]) => updateLevelConfigPath("footerContent.rightPadding", v ?? 0)}
-                                  min={0}
-                                  max={80}
-                                  step={4}
-                                  className="flex-1"
-                                />
-                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.rightPadding ?? 0}px</span>
+                                <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.topPadding ?? 16}px</span>
                               </div>
                             </div>
                             <div className="space-y-2">

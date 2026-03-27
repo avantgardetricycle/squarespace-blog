@@ -40,10 +40,7 @@ function buildDefaultPostConfig (
       show: false,
       modules: [],
       moduleOrder: [],
-      height: 48,
-      contentAlignment: 'left',
-      leftPadding: 0,
-      rightPadding: 0
+      topPadding: 16
     },
     progressBar: {
       show: progressBar.show ?? false,

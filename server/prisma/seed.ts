@@ -197,10 +197,7 @@ async function main() {
           show: true,
           modules: ['emailCapture'],
           moduleOrder: ['emailCapture'],
-          height: 48,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
         featuredArticle: { show: true, position: 'header' }
@@ -264,10 +261,7 @@ async function main() {
           show: false,
           modules: [],
           moduleOrder: [],
-          height: 48,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 },
         featuredArticle: { show: true, position: 'inLayout' }
@@ -366,10 +360,7 @@ async function main() {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
-          height: 56,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         socialMediaLinks: {
           show: true,
@@ -423,10 +414,7 @@ async function main() {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          height: 56,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
         postModules: {
@@ -484,10 +472,7 @@ async function main() {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          height: 56,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         socialMediaLinks: { show: false, platforms: [] },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'rightJustified', imageWidthPercent: 38 },
@@ -540,10 +525,7 @@ async function main() {
           show: true,
           modules: ['authorProfiles', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'leadMagnet'],
-          height: 56,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 60 },
@@ -587,10 +569,7 @@ async function main() {
           show: true,
           modules: ['authorProfiles', 'prevNextArticle'],
           moduleOrder: ['authorProfiles', 'prevNextArticle'],
-          height: 56,
-          contentAlignment: 'left',
-          leftPadding: 0,
-          rightPadding: 0
+          topPadding: 16
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, show: false },
         postModules: {

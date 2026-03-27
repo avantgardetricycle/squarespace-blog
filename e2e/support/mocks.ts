@@ -53,7 +53,7 @@ const configResponse = {
     leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
     rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-    footerContent: { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 },
+    footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
     socialMediaLinks: { show: false, platforms: [] },
     featuredImage: {
       show: true,
@@ -95,7 +95,7 @@ const configResponse = {
     leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
     rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-    footerContent: { show: false, modules: [], moduleOrder: [], height: 48, contentAlignment: "left", leftPadding: 0, rightPadding: 0 },
+    footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
     socialMediaLinks: { show: false, platforms: [] },
     featuredImage: {
       show: true,
