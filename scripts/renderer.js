@@ -3276,7 +3276,7 @@
             btn.style.border = '1px solid ' + (isCurrent ? '#5B4FE8' : '#ddd');
             btn.style.borderRadius = '6px';
             btn.style.background = isCurrent ? '#5B4FE8' : 'white';
-            btn.style.cursor = 'pointer';
+            btn.style.cursor = isCurrent ? 'default' : 'pointer';
             btn.style.color = isCurrent ? 'white' : '#333';
             if (!isCurrent) {
               btn.onclick = function() {
@@ -3294,18 +3294,28 @@
             span.style.color = '#999';
             pagBtns.appendChild(span);
           };
-          if (totalPages <= 4) {
-            for (var p = 1; p <= totalPages; p++) pagBtns.appendChild(makePageBtn(p, p === currentPage));
-          } else {
-            for (var p1 = 1; p1 <= 3; p1++) pagBtns.appendChild(makePageBtn(p1, p1 === currentPage));
-            if (currentPage > 3 && currentPage < totalPages) {
-              addEllipsis();
-              pagBtns.appendChild(makePageBtn(currentPage, true));
-              if (currentPage < totalPages - 1) addEllipsis();
-            } else {
-              addEllipsis();
+          var pageSet = {};
+          var addP = function(n) {
+            if (n >= 1 && n <= totalPages) pageSet[n] = true;
+          };
+          addP(1);
+          addP(totalPages);
+          addP(currentPage);
+          addP(currentPage - 1);
+          addP(currentPage + 1);
+          var sortedPages = Object.keys(pageSet).map(Number).sort(function(a, b) { return a - b; });
+          for (var si = 0; si < sortedPages.length; si++) {
+            if (si > 0) {
+              var prevP = sortedPages[si - 1];
+              var curP = sortedPages[si];
+              var skip = curP - prevP - 1;
+              if (skip === 1) {
+                pagBtns.appendChild(makePageBtn(prevP + 1, prevP + 1 === currentPage));
+              } else if (skip >= 2) {
+                addEllipsis();
+              }
             }
-            pagBtns.appendChild(makePageBtn(totalPages, totalPages === currentPage));
+            pagBtns.appendChild(makePageBtn(sortedPages[si], sortedPages[si] === currentPage));
           }
           paginationEl.appendChild(pagBtns);
         }
