@@ -179,10 +179,22 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     }
   }
 
-  const updated = await prisma.comment.update({
-    where: { id },
-    data: updates,
-  })
+  const updated =
+    updates.status === 'deleted'
+      ? await prisma.$transaction(async (tx) => {
+          await tx.comment.updateMany({
+            where: { parentId: id },
+            data: { parentId: comment.parentId },
+          })
+          return tx.comment.update({
+            where: { id },
+            data: updates,
+          })
+        })
+      : await prisma.comment.update({
+          where: { id },
+          data: updates,
+        })
 
   res.json(updated)
 })

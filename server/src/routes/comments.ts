@@ -165,14 +165,20 @@ router.get('/', async (req: Request, res: Response) => {
     include: { _count: { select: { commentLikes: true } } },
   })
 
-  const byParent = new Map<string | null, typeof allApproved>()
-  for (const c of allApproved) {
+  const approvedIdSet = new Set(allApproved.map((c) => c.id))
+  const rowsForTree = allApproved.map((c) => ({
+    ...c,
+    parentId: c.parentId !== null && approvedIdSet.has(c.parentId) ? c.parentId : null,
+  }))
+
+  const byParent = new Map<string | null, typeof rowsForTree>()
+  for (const c of rowsForTree) {
     const k = c.parentId
     if (!byParent.has(k)) byParent.set(k, [])
     byParent.get(k)!.push(c)
   }
 
-  const sortSiblings = (arr: typeof allApproved) => {
+  const sortSiblings = (arr: typeof rowsForTree) => {
     arr.sort((a, b) => {
       if (settings.sortOrder === 'oldest') return a.createdAt.getTime() - b.createdAt.getTime()
       if (settings.sortOrder === 'most_liked')
@@ -186,7 +192,7 @@ router.get('/', async (req: Request, res: Response) => {
   const total = roots.length
   const pageRoots = roots.slice((page - 1) * perPage, (page - 1) * perPage + perPage)
 
-  const formatNode = (c: (typeof allApproved)[0]): Record<string, unknown> => {
+  const formatNode = (c: (typeof rowsForTree)[0]): Record<string, unknown> => {
     const kids = byParent.get(c.id) ?? []
     sortSiblings(kids)
     const ext = c.externalCommentId
