@@ -182,9 +182,42 @@
     }
   }
 
+  function bbCollectImportedExternalIds(comments) {
+    var set = {};
+    function walk(arr) {
+      if (!arr || !arr.length) return;
+      for (var i = 0; i < arr.length; i++) {
+        var c = arr[i];
+        if (c && c.external_comment_id != null && String(c.external_comment_id).trim() !== '') {
+          set[String(c.external_comment_id)] = true;
+        }
+        walk(c.replies);
+      }
+    }
+    walk(comments);
+    return set;
+  }
+
+  function bbFilterSqByImported(sqRoots, importedSet) {
+    function filt(nodes) {
+      var out = [];
+      if (!nodes || !nodes.length) return out;
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var sid = String(node && node.id ? node.id : '').replace(/^sq:/, '');
+        if (sid && importedSet[sid]) continue;
+        var copy = Object.assign({}, node);
+        copy.replies = filt(node.replies || []);
+        out.push(copy);
+      }
+      return out;
+    }
+    return filt(sqRoots || []);
+  }
+
   function bbFillCommentBodyElement(el, c) {
     var text = (c.body && String(c.body)) || '';
-    if (c.bb_legacy_squarespace && bbLooksLikeHtml(text)) {
+    if ((c.bb_legacy_squarespace || c.imported_from_squarespace) && bbLooksLikeHtml(text)) {
       try {
         var doc = new DOMParser().parseFromString(text, 'text/html');
         bbStripDangerousFromCommentRoot(doc.body);
@@ -195,6 +228,32 @@
       } catch (e) {}
     }
     el.textContent = text;
+  }
+
+  /** diffHours = (now - commentDate) in hours; returns null to use an absolute date instead. */
+  function bbFormatRelativeCommentTime(diffHours) {
+    if (diffHours < 0) diffHours = 0;
+    if (diffHours < 1 / 60) return 'Just now';
+    if (diffHours < 1) {
+      var mins = Math.max(1, Math.round(diffHours * 60));
+      return mins === 1 ? '1 minute ago' : mins + ' minutes ago';
+    }
+    if (diffHours < 24) {
+      var hrs = Math.floor(diffHours);
+      if (hrs < 1) hrs = 1;
+      return hrs === 1 ? '1 hour ago' : hrs + ' hours ago';
+    }
+    if (diffHours < 168) {
+      var days = Math.floor(diffHours / 24);
+      if (days < 1) days = 1;
+      return days === 1 ? '1 day ago' : days + ' days ago';
+    }
+    if (diffHours < 1344) {
+      var wks = Math.floor(diffHours / 168);
+      if (wks < 1) wks = 1;
+      return wks === 1 ? '1 week ago' : wks + ' weeks ago';
+    }
+    return null;
   }
 
   function bbSquarespaceCommentApproved(c) {
@@ -529,12 +588,20 @@
       var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
       if (!postId) return;
 
+      var NAME_MAX = 100;
+      var BODY_MAX = 5000;
+      var bbCmtFocusCss =
+        '#bb-comments input:focus,#bb-comments textarea:focus{outline:none!important;border:1px solid #bbb!important;box-shadow:none!important}';
       var style = document.getElementById('bb-comments-styles');
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-comments-styles';
-        style.textContent = '.squarespace-comments .comment-form,.squarespace-comments .comment-form-wrapper,[data-block-type="comments"] form,.comment-count-link{display:none!important}';
+        style.textContent =
+          '.squarespace-comments .comment-form,.squarespace-comments .comment-form-wrapper,[data-block-type="comments"] form,.comment-count-link{display:none!important}' +
+          bbCmtFocusCss;
         document.head.appendChild(style);
+      } else if (style.textContent.indexOf('#bb-comments input:focus') === -1) {
+        style.textContent += bbCmtFocusCss;
       }
 
       var nativeBlock = document.querySelector('.squarespace-comments, [data-block-type="comments"]');
@@ -549,17 +616,25 @@
       bbDiv.style.borderTop = '1px solid #eee';
 
       var apiUrl = baseUrl.replace(/\/+$/, '') + '/api/comments';
+      var mergedSqRootsForComments = [];
+      function mergeSqAndBbForRender(sqRoots, data) {
+        var bbList = (data && data.comments) || [];
+        var imported = bbCollectImportedExternalIds(bbList);
+        return bbFilterSqByImported(sqRoots || [], imported).concat(bbList);
+      }
+      var refreshBetterBlogCommentsList = function() {};
 
       var renderComments = function(comments, total) {
         var listEl = bbDiv.querySelector('.bb-comments-list');
         if (!listEl) return;
         listEl.innerHTML = '';
         var list = (comments || []).slice();
-        var addComment = function(c, isReply) {
+        var addComment = function(c, depth) {
+          var depthLevel = typeof depth === 'number' && !isNaN(depth) ? depth : 0;
           var wrap = document.createElement('div');
-          wrap.className = 'bb-comment' + (isReply ? ' bb-comment-reply' : '');
-          wrap.style.marginBottom = isReply ? '12px' : '20px';
-          wrap.style.paddingLeft = isReply ? '20px' : '0';
+          wrap.className = 'bb-comment' + (depthLevel > 0 ? ' bb-comment-reply' : '');
+          wrap.style.marginBottom = depthLevel > 0 ? '12px' : '20px';
+          wrap.style.paddingLeft = depthLevel > 0 ? depthLevel * 22 + 'px' : '0';
           var initials = (c.display_name || '?').slice(0, 2).toUpperCase();
           var avatar = document.createElement('span');
           avatar.className = 'bb-comment-avatar';
@@ -573,14 +648,14 @@
           time.style.fontSize = '0.8rem';
           time.style.color = '#999';
           time.style.marginLeft = '8px';
-          var d = c.created_at ? new Date(c.created_at) : null;
-          if (d && !isNaN(d.getTime())) {
+          var created = c.created_at ? new Date(c.created_at) : null;
+          if (created && !isNaN(created.getTime())) {
             var now = new Date();
-            var diff = (now - d) / 1000 / 60 / 60;
-            if (diff < 0) diff = 0;
-            time.textContent = diff < 24
-              ? (diff < 1 ? (diff < 1 / 60 ? 'Just now' : Math.max(1, Math.round(diff * 60)) + ' min ago') : Math.round(diff) + ' hours ago')
-              : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            var diffH = (now - created) / 1000 / 60 / 60;
+            var rel = bbFormatRelativeCommentTime(diffH);
+            time.textContent = rel != null
+              ? rel
+              : created.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
           }
           var row1 = document.createElement('div');
           row1.style.marginBottom = '4px';
@@ -619,11 +694,155 @@
             };
           }
           actions.appendChild(likeBtn);
-          wrap.appendChild(actions);
+          var threadingOn = cs.allowThreadedReplies !== false;
+          var showReply = threadingOn && c.id;
+          if (showReply) {
+            var replyBtn = document.createElement('button');
+            replyBtn.type = 'button';
+            replyBtn.textContent = 'Reply';
+            replyBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#5B4FE8;margin-left:12px;font-size:inherit;font-family:inherit;padding:0';
+            var replyFormShell = document.createElement('div');
+            replyFormShell.className = 'bb-comment-inline-reply';
+            replyFormShell.style.cssText = 'display:none;margin-top:14px;margin-left:28px;padding:14px 16px 16px 18px;border-left:3px solid #d4cef7;border-radius:0 8px 8px 0;background:#f8f7fc;box-sizing:border-box;width:calc(100% - 28px);max-width:520px';
+            var replyFormTitle = document.createElement('div');
+            replyFormTitle.textContent = 'Write a reply';
+            replyFormTitle.style.cssText = 'font-size:0.9rem;font-weight:600;color:#1a1a1a;margin-bottom:10px';
+            replyFormShell.appendChild(replyFormTitle);
+            var rName = document.createElement('input');
+            rName.type = 'text';
+            rName.placeholder = 'Name (required)';
+            rName.setAttribute('maxlength', String(NAME_MAX));
+            rName.style.cssText = 'display:block;width:100%;max-width:400px;padding:9px 11px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+            replyFormShell.appendChild(rName);
+            var rNameCount = document.createElement('div');
+            rNameCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 8px 0;max-width:400px;text-align:right';
+            replyFormShell.appendChild(rNameCount);
+            var rBody = document.createElement('textarea');
+            rBody.placeholder = 'Reply (required)';
+            rBody.setAttribute('maxlength', String(BODY_MAX));
+            rBody.rows = 3;
+            rBody.style.cssText = 'display:block;width:100%;max-width:500px;padding:9px 11px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+            replyFormShell.appendChild(rBody);
+            var rBodyCount = document.createElement('div');
+            rBodyCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:500px;text-align:right';
+            replyFormShell.appendChild(rBodyCount);
+            var rRow = document.createElement('div');
+            rRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:center';
+            var rSubmit = document.createElement('button');
+            rSubmit.type = 'button';
+            rSubmit.textContent = 'Post reply';
+            rSubmit.style.cssText = 'padding:8px 20px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:not-allowed;opacity:0.55';
+            rSubmit.disabled = true;
+            function rReplySync() {
+              var nm = (rName.value || '').trim();
+              var bd = (rBody.value || '').trim();
+              rNameCount.textContent = NAME_MAX - rName.value.length + ' characters left';
+              rBodyCount.textContent = BODY_MAX - rBody.value.length + ' characters left';
+              var ok = !!nm && !!bd;
+              rSubmit.disabled = !ok;
+              rSubmit.style.opacity = ok ? '1' : '0.55';
+              rSubmit.style.cursor = ok ? 'pointer' : 'not-allowed';
+            }
+            rName.oninput = rBody.oninput = rReplySync;
+            rReplySync();
+            var rCancel = document.createElement('button');
+            rCancel.type = 'button';
+            rCancel.textContent = 'Cancel';
+            rCancel.style.cssText = 'padding:8px 16px;font-size:0.95rem;background:transparent;color:#555;border:1px solid #ccc;border-radius:6px;cursor:pointer';
+            rRow.appendChild(rSubmit);
+            rRow.appendChild(rCancel);
+            replyFormShell.appendChild(rRow);
+            var parentCommentId = String(c.id);
+            replyBtn.onclick = function() {
+              var wasOpen = replyFormShell.style.display === 'block';
+              var allInline = listEl.querySelectorAll('.bb-comment-inline-reply');
+              for (var ri = 0; ri < allInline.length; ri++) allInline[ri].style.display = 'none';
+              if (wasOpen) return;
+              replyFormShell.style.display = 'block';
+              try {
+                if (nameInput && nameInput.value && !rName.value) rName.value = nameInput.value;
+              } catch (e) {}
+              rReplySync();
+              try { rBody.focus(); } catch (e2) {}
+            };
+            rCancel.onclick = function() {
+              replyFormShell.style.display = 'none';
+            };
+            rSubmit.onclick = function() {
+              var nm = (rName.value || '').trim();
+              var bd = (rBody.value || '').trim();
+              if (!nm) { rName.focus(); return; }
+              if (!bd) { rBody.focus(); return; }
+              rSubmit.disabled = true;
+              rSubmit.style.opacity = '0.55';
+              rSubmit.style.cursor = 'not-allowed';
+              rSubmit.textContent = 'Posting…';
+              var payload = {
+                post_id: postId,
+                display_name: nm,
+                body: bd,
+                siteKey: siteKey,
+                parent_id: parentCommentId,
+                post_title: (post && post.title) || null,
+                post_published_at: (post && post.publishDate) || (post && post.publishedOn) || null,
+                post_url: (post && (post.fullUrl || post.url)) || null
+              };
+              if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
+                payload.squarespace_record_type = post.recordType;
+              }
+              if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
+                try {
+                  var tok = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
+                  if (tok) payload.hcaptcha_token = tok;
+                } catch (e3) {}
+              }
+              fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify(payload),
+                credentials: 'omit'
+              })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  rSubmit.textContent = 'Post reply';
+                  if (data && data.id) {
+                    replyFormShell.style.display = 'none';
+                    rBody.value = '';
+                    rReplySync();
+                    if (data.status === 'pending') {
+                      var pend = document.createElement('p');
+                      pend.className = 'bb-comment-reply-pending-note';
+                      pend.style.cssText = 'margin:10px 0 0;font-size:0.85rem;color:#666;padding-left:4px';
+                      pend.textContent = 'Your reply was submitted and is awaiting moderation.';
+                      wrap.appendChild(pend);
+                    } else {
+                      refreshBetterBlogCommentsList();
+                    }
+                  } else {
+                    var err = (data && data.error) || 'Failed to post';
+                    rSubmit.textContent = err;
+                    setTimeout(function() {
+                      rSubmit.textContent = 'Post reply';
+                      rReplySync();
+                    }, 3500);
+                    rReplySync();
+                  }
+                })
+                .catch(function() {
+                  rSubmit.textContent = 'Post reply';
+                  rReplySync();
+                });
+            };
+            actions.appendChild(replyBtn);
+            wrap.appendChild(actions);
+            wrap.appendChild(replyFormShell);
+          } else {
+            wrap.appendChild(actions);
+          }
           listEl.appendChild(wrap);
-          (c.replies || []).forEach(function(r) { addComment(r, true); });
+          (c.replies || []).forEach(function(r) { addComment(r, depthLevel + 1); });
         };
-        list.forEach(function(c) { addComment(c, false); });
+        list.forEach(function(c) { addComment(c, 0); });
       };
 
       var listEl = document.createElement('div');
@@ -636,10 +855,10 @@
         .catch(function() { return { comments: [], total: 0 }; });
       Promise.all([bbFetchSquarespaceCommentsForPost(post), bbCommentsPromise])
         .then(function(pair) {
-          var sqRoots = pair[0] || [];
+          mergedSqRootsForComments = pair[0] || [];
           var data = pair[1] || {};
-          var bbList = (data && data.comments) || [];
-          renderComments(sqRoots.concat(bbList), (data && data.total) || bbList.length || 0);
+          var merged = mergeSqAndBbForRender(mergedSqRootsForComments, data);
+          renderComments(merged, (data && data.total) || 0);
         })
         .catch(function() {});
 
@@ -656,27 +875,59 @@
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.placeholder = 'Name (required)';
-      nameInput.setAttribute('maxlength', '100');
-      nameInput.style.cssText = 'display:block;width:100%;max-width:400px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+      nameInput.setAttribute('maxlength', String(NAME_MAX));
+      nameInput.style.cssText = 'display:block;width:100%;max-width:400px;padding:10px 12px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
       formWrap.appendChild(nameInput);
+      var mainNameCount = document.createElement('div');
+      mainNameCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:400px;text-align:right';
+      formWrap.appendChild(mainNameCount);
 
       var bodyArea = document.createElement('textarea');
       bodyArea.placeholder = 'Comment (required)';
-      bodyArea.setAttribute('maxlength', '5000');
+      bodyArea.setAttribute('maxlength', String(BODY_MAX));
       bodyArea.rows = 4;
-      bodyArea.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+      bodyArea.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
       formWrap.appendChild(bodyArea);
+      var mainBodyCount = document.createElement('div');
+      mainBodyCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:500px;text-align:right';
+      formWrap.appendChild(mainBodyCount);
 
       var submitBtn = document.createElement('button');
       submitBtn.type = 'button';
       submitBtn.textContent = 'Post Comment';
-      submitBtn.style.cssText = 'padding:10px 24px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:pointer';
+      submitBtn.style.cssText = 'padding:10px 24px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:not-allowed;opacity:0.55';
+      submitBtn.disabled = true;
+      function mainFormSync() {
+        var nm = (nameInput.value || '').trim();
+        var bd = (bodyArea.value || '').trim();
+        mainNameCount.textContent = NAME_MAX - nameInput.value.length + ' characters left';
+        mainBodyCount.textContent = BODY_MAX - bodyArea.value.length + ' characters left';
+        var ok = !!nm && !!bd;
+        submitBtn.disabled = !ok;
+        submitBtn.style.opacity = ok ? '1' : '0.55';
+        submitBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
+      }
+      nameInput.oninput = bodyArea.oninput = mainFormSync;
+      mainFormSync();
+
+      refreshBetterBlogCommentsList = function() {
+        return fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var merged = mergeSqAndBbForRender(mergedSqRootsForComments, d);
+            renderComments(merged, (d && d.total) || 0);
+          })
+          .catch(function() {});
+      };
+
       submitBtn.onclick = function() {
         var name = (nameInput.value || '').trim();
         var body = (bodyArea.value || '').trim();
         if (!name) { nameInput.focus(); return; }
         if (!body) { bodyArea.focus(); return; }
         submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.55';
+        submitBtn.style.cursor = 'not-allowed';
         submitBtn.textContent = 'Posting…';
         var payload = {
           post_id: postId,
@@ -701,38 +952,33 @@
         })
           .then(function(r) { return r.json(); })
           .then(function(data) {
-            submitBtn.disabled = false;
             submitBtn.textContent = 'Post Comment';
             if (data && data.id) {
+              bodyArea.value = '';
               if (data.status === 'pending') {
-                bodyArea.value = '';
                 var msg = document.createElement('p');
                 msg.style.color = '#666';
                 msg.style.fontSize = '0.9rem';
                 msg.textContent = 'Your comment is awaiting moderation.';
                 formWrap.appendChild(msg);
               } else {
-                bodyArea.value = '';
                 nameInput.value = '';
-                var c = { id: data.id, display_name: data.display_name, verified_subscriber: data.verified_subscriber, body: data.body, like_count: 0, created_at: data.created_at, replies: [] };
-                var list = bbDiv.querySelector('.bb-comments-list');
-                if (list) {
-                  var wrap = document.createElement('div');
-                  wrap.className = 'bb-comment';
-                  wrap.style.marginBottom = '20px';
-                  wrap.innerHTML = '<div style="margin-bottom:4px"><span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#5B4FE8;color:#fff;font-size:12px;font-weight:600;margin-right:10px;vertical-align:middle">' + (data.display_name || '?').slice(0, 2).toUpperCase() + '</span><span style="font-size:0.9rem;color:#333">' + (data.display_name || 'Anonymous') + '</span><span style="font-size:0.8rem;color:#999;margin-left:8px">Just now</span></div><div style="margin-bottom:6px;font-size:0.95rem;line-height:1.5">' + (data.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
-                  list.appendChild(wrap);
-                }
+                refreshBetterBlogCommentsList();
               }
+              mainFormSync();
             } else {
               var err = (data && data.error) || 'Failed to post';
               submitBtn.textContent = err;
-              setTimeout(function() { submitBtn.textContent = 'Post Comment'; }, 3000);
+              setTimeout(function() {
+                submitBtn.textContent = 'Post Comment';
+                mainFormSync();
+              }, 3000);
+              mainFormSync();
             }
           })
           .catch(function() {
-            submitBtn.disabled = false;
             submitBtn.textContent = 'Post Comment';
+            mainFormSync();
           });
       };
       formWrap.appendChild(submitBtn);

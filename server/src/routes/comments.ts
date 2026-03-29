@@ -9,6 +9,7 @@ import { decrypt } from '../lib/encryption.js'
 import { signCommentActionToken } from '../lib/comment-action-token.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
+import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
 
 const router = Router()
 
@@ -159,70 +160,52 @@ router.get('/', async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(String(req.query.page || 1), 10))
   const perPage = Math.min(50, Math.max(1, parseInt(String(req.query.per_page || 20), 10)))
 
-  const where = {
-    siteId: site.id,
-    postId,
-    status: 'approved' as const,
-    parentId: null,
-  }
-
-  const [comments, total] = await Promise.all([
-    prisma.comment.findMany({
-      where,
-      orderBy:
-        settings.sortOrder === 'oldest'
-          ? { createdAt: 'asc' }
-          : settings.sortOrder === 'most_liked'
-            ? { commentLikes: { _count: 'desc' } }
-            : { createdAt: 'desc' },
-      skip: (page - 1) * perPage,
-      take: perPage,
-      include: {
-        replies: {
-          where: { status: 'approved' },
-          include: { _count: { select: { commentLikes: true } } },
-          orderBy: { createdAt: 'asc' },
-        },
-        _count: { select: { commentLikes: true } },
-      },
-    }),
-    prisma.comment.count({ where }),
-  ])
-
-  const formatComment = (c: {
-    id: string
-    displayName: string
-    verifiedSubscriber: boolean
-    body: string
-    createdAt: Date
-    replies?: Array<{
-      id: string
-      displayName: string
-      verifiedSubscriber: boolean
-      body: string
-      createdAt: Date
-      _count: { commentLikes: number }
-    }>
-    _count: { commentLikes: number }
-  }) => ({
-    id: c.id,
-    display_name: c.displayName,
-    verified_subscriber: c.verifiedSubscriber,
-    body: c.body,
-    like_count: c._count.commentLikes,
-    created_at: c.createdAt.toISOString(),
-    replies: (c.replies ?? []).map((r) => ({
-      id: r.id,
-      display_name: r.displayName,
-      verified_subscriber: r.verifiedSubscriber,
-      body: r.body,
-      like_count: r._count.commentLikes,
-      created_at: r.createdAt.toISOString(),
-    })),
+  const allApproved = await prisma.comment.findMany({
+    where: { siteId: site.id, postId, status: 'approved' },
+    include: { _count: { select: { commentLikes: true } } },
   })
 
+  const byParent = new Map<string | null, typeof allApproved>()
+  for (const c of allApproved) {
+    const k = c.parentId
+    if (!byParent.has(k)) byParent.set(k, [])
+    byParent.get(k)!.push(c)
+  }
+
+  const sortSiblings = (arr: typeof allApproved) => {
+    arr.sort((a, b) => {
+      if (settings.sortOrder === 'oldest') return a.createdAt.getTime() - b.createdAt.getTime()
+      if (settings.sortOrder === 'most_liked')
+        return b._count.commentLikes - a._count.commentLikes
+      return b.createdAt.getTime() - a.createdAt.getTime()
+    })
+  }
+
+  const roots = byParent.get(null) ?? []
+  sortSiblings(roots)
+  const total = roots.length
+  const pageRoots = roots.slice((page - 1) * perPage, (page - 1) * perPage + perPage)
+
+  const formatNode = (c: (typeof allApproved)[0]): Record<string, unknown> => {
+    const kids = byParent.get(c.id) ?? []
+    sortSiblings(kids)
+    const ext = c.externalCommentId
+    const out: Record<string, unknown> = {
+      id: c.id,
+      display_name: c.displayName,
+      verified_subscriber: c.verifiedSubscriber,
+      body: c.body,
+      like_count: c._count.commentLikes,
+      created_at: c.createdAt.toISOString(),
+      replies: kids.map((k) => formatNode(k)),
+    }
+    if (ext) out.external_comment_id = ext
+    if (c.importedFromSquarespace) out.imported_from_squarespace = true
+    return out
+  }
+
   res.json({
-    comments: comments.map(formatComment),
+    comments: pageRoots.map((r) => formatNode(r)),
     total,
     page,
   })
@@ -262,6 +245,7 @@ router.post('/', async (req: Request, res: Response) => {
     email?: string
     body?: string
     parent_id?: string | null
+    squarespace_record_type?: number | string
     hcaptcha_token?: string
     verification_cookie_token?: string
     post_title?: string
@@ -300,7 +284,51 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() || null : null
-  const parentId = typeof body.parent_id === 'string' && body.parent_id ? body.parent_id : null
+  let resolvedParentId: string | null =
+    typeof body.parent_id === 'string' && body.parent_id.trim() ? body.parent_id.trim() : null
+
+  if (resolvedParentId?.startsWith('sq:')) {
+    const ssExt = resolvedParentId.slice(3).trim()
+    if (!ssExt) {
+      res.status(400).json({ error: 'Invalid parent comment' })
+      return
+    }
+    let recordType = 1
+    const rawRt = body.squarespace_record_type
+    if (typeof rawRt === 'number' && Number.isFinite(rawRt)) recordType = Math.trunc(rawRt)
+    else if (typeof rawRt === 'string' && /^\d+$/.test(rawRt)) recordType = parseInt(rawRt, 10)
+
+    const importedId = await resolveSquarespaceParentForReply(prisma, {
+      siteId: site.id,
+      postId,
+      siteUrl: site.url,
+      blogPassword: site.blogPassword,
+      squarespaceParentId: ssExt,
+      recordType,
+    })
+    if (!importedId) {
+      res.status(400).json({
+        error:
+          'Could not load Squarespace comment for reply. Check that your Site URL in BetterBlog matches the live site, and try again.',
+      })
+      return
+    }
+    resolvedParentId = importedId
+  }
+
+  if (resolvedParentId) {
+    if (!settings.allowThreadedReplies) {
+      res.status(403).json({ error: 'Threaded replies are disabled' })
+      return
+    }
+    const parent = await prisma.comment.findFirst({
+      where: { id: resolvedParentId, siteId: site.id, postId, status: 'approved' },
+    })
+    if (!parent) {
+      res.status(400).json({ error: 'Invalid parent comment' })
+      return
+    }
+  }
 
   // Upsert cached post for auto-close check
   const postTitle = typeof body.post_title === 'string' ? body.post_title.trim() : 'Untitled'
@@ -370,7 +398,7 @@ router.post('/', async (req: Request, res: Response) => {
     data: {
       siteId: site.id,
       postId,
-      parentId,
+      parentId: resolvedParentId,
       displayName,
       email,
       verifiedSubscriber,
