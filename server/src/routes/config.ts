@@ -19,6 +19,40 @@ const POST_CONFIG_ZONE_KEYS = new Set([
   'collectionModules'
 ])
 
+type ViewerMode = 'loggedOut' | 'loggedIn'
+
+function isRecord (value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseViewerModeQuery (value: unknown): ViewerMode | null {
+  if (value === 'loggedIn') return 'loggedIn'
+  if (value === 'loggedOut') return 'loggedOut'
+  return null
+}
+
+function isContextBucket (value: unknown): value is { loggedOut?: Record<string, unknown>; loggedIn?: Record<string, unknown> } {
+  if (!isRecord(value)) return false
+  return isRecord(value.loggedOut) || isRecord(value.loggedIn)
+}
+
+function normalizeContextBucket (
+  raw: unknown,
+  fallbackFactory: () => Record<string, unknown>,
+  fallbackForMissingLoggedIn?: Record<string, unknown> | null
+): { loggedOut: Record<string, unknown>; loggedIn: Record<string, unknown> } {
+  if (isContextBucket(raw)) {
+    const loggedOut = isRecord(raw.loggedOut) ? raw.loggedOut : (isRecord(raw.loggedIn) ? raw.loggedIn : fallbackFactory())
+    const loggedIn = isRecord(raw.loggedIn) ? raw.loggedIn : (fallbackForMissingLoggedIn ?? loggedOut)
+    return { loggedOut, loggedIn }
+  }
+  if (isRecord(raw)) {
+    return { loggedOut: raw, loggedIn: fallbackForMissingLoggedIn ?? raw }
+  }
+  const fallback = fallbackFactory()
+  return { loggedOut: fallback, loggedIn: fallbackForMissingLoggedIn ?? fallback }
+}
+
 function collectionFieldsForDefaultPost (cc: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const key of Object.keys(cc)) {
@@ -126,6 +160,7 @@ function annotateSquarespaceFeaturedOnItems (items: unknown[], collection: Recor
 // GET /api/blog-preview/:siteKey - Proxy blog JSON for configure page preview
 router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
+  const viewerMode = parseViewerModeQuery(req.query.viewerMode)
 
   const site = await getSiteBySiteKey(siteKey)
   if (!site) {
@@ -243,9 +278,12 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
       firstJson.items = allItems
       delete (firstJson as Record<string, unknown>).nextPageUrl
       delete (firstJson as Record<string, unknown>).nextPage
+      if (viewerMode) {
+        ;(firstJson as Record<string, unknown>).betterBlogViewerMode = viewerMode
+      }
       res.json(firstJson)
     } else {
-      res.json({ items: allItems })
+      res.json({ items: allItems, ...(viewerMode ? { betterBlogViewerMode: viewerMode } : {}) })
     }
   } catch (err) {
     console.error('Blog preview fetch error:', err)
@@ -381,6 +419,7 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
 // Uses internal subscription record only (no Stripe API calls) - gated on status
 router.get('/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
+  const viewerMode = parseViewerModeQuery(req.query.viewerMode)
   const reqId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   console.log(`[config] GET ${siteKey} start (${reqId})`)
   try {
@@ -525,9 +564,9 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           verticalSpacing: 'normal' as const,
         }
 
-    const collectionConfig = (siteConfig as { collectionConfig?: object }).collectionConfig
-    const postConfig = (siteConfig as { postConfig?: object }).postConfig
-    const ccBase = collectionConfig && typeof collectionConfig === 'object' ? collectionConfig : {
+    const collectionConfig = (siteConfig as { collectionConfig?: unknown }).collectionConfig
+    const postConfig = (siteConfig as { postConfig?: unknown }).postConfig
+    const legacyCollectionFallback = {
       showDate: siteConfig.showDate,
       showAuthor: siteConfig.showAuthor,
       showReadingTime: siteConfig.showReadingTime ?? false,
@@ -537,23 +576,37 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       socialMediaLinks: sm,
       featuredImage
     }
-    const ccPagination = (ccBase as { pagination?: { show?: boolean; mode?: string; postsPerPage?: number } }).pagination
-    const cc = {
-      ...ccBase,
-      pagination: ccPagination && typeof ccPagination === 'object'
-        ? {
-            show: ccPagination.show ?? false,
-            mode: ccPagination.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages',
-            postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10
-          }
-        : { show: false, mode: 'pages', postsPerPage: 10 }
+    const normalizedCollection = normalizeContextBucket(collectionConfig, () => legacyCollectionFallback)
+    const normalizeCollectionLevel = (ccLevelRaw: Record<string, unknown>): Record<string, unknown> => {
+      const ccPagination = (ccLevelRaw as { pagination?: { show?: boolean; mode?: string; postsPerPage?: number } }).pagination
+      return {
+        ...ccLevelRaw,
+        pagination: ccPagination && typeof ccPagination === 'object'
+          ? {
+              show: ccPagination.show ?? false,
+              mode: ccPagination.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages',
+              postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10
+            }
+          : { show: false, mode: 'pages', postsPerPage: 10 }
+      }
     }
-    const pc = postConfig && typeof postConfig === 'object'
-      ? postConfig
-      : buildDefaultPostConfig(cc as Record<string, unknown>, progressBar)
+    const cc = {
+      loggedOut: normalizeCollectionLevel(normalizedCollection.loggedOut),
+      loggedIn: normalizeCollectionLevel(normalizedCollection.loggedIn)
+    }
+    const normalizedPost = normalizeContextBucket(
+      postConfig,
+      () => buildDefaultPostConfig(cc.loggedOut, progressBar),
+      buildDefaultPostConfig(cc.loggedIn, progressBar)
+    )
+    const pc = {
+      loggedOut: normalizedPost.loggedOut,
+      loggedIn: normalizedPost.loggedIn
+    }
     // When postSort is "popularity", fetch post view counts from analytics for the renderer
     let postViewCounts: Record<string, number> = {}
-    const ccPostSort = (cc as { postSort?: string }).postSort
+    const sortContext = viewerMode === 'loggedIn' ? cc.loggedIn : cc.loggedOut
+    const ccPostSort = (sortContext as { postSort?: string }).postSort
     if (ccPostSort === 'popularity') {
       const since = new Date()
       since.setDate(since.getDate() - 30)
@@ -570,20 +623,22 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 
     const siteConfigTyped = siteConfig as { collectionTemplateId?: string | null; postTemplateId?: string | null }
     const cs = site.blogCommentSettings
-    const commentSettings =
-      cs?.commentsEnabled === true
-        ? {
-            commentsEnabled: true,
-            allowAnonymousComments: cs.allowAnonymousComments,
-            subscriberCommentsEnabled: cs.subscriberCommentsEnabled,
-            requireApproval: cs.requireApproval,
-            autoCloseAfterDays: cs.autoCloseAfterDays,
-            allowLikes: cs.allowLikes,
-            allowThreadedReplies: cs.allowThreadedReplies,
-            sortOrder: cs.sortOrder,
-            hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
-          }
-        : { commentsEnabled: false }
+    const commentsTurnedOff = cs != null && cs.commentsEnabled === false
+    const sortOrder =
+      cs?.sortOrder === 'oldest' || cs?.sortOrder === 'most_liked' ? cs.sortOrder : 'newest'
+    const commentSettings = commentsTurnedOff
+      ? { commentsEnabled: false }
+      : {
+          commentsEnabled: true,
+          allowAnonymousComments: cs?.allowAnonymousComments ?? true,
+          subscriberCommentsEnabled: cs?.subscriberCommentsEnabled ?? false,
+          requireApproval: cs?.requireApproval ?? false,
+          autoCloseAfterDays: cs?.autoCloseAfterDays ?? null,
+          allowLikes: cs?.allowLikes ?? true,
+          allowThreadedReplies: cs?.allowThreadedReplies ?? true,
+          sortOrder,
+          hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
+        }
 
     const configData = {
       siteKey,
@@ -596,6 +651,10 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       authorProfiles,
       collectionConfig: cc,
       postConfig: pc,
+      paywallMode: site.paywallMode,
+      paywallDetectionState: site.paywallDetectionState,
+      paywallDetectionSource: site.paywallDetectionSource ?? null,
+      ...(viewerMode ? { viewerMode } : {}),
       collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
       postTemplateId: siteConfigTyped.postTemplateId ?? null,
       recentPostsCount: 5,

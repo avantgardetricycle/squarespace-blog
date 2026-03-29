@@ -15,6 +15,9 @@ import { getAppUrl } from '../lib/url.js'
 import { randomBytes } from 'crypto'
 
 const router = Router()
+const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
+type PaywallMode = (typeof PAYWALL_MODES)[number]
+type PaywallDetectionState = 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -54,11 +57,12 @@ function buildBlogJsonUrl(url: string, blogPath: string | null): string {
 }
 
 /**
- * Try to fetch blog JSON from Squarespace. Returns true if successful.
+ * Verify a blog URL is reachable by fetching its `?format=json` endpoint.
+ * Returns whether the blog was successfully reached and parsed.
  */
-async function tryFetchBlogJson(blogJsonUrl: string): Promise<boolean> {
+async function verifyBlogUrl(blogJsonUrl: string): Promise<boolean> {
   try {
-    const res = await fetch(blogJsonUrl)
+    const res = await fetch(blogJsonUrl, { signal: AbortSignal.timeout(8000) })
     if (!res.ok) return false
     const json = await res.json()
     return Array.isArray(json?.items) || (json?.collection && Array.isArray(json.collection?.items))
@@ -166,6 +170,9 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         url: s.url,
         blogPath: s.blogPath,
         hasBlogPassword: Boolean(s.blogPassword),
+        paywallMode: s.paywallMode,
+        paywallDetectionState: s.paywallDetectionState,
+        paywallDetectionSource: s.paywallDetectionSource,
         status: s.status,
         verificationStatus: s.verificationStatus,
         createdAt: s.createdAt
@@ -285,7 +292,7 @@ router.post('/subscription/portal', requireSession, async (req: Request, res: Re
 // POST /api/dashboard/sites - Create new site
 router.post('/sites', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { name, url } = req.body ?? {}
+  const { name, url, paywallDetectionState: rawPaywallState } = req.body ?? {}
 
   try {
     const [subscription, siteCount] = await Promise.all([
@@ -327,7 +334,14 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     }
     const { url: siteUrl, blogPath } = parsed
 
-    const site = await prisma.site.create({
+    const VALID_PAYWALL_STATES: PaywallDetectionState[] = ['unknown', 'detected_paywalled', 'detected_unpaywalled']
+    const userPaywallState: PaywallDetectionState =
+      VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
+
+    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
+    const verified = await verifyBlogUrl(blogJsonUrl)
+
+    const updatedSite = await prisma.site.create({
       data: {
         userId: user.id,
         siteKey,
@@ -335,21 +349,17 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         url: siteUrl,
         blogPath,
         status: 'active',
-        verificationStatus: 'pending',
+        verificationStatus: verified ? 'verified' : 'needs_attention',
+        paywallMode: 'auto',
+        paywallDetectionState: userPaywallState,
+        paywallDetectionSource: userPaywallState !== 'unknown' ? 'manual' : null,
         channel: 'stable'
       }
     })
 
-    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
-    const verified = await tryFetchBlogJson(blogJsonUrl)
-    const updatedSite = await prisma.site.update({
-      where: { id: site.id },
-      data: { verificationStatus: verified ? 'verified' : 'needs_attention' }
-    })
-
     await prisma.siteConfig.create({
       data: {
-        siteId: site.id,
+        siteId: updatedSite.id,
         version: 1,
         showDate: true,
         showAuthor: false,
@@ -371,6 +381,9 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       name: updatedSite.name,
       url: updatedSite.url,
       blogPath: updatedSite.blogPath,
+      paywallMode: updatedSite.paywallMode,
+      paywallDetectionState: updatedSite.paywallDetectionState,
+      paywallDetectionSource: updatedSite.paywallDetectionSource,
       status: updatedSite.status,
       verificationStatus: updatedSite.verificationStatus,
       createdAt: updatedSite.createdAt
@@ -385,7 +398,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
 router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = Array.isArray(req.params.siteKey) ? req.params.siteKey[0] : req.params.siteKey ?? ''
-  const { blogPassword } = req.body ?? {}
+  const { blogPassword, paywallMode, paywallDetectionState, name } = req.body ?? {}
 
   if (!siteKey) {
     res.status(400).json({ error: 'Site key required' })
@@ -402,9 +415,34 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       return
     }
 
-    const updates: { blogPassword?: string | null } = {}
+    const updates: {
+      name?: string | null
+      blogPassword?: string | null
+      paywallMode?: PaywallMode
+      paywallDetectionState?: PaywallDetectionState
+      paywallDetectionSource?: string | null
+    } = {}
+    if ('name' in req.body) {
+      updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
+    }
     if ('blogPassword' in req.body) {
       updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+    }
+    if ('paywallMode' in req.body) {
+      if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
+        res.status(400).json({ error: 'Invalid paywallMode' })
+        return
+      }
+      updates.paywallMode = paywallMode as PaywallMode
+      updates.paywallDetectionSource = 'manual'
+    }
+    if ('paywallDetectionState' in req.body) {
+      if (paywallDetectionState !== 'unknown' && paywallDetectionState !== 'detected_paywalled' && paywallDetectionState !== 'detected_unpaywalled') {
+        res.status(400).json({ error: 'Invalid paywallDetectionState' })
+        return
+      }
+      updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
+      updates.paywallDetectionSource = 'manual'
     }
 
     if (Object.keys(updates).length === 0) {
@@ -428,6 +466,9 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       url: updated!.url,
       blogPath: updated!.blogPath,
       hasBlogPassword: Boolean(updated!.blogPassword),
+      paywallMode: updated!.paywallMode,
+      paywallDetectionState: updated!.paywallDetectionState,
+      paywallDetectionSource: updated!.paywallDetectionSource,
       status: updated!.status,
       verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt
@@ -442,7 +483,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 router.patch('/sites/:id', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
-  const { blogPassword } = req.body ?? {}
+  const { blogPassword, paywallMode, paywallDetectionState, name } = req.body ?? {}
 
   if (!siteId) {
     res.status(400).json({ error: 'Site ID required' })
@@ -459,9 +500,34 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
       return
     }
 
-    const updates: { blogPassword?: string | null } = {}
+    const updates: {
+      name?: string | null
+      blogPassword?: string | null
+      paywallMode?: PaywallMode
+      paywallDetectionState?: PaywallDetectionState
+      paywallDetectionSource?: string | null
+    } = {}
+    if ('name' in req.body) {
+      updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
+    }
     if ('blogPassword' in req.body) {
       updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+    }
+    if ('paywallMode' in req.body) {
+      if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
+        res.status(400).json({ error: 'Invalid paywallMode' })
+        return
+      }
+      updates.paywallMode = paywallMode as PaywallMode
+      updates.paywallDetectionSource = 'manual'
+    }
+    if ('paywallDetectionState' in req.body) {
+      if (paywallDetectionState !== 'unknown' && paywallDetectionState !== 'detected_paywalled' && paywallDetectionState !== 'detected_unpaywalled') {
+        res.status(400).json({ error: 'Invalid paywallDetectionState' })
+        return
+      }
+      updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
+      updates.paywallDetectionSource = 'manual'
     }
 
     if (Object.keys(updates).length === 0) {
@@ -485,6 +551,9 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
       url: updated!.url,
       blogPath: updated!.blogPath,
       hasBlogPassword: Boolean(updated!.blogPassword),
+      paywallMode: updated!.paywallMode,
+      paywallDetectionState: updated!.paywallDetectionState,
+      paywallDetectionSource: updated!.paywallDetectionSource,
       status: updated!.status,
       verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt

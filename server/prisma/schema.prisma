@@ -49,6 +49,9 @@ model Site {
   blogPassword        String?  @map("blog_password") // for password-protected Squarespace blogs (?password=)
   status              String   @default("active") // active | disabled
   verificationStatus  String   @default("pending") @map("verification_status") // pending | verified | needs_attention
+  paywallMode         String   @default("auto") @map("paywall_mode") // auto | force_logged_out | force_logged_in
+  paywallDetectionState String @default("unknown") @map("paywall_detection_state") // unknown | detected_paywalled | detected_unpaywalled
+  paywallDetectionSource String? @map("paywall_detection_source") // json_probe | manual
   channel             String   @default("stable") // stable | beta
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @map("updated_at")

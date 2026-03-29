@@ -212,6 +212,8 @@ export interface BaseLevelConfig {
 export type PostSortOption = "date" | "az" | "popularity";
 
 export type PostsPerPageOption = 5 | 10 | 20;
+export type ViewerMode = "loggedOut" | "loggedIn";
+export type PaywallDetectionState = "unknown" | "detected_paywalled" | "detected_unpaywalled";
 
 export type PaginationMode = "pages" | "infiniteScroll";
 
@@ -249,11 +251,16 @@ export interface PostLevelConfig extends BaseLevelConfig {
   postHeader?: PostHeaderConfig;
 }
 
+export interface ContextBuckets<T> {
+  loggedOut: T;
+  loggedIn: T;
+}
+
 export interface SiteConfigForm {
   defaultAuthorIds: string[];
   postAuthorOverrides: Record<string, string[]>;
-  collectionConfig: CollectionLevelConfig;
-  postConfig: PostLevelConfig;
+  collectionConfig: ContextBuckets<CollectionLevelConfig>;
+  postConfig: ContextBuckets<PostLevelConfig>;
   collectionTemplateId?: string | null;
   postTemplateId?: string | null;
 }
@@ -336,8 +343,14 @@ const defaultPostConfig: PostLevelConfig = {
 const defaultSiteConfig: SiteConfigForm = {
   defaultAuthorIds: [],
   postAuthorOverrides: {},
-  collectionConfig: defaultCollectionConfig,
-  postConfig: defaultPostConfig,
+  collectionConfig: {
+    loggedOut: JSON.parse(JSON.stringify(defaultCollectionConfig)) as CollectionLevelConfig,
+    loggedIn: JSON.parse(JSON.stringify(defaultCollectionConfig)) as CollectionLevelConfig,
+  },
+  postConfig: {
+    loggedOut: JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig,
+    loggedIn: JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig,
+  },
   collectionTemplateId: null,
   postTemplateId: null,
 };
@@ -483,45 +496,48 @@ function syncModuleOrderFromExplicit(
  * Apply derived modules to config for renderer. Mutates in place for collection/post config.
  */
 function applyDerivedModules(config: SiteConfigForm): void {
-  const cc = config.collectionConfig;
-  const pc = config.postConfig;
-  const cm = cc.collectionModules ?? defaultCollectionModules;
-  const pm = pc.postModules ?? defaultPostModules;
-  const coll = deriveCollectionModules(
-    cm,
-    effectiveZoneModuleOrder(cc.headerContent.moduleOrder, cc.headerContent.modules),
-    effectiveZoneModuleOrder(cc.leftSidebar.moduleOrder, cc.leftSidebar.modules),
-    effectiveZoneModuleOrder(cc.rightSidebar.moduleOrder, cc.rightSidebar.modules),
-    effectiveZoneModuleOrder(cc.footerContent?.moduleOrder, cc.footerContent?.modules)
-  );
-  cc.headerContent.modules = coll.header;
-  cc.headerContent.moduleOrder = [...coll.header];
-  cc.leftSidebar.modules = coll.left;
-  cc.leftSidebar.moduleOrder = [...coll.left];
-  cc.rightSidebar.modules = coll.right;
-  cc.rightSidebar.moduleOrder = [...coll.right];
-  cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: coll.footer, moduleOrder: [...coll.footer], show: coll.footer.length > 0 };
-  cc.headerContent.show = coll.header.length > 0;
-  cc.leftSidebar.show = coll.left.length > 0;
-  cc.rightSidebar.show = coll.right.length > 0;
-  const post = derivePostModules(
-    pm,
-    pc,
-    effectiveZoneModuleOrder(pc.headerContent.moduleOrder, pc.headerContent.modules),
-    effectiveZoneModuleOrder(pc.leftSidebar.moduleOrder, pc.leftSidebar.modules),
-    effectiveZoneModuleOrder(pc.rightSidebar.moduleOrder, pc.rightSidebar.modules),
-    effectiveZoneModuleOrder(pc.footerContent?.moduleOrder, pc.footerContent?.modules)
-  );
-  pc.headerContent.modules = post.header;
-  pc.headerContent.moduleOrder = [...post.header];
-  pc.leftSidebar.modules = post.left;
-  pc.leftSidebar.moduleOrder = [...post.left];
-  pc.rightSidebar.modules = post.right;
-  pc.rightSidebar.moduleOrder = [...post.right];
-  pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: post.footer, moduleOrder: [...post.footer], show: post.footer.length > 0 };
-  pc.headerContent.show = post.header.length > 0;
-  pc.leftSidebar.show = post.left.length > 0;
-  pc.rightSidebar.show = post.right.length > 0;
+  const contexts: ViewerMode[] = ["loggedOut", "loggedIn"];
+  for (const context of contexts) {
+    const cc = config.collectionConfig[context];
+    const pc = config.postConfig[context];
+    const cm = cc.collectionModules ?? defaultCollectionModules;
+    const pm = pc.postModules ?? defaultPostModules;
+    const coll = deriveCollectionModules(
+      cm,
+      effectiveZoneModuleOrder(cc.headerContent.moduleOrder, cc.headerContent.modules),
+      effectiveZoneModuleOrder(cc.leftSidebar.moduleOrder, cc.leftSidebar.modules),
+      effectiveZoneModuleOrder(cc.rightSidebar.moduleOrder, cc.rightSidebar.modules),
+      effectiveZoneModuleOrder(cc.footerContent?.moduleOrder, cc.footerContent?.modules)
+    );
+    cc.headerContent.modules = coll.header;
+    cc.headerContent.moduleOrder = [...coll.header];
+    cc.leftSidebar.modules = coll.left;
+    cc.leftSidebar.moduleOrder = [...coll.left];
+    cc.rightSidebar.modules = coll.right;
+    cc.rightSidebar.moduleOrder = [...coll.right];
+    cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: coll.footer, moduleOrder: [...coll.footer], show: coll.footer.length > 0 };
+    cc.headerContent.show = coll.header.length > 0;
+    cc.leftSidebar.show = coll.left.length > 0;
+    cc.rightSidebar.show = coll.right.length > 0;
+    const post = derivePostModules(
+      pm,
+      pc,
+      effectiveZoneModuleOrder(pc.headerContent.moduleOrder, pc.headerContent.modules),
+      effectiveZoneModuleOrder(pc.leftSidebar.moduleOrder, pc.leftSidebar.modules),
+      effectiveZoneModuleOrder(pc.rightSidebar.moduleOrder, pc.rightSidebar.modules),
+      effectiveZoneModuleOrder(pc.footerContent?.moduleOrder, pc.footerContent?.modules)
+    );
+    pc.headerContent.modules = post.header;
+    pc.headerContent.moduleOrder = [...post.header];
+    pc.leftSidebar.modules = post.left;
+    pc.leftSidebar.moduleOrder = [...post.left];
+    pc.rightSidebar.modules = post.right;
+    pc.rightSidebar.moduleOrder = [...post.right];
+    pc.footerContent = { ...(pc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: post.footer, moduleOrder: [...post.footer], show: post.footer.length > 0 };
+    pc.headerContent.show = post.header.length > 0;
+    pc.leftSidebar.show = post.left.length > 0;
+    pc.rightSidebar.show = post.right.length > 0;
+  }
 }
 
 function parseLevelConfig(
@@ -851,6 +867,37 @@ function parseLevelConfig(
   return base;
 }
 
+function cloneLevelConfig<T>(config: T): T {
+  return JSON.parse(JSON.stringify(config)) as T;
+}
+
+function normalizeContextBuckets(
+  raw: Record<string, unknown> | null,
+  level: "collection" | "post"
+): ContextBuckets<CollectionLevelConfig> | ContextBuckets<PostLevelConfig> {
+  const parse = (input: Record<string, unknown> | null) =>
+    parseLevelConfig(input, level) as CollectionLevelConfig | PostLevelConfig;
+  const loggedOutRaw =
+    raw && typeof raw.loggedOut === "object" ? (raw.loggedOut as Record<string, unknown>) : null;
+  const loggedInRaw =
+    raw && typeof raw.loggedIn === "object" ? (raw.loggedIn as Record<string, unknown>) : null;
+
+  if (loggedOutRaw || loggedInRaw) {
+    const loggedOutParsed = parse(loggedOutRaw ?? loggedInRaw);
+    const loggedInParsed = parse(loggedInRaw ?? loggedOutRaw);
+    return {
+      loggedOut: loggedOutParsed,
+      loggedIn: loggedInParsed,
+    } as ContextBuckets<CollectionLevelConfig> | ContextBuckets<PostLevelConfig>;
+  }
+
+  const parsed = parse(raw);
+  return {
+    loggedOut: cloneLevelConfig(parsed),
+    loggedIn: cloneLevelConfig(parsed),
+  } as ContextBuckets<CollectionLevelConfig> | ContextBuckets<PostLevelConfig>;
+}
+
 function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   const defaultAuthorIds = Array.isArray(data.defaultAuthorIds) ? data.defaultAuthorIds as string[] : [];
   const postAuthorOverrides = (data.postAuthorOverrides && typeof data.postAuthorOverrides === "object")
@@ -863,8 +910,8 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
     return {
       defaultAuthorIds,
       postAuthorOverrides,
-      collectionConfig: parseLevelConfig(cc, "collection"),
-      postConfig: parseLevelConfig(pc, "post") as PostLevelConfig,
+      collectionConfig: normalizeContextBuckets(cc, "collection") as ContextBuckets<CollectionLevelConfig>,
+      postConfig: normalizeContextBuckets(pc, "post") as ContextBuckets<PostLevelConfig>,
       collectionTemplateId: collectionTemplateId ?? null,
       postTemplateId: postTemplateId ?? null,
     };
@@ -900,8 +947,14 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
   return {
     defaultAuthorIds,
     postAuthorOverrides,
-    collectionConfig: parseLevelConfig(legacy, "collection"),
-    postConfig: parseLevelConfig(migratedPost, "post") as PostLevelConfig,
+    collectionConfig: {
+      loggedOut: parseLevelConfig(legacy, "collection") as CollectionLevelConfig,
+      loggedIn: parseLevelConfig(legacy, "collection") as CollectionLevelConfig,
+    },
+    postConfig: {
+      loggedOut: parseLevelConfig(migratedPost, "post") as PostLevelConfig,
+      loggedIn: parseLevelConfig(migratedPost, "post") as PostLevelConfig,
+    },
     collectionTemplateId: collectionTemplateId ?? null,
     postTemplateId: postTemplateId ?? null,
   };
@@ -1049,8 +1102,10 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     (a.collectionTemplateId ?? null) === (b.collectionTemplateId ?? null) &&
     (a.postTemplateId ?? null) === (b.postTemplateId ?? null);
   return defaultIdsEqual && overridesEqual && templateIdsEqual &&
-    levelConfigsEqual(a.collectionConfig, b.collectionConfig) &&
-    levelConfigsEqual(a.postConfig, b.postConfig);
+    levelConfigsEqual(a.collectionConfig.loggedOut, b.collectionConfig.loggedOut) &&
+    levelConfigsEqual(a.collectionConfig.loggedIn, b.collectionConfig.loggedIn) &&
+    levelConfigsEqual(a.postConfig.loggedOut, b.postConfig.loggedOut) &&
+    levelConfigsEqual(a.postConfig.loggedIn, b.postConfig.loggedIn);
 }
 
 export default function Configure() {
@@ -1092,6 +1147,7 @@ export default function Configure() {
   const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
   const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
+  const [viewerMode, setViewerMode] = useState<ViewerMode>("loggedOut");
   const [commentSettings, setCommentSettings] = useState<{
     commentsEnabled: boolean;
     allowAnonymousComments: boolean;
@@ -1174,14 +1230,17 @@ export default function Configure() {
           const loaded = configFromApi(data as Record<string, unknown>);
           setConfig(loaded);
           setSavedConfig(loaded);
+          setViewerMode("loggedOut");
         } else {
           setConfig(defaultSiteConfig);
           setSavedConfig(defaultSiteConfig);
+          setViewerMode("loggedOut");
         }
       })
       .catch(() => {
         setConfig(defaultSiteConfig);
         setSavedConfig(defaultSiteConfig);
+        setViewerMode("loggedOut");
       })
       .finally(() => setConfigLoading(false));
   }, [siteKey]);
@@ -1191,6 +1250,12 @@ export default function Configure() {
       ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
+  const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
+  const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
+
+  useEffect(() => {
+    if (!shouldShowViewerModeToggle) setViewerMode("loggedOut");
+  }, [shouldShowViewerModeToggle]);
 
   useEffect(() => {
     if (!effectiveSiteKey) return;
@@ -1358,7 +1423,9 @@ export default function Configure() {
      commentSettings.allowThreadedReplies !== savedCommentSettings.allowThreadedReplies ||
      commentSettings.sortOrder !== savedCommentSettings.sortOrder);
   const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty;
-  const effectiveConfig = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
+  const effectiveConfig = selectedLevel === "collection"
+    ? config.collectionConfig[viewerMode]
+    : config.postConfig[viewerMode];
 
   useEffect(() => {
     if (!me || me.sites.length === 0) return;
@@ -1394,7 +1461,7 @@ export default function Configure() {
       const t = templateCatalogCollection.find((x) => x.id === tid);
       if (!t?.collectionConfig || typeof t.collectionConfig !== "object") return null;
       const parsed = parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection");
-      if (!levelConfigsEqual(config.collectionConfig, parsed)) return null;
+      if (!levelConfigsEqual(config.collectionConfig[viewerMode], parsed)) return null;
       return { name: t.name, kind: "collection" };
     }
     const tid = config.postTemplateId;
@@ -1402,7 +1469,7 @@ export default function Configure() {
     const t = templateCatalogPost.find((x) => x.id === tid);
     if (!t?.postConfig || typeof t.postConfig !== "object") return null;
     const parsed = parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
-    if (!levelConfigsEqual(config.postConfig, parsed)) return null;
+    if (!levelConfigsEqual(config.postConfig[viewerMode], parsed)) return null;
     return { name: t.name, kind: "post" };
   }, [
     selectedLevel,
@@ -1412,8 +1479,11 @@ export default function Configure() {
     config.postTemplateId,
     templateCatalogCollection,
     templateCatalogPost,
+    viewerMode,
   ]);
-  const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
+  const pathPrefix = selectedLevel === "collection"
+    ? `collectionConfig.${viewerMode}`
+    : `postConfig.${viewerMode}`;
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
   const moduleOrderPathForLocation = useCallback((loc: FeatureModuleLocation): "headerContent.moduleOrder" | "leftSidebar.moduleOrder" | "rightSidebar.moduleOrder" | "footerContent.moduleOrder" => {
     if (loc === "header") return "headerContent.moduleOrder";
@@ -1533,14 +1603,14 @@ export default function Configure() {
     return getFeaturedPostKey(blogItems[idxSq], idxSq);
   }, [blogItems, getFeaturedPostKey]);
   const featuredPostSelectValue = useMemo(() => {
-    const fpId = (config.collectionConfig.featuredArticle ?? defaultFeaturedArticle).featuredPostId;
+    const fpId = (config.collectionConfig[viewerMode].featuredArticle ?? defaultFeaturedArticle).featuredPostId;
     if (fpId === null) return "__none__";
     if (typeof fpId === "string" && fpId.trim()) {
       const idx = blogItems.findIndex((item, i) => getFeaturedPostKey(item, i) === fpId.trim());
       return idx >= 0 ? getFeaturedPostKey(blogItems[idx], idx) : "__none__";
     }
     return implicitFeaturedPostKey ?? "__none__";
-  }, [config.collectionConfig.featuredArticle, blogItems, getFeaturedPostKey, implicitFeaturedPostKey]);
+  }, [config.collectionConfig, viewerMode, blogItems, getFeaturedPostKey, implicitFeaturedPostKey]);
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
@@ -1563,11 +1633,13 @@ export default function Configure() {
       baseUrl: typeof window !== "undefined" ? window.location.origin : "",
       siteKey: effectiveSiteKey ?? undefined,
       siteId: effectiveSite?.id ?? undefined,
+      viewerMode,
+      paywallMode: effectiveSite?.paywallMode ?? "auto",
       previewSelectedPostIndex,
       previewFeaturedDebug: previewDebugEnabled,
       configUpdateCallback: (path: string, value: unknown) => updateConfigRef.current(path, value),
     };
-  }, [config, authors, effectiveSiteKey, effectiveSite, previewSelectedPostIndex, previewDebugEnabled]);
+  }, [config, authors, effectiveSiteKey, effectiveSite, viewerMode, previewSelectedPostIndex, previewDebugEnabled]);
 
   // Stable signature so preview components reliably detect config changes (avoids stale effect deps)
   const configSignature = useMemo(
@@ -1575,14 +1647,16 @@ export default function Configure() {
       JSON.stringify({
         post: config.postConfig,
         collection: config.collectionConfig,
+        viewerMode,
+        paywallMode: effectiveSite?.paywallMode ?? "auto",
         previewSelectedPostIndex,
       }),
-    [config.postConfig, config.collectionConfig, previewSelectedPostIndex]
+    [config.postConfig, config.collectionConfig, viewerMode, effectiveSite?.paywallMode, previewSelectedPostIndex]
   );
 
   useEffect(() => {
     if (!previewDebugEnabled) return;
-    const levelCfg = selectedLevel === "collection" ? config.collectionConfig : config.postConfig;
+    const levelCfg = selectedLevel === "collection" ? config.collectionConfig[viewerMode] : config.postConfig[viewerMode];
     console.log("[Configure] Preview state", {
       selectedLevel,
       selectedPostIndex,
@@ -1593,7 +1667,7 @@ export default function Configure() {
       headerContent: levelCfg.headerContent,
       footerContent: levelCfg.footerContent,
     });
-  }, [previewDebugEnabled, selectedLevel, selectedPostIndex, previewSelectedPostIndex, configSignature, config.collectionConfig, config.postConfig]);
+  }, [previewDebugEnabled, selectedLevel, selectedPostIndex, previewSelectedPostIndex, configSignature, config.collectionConfig, config.postConfig, viewerMode]);
 
   const handleSave = useCallback(async () => {
     const keyToSave = effectiveSiteKey ?? siteKey;
@@ -1663,7 +1737,10 @@ export default function Configure() {
         const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection");
         setConfig((prev) => ({
           ...prev,
-          collectionConfig: parsedCollection,
+          collectionConfig: {
+            ...prev.collectionConfig,
+            [viewerMode]: parsedCollection as CollectionLevelConfig,
+          },
           collectionTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
@@ -1682,7 +1759,10 @@ export default function Configure() {
         const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
         setConfig((prev) => ({
           ...prev,
-          postConfig: parsedPost,
+          postConfig: {
+            ...prev.postConfig,
+            [viewerMode]: parsedPost,
+          },
           postTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
@@ -1699,7 +1779,7 @@ export default function Configure() {
         toast.success(`Applied "${template.name}" post template.`);
       }
     },
-    [previewDebugEnabled]
+    [previewDebugEnabled, viewerMode]
   );
 
   const updateConfigRef = useRef<(path: string, value: unknown) => void>(() => {});
@@ -1712,11 +1792,23 @@ export default function Configure() {
         const postId = path.slice("postAuthorOverrides.".length);
         next.postAuthorOverrides = { ...prev.postAuthorOverrides, [postId]: value as string[] };
       } else if (path.startsWith("collectionConfig.")) {
-        const sub = path.slice("collectionConfig.".length);
-        next.collectionConfig = updateLevelConfig(prev.collectionConfig, sub, value);
+        const rest = path.slice("collectionConfig.".length);
+        const [context, ...subParts] = rest.split(".");
+        const targetContext = context === "loggedOut" || context === "loggedIn" ? context : viewerMode;
+        const sub = context === "loggedOut" || context === "loggedIn" ? subParts.join(".") : rest;
+        next.collectionConfig = {
+          ...prev.collectionConfig,
+          [targetContext]: updateLevelConfig(prev.collectionConfig[targetContext], sub, value) as CollectionLevelConfig,
+        };
       } else if (path.startsWith("postConfig.")) {
-        const sub = path.slice("postConfig.".length);
-        next.postConfig = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
+        const rest = path.slice("postConfig.".length);
+        const [context, ...subParts] = rest.split(".");
+        const targetContext = context === "loggedOut" || context === "loggedIn" ? context : viewerMode;
+        const sub = context === "loggedOut" || context === "loggedIn" ? subParts.join(".") : rest;
+        next.postConfig = {
+          ...prev.postConfig,
+          [targetContext]: updateLevelConfig(prev.postConfig[targetContext], sub, value) as PostLevelConfig,
+        };
       } else if (path === "collectionTemplateId") next.collectionTemplateId = value as string | null;
       else if (path === "postTemplateId") next.postTemplateId = value as string | null;
       return next;
@@ -1899,6 +1991,28 @@ export default function Configure() {
                   ))}
                 </SelectContent>
               </Select>
+            )}
+            {shouldShowViewerModeToggle && (
+              <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
+                <button
+                  type="button"
+                  onClick={() => setViewerMode("loggedOut")}
+                  className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                    viewerMode === "loggedOut" ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  }`}
+                >
+                  Logged out
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewerMode("loggedIn")}
+                  className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                    viewerMode === "loggedIn" ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                  }`}
+                >
+                  Logged in
+                </button>
+              </div>
             )}
             <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
               <button
@@ -4412,7 +4526,7 @@ export default function Configure() {
                   typeof window !== "undefined" &&
                   (window.location.search.includes("bbPreviewDebug=1") ||
                     sessionStorage.getItem("bbPreviewDebug") === "1");
-                const previewUrl = buildBlogPreviewUrl(effectiveSite, undefined, previewDebug);
+                const previewUrl = buildBlogPreviewUrl(effectiveSite, undefined, previewDebug, viewerMode);
                 if (!previewUrl) {
                   return (
                     <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
@@ -4444,6 +4558,7 @@ export default function Configure() {
                     config={rendererConfig}
                     configSignature={configSignature}
                     selectPostIndex={previewSelectedPostIndex}
+                    viewerMode={viewerMode}
                     className="min-h-full"
                   />
                 );

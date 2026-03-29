@@ -126,6 +126,191 @@
     return null;
   }
 
+  /**
+   * Squarespace blog ?format=json includes comment counts on items but not comment bodies.
+   * Native comments are loaded via the same-origin endpoint their templates use (see universal comments bundle).
+   */
+  function bbUnwrapSquarespaceCommentRow(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    return raw.comment && typeof raw.comment === 'object' ? raw.comment : raw;
+  }
+
+  /** Squarespace APIs may use ms, seconds since epoch, or ISO strings; field names vary. */
+  function bbParseSquarespaceCommentCreatedMs(r) {
+    if (!r || typeof r !== 'object') return null;
+    var candidates = [r.createdOn, r.addedOn, r.updatedOn, r.createdTimestamp, r.publishedOn];
+    for (var i = 0; i < candidates.length; i++) {
+      var v = candidates[i];
+      if (v === undefined || v === null || v === '') continue;
+      if (typeof v === 'string') {
+        var trimmed = v.trim();
+        var parsed = Date.parse(trimmed);
+        if (!isNaN(parsed)) return parsed;
+        var num = parseFloat(trimmed);
+        if (!isNaN(num) && num > 0) {
+          if (num < 1e11) return Math.round(num * 1000);
+          return Math.round(num);
+        }
+        continue;
+      }
+      if (typeof v === 'number' && !isNaN(v) && v > 0) {
+        if (v < 1e11) return Math.round(v * 1000);
+        return Math.round(v);
+      }
+    }
+    return null;
+  }
+
+  function bbLooksLikeHtml(s) {
+    return typeof s === 'string' && /<\/?[a-z][\s\S]*>/i.test(s);
+  }
+
+  function bbStripDangerousFromCommentRoot(root) {
+    if (!root || !root.querySelectorAll) return;
+    var bad = root.querySelectorAll('script, style, iframe, object, embed, form, input, textarea, select, button, meta, link, base');
+    for (var bi = bad.length - 1; bi >= 0; bi--) bad[bi].remove();
+    var all = root.querySelectorAll('*');
+    for (var j = 0; j < all.length; j++) {
+      var el = all[j];
+      var attrs = el.attributes;
+      for (var k = attrs.length - 1; k >= 0; k--) {
+        var an = attrs[k].name.toLowerCase();
+        var av = attrs[k].value || '';
+        if (an.indexOf('on') === 0) el.removeAttribute(attrs[k].name);
+        if ((an === 'href' || an === 'src' || an === 'xlink:href') && /^\s*javascript:/i.test(av)) el.removeAttribute(attrs[k].name);
+      }
+    }
+  }
+
+  function bbFillCommentBodyElement(el, c) {
+    var text = (c.body && String(c.body)) || '';
+    if (c.bb_legacy_squarespace && bbLooksLikeHtml(text)) {
+      try {
+        var doc = new DOMParser().parseFromString(text, 'text/html');
+        bbStripDangerousFromCommentRoot(doc.body);
+        while (doc.body.firstChild) el.appendChild(doc.body.firstChild);
+        bbStripDangerousFromCommentRoot(el);
+        if (!el.childNodes.length) el.textContent = text;
+        return;
+      } catch (e) {}
+    }
+    el.textContent = text;
+  }
+
+  function bbSquarespaceCommentApproved(c) {
+    if (!c || c.status === undefined || c.status === null) return true;
+    return c.status === 1 || c.status === 'APPROVED';
+  }
+
+  function bbBuildSquarespaceCommentTree(flat) {
+    if (!flat || !flat.length) return [];
+    var rows = [];
+    for (var i = 0; i < flat.length; i++) {
+      var u = bbUnwrapSquarespaceCommentRow(flat[i]);
+      if (u && bbSquarespaceCommentApproved(u)) rows.push(u);
+    }
+    var map = {};
+    for (var j = 0; j < rows.length; j++) {
+      var r = rows[j];
+      var sid = r.id !== undefined && r.id !== null ? String(r.id) : '';
+      if (!sid) continue;
+      var createdMs = bbParseSquarespaceCommentCreatedMs(r);
+      var created_at = createdMs != null && !isNaN(createdMs) ? new Date(createdMs).toISOString() : null;
+      map[sid] = {
+        id: 'sq:' + sid,
+        display_name: (r.authorName && String(r.authorName).trim()) || 'Anonymous',
+        verified_subscriber: false,
+        body: (r.body && String(r.body)) || '',
+        like_count: typeof r.likeCount === 'number' ? r.likeCount : 0,
+        created_at: created_at,
+        replies: [],
+        bb_legacy_squarespace: true
+      };
+    }
+    var roots = [];
+    for (var k = 0; k < rows.length; k++) {
+      var raw = rows[k];
+      var idStr = raw.id !== undefined && raw.id !== null ? String(raw.id) : '';
+      if (!idStr || !map[idStr]) continue;
+      var node = map[idStr];
+      var pid = raw.parentId !== undefined && raw.parentId !== null ? String(raw.parentId) : '';
+      if (pid && map[pid]) {
+        map[pid].replies.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+    function sortByCreated(a, b) {
+      var ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      var tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return ta - tb;
+    }
+    roots.sort(sortByCreated);
+    for (var ri = 0; ri < roots.length; ri++) {
+      (function sortDeep(n) {
+        if (n.replies && n.replies.length) {
+          n.replies.sort(sortByCreated);
+          for (var x = 0; x < n.replies.length; x++) sortDeep(n.replies[x]);
+        }
+      })(roots[ri]);
+    }
+    return roots;
+  }
+
+  function bbFetchSquarespaceCommentsForPost(post) {
+    return new Promise(function(resolve) {
+      var id = post && post.id !== undefined && post.id !== null ? String(post.id).trim() : '';
+      if (!id) {
+        resolve([]);
+        return;
+      }
+      var rt = post.recordType !== undefined && post.recordType !== null ? post.recordType : 1;
+      var origin = '';
+      try {
+        origin = window.location.origin || '';
+      } catch (e) {}
+      if (!origin) {
+        resolve([]);
+        return;
+      }
+      var allFlat = [];
+      var page = 1;
+      var maxPages = 60;
+      function next() {
+        if (page > maxPages) {
+          resolve(bbBuildSquarespaceCommentTree(allFlat));
+          return;
+        }
+        var params = new URLSearchParams();
+        params.set('targetId', id);
+        params.set('targetType', String(rt));
+        params.set('page', String(page));
+        params.set('since', '');
+        params.set('sortBy', '');
+        var url = origin + '/api/comment/GetComments?' + params.toString();
+        fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+          .then(function(res) {
+            if (!res.ok) throw new Error('GetComments ' + res.status);
+            return res.json();
+          })
+          .then(function(data) {
+            var chunk = (data && data.comments) || [];
+            for (var ci = 0; ci < chunk.length; ci++) allFlat.push(chunk[ci]);
+            if (chunk.length === 0) {
+              resolve(bbBuildSquarespaceCommentTree(allFlat));
+              return;
+            }
+            page++;
+            next();
+          })
+          .catch(function() {
+            resolve(bbBuildSquarespaceCommentTree(allFlat));
+          });
+      }
+      next();
+    });
+  }
+
   window.BlogOverlayRenderer = {
     config: null,
     items: [],
@@ -353,16 +538,6 @@
       }
 
       var nativeBlock = document.querySelector('.squarespace-comments, [data-block-type="comments"]');
-      if (nativeBlock && nativeBlock.querySelectorAll('.comment').length > 0) {
-        var label = document.createElement('p');
-        label.className = 'bb-legacy-label';
-        label.textContent = 'Earlier comments';
-        label.style.fontSize = '0.85rem';
-        label.style.color = '#666';
-        label.style.marginBottom = '8px';
-        nativeBlock.insertAdjacentElement('beforebegin', label);
-        nativeBlock.classList.add('bb-legacy-comments');
-      }
 
       var existing = document.getElementById('bb-comments');
       if (existing) existing.remove();
@@ -398,18 +573,23 @@
           time.style.fontSize = '0.8rem';
           time.style.color = '#999';
           time.style.marginLeft = '8px';
-          var d = c.created_at ? new Date(c.created_at) : new Date();
-          var now = new Date();
-          var diff = (now - d) / 1000 / 60 / 60;
-          time.textContent = diff < 24 ? (diff < 1 ? (d.getMinutes() === now.getMinutes() ? 'Just now' : Math.round(diff * 60) + ' min ago') : Math.round(diff) + ' hours ago') : d.toLocaleDateString();
+          var d = c.created_at ? new Date(c.created_at) : null;
+          if (d && !isNaN(d.getTime())) {
+            var now = new Date();
+            var diff = (now - d) / 1000 / 60 / 60;
+            if (diff < 0) diff = 0;
+            time.textContent = diff < 24
+              ? (diff < 1 ? (diff < 1 / 60 ? 'Just now' : Math.max(1, Math.round(diff * 60)) + ' min ago') : Math.round(diff) + ' hours ago')
+              : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+          }
           var row1 = document.createElement('div');
           row1.style.marginBottom = '4px';
           row1.appendChild(avatar);
           row1.appendChild(meta);
-          row1.appendChild(time);
+          if (time.textContent) row1.appendChild(time);
           wrap.appendChild(row1);
           var body = document.createElement('div');
-          body.textContent = c.body || '';
+          bbFillCommentBodyElement(body, c);
           body.style.marginBottom = '6px';
           body.style.fontSize = '0.95rem';
           body.style.lineHeight = '1.5';
@@ -424,7 +604,7 @@
           likeBtn.style.cursor = 'pointer';
           likeBtn.style.color = 'inherit';
           likeBtn.textContent = (c.like_count || 0) + ' 👍';
-          if (cs.allowLikes !== false) {
+          if (!c.bb_legacy_squarespace && cs.allowLikes !== false) {
             likeBtn.onclick = function() {
               fetch(apiUrl + '/' + c.id + '/like', {
                 method: 'POST',
@@ -451,10 +631,15 @@
       listEl.style.marginBottom = '24px';
       bbDiv.appendChild(listEl);
 
-      fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+      var bbCommentsPromise = fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
         .then(function(r) { return r.json(); })
-        .then(function(data) {
-          if (data && data.comments) renderComments(data.comments, data.total || 0);
+        .catch(function() { return { comments: [], total: 0 }; });
+      Promise.all([bbFetchSquarespaceCommentsForPost(post), bbCommentsPromise])
+        .then(function(pair) {
+          var sqRoots = pair[0] || [];
+          var data = pair[1] || {};
+          var bbList = (data && data.comments) || [];
+          renderComments(sqRoots.concat(bbList), (data && data.total) || bbList.length || 0);
         })
         .catch(function() {});
 
@@ -754,6 +939,93 @@
       return fromOrder.concat(remaining);
     },
 
+    _isContextBucket: function(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+      var hasLoggedOut = value.loggedOut && typeof value.loggedOut === 'object' && !Array.isArray(value.loggedOut);
+      var hasLoggedIn = value.loggedIn && typeof value.loggedIn === 'object' && !Array.isArray(value.loggedIn);
+      return Boolean(hasLoggedOut || hasLoggedIn);
+    },
+
+    _normalizeViewerMode: function(value) {
+      return value === 'loggedIn' ? 'loggedIn' : (value === 'loggedOut' ? 'loggedOut' : null);
+    },
+
+    _getViewerModeFromQueryParam: function() {
+      try {
+        var params = new URLSearchParams(window.location.search || '');
+        return this._normalizeViewerMode(params.get('viewerMode'));
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _detectViewerModeFromSquarespaceContext: function() {
+      try {
+        var context = window.Static && window.Static.SQUARESPACE_CONTEXT;
+        if (!context || typeof context !== 'object') return null;
+        if (context.authenticatedAccount || context.loggedInAccount || context.member) return 'loggedIn';
+        if (typeof context.authenticated === 'boolean') return context.authenticated ? 'loggedIn' : 'loggedOut';
+      } catch (e) {}
+      return null;
+    },
+
+    _detectViewerModeFromDom: function() {
+      try {
+        var unauth = document.querySelector('.user-accounts-panel .unauth');
+        var auth = document.querySelector('.user-accounts-panel .auth');
+        if (auth && !unauth) return 'loggedIn';
+        if (unauth && !auth) return 'loggedOut';
+      } catch (e) {}
+      return null;
+    },
+
+    _resolveViewerMode: function() {
+      var cfg = this.config || {};
+      var explicitConfig = this._normalizeViewerMode(cfg.viewerMode);
+      if (explicitConfig) return explicitConfig;
+      var explicitQuery = this._getViewerModeFromQueryParam();
+      if (explicitQuery) return explicitQuery;
+
+      var paywallMode = cfg.paywallMode;
+      if (paywallMode === 'force_logged_in') return 'loggedIn';
+      if (paywallMode === 'force_logged_out') return 'loggedOut';
+
+      var fromSquarespaceContext = this._detectViewerModeFromSquarespaceContext();
+      if (fromSquarespaceContext) return fromSquarespaceContext;
+      var fromDom = this._detectViewerModeFromDom();
+      if (fromDom) return fromDom;
+      return 'loggedOut';
+    },
+
+    _resolveLevelConfigForViewerMode: function(levelConfig, viewerMode) {
+      if (!this._isContextBucket(levelConfig)) {
+        if (levelConfig && typeof levelConfig === 'object') {
+          return { normalized: { loggedOut: levelConfig, loggedIn: levelConfig }, active: levelConfig };
+        }
+        return { normalized: null, active: null };
+      }
+      var normalized = {
+        loggedOut: (levelConfig.loggedOut && typeof levelConfig.loggedOut === 'object') ? levelConfig.loggedOut : (levelConfig.loggedIn && typeof levelConfig.loggedIn === 'object' ? levelConfig.loggedIn : {}),
+        loggedIn: (levelConfig.loggedIn && typeof levelConfig.loggedIn === 'object') ? levelConfig.loggedIn : (levelConfig.loggedOut && typeof levelConfig.loggedOut === 'object' ? levelConfig.loggedOut : {})
+      };
+      var active = viewerMode === 'loggedIn' ? normalized.loggedIn : normalized.loggedOut;
+      return { normalized: normalized, active: active };
+    },
+
+    _mergeContextBucketLevelConfig: function(prev, next, nestedKeys) {
+      var prevIsBucket = this._isContextBucket(prev);
+      var nextIsBucket = this._isContextBucket(next);
+      if (!prevIsBucket && !nextIsBucket) {
+        return this._mergeNestedLevelConfig(prev, next, nestedKeys);
+      }
+      var prevBucket = this._resolveLevelConfigForViewerMode(prev, this._resolveViewerMode()).normalized || {};
+      var nextBucket = this._resolveLevelConfigForViewerMode(next, this._resolveViewerMode()).normalized || {};
+      return {
+        loggedOut: this._mergeNestedLevelConfig(prevBucket.loggedOut, nextBucket.loggedOut, nestedKeys),
+        loggedIn: this._mergeNestedLevelConfig(prevBucket.loggedIn, nextBucket.loggedIn, nestedKeys)
+      };
+    },
+
     updateConfig: function(newConfig) {
       if (!newConfig || typeof newConfig !== 'object') return;
       var prevSig = this._lastConfigSignature;
@@ -761,12 +1033,12 @@
       var prev = this.config || {};
       var merged = Object.assign({}, prev, newConfig);
       if (newConfig.collectionConfig && typeof newConfig.collectionConfig === 'object') {
-        merged.collectionConfig = this._mergeNestedLevelConfig(prev.collectionConfig, newConfig.collectionConfig, [
+        merged.collectionConfig = this._mergeContextBucketLevelConfig(prev.collectionConfig, newConfig.collectionConfig, [
           'headerContent', 'footerContent', 'leftSidebar', 'rightSidebar', 'featuredArticle', 'pagination', 'collectionModules', 'featuredImage'
         ]);
       }
       if (newConfig.postConfig && typeof newConfig.postConfig === 'object') {
-        merged.postConfig = this._mergeNestedLevelConfig(prev.postConfig, newConfig.postConfig, [
+        merged.postConfig = this._mergeContextBucketLevelConfig(prev.postConfig, newConfig.postConfig, [
           'headerContent', 'footerContent', 'leftSidebar', 'rightSidebar', 'postModules', 'postHeader', 'progressBar', 'featuredImage'
         ]);
       }
@@ -2921,7 +3193,15 @@
 
     _computeCollectionViewState: function(items) {
       var self = this;
-      var baseCfg = this.config || {};
+      var rawCfg = this.config || {};
+      var viewerMode = this._resolveViewerMode();
+      var resolvedCollection = this._resolveLevelConfigForViewerMode(rawCfg.collectionConfig, viewerMode);
+      var resolvedPost = this._resolveLevelConfigForViewerMode(rawCfg.postConfig, viewerMode);
+      var baseCfg = Object.assign({}, rawCfg, {
+        collectionConfig: resolvedCollection.active || rawCfg.collectionConfig,
+        postConfig: resolvedPost.active || rawCfg.postConfig,
+        viewerModeResolved: viewerMode
+      });
       var selectedIndex = this._getSelectedIndex(items);
       var searchQuery = this._searchQuery || '';
       var hasSearchQuery = searchQuery.trim().length > 0;
@@ -3047,7 +3327,11 @@
       if ((collectionLayoutRaw == null || collectionLayoutRaw === '') && baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' && baseCfg.collectionConfig.collectionLayout) {
         collectionLayoutRaw = baseCfg.collectionConfig.collectionLayout;
       }
-      if (typeof collectionLayoutRaw === 'string') collectionLayoutRaw = collectionLayoutRaw.trim().toLowerCase();
+      if (typeof collectionLayoutRaw === 'string') {
+        var cl = collectionLayoutRaw.trim().toLowerCase();
+        if (cl === 'listrows' || cl === 'list-rows' || cl === 'list_rows') collectionLayoutRaw = 'listRows';
+        else if (cl === 'grid' || cl === 'editorial' || cl === 'showcase' || cl === 'digest') collectionLayoutRaw = cl;
+      }
       var collectionLayout = !isSinglePost && layoutModeKeys.indexOf(collectionLayoutRaw) >= 0 ? collectionLayoutRaw : 'grid';
       var parsedGridCols = parseInt(cfg.gridColumns, 10);
       var gridColsFromConfig = (parsedGridCols === 2 || parsedGridCols === 3) ? parsedGridCols : null;
@@ -3127,6 +3411,7 @@
 
       return {
         baseCfg: baseCfg,
+        viewerMode: viewerMode,
         selectedIndex: selectedIndex,
         searchQuery: searchQuery,
         hasSearchQuery: hasSearchQuery,
@@ -4308,6 +4593,7 @@
       this._renderSeq += 1;
       this._debugLog('render start', {
         renderSeq: this._renderSeq,
+        viewerMode: vs.viewerMode || null,
         selectedIndex: selectedIndex,
         isSinglePost: isSinglePost,
         hasAnyFilter: hasAnyFilter,
@@ -4423,19 +4709,7 @@
       footerZoneEl.style.zIndex = '10';
       footerZoneEl.style.width = '100%';
 
-      /* Collection post list: one branch per layout — do not combine grid/digest with showcase/listRows/editorial. */
-      var layoutModeKeys = ['grid', 'listRows', 'editorial', 'showcase', 'digest'];
-      var collectionLayoutRaw = cfg.collectionLayout;
-      if ((collectionLayoutRaw == null || collectionLayoutRaw === '') && baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' && baseCfg.collectionConfig.collectionLayout) {
-        collectionLayoutRaw = baseCfg.collectionConfig.collectionLayout;
-      }
-      if (typeof collectionLayoutRaw === 'string') collectionLayoutRaw = collectionLayoutRaw.trim().toLowerCase();
-      var collectionLayout = !isSinglePost && layoutModeKeys.indexOf(collectionLayoutRaw) >= 0 ? collectionLayoutRaw : 'grid';
-      var parsedGridCols = parseInt(cfg.gridColumns, 10);
-      var gridColsFromConfig = (parsedGridCols === 2 || parsedGridCols === 3) ? parsedGridCols : null;
-      var gridColsDigestOrGrid = gridColsFromConfig != null
-        ? gridColsFromConfig
-        : (collectionLayout === 'digest' ? 2 : 3);
+      /* Use layout values from _computeCollectionViewState (already resolved per viewer context). */
       if (isSinglePost) {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';

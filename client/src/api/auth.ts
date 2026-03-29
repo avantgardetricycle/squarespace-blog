@@ -20,6 +20,9 @@ export interface DashboardMe {
     url: string | null
     blogPath: string | null
     hasBlogPassword?: boolean
+    paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
+    paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+    paywallDetectionSource?: 'json_probe' | 'manual' | null
     status: string
     verificationStatus: 'pending' | 'verified' | 'needs_attention'
     createdAt: string
@@ -50,19 +53,27 @@ export interface CreatedSite {
   name: string | null
   url: string | null
   blogPath: string | null
+  paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
+  paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+  paywallDetectionSource?: 'json_probe' | 'manual' | null
   status: string
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
 }
 
-export async function createSite(name?: string, url?: string): Promise<CreatedSite | null> {
+export async function createSite(
+  name?: string,
+  url?: string,
+  paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+): Promise<CreatedSite | null> {
   const res = await fetch(`${API}/dashboard/sites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({
       name: name?.trim() || undefined,
-      url: url?.trim() || undefined
+      url: url?.trim() || undefined,
+      paywallDetectionState,
     })
   })
   if (!res.ok) return null
@@ -101,7 +112,31 @@ export async function cancelSubscription(): Promise<{ success: boolean; error?: 
   return { success: true, currentPeriodEnd: data.currentPeriodEnd }
 }
 
-export async function updateSite(siteKey: string, updates: { blogPassword?: string }): Promise<{ ok: boolean; error?: string }> {
+/** Response body from PATCH /dashboard/sites/by-key/:siteKey */
+export type SitePatchResponse = {
+  id: string
+  siteKey: string
+  name: string | null
+  url: string | null
+  blogPath: string | null
+  hasBlogPassword?: boolean
+  paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
+  paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+  paywallDetectionSource?: 'json_probe' | 'manual' | null
+  status: string
+  verificationStatus: 'pending' | 'verified' | 'needs_attention'
+  createdAt: string
+}
+
+export async function updateSite(
+  siteKey: string,
+  updates: {
+    name?: string | null
+    blogPassword?: string
+    paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
+    paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+  }
+): Promise<{ ok: true; site: SitePatchResponse } | { ok: false; error?: string }> {
   const res = await fetch(`${API}/dashboard/sites/by-key/${encodeURIComponent(siteKey)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -118,5 +153,6 @@ export async function updateSite(siteKey: string, updates: { blogPassword?: stri
     }
     return { ok: false, error }
   }
-  return { ok: true }
+  const site = (await res.json()) as SitePatchResponse
+  return { ok: true, site }
 }

@@ -16,6 +16,8 @@ interface RendererConfigOverrides {
   previewSelectedPostIndex?: number;
   /** Log featured-post resolution (collection keys, item flags) in the browser console */
   previewFeaturedDebug?: boolean;
+  viewerMode?: "loggedOut" | "loggedIn";
+  paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
 }
 
 interface BlogPreviewRendererProps {
@@ -41,6 +43,8 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
       ? { previewSelectedPostIndex: overrides.previewSelectedPostIndex }
       : {}),
     ...(overrides?.previewFeaturedDebug ? { previewFeaturedDebug: true } : {}),
+    ...(overrides?.viewerMode ? { viewerMode: overrides.viewerMode } : {}),
+    ...(overrides?.paywallMode ? { paywallMode: overrides.paywallMode } : {}),
   };
 }
 
@@ -49,6 +53,14 @@ function blogPreviewFeaturedDebugQuery(): string {
   return window.location.search.includes("bbPreviewDebug=1") || sessionStorage.getItem("bbPreviewDebug") === "1"
     ? "?bbFeaturedDebug=1"
     : "";
+}
+
+function blogPreviewQuery(overrides: RendererConfigOverrides | null | undefined): string {
+  const params = new URLSearchParams();
+  if (overrides?.viewerMode) params.set("viewerMode", overrides.viewerMode);
+  if (blogPreviewFeaturedDebugQuery()) params.set("bbFeaturedDebug", "1");
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 /**
@@ -89,7 +101,7 @@ export default function BlogPreviewRenderer({
       const config = {
         ...buildRendererConfig(configRef.current),
         rootEl: root,
-        previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}${blogPreviewFeaturedDebugQuery()}`,
+        previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(siteKey)}${blogPreviewQuery(configRef.current)}`,
       };
 
       try {

@@ -5,6 +5,7 @@ const router = Router()
 
 /** Merged onto DB template rows when serving Masthead. */
 const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
+  collectionLayout: 'grid' as const,
   gridColumns: 3 as const,
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   leftSidebar: {
@@ -93,6 +94,8 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
 
 /** Merged onto DB template rows when serving Digest. */
 const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
+  collectionLayout: 'digest' as const,
+  gridColumns: 2 as const,
   featuredArticle: { show: true, position: 'inLayout' as const },
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
@@ -142,7 +145,38 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
 
 /** Merged onto DB template rows when serving Newsroom. */
 const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
+  collectionLayout: 'listRows' as const,
+  showDate: true,
+  showAuthor: false,
   showReadingTime: true,
+  pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: true
+  },
+  rightSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: true
+  },
+  headerContent: {
+    show: true,
+    modules: ['filterByTagsAndCategories', 'searchPosts', 'postSort'],
+    moduleOrder: ['filterByTagsAndCategories', 'searchPosts', 'postSort'],
+    height: 48
+  },
+  featuredImage: {
+    show: true,
+    layoutMode: 'leftJustified' as const,
+    imageWidthPercent: 30
+  },
   featuredArticle: { show: true, position: 'inLayout' as const }
 }
 
@@ -526,61 +560,41 @@ function normalizeTemplateForResponse (
     }
   }
   if (level === 'collection' && template.templateKey === 'masthead') {
-    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
-      ? template.collectionConfig as Record<string, unknown>
-      : {}
     return {
       ...template,
       collectionConfig: {
-        ...existing,
         ...CANONICAL_MASTHEAD_COLLECTION_TEMPLATE
       }
     }
   }
   if (level === 'collection' && template.templateKey === 'editorial') {
-    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
-      ? template.collectionConfig as Record<string, unknown>
-      : {}
     return {
       ...template,
       collectionConfig: {
-        ...existing,
         ...CANONICAL_EDITORIAL_COLLECTION_TEMPLATE
       }
     }
   }
   if (level === 'collection' && template.templateKey === 'showcase') {
-    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
-      ? template.collectionConfig as Record<string, unknown>
-      : {}
     return {
       ...template,
       collectionConfig: {
-        ...existing,
         ...CANONICAL_SHOWCASE_COLLECTION_TEMPLATE
       }
     }
   }
   if (level === 'collection' && template.templateKey === 'digest') {
-    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
-      ? template.collectionConfig as Record<string, unknown>
-      : {}
     return {
       ...template,
       collectionConfig: {
-        ...existing,
         ...CANONICAL_DIGEST_COLLECTION_TEMPLATE
       }
     }
   }
   if (level === 'collection' && template.templateKey === 'newsroom') {
-    const existing = template.collectionConfig && typeof template.collectionConfig === 'object'
-      ? template.collectionConfig as Record<string, unknown>
-      : {}
     return {
       ...template,
       collectionConfig: {
-        ...existing,
         ...CANONICAL_NEWSROOM_COLLECTION_TEMPLATE
       }
     }

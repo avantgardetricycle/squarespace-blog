@@ -72,6 +72,40 @@ async function getSiteWithSubscription(siteToken: string) {
   return site
 }
 
+type CommentSettingsRow = {
+  commentsEnabled: boolean
+  allowAnonymousComments: boolean
+  subscriberCommentsEnabled: boolean
+  squarespaceApiKeyEnc: string | null
+  requireApproval: boolean
+  autoCloseAfterDays: number | null
+  notifyEmail: boolean
+  notificationEmail: string | null
+  allowLikes: boolean
+  allowThreadedReplies: boolean
+  sortOrder: string
+}
+
+/** When no blog_comment_settings row exists, match Prisma @default and dashboard GET defaults */
+function effectiveCommentSettings(s: CommentSettingsRow | null) {
+  if (!s) {
+    return {
+      commentsEnabled: true,
+      allowAnonymousComments: true,
+      subscriberCommentsEnabled: false,
+      squarespaceApiKeyEnc: null as string | null,
+      requireApproval: false,
+      autoCloseAfterDays: null as number | null,
+      notifyEmail: true,
+      notificationEmail: null as string | null,
+      allowLikes: true,
+      allowThreadedReplies: true,
+      sortOrder: 'newest',
+    }
+  }
+  return s
+}
+
 async function verifyHCaptcha(token: string): Promise<boolean> {
   const secret = process.env.HCAPTCHA_SECRET_KEY
   if (!secret) {
@@ -110,8 +144,8 @@ router.get('/', async (req: Request, res: Response) => {
     return
   }
 
-  const settings = site.blogCommentSettings
-  if (!settings?.commentsEnabled) {
+  const settings = effectiveCommentSettings(site.blogCommentSettings)
+  if (!settings.commentsEnabled) {
     res.status(403).json({ error: 'Comments are disabled' })
     return
   }
@@ -208,8 +242,8 @@ router.post('/', async (req: Request, res: Response) => {
     return
   }
 
-  const settings = site.blogCommentSettings
-  if (!settings?.commentsEnabled) {
+  const settings = effectiveCommentSettings(site.blogCommentSettings)
+  if (!settings.commentsEnabled) {
     res.status(403).json({ error: 'Comments are disabled' })
     return
   }
@@ -395,8 +429,8 @@ router.post('/:id/like', async (req: Request, res: Response) => {
     return
   }
 
-  const settings = site.blogCommentSettings
-  if (!settings?.allowLikes) {
+  const settings = effectiveCommentSettings(site.blogCommentSettings)
+  if (!settings.allowLikes) {
     res.status(403).json({ error: 'Likes are disabled' })
     return
   }

@@ -15,6 +15,8 @@ export interface RendererConfig {
   rightSidebar?: { show?: boolean; modules?: string[]; width?: number; spaceAbove?: number; sticky?: boolean };
   headerContent?: { show?: boolean; modules?: string[]; height?: number };
   recentPostsCount?: number;
+  viewerMode?: "loggedOut" | "loggedIn";
+  paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
 }
 
 interface BlogPreviewIframeProps {
@@ -24,6 +26,7 @@ interface BlogPreviewIframeProps {
   configSignature?: string;
   /** When set, tells the iframe to switch to single-post view for this index (e.g. when editing post-level config) */
   selectPostIndex?: number;
+  viewerMode?: "loggedOut" | "loggedIn";
   className?: string;
 }
 
@@ -56,7 +59,8 @@ export function isSquarespaceUrl(url: string): boolean {
 export function buildBlogPreviewUrl(
   site: { url: string | null; blogPath: string | null },
   blogPassword?: string,
-  debug?: boolean
+  debug?: boolean,
+  viewerMode?: "loggedOut" | "loggedIn"
 ): string | null {
   if (!site.url) return null;
   try {
@@ -73,6 +77,9 @@ export function buildBlogPreviewUrl(
     if (debug) {
       url.searchParams.set("bbPreviewDebug", "1");
     }
+    if (viewerMode) {
+      url.searchParams.set("viewerMode", viewerMode);
+    }
     return url.toString();
   } catch {
     return null;
@@ -88,6 +95,7 @@ export default function BlogPreviewIframe({
   config,
   configSignature,
   selectPostIndex,
+  viewerMode,
   className = "",
 }: BlogPreviewIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -155,7 +163,10 @@ export default function BlogPreviewIframe({
       const target = event.source as Window | null;
       if (!target || typeof target.postMessage !== "function") return;
       resolvedTargetOriginRef.current = event.origin;
-      const latestConfig = configForPostMessage(configRef.current);
+      const latestConfig = configForPostMessage({
+        ...configRef.current,
+        ...(viewerMode ? { viewerMode } : {}),
+      });
       const targetOrigin = event.origin || expectedOrigin || "*";
       if (DEBUG) console.log("[BlogPreviewIframe] READY received, sending config", { targetOrigin });
       target.postMessage(
@@ -165,7 +176,7 @@ export default function BlogPreviewIframe({
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [blogUrl]);
+  }, [blogUrl, viewerMode]);
 
   // Tell iframe to switch views when selectPostIndex changes.
   // -1 => collection/list view, >=0 => single-post view
@@ -195,7 +206,10 @@ export default function BlogPreviewIframe({
     if (!iframe?.contentWindow) return;
     try {
       const targetOrigin = resolvedTargetOriginRef.current ?? "*";
-      const latestConfig = configForPostMessage(configRef.current);
+      const latestConfig = configForPostMessage({
+        ...configRef.current,
+        ...(viewerMode ? { viewerMode } : {}),
+      });
       iframe.contentWindow.postMessage(
         { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
         targetOrigin
@@ -204,7 +218,7 @@ export default function BlogPreviewIframe({
     } catch {
       // ignore
     }
-  }, []);
+  }, [blogUrl, viewerMode]);
 
   const requestReady = useCallback(() => {
     const iframe = iframeRef.current;
@@ -228,7 +242,7 @@ export default function BlogPreviewIframe({
       sendConfig();
     }, d));
     return () => timeouts.forEach((t) => window.clearTimeout(t));
-  }, [config, configSignature, blogUrl, sendConfig, requestReady]);
+  }, [config, configSignature, blogUrl, viewerMode, sendConfig, requestReady]);
 
   // Re-send config when page becomes visible (e.g. bfcache restore, tab focus). Fixes iframe not updating after nav-back.
   useEffect(() => {

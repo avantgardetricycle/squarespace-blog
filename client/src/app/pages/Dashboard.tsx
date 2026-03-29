@@ -9,6 +9,7 @@ import {
   Globe,
   Plus,
   Trash2,
+  Pencil,
   ChevronRight,
   ChevronDown,
   CheckCircle,
@@ -35,7 +36,14 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Separator } from "@/app/components/ui/separator";
 import { toast } from "sonner";
-import { getDashboardMe, createSite, deleteSite, type DashboardMe, type CreatedSite } from "@/api/auth";
+import {
+  getDashboardMe,
+  createSite,
+  deleteSite,
+  updateSite,
+  type DashboardMe,
+  type CreatedSite,
+} from "@/api/auth";
 import { getPlanDisplayName } from "@/lib/planLabels";
 
 const LOADER_URL =
@@ -51,8 +59,13 @@ export default function Dashboard() {
   const [newBlogUrl, setNewBlogUrl] = useState("");
   const [creating, setCreating] = useState(false);
   const [justCreatedSite, setJustCreatedSite] = useState<CreatedSite | null>(null);
+  const [newBlogPaywalled, setNewBlogPaywalled] = useState<"yes" | "no">("no");
   const [siteToDelete, setSiteToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingSite, setEditingSite] = useState<DashboardMe["sites"][number] | null>(null);
+  const [editBlogName, setEditBlogName] = useState("");
+  const [editBlogRequiresLogin, setEditBlogRequiresLogin] = useState<"yes" | "no">("no");
+  const [savingBlogEdit, setSavingBlogEdit] = useState(false);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -93,7 +106,9 @@ export default function Dashboard() {
     }
     setCreating(true);
     try {
-      const site = await createSite(newBlogName.trim(), newBlogUrl.trim());
+      const paywallDetectionState =
+        newBlogPaywalled === "yes" ? "detected_paywalled" : "detected_unpaywalled";
+      const site = await createSite(newBlogName.trim(), newBlogUrl.trim(), paywallDetectionState);
       if (site) {
         setMe((prev) => {
           if (!prev) return prev;
@@ -109,6 +124,7 @@ export default function Dashboard() {
         });
         setNewBlogName("");
         setNewBlogUrl("");
+        setNewBlogPaywalled("no");
         setJustCreatedSite(site);
         setExpandedSiteId(site.id);
       } else {
@@ -116,6 +132,54 @@ export default function Dashboard() {
       }
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEditBlog = (site: DashboardMe["sites"][number]) => {
+    setEditingSite(site);
+    setEditBlogName(site.name ?? "");
+    setEditBlogRequiresLogin(site.paywallDetectionState === "detected_paywalled" ? "yes" : "no");
+  };
+
+  const handleSaveBlogEdit = async () => {
+    if (!editingSite) return;
+    if (!editBlogName.trim()) {
+      toast.error("Please enter a blog name");
+      return;
+    }
+    setSavingBlogEdit(true);
+    try {
+      const paywallDetectionState =
+        editBlogRequiresLogin === "yes" ? "detected_paywalled" : "detected_unpaywalled";
+      const result = await updateSite(editingSite.siteKey, {
+        name: editBlogName.trim(),
+        paywallDetectionState,
+      });
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to save");
+        return;
+      }
+      const s = result.site;
+      setMe((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          sites: prev.sites.map((row) =>
+            row.siteKey === s.siteKey
+              ? {
+                  ...row,
+                  name: s.name,
+                  paywallDetectionState: s.paywallDetectionState,
+                  paywallDetectionSource: s.paywallDetectionSource,
+                }
+              : row
+          ),
+        };
+      });
+      toast.success("Blog settings saved");
+      setEditingSite(null);
+    } finally {
+      setSavingBlogEdit(false);
     }
   };
 
@@ -230,7 +294,10 @@ export default function Dashboard() {
         open={showAddBlogModal}
         onOpenChange={(open) => {
           setShowAddBlogModal(open);
-          if (!open) setJustCreatedSite(null);
+          if (!open) {
+            setJustCreatedSite(null);
+            setNewBlogPaywalled("no");
+          }
         }}
       >
         <DialogContent className="sm:max-w-[500px] overflow-x-hidden">
@@ -361,6 +428,35 @@ export default function Dashboard() {
                     )
                   </p>
                 </div>
+                <div className="space-y-2">
+                  <Label>Does this blog require a membership to view posts?</Label>
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    {(
+                      [
+                        { value: "yes", label: "Yes" },
+                        { value: "no", label: "No" },
+                      ] as const
+                    ).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setNewBlogPaywalled(value)}
+                        className={[
+                          "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                          newBlogPaywalled === value
+                            ? "border-[#5B4FE8] bg-[#5B4FE8]/10 text-[#5B4FE8]"
+                            : "border-[#e5e4e0] bg-white text-[#0a0a0a] hover:bg-[#f5f5f3]",
+                        ].join(" ")}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[#6b6b6b]">
+                    This controls whether logged-in and logged-out display settings are available in Customize. You can
+                    update this setting later if your blog&apos;s membership setup changes.
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button
@@ -405,6 +501,176 @@ export default function Dashboard() {
               disabled={deleting}
             >
               {deleting ? "Removing…" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!editingSite}
+        onOpenChange={(open) => {
+          if (!open) setEditingSite(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit blog settings</DialogTitle>
+            <DialogDescription>
+              Change the display name and whether this blog expects visitors to log in before viewing posts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {editingSite?.url ? (
+              <p className="text-xs text-[#6b6b6b] break-all">
+                Blog URL:{" "}
+                <span className="font-mono text-[#0a0a0a]">{editingSite.url}</span>
+              </p>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="edit-blog-name">
+                Blog name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="edit-blog-name"
+                value={editBlogName}
+                onChange={(e) => setEditBlogName(e.target.value)}
+                placeholder="e.g., My Travel Blog"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleSaveBlogEdit();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Does this blog require a membership to view posts?</Label>
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                {(
+                  [
+                    { value: "yes", label: "Yes" },
+                    { value: "no", label: "No" },
+                  ] as const
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEditBlogRequiresLogin(value)}
+                    className={[
+                      "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                      editBlogRequiresLogin === value
+                        ? "border-[#5B4FE8] bg-[#5B4FE8]/10 text-[#5B4FE8]"
+                        : "border-[#e5e4e0] bg-white text-[#0a0a0a] hover:bg-[#f5f5f3]",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-[#6b6b6b]">
+                When set to Yes, Customize shows separate layout options for logged-in and logged-out visitors.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingSite(null)}
+              disabled={savingBlogEdit}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSaveBlogEdit()}
+              disabled={savingBlogEdit}
+              className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
+            >
+              {savingBlogEdit ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!editingSite}
+        onOpenChange={(open) => {
+          if (!open) setEditingSite(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit blog settings</DialogTitle>
+            <DialogDescription>
+              Change the display name and whether this blog expects visitors to log in before viewing posts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {editingSite?.url ? (
+              <p className="text-xs text-[#6b6b6b] break-all">
+                Blog URL:{" "}
+                <span className="font-mono text-[#0a0a0a]">{editingSite.url}</span>
+              </p>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="edit-blog-name">
+                Blog name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="edit-blog-name"
+                value={editBlogName}
+                onChange={(e) => setEditBlogName(e.target.value)}
+                placeholder="e.g., My Travel Blog"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleSaveBlogEdit();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Does this blog require a membership to view posts?</Label>
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                {(
+                  [
+                    { value: "yes", label: "Yes" },
+                    { value: "no", label: "No" },
+                  ] as const
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEditBlogRequiresLogin(value)}
+                    className={[
+                      "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                      editBlogRequiresLogin === value
+                        ? "border-[#5B4FE8] bg-[#5B4FE8]/10 text-[#5B4FE8]"
+                        : "border-[#e5e4e0] bg-white text-[#0a0a0a] hover:bg-[#f5f5f3]",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-[#6b6b6b]">
+                When set to Yes, Customize shows separate layout options for logged-in and logged-out visitors.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingSite(null)}
+              disabled={savingBlogEdit}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleSaveBlogEdit()}
+              disabled={savingBlogEdit}
+              className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
+            >
+              {savingBlogEdit ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -489,7 +755,20 @@ export default function Dashboard() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8 text-[#6b6b6b] hover:text-[#0a0a0a]"
+                        aria-label="Edit blog settings"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditBlog(site);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8"
+                        aria-label="Remove blog"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSiteToDelete({ id: site.id, name: site.name || "Unnamed site" });
