@@ -26,6 +26,7 @@ export default function Login() {
 
   const errorCode = searchParams.get("error");
   const reasonCode = searchParams.get("reason");
+  const returnTo = searchParams.get("returnTo");
   const errorMessage = errorCode
     ? (ERROR_MESSAGES[errorCode] ?? "An error occurred.")
     : reasonCode
@@ -43,7 +44,10 @@ export default function Login() {
       const res = await fetch("/api/auth/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          ...(returnTo ? { returnTo } : {}),
+        }),
       });
       if (res.ok) {
         setSent(true);

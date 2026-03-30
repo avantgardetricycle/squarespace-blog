@@ -44,12 +44,14 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   }
 
   const s = site.blogCommentSettings
+  const legacyApiKey = (s as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null
+  const effectiveApiKeyEnc = site.squarespaceApiKeyEnc ?? legacyApiKey
   const rawAutoClose = s?.autoCloseAfterDays ?? DEFAULT_SETTINGS.autoCloseAfterDays
   const settings = {
     commentsEnabled: s?.commentsEnabled ?? DEFAULT_SETTINGS.commentsEnabled,
     allowAnonymousComments: s?.allowAnonymousComments ?? DEFAULT_SETTINGS.allowAnonymousComments,
     subscriberCommentsEnabled: s?.subscriberCommentsEnabled ?? DEFAULT_SETTINGS.subscriberCommentsEnabled,
-    apiKeyVerified: !!s?.squarespaceApiKeyEnc,
+    apiKeyVerified: !!effectiveApiKeyEnc,
     requireApproval: s?.requireApproval ?? DEFAULT_SETTINGS.requireApproval,
     autoCloseAfterDays: rawAutoClose === 0 ? null : rawAutoClose,
     notifyEmail: s?.notifyEmail ?? DEFAULT_SETTINGS.notifyEmail,
@@ -91,6 +93,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Site not found' })
     return
   }
+  const legacyApiKey = (site.blogCommentSettings as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null
 
   const updates: Record<string, unknown> = {
     commentsEnabled: body.commentsEnabled ?? site.blogCommentSettings?.commentsEnabled ?? true,
@@ -115,7 +118,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     }
   }
 
-  if (updates.subscriberCommentsEnabled === true && !updates.squarespaceApiKeyEnc && !site.blogCommentSettings?.squarespaceApiKeyEnc) {
+  if (updates.subscriberCommentsEnabled === true && !updates.squarespaceApiKeyEnc && !site.squarespaceApiKeyEnc && !legacyApiKey) {
     res.status(400).json({ error: 'Verified API key is required to enable subscriber comments' })
     return
   }
@@ -135,7 +138,6 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     commentsEnabled: updates.commentsEnabled as boolean,
     allowAnonymousComments: updates.allowAnonymousComments as boolean,
     subscriberCommentsEnabled: updates.subscriberCommentsEnabled as boolean,
-    squarespaceApiKeyEnc: (updates.squarespaceApiKeyEnc as string | undefined) ?? site.blogCommentSettings?.squarespaceApiKeyEnc ?? null,
     requireApproval: updates.requireApproval as boolean,
     autoCloseAfterDays: updates.autoCloseAfterDays as number | null,
     notifyEmail: updates.notifyEmail as boolean,
@@ -149,7 +151,6 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     commentsEnabled?: boolean
     allowAnonymousComments?: boolean
     subscriberCommentsEnabled?: boolean
-    squarespaceApiKeyEnc?: string
     requireApproval?: boolean
     autoCloseAfterDays?: number | null
     notifyEmail?: boolean
@@ -169,15 +170,18 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     allowThreadedReplies: updates.allowThreadedReplies as boolean,
     sortOrder: updates.sortOrder as string,
   }
-  if (updates.squarespaceApiKeyEnc !== undefined) {
-    updateData.squarespaceApiKeyEnc = updates.squarespaceApiKeyEnc as string
-  }
-
   await prisma.blogCommentSettings.upsert({
     where: { siteId: site.id },
     create: createData,
     update: updateData,
   })
+
+  if (updates.squarespaceApiKeyEnc !== undefined) {
+    await prisma.site.update({
+      where: { id: site.id },
+      data: { squarespaceApiKeyEnc: updates.squarespaceApiKeyEnc as string },
+    })
+  }
 
   res.json({ ok: true })
 })

@@ -175,6 +175,9 @@ export async function importSquarespaceCommentChain(
           body,
           parentId: prismaParentId,
           updatedAt: new Date(),
+          status: 'approved',
+          autoApproved: true,
+          importedFromSquarespace: true,
         },
       })
       idMap.set(extId, saved.id)
@@ -220,4 +223,42 @@ export async function resolveSquarespaceParentForReply(
     options.squarespaceParentId,
     rows
   )
+}
+
+/**
+ * Before moderating a comment, ensure any Squarespace-linked ancestor thread is fetched and stored.
+ * Call before applying spam/deleted (or similar) so SS-originated parents stay in sync and approved on ingest.
+ */
+export async function ensureSquarespaceThreadImportedForModeration(
+  prisma: PrismaClient,
+  site: { id: string; url: string | null | undefined; blogPassword?: string | null },
+  comment: { postId: string; parentId: string | null; externalCommentId: string | null }
+): Promise<void> {
+  if (!site.url || !String(site.url).trim()) return
+
+  let ext: string | null = comment.externalCommentId
+  let parentId = comment.parentId
+  const guard = new Set<string>()
+  while (!ext && parentId) {
+    if (guard.has(parentId)) return
+    guard.add(parentId)
+    const p = await prisma.comment.findFirst({
+      where: { id: parentId },
+      select: { externalCommentId: true, parentId: true },
+    })
+    if (!p) break
+    ext = p.externalCommentId
+    parentId = p.parentId
+  }
+  if (!ext) return
+
+  const rows = await fetchAllSquarespaceCommentsForPost({
+    siteUrl: site.url,
+    postItemId: comment.postId,
+    recordType: 1,
+    blogPassword: site.blogPassword ?? null,
+  })
+  if (rows.length === 0) return
+
+  await importSquarespaceCommentChain(prisma, site.id, comment.postId, ext, rows)
 }

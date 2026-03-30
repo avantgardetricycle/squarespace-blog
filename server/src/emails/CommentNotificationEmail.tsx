@@ -1,11 +1,35 @@
 import { Html, Head, Body, Container, Section, Text, Link, Hr } from '@react-email/components'
 import * as React from 'react'
 
+export type CommentNotificationCommentStatus = 'pending' | 'approved'
+
 interface CommentNotificationEmailProps {
   displayName: string
   postTitle: string
   commentExcerpt: string
   viewUrl: string
+  commentStatus: CommentNotificationCommentStatus
+  approveUrl: string
+  spamUrl: string
+  hideUrl: string
+}
+
+const cellStyle: React.CSSProperties = {
+  width: '33.33%',
+  padding: '0 6px 10px 6px',
+  verticalAlign: 'top',
+}
+
+const linkBase: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  boxSizing: 'border-box',
+  fontSize: 14,
+  fontWeight: 600,
+  padding: '12px 16px',
+  borderRadius: 6,
+  textDecoration: 'none',
+  textAlign: 'center' as const,
 }
 
 export function CommentNotificationEmail({
@@ -13,7 +37,34 @@ export function CommentNotificationEmail({
   postTitle = 'Untitled',
   commentExcerpt = '',
   viewUrl = '#',
+  commentStatus = 'pending',
+  approveUrl = '#',
+  spamUrl = '#',
+  hideUrl = '#',
 }: CommentNotificationEmailProps) {
+  const isPending = commentStatus === 'pending'
+  const helperText = isPending
+    ? 'This comment is awaiting review. Approve it, mark it as spam, or open it in the dashboard.'
+    : 'This comment is published. Mark it as spam, hide it, or view it in the dashboard.'
+
+  const firstHref = isPending ? approveUrl : spamUrl
+  const firstLabel = isPending ? 'Approve' : 'Mark as spam'
+  const firstStyle: React.CSSProperties = isPending
+    ? { ...linkBase, backgroundColor: '#059669', color: '#ffffff' }
+    : { ...linkBase, backgroundColor: '#ffffff', color: '#b91c1c', border: '1px solid #fecaca' }
+
+  const secondHref = isPending ? spamUrl : hideUrl
+  const secondLabel = isPending ? 'Mark as spam' : 'Hide'
+  const secondStyle: React.CSSProperties = isPending
+    ? { ...linkBase, backgroundColor: '#ffffff', color: '#b91c1c', border: '1px solid #fecaca' }
+    : { ...linkBase, backgroundColor: '#ffffff', color: '#374151', border: '1px solid #d1d5db' }
+
+  const viewStyle: React.CSSProperties = {
+    ...linkBase,
+    backgroundColor: '#5B4FE8',
+    color: '#ffffff',
+  }
+
   return (
     <Html>
       <Head>
@@ -38,22 +89,38 @@ export function CommentNotificationEmail({
               </Text>
             </Section>
 
-            <Section style={{ marginBottom: 24 }}>
-              <Link
-                href={viewUrl}
-                style={{
-                  display: 'inline-block',
-                  backgroundColor: '#5B4FE8',
-                  color: '#ffffff',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  padding: '12px 20px',
-                  borderRadius: 6,
-                  textDecoration: 'none',
-                }}
+            <Text style={{ color: '#6b6b6b', fontSize: 13, margin: '0 0 12px', lineHeight: 1.5 }}>
+              {helperText}
+            </Text>
+
+            <Section style={{ marginBottom: 16 }}>
+              <table
+                cellPadding={0}
+                cellSpacing={0}
+                role="presentation"
+                width="100%"
+                style={{ borderCollapse: 'collapse' as const, tableLayout: 'fixed' as const }}
               >
-                View in Dashboard
-              </Link>
+                <tbody>
+                  <tr>
+                    <td style={cellStyle}>
+                      <Link href={firstHref} style={firstStyle}>
+                        {firstLabel}
+                      </Link>
+                    </td>
+                    <td style={cellStyle}>
+                      <Link href={secondHref} style={secondStyle}>
+                        {secondLabel}
+                      </Link>
+                    </td>
+                    <td style={cellStyle}>
+                      <Link href={viewUrl} style={viewStyle}>
+                        View in Dashboard
+                      </Link>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </Section>
 
             <Hr style={{ borderColor: '#e5e4e0' }} />

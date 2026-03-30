@@ -1,4 +1,4 @@
-import { createBrowserRouter, redirect } from "react-router";
+import { createBrowserRouter, redirect, type LoaderFunctionArgs } from "react-router";
 import AppLayout from "./components/Layout";
 import Login from "./pages/Login";
 import LandingPage from "./pages/LandingPage";
@@ -11,10 +11,11 @@ import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Analytics from "./pages/Analytics";
 import { getDashboardMe } from "@/api/auth";
 
-const protectedLoader = async () => {
+const protectedLoader = async ({ request }: LoaderFunctionArgs) => {
   const me = await getDashboardMe();
   if (!me) {
-    return redirect("/login");
+    const u = new URL(request.url);
+    return redirect("/login?returnTo=" + encodeURIComponent(u.pathname + u.search));
   }
   return null;
 };

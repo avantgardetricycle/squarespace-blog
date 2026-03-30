@@ -1,6 +1,7 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
 import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
+import { getAppUrl } from './url.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -208,13 +209,36 @@ export async function sendCommentNotificationEmail(
   displayName: string,
   postTitle: string,
   commentExcerpt: string,
-  viewUrl: string
+  siteKey: string,
+  commentId: string,
+  commentStatus: 'pending' | 'approved'
 ): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
     console.log(`[Comment] SENDGRID_API_KEY not set. New comment from ${displayName} on "${postTitle}"`)
     return
   }
+
+  const base = getAppUrl().replace(/\/+$/, '')
+  const viewUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey,
+    highlight: commentId,
+  }).toString()}`
+  const approveUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey,
+    moderate: 'approve',
+    commentId,
+  }).toString()}`
+  const spamUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey,
+    moderate: 'spam',
+    commentId,
+  }).toString()}`
+  const hideUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey,
+    moderate: 'hide',
+    commentId,
+  }).toString()}`
 
   sgMail.setApiKey(apiKey)
 
@@ -223,6 +247,10 @@ export async function sendCommentNotificationEmail(
     postTitle,
     commentExcerpt,
     viewUrl,
+    commentStatus,
+    approveUrl,
+    spamUrl,
+    hideUrl,
   })
 
   try {

@@ -47,6 +47,7 @@ model Site {
   url                 String?
   blogPath            String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
   blogPassword        String?  @map("blog_password") // for password-protected Squarespace blogs (?password=)
+  squarespaceApiKeyEnc String? @map("squarespace_api_key_enc") @db.Text // encrypted Squarespace Profiles API key
   status              String   @default("active") // active | disabled
   verificationStatus  String   @default("pending") @map("verification_status") // pending | verified | needs_attention
   paywallMode         String   @default("auto") @map("paywall_mode") // auto | force_logged_out | force_logged_in
@@ -323,7 +324,7 @@ model Comment {
   verifiedSubscriber       Boolean   @default(false) @map("verified_subscriber")
   squarespaceProfileId     String?   @map("squarespace_profile_id") @db.Text
   body                     String    @db.Text
-  status                   String    @default("pending") // pending | approved | spam | deleted
+  status                   String    @default("pending") // pending | approved | spam | hidden | deleted
   autoApproved             Boolean   @default(false) @map("auto_approved")
   ipAddress                String?   @map("ip_address") @db.VarChar(45)
   userAgent                String?   @map("user_agent") @db.Text
@@ -362,7 +363,6 @@ model BlogCommentSettings {
   commentsEnabled          Boolean  @default(true) @map("comments_enabled")
   allowAnonymousComments   Boolean  @default(true) @map("allow_anonymous_comments")
   subscriberCommentsEnabled Boolean @default(false) @map("subscriber_comments_enabled")
-  squarespaceApiKeyEnc     String?  @map("squarespace_api_key_enc") @db.Text
   requireApproval          Boolean  @default(false) @map("require_approval")
   autoCloseAfterDays       Int?     @map("auto_close_after_days")
   notifyEmail              Boolean  @default(true) @map("notify_email")

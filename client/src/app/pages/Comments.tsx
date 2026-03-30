@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router";
+import { useState, useEffect, useRef } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router";
 import {
   MessageCircle,
   ThumbsUp,
@@ -27,11 +27,19 @@ import { Switch } from "@/app/components/ui/switch";
 import { Slider } from "@/app/components/ui/slider";
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 
-// API statuses: pending, approved, spam, deleted
-// UI statuses: published (approved), awaiting (pending), spam, hidden (deleted)
-type ApiStatus = "pending" | "approved" | "spam" | "deleted";
-type UiStatus = "published" | "awaiting" | "hidden" | "spam";
+// Dashboard list: pending | approved | spam | hidden. Permanently deleted rows are never returned.
+type ApiStatus = "pending" | "approved" | "spam" | "hidden";
+type UiStatus = "published" | "awaiting" | "spam" | "hidden";
 
 interface Comment {
   id: string;
@@ -41,6 +49,7 @@ interface Comment {
   displayName: string;
   email: string | null;
   verifiedSubscriber: boolean;
+  squarespaceProfileId: string | null;
   body: string;
   status: ApiStatus;
   ipAddress: string | null;
@@ -48,25 +57,46 @@ interface Comment {
   likeCount: number;
 }
 
-function apiToUiStatus(s: ApiStatus): UiStatus {
+/** Opens Squarespace site config — profile detail when id is known, otherwise profiles list. */
+function squarespaceProfileHref(siteUrl: string | null | undefined, profileId: string | null | undefined): string | null {
+  try {
+    const s = (siteUrl || "").trim();
+    if (!s) return null;
+    const u = new URL(s.startsWith("http") ? s : `https://${s}`);
+    const id = profileId?.trim();
+    if (id) return `${u.origin}/config/profiles/${encodeURIComponent(id)}`;
+    return `${u.origin}/config/profiles`;
+  } catch {
+    return null;
+  }
+}
+
+function apiToUiStatus(s: string): UiStatus {
   if (s === "approved") return "published";
   if (s === "pending") return "awaiting";
-  if (s === "deleted") return "hidden";
+  if (s === "hidden") return "hidden";
   return "spam";
 }
 
 function uiToApiStatus(s: UiStatus): ApiStatus {
   if (s === "published") return "approved";
   if (s === "awaiting") return "pending";
-  if (s === "hidden") return "deleted";
+  if (s === "hidden") return "hidden";
   return "spam";
+}
+
+function statusBadgeLabel(ui: UiStatus): string {
+  if (ui === "awaiting") return "Awaiting Review";
+  if (ui === "published") return "Published";
+  if (ui === "hidden") return "Hidden";
+  return "Spam";
 }
 
 interface Counts {
   pending: number;
   approved: number;
   spam: number;
-  deleted: number;
+  hidden: number;
 }
 
 interface CommentSettings {
@@ -87,7 +117,11 @@ export default function Comments() {
   const [loading, setLoading] = useState(true);
   const [siteKey, setSiteKey] = useState<string | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [counts, setCounts] = useState<Counts>({ pending: 0, approved: 0, spam: 0, deleted: 0 });
+  const [counts, setCounts] = useState<Counts>({ pending: 0, approved: 0, spam: 0, hidden: 0 });
+  const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<
+    { mode: "single"; comment: Comment } | { mode: "bulk"; ids: string[] } | null
+  >(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -99,13 +133,32 @@ export default function Comments() {
   const [replyText, setReplyText] = useState("");
   const [replySending, setReplySending] = useState(false);
   const [bulkActioning, setBulkActioning] = useState(false);
+  const [permanentDeleting, setPermanentDeleting] = useState(false);
   const [settings, setSettings] = useState<CommentSettings | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const emailModerationAttempted = useRef<string | null>(null);
+  const highlightHandled = useRef<string | null>(null);
+  const highlightSetupRef = useRef<string | null>(null);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
       setMe(data ?? null);
-      if (data?.sites?.[0]) setSiteKey(data.sites[0].siteKey);
+      if (data?.sites?.[0]) {
+        let initialKey = data.sites[0].siteKey;
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const urlSk = params.get("siteKey");
+          if (urlSk && data.sites.some((s) => s.siteKey === urlSk)) {
+            initialKey = urlSk;
+          }
+        } catch {
+          /* ignore */
+        }
+        setSiteKey(initialKey);
+      }
       setLoading(false);
     });
   }, []);
@@ -130,7 +183,7 @@ export default function Comments() {
         }
       })
       .finally(() => setFetching(false));
-  }, [siteKey, selectedFilter, page, searchQuery]);
+  }, [siteKey, selectedFilter, page, searchQuery, listRefreshKey]);
 
   useEffect(() => {
     if (!siteKey) return;
@@ -139,7 +192,13 @@ export default function Comments() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) setCounts(data);
+        if (data)
+          setCounts({
+            pending: data.pending ?? 0,
+            approved: data.approved ?? 0,
+            spam: data.spam ?? 0,
+            hidden: data.hidden ?? 0,
+          });
       });
   }, [siteKey, comments]);
 
@@ -175,15 +234,143 @@ export default function Comments() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) setCounts(data);
+        if (data)
+          setCounts({
+            pending: data.pending ?? 0,
+            approved: data.approved ?? 0,
+            spam: data.spam ?? 0,
+            hidden: data.hidden ?? 0,
+          });
       });
   };
 
-  const doBulkAction = async (action: "approve" | "spam" | "delete") => {
+  const clearCommentQueryKeys = (keys: string[]) => {
+    const next = new URLSearchParams(searchParams);
+    keys.forEach((k) => next.delete(k));
+    const s = next.toString();
+    navigate({ pathname: "/dashboard/comments", search: s ? `?${s}` : "" }, { replace: true });
+  };
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (!err) return;
+    if (err === "invalid_token") toast.error("That link is invalid or expired.");
+    else if (err === "not_found") toast.error("Comment not found.");
+    else toast.error("Something went wrong.");
+    clearCommentQueryKeys(["error"]);
+  }, [searchParams, navigate]);
+
+  useEffect(() => {
+    const approvedId = searchParams.get("approved");
+    if (!approvedId) return;
+    toast.success("Comment approved.");
+    clearCommentQueryKeys(["approved"]);
+    setListRefreshKey((k) => k + 1);
+  }, [searchParams, navigate]);
+
+  useEffect(() => {
+    const spamId = searchParams.get("spam");
+    if (!spamId) return;
+    toast.success("Marked as spam.");
+    clearCommentQueryKeys(["spam"]);
+    setListRefreshKey((k) => k + 1);
+  }, [searchParams, navigate]);
+
+  useEffect(() => {
+    const hid = searchParams.get("highlight");
+    if (!hid) {
+      highlightSetupRef.current = null;
+      return;
+    }
+    if (!siteKey) return;
+    if (highlightSetupRef.current === hid) return;
+    highlightSetupRef.current = hid;
+    setSelectedFilter("all");
+    setPage(1);
+    setSearchQuery("");
+    setListRefreshKey((k) => k + 1);
+  }, [searchParams, siteKey]);
+
+  useEffect(() => {
+    if (!me || loading) return;
+    const urlSk = searchParams.get("siteKey");
+    const validKeys = new Set((me.sites || []).map((s) => s.siteKey).filter(Boolean));
+    if (urlSk && !validKeys.has(urlSk)) {
+      toast.error("This comment does not belong to your account.");
+      clearCommentQueryKeys(["siteKey", "moderate", "commentId", "highlight"]);
+      return;
+    }
+    const moderate = searchParams.get("moderate");
+    if (
+      urlSk &&
+      siteKey &&
+      urlSk !== siteKey &&
+      (moderate === "approve" || moderate === "spam" || moderate === "hide" || searchParams.get("highlight"))
+    ) {
+      setSiteKey(urlSk);
+    }
+  }, [me, loading, siteKey, searchParams, navigate]);
+
+  useEffect(() => {
+    if (!me || loading || !siteKey) return;
+    const moderate = searchParams.get("moderate");
+    const commentId = searchParams.get("commentId");
+    if (!moderate || !commentId || !["approve", "spam", "hide"].includes(moderate)) return;
+    const urlSk = searchParams.get("siteKey");
+    if (urlSk && urlSk !== siteKey) return;
+
+    const key = `${moderate}:${commentId}`;
+    if (emailModerationAttempted.current === key) return;
+    emailModerationAttempted.current = key;
+
+    const status = moderate === "approve" ? "approved" : moderate === "hide" ? "hidden" : "spam";
+    (async () => {
+      const r = await fetch(`/api/dashboard/comments/${commentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (r.ok) {
+        toast.success(
+          status === "approved" ? "Comment approved" : status === "hidden" ? "Comment hidden" : "Marked as spam"
+        );
+        setComments((prev) => prev.filter((x) => x.id !== commentId));
+        setTotal((n) => Math.max(0, n - 1));
+        refreshCounts();
+        setListRefreshKey((k) => k + 1);
+        clearCommentQueryKeys(["moderate", "commentId"]);
+      } else {
+        emailModerationAttempted.current = null;
+        const data = await r.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error ?? "Could not update comment");
+        clearCommentQueryKeys(["moderate", "commentId"]);
+      }
+    })();
+  }, [me, loading, siteKey, searchParams, navigate]);
+
+  useEffect(() => {
+    const hid = searchParams.get("highlight");
+    if (!hid || fetching) return;
+    if (highlightHandled.current === hid) return;
+    const el = document.getElementById(`bb-comment-row-${hid}`);
+    if (!el) return;
+    highlightHandled.current = hid;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-[#5B4FE8]", "ring-offset-2", "rounded-lg");
+    const timer = window.setTimeout(() => {
+      el.classList.remove("ring-2", "ring-[#5B4FE8]", "ring-offset-2", "rounded-lg");
+    }, 4000);
+    clearCommentQueryKeys(["highlight"]);
+    return () => window.clearTimeout(timer);
+  }, [comments, fetching, searchParams, navigate]);
+
+  const doBulkAction = async (action: "approve" | "spam" | "hide") => {
     if (selectedComments.size === 0) return;
     setBulkActioning(true);
-    const status = action === "approve" ? "approved" : action === "spam" ? "spam" : "deleted";
-    const promises = Array.from(selectedComments).map((id) =>
+    const status = action === "approve" ? "approved" : action === "hide" ? "hidden" : "spam";
+    const ids = Array.from(selectedComments);
+    const promises = ids.map((id) =>
       fetch(`/api/dashboard/comments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -193,17 +380,75 @@ export default function Comments() {
     );
     await Promise.all(promises);
     setSelectedComments(new Set());
-    setComments((prev) => prev.filter((c) => !selectedComments.has(c.id)));
-    setTotal((t) => Math.max(0, t - selectedComments.size));
+    setComments((prev) => prev.filter((c) => !ids.includes(c.id)));
+    setTotal((t) => Math.max(0, t - ids.length));
     refreshCounts();
     toast.success(
       action === "approve"
         ? "Comments approved"
-        : action === "spam"
-          ? "Comments marked as spam"
-          : "Comments deleted"
+        : action === "hide"
+          ? "Comments hidden"
+          : "Comments marked as spam"
     );
     setBulkActioning(false);
+  };
+
+  const openPermanentDeleteBulk = () => {
+    if (selectedComments.size === 0) return;
+    setPermanentDeleteTarget({ mode: "bulk", ids: Array.from(selectedComments) });
+    setPermanentDeleteOpen(true);
+  };
+
+  const executePermanentDelete = async () => {
+    const t = permanentDeleteTarget;
+    if (!t) return;
+    setPermanentDeleting(true);
+    try {
+      if (t.mode === "single") {
+        const r = await fetch(`/api/dashboard/comments/${t.comment.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ status: "deleted" }),
+        });
+        if (r.ok) {
+          toast.success("Comment deleted");
+          setComments((prev) => prev.filter((x) => x.id !== t.comment.id));
+          setTotal((n) => Math.max(0, n - 1));
+          refreshCounts();
+          setPermanentDeleteOpen(false);
+          setPermanentDeleteTarget(null);
+        } else {
+          toast.error("Could not delete comment");
+        }
+      } else {
+        const ids = t.ids;
+        const results = await Promise.all(
+          ids.map((id) =>
+            fetch(`/api/dashboard/comments/${id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ status: "deleted" }),
+            })
+          )
+        );
+        const allOk = results.every((r) => r.ok);
+        if (allOk) {
+          setSelectedComments(new Set());
+          setComments((prev) => prev.filter((c) => !ids.includes(c.id)));
+          setTotal((n) => Math.max(0, n - ids.length));
+          refreshCounts();
+          toast.success("Comments deleted");
+          setPermanentDeleteOpen(false);
+          setPermanentDeleteTarget(null);
+        } else {
+          toast.error("Some comments could not be deleted");
+        }
+      }
+    } finally {
+      setPermanentDeleting(false);
+    }
   };
 
   const handleApprove = (c: Comment) => {
@@ -238,24 +483,25 @@ export default function Comments() {
     });
   };
 
-  const handleDelete = (c: Comment) => {
+  const requestPermanentDelete = (c: Comment) => {
+    setPermanentDeleteTarget({ mode: "single", comment: c });
+    setPermanentDeleteOpen(true);
+  };
+
+  const handleHide = (c: Comment) => {
     fetch(`/api/dashboard/comments/${c.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ status: "deleted" }),
+      body: JSON.stringify({ status: "hidden" }),
     }).then((r) => {
       if (r.ok) {
-        toast.success("Comment deleted");
+        toast.success("Comment hidden");
         setComments((prev) => prev.filter((x) => x.id !== c.id));
         setTotal((t) => Math.max(0, t - 1));
         refreshCounts();
       }
     });
-  };
-
-  const handleHide = (c: Comment) => {
-    handleDelete(c);
   };
 
   const handleUnhide = (c: Comment) => {
@@ -266,10 +512,9 @@ export default function Comments() {
       body: JSON.stringify({ status: "approved" }),
     }).then((r) => {
       if (r.ok) {
-        toast.success("Comment unhidden");
-        setComments((prev) =>
-          prev.map((x) => (x.id === c.id ? { ...x, status: "approved" as ApiStatus } : x))
-        );
+        toast.success("Comment published");
+        setComments((prev) => prev.filter((x) => x.id !== c.id));
+        setTotal((t) => Math.max(0, t - 1));
         refreshCounts();
       }
     });
@@ -365,13 +610,13 @@ export default function Comments() {
       year: "numeric",
     });
 
-  const totalCount = counts.pending + counts.approved + counts.spam + counts.deleted;
+  const totalCount = counts.pending + counts.approved + counts.spam + counts.hidden;
 
   const filters: { value: "all" | UiStatus; label: string; count: number }[] = [
     { value: "all", label: "All Comments", count: totalCount },
     { value: "published", label: "Published", count: counts.approved },
     { value: "awaiting", label: "Awaiting Review", count: counts.pending },
-    { value: "hidden", label: "Hidden", count: counts.deleted },
+    { value: "hidden", label: "Hidden", count: counts.hidden },
     { value: "spam", label: "Spam", count: counts.spam },
   ];
 
@@ -394,6 +639,7 @@ export default function Comments() {
   }
 
   return (
+    <>
     <div className="flex h-full p-8">
       <div className="flex-1 flex flex-col">
         <div className="border-b border-neutral-200 bg-white">
@@ -494,17 +740,27 @@ export default function Comments() {
                   variant="outline"
                   size="sm"
                   disabled={bulkActioning}
-                  onClick={() => doBulkAction("spam")}
+                  onClick={() => doBulkAction("hide")}
                   className="border-neutral-300"
                 >
                   <EyeOff className="w-3.5 h-3.5 mr-1.5" />
+                  Hide
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkActioning}
+                  onClick={() => doBulkAction("spam")}
+                  className="border-neutral-300"
+                >
+                  <Flag className="w-3.5 h-3.5 mr-1.5" />
                   Mark as Spam
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={bulkActioning}
-                  onClick={() => doBulkAction("delete")}
+                  onClick={openPermanentDeleteBulk}
                   className="border-red-300 text-red-700 hover:bg-red-50"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1.5" />
@@ -548,8 +804,14 @@ export default function Comments() {
 
                 {comments.map((comment) => {
                   const uiStatus = apiToUiStatus(comment.status);
+                  const siteUrl =
+                    me?.sites?.find((s) => s.siteKey === siteKey)?.url ?? me?.sites?.[0]?.url ?? null;
+                  const isAuthenticated = comment.verifiedSubscriber === true;
+                  const profileLink =
+                    isAuthenticated ? squarespaceProfileHref(siteUrl, comment.squarespaceProfileId) : null;
                   return (
                     <div
+                      id={`bb-comment-row-${comment.id}`}
                       key={comment.id}
                       className="bg-white rounded-lg border border-neutral-200 shadow-sm"
                     >
@@ -565,27 +827,44 @@ export default function Comments() {
                             {comment.displayName?.charAt(0) || "?"}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between mb-2">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium text-[#0a0a0a]">
-                                    {comment.displayName}
-                                  </span>
+                            <div className="flex items-start justify-between mb-2 gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  {profileLink ? (
+                                    <a
+                                      href={profileLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="font-medium text-[#0a0a0a] hover:text-[#5B4FE8] hover:underline"
+                                    >
+                                      {comment.displayName}
+                                    </a>
+                                  ) : (
+                                    <span className="font-medium text-[#0a0a0a]">{comment.displayName}</span>
+                                  )}
                                   <span
-                                    className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getStatusBadgeStyles(
+                                    className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${getStatusBadgeStyles(
                                       uiStatus
                                     )}`}
                                   >
-                                    {uiStatus === "awaiting"
-                                      ? "Awaiting Review"
-                                      : uiStatus.charAt(0).toUpperCase() + uiStatus.slice(1)}
+                                    {statusBadgeLabel(uiStatus)}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-neutral-500">
-                                  {comment.email && <span>{comment.email}</span>}
-                                  {comment.email && <span>•</span>}
-                                  <span>{formatDate(comment.createdAt)}</span>
+                                <div className="flex flex-wrap items-center gap-2 text-xs mb-1 justify-start">
+                                  {comment.email ? (
+                                    <span className="text-neutral-600 truncate max-w-full">{comment.email}</span>
+                                  ) : null}
+                                  <span
+                                    className={`shrink-0 px-2 py-0.5 rounded-full border font-medium ${
+                                      isAuthenticated
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                        : "border-neutral-200 bg-neutral-50 text-neutral-600"
+                                    }`}
+                                  >
+                                    {isAuthenticated ? "Authenticated" : "Unauthenticated"}
+                                  </span>
                                 </div>
+                                <div className="text-xs text-neutral-500">{formatDate(comment.createdAt)}</div>
                               </div>
                             </div>
 
@@ -619,7 +898,7 @@ export default function Comments() {
                                   Approve
                                 </button>
                               )}
-                              {uiStatus === "published" && (
+                              {(uiStatus === "published" || uiStatus === "awaiting") && (
                                 <button
                                   onClick={() => handleHide(comment)}
                                   className="text-sm font-medium text-neutral-600 hover:text-neutral-700 flex items-center gap-1.5"
@@ -665,7 +944,7 @@ export default function Comments() {
                                 </button>
                               )}
                               <button
-                                onClick={() => handleDelete(comment)}
+                                onClick={() => requestPermanentDelete(comment)}
                                 className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center gap-1.5 ml-auto"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -755,10 +1034,8 @@ export default function Comments() {
             <div className="font-heading text-3xl text-amber-900">{counts.pending}</div>
           </div>
           <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-            <div className="text-xs font-medium text-red-700 uppercase tracking-wider mb-1">
-              Hidden
-            </div>
-            <div className="font-heading text-3xl text-red-900">{counts.deleted}</div>
+            <div className="text-xs font-medium text-red-700 uppercase tracking-wider mb-1">Hidden</div>
+            <div className="font-heading text-3xl text-red-900">{counts.hidden}</div>
           </div>
           <div className="p-4 bg-neutral-100 rounded-lg border border-neutral-300">
             <div className="text-xs font-medium text-neutral-600 uppercase tracking-wider mb-1">
@@ -801,7 +1078,7 @@ export default function Comments() {
                 <Switch
                   checked={settings?.subscriberCommentsEnabled ?? false}
                   onCheckedChange={(v) => settings && updateSetting("subscriberCommentsEnabled", v)}
-                  disabled={settingsSaving}
+                  disabled={settingsSaving || !settings?.apiKeyVerified}
                 />
               </div>
               <p className="text-xs text-neutral-500">Require email for paywalled posts, verified against your Squarespace member list.</p>
@@ -907,5 +1184,37 @@ export default function Comments() {
         </div>
       </aside>
     </div>
+
+    <AlertDialog
+      open={permanentDeleteOpen}
+      onOpenChange={(open) => {
+        if (!open && !permanentDeleting) {
+          setPermanentDeleteOpen(false);
+          setPermanentDeleteTarget(null);
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. The comment
+            {permanentDeleteTarget?.mode === "bulk" ? "s" : ""} will be removed from your blog and will
+            not appear in this dashboard again.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={permanentDeleting}>Cancel</AlertDialogCancel>
+          <Button
+            variant="destructive"
+            disabled={permanentDeleting}
+            onClick={() => void executePermanentDelete()}
+          >
+            {permanentDeleting ? "Deleting…" : "Delete permanently"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

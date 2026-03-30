@@ -211,7 +211,10 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
       if (!firstJson) firstJson = json
 
       const items = Array.isArray(json?.items) ? json.items : (json?.collection && typeof json.collection === 'object' && Array.isArray((json.collection as Record<string, unknown>).items) ? (json.collection as Record<string, unknown>).items : []) as unknown[]
-      for (const item of items) allItems.push(item)
+      for (const item of items) {
+        // Squarespace may return null entries for member-area-gated posts — skip them.
+        if (item && typeof item === 'object') allItems.push(item)
+      }
 
       const coll = json?.collection && typeof json.collection === 'object' ? json.collection as Record<string, unknown> : null
       const pag = (json?.pagination && typeof json.pagination === 'object' ? json.pagination : coll?.pagination && typeof coll.pagination === 'object' ? coll.pagination : null) as { nextPageUrl?: string } | null

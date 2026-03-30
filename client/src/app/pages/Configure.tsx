@@ -1359,7 +1359,10 @@ export default function Configure() {
       fetch(`/api/blog-authors/${effectiveSiteKey}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])),
     ])
       .then(async ([json, existingAuthors]) => {
-        const items = Array.isArray(json?.items) ? json.items : (json?.collection?.items ?? []);
+        const rawItems = Array.isArray(json?.items) ? json.items : (json?.collection?.items ?? []);
+        // Squarespace can return null entries for member-area-gated posts — filter them out
+        // to prevent null-access crashes when a post is selected in the Configure panel.
+        const items = rawItems.filter((item: unknown) => item != null && typeof item === 'object');
         setBlogItems(items);
         const existingList = Array.isArray(existingAuthors) ? existingAuthors : [];
         const existingByName = new Map(existingList.map((a: { id?: string; name?: string }) => [a?.name ?? "", a?.id ?? ""]));
@@ -2441,7 +2444,7 @@ export default function Configure() {
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
                       Publishing & Management
                     </div>
-                    {selectedPostIndex >= 0 && blogItems.length > 0 && selectedPostIndex < blogItems.length ? (
+                    {selectedPostIndex >= 0 && blogItems.length > 0 && selectedPostIndex < blogItems.length && blogItems[selectedPostIndex] != null ? (
                       <div className="border-b border-[#e5e4e0] pb-4">
                         <span className="font-medium block py-3">Post Author(s)</span>
                         <div className="space-y-2">
@@ -2737,16 +2740,14 @@ export default function Configure() {
                                 <Switch
                                   checked={commentSettings.subscriberCommentsEnabled}
                                   onCheckedChange={(v) => {
+                                    if (!commentSettings.apiKeyVerified) return;
                                     if (v) {
-                                      if (commentSettings.apiKeyVerified) {
-                                        setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: true } : p);
-                                      } else {
-                                        setSquarespaceApiKeyModalOpen("setup");
-                                      }
+                                      setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: true } : p);
                                     } else {
                                       setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: false } : p);
                                     }
                                   }}
+                                  disabled={!commentSettings.apiKeyVerified}
                                 />
                               </div>
                               <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
@@ -2762,6 +2763,15 @@ export default function Configure() {
                                     <Pencil className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
+                              )}
+                              {!commentSettings.apiKeyVerified && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSquarespaceApiKeyModalOpen("setup")}
+                                  className="text-xs text-[#5B4FE8] hover:underline"
+                                >
+                                  Connect Squarespace API key to enable this setting
+                                </button>
                               )}
                             </div>
                             <div className="space-y-2">

@@ -10,9 +10,25 @@ const SESSION_COOKIE = 'session'
 const SESSION_DAYS = 30
 const MAGIC_LINK_EXPIRY_MINUTES = 15
 
+/** Restrict post-login redirects to in-app dashboard paths (open-redirect safe). */
+function sanitizeAuthReturnTo(raw: unknown): string | null {
+  if (raw == null || typeof raw !== 'string') return null
+  const s = raw.trim()
+  if (!s.startsWith('/dashboard')) return null
+  if (s.startsWith('//') || s.includes('\\')) return null
+  if (s.length > 2048) return null
+  try {
+    const fake = new URL(s, 'https://example.com')
+    if (fake.username || fake.password) return null
+  } catch {
+    return null
+  }
+  return s
+}
+
 // POST /api/auth/invite - Send magic link (user must exist)
 router.post('/invite', async (req: Request, res: Response) => {
-  const { email } = req.body
+  const { email, returnTo } = req.body as { email?: string; returnTo?: string }
 
   if (!email || typeof email !== 'string') {
     res.status(400).json({ error: 'Email is required' })
@@ -50,7 +66,10 @@ router.post('/invite', async (req: Request, res: Response) => {
     })
 
     const appUrl = getAppUrl()
-    const magicLink = `${appUrl}/api/auth/magic?token=${rawToken}`
+    const safeReturn = sanitizeAuthReturnTo(returnTo)
+    const magicLink =
+      `${appUrl}/api/auth/magic?token=${rawToken}` +
+      (safeReturn ? `&returnTo=${encodeURIComponent(safeReturn)}` : '')
 
     await sendMagicLinkEmailViaSendGrid(normalizedEmail, magicLink)
 
@@ -64,8 +83,10 @@ router.post('/invite', async (req: Request, res: Response) => {
 // GET /api/auth/magic?token=... - Validate token, create session, redirect to dashboard
 router.get('/magic', async (req: Request, res: Response) => {
   const token = req.query.token as string | undefined
+  const returnToRaw = typeof req.query.returnTo === 'string' ? req.query.returnTo : undefined
   const appUrl = getAppUrl()
-  const dashboardUrl = `${appUrl}/dashboard`
+  const safeReturn = sanitizeAuthReturnTo(returnToRaw)
+  const dashboardUrl = `${appUrl}${safeReturn ?? '/dashboard'}`
   const loginUrl = `${appUrl}/login`
 
   if (!token) {

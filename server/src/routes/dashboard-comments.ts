@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
-import { signCommentActionToken } from '../lib/comment-action-token.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
-import { getAppUrl } from '../lib/url.js'
+import { ensureSquarespaceThreadImportedForModeration } from '../lib/squarespace-comments-import.js'
 
 const router = Router()
 
@@ -22,7 +21,7 @@ async function getCommentWithAuth(commentId: string, userId: number) {
   return comment
 }
 
-// GET /api/dashboard/comments?siteKey=xxx&status=pending|approved|spam&page=1&per_page=20&postId=&search=
+// GET /api/dashboard/comments?siteKey=xxx&status=pending|approved|spam|hidden|all&page=1&per_page=20&postId=&search=
 router.get('/', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = typeof req.query.siteKey === 'string' ? req.query.siteKey.trim() : null
@@ -38,7 +37,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   }
 
   const status = req.query.status as string
-  const validStatuses = ['pending', 'approved', 'spam', 'deleted']
+  const validStatuses = ['pending', 'approved', 'spam', 'hidden']
   const statusFilter = validStatuses.includes(status) ? status : status === 'all' ? null : 'pending'
   const page = Math.max(1, parseInt(String(req.query.page || 1), 10))
   const perPage = Math.min(50, Math.max(1, parseInt(String(req.query.per_page || 20), 10)))
@@ -47,7 +46,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
 
   const where: Record<string, unknown> = {
     siteId: site.id,
-    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : { status: { not: 'deleted' } }),
   }
   if (postId) where.postId = postId
   if (search) {
@@ -75,6 +74,17 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   ])
 
   const postTitleMap = new Map(cachedPosts.map((p) => [p.externalPostId, p.title]))
+  console.log('[dashboard-comments] list', {
+    userId: user.id,
+    siteKey,
+    siteId: site.id,
+    statusQuery: status ?? null,
+    statusFilter: statusFilter ?? 'all',
+    postId: postId ?? null,
+    search: search ?? null,
+    total,
+    returned: comments.length,
+  })
 
   res.json({
     comments: comments.map((c) => ({
@@ -112,14 +122,14 @@ router.get('/count', requireSession, async (req: Request, res: Response) => {
     return
   }
 
-  const [pending, approved, spam, deleted] = await Promise.all([
+  const [pending, approved, spam, hidden] = await Promise.all([
     prisma.comment.count({ where: { siteId: site.id, status: 'pending' } }),
     prisma.comment.count({ where: { siteId: site.id, status: 'approved' } }),
     prisma.comment.count({ where: { siteId: site.id, status: 'spam' } }),
-    prisma.comment.count({ where: { siteId: site.id, status: 'deleted' } }),
+    prisma.comment.count({ where: { siteId: site.id, status: 'hidden' } }),
   ])
 
-  res.json({ pending, approved, spam, deleted })
+  res.json({ pending, approved, spam, hidden })
 })
 
 // PATCH /api/dashboard/comments/:id
@@ -137,9 +147,14 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     return
   }
 
+  const siteRow = await prisma.site.findUnique({
+    where: { id: comment.siteId },
+    select: { id: true, url: true, blogPassword: true },
+  })
+
   const body = req.body as { status?: string; body?: string }
   const updates: Record<string, unknown> = {}
-  if (['approved', 'spam', 'deleted'].includes(body.status ?? '')) {
+  if (['approved', 'spam', 'deleted', 'hidden'].includes(body.status ?? '')) {
     updates.status = body.status
   }
   if (typeof body.body === 'string') {
@@ -149,6 +164,14 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   if (Object.keys(updates).length === 0) {
     res.status(400).json({ error: 'No valid updates' })
     return
+  }
+
+  if (siteRow && (updates.status === 'spam' || updates.status === 'deleted' || updates.status === 'hidden')) {
+    await ensureSquarespaceThreadImportedForModeration(prisma, siteRow, {
+      postId: comment.postId,
+      parentId: comment.parentId,
+      externalCommentId: comment.externalCommentId,
+    })
   }
 
   if (updates.status === 'approved') {
@@ -163,38 +186,26 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
           include: { user: true },
         })
         const notifyTo = settings.notificationEmail || siteWithUser?.user?.email
-        if (notifyTo) {
-          const appUrl = getAppUrl()
-          const viewToken = signCommentActionToken(comment.id, 'view')
+        if (notifyTo && siteWithUser?.siteKey) {
           const excerpt = comment.body.slice(0, 200) + (comment.body.length > 200 ? '…' : '')
           sendCommentNotificationEmail(
             notifyTo,
             comment.displayName,
             'Your post',
             excerpt,
-            `${appUrl}/api/comment-actions/view?token=${viewToken}`
+            siteWithUser.siteKey,
+            comment.id,
+            'approved'
           ).catch((err) => console.error('[dashboard-comments] Notification send error:', err))
         }
       }
     }
   }
 
-  const updated =
-    updates.status === 'deleted'
-      ? await prisma.$transaction(async (tx) => {
-          await tx.comment.updateMany({
-            where: { parentId: id },
-            data: { parentId: comment.parentId },
-          })
-          return tx.comment.update({
-            where: { id },
-            data: updates,
-          })
-        })
-      : await prisma.comment.update({
-          where: { id },
-          data: updates,
-        })
+  const updated = await prisma.comment.update({
+    where: { id },
+    data: updates,
+  })
 
   res.json(updated)
 })
