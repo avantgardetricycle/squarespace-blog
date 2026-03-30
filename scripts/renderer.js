@@ -691,6 +691,32 @@
       return false;
     },
 
+    /**
+     * When Show Comments is off, remove BetterBlog comment UI and hide native Squarespace comment blocks.
+     * When on, remove the global hide so _initComments can manage the threaded UI.
+     */
+    _setAllCommentUiHidden: function(hidden) {
+      var STYLE_ID = 'bb-comments-fully-hidden';
+      try {
+        if (hidden) {
+          var bb = document.getElementById('bb-comments');
+          if (bb && bb.parentNode) bb.parentNode.removeChild(bb);
+          if (!document.getElementById(STYLE_ID)) {
+            var st = document.createElement('style');
+            st.id = STYLE_ID;
+            st.textContent =
+              '.squarespace-comments,[data-block-type="comments"]{display:none!important;visibility:hidden!important;}';
+            document.head.appendChild(st);
+          }
+        } else {
+          var existing = document.getElementById(STYLE_ID);
+          if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+        }
+      } catch (e) {
+        console.error('[BlogOverlay] _setAllCommentUiHidden error', e);
+      }
+    },
+
     _initComments: function(container, post, cfg) {
       var self = this;
       var cs = (cfg && cfg.commentSettings) || {};
@@ -751,6 +777,7 @@
         return daysSince > closeAfterDays;
       }
       var commentsClosed = bbCommentsClosedForPost(post, cs.autoCloseAfterDays);
+      var allowAnonymousComments = cs.allowAnonymousComments !== false;
       var mergedSqRootsForComments = [];
       var commentSortOrder =
         cs.sortOrder === 'oldest' || cs.sortOrder === 'most_liked' ? cs.sortOrder : 'newest';
@@ -932,7 +959,13 @@
           actions.style.fontSize = '0.8rem';
           actions.style.color = '#999';
           var threadingOn = cs.allowThreadedReplies !== false;
-          var showReply = !commentsClosed && !isDeletedStub && threadingOn && c.id;
+          var replyMode = currentCommentViewerMode().mode;
+          var showReply =
+            !commentsClosed &&
+            !isDeletedStub &&
+            threadingOn &&
+            c.id &&
+            (allowAnonymousComments || replyMode === 'loggedIn');
           if (!isDeletedStub) {
             var likeBtn = document.createElement('button');
             likeBtn.type = 'button';
@@ -1163,6 +1196,12 @@
       heading.style.fontSize = '1.1rem';
       heading.style.margin = '0 0 12px 0';
       formWrap.appendChild(heading);
+      var guestOnlyNote = document.createElement('p');
+      guestOnlyNote.style.cssText =
+        'display:none;margin:0 0 12px 0;color:#666;font-size:0.92rem;max-width:520px;line-height:1.45';
+      guestOnlyNote.textContent =
+        'Anonymous comments are turned off. Sign in with your site member account to leave a comment.';
+      formWrap.appendChild(guestOnlyNote);
       if (commentsClosed) {
         var closedMsg = document.createElement('p');
         closedMsg.style.cssText = 'margin:0;color:#666;font-size:0.92rem;max-width:560px;line-height:1.45';
@@ -1219,7 +1258,8 @@
         var nm = (nameInput.value || '').trim();
         var bd = (bodyArea.value || '').trim();
         mainBodyCount.textContent = BODY_MAX - bodyArea.value.length + ' characters left';
-        var ok = modeNow === 'loggedIn' ? !!bd : !!nm && !!bd;
+        var guestsMayPost = allowAnonymousComments || modeNow === 'loggedIn';
+        var ok = guestsMayPost && (modeNow === 'loggedIn' ? !!bd : !!nm && !!bd);
         submitBtn.disabled = !ok;
         submitBtn.style.opacity = ok ? '1' : '0.55';
         submitBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -1237,9 +1277,27 @@
         var mode = resolved.mode;
         var id = resolved.identity || null;
         var verifiedIdentity = bbGetVerifiedIdentity();
-        if (mode === 'loggedIn') {
+        var guestsMayPost = allowAnonymousComments || mode === 'loggedIn';
+        if (!guestsMayPost) {
+          heading.textContent = 'Sign in to comment';
+          guestOnlyNote.style.display = 'block';
           nameInput.style.display = 'none';
           emailInput.style.display = 'none';
+          bodyArea.style.display = 'none';
+          mainBodyCount.style.display = 'none';
+          submitBtn.style.display = 'none';
+          identityNote.style.display = 'none';
+          identityNote.textContent = '';
+          loggedInIdentityLine.style.display = 'none';
+          loggedInIdentityLine.textContent = '';
+        } else if (mode === 'loggedIn') {
+          heading.textContent = 'Leave a comment';
+          guestOnlyNote.style.display = 'none';
+          nameInput.style.display = 'none';
+          emailInput.style.display = 'none';
+          bodyArea.style.display = 'block';
+          mainBodyCount.style.display = 'block';
+          submitBtn.style.display = 'inline-block';
           identityNote.style.display = 'none';
           identityNote.textContent = '';
           if (verifiedIdentity) {
@@ -1251,9 +1309,14 @@
             loggedInIdentityLine.textContent = '';
           }
         } else {
+          heading.textContent = 'Leave a comment';
+          guestOnlyNote.style.display = 'none';
           nameInput.style.display = 'block';
           emailInput.style.display = 'block';
           emailInput.placeholder = 'Email (optional)';
+          bodyArea.style.display = 'block';
+          mainBodyCount.style.display = 'block';
+          submitBtn.style.display = 'inline-block';
           identityNote.style.display = 'none';
           loggedInIdentityLine.style.display = 'none';
           loggedInIdentityLine.textContent = '';
@@ -7440,7 +7503,17 @@
             wrapper.appendChild(paginationZoneEl);
           }
 
-          if (isSinglePost && selectedIndex >= 0 && items[selectedIndex] && cfg && cfg.commentSettings && cfg.commentSettings.commentsEnabled) {
+          var commentCfg = cfg && cfg.commentSettings;
+          var commentsTurnedOff = commentCfg && commentCfg.commentsEnabled === false;
+          self._setAllCommentUiHidden(!!commentsTurnedOff);
+          if (
+            isSinglePost &&
+            selectedIndex >= 0 &&
+            items[selectedIndex] &&
+            cfg &&
+            commentCfg &&
+            commentCfg.commentsEnabled
+          ) {
             try {
               self._initComments(main, items[selectedIndex], cfg);
             } catch (e) {

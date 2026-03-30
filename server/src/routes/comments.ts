@@ -342,6 +342,13 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'display_name is required (max 100 characters)' })
     return
   }
+  if (!settings.allowAnonymousComments && displayNameRaw) {
+    res.status(403).json({
+      error:
+        'Anonymous comments are disabled. Sign in with your site member account and confirm your member email to comment.',
+    })
+    return
+  }
   let resolvedParentId: string | null =
     typeof body.parent_id === 'string' && body.parent_id.trim() ? body.parent_id.trim() : null
 
@@ -523,7 +530,25 @@ router.post('/', async (req: Request, res: Response) => {
     })
   }
 
-  // Logged-in/member flow can intentionally omit display_name; if verification fails we keep anonymous.
+  const memberEmailAttempt = !displayNameRaw && !!email
+  if (memberEmailAttempt && !settings.allowAnonymousComments) {
+    if (!settings.subscriberCommentsEnabled || !effectiveSquarespaceApiKeyEnc) {
+      res.status(400).json({
+        error:
+          'Member email verification is required to comment. Enable subscriber comments and connect your Squarespace API key, or turn on anonymous comments.',
+      })
+      return
+    }
+    if (!verifiedSubscriber) {
+      res.status(400).json({
+        error:
+          'We could not verify a member account for that email. Use the address tied to your site membership, or ask the site owner for help.',
+      })
+      return
+    }
+  }
+
+  // Logged-in/member flow omits display_name; if verification fails and anonymous comments are allowed, post as Anonymous.
   if (!displayName) {
     displayName = 'Anonymous'
   }

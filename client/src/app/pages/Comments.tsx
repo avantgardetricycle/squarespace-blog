@@ -57,14 +57,14 @@ interface Comment {
   likeCount: number;
 }
 
-/** Opens Squarespace site config — profile detail when id is known, otherwise profiles list. */
+/** Opens Squarespace site config — member profile when id is known, otherwise profiles area. */
 function squarespaceProfileHref(siteUrl: string | null | undefined, profileId: string | null | undefined): string | null {
   try {
     const s = (siteUrl || "").trim();
     if (!s) return null;
     const u = new URL(s.startsWith("http") ? s : `https://${s}`);
     const id = profileId?.trim();
-    if (id) return `${u.origin}/config/profiles/${encodeURIComponent(id)}`;
+    if (id) return `${u.origin}/config/profiles/members/${encodeURIComponent(id)}/member`;
     return `${u.origin}/config/profiles`;
   } catch {
     return null;
@@ -1052,7 +1052,7 @@ export default function Comments() {
           ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Enable Comments</Label>
+              <Label className="text-sm">Show Comments</Label>
               <Switch
                 checked={settings?.commentsEnabled ?? true}
                 onCheckedChange={(v) => settings && updateSetting("commentsEnabled", v)}

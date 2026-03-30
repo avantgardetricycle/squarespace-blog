@@ -2705,7 +2705,7 @@ export default function Configure() {
                     ) : commentSettings && (
                     <div className="border-b border-[#e5e4e0] pb-4">
                       <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Enable Comments</span>
+                        <span className="font-medium">Show Comments</span>
                         <div className="flex items-center gap-1">
                           <Switch
                             checked={commentSettings.commentsEnabled}
