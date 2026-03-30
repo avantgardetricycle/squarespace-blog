@@ -731,6 +731,26 @@
       bbDiv.style.borderTop = '1px solid #eee';
 
       var apiUrl = baseUrl.replace(/\/+$/, '') + '/api/comments';
+      function bbResolvePostPublishedAt(p) {
+        if (!p || typeof p !== 'object') return null;
+        var candidates = [p.publishDate, p.publishedOn, p.publishOn, p.addedOn, p.createdOn];
+        for (var i = 0; i < candidates.length; i++) {
+          var v = candidates[i];
+          if (v === undefined || v === null || v === '') continue;
+          return v;
+        }
+        return null;
+      }
+      function bbCommentsClosedForPost(p, closeAfterDays) {
+        if (closeAfterDays == null || closeAfterDays <= 0) return false;
+        var raw = bbResolvePostPublishedAt(p);
+        if (raw == null || raw === '') return false;
+        var dt = new Date(raw);
+        if (isNaN(dt.getTime())) return false;
+        var daysSince = (Date.now() - dt.getTime()) / (24 * 60 * 60 * 1000);
+        return daysSince > closeAfterDays;
+      }
+      var commentsClosed = bbCommentsClosedForPost(post, cs.autoCloseAfterDays);
       var mergedSqRootsForComments = [];
       var commentSortOrder =
         cs.sortOrder === 'oldest' || cs.sortOrder === 'most_liked' ? cs.sortOrder : 'newest';
@@ -912,7 +932,7 @@
           actions.style.fontSize = '0.8rem';
           actions.style.color = '#999';
           var threadingOn = cs.allowThreadedReplies !== false;
-          var showReply = !isDeletedStub && threadingOn && c.id;
+          var showReply = !commentsClosed && !isDeletedStub && threadingOn && c.id;
           if (!isDeletedStub) {
             var likeBtn = document.createElement('button');
             likeBtn.type = 'button';
@@ -1050,7 +1070,7 @@
                 siteKey: siteKey,
                 parent_id: parentCommentId,
                 post_title: (post && post.title) || null,
-                post_published_at: (post && post.publishDate) || (post && post.publishedOn) || null,
+                post_published_at: bbResolvePostPublishedAt(post),
                 post_url: (post && (post.fullUrl || post.url)) || null
               };
               var rEm = modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim();
@@ -1139,10 +1159,23 @@
       formWrap.style.marginTop = '16px';
 
       var heading = document.createElement('h3');
-      heading.textContent = 'Leave a comment';
+      heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
       heading.style.fontSize = '1.1rem';
       heading.style.margin = '0 0 12px 0';
       formWrap.appendChild(heading);
+      if (commentsClosed) {
+        var closedMsg = document.createElement('p');
+        closedMsg.style.cssText = 'margin:0;color:#666;font-size:0.92rem;max-width:560px;line-height:1.45';
+        closedMsg.textContent = 'Comments on this post are closed.';
+        formWrap.appendChild(closedMsg);
+        bbDiv.appendChild(formWrap);
+        if (nativeBlock) {
+          nativeBlock.insertAdjacentElement('afterend', bbDiv);
+        } else {
+          container.appendChild(bbDiv);
+        }
+        return;
+      }
       var loggedInIdentityLine = document.createElement('div');
       loggedInIdentityLine.style.cssText = 'display:none;max-width:500px;margin:0 0 10px 0;font-size:0.9rem;color:#444';
       formWrap.appendChild(loggedInIdentityLine);
@@ -1271,7 +1304,7 @@
           body: body,
           siteKey: siteKey,
           post_title: (post && post.title) || null,
-          post_published_at: (post && post.publishDate) || (post && post.publishedOn) || null,
+          post_published_at: bbResolvePostPublishedAt(post),
           post_url: (post && (post.fullUrl || post.url)) || null
         };
         if (emailToUse) payload.email = emailToUse;

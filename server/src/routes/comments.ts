@@ -390,7 +390,22 @@ router.post('/', async (req: Request, res: Response) => {
 
   // Upsert cached post for auto-close check
   const postTitle = typeof body.post_title === 'string' ? body.post_title.trim() : 'Untitled'
-  const postPublishedAt = body.post_published_at ? new Date(body.post_published_at) : new Date()
+  const postPublishedAtRaw = body.post_published_at
+  const parsedPostPublishedAt =
+    postPublishedAtRaw != null && postPublishedAtRaw !== ''
+      ? new Date(postPublishedAtRaw)
+      : null
+  const postPublishedAt =
+    parsedPostPublishedAt && !isNaN(parsedPostPublishedAt.getTime())
+      ? parsedPostPublishedAt
+      : new Date()
+  if (!parsedPostPublishedAt || isNaN(parsedPostPublishedAt.getTime())) {
+    console.warn('[comments] Missing/invalid post_published_at; defaulting to now', {
+      siteId: site.id,
+      postId,
+      raw: postPublishedAtRaw ?? null,
+    })
+  }
   const postUrl = typeof body.post_url === 'string' ? body.post_url.trim() || null : null
 
   await prisma.cachedPost.upsert({
