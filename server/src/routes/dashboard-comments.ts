@@ -21,7 +21,7 @@ async function getCommentWithAuth(commentId: string, userId: number) {
   return comment
 }
 
-// GET /api/dashboard/comments?siteKey=xxx&status=pending|approved|spam|hidden|all&page=1&per_page=20&postId=&search=
+// GET /api/dashboard/comments?siteKey=xxx&statuses=pending,approved&status=approved (legacy)&auth=all|authenticated|anonymous&postId=&page=&per_page=&search=
 router.get('/', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = typeof req.query.siteKey === 'string' ? req.query.siteKey.trim() : null
@@ -36,19 +36,61 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     return
   }
 
-  const status = req.query.status as string
-  const validStatuses = ['pending', 'approved', 'spam', 'hidden']
-  const statusFilter = validStatuses.includes(status) ? status : status === 'all' ? null : 'pending'
+  const validStatuses = ['pending', 'approved', 'spam', 'hidden'] as const
+  const statusesRaw = typeof req.query.statuses === 'string' ? req.query.statuses.trim() : ''
+  const legacyStatus = typeof req.query.status === 'string' ? req.query.status.trim() : ''
+
+  let statusIn: string[] | null = null
+  if (statusesRaw) {
+    const parsed = statusesRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s): s is (typeof validStatuses)[number] => validStatuses.includes(s as (typeof validStatuses)[number]))
+    const unique = [...new Set(parsed)]
+    if (unique.length === validStatuses.length) {
+      statusIn = null
+    } else if (unique.length > 0) {
+      statusIn = unique
+    } else {
+      statusIn = null
+    }
+  } else if (validStatuses.includes(legacyStatus as (typeof validStatuses)[number])) {
+    statusIn = [legacyStatus]
+  } else if (legacyStatus === 'all' || !legacyStatus) {
+    statusIn = null
+  } else {
+    statusIn = ['pending']
+  }
+
+  const authRaw = typeof req.query.auth === 'string' ? req.query.auth.trim().toLowerCase() : 'all'
+  const authFilter = authRaw === 'authenticated' || authRaw === 'anonymous' ? authRaw : 'all'
+
   const page = Math.max(1, parseInt(String(req.query.page || 1), 10))
   const perPage = Math.min(50, Math.max(1, parseInt(String(req.query.per_page || 20), 10)))
-  const postId = typeof req.query.postId === 'string' ? req.query.postId.trim() : null
+  const postIdRaw = typeof req.query.postId === 'string' ? req.query.postId.trim() : ''
+  const postIdsRaw = typeof req.query.postIds === 'string' ? req.query.postIds.trim() : ''
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : null
 
   const where: Record<string, unknown> = {
     siteId: site.id,
-    ...(statusFilter ? { status: statusFilter } : { status: { not: 'deleted' } }),
   }
-  if (postId) where.postId = postId
+  if (statusIn && statusIn.length > 0) {
+    where.status = statusIn.length === 1 ? statusIn[0] : { in: statusIn }
+  } else {
+    where.status = { not: 'deleted' }
+  }
+  if (postIdsRaw) {
+    const ids = postIdsRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    if (ids.length === 1) where.postId = ids[0]
+    else if (ids.length > 1) where.postId = { in: ids }
+  } else if (postIdRaw) {
+    where.postId = postIdRaw
+  }
+  if (authFilter === 'authenticated') where.verifiedSubscriber = true
+  if (authFilter === 'anonymous') where.verifiedSubscriber = false
   if (search) {
     where.OR = [
       { displayName: { contains: search, mode: 'insensitive' } },
@@ -78,9 +120,9 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     userId: user.id,
     siteKey,
     siteId: site.id,
-    statusQuery: status ?? null,
-    statusFilter: statusFilter ?? 'all',
-    postId: postId ?? null,
+    statuses: statusIn ?? 'all',
+    auth: authFilter,
+    postIds: postIdsRaw || postIdRaw || null,
     search: search ?? null,
     total,
     returned: comments.length,
@@ -130,6 +172,49 @@ router.get('/count', requireSession, async (req: Request, res: Response) => {
   ])
 
   res.json({ pending, approved, spam, hidden })
+})
+
+// GET /api/dashboard/comments/posts?siteKey=xxx — posts with comments (titles from cache when available)
+router.get('/posts', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = typeof req.query.siteKey === 'string' ? req.query.siteKey.trim() : null
+  if (!siteKey) {
+    res.status(400).json({ error: 'siteKey is required' })
+    return
+  }
+
+  const site = await getSiteForUser(siteKey, user.id)
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  const [cached, distinctPosts] = await Promise.all([
+    prisma.cachedPost.findMany({
+      where: { siteId: site.id },
+      select: { externalPostId: true, title: true },
+    }),
+    prisma.comment.findMany({
+      where: { siteId: site.id, status: { not: 'deleted' } },
+      distinct: ['postId'],
+      select: { postId: true },
+    }),
+  ])
+
+  const titleById = new Map(cached.map((p) => [p.externalPostId, p.title || p.externalPostId]))
+  const rows: { postId: string; title: string }[] = []
+  const seen = new Set<string>()
+  for (const c of distinctPosts) {
+    if (!c.postId || seen.has(c.postId)) continue
+    seen.add(c.postId)
+    rows.push({
+      postId: c.postId,
+      title: titleById.get(c.postId) ?? c.postId,
+    })
+  }
+  rows.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
+
+  res.json({ posts: rows })
 })
 
 // PATCH /api/dashboard/comments/:id

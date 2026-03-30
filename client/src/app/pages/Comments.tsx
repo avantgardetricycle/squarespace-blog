@@ -25,6 +25,12 @@ import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import { Slider } from "@/app/components/ui/slider";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import {
@@ -78,17 +84,19 @@ function apiToUiStatus(s: string): UiStatus {
   return "spam";
 }
 
-function uiToApiStatus(s: UiStatus): ApiStatus {
-  if (s === "published") return "approved";
-  if (s === "awaiting") return "pending";
-  if (s === "hidden") return "hidden";
-  return "spam";
-}
-
 function statusBadgeLabel(ui: UiStatus): string {
   if (ui === "awaiting") return "Awaiting Review";
   if (ui === "published") return "Published";
   if (ui === "hidden") return "Hidden";
+  return "Spam";
+}
+
+const ALL_API_STATUSES: ApiStatus[] = ["pending", "approved", "spam", "hidden"];
+
+function apiStatusFilterLabel(s: ApiStatus): string {
+  if (s === "pending") return "Awaiting review";
+  if (s === "approved") return "Published";
+  if (s === "hidden") return "Hidden";
   return "Spam";
 }
 
@@ -127,7 +135,13 @@ export default function Comments() {
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [fetching, setFetching] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<"all" | UiStatus>("all");
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<ApiStatus>>(
+    () => new Set(ALL_API_STATUSES)
+  );
+  const [authFilter, setAuthFilter] = useState<"all" | "authenticated" | "anonymous">("all");
+  const [postFilterIds, setPostFilterIds] = useState<Set<string>>(() => new Set());
+  const [postOptions, setPostOptions] = useState<{ postId: string; title: string }[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
   const [selectedComments, setSelectedComments] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -171,8 +185,13 @@ export default function Comments() {
       page: String(page),
       per_page: "20",
     });
-    const statusParam = selectedFilter === "all" ? "all" : uiToApiStatus(selectedFilter);
-    params.set("status", statusParam);
+    if (selectedStatuses.size > 0 && selectedStatuses.size < ALL_API_STATUSES.length) {
+      params.set("statuses", ALL_API_STATUSES.filter((s) => selectedStatuses.has(s)).join(","));
+    }
+    if (authFilter !== "all") params.set("auth", authFilter);
+    if (postFilterIds.size > 0) {
+      params.set("postIds", Array.from(postFilterIds).join(","));
+    }
     if (searchQuery.trim()) params.set("search", searchQuery.trim());
     fetch(`/api/dashboard/comments?${params}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
@@ -183,7 +202,28 @@ export default function Comments() {
         }
       })
       .finally(() => setFetching(false));
-  }, [siteKey, selectedFilter, page, searchQuery, listRefreshKey]);
+  }, [siteKey, selectedStatuses, authFilter, postFilterIds, page, searchQuery, listRefreshKey]);
+
+  useEffect(() => {
+    if (!siteKey) {
+      setPostOptions([]);
+      return;
+    }
+    setPostsLoading(true);
+    fetch(`/api/dashboard/comments/posts?siteKey=${encodeURIComponent(siteKey)}`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.posts) setPostOptions(data.posts as { postId: string; title: string }[]);
+        else setPostOptions([]);
+      })
+      .finally(() => setPostsLoading(false));
+  }, [siteKey]);
+
+  useEffect(() => {
+    setPostFilterIds(new Set());
+  }, [siteKey]);
 
   useEffect(() => {
     if (!siteKey) return;
@@ -285,7 +325,9 @@ export default function Comments() {
     if (!siteKey) return;
     if (highlightSetupRef.current === hid) return;
     highlightSetupRef.current = hid;
-    setSelectedFilter("all");
+    setSelectedStatuses(new Set(ALL_API_STATUSES));
+    setAuthFilter("all");
+    setPostFilterIds(new Set());
     setPage(1);
     setSearchQuery("");
     setListRefreshKey((k) => k + 1);
@@ -610,15 +652,33 @@ export default function Comments() {
       year: "numeric",
     });
 
-  const totalCount = counts.pending + counts.approved + counts.spam + counts.hidden;
+  const statusCount = (s: ApiStatus): number => {
+    if (s === "pending") return counts.pending;
+    if (s === "approved") return counts.approved;
+    if (s === "hidden") return counts.hidden;
+    return counts.spam;
+  };
 
-  const filters: { value: "all" | UiStatus; label: string; count: number }[] = [
-    { value: "all", label: "All Comments", count: totalCount },
-    { value: "published", label: "Published", count: counts.approved },
-    { value: "awaiting", label: "Awaiting Review", count: counts.pending },
-    { value: "hidden", label: "Hidden", count: counts.hidden },
-    { value: "spam", label: "Spam", count: counts.spam },
-  ];
+  const setStatusFilterChecked = (s: ApiStatus, checked: boolean) => {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(s);
+        return next;
+      }
+      if (next.size <= 1) return prev;
+      next.delete(s);
+      return next;
+    });
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setSelectedStatuses(new Set(ALL_API_STATUSES));
+    setAuthFilter("all");
+    setPostFilterIds(new Set());
+    setPage(1);
+  };
 
   if (loading || !me) {
     return (
@@ -692,30 +752,167 @@ export default function Comments() {
             <p className="text-neutral-500 text-sm">Manage and moderate comments on your blog posts</p>
           </div>
 
-          <div className="px-8 flex gap-6 border-t border-neutral-100 pt-4">
-            {filters.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => {
-                  setSelectedFilter(f.value);
-                  setPage(1);
-                }}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                  selectedFilter === f.value
-                    ? "border-[#5B4FE8] text-[#5B4FE8]"
-                    : "border-transparent text-neutral-500 hover:text-neutral-900"
-                }`}
-              >
-                {f.label}
-                <span
-                  className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                    selectedFilter === f.value ? "bg-[#5B4FE8]/10 text-[#5B4FE8]" : "bg-neutral-100 text-neutral-600"
-                  }`}
+          <div className="px-8 border-t border-neutral-100 pt-4 pb-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Filters</span>
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-neutral-600" onClick={resetFilters}>
+                Reset filters
+              </Button>
+            </div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+              <div className="space-y-2 min-w-0 flex-1">
+                <Label className="text-xs text-neutral-500">Status</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="h-9 px-3 text-sm justify-between w-full sm:w-[260px] inline-flex items-center rounded-md border border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4FE8] focus-visible:ring-offset-1"
+                  >
+                    <span className="truncate">
+                      {selectedStatuses.size === ALL_API_STATUSES.length
+                        ? "All statuses"
+                        : selectedStatuses.size === 1
+                        ? apiStatusFilterLabel(Array.from(selectedStatuses)[0])
+                        : `${selectedStatuses.size} statuses selected`}
+                    </span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    {ALL_API_STATUSES.map((s) => (
+                      <DropdownMenuCheckboxItem
+                        key={s}
+                        checked={selectedStatuses.has(s)}
+                        onCheckedChange={(v: boolean) => {
+                          setStatusFilterChecked(s, v);
+                        }}
+                      >
+                        <span className="flex-1">{apiStatusFilterLabel(s)}</span>
+                        <span className="text-xs text-neutral-400 tabular-nums">
+                          {statusCount(s)}
+                        </span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="space-y-2 w-full sm:w-auto sm:min-w-[200px]">
+                <Label className="text-xs text-neutral-500">Audience</Label>
+                <Select
+                  value={authFilter}
+                  onValueChange={(v) => {
+                    setAuthFilter(v as "all" | "authenticated" | "anonymous");
+                    setPage(1);
+                  }}
                 >
-                  {f.count}
-                </span>
-              </button>
-            ))}
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="Audience" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All comments</SelectItem>
+                    <SelectItem value="authenticated">Authenticated (member)</SelectItem>
+                    <SelectItem value="anonymous">Anonymous / guest</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 w-full sm:w-auto sm:min-w-[240px] lg:min-w-[280px]">
+                <Label className="text-xs text-neutral-500">Post</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={postsLoading}
+                    className="h-9 px-3 text-sm justify-between w-full sm:w-[280px] inline-flex items-center rounded-md border border-neutral-300 bg-white text-neutral-800 hover:bg-neutral-50 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4FE8] focus-visible:ring-offset-1"
+                  >
+                    <span className="truncate">
+                      {postsLoading
+                        ? "Loading posts…"
+                        : postFilterIds.size === 0
+                        ? "All posts"
+                        : postFilterIds.size === 1
+                        ? postOptions.find((p) => postFilterIds.has(p.postId))?.title ??
+                          "1 post selected"
+                        : `${postFilterIds.size} posts selected`}
+                    </span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-80 max-h-80 overflow-auto">
+                    <DropdownMenuCheckboxItem
+                      checked={postFilterIds.size === 0}
+                      onCheckedChange={(v) => {
+                        if (!v) return;
+                        setPostFilterIds(new Set());
+                        setPage(1);
+                      }}
+                    >
+                      <span className="flex-1">All posts</span>
+                    </DropdownMenuCheckboxItem>
+                    {postOptions.map((p) => (
+                      <DropdownMenuCheckboxItem
+                        key={p.postId}
+                        checked={postFilterIds.has(p.postId)}
+                        onCheckedChange={(v) => {
+                          setPostFilterIds((prev) => {
+                            const next = new Set(prev);
+                            if (v) next.add(p.postId);
+                            else next.delete(p.postId);
+                            return next;
+                          });
+                          setPage(1);
+                        }}
+                      >
+                        <span className="truncate" title={p.title}>
+                          {p.title}
+                        </span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+            {(selectedStatuses.size < ALL_API_STATUSES.length || postFilterIds.size > 0) && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {ALL_API_STATUSES.filter((s) => selectedStatuses.has(s)).length <
+                  ALL_API_STATUSES.length &&
+                  ALL_API_STATUSES.filter((s) => selectedStatuses.has(s)).map((s) => (
+                    <span
+                      key={`status-${s}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700"
+                    >
+                      <span>Status: {apiStatusFilterLabel(s)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setStatusFilterChecked(s, false)}
+                        className="ml-0.5 text-neutral-500 hover:text-neutral-800"
+                        aria-label={`Remove status ${apiStatusFilterLabel(s)}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                {Array.from(postFilterIds).map((id) => {
+                  const title = postOptions.find((p) => p.postId === id)?.title ?? id;
+                  return (
+                    <span
+                      key={`post-${id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700"
+                    >
+                      <span className="truncate max-w-[200px]" title={title}>
+                        Post: {title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPostFilterIds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(id);
+                            return next;
+                          });
+                          setPage(1);
+                        }}
+                        className="ml-0.5 text-neutral-500 hover:text-neutral-800"
+                        aria-label={`Remove post ${title}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -861,7 +1058,7 @@ export default function Comments() {
                                         : "border-neutral-200 bg-neutral-50 text-neutral-600"
                                     }`}
                                   >
-                                    {isAuthenticated ? "Authenticated" : "Unauthenticated"}
+                                    {isAuthenticated ? "Authenticated" : "Anonymous"}
                                   </span>
                                 </div>
                                 <div className="text-xs text-neutral-500">{formatDate(comment.createdAt)}</div>
