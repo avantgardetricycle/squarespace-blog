@@ -25,7 +25,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     sticky: true
   },
   collectionModules: {
-    filter: { filterByTags: true, filterByCategories: true },
+    filter: { filterByTags: false, filterByCategories: true },
     sort: {},
     search: {},
     recentPosts: {},
@@ -41,8 +41,8 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   },
   headerContent: {
     show: true,
-    modules: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
-    moduleOrder: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
+    modules: ['filterByCategory', 'postSort', 'searchPosts'],
+    moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
     height: 48
   },
   footerContent: {
@@ -60,23 +60,45 @@ const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
-  featuredArticle: { show: true, position: 'inLayout' as const }
+  featuredArticle: { show: true, position: 'inLayout' as const },
+  headerContent: {
+    show: true,
+    modules: ['filterByCategory', 'searchPosts', 'postSort'],
+    moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
+    height: 48
+  },
+  collectionModules: {
+    filter: { filterByTags: false, filterByCategories: true },
+    sort: {},
+    search: {},
+    recentPosts: {},
+    emailCapture: {
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      resourceTitle: '',
+      description: '',
+      buttonText: 'Get it free'
+    }
+  }
 }
 
 /** Merged onto DB template rows when serving Showcase so Configure/preview match product intent. */
 const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
   collectionLayout: 'showcase' as const,
+  pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   showAuthor: true,
   showReadingTime: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
   headerContent: {
     show: true,
-    modules: ['filterByTagsAndCategories', 'searchPosts'],
-    moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+    modules: ['filterByCategory', 'searchPosts'],
+    moduleOrder: ['filterByCategory', 'searchPosts'],
     height: 48
   },
   collectionModules: {
-    filter: { filterByTags: true, filterByCategories: true },
+    filter: { filterByTags: false, filterByCategories: true },
     sort: {},
     search: {},
     recentPosts: {},
@@ -108,16 +130,16 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   },
   rightSidebar: {
     show: true,
-    modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
-    moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
+    modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
+    moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
     width: 280,
     spaceAbove: 0,
     sticky: true
   },
   headerContent: {
     show: true,
-    modules: ['filterByTagsAndCategories', 'searchPosts'],
-    moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+    modules: ['filterByCategory', 'searchPosts'],
+    moduleOrder: ['filterByCategory', 'searchPosts'],
     height: 48
   },
   footerContent: {
@@ -127,7 +149,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     topPadding: 16
   },
   collectionModules: {
-    filter: { filterByTags: true, filterByCategories: true },
+    filter: { filterByTags: false, filterByCategories: true },
     sort: {},
     search: {},
     recentPosts: {},
@@ -168,9 +190,24 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
   },
   headerContent: {
     show: true,
-    modules: ['filterByTagsAndCategories', 'searchPosts', 'postSort'],
-    moduleOrder: ['filterByTagsAndCategories', 'searchPosts', 'postSort'],
+    modules: ['filterByCategory', 'searchPosts', 'postSort'],
+    moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
     height: 48
+  },
+  collectionModules: {
+    filter: { filterByTags: false, filterByCategories: true },
+    sort: {},
+    search: {},
+    recentPosts: {},
+    emailCapture: {
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      resourceTitle: '',
+      description: '',
+      buttonText: 'Get it free'
+    }
   },
   featuredImage: {
     show: true,

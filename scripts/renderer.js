@@ -2069,6 +2069,22 @@
       return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
     },
 
+    /** Plain text from excerpt/body: first n sentences (best-effort split on . ! ?). */
+    _extractFirstNSentences: function(htmlOrText, n) {
+      if (!htmlOrText || n < 1) return '';
+      var plain = this._stripHtml(htmlOrText);
+      if (!plain) return '';
+      var m = plain.match(/[^.!?]*[.!?]+|[^.!?]+$/g);
+      if (!m || m.length === 0) return plain;
+      var take = Math.min(n, m.length);
+      var out = [];
+      for (var i = 0; i < take; i++) {
+        var t = (m[i] || '').trim();
+        if (t) out.push(t);
+      }
+      return out.length ? out.join(' ').trim() : plain;
+    },
+
     /**
      * Exact substring search over posts: titles, excerpts, and body text (case-insensitive)
      */
@@ -2088,22 +2104,109 @@
     },
 
     /**
-     * Get category names for a post (supports category, categories array, objects with title/name)
+     * Get category names for a post (supports category, categories array, objects with title/name).
+     * Comma-separated strings (common from Squarespace / feeds) are split so display gets "A, B" spacing.
      */
     _getPostCategories: function(post) {
       if (!post) return [];
       var cats = [];
+      function pushSplitNames(raw) {
+        if (raw == null || raw === '') return;
+        var parts = String(raw).split(',');
+        for (var pi = 0; pi < parts.length; pi++) {
+          var name = parts[pi].replace(/^\s+|\s+$/g, '');
+          if (name && cats.indexOf(name) === -1) cats.push(name);
+        }
+      }
       if (post.category) {
-        cats.push(String(post.category));
+        pushSplitNames(post.category);
       }
       if (post.categories && Array.isArray(post.categories)) {
         for (var i = 0; i < post.categories.length; i++) {
           var c = post.categories[i];
           var name = typeof c === 'string' ? c : (c && (c.title || c.name)) ? String(c.title || c.name) : null;
-          if (name && cats.indexOf(name) === -1) cats.push(name);
+          if (name) pushSplitNames(name);
         }
       }
       return cats;
+    },
+
+    _zoneHasCategoryFilterModule: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var has = function(zone) {
+        if (!zone || !Array.isArray(zone.modules)) return false;
+        var m = zone.modules;
+        return m.indexOf('filterByCategory') >= 0 || m.indexOf('filterByTagsAndCategories') >= 0;
+      };
+      return has(cfg.headerContent) || has(cfg.leftSidebar) || has(cfg.rightSidebar);
+    },
+
+    _collectionCategoryFilterUiEnabled: function(baseCfg) {
+      if (!baseCfg || typeof baseCfg !== 'object') return false;
+      if (this._zoneHasCategoryFilterModule(baseCfg.collectionConfig)) return true;
+      return this._zoneHasCategoryFilterModule(baseCfg);
+    },
+
+    /**
+     * Categories line above post title (Newsroom / Showcase). Small caps + accent; optional filter buttons.
+     */
+    _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled) {
+      var self = this;
+      var cats = self._getPostCategories(post);
+      if (cats.length === 0) return null;
+      var accent = siteAccent || '#5B4FE8';
+      var wrap = document.createElement('div');
+      wrap.className = 'blog-overlay-post-categories-line';
+      wrap.style.fontVariant = 'small-caps';
+      wrap.style.fontSize = '0.85rem';
+      wrap.style.letterSpacing = '0.04em';
+      wrap.style.color = accent;
+      wrap.style.marginBottom = '6px';
+      wrap.style.lineHeight = '1.35';
+      if (!categoryFilterUiEnabled) {
+        wrap.textContent = cats.join(', ');
+        return wrap;
+      }
+      wrap.style.display = 'flex';
+      wrap.style.flexWrap = 'wrap';
+      wrap.style.alignItems = 'baseline';
+      for (var i = 0; i < cats.length; i++) {
+        if (i > 0) {
+          var commaSp = document.createElement('span');
+          commaSp.textContent = ', ';
+          commaSp.setAttribute('aria-hidden', 'true');
+          wrap.appendChild(commaSp);
+        }
+        var catBtn = document.createElement('button');
+        catBtn.type = 'button';
+        catBtn.textContent = cats[i];
+        catBtn.style.font = 'inherit';
+        catBtn.style.fontFamily = 'inherit';
+        catBtn.style.fontVariant = 'small-caps';
+        catBtn.style.letterSpacing = 'inherit';
+        catBtn.style.color = 'inherit';
+        catBtn.style.background = 'none';
+        catBtn.style.border = 'none';
+        catBtn.style.padding = '0';
+        catBtn.style.margin = '0';
+        catBtn.style.cursor = 'pointer';
+        catBtn.style.textDecoration = 'none';
+        catBtn.setAttribute('aria-label', 'Show posts in category: ' + cats[i]);
+        (function(catName) {
+          catBtn.onclick = function(e) {
+            e.preventDefault();
+            self._categoryFilter = [catName];
+            self._currentPage = 1;
+            if (typeof window !== 'undefined') {
+              try { window.history.replaceState(null, '', window.location.pathname + (window.location.search || '')); } catch (err) {}
+              window.location.hash = '';
+            }
+            self._renderContent(self.items);
+          };
+        })(cats[i]);
+        wrap.appendChild(catBtn);
+      }
+      return wrap;
     },
 
     /**
@@ -3966,6 +4069,53 @@
       return null;
     },
 
+    /**
+     * Best-effort accent from the host Squarespace page: global --accent-hsl, section theme vars
+     * (--primaryButtonBackgroundColor, link colors), or a primary .sqs-button-element--primary fill.
+     */
+    _getSiteAccentColor: function() {
+      var fb = '#5B4FE8';
+      if (typeof window === 'undefined' || !document || !document.documentElement || !window.getComputedStyle) return fb;
+      var readVar = function(el, name) {
+        try {
+          if (!el) return '';
+          var v = window.getComputedStyle(el).getPropertyValue(name);
+          return v && typeof v === 'string' ? v.replace(/^\s+|\s+$/g, '') : '';
+        } catch (e) { return ''; }
+      };
+      var root = document.documentElement;
+      var body = document.body;
+      var accentHsl = readVar(root, '--accent-hsl') || readVar(body, '--accent-hsl') || readVar(root, '--safeDarkAccent-hsl');
+      if (accentHsl && accentHsl.indexOf('var(') !== 0) {
+        if (accentHsl.indexOf(',') >= 0) return 'hsl(' + accentHsl + ')';
+        var sp = accentHsl.split(/\s+/).filter(Boolean);
+        if (sp.length >= 3) return 'hsl(' + sp.slice(0, 3).join(', ') + ')';
+      }
+      var cssNames = [
+        '--primaryButtonBackgroundColor', '--primary-button-background-color',
+        '--paragraphLinkColor', '--paragraph-link-color',
+        '--navigationLinkColor', '--navigation-link-color',
+        '--headingLinkColor', '--heading-link-color'
+      ];
+      var start = this._root || document.getElementById('blogga-blogga-root') || body;
+      var el = start;
+      for (var depth = 0; depth < 24 && el; depth++) {
+        for (var ci = 0; ci < cssNames.length; ci++) {
+          var val = readVar(el, cssNames[ci]);
+          if (val && val.indexOf('var(') !== 0 && val !== 'rgba(0, 0, 0, 0)' && val !== 'transparent') return val;
+        }
+        el = el.parentElement;
+      }
+      try {
+        var prim = document.querySelector('.sqs-button-element--primary');
+        if (prim) {
+          var bg = window.getComputedStyle(prim).backgroundColor;
+          if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+        }
+      } catch (e1) { /* ignore */ }
+      return fb;
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
@@ -4056,6 +4206,74 @@
         var resultsCount = this._searchPosts(this.items, q).length;
         this._analyticsTrackSearchDebounced(q, resultsCount);
       }
+    },
+
+    /**
+     * Featured post resolution when featured article is enabled: BetterBlog featuredPostId (if it matches
+     * a post in the pool), else Squarespace featured markers/refs, else first post in sortedItems (e.g. newest by date).
+     */
+    _resolveFeaturedPostForCollection: function(isSinglePost, faCfg, sortedItems, displayPostKey) {
+      if (isSinglePost || !faCfg || faCfg.show !== true || !sortedItems || sortedItems.length === 0) return null;
+      var pool = sortedItems;
+      var idx = -1;
+      var bb = faCfg.featuredPostId;
+      if (typeof bb === 'string' && bb.trim()) {
+        var bid = String(bb).trim();
+        for (var i = 0; i < pool.length; i++) {
+          if (displayPostKey(pool[i]) === bid) {
+            idx = i;
+            break;
+          }
+        }
+      }
+      if (idx < 0) {
+        var refIds = this._getCollectionFeaturedRefIds();
+        for (var f = 0; f < pool.length; f++) {
+          var it = pool[f];
+          if (it && (this._itemIsSquarespaceFeatured(it) || this._itemMatchesFeaturedRef(it, refIds))) {
+            idx = f;
+            break;
+          }
+        }
+      }
+      if (idx < 0 && pool.length > 0) idx = 0;
+      return idx >= 0 ? pool[idx] : null;
+    },
+
+    _applyFeaturedPostDisplayLayout: function(featuredPost, faCfg, displayItems, displayPostKey) {
+      var displayItemsForLoop = displayItems;
+      if (!featuredPost || !faCfg) return displayItemsForLoop;
+      if (faCfg.position === 'header') {
+        var headerFpK = displayPostKey(featuredPost);
+        displayItemsForLoop = displayItems.filter(function(p) {
+          if (p === featuredPost) return false;
+          if (headerFpK && displayPostKey(p) === headerFpK) return false;
+          return true;
+        });
+      } else if (faCfg.position === 'inLayout') {
+        var inLayoutList = displayItems.slice();
+        var fpK = displayPostKey(featuredPost);
+        var fpPos = -1;
+        for (var ili = 0; ili < inLayoutList.length; ili++) {
+          var lit = inLayoutList[ili];
+          if (lit === featuredPost || (fpK && displayPostKey(lit) === fpK)) {
+            fpPos = ili;
+            break;
+          }
+        }
+        if (fpPos > 0) {
+          var fpItem = inLayoutList.splice(fpPos, 1)[0];
+          inLayoutList.unshift(fpItem);
+          displayItemsForLoop = inLayoutList;
+        } else if (fpPos === 0) {
+          displayItemsForLoop = inLayoutList;
+        } else {
+          displayItemsForLoop = [featuredPost].concat(inLayoutList.filter(function(p) {
+            return p !== featuredPost && (!fpK || displayPostKey(p) !== fpK);
+          }));
+        }
+      }
+      return displayItemsForLoop;
     },
 
     _computeCollectionViewState: function(items) {
@@ -4214,63 +4432,15 @@
           : '';
       };
       if (!isSinglePost && faCfg && faCfg.show === true && sortedItems.length > 0) {
-        var bbFeatured = faCfg.featuredPostId;
-        var featuredPool = sortedItems;
-        var featuredIdx = -1;
-        if (typeof bbFeatured === 'string' && bbFeatured.trim()) {
-          var configuredFeaturedPostId = String(bbFeatured).trim();
-          for (var bi = 0; bi < featuredPool.length; bi++) {
-            if (displayPostKey(featuredPool[bi]) === configuredFeaturedPostId) {
-              featuredIdx = bi;
-              break;
-            }
-          }
-        } else {
-          var refIds = self._getCollectionFeaturedRefIds();
-          for (var fi = 0; fi < featuredPool.length; fi++) {
-            var itSq = featuredPool[fi];
-            if (itSq && (self._itemIsSquarespaceFeatured(itSq) || self._itemMatchesFeaturedRef(itSq, refIds))) {
-              featuredIdx = fi;
-              break;
-            }
-          }
-        }
-        featuredPost = featuredIdx >= 0 ? featuredPool[featuredIdx] : null;
-        if (faCfg.position === 'header' && featuredPost) {
-          var headerFpK = displayPostKey(featuredPost);
-          displayItemsForLoop = displayItems.filter(function(p) {
-            if (p === featuredPost) return false;
-            if (headerFpK && displayPostKey(p) === headerFpK) return false;
-            return true;
-          });
-        } else if (faCfg.position === 'inLayout' && featuredPost) {
-          var inLayoutList = displayItems.slice();
-          var fpK = displayPostKey(featuredPost);
-          var fpPos = -1;
-          for (var ili = 0; ili < inLayoutList.length; ili++) {
-            var lit = inLayoutList[ili];
-            if (lit === featuredPost || (fpK && displayPostKey(lit) === fpK)) {
-              fpPos = ili;
-              break;
-            }
-          }
-          if (fpPos > 0) {
-            var fpItem = inLayoutList.splice(fpPos, 1)[0];
-            inLayoutList.unshift(fpItem);
-            displayItemsForLoop = inLayoutList;
-          } else if (fpPos === 0) {
-            displayItemsForLoop = inLayoutList;
-          } else {
-            displayItemsForLoop = [featuredPost].concat(inLayoutList.filter(function(p) {
-              return p !== featuredPost && (!fpK || displayPostKey(p) !== fpK);
-            }));
-          }
+        featuredPost = self._resolveFeaturedPostForCollection(isSinglePost, faCfg, sortedItems, displayPostKey);
+        if (featuredPost) {
+          displayItemsForLoop = self._applyFeaturedPostDisplayLayout(featuredPost, faCfg, displayItems, displayPostKey);
         }
         if (self._featuredDebugEnabled()) {
           console.warn('[BlogOverlay][featured-debug] resolved', {
-            bbFeatured: bbFeatured,
+            bbFeatured: faCfg.featuredPostId,
             featuredTitle: featuredPost && featuredPost.title,
-            poolLen: featuredPool.length,
+            poolLen: sortedItems.length,
             displayLen: displayItems.length
           });
         }
@@ -4327,6 +4497,7 @@
         featuredPost: featuredPost,
         displayItemsForLoop: displayItemsForLoop,
         displayPostKey: displayPostKey,
+        categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
       };
     },
 
@@ -4374,7 +4545,7 @@
       var totalPages = vs.totalPages;
       var currentPage = vs.currentPage;
       var collectionPaginationEl = null;
-      if (usePagination && (paginationMode === 'infiniteScroll' ? (self._infiniteScrollLoaded < totalFiltered && totalFiltered > 0) : totalPages > 1)) {
+      if (usePagination && (paginationMode === 'infiniteScroll' ? totalFiltered > 0 : totalPages > 1)) {
         var paginationEl = document.createElement('nav');
         paginationEl.className = 'blog-overlay-pagination';
         paginationEl.setAttribute('aria-label', 'Pagination');
@@ -4389,26 +4560,40 @@
         paginationEl.style.width = '100%';
         paginationEl.style.boxSizing = 'border-box';
         if (paginationMode === 'infiniteScroll') {
-          var loadMoreBtn = document.createElement('button');
-          loadMoreBtn.type = 'button';
-          loadMoreBtn.textContent = 'Load more';
-          loadMoreBtn.style.padding = '8px 24px';
-          loadMoreBtn.style.fontSize = '0.9rem';
-          loadMoreBtn.style.fontWeight = '500';
-          loadMoreBtn.style.border = '1px solid #ddd';
-          loadMoreBtn.style.borderRadius = '6px';
-          loadMoreBtn.style.background = '#5B4FE8';
-          loadMoreBtn.style.color = 'white';
-          loadMoreBtn.style.cursor = 'pointer';
-          loadMoreBtn.onmouseover = function() { loadMoreBtn.style.background = '#4a3fd4'; };
-          loadMoreBtn.onmouseout = function() { loadMoreBtn.style.background = '#5B4FE8'; };
-          loadMoreBtn.onclick = function() {
-            var prevLoaded = self._infiniteScrollLoaded;
-            self._infiniteScrollLoaded = Math.min(self._infiniteScrollLoaded + postsPerPage, totalFiltered);
-            self._scrollToFirstNewPostIndex = prevLoaded;
-            self._renderContent(self.items);
-          };
-          paginationEl.appendChild(loadMoreBtn);
+          paginationEl.style.flexDirection = 'column';
+          paginationEl.style.gap = '10px';
+          if (self._infiniteScrollLoaded < totalFiltered) {
+            var loadMoreBtn = document.createElement('button');
+            loadMoreBtn.type = 'button';
+            loadMoreBtn.textContent = 'Load more';
+            loadMoreBtn.style.padding = '8px 24px';
+            loadMoreBtn.style.fontSize = '0.9rem';
+            loadMoreBtn.style.fontWeight = '500';
+            loadMoreBtn.style.border = '1px solid #ddd';
+            loadMoreBtn.style.borderRadius = '6px';
+            loadMoreBtn.style.background = '#5B4FE8';
+            loadMoreBtn.style.color = 'white';
+            loadMoreBtn.style.cursor = 'pointer';
+            loadMoreBtn.onmouseover = function() { loadMoreBtn.style.background = '#4a3fd4'; };
+            loadMoreBtn.onmouseout = function() { loadMoreBtn.style.background = '#5B4FE8'; };
+            loadMoreBtn.onclick = function() {
+              var prevLoaded = self._infiniteScrollLoaded;
+              self._infiniteScrollLoaded = Math.min(self._infiniteScrollLoaded + postsPerPage, totalFiltered);
+              self._scrollToFirstNewPostIndex = prevLoaded;
+              self._renderContent(self.items);
+            };
+            paginationEl.appendChild(loadMoreBtn);
+          }
+          var shownCount = Math.min(self._infiniteScrollLoaded, totalFiltered);
+          var statusLine = document.createElement('p');
+          statusLine.className = 'blog-overlay-pagination-infinite-status';
+          statusLine.textContent = 'Showing ' + shownCount + ' ' + (shownCount === 1 ? 'post' : 'posts') + ' of ' + totalFiltered;
+          statusLine.style.margin = '0';
+          statusLine.style.fontSize = '0.85rem';
+          statusLine.style.color = '#666';
+          statusLine.style.textAlign = 'center';
+          statusLine.setAttribute('aria-live', 'polite');
+          paginationEl.appendChild(statusLine);
         } else {
           var pagBtns = document.createElement('div');
           pagBtns.style.display = 'flex';
@@ -4497,6 +4682,8 @@
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
       var hasAnyFilter = vs.hasAnyFilter;
+      var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
+      var siteAccentForPostCats = self._getSiteAccentColor();
       var postHeaderSideGapPx;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
@@ -4798,7 +4985,7 @@
           if (siteTitle) { bcNav.appendChild(makeLink(siteTitle, blogIndexUrl, goToBlogIndex, 'breadcrumb')); bcNav.appendChild(sep()); }
           bcNav.appendChild(makeLink(blogName, blogIndexUrl, goToBlogIndex, 'breadcrumb'));
           var postCats = self._getPostCategories(post);
-          if (postCats.length > 0) { bcNav.appendChild(sep()); for (var ci = 0; ci < postCats.length; ci++) { if (ci > 0) { var c = document.createElement('span'); c.textContent = ','; c.style.marginRight = '4px'; bcNav.appendChild(c); } bcNav.appendChild(makeLink(postCats[ci], '#', (function(cat) { return function() { self._categoryFilter = [cat]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(postCats[ci]), 'categoryTag')); } }
+          if (postCats.length > 0) { bcNav.appendChild(sep()); for (var ci = 0; ci < postCats.length; ci++) { if (ci > 0) { var c = document.createElement('span'); c.textContent = ', '; bcNav.appendChild(c); } bcNav.appendChild(makeLink(postCats[ci], '#', (function(cat) { return function() { self._categoryFilter = [cat]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(postCats[ci]), 'categoryTag')); } }
           bcNav.appendChild(sep());
           var pt = post.title || 'Untitled';
           var pu = self._getPostUrl(post);
@@ -4850,6 +5037,10 @@
           if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
         }
 
+        var postCategoriesLine = (!isSinglePost && collectionLayout === 'listRows')
+          ? self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, categoryFilterUiEnabled)
+          : null;
+
         var h2 = document.createElement('h2');
         h2.className = 'blog-overlay-title';
         h2.style.margin = '0 0 8px 0';
@@ -4889,6 +5080,7 @@
         } else {
           h2.textContent = post.title || 'Untitled';
         }
+        if (postCategoriesLine) headlineMount.appendChild(postCategoriesLine);
         if (isFeaturedInLayout) {
           var titleRow = document.createElement('div');
           titleRow.style.display = 'flex';
@@ -5173,6 +5365,8 @@
       var hasAnyFilter = vs.hasAnyFilter;
       var hasSearchQuery = vs.hasSearchQuery;
       var searchQuery = vs.searchQuery;
+      var siteAccent = self._getSiteAccentColor();
+      var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
 
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
@@ -5181,37 +5375,41 @@
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
         var imgUrlValid = imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0 && imgUrl !== '#' && (imgUrl.indexOf('http://') === 0 || imgUrl.indexOf('https://') === 0);
         var imgLeft = j % 2 === 0;
-        var card = document.createElement('a');
+        var postUrl = self._getPostUrl(post) || (self._bbPreview ? '#post-' + postIndex : '#');
         var displayIdx = displayItems.indexOf(post);
-        card.href = self._getPostUrl(post) || (self._bbPreview ? '#post-' + postIndex : '#');
-        if (!isSinglePost) {
-          card.setAttribute('data-analytics-element', 'postTitle');
-          card.setAttribute('data-post-index', String(postIndex));
-          if (hasSearchQuery && searchQuery) {
-            card.setAttribute('data-search-term', searchQuery);
+        function wireShowcaseNavLink(el) {
+          if (self._bbPreview && hasAnyFilter && postIndex >= 0) {
+            el.onclick = (function(idx) {
+              return function(e) {
+                e.preventDefault();
+                self._categoryFilter = [];
+                self._tagFilter = [];
+                self._searchQuery = '';
+                self._currentPage = 1;
+                var targetHash = '#post-' + idx;
+                if (window.location.hash !== targetHash) {
+                  window.location.hash = targetHash;
+                } else {
+                  self._renderContent(self.items);
+                }
+              };
+            })(postIndex);
           }
         }
-        if (self._bbPreview && hasAnyFilter && postIndex >= 0) {
-          card.onclick = (function(idx) {
-            return function(e) {
-              e.preventDefault();
-              self._categoryFilter = [];
-              self._tagFilter = [];
-              self._searchQuery = '';
-              self._currentPage = 1;
-              var targetHash = '#post-' + idx;
-              if (window.location.hash !== targetHash) {
-                window.location.hash = targetHash;
-              } else {
-                self._renderContent(self.items);
-              }
-            };
-          })(postIndex);
+        function setShowcasePostAnalytics(el) {
+          if (!isSinglePost) {
+            el.setAttribute('data-analytics-element', 'postTitle');
+            el.setAttribute('data-post-index', String(postIndex));
+            if (hasSearchQuery && searchQuery) {
+              el.setAttribute('data-search-term', searchQuery);
+            }
+          }
         }
+        var card = document.createElement('div');
+        card.className = 'blog-overlay-showcase-card';
         card.style.display = 'grid';
         card.style.gap = '0';
-        card.style.textDecoration = 'none';
-        card.style.color = 'inherit';
+        card.style.marginTop = '10%';
         card.style.marginBottom = '48px';
         card.style.gridTemplateColumns = '1fr';
         card.style.width = '100%';
@@ -5225,10 +5423,6 @@
         bodyCol.style.flexDirection = 'column';
         bodyCol.style.justifyContent = 'center';
         bodyCol.style.padding = '24px 0';
-        var titleEl = document.createElement('h2');
-        titleEl.className = 'blog-overlay-title';
-        titleEl.style.margin = '0 0 8px 0';
-        titleEl.textContent = post.title || 'Untitled';
         if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
           var shFpK = displayPostKey(featuredPost);
           var shPk = displayPostKey(post);
@@ -5237,7 +5431,7 @@
             shBadge.textContent = 'FEATURED';
             shBadge.style.display = 'inline-flex';
             shBadge.style.alignItems = 'center';
-            shBadge.style.background = '#5B4FE8';
+            shBadge.style.background = siteAccent;
             shBadge.style.color = '#fff';
             shBadge.style.fontSize = '9px';
             shBadge.style.fontWeight = '700';
@@ -5252,7 +5446,23 @@
             bodyCol.appendChild(shBadge);
           }
         }
-        var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
+        var postCategoriesLineShowcase = !isSinglePost
+          ? self._createCollectionPostCategoriesLine(post, siteAccent, categoryFilterUiEnabled)
+          : null;
+        if (postCategoriesLineShowcase) bodyCol.appendChild(postCategoriesLineShowcase);
+        var h2 = document.createElement('h2');
+        h2.className = 'blog-overlay-title';
+        h2.style.margin = '0 0 8px 0';
+        var titleLink = document.createElement('a');
+        titleLink.href = postUrl;
+        titleLink.textContent = post.title || 'Untitled';
+        titleLink.style.color = 'inherit';
+        titleLink.style.textDecoration = 'none';
+        titleLink.style.cursor = 'pointer';
+        setShowcasePostAnalytics(titleLink);
+        wireShowcaseNavLink(titleLink);
+        h2.appendChild(titleLink);
+        var excerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
         var bodyEl = document.createElement('div');
         bodyEl.className = 'blog-overlay-body';
         if (excerptText) {
@@ -5269,33 +5479,83 @@
         metaEl.className = 'blog-overlay-meta-row';
         metaEl.style.display = 'flex';
         metaEl.style.alignItems = 'center';
-        metaEl.style.marginBottom = '8px';
+        metaEl.style.marginBottom = '0';
         metaEl.style.gap = '12px';
         metaEl.style.flexWrap = 'wrap';
         metaEl.style.fontSize = '0.85rem';
         metaEl.style.color = '#666';
         metaEl.textContent = metaParts.join(' · ');
-        bodyCol.appendChild(titleEl);
+        var readLink = document.createElement('a');
+        readLink.href = postUrl;
+        readLink.className = 'blog-overlay-showcase-read-link';
+        readLink.style.display = 'inline-flex';
+        readLink.style.alignItems = 'center';
+        readLink.style.gap = '6px';
+        readLink.style.marginTop = '12px';
+        readLink.style.fontSize = '0.9rem';
+        readLink.style.fontWeight = '600';
+        readLink.style.color = siteAccent;
+        readLink.style.textDecoration = 'none';
+        readLink.style.cursor = 'pointer';
+        readLink.setAttribute('aria-label', 'Read article: ' + (post.title || 'Untitled'));
+        setShowcasePostAnalytics(readLink);
+        wireShowcaseNavLink(readLink);
+        readLink.onmouseover = function() { readLink.style.textDecoration = 'underline'; };
+        readLink.onmouseout = function() { readLink.style.textDecoration = 'none'; };
+        var readLabel = document.createElement('span');
+        readLabel.textContent = 'Read article';
+        readLink.appendChild(readLabel);
+        var arrowNs = 'http://www.w3.org/2000/svg';
+        var arrowSvg = document.createElementNS(arrowNs, 'svg');
+        arrowSvg.setAttribute('width', '16');
+        arrowSvg.setAttribute('height', '16');
+        arrowSvg.setAttribute('viewBox', '0 0 24 24');
+        arrowSvg.setAttribute('fill', 'none');
+        arrowSvg.setAttribute('stroke', 'currentColor');
+        arrowSvg.setAttribute('stroke-width', '2');
+        arrowSvg.setAttribute('stroke-linecap', 'round');
+        arrowSvg.setAttribute('stroke-linejoin', 'round');
+        arrowSvg.style.display = 'block';
+        arrowSvg.style.flexShrink = '0';
+        var arrowPath = document.createElementNS(arrowNs, 'path');
+        arrowPath.setAttribute('d', 'M5 12h14m-7-7l7 7-7 7');
+        arrowSvg.appendChild(arrowPath);
+        readLink.appendChild(arrowSvg);
+        bodyCol.appendChild(h2);
         bodyCol.appendChild(bodyEl);
         bodyCol.appendChild(metaEl);
+        bodyCol.appendChild(readLink);
         card.appendChild(bodyCol);
         if (imgUrlValid && !self._isPlaceholderWithMap(imgUrl, placeholderMap)) {
+          card.style.alignItems = 'start';
           var imgCol = document.createElement('div');
           imgCol.style.overflow = 'hidden';
           imgCol.style.borderRadius = '4px';
-          imgCol.style.minHeight = '320px';
+          imgCol.style.aspectRatio = '3 / 2';
+          imgCol.style.width = '100%';
+          imgCol.style.height = 'auto';
+          imgCol.style.alignSelf = 'start';
+          imgCol.style.minWidth = '0';
           if (!imgLeft) imgCol.style.order = '2';
           var imgEl = document.createElement('img');
           imgEl.src = imgUrl;
           imgEl.alt = post.title || '';
           imgEl.style.width = '100%';
           imgEl.style.height = '100%';
-          imgEl.style.minHeight = '320px';
           imgEl.style.objectFit = 'cover';
           imgEl.style.objectPosition = 'center';
           imgEl.style.display = 'block';
           imgEl.style.transition = 'transform 0.5s';
-          imgCol.appendChild(imgEl);
+          var imgLink = document.createElement('a');
+          imgLink.href = postUrl;
+          imgLink.style.display = 'block';
+          imgLink.style.color = 'inherit';
+          imgLink.style.textDecoration = 'none';
+          imgLink.style.height = '100%';
+          setShowcasePostAnalytics(imgLink);
+          wireShowcaseNavLink(imgLink);
+          imgLink.appendChild(imgEl);
+          imgCol.appendChild(imgLink);
           card.style.gridTemplateColumns = imgLeft ? '58% 42%' : '42% 58%';
           bodyCol.style.padding = '48px 56px';
           if (imgLeft) { bodyCol.style.paddingRight = '0'; bodyCol.style.paddingLeft = '56px'; }
@@ -5336,7 +5596,7 @@
 
       var pagZone = document.getElementById('blog-overlay-pagination-zone');
       var needsPagination = vs.usePagination && (vs.paginationMode === 'infiniteScroll'
-        ? (self._infiniteScrollLoaded < vs.totalFiltered && vs.totalFiltered > 0)
+        ? vs.totalFiltered > 0
         : vs.totalPages > 1);
       if (needsPagination && !pagZone) {
         var wrapper = document.getElementById('blog-overlay-list');
@@ -5360,12 +5620,30 @@
         mainEl.style.display = 'grid';
         mainEl.style.gridTemplateColumns = 'repeat(' + gridColsDigestOrGrid + ', 1fr)';
         mainEl.style.gap = '24px';
+        mainEl.style.width = '';
+        mainEl.style.maxWidth = '';
+        mainEl.style.marginLeft = '';
+        mainEl.style.marginRight = '';
+        mainEl.style.boxSizing = '';
       } else {
         mainEl.style.display = 'flex';
         mainEl.style.flexDirection = 'column';
         mainEl.style.alignItems = 'stretch';
         mainEl.style.gap = '0';
         mainEl.style.gridTemplateColumns = '';
+        if (collectionLayout === 'showcase') {
+          mainEl.style.width = '80%';
+          mainEl.style.maxWidth = '100%';
+          mainEl.style.marginLeft = '10%';
+          mainEl.style.marginRight = '10%';
+          mainEl.style.boxSizing = 'border-box';
+        } else {
+          mainEl.style.width = '';
+          mainEl.style.maxWidth = '';
+          mainEl.style.marginLeft = '';
+          mainEl.style.marginRight = '';
+          mainEl.style.boxSizing = '';
+        }
       }
 
       var navbarOffset = this._getNavbarOffset();
@@ -5569,7 +5847,7 @@
           singlePostHeaderZoneEl.style.paddingTop = '16px';
           singlePostHeaderZoneEl.style.paddingBottom = '16px';
           singlePostHeaderZoneEl.style.boxSizing = 'border-box';
-          singlePostHeaderZoneEl.style.background = 'rgba(255,255,255,0.98)';
+          singlePostHeaderZoneEl.style.background = 'transparent';
           singlePostHeaderZoneEl.style.borderBottom = '1px solid #eee';
         }
         singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
@@ -5612,6 +5890,11 @@
         main.style.alignItems = 'stretch';
         main.style.gap = '0';
         main.style.gridTemplateColumns = '';
+        main.style.width = '80%';
+        main.style.maxWidth = '100%';
+        main.style.marginLeft = '10%';
+        main.style.marginRight = '10%';
+        main.style.boxSizing = 'border-box';
       } else {
         /* listRows, editorial, etc. — single column of sections; editorial rows are their own grids. */
         main.style.display = 'flex';
@@ -5621,8 +5904,6 @@
         main.style.gridTemplateColumns = '';
       }
       if (!isSinglePost) {
-        var blogMeta = this._blogMeta || {};
-        var blogTitleText = blogMeta.blogName || 'Blog';
         headerZoneEl = document.createElement('div');
         headerZoneEl.className = 'blog-overlay-header-zone';
         headerZoneEl.style.position = 'relative';
@@ -5633,19 +5914,11 @@
         headerZoneEl.style.marginRight = 'calc(50% - 50vw)';
         headerZoneEl.style.padding = '16px 24px';
         headerZoneEl.style.boxSizing = 'border-box';
-        headerZoneEl.style.background = 'rgba(255,255,255,0.98)';
+        headerZoneEl.style.background = 'transparent';
         headerZoneEl.style.borderBottom = '1px solid #eee';
-        var titleEl = document.createElement('h1');
-        titleEl.textContent = blogTitleText;
-        titleEl.style.margin = '0';
-        titleEl.style.fontSize = '1.6rem';
-        titleEl.style.fontWeight = '600';
-        titleEl.style.lineHeight = '1.2';
-        titleEl.style.color = '#1a1a1a';
-        headerZoneEl.appendChild(titleEl);
         headerModulesHostEl = document.createElement('div');
         headerModulesHostEl.className = 'blog-overlay-header-modules-host';
-        headerModulesHostEl.style.marginTop = '12px';
+        headerModulesHostEl.style.marginTop = '0';
         headerModulesHostEl.style.display = 'flex';
         headerModulesHostEl.style.flexDirection = 'row';
         headerModulesHostEl.style.flexWrap = 'wrap';
@@ -5723,63 +5996,15 @@
           : '';
       };
       if (!isSinglePost && faCfg && faCfg.show === true && sortedItems.length > 0) {
-        var bbFeatured = faCfg.featuredPostId;
-        var featuredPool = sortedItems;
-        var featuredIdx = -1;
-        if (typeof bbFeatured === 'string' && bbFeatured.trim()) {
-          var configuredFeaturedPostId = String(bbFeatured).trim();
-          for (var bi = 0; bi < featuredPool.length; bi++) {
-            if (displayPostKey(featuredPool[bi]) === configuredFeaturedPostId) {
-              featuredIdx = bi;
-              break;
-            }
-          }
-        } else {
-          var refIds = self._getCollectionFeaturedRefIds();
-          for (var fi = 0; fi < featuredPool.length; fi++) {
-            var itSq = featuredPool[fi];
-            if (itSq && (self._itemIsSquarespaceFeatured(itSq) || self._itemMatchesFeaturedRef(itSq, refIds))) {
-              featuredIdx = fi;
-              break;
-            }
-          }
-        }
-        featuredPost = featuredIdx >= 0 ? featuredPool[featuredIdx] : null;
-        if (faCfg.position === 'header' && featuredPost) {
-          var headerFpK = displayPostKey(featuredPost);
-          displayItemsForLoop = displayItems.filter(function(p) {
-            if (p === featuredPost) return false;
-            if (headerFpK && displayPostKey(p) === headerFpK) return false;
-            return true;
-          });
-        } else if (faCfg.position === 'inLayout' && featuredPost) {
-          var inLayoutList = displayItems.slice();
-          var fpK = displayPostKey(featuredPost);
-          var fpPos = -1;
-          for (var ili = 0; ili < inLayoutList.length; ili++) {
-            var lit = inLayoutList[ili];
-            if (lit === featuredPost || (fpK && displayPostKey(lit) === fpK)) {
-              fpPos = ili;
-              break;
-            }
-          }
-          if (fpPos > 0) {
-            var fpItem = inLayoutList.splice(fpPos, 1)[0];
-            inLayoutList.unshift(fpItem);
-            displayItemsForLoop = inLayoutList;
-          } else if (fpPos === 0) {
-            displayItemsForLoop = inLayoutList;
-          } else {
-            displayItemsForLoop = [featuredPost].concat(inLayoutList.filter(function(p) {
-              return p !== featuredPost && (!fpK || displayPostKey(p) !== fpK);
-            }));
-          }
+        featuredPost = self._resolveFeaturedPostForCollection(isSinglePost, faCfg, sortedItems, displayPostKey);
+        if (featuredPost) {
+          displayItemsForLoop = self._applyFeaturedPostDisplayLayout(featuredPost, faCfg, displayItems, displayPostKey);
         }
         if (self._featuredDebugEnabled()) {
           console.warn('[BlogOverlay][featured-debug] resolved', {
-            bbFeatured: bbFeatured,
+            bbFeatured: faCfg.featuredPostId,
             featuredTitle: featuredPost && featuredPost.title,
-            poolLen: featuredPool.length,
+            poolLen: sortedItems.length,
             displayLen: displayItems.length
           });
         }
@@ -5953,7 +6178,7 @@
           heroInner.appendChild(heroContent);
           heroLink.appendChild(heroInner);
           if (!isSinglePost && headerZoneEl && headerModulesHostEl) {
-            heroLink.style.marginTop = '12px';
+            heroLink.style.marginTop = '0';
             headerZoneEl.insertBefore(heroLink, headerModulesHostEl);
           } else {
             main.insertBefore(heroLink, main.firstChild);
@@ -7100,7 +7325,7 @@
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky !== false;
           var collectionHeaderStickyOffset = 0;
           if (!isSinglePost) {
-            var collectionTitleBand = 52;
+            var collectionTitleBand = 0;
             var headerModulesBand = (headerContentCfg && headerContentCfg.show)
               ? (Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48)) + 16)
               : 0;
@@ -7239,8 +7464,7 @@
                       for (var ci = 0; ci < catParts.length; ci++) {
                         if (ci > 0) {
                           var comma = document.createElement('span');
-                          comma.textContent = ',';
-                          comma.style.marginRight = '4px';
+                          comma.textContent = ', ';
                           breadcrumbEl.appendChild(comma);
                         }
                         var catName = catParts[ci];

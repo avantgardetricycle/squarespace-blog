@@ -226,6 +226,11 @@ export type FeaturedArticlePosition = "header" | "inLayout";
 export interface FeaturedArticleConfig {
   show: boolean;
   position: FeaturedArticlePosition;
+  /**
+   * When set to a post key (id, fullUrl, or title — same as renderer `displayPostKey`), that post is featured.
+   * When null/omitted, the live blog uses Squarespace featured flags, then the first post in the sorted list
+   * (newest when sorted by date).
+   */
   featuredPostId?: string | null;
 }
 
@@ -243,6 +248,70 @@ export interface CollectionLevelConfig extends BaseLevelConfig {
   gridColumns?: GridColumnsOption;
   collectionModules?: CollectionModulesConfig;
   featuredArticle?: FeaturedArticleConfig;
+}
+
+function blogPreviewItemTimestampMs(item: {
+  publishedOn?: unknown;
+  publishOn?: unknown;
+  addedOn?: unknown;
+}): number {
+  const v = item.publishedOn ?? item.publishOn ?? item.addedOn;
+  if (typeof v === "number" && !Number.isNaN(v)) return v;
+  if (typeof v === "string") {
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? 0 : t;
+  }
+  return 0;
+}
+
+function collectionHasPostSortModule(cfg: CollectionLevelConfig): boolean {
+  const zoneHas = (zone: { modules?: string[] } | null | undefined) =>
+    Array.isArray(zone?.modules) && zone.modules.includes("postSort");
+  return (
+    zoneHas(cfg.leftSidebar) ||
+    zoneHas(cfg.rightSidebar) ||
+    zoneHas(cfg.headerContent)
+  );
+}
+
+/** Same ordering the renderer uses for the featured-article candidate pool (sortedItems). */
+function sortBlogItemsForFeaturedPool<T extends { title?: string; publishedOn?: unknown; publishOn?: unknown; addedOn?: unknown }>(
+  items: T[],
+  collectionCfg: CollectionLevelConfig
+): T[] {
+  const sorted = items.slice();
+  const hasMod = collectionHasPostSortModule(collectionCfg);
+  const postSort =
+    hasMod && (collectionCfg.postSort === "az" || collectionCfg.postSort === "popularity")
+      ? collectionCfg.postSort
+      : "date";
+  if (postSort === "az") {
+    sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  } else {
+    sorted.sort((a, b) => blogPreviewItemTimestampMs(b) - blogPreviewItemTimestampMs(a));
+  }
+  return sorted;
+}
+
+export const FEATURED_POST_SELECT_AUTO = "__auto__";
+
+export type FeaturedArticleEffectiveSource = "betterblog" | "squarespace" | "recent";
+
+export function resolveEffectiveFeaturedArticle<T extends { title?: string }>(args: {
+  sortedPool: T[];
+  featuredPostId: string | null | undefined;
+  getKey: (item: T, idx: number) => string;
+}): { post: T | null; source: FeaturedArticleEffectiveSource } {
+  const { sortedPool, featuredPostId, getKey } = args;
+  if (sortedPool.length === 0) return { post: null, source: "recent" };
+  if (typeof featuredPostId === "string" && featuredPostId.trim()) {
+    const id = featuredPostId.trim();
+    const idx = sortedPool.findIndex((item, i) => getKey(item, i) === id);
+    if (idx >= 0) return { post: sortedPool[idx], source: "betterblog" };
+  }
+  const idxSq = sortedPool.findIndex((item) => blogItemLooksSquarespaceFeatured(item as Parameters<typeof blogItemLooksSquarespaceFeatured>[0]));
+  if (idxSq >= 0) return { post: sortedPool[idxSq], source: "squarespace" };
+  return { post: sortedPool[0], source: "recent" };
 }
 
 export interface PostLevelConfig extends BaseLevelConfig {
@@ -1599,21 +1668,27 @@ export default function Configure() {
     })),
     [blogItems, getFeaturedPostKey]
   );
-  /** When featuredPostId is omitted, renderer uses Squarespace flags; this is the matching option value for the select. */
-  const implicitFeaturedPostKey = useMemo(() => {
-    const idxSq = blogItems.findIndex((item) => blogItemLooksSquarespaceFeatured(item));
-    if (idxSq < 0) return null;
-    return getFeaturedPostKey(blogItems[idxSq], idxSq);
-  }, [blogItems, getFeaturedPostKey]);
+  const sortedBlogItemsForFeatured = useMemo(
+    () => sortBlogItemsForFeaturedPool(blogItems, config.collectionConfig[viewerMode]),
+    [blogItems, config.collectionConfig, viewerMode]
+  );
+  const effectiveFeaturedArticle = useMemo(() => {
+    const fa = config.collectionConfig[viewerMode].featuredArticle ?? defaultFeaturedArticle;
+    return resolveEffectiveFeaturedArticle({
+      sortedPool: sortedBlogItemsForFeatured,
+      featuredPostId: fa.featuredPostId,
+      getKey: getFeaturedPostKey,
+    });
+  }, [config.collectionConfig, viewerMode, sortedBlogItemsForFeatured, getFeaturedPostKey]);
   const featuredPostSelectValue = useMemo(() => {
     const fpId = (config.collectionConfig[viewerMode].featuredArticle ?? defaultFeaturedArticle).featuredPostId;
-    if (fpId === null) return "__none__";
-    if (typeof fpId === "string" && fpId.trim()) {
-      const idx = blogItems.findIndex((item, i) => getFeaturedPostKey(item, i) === fpId.trim());
-      return idx >= 0 ? getFeaturedPostKey(blogItems[idx], idx) : "__none__";
+    if (fpId === null || fpId === undefined || (typeof fpId === "string" && !fpId.trim())) {
+      return FEATURED_POST_SELECT_AUTO;
     }
-    return implicitFeaturedPostKey ?? "__none__";
-  }, [config.collectionConfig, viewerMode, blogItems, getFeaturedPostKey, implicitFeaturedPostKey]);
+    const trimmed = String(fpId).trim();
+    const idx = blogItems.findIndex((item, i) => getFeaturedPostKey(item, i) === trimmed);
+    return idx >= 0 ? getFeaturedPostKey(blogItems[idx], idx) : FEATURED_POST_SELECT_AUTO;
+  }, [config.collectionConfig, viewerMode, blogItems, getFeaturedPostKey]);
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
@@ -2307,27 +2382,44 @@ export default function Configure() {
                       <Collapsible open={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).show && sectionExpanded.featuredArticle}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-4">
+                            <div className="min-w-0 space-y-2 rounded-md border border-[#e5e4e0] bg-[#fafaf9] px-3 py-2.5">
+                              <Label className="text-xs text-[#6b6b6b]">Currently featured</Label>
+                              <p className="text-sm font-medium text-[#0a0a0a] break-words">
+                                {effectiveFeaturedArticle.post
+                                  ? (effectiveFeaturedArticle.post.title?.trim() || "Untitled")
+                                  : blogItems.length === 0
+                                    ? "No posts loaded yet"
+                                    : "—"}
+                              </p>
+                              <p className="text-xs text-[#6b6b6b]">
+                                {effectiveFeaturedArticle.post
+                                  ? effectiveFeaturedArticle.source === "betterblog"
+                                    ? "Pinned in BetterBlog"
+                                    : effectiveFeaturedArticle.source === "squarespace"
+                                      ? "From Squarespace"
+                                      : "Newest in sort order (fallback)"
+                                  : null}
+                              </p>
+                            </div>
                             <div className="min-w-0 space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Featured post</Label>
                               <Select
                                 value={featuredPostSelectValue}
                                 onValueChange={(v) => {
-                                  if (v === "__none__") {
+                                  if (v === FEATURED_POST_SELECT_AUTO) {
                                     updateLevelConfigPath("featuredArticle.featuredPostId", null);
-                                    return;
-                                  }
-                                  const fpId = ((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).featuredPostId;
-                                  if (fpId === undefined && implicitFeaturedPostKey !== null && v === implicitFeaturedPostKey) {
                                     return;
                                   }
                                   updateLevelConfigPath("featuredArticle.featuredPostId", v);
                                 }}
                               >
                                 <SelectTrigger className="w-full min-w-0 max-w-full whitespace-normal">
-                                  <SelectValue placeholder="No featured post" />
+                                  <SelectValue placeholder="Choose featured post" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="__none__">None</SelectItem>
+                                  <SelectItem value={FEATURED_POST_SELECT_AUTO}>
+                                    Automatic (Squarespace, else newest)
+                                  </SelectItem>
                                   {featuredArticleOptions.map((opt) => (
                                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                                   ))}

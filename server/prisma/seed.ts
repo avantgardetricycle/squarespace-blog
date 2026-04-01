@@ -188,7 +188,7 @@ async function main() {
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         collectionModules: {
-          filter: { filterByTags: true, filterByCategories: true },
+          filter: { filterByTags: false, filterByCategories: true },
           sort: {},
           search: {},
           recentPosts: {},
@@ -200,8 +200,8 @@ async function main() {
         },
         headerContent: {
           show: true,
-          modules: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
-          moduleOrder: ['filterByTagsAndCategories', 'postSort', 'searchPosts'],
+          modules: ['filterByCategory', 'postSort', 'searchPosts'],
+          moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
           height: 48
         },
         footerContent: {
@@ -224,7 +224,23 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'listRows',
         showReadingTime: true,
-        headerContent: { show: true, modules: ['filterByTagsAndCategories', 'searchPosts', 'postSort'], height: 48 },
+        headerContent: {
+          show: true,
+          modules: ['filterByCategory', 'searchPosts', 'postSort'],
+          moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
+          height: 48
+        },
+        collectionModules: {
+          filter: { filterByTags: false, filterByCategories: true },
+          sort: {},
+          search: {},
+          recentPosts: {},
+          emailCapture: {
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
+        },
         leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 },
@@ -245,14 +261,14 @@ async function main() {
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: {
           show: true,
-          modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
-          moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByTagsAndCategories'],
+          modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
+          moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
           width: 280,
           spaceAbove: 0,
           sticky: true
         },
         collectionModules: {
-          filter: { filterByTags: true, filterByCategories: true },
+          filter: { filterByTags: false, filterByCategories: true },
           sort: {},
           search: {},
           recentPosts: {},
@@ -264,8 +280,8 @@ async function main() {
         },
         headerContent: {
           show: true,
-          modules: ['filterByTagsAndCategories', 'searchPosts'],
-          moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+          modules: ['filterByCategory', 'searchPosts'],
+          moduleOrder: ['filterByCategory', 'searchPosts'],
           height: 48
         },
         footerContent: {
@@ -290,8 +306,9 @@ async function main() {
         showReadingTime: true,
         collectionLayout: 'showcase',
         gridColumns: 2,
+        pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
         collectionModules: {
-          filter: { filterByTags: true, filterByCategories: true },
+          filter: { filterByTags: false, filterByCategories: true },
           sort: {},
           search: {},
           recentPosts: {},
@@ -303,8 +320,8 @@ async function main() {
         },
         headerContent: {
           show: true,
-          modules: ['filterByTagsAndCategories', 'searchPosts'],
-          moduleOrder: ['filterByTagsAndCategories', 'searchPosts'],
+          modules: ['filterByCategory', 'searchPosts'],
+          moduleOrder: ['filterByCategory', 'searchPosts'],
           height: 48
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 },
@@ -323,7 +340,23 @@ async function main() {
         showAuthor: true,
         showReadingTime: true,
         gridColumns: 3,
-        headerContent: { show: true, modules: ['filterByCategory', 'filterByTag', 'searchPosts', 'postSort'], height: 48 },
+        headerContent: {
+          show: true,
+          modules: ['filterByCategory', 'searchPosts', 'postSort'],
+          moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
+          height: 48
+        },
+        collectionModules: {
+          filter: { filterByTags: false, filterByCategories: true },
+          sort: {},
+          search: {},
+          recentPosts: {},
+          emailCapture: {
+            header: 'Subscribe to our newsletter',
+            buttonText: 'Subscribe'
+          },
+          leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
+        },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
         featuredArticle: { show: true, position: 'inLayout' }
       },
