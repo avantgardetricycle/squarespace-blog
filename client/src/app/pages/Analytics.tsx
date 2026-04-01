@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import {
   AreaChart,
@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import {
   Eye,
   TrendingUp,
@@ -50,12 +49,14 @@ interface AnalyticsData {
     pctChange: number;
   };
   pageViewsData: Array<{ date: string; views: number; uniqueVisitors: number }>;
-  mostReadPosts: Array<{
+  perPostAnalytics: Array<{
     postId: string;
     title: string;
     views: number;
     readPercent: number;
     avgTimeOnPage: string;
+    avgTimeOnPageSeconds: number;
+    publishedAt: string | null;
     author: string;
   }>;
   clickTrackingData: Array<{ element: string; clicks: number; ctr: number }>;
@@ -80,7 +81,7 @@ const emptyAnalytics: AnalyticsData = {
     pctChange: 0,
   },
   pageViewsData: [],
-  mostReadPosts: [],
+  perPostAnalytics: [],
   clickTrackingData: [],
   searchAnalyticsData: [],
   authorAnalyticsData: [],
@@ -99,7 +100,10 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [timeRange, setTimeRange] = useState("30d");
-  const [mostReadPeriod, setMostReadPeriod] = useState("30days");
+  const [postSort, setPostSort] = useState<
+    "views" | "date_posted" | "read_percent" | "avg_time"
+  >("views");
+  const [postLimit, setPostLimit] = useState<number | "all">(5);
   const [gaConfig, setGaConfig] = useState<GAConfig | null>(null);
   const [gaModalOpen, setGaModalOpen] = useState(false);
   const [leadsData, setLeadsData] = useState<{
@@ -129,17 +133,29 @@ export default function Analytics() {
   useEffect(() => {
     if (!siteKey) return;
     setLoading(true);
-    const params = new URLSearchParams({ timeRange, mostReadPeriod });
+    const params = new URLSearchParams({ timeRange });
     fetch(`/api/analytics/${encodeURIComponent(siteKey)}?${params}`, {
       credentials: "include",
     })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setAnalytics(data ?? emptyAnalytics);
+      .then((payload) => {
+        if (!payload) {
+          setAnalytics(emptyAnalytics);
+          return;
+        }
+        const d = payload as AnalyticsData & { mostReadPosts?: AnalyticsData["perPostAnalytics"] };
+        if (!d.perPostAnalytics?.length && Array.isArray(d.mostReadPosts) && d.mostReadPosts.length > 0) {
+          d.perPostAnalytics = d.mostReadPosts.map((p) => ({
+            ...p,
+            avgTimeOnPageSeconds: 0,
+            publishedAt: null,
+          }));
+        }
+        setAnalytics({ ...emptyAnalytics, ...d });
       })
       .catch(() => setAnalytics(emptyAnalytics))
       .finally(() => setLoading(false));
-  }, [siteKey, timeRange, mostReadPeriod]);
+  }, [siteKey, timeRange]);
 
   useEffect(() => {
     if (!siteKey) return;
@@ -159,6 +175,37 @@ export default function Analytics() {
   }, [siteKey, timeRange]);
 
   const data = analytics ?? emptyAnalytics;
+  const readPercentTotal = data.readPercentDistribution.reduce((s, d) => s + d.count, 0);
+
+  const sortedPerPostAnalytics = useMemo(() => {
+    const list = [...(data.perPostAnalytics ?? [])];
+    const cmp = (
+      a: (typeof list)[0],
+      b: (typeof list)[0],
+    ): number => {
+      switch (postSort) {
+        case "views":
+          return b.views - a.views || a.title.localeCompare(b.title);
+        case "read_percent":
+          return b.readPercent - a.readPercent || b.views - a.views;
+        case "avg_time":
+          return (
+            b.avgTimeOnPageSeconds - a.avgTimeOnPageSeconds || b.views - a.views
+          );
+        case "date_posted": {
+          const ta = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+          const tb = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+          if (ta !== tb) return tb - ta;
+          return b.views - a.views;
+        }
+        default:
+          return 0;
+      }
+    };
+    list.sort(cmp);
+    if (postLimit === "all") return list;
+    return list.slice(0, postLimit);
+  }, [data.perPostAnalytics, postSort, postLimit]);
 
   if (loading && !analytics) {
     return (
@@ -527,20 +574,55 @@ export default function Analytics() {
         </ResponsiveContainer>
       </Card>
 
-      {/* Most Read Posts */}
+      {/* Per-Post Analytics */}
       <Card className="bg-white border-[#e4e3de] p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="font-heading text-xl text-[#0a0a0a]">Most Read Posts</h3>
-          <Tabs value={mostReadPeriod} onValueChange={setMostReadPeriod}>
-            <TabsList className="bg-[#f7f6f3]">
-              <TabsTrigger value="week">Last Week</TabsTrigger>
-              <TabsTrigger value="30days">Last 30 Days</TabsTrigger>
-              <TabsTrigger value="alltime">All Time</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className="font-heading text-xl text-[#0a0a0a]">Per-Post Analytics</h3>
+            <p className="text-xs text-[#6b6b6b] mt-1">
+              Metrics match the dashboard time range above (e.g. Last 7 / 30 / 90 days or 12 months).
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-[#6b6b6b] whitespace-nowrap">Sort by</span>
+              <Select value={postSort} onValueChange={(v) => setPostSort(v as typeof postSort)}>
+                <SelectTrigger className="h-9 w-[200px] bg-white">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="views">Views (high → low)</SelectItem>
+                  <SelectItem value="date_posted">Date posted (newest first)</SelectItem>
+                  <SelectItem value="read_percent">Read % (high → low)</SelectItem>
+                  <SelectItem value="avg_time">Avg. read time (high → low)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-[#6b6b6b] whitespace-nowrap">Show</span>
+              <Select
+                value={postLimit === "all" ? "all" : String(postLimit)}
+                onValueChange={(v) =>
+                  setPostLimit(v === "all" ? "all" : Number.parseInt(v, 10))
+                }
+              >
+                <SelectTrigger className="h-9 w-[120px] bg-white">
+                  <SelectValue placeholder="Count" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 posts</SelectItem>
+                  <SelectItem value="10">10 posts</SelectItem>
+                  <SelectItem value="25">25 posts</SelectItem>
+                  <SelectItem value="50">50 posts</SelectItem>
+                  <SelectItem value="100">100 posts</SelectItem>
+                  <SelectItem value="all">All posts</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
         <div className="space-y-4">
-          {data.mostReadPosts.length === 0 ? (
+          {(data.perPostAnalytics ?? []).length === 0 ? (
             <div className="flex items-center gap-4 p-4 rounded-lg border border-dashed border-[#e4e3de] bg-[#f7f6f3]/50">
               <div className="w-8 h-8 rounded-full bg-[#e4e3de] flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -549,44 +631,57 @@ export default function Analytics() {
               </div>
               <div className="text-[#6b6b6b] text-sm">No data available</div>
             </div>
-          ) : data.mostReadPosts.map((post, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-4 p-4 rounded-lg border border-[#e4e3de] hover:border-[#5B4FE8] transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-[#f7f6f3] flex items-center justify-center font-heading text-[#5B4FE8] font-semibold">
-                {index + 1}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-[#0a0a0a] mb-1 truncate">
-                  {post.title || "Untitled"}
-                </h4>
-                <div className="flex items-center gap-4 text-xs text-[#6b6b6b]">
-                  <span>By {post.author}</span>
-                  <span>•</span>
-                  <span>{post.views.toLocaleString()} views</span>
-                  <span>•</span>
-                  <span>{post.avgTimeOnPage} avg. time</span>
+          ) : (
+            sortedPerPostAnalytics.map((post, index) => (
+              <div
+                key={post.postId}
+                className="flex items-center gap-4 p-4 rounded-lg border border-[#e4e3de] hover:border-[#5B4FE8] transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#f7f6f3] flex items-center justify-center font-heading text-[#5B4FE8] font-semibold shrink-0">
+                  {index + 1}
                 </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <div className="text-sm font-medium text-[#0a0a0a]">
-                    {post.readPercent}%
-                  </div>
-                  <div className="text-xs text-[#6b6b6b]">read</div>
-                </div>
-                <div className="w-20">
-                  <div className="h-2 bg-[#f7f6f3] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#5B4FE8] rounded-full"
-                      style={{ width: `${post.readPercent}%` }}
-                    />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-[#0a0a0a] mb-1 truncate">
+                    {post.title || "Untitled"}
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6b6b6b]">
+                    <span>By {post.author}</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span>
+                      Posted{" "}
+                      {post.publishedAt
+                        ? new Date(post.publishedAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : "—"}
+                    </span>
+                    <span className="hidden sm:inline">•</span>
+                    <span>{post.views.toLocaleString()} views</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span>{post.avgTimeOnPage} avg. time</span>
                   </div>
                 </div>
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-[#0a0a0a]">
+                      {post.readPercent}%
+                    </div>
+                    <div className="text-xs text-[#6b6b6b]">read</div>
+                  </div>
+                  <div className="w-20">
+                    <div className="h-2 bg-[#f7f6f3] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#5B4FE8] rounded-full"
+                        style={{ width: `${post.readPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </Card>
 
@@ -650,33 +745,77 @@ export default function Analytics() {
               </div>
             </div>
           ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={data.readPercentDistribution}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ range, count }: { range: string; count: number }) =>
-                  `${range}: ${count.toLocaleString()}`
-                }
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey="count"
-              >
-                {data.readPercentDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #e4e3de",
-                  borderRadius: "8px",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+            <div>
+              {/*
+                Recharts (and most SVG pies) have no automatic non-overlapping labels on slices.
+                Slice labels are omitted; counts and % appear in the list below and in the tooltip.
+              */}
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={data.readPercentDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={0}
+                    outerRadius={100}
+                    paddingAngle={0}
+                    label={false}
+                    dataKey="count"
+                  >
+                    {data.readPercentDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const p = payload[0].payload as {
+                        range: string;
+                        count: number;
+                        color: string;
+                      };
+                      const pct =
+                        readPercentTotal > 0
+                          ? ((p.count / readPercentTotal) * 100).toFixed(1)
+                          : "0";
+                      return (
+                        <div className="rounded-md border border-[#e4e3de] bg-white px-3 py-2 text-sm shadow-sm">
+                          <div className="font-medium text-[#0a0a0a]">{p.range}</div>
+                          <div className="text-[#6b6b6b]">
+                            {p.count.toLocaleString()} sessions ({pct}%)
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 space-y-2 border-t border-[#e4e3de] pt-4">
+                {data.readPercentDistribution.map((d) => {
+                  const pct =
+                    readPercentTotal > 0 ? (d.count / readPercentTotal) * 100 : 0;
+                  return (
+                    <div
+                      key={d.range}
+                      className="flex items-center justify-between gap-3 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="size-3 shrink-0 rounded-sm"
+                          style={{ backgroundColor: d.color }}
+                          aria-hidden
+                        />
+                        <span className="font-medium text-[#0a0a0a]">{d.range}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums text-[#6b6b6b]">
+                        {d.count.toLocaleString()}{" "}
+                        <span className="text-[#0a0a0a]">({pct.toFixed(1)}%)</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </Card>
       </div>

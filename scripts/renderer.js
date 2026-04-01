@@ -1927,6 +1927,10 @@
 
     _analyticsFlush: function() {
       if (this._analyticsQueue.length === 0) return;
+      if (this._analyticsFlushScheduled) {
+        clearTimeout(this._analyticsFlushScheduled);
+        this._analyticsFlushScheduled = null;
+      }
       var siteKey = this.config && this.config.siteKey;
       var siteId = this.config && this.config.siteId;
       var baseUrl = this.config && this.config.baseUrl;
@@ -5167,6 +5171,8 @@
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
       var hasAnyFilter = vs.hasAnyFilter;
+      var hasSearchQuery = vs.hasSearchQuery;
+      var searchQuery = vs.searchQuery;
 
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
@@ -5178,6 +5184,13 @@
         var card = document.createElement('a');
         var displayIdx = displayItems.indexOf(post);
         card.href = self._getPostUrl(post) || (self._bbPreview ? '#post-' + postIndex : '#');
+        if (!isSinglePost) {
+          card.setAttribute('data-analytics-element', 'postTitle');
+          card.setAttribute('data-post-index', String(postIndex));
+          if (hasSearchQuery && searchQuery) {
+            card.setAttribute('data-search-term', searchQuery);
+          }
+        }
         if (self._bbPreview && hasAnyFilter && postIndex >= 0) {
           card.onclick = (function(idx) {
             return function(e) {
@@ -7032,6 +7045,14 @@
             link.appendChild(content);
             var idx = displayItems.indexOf(p);
             if (idx >= 0) link.setAttribute('data-display-index', String(idx));
+            if (!isSinglePost) {
+              var edPostIdx = items.indexOf(p);
+              link.setAttribute('data-analytics-element', 'postTitle');
+              link.setAttribute('data-post-index', String(edPostIdx));
+              if (hasSearchQuery && searchQuery) {
+                link.setAttribute('data-search-term', searchQuery);
+              }
+            }
             return link;
           };
           if (rowA) {
@@ -7622,6 +7643,7 @@
             if (searchTerm && postIdx != null) {
               self._analyticsTrack('search_click', { term: searchTerm, postIndex: parseInt(postIdx, 10) });
             }
+            self._analyticsFlush();
             break;
           }
           t = t.parentElement;

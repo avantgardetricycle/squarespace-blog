@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../db/index.js'
-import { getSiteBySiteKey } from '../db/index.js'
+import prisma, {
+  getActiveSiteConfig,
+  getSiteBySiteKey,
+  type AuthorSettings,
+} from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 
 const router = Router()
@@ -14,6 +17,90 @@ function parseTimeRange(range: string): { days: number } {
     case '90d': return { days: 90 }
     case '12m': return { days: 365 }
     default: return { days: 30 }
+  }
+}
+
+/** Matches renderer author resolution: overrides per post, else default author ids (all co-authors). */
+function resolveAuthorNamesForPost(
+  postId: string,
+  effective: { defaultAuthorIds: string[]; postAuthorOverrides: Record<string, string[]> },
+  authorIdToName: Map<string, string>,
+  payloadAuthorName?: string | null,
+): string[] {
+  const overrides = effective.postAuthorOverrides
+  const hasOverride = Object.prototype.hasOwnProperty.call(overrides, postId)
+  const ids = hasOverride
+    ? overrides[postId]
+    : effective.defaultAuthorIds.length > 0
+      ? effective.defaultAuthorIds
+      : null
+
+  if (Array.isArray(ids) && ids.length > 0) {
+    const names: string[] = []
+    const seen = new Set<string>()
+    for (const id of ids) {
+      const n = authorIdToName.get(id)
+      if (n && !seen.has(n)) {
+        seen.add(n)
+        names.push(n)
+      }
+    }
+    if (names.length > 0) return names
+  }
+
+  if (payloadAuthorName && String(payloadAuthorName).trim()) {
+    return [String(payloadAuthorName).trim()]
+  }
+  return ['Unknown']
+}
+
+function formatAuthorsLabel(names: string[]): string {
+  if (names.length === 0) return 'Unknown'
+  return names.join(', ')
+}
+
+async function loadEffectiveAuthorSettings(siteId: string): Promise<{
+  defaultAuthorIds: string[]
+  postAuthorOverrides: Record<string, string[]>
+  authorIdToName: Map<string, string>
+}> {
+  const siteConfigRow = await getActiveSiteConfig(siteId)
+  const raw = (siteConfigRow?.authorSettings as AuthorSettings | null | undefined) ?? {}
+  let defaultAuthorIds = Array.isArray(raw.defaultAuthorIds) ? raw.defaultAuthorIds.filter((id): id is string => typeof id === 'string') : []
+  if (defaultAuthorIds.length === 0) {
+    const defs = await prisma.blogAuthor.findMany({
+      where: { siteId, isDefault: true },
+      select: { id: true },
+    })
+    defaultAuthorIds = defs.map((d) => d.id)
+  }
+  const postAuthorOverrides =
+    raw.postAuthorOverrides && typeof raw.postAuthorOverrides === 'object' && !Array.isArray(raw.postAuthorOverrides)
+      ? (raw.postAuthorOverrides as Record<string, string[]>)
+      : {}
+
+  const allIds = new Set<string>(defaultAuthorIds)
+  for (const ids of Object.values(postAuthorOverrides)) {
+    if (!Array.isArray(ids)) continue
+    for (const id of ids) {
+      if (typeof id === 'string') allIds.add(id)
+    }
+  }
+
+  const authors =
+    allIds.size > 0
+      ? await prisma.blogAuthor.findMany({
+          where: { siteId, id: { in: Array.from(allIds) } },
+          select: { id: true, name: true },
+        })
+      : []
+
+  const authorIdToName = new Map(authors.map((a) => [a.id, a.name]))
+
+  return {
+    defaultAuthorIds,
+    postAuthorOverrides,
+    authorIdToName,
   }
 }
 
@@ -333,7 +420,6 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const timeRange = (req.query.timeRange as string) || '30d'
-  const mostReadPeriod = (req.query.mostReadPeriod as string) || '30days'
 
   const site = await prisma.site.findFirst({
     where: { siteKey, userId: user.id }
@@ -347,10 +433,14 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
   const since = new Date()
   since.setDate(since.getDate() - days)
 
-  const mostReadDays = mostReadPeriod === 'week' ? 7 : mostReadPeriod === '30days' ? 30 : 99999
-  const mostReadSince = mostReadDays < 99999 ? new Date(Date.now() - mostReadDays * 24 * 60 * 60 * 1000) : new Date(0)
-
   try {
+    const {
+      defaultAuthorIds,
+      postAuthorOverrides,
+      authorIdToName,
+    } = await loadEffectiveAuthorSettings(site.id)
+    const effectiveAuthorSettings = { defaultAuthorIds, postAuthorOverrides }
+
     const events = await prisma.analyticsEvent.findMany({
       where: { siteId: site.id, occurredAt: { gte: since } },
       orderBy: { occurredAt: 'asc' }
@@ -431,56 +521,35 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
       }
     }
 
-    const mostReadPageViews = pageViews.filter((e) => e.occurredAt >= mostReadSince)
-    const mostReadScrollDepths = scrollDepths.filter((e) => e.occurredAt >= mostReadSince)
-    const mostReadTimeOnPage = timeOnPage.filter((e) => e.occurredAt >= mostReadSince)
+    const cachedPostDates = await prisma.cachedPost.findMany({
+      where: { siteId: site.id },
+      select: { externalPostId: true, publishedAt: true },
+    })
+    const publishedAtByPostId = new Map(
+      cachedPostDates.map((p) => [p.externalPostId, p.publishedAt]),
+    )
 
-    const mostReadPostViews = new Map<string, { views: number; readDepths: number[]; timeSeconds: number[]; postTitle?: string; authorName?: string }>()
-    for (const e of mostReadPageViews) {
-      if (e.postId) {
-        const p = (e.payload as { postTitle?: string; authorName?: string }) ?? {}
-        const entry = mostReadPostViews.get(e.postId) ?? { views: 0, readDepths: [], timeSeconds: [], postTitle: p.postTitle, authorName: p.authorName }
-        entry.views += 1
-        if (p.postTitle) entry.postTitle = p.postTitle
-        if (p.authorName) entry.authorName = p.authorName
-        mostReadPostViews.set(e.postId, entry)
+    const perPostAnalytics = Array.from(postViews.entries()).map(([postId, v]) => {
+      const readPercent =
+        v.readDepths.length > 0
+          ? Math.round(v.readDepths.reduce((a, b) => a + b, 0) / v.readDepths.length)
+          : 0
+      const avgTime =
+        v.timeSeconds.length > 0 ? v.timeSeconds.reduce((a, b) => a + b, 0) / v.timeSeconds.length : 0
+      const publishedAt = publishedAtByPostId.get(postId) ?? null
+      return {
+        postId,
+        title: v.postTitle ?? 'Untitled',
+        views: v.views,
+        readPercent,
+        avgTimeOnPage: formatDuration(avgTime),
+        avgTimeOnPageSeconds: Math.round(avgTime * 100) / 100,
+        publishedAt: publishedAt ? publishedAt.toISOString() : null,
+        author: formatAuthorsLabel(
+          resolveAuthorNamesForPost(postId, effectiveAuthorSettings, authorIdToName, v.authorName),
+        ),
       }
-    }
-    for (const e of mostReadScrollDepths) {
-      if (e.postId) {
-        const entry = mostReadPostViews.get(e.postId)
-        if (entry) {
-          const d = Number((e.payload as { depth?: number })?.depth)
-          if (d) entry.readDepths.push(d)
-        }
-      }
-    }
-    for (const e of mostReadTimeOnPage) {
-      const pid = (e.payload as { postId?: string })?.postId ?? e.postId
-      if (pid) {
-        const entry = mostReadPostViews.get(pid)
-        if (entry) {
-          const s = Number((e.payload as { seconds?: number })?.seconds)
-          if (s) entry.timeSeconds.push(s)
-        }
-      }
-    }
-
-    const mostReadPosts = Array.from(mostReadPostViews.entries())
-      .map(([postId, v]) => {
-        const readPercent = v.readDepths.length > 0 ? Math.round(v.readDepths.reduce((a, b) => a + b, 0) / v.readDepths.length) : 0
-        const avgTime = v.timeSeconds.length > 0 ? v.timeSeconds.reduce((a, b) => a + b, 0) / v.timeSeconds.length : 0
-        return {
-          postId,
-          title: v.postTitle ?? 'Untitled',
-          views: v.views,
-          readPercent,
-          avgTimeOnPage: formatDuration(avgTime),
-          author: v.authorName ?? 'Unknown'
-        }
-      })
-      .sort((a, b) => b.views - a.views)
-      .slice(0, 5)
+    })
 
     const clickCounts = new Map<string, number>()
     for (const e of clicks) {
@@ -525,13 +594,15 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
 
     const authorStats = new Map<string, { posts: Set<string>; views: number; readDepths: number[]; timeSeconds: number[] }>()
     for (const [postId, v] of postViews.entries()) {
-      const author = v.authorName ?? 'Unknown'
-      const entry = authorStats.get(author) ?? { posts: new Set(), views: 0, readDepths: [], timeSeconds: [] }
-      entry.posts.add(postId)
-      entry.views += v.views
-      entry.readDepths.push(...v.readDepths)
-      entry.timeSeconds.push(...v.timeSeconds)
-      authorStats.set(author, entry)
+      const names = resolveAuthorNamesForPost(postId, effectiveAuthorSettings, authorIdToName, v.authorName)
+      for (const author of names) {
+        const entry = authorStats.get(author) ?? { posts: new Set(), views: 0, readDepths: [], timeSeconds: [] }
+        entry.posts.add(postId)
+        entry.views += v.views
+        entry.readDepths.push(...v.readDepths)
+        entry.timeSeconds.push(...v.timeSeconds)
+        authorStats.set(author, entry)
+      }
     }
     const authorAnalyticsData = Array.from(authorStats.entries()).map(([name, v]) => ({
       name,
@@ -574,7 +645,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
         pctChange
       },
       pageViewsData,
-      mostReadPosts,
+      perPostAnalytics,
       clickTrackingData,
       searchAnalyticsData,
       authorAnalyticsData,
@@ -612,7 +683,8 @@ function formatElementName(element: string): string {
     shareLinkedIn: 'Social Share - LinkedIn',
     categoryTag: 'Category Tags',
     newsletterCta: 'Newsletter CTA',
-    recentPosts: 'Recent Posts Widget'
+    recentPosts: 'Recent Posts Widget',
+    postTitle: 'Post Title'
   }
   return map[element] ?? element
 }
