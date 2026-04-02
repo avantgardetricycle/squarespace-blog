@@ -93,8 +93,8 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
   featuredArticle: { show: true, position: 'inLayout' as const },
   headerContent: {
     show: true,
-    modules: ['filterByCategory', 'searchPosts'],
-    moduleOrder: ['filterByCategory', 'searchPosts'],
+    modules: ['filterByCategory', 'postSort', 'searchPosts'],
+    moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
     height: 48
   },
   collectionModules: {
@@ -130,8 +130,8 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   },
   rightSidebar: {
     show: true,
-    modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
-    moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
+    modules: ['emailCapture', 'popularPosts', 'filterByCategory'],
+    moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
     width: 280,
     spaceAbove: 0,
     sticky: true

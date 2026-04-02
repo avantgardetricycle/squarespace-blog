@@ -261,8 +261,8 @@ async function main() {
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: {
           show: true,
-          modules: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
-          moduleOrder: ['searchPosts', 'emailCapture', 'popularPosts', 'filterByCategory'],
+          modules: ['emailCapture', 'popularPosts', 'filterByCategory'],
+          moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
           width: 280,
           spaceAbove: 0,
           sticky: true
@@ -320,8 +320,8 @@ async function main() {
         },
         headerContent: {
           show: true,
-          modules: ['filterByCategory', 'searchPosts'],
-          moduleOrder: ['filterByCategory', 'searchPosts'],
+          modules: ['filterByCategory', 'postSort', 'searchPosts'],
+          moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
           height: 48
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 },

@@ -68,6 +68,13 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
     </div>
   );
 
+  const SortMini = () => (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <span className={cn(textMuted, "text-[10px] font-medium")}>Sort</span>
+      <span className="text-[10px] text-[#333] px-2 py-1 rounded border border-[#e5e4e0] bg-white">Date</span>
+    </div>
+  );
+
   const Pagination = () => (
     <div className="flex items-center justify-center gap-1 py-2 shrink-0">
       <span className="text-[10px] font-medium w-6 h-6 flex items-center justify-center rounded bg-[#5B4FE8] text-white">1</span>
@@ -290,9 +297,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
             <Pagination />
           </div>
           <div className="w-[30%] min-w-[100px] shrink-0 flex flex-col gap-1 py-1.5 pl-2 border-l border-[#e5e4e0]">
-            <div className={cn(textMuted, "font-medium text-[10px] uppercase")}>Search</div>
-            <div className="h-6 rounded border border-[#e5e4e0] bg-white" />
-            <div className={cn(textMuted, "font-medium text-[10px] uppercase mt-1")}>Newsletter</div>
+            <div className={cn(textMuted, "font-medium text-[10px] uppercase")}>Newsletter</div>
             <div className={cn(textMuted, "text-[10px]")}>Subscribe</div>
             <div className={cn(textMuted, "font-medium text-[10px] uppercase mt-1")}>Trending</div>
             <div className={cn(textMuted, "text-[10px]")}>Post 1</div>
@@ -310,9 +315,10 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
         <div className={cn("flex flex-col gap-3 p-4 min-h-0", className)}>
           <div className="flex flex-col gap-2 shrink-0">
             <div className="text-[12px] font-semibold text-[#333]">Blog Title</div>
-            <SearchBar fullWidth />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 min-w-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
               <FilterBarTabs />
+              <SortMini />
+              <SearchBar />
             </div>
           </div>
           <div className="space-y-3 min-h-0">
