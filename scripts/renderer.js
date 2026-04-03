@@ -8,6 +8,31 @@
 (function() {
   'use strict';
 
+  var BB_RENDERER_LOG = '[BetterBlog][renderer]';
+  function bbRendererNow() {
+    try {
+      return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    } catch (e) {
+      return 0;
+    }
+  }
+  function bbRendererDiag(msg, detail) {
+    var loaderT0 = typeof window !== 'undefined' && typeof window.__bbLoaderT0 === 'number' ? window.__bbLoaderT0 : null;
+    var now = bbRendererNow();
+    var row = {
+      msSinceLoaderScript: loaderT0 != null ? Math.round((now - loaderT0) * 10) / 10 : null,
+      perfNow: Math.round(now * 10) / 10,
+      readyState: typeof document !== 'undefined' ? document.readyState : '?'
+    };
+    if (detail && typeof detail === 'object') {
+      for (var k in detail) {
+        if (Object.prototype.hasOwnProperty.call(detail, k)) row[k] = detail[k];
+      }
+    }
+    console.log(BB_RENDERER_LOG, msg, row);
+  }
+  bbRendererDiag('renderer.js IIFE executing (bundle evaluated)');
+
   function getVisitorId() {
     try {
       var key = 'bb_visitor';
@@ -444,6 +469,7 @@
         var bb = document.getElementById('bb-comments');
         if (bb && bb.parentNode) bb.parentNode.removeChild(bb);
       } catch (e3) {}
+      try { this._clearBootstrapLoading('_bailToNative'); } catch (e4) {}
     },
 
     _guard: function(label, fn) {
@@ -1456,6 +1482,16 @@
       }
     },
 
+    /** Remove loader.js full-screen spinner / scroll lock (native blog visible again). */
+    _clearBootstrapLoading: function(reason) {
+      try {
+        bbRendererDiag('clearBootstrapLoading (dismiss loader overlay)', { reason: reason || '(not specified)' });
+        if (typeof window !== 'undefined' && typeof window.__bbClearBootstrapLoading === 'function') {
+          window.__bbClearBootstrapLoading(reason);
+        }
+      } catch (e) { /* ignore */ }
+    },
+
     /**
      * Initialize the renderer with user config
      * @param {Object} config - User configuration from the API
@@ -1464,6 +1500,7 @@
      *   - previewFetchUrl: optional URL to fetch blog JSON from (preview mode)
      */
     init: function(config) {
+      bbRendererDiag('BlogOverlayRenderer.init() enter');
       this.config = config || {};
       var previewMode = Boolean(this.config.previewMode);
       var bbPreview = this._hasBbPreviewParam();
@@ -1474,6 +1511,7 @@
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
         this._suppressedByEditorMode = true;
         this._startEditorModeObserver();
+        this._clearBootstrapLoading('init: Squarespace edit mode');
         return;
       }
 
@@ -1482,6 +1520,7 @@
         var pathname = window.location.pathname || '/';
         if (!this._isOnBlogRoute(pathname, blogPath)) {
           console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
+          this._clearBootstrapLoading('init: not on blog route');
           return;
         }
       }
@@ -1489,6 +1528,7 @@
       var root = this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
+        this._clearBootstrapLoading('init: no blog container');
         return;
       }
       this._root = root;
@@ -1538,6 +1578,7 @@
       window.addEventListener('beforeunload', sendTimeOnPage);
       window.addEventListener('pagehide', sendTimeOnPage);
 
+      bbRendererDiag('init() calling render()');
       this.render();
     },
 
@@ -2047,32 +2088,77 @@
       return this._isPlaceholderImageUrl(url);
     },
 
+    /** Same gradient set as editorial cards when no usable featured image. */
+    _editorialImagePlaceholderGradients: [
+      'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+      'linear-gradient(135deg, #2d1b69 0%, #11998e 100%)',
+      'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
+      'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
+      'linear-gradient(135deg, #4b1248 0%, #f10711 100%)',
+      'linear-gradient(135deg, #0d0d0d 0%, #4a4a4a 100%)'
+    ],
     /**
-     * Strip HTML and truncate text to maxLen chars
+     * CSS `background` value for a featured/collection image area: cover photo or editorial-style gradient.
      */
-    _truncateText: function(html, maxLen) {
-      if (!html) return '';
-      var div = document.createElement('div');
-      div.innerHTML = html;
-      var text = (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
-      if (text.length <= maxLen) return text;
-      return text.slice(0, maxLen) + '…';
+    _featuredImageAreaBackground: function(imgUrl, placeholderMap, post, items) {
+      if (imgUrl && typeof imgUrl === 'string' && !this._isPlaceholderWithMap(imgUrl, placeholderMap)) {
+        return 'url(' + imgUrl + ') center/cover';
+      }
+      var idx = 0;
+      if (post && items && Array.isArray(items)) {
+        var ix = items.indexOf(post);
+        if (ix >= 0) idx = ix;
+      }
+      var g = this._editorialImagePlaceholderGradients;
+      return g[idx % g.length];
     },
 
     /**
-     * Strip HTML to plain text
+     * Strip HTML to plain text. Prefer innerText so block boundaries (e.g. </h2><p>)
+     * become whitespace; textContent concatenates adjacent blocks ("Section 1" + "Advice" → "Section 1Advice").
      */
     _stripHtml: function(html) {
       if (!html || typeof html !== 'string') return '';
       var div = document.createElement('div');
       div.innerHTML = html;
-      return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+      var raw = typeof div.innerText === 'string' ? div.innerText : (div.textContent || '');
+      return raw.replace(/\s+/g, ' ').trim();
+    },
+
+    /**
+     * Remove leading Squarespace-style placeholder headings ("Section 1", "Section 2", …)
+     * from plain text used for excerpts/decks. Handles glued text ("Section 1Advice") and
+     * punctuation after the number ("Section 1.Advice").
+     */
+    _stripLeadingSquarespaceSectionMarkers: function(plain) {
+      if (!plain || typeof plain !== 'string') return '';
+      var s = plain.trim();
+      while (/^Section\s+\d+/i.test(s)) {
+        s = s.replace(/^Section\s+\d+/i, '').trim();
+        s = s.replace(/^[.,:;\s]+/, '').trim();
+      }
+      return s;
+    },
+
+    /** Plain text from blog HTML for excerpts, truncated blurbs, and decks (strip + Section cleanup). */
+    _plainTextFromBlogHtml: function(html) {
+      return this._stripLeadingSquarespaceSectionMarkers(this._stripHtml(html));
+    },
+
+    /**
+     * Strip HTML and truncate text to maxLen chars
+     */
+    _truncateText: function(html, maxLen) {
+      if (!html) return '';
+      var text = this._plainTextFromBlogHtml(html);
+      if (text.length <= maxLen) return text;
+      return text.slice(0, maxLen) + '…';
     },
 
     /** Plain text from excerpt/body: first n sentences (best-effort split on . ! ?). */
     _extractFirstNSentences: function(htmlOrText, n) {
       if (!htmlOrText || n < 1) return '';
-      var plain = this._stripHtml(htmlOrText);
+      var plain = this._plainTextFromBlogHtml(htmlOrText);
       if (!plain) return '';
       var m = plain.match(/[^.!?]*[.!?]+|[^.!?]+$/g);
       if (!m || m.length === 0) return plain;
@@ -3692,10 +3778,9 @@
     },
 
     /**
-     * Get blog index URL (for "Back to list" link)
+     * Normalized pathname for the blog collection index (no post slug), e.g. /blog
      */
-    _getBlogIndexUrl: function() {
-      if (typeof window === 'undefined') return '';
+    _getBlogCollectionPath: function() {
       var blogPath = this.config && this.config.blogPath;
       if (!blogPath || blogPath === '/') {
         var first = this.items && this.items[0];
@@ -3708,7 +3793,86 @@
           blogPath = '/blog';
         }
       }
-      return window.location.origin + blogPath + (window.location.search || '');
+      if (typeof blogPath !== 'string') blogPath = '/blog';
+      if (blogPath.charAt(0) !== '/') blogPath = '/' + blogPath;
+      return blogPath.replace(/\/+$/, '') || '/';
+    },
+
+    /**
+     * Absolute collection URL. Uses bbCategory / bbTag query params for overlay filters.
+     * Does not append the full current location.search (post URLs would keep the wrong address bar).
+     */
+    _buildBlogCollectionNavUrl: function(opts) {
+      opts = opts || {};
+      if (typeof window === 'undefined') return '';
+      var path = this._getBlogCollectionPath();
+      var url;
+      try {
+        url = new URL(path, window.location.origin);
+      } catch (e) {
+        return '';
+      }
+      var cur = null;
+      try {
+        cur = new URL(window.location.href);
+      } catch (e2) {}
+      if (cur) {
+        var passThrough = ['password', 'viewerMode', 'bbPreview', 'bbPreviewDebug'];
+        for (var pi = 0; pi < passThrough.length; pi++) {
+          var k = passThrough[pi];
+          var v = cur.searchParams.get(k);
+          if (v != null && v !== '') url.searchParams.set(k, v);
+        }
+      }
+      url.searchParams.delete('bbCategory');
+      url.searchParams.delete('bbTag');
+      if (opts.category && String(opts.category).trim()) {
+        url.searchParams.set('bbCategory', String(opts.category).trim());
+      } else if (opts.tag && String(opts.tag).trim()) {
+        url.searchParams.set('bbTag', String(opts.tag).trim());
+      }
+      return url.toString();
+    },
+
+    /** href for breadcrumb collection links; Configure iframe preview stays on # + in-place navigation */
+    _blogCollectionNavHref: function(opts) {
+      if (this._bbPreview || this._previewMode) return '#';
+      return this._buildBlogCollectionNavUrl(opts || {});
+    },
+
+    /** Comma + space between breadcrumb category links (flex can collapse gaps without an explicit separator) */
+    _breadcrumbCommaSeparator: function() {
+      var comma = document.createElement('span');
+      comma.textContent = ', ';
+      comma.setAttribute('aria-hidden', 'true');
+      comma.className = 'blog-overlay-breadcrumb-comma';
+      comma.style.whiteSpace = 'pre';
+      comma.style.userSelect = 'none';
+      comma.style.marginLeft = '2px';
+      comma.style.marginRight = '2px';
+      return comma;
+    },
+
+    /** Apply bbCategory / bbTag from the current page URL to overlay filter state */
+    _syncOverlayFiltersFromUrl: function() {
+      try {
+        var p = new URLSearchParams(window.location.search || '');
+        var bc = p.get('bbCategory');
+        var bt = p.get('bbTag');
+        if (bc != null && String(bc).trim()) {
+          this._categoryFilter = [String(bc).trim()];
+        }
+        if (bt != null && String(bt).trim()) {
+          this._tagFilter = [String(bt).trim()];
+        }
+      } catch (e) {}
+    },
+
+    /**
+     * Get blog index URL (for "Back to list" link)
+     */
+    _getBlogIndexUrl: function() {
+      return this._buildBlogCollectionNavUrl({});
     },
 
     /**
@@ -3794,6 +3958,8 @@
         this._removeOverlayNodes();
         this._restoreOriginalRootChildren();
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
+        bbRendererDiag('render() skip: edit mode');
+        this._clearBootstrapLoading('render: edit mode');
         return;
       }
       this._suppressedByEditorMode = false;
@@ -3803,6 +3969,8 @@
         var pathname = window.location.pathname || '/';
         if (!this._isOnBlogRoute(pathname, blogPath)) {
           console.log('[BlogOverlay] Skipping render: not on blog route');
+          bbRendererDiag('render() skip: not blog route', { pathname: pathname, blogPath: blogPath });
+          this._clearBootstrapLoading('render: not blog route');
           return;
         }
       }
@@ -3810,9 +3978,12 @@
       var root = this._root || this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
+        bbRendererDiag('render() skip: no root');
+        this._clearBootstrapLoading('render: no root');
         return;
       }
 
+      bbRendererDiag('render() fetching blog JSON');
       var fetchUrl = this.config.previewFetchUrl;
       if (!fetchUrl) {
         var blogPath = this.config && this.config.blogPath;
@@ -3914,11 +4085,26 @@
               return { idx: idx, title: it.title, id: it.id, urlId: it.urlId, fullUrl: it.fullUrl, interestingKeys: interesting, snapshot: snap, marker: self._itemIsSquarespaceFeatured(it) };
             }));
           }
-          self._renderContent(self.items);
+          self._syncOverlayFiltersFromUrl();
+          bbRendererDiag('_renderContent() starting (async)', { itemCount: allItems.length });
+          var renderPhaseStart = bbRendererNow();
+          Promise.resolve(self._renderContent(self.items)).then(
+            function() {
+              bbRendererDiag('_renderContent() finished OK', { ms: Math.round((bbRendererNow() - renderPhaseStart) * 10) / 10 });
+              self._clearBootstrapLoading('after _renderContent success');
+            },
+            function(renderErr) {
+              console.error('[BlogOverlay] Render error:', renderErr);
+              bbRendererDiag('_renderContent() rejected', { error: renderErr && renderErr.message ? renderErr.message : String(renderErr) });
+              self._clearBootstrapLoading('after _renderContent error');
+            }
+          );
           console.log('[BlogOverlay] Rendered', allItems.length, 'posts from blog JSON');
         })
         .catch(function(err) {
           console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
+          bbRendererDiag('blog JSON fetch chain failed', { error: err && err.message ? err.message : String(err) });
+          self._clearBootstrapLoading('blog JSON fetch failed');
         });
     },
 
@@ -4707,10 +4893,11 @@
         var fiImageWidth = Math.min(60, Math.max(25, parseInt(fiCfg.imageWidthPercent, 10) || 40));
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
+        var showFiPlaceholder = fiShow && !imgUrl;
         if (isSinglePost) {
           fiLayout = phImagePos === 'fullBleed' ? 'fullBleed' : phImagePos === 'rightOfInfo' ? 'rightJustified' : 'leftJustified';
           if (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') fiImageWidth = fiImageWidth;
-        } else if (collectionLayout === 'listRows' && fiShow && imgUrl) {
+        } else if (collectionLayout === 'listRows' && fiShow) {
           fiLayout = 'leftJustified';
           fiImageWidth = 28;
         } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
@@ -4762,9 +4949,9 @@
         }
 
         var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
-        var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && imgUrl;
+        var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl || showFiPlaceholder) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && (imgUrl || showFiPlaceholder);
         if (isSinglePost && (phImagePos === 'belowInfo' || phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) isSideBySide = false;
-        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && imgUrl) isSideBySide = true;
+        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || showFiPlaceholder)) isSideBySide = true;
         var rowEl = null;
         var contentEl = null;
         if (isSideBySide) {
@@ -4779,11 +4966,11 @@
           contentEl.style.minWidth = '0';
         }
         var appendTo = isSideBySide ? contentEl : article;
-        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
+        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow;
         var fullBleedLayoutStacked = postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked';
         var singlePostFullBleedStacked = hasFullBleedImg && fullBleedLayoutStacked;
         var singlePostFullBleedHero = hasFullBleedImg && !fullBleedLayoutStacked;
-        var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
+        var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow;
         var fullBleedHeaderBlock = null;
         var stackedFullBleedWrap = null;
         var leftRailHasModules = Boolean(leftSidebarCfg && leftSidebarCfg.show && Array.isArray(leftSidebarCfg.modules) && leftSidebarCfg.modules.length > 0);
@@ -4795,9 +4982,7 @@
         if (singlePostFullBleedHero) {
           fullBleedHeaderBlock = document.createElement('div');
           fullBleedHeaderBlock.className = 'blog-overlay-post-header-fullbleed';
-          fullBleedHeaderBlock.style.backgroundImage = 'url(' + imgUrl + ')';
-          fullBleedHeaderBlock.style.backgroundSize = 'cover';
-          fullBleedHeaderBlock.style.backgroundPosition = 'center';
+          fullBleedHeaderBlock.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
           fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
           if (hasSideRails) {
             fullBleedHeaderBlock.style.width = 'calc(100% + ' + (leftRailWidth + rightRailWidth + (fullBleedWrapperPad * 2)) + 'px)';
@@ -4863,16 +5048,27 @@
             stackFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
             stackFiInner.style.width = '100%';
           }
-          var stackImg = document.createElement('img');
-          stackImg.src = imgUrl;
-          stackImg.alt = post.title || '';
-          stackImg.style.width = '100%';
-          stackImg.style.height = '100%';
-          stackImg.style.display = 'block';
-          stackImg.style.objectFit = fiFixedAspectCrop ? 'cover' : 'contain';
-          stackImg.style.objectPosition = 'center';
-          stackImg.onerror = function() { if (stackedFullBleedWrap) stackedFullBleedWrap.style.display = 'none'; };
-          stackFiInner.appendChild(stackImg);
+          if (imgUrl) {
+            var stackImg = document.createElement('img');
+            stackImg.src = imgUrl;
+            stackImg.alt = post.title || '';
+            stackImg.style.width = '100%';
+            stackImg.style.height = '100%';
+            stackImg.style.display = 'block';
+            stackImg.style.objectFit = fiFixedAspectCrop ? 'cover' : 'contain';
+            stackImg.style.objectPosition = 'center';
+            stackImg.onerror = function() { if (stackedFullBleedWrap) stackedFullBleedWrap.style.display = 'none'; };
+            stackFiInner.appendChild(stackImg);
+          } else {
+            var stackPh = document.createElement('div');
+            stackPh.setAttribute('role', 'img');
+            stackPh.setAttribute('aria-label', post.title || 'Post');
+            stackPh.style.width = '100%';
+            stackPh.style.height = '100%';
+            stackPh.style.minHeight = '120px';
+            stackPh.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
+            stackFiInner.appendChild(stackPh);
+          }
           stackedFullBleedWrap.appendChild(stackFiInner);
           if (fiCaption && imgCaption) {
             var stackCap = document.createElement('div');
@@ -4885,7 +5081,7 @@
             stackedFullBleedWrap.appendChild(stackCap);
           }
         }
-        if (fiShow && imgUrl && !self._isPlaceholderWithMap(imgUrl, placeholderMap) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
+        if (fiShow && (imgUrl || showFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
           var fiWrap = document.createElement('div');
           fiWrap.className = 'blog-overlay-featured-image';
           if (fiLayout === 'fullBleed') {
@@ -4913,16 +5109,21 @@
             fiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
             fiInner.style.width = '100%';
           }
-          var img = document.createElement('img');
-          img.src = imgUrl;
-          img.alt = post.title || '';
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.display = 'block';
-          img.style.objectFit = fiFixedAspectCrop ? 'cover' : 'contain';
-          img.style.objectPosition = 'center';
-          img.onerror = function() { fiWrap.style.display = 'none'; };
-          fiInner.appendChild(img);
+          if (imgUrl) {
+            var img = document.createElement('img');
+            img.src = imgUrl;
+            img.alt = post.title || '';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.display = 'block';
+            img.style.objectFit = fiFixedAspectCrop ? 'cover' : 'contain';
+            img.style.objectPosition = 'center';
+            img.onerror = function() { fiWrap.style.display = 'none'; };
+            fiInner.appendChild(img);
+          } else {
+            fiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
+            if (!fiFixedAspectCrop) fiInner.style.minHeight = '200px';
+          }
           fiWrap.appendChild(fiInner);
           if (fiCaption && imgCaption) {
             var capEl = document.createElement('div');
@@ -4971,7 +5172,8 @@
           var meta = self._blogMeta || {};
           var siteTitle = meta.siteTitle || '';
           var blogName = meta.blogName || 'Blog';
-          var blogIndexUrl = self._getBlogIndexUrl();
+          var previewBreadcrumbNav = Boolean(self._bbPreview || self._previewMode);
+          var blogCollectionHref = self._blogCollectionNavHref({});
           var sep = function() { var s = document.createElement('span'); s.textContent = ' › '; s.style.margin = '0 4px'; return s; };
           var makeLink = function(txt, href, onClick, el) {
             var a = document.createElement('a');
@@ -4980,7 +5182,12 @@
             a.style.textDecoration = 'none';
             a.style.setProperty('cursor', 'pointer', 'important');
             if (el) a.setAttribute('data-analytics-element', el);
-            a.onclick = function(e) { if (onClick) { e.preventDefault(); onClick(); } };
+            if (onClick) {
+              a.onclick = function(e) {
+                e.preventDefault();
+                onClick();
+              };
+            }
             return a;
           };
           var goToBlogIndex = function() {
@@ -4989,10 +5196,28 @@
             window.location.hash = '';
             self._renderContent(self.items);
           };
-          if (siteTitle) { bcNav.appendChild(makeLink(siteTitle, blogIndexUrl, goToBlogIndex, 'breadcrumb')); bcNav.appendChild(sep()); }
-          bcNav.appendChild(makeLink(blogName, blogIndexUrl, goToBlogIndex, 'breadcrumb'));
+          var goToBlogCategory = function(cat) {
+            self._categoryFilter = [cat];
+            self._tagFilter = [];
+            self._currentPage = 1;
+            window.location.hash = '';
+            self._renderContent(self.items);
+          };
+          if (siteTitle) {
+            bcNav.appendChild(makeLink(siteTitle, blogCollectionHref, previewBreadcrumbNav ? goToBlogIndex : null, 'breadcrumb'));
+            bcNav.appendChild(sep());
+          }
+          bcNav.appendChild(makeLink(blogName, blogCollectionHref, previewBreadcrumbNav ? goToBlogIndex : null, 'breadcrumb'));
           var postCats = self._getPostCategories(post);
-          if (postCats.length > 0) { bcNav.appendChild(sep()); for (var ci = 0; ci < postCats.length; ci++) { if (ci > 0) { var c = document.createElement('span'); c.textContent = ', '; bcNav.appendChild(c); } bcNav.appendChild(makeLink(postCats[ci], '#', (function(cat) { return function() { self._categoryFilter = [cat]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(postCats[ci]), 'categoryTag')); } }
+          if (postCats.length > 0) {
+            bcNav.appendChild(sep());
+            for (var ci = 0; ci < postCats.length; ci++) {
+              if (ci > 0) bcNav.appendChild(self._breadcrumbCommaSeparator());
+              var catNm = postCats[ci];
+              var catHref = self._blogCollectionNavHref({ category: catNm });
+              bcNav.appendChild(makeLink(catNm, catHref, previewBreadcrumbNav ? (function(c) { return function() { goToBlogCategory(c); }; })(catNm) : null, 'categoryTag'));
+            }
+          }
           bcNav.appendChild(sep());
           var pt = post.title || 'Untitled';
           var pu = self._getPostUrl(post);
@@ -5121,11 +5346,11 @@
         }
 
         if (phShowByline && postInfoWrap) {
-          var bylineDeckText = self._stripHtml(post.excerpt || post.body || '');
+          var bylineDeckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
           var bylineSentences = bylineDeckText ? bylineDeckText.match(/[^.!?]*[.!?]/g) : null;
           var bylineText = bylineSentences && bylineSentences.length > 0 ? bylineSentences[0].trim() : '';
           if (!bylineText) bylineText = self._truncateText(post.excerpt || post.body || '', 200);
-          if (bylineText) bylineText = bylineText.replace(/^Section\s+\d+\s*/i, '').trim();
+          if (bylineText) bylineText = self._stripLeadingSquarespaceSectionMarkers(bylineText);
           if (bylineText) {
             var bylineEl = document.createElement('p');
             bylineEl.className = 'blog-overlay-post-byline';
@@ -5201,11 +5426,11 @@
         }
 
         if (isSinglePost && postInfoWrap) {
-          var deckText = self._stripHtml(post.excerpt || post.body || '');
+          var deckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
           var deckSentences = deckText ? deckText.match(/[^.!?]*[.!?]/g) : null;
           var deck = deckSentences && deckSentences.length > 0 ? deckSentences[0].trim() : '';
           if (!deck) deck = self._truncateText(post.excerpt || post.body || '', 200);
-          if (deck) deck = deck.replace(/^Section\s+\d+\s*/i, '').trim();
+          if (deck) deck = self._stripLeadingSquarespaceSectionMarkers(deck);
           if (deck && !singlePostFullBleedStacked && !phShowByline) {
             var deckEl = document.createElement('p');
             deckEl.className = 'blog-overlay-deck';
@@ -5247,7 +5472,7 @@
           }
         }
 
-        if (singlePostBelowInfo && imgUrl) {
+        if (singlePostBelowInfo) {
           var belowFiWrap = document.createElement('div');
           belowFiWrap.className = 'blog-overlay-featured-image';
           belowFiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
@@ -5264,16 +5489,21 @@
             belowFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
             belowFiInner.style.width = '100%';
           }
-          var belowImg = document.createElement('img');
-          belowImg.src = imgUrl;
-          belowImg.alt = post.title || '';
-          belowImg.style.width = '100%';
-          belowImg.style.height = '100%';
-          belowImg.style.display = 'block';
-          belowImg.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
-          belowImg.style.objectPosition = 'center';
-          belowImg.onerror = function() { belowFiWrap.style.display = 'none'; };
-          belowFiInner.appendChild(belowImg);
+          if (imgUrl) {
+            var belowImg = document.createElement('img');
+            belowImg.src = imgUrl;
+            belowImg.alt = post.title || '';
+            belowImg.style.width = '100%';
+            belowImg.style.height = '100%';
+            belowImg.style.display = 'block';
+            belowImg.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
+            belowImg.style.objectPosition = 'center';
+            belowImg.onerror = function() { belowFiWrap.style.display = 'none'; };
+            belowFiInner.appendChild(belowImg);
+          } else {
+            belowFiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
+            if (fiAspect !== 'cropped') belowFiInner.style.minHeight = '200px';
+          }
           belowFiWrap.appendChild(belowFiInner);
           if (fiCaption && imgCaption) {
             var belowCap = document.createElement('div');
@@ -5313,19 +5543,14 @@
           }
         } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
           if (collectionLayout === 'digest' && isFeaturedInLayout) {
-            body.innerHTML = post.body || '';
-            body.style.fontSize = '0.9375rem';
-            body.style.color = '#444';
-            body.style.lineHeight = '1.6';
-            body.style.width = '100%';
-            body.style.maxWidth = '100%';
-            body.style.boxSizing = 'border-box';
-            body.style.columnCount = '2';
-            body.style.columnGap = '28px';
-            body.style.columnFill = 'balance';
-            body.style.overflowWrap = 'break-word';
-            body.style.setProperty('-webkit-column-count', '2');
-          } else {
+            var digestFeaturedExcerpt = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+            if (digestFeaturedExcerpt) {
+              body.textContent = digestFeaturedExcerpt;
+              body.style.fontSize = '0.9rem';
+              body.style.color = '#666';
+              body.style.lineHeight = '1.5';
+            }
+          } else if (collectionLayout === 'listRows') {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
             if (excerptText) {
               body.textContent = excerptText;
@@ -5334,8 +5559,16 @@
               body.style.lineHeight = '1.5';
             }
           }
+          // digest, non-featured cards: no excerpt (body left empty; omitted below)
         } else {
-          body.innerHTML = post.body || '';
+          // grid layout — show a short teaser (first 2 sentences) rather than the full post HTML
+          var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+          if (gridExcerptText) {
+            body.textContent = gridExcerptText;
+            body.style.fontSize = '0.9rem';
+            body.style.color = '#666';
+            body.style.lineHeight = '1.5';
+          }
         }
         if (isSinglePost) {
           var headings = body.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -5356,7 +5589,10 @@
             article.appendChild(rowEl);
           }
         }
-        bodyAppendTo.appendChild(body);
+        var omitDigestNonFeaturedBody = !isSinglePost && collectionLayout === 'digest' && !isFeaturedInLayout;
+        if (!omitDigestNonFeaturedBody) {
+          bodyAppendTo.appendChild(body);
+        }
         mainEl.appendChild(article);
       }
     },
@@ -5537,17 +5773,27 @@
         bodyCol.appendChild(metaEl);
         bodyCol.appendChild(readLink);
         card.appendChild(bodyCol);
-        if (imgUrlValid && !self._isPlaceholderWithMap(imgUrl, placeholderMap)) {
-          card.style.alignItems = 'start';
-          var imgCol = document.createElement('div');
-          imgCol.style.overflow = 'hidden';
-          imgCol.style.borderRadius = '4px';
-          imgCol.style.aspectRatio = '3 / 2';
-          imgCol.style.width = '100%';
-          imgCol.style.height = 'auto';
-          imgCol.style.alignSelf = 'start';
-          imgCol.style.minWidth = '0';
-          if (!imgLeft) imgCol.style.order = '2';
+        var showcaseHasImage = imgUrlValid && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
+        card.style.alignItems = 'start';
+        var imgCol = document.createElement('div');
+        imgCol.style.overflow = 'hidden';
+        imgCol.style.borderRadius = '4px';
+        imgCol.style.aspectRatio = '3 / 2';
+        imgCol.style.width = '100%';
+        imgCol.style.height = 'auto';
+        imgCol.style.alignSelf = 'start';
+        imgCol.style.minWidth = '0';
+        if (!imgLeft) imgCol.style.order = '2';
+        var imgLink = document.createElement('a');
+        imgLink.href = postUrl;
+        imgLink.style.display = 'block';
+        imgLink.style.color = 'inherit';
+        imgLink.style.textDecoration = 'none';
+        imgLink.style.height = '100%';
+        setShowcasePostAnalytics(imgLink);
+        wireShowcaseNavLink(imgLink);
+        var showcaseHoverTarget;
+        if (showcaseHasImage) {
           var imgEl = document.createElement('img');
           imgEl.src = imgUrl;
           imgEl.alt = post.title || '';
@@ -5557,24 +5803,28 @@
           imgEl.style.objectPosition = 'center';
           imgEl.style.display = 'block';
           imgEl.style.transition = 'transform 0.5s';
-          var imgLink = document.createElement('a');
-          imgLink.href = postUrl;
-          imgLink.style.display = 'block';
-          imgLink.style.color = 'inherit';
-          imgLink.style.textDecoration = 'none';
-          imgLink.style.height = '100%';
-          setShowcasePostAnalytics(imgLink);
-          wireShowcaseNavLink(imgLink);
+          showcaseHoverTarget = imgEl;
           imgLink.appendChild(imgEl);
-          imgCol.appendChild(imgLink);
-          card.style.gridTemplateColumns = imgLeft ? '58% 42%' : '42% 58%';
-          bodyCol.style.padding = '48px 56px';
-          if (imgLeft) { bodyCol.style.paddingRight = '0'; bodyCol.style.paddingLeft = '56px'; }
-          else { bodyCol.style.paddingLeft = '0'; bodyCol.style.paddingRight = '56px'; bodyCol.style.order = '1'; }
-          card.insertBefore(imgCol, bodyCol);
-          card.onmouseover = function() { imgEl.style.transform = 'scale(1.03)'; };
-          card.onmouseout = function() { imgEl.style.transform = 'scale(1)'; };
+        } else {
+          var phEl = document.createElement('div');
+          phEl.setAttribute('role', 'img');
+          phEl.setAttribute('aria-label', post.title || 'Post');
+          phEl.style.width = '100%';
+          phEl.style.height = '100%';
+          phEl.style.display = 'block';
+          phEl.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
+          phEl.style.transition = 'transform 0.5s';
+          showcaseHoverTarget = phEl;
+          imgLink.appendChild(phEl);
         }
+        imgCol.appendChild(imgLink);
+        card.style.gridTemplateColumns = imgLeft ? '58% 42%' : '42% 58%';
+        bodyCol.style.padding = '48px 56px';
+        if (imgLeft) { bodyCol.style.paddingRight = '0'; bodyCol.style.paddingLeft = '56px'; }
+        else { bodyCol.style.paddingLeft = '0'; bodyCol.style.paddingRight = '56px'; bodyCol.style.order = '1'; }
+        card.insertBefore(imgCol, bodyCol);
+        card.onmouseover = function() { showcaseHoverTarget.style.transform = 'scale(1.03)'; };
+        card.onmouseout = function() { showcaseHoverTarget.style.transform = 'scale(1)'; };
         mainEl.appendChild(card);
       }
     },
@@ -6454,7 +6704,7 @@
         return createSidebarSection('Recent Posts', el);
       }
       function relevantPostFooterFirstLine(post) {
-        var t = self._stripHtml(post.body || post.excerpt || '').replace(/\r/g, '').trim();
+        var t = self._plainTextFromBlogHtml(post.body || post.excerpt || '').replace(/\r/g, '').trim();
         if (!t) return '';
         var lines = t.split('\n');
         for (var li = 0; li < lines.length; li++) {
@@ -7185,15 +7435,6 @@
       var leftModules = buildSidebarModules(leftSidebarCfg);
       var rightModules = buildSidebarModules(rightSidebarCfg);
 
-      var editorialGradients = [
-        'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-        'linear-gradient(135deg, #2d1b69 0%, #11998e 100%)',
-        'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
-        'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
-        'linear-gradient(135deg, #4b1248 0%, #f10711 100%)',
-        'linear-gradient(135deg, #0d0d0d 0%, #4a4a4a 100%)'
-      ];
-
       if (collectionLayout === 'editorial') {
         var posts = displayItemsForLoop;
         var batchSize = 3;
@@ -7223,7 +7464,7 @@
           var makeEditorialCard = function(p, isLarge) {
             var cardUrl = p.assetUrl || p.thumbnailUrl || (p.assets && p.assets[0] && p.assets[0].assetUrl) || null;
             if (cardUrl && self._isPlaceholderWithMap(cardUrl, placeholderMap)) cardUrl = null;
-            var bgStyle = cardUrl ? 'url(' + cardUrl + ') center/cover' : editorialGradients[(items.indexOf(p) % editorialGradients.length)];
+            var bgStyle = self._featuredImageAreaBackground(cardUrl, placeholderMap, p, items);
             var link = document.createElement('a');
             link.href = self._getPostUrl(p) || (self._bbPreview ? '#post-' + items.indexOf(p) : '#');
             link.style.display = 'block';
@@ -7544,7 +7785,8 @@
                   var meta = self._blogMeta || {};
                   var siteTitle = meta.siteTitle || '';
                   var blogName = meta.blogName || 'Blog';
-                  var blogIndexUrl = self._getBlogIndexUrl();
+                  var previewHeaderBc = Boolean(self._bbPreview || self._previewMode);
+                  var blogCollectionHref = self._blogCollectionNavHref({});
                   var sep = function() {
                     var s = document.createElement('span');
                     s.textContent = ' › ';
@@ -7558,12 +7800,12 @@
                     a.style.textDecoration = 'none';
                     a.style.setProperty('cursor', 'pointer', 'important');
                     if (analyticsEl) a.setAttribute('data-analytics-element', analyticsEl);
-                    a.onclick = function(e) {
-                      if (onClick) {
+                    if (onClick) {
+                      a.onclick = function(e) {
                         e.preventDefault();
                         onClick();
-                      }
-                    };
+                      };
+                    }
                     return a;
                   };
                   var goToBlogIndex = function() {
@@ -7577,11 +7819,18 @@
                     window.location.hash = '';
                     self._renderContent(self.items);
                   };
+                  var goToBlogCategory = function(cat) {
+                    self._categoryFilter = [cat];
+                    self._tagFilter = [];
+                    self._currentPage = 1;
+                    window.location.hash = '';
+                    self._renderContent(self.items);
+                  };
                   if (siteTitle) {
-                    breadcrumbEl.appendChild(makeLink(siteTitle, blogIndexUrl, goToBlogIndex, 'breadcrumb'));
+                    breadcrumbEl.appendChild(makeLink(siteTitle, blogCollectionHref, previewHeaderBc ? goToBlogIndex : null, 'breadcrumb'));
                     breadcrumbEl.appendChild(sep());
                   }
-                  breadcrumbEl.appendChild(makeLink(blogName, blogIndexUrl, goToBlogIndex, 'breadcrumb'));
+                  breadcrumbEl.appendChild(makeLink(blogName, blogCollectionHref, previewHeaderBc ? goToBlogIndex : null, 'breadcrumb'));
                   if (isSinglePost && selectedIndex >= 0) {
                     var post = items[selectedIndex];
                     var postCats = self._getPostCategories(post);
@@ -7589,20 +7838,10 @@
                       breadcrumbEl.appendChild(sep());
                       var catParts = postCats;
                       for (var ci = 0; ci < catParts.length; ci++) {
-                        if (ci > 0) {
-                          var comma = document.createElement('span');
-                          comma.textContent = ', ';
-                          breadcrumbEl.appendChild(comma);
-                        }
+                        if (ci > 0) breadcrumbEl.appendChild(self._breadcrumbCommaSeparator());
                         var catName = catParts[ci];
-                        breadcrumbEl.appendChild(makeLink(catName, '#', (function(cat) {
-                          return function() {
-                            self._categoryFilter = [cat];
-                            self._currentPage = 1;
-                            window.location.hash = '';
-                            self._renderContent(self.items);
-                          };
-                        })(catName), 'categoryTag'));
+                        var catHref = self._blogCollectionNavHref({ category: catName });
+                        breadcrumbEl.appendChild(makeLink(catName, catHref, previewHeaderBc ? (function(c) { return function() { goToBlogCategory(c); }; })(catName) : null, 'categoryTag'));
                       }
                     }
                     breadcrumbEl.appendChild(sep());

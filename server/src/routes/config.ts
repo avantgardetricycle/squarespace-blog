@@ -36,6 +36,78 @@ function isContextBucket (value: unknown): value is { loggedOut?: Record<string,
   return isRecord(value.loggedOut) || isRecord(value.loggedIn)
 }
 
+/**
+ * Resolve the primary level bucket from a context-bucket payload.
+ * Prefers loggedOut; falls back to loggedIn if loggedOut is absent.
+ */
+function resolvePrimaryBucket (raw: unknown): Record<string, unknown> | null {
+  if (isContextBucket(raw)) {
+    if (isRecord(raw.loggedOut)) return raw.loggedOut
+    if (isRecord(raw.loggedIn)) return raw.loggedIn
+    return null
+  }
+  if (isRecord(raw)) return raw
+  return null
+}
+
+/** showDate / showAuthor / showReadingTime from dashboard collectionConfig (loggedOut → loggedIn → DB column). */
+function pickMetaBooleanFromCollectionConfig (
+  collectionRaw: unknown,
+  key: 'showDate' | 'showAuthor' | 'showReadingTime',
+  existingColumnValue: boolean | undefined,
+  defaultVal: boolean
+): boolean {
+  const bucket = resolvePrimaryBucket(collectionRaw)
+  if (bucket && typeof bucket[key] === 'boolean') return bucket[key] as boolean
+  if (typeof existingColumnValue === 'boolean') return existingColumnValue
+  return defaultVal
+}
+
+type ProgressBarPayload = { show: boolean; position: string | null; thickness: number; color: string }
+
+function pickProgressBarFromPostConfig (postRaw: unknown, existing: ProgressBarPayload | null | undefined): ProgressBarPayload {
+  const bucket = resolvePrimaryBucket(postRaw)
+  const raw = bucket?.progressBar
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const p = raw as Record<string, unknown>
+    const color = typeof p.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(p.color)
+      ? p.color
+      : (existing?.color ?? '#5B4FE8')
+    return {
+      show: Boolean(p.show ?? false),
+      position: p.position === 'bottom' ? 'bottom' : 'top',
+      thickness: Math.min(12, Math.max(2, Number(p.thickness) || 6)),
+      color
+    }
+  }
+  if (existing) {
+    return {
+      show: Boolean(existing.show ?? false),
+      position: existing.position === 'bottom' ? 'bottom' : 'top',
+      thickness: Math.min(12, Math.max(2, Number(existing.thickness) || 6)),
+      color: (typeof existing.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(existing.color)) ? existing.color : '#5B4FE8'
+    }
+  }
+  return { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
+}
+
+/** Extract legacy sidebar/header/social/featuredImage columns from the primary bucket of collectionConfig. */
+function pickLegacyColumnsFromCollectionConfig (collectionRaw: unknown, existingRow: Record<string, unknown> | null) {
+  const bucket = resolvePrimaryBucket(collectionRaw)
+  const get = <T>(key: string, fallback: T): T => {
+    if (bucket && isRecord(bucket[key])) return bucket[key] as T
+    if (existingRow && isRecord(existingRow[key])) return existingRow[key] as T
+    return fallback
+  }
+  return {
+    leftSidebar: get('leftSidebar', undefined as Record<string, unknown> | undefined),
+    rightSidebar: get('rightSidebar', undefined as Record<string, unknown> | undefined),
+    headerContent: get('headerContent', undefined as Record<string, unknown> | undefined),
+    socialMediaLinks: get('socialMediaLinks', undefined as Record<string, unknown> | undefined),
+    featuredImage: get('featuredImage', undefined as Record<string, unknown> | undefined),
+  }
+}
+
 function normalizeContextBucket (
   raw: unknown,
   fallbackFactory: () => Record<string, unknown>,
@@ -700,27 +772,73 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
 
   try {
     const c = config as Record<string, unknown>
-    const authorSettings = (c as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> })
-    const cc = c.collectionConfig as object | undefined
-    const pc = c.postConfig as object | undefined
-    const collectionTemplateId = c.collectionTemplateId as string | null | undefined
-    const postTemplateId = c.postTemplateId as string | null | undefined
-    const data: SiteConfigData = {
-      showDate: true,
-      showAuthor: false,
-      showReadingTime: false,
-      authorSettings: {
-        defaultAuthorIds: Array.isArray(authorSettings.defaultAuthorIds) ? authorSettings.defaultAuthorIds : [],
-        postAuthorOverrides: (authorSettings.postAuthorOverrides && typeof authorSettings.postAuthorOverrides === 'object') ? authorSettings.postAuthorOverrides : {}
-      },
-      progressBar: { show: false, position: 'top', thickness: 6, color: '#5B4FE8' },
-      tableOfContents: { show: false, position: 'left' },
-      recentPostsSidebar: { show: false, position: 'left' },
-      collectionConfig: cc && typeof cc === 'object' ? cc : undefined,
-      postConfig: pc && typeof pc === 'object' ? pc : undefined,
-      collectionTemplateId: collectionTemplateId ?? undefined,
-      postTemplateId: postTemplateId ?? undefined,
+    const collectionRaw = c.collectionConfig
+    const postRaw = c.postConfig
+
+    // collectionTemplateId / postTemplateId are top-level fields sent by the dashboard.
+    // Preserve null explicitly so clearing a template is correctly persisted.
+    const collectionTemplateId: string | null =
+      typeof c.collectionTemplateId === 'string' ? c.collectionTemplateId : null
+    const postTemplateId: string | null =
+      typeof c.postTemplateId === 'string' ? c.postTemplateId : null
+
+    const existing = await getActiveSiteConfig(site.id)
+    const existingRow = existing as Record<string, unknown> | null
+
+    // Extract booleans from the primary (loggedOut) context bucket of collectionConfig,
+    // falling back to the existing DB column value, then to a sensible default.
+    const showDate = pickMetaBooleanFromCollectionConfig(collectionRaw, 'showDate', existing?.showDate, true)
+    const showAuthor = pickMetaBooleanFromCollectionConfig(collectionRaw, 'showAuthor', existing?.showAuthor, false)
+    const showReadingTime = pickMetaBooleanFromCollectionConfig(collectionRaw, 'showReadingTime', existing?.showReadingTime, false)
+
+    // progressBar lives inside postConfig.loggedOut.progressBar
+    const existingPb = existing?.progressBar as ProgressBarPayload | null | undefined
+    const progressBar = pickProgressBarFromPostConfig(postRaw, existingPb ?? undefined)
+
+    // Legacy sidebar/zone columns — read from the incoming payload first, then the existing row.
+    const legacy = pickLegacyColumnsFromCollectionConfig(collectionRaw, existingRow)
+
+    // tableOfContents / recentPostsSidebar are truly legacy (not sent by the dashboard anymore);
+    // preserve the existing values so they aren't wiped out.
+    const tableOfContents = (existing?.tableOfContents as SiteConfigData['tableOfContents']) ?? { show: false, position: 'left' }
+    const recentPostsSidebar = (existing?.recentPostsSidebar as SiteConfigData['recentPostsSidebar']) ?? { show: false, position: 'left' }
+
+    const authorSettingsRaw = c as { defaultAuthorIds?: unknown; postAuthorOverrides?: unknown }
+    const authorSettings = {
+      defaultAuthorIds: Array.isArray(authorSettingsRaw.defaultAuthorIds) ? authorSettingsRaw.defaultAuthorIds as string[] : [],
+      postAuthorOverrides: (authorSettingsRaw.postAuthorOverrides && typeof authorSettingsRaw.postAuthorOverrides === 'object' && !Array.isArray(authorSettingsRaw.postAuthorOverrides))
+        ? authorSettingsRaw.postAuthorOverrides as Record<string, string[]>
+        : {}
     }
+
+    const data: SiteConfigData = {
+      showDate,
+      showAuthor,
+      showReadingTime,
+      authorSettings,
+      progressBar,
+      tableOfContents,
+      recentPostsSidebar,
+      leftSidebar: legacy.leftSidebar as SiteConfigData['leftSidebar'],
+      rightSidebar: legacy.rightSidebar as SiteConfigData['rightSidebar'],
+      headerContent: legacy.headerContent as SiteConfigData['headerContent'],
+      socialMediaLinks: legacy.socialMediaLinks as SiteConfigData['socialMediaLinks'],
+      featuredImage: legacy.featuredImage as SiteConfigData['featuredImage'],
+      collectionConfig: isRecord(collectionRaw) ? collectionRaw : undefined,
+      postConfig: isRecord(postRaw) ? postRaw : undefined,
+      collectionTemplateId,
+      postTemplateId,
+    }
+
+    console.log('[config] POST save', {
+      siteKey,
+      collectionTemplateId,
+      postTemplateId,
+      showDate,
+      showAuthor,
+      showReadingTime,
+    })
+
     await upsertSiteConfig(site.id, data)
     res.json({ success: true })
   } catch (error) {

@@ -119,8 +119,8 @@ export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
         featuredImage: featuredImage as object,
         collectionConfig: (data.collectionConfig && typeof data.collectionConfig === 'object') ? data.collectionConfig as object : undefined,
         postConfig: (data.postConfig && typeof data.postConfig === 'object') ? data.postConfig as object : undefined,
-        collectionTemplateId: data.collectionTemplateId ?? undefined,
-        postTemplateId: data.postTemplateId ?? undefined,
+        collectionTemplateId: typeof data.collectionTemplateId === 'string' ? data.collectionTemplateId : null,
+        postTemplateId: typeof data.postTemplateId === 'string' ? data.postTemplateId : null,
         isActive: true
       }
     })

@@ -1753,12 +1753,29 @@ export default function Configure() {
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
     try {
+      // For sites without a paywall distinction, the viewer mode toggle is never shown
+      // and all edits go to the loggedOut bucket only. Mirror loggedOut → loggedIn so
+      // both branches in the DB stay identical and the live blog uses correct settings
+      // regardless of which context the renderer resolves.
+      const configToSave: SiteConfigForm = !shouldShowViewerModeToggle
+        ? {
+            ...config,
+            collectionConfig: {
+              loggedOut: config.collectionConfig.loggedOut,
+              loggedIn: config.collectionConfig.loggedOut,
+            },
+            postConfig: {
+              loggedOut: config.postConfig.loggedOut,
+              loggedIn: config.postConfig.loggedOut,
+            },
+          }
+        : config;
       const [configRes, commentsRes] = await Promise.all([
         fetch(`${apiBase}/api/config`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ siteKey: keyToSave, config: configToApiPayload(config) }),
+          body: JSON.stringify({ siteKey: keyToSave, config: configToApiPayload(configToSave) }),
         }),
         commentSettings
           ? fetch(`${apiBase}/api/dashboard/settings/comments`, {
@@ -1801,7 +1818,7 @@ export default function Configure() {
     } finally {
       setSaving(false);
     }
-  }, [effectiveSiteKey, siteKey, config, commentSettings]);
+  }, [effectiveSiteKey, siteKey, config, commentSettings, shouldShowViewerModeToggle]);
 
   const handleReset = () => {
     setConfig(savedConfig);
@@ -1812,24 +1829,22 @@ export default function Configure() {
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
       if (level === "collection" && template.collectionConfig && typeof template.collectionConfig === "object") {
-        const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection");
+        const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
         setConfig((prev) => ({
           ...prev,
-          collectionConfig: {
-            ...prev.collectionConfig,
-            [viewerMode]: parsedCollection as CollectionLevelConfig,
-          },
+          collectionConfig: shouldShowViewerModeToggle
+            ? { ...prev.collectionConfig, [viewerMode]: parsedCollection }
+            : { loggedOut: parsedCollection, loggedIn: parsedCollection },
           collectionTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
-          const cc = parsedCollection as CollectionLevelConfig;
           console.log("[Configure] Applied collection template", {
             templateId: template.id,
             templateName: template.name,
-            leftSidebar: cc.leftSidebar,
-            rightSidebar: cc.rightSidebar,
-            headerContent: cc.headerContent,
-            footerContent: cc.footerContent,
+            leftSidebar: parsedCollection.leftSidebar,
+            rightSidebar: parsedCollection.rightSidebar,
+            headerContent: parsedCollection.headerContent,
+            footerContent: parsedCollection.footerContent,
           });
         }
         toast.success(`Applied "${template.name}" collection template.`);
@@ -1837,10 +1852,9 @@ export default function Configure() {
         const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
         setConfig((prev) => ({
           ...prev,
-          postConfig: {
-            ...prev.postConfig,
-            [viewerMode]: parsedPost,
-          },
+          postConfig: shouldShowViewerModeToggle
+            ? { ...prev.postConfig, [viewerMode]: parsedPost }
+            : { loggedOut: parsedPost, loggedIn: parsedPost },
           postTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
@@ -1857,7 +1871,7 @@ export default function Configure() {
         toast.success(`Applied "${template.name}" post template.`);
       }
     },
-    [previewDebugEnabled, viewerMode]
+    [previewDebugEnabled, viewerMode, shouldShowViewerModeToggle]
   );
 
   const updateConfigRef = useRef<(path: string, value: unknown) => void>(() => {});
