@@ -8,31 +8,6 @@
 (function() {
   'use strict';
 
-  var BB_RENDERER_LOG = '[BetterBlog][renderer]';
-  function bbRendererNow() {
-    try {
-      return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-    } catch (e) {
-      return 0;
-    }
-  }
-  function bbRendererDiag(msg, detail) {
-    var loaderT0 = typeof window !== 'undefined' && typeof window.__bbLoaderT0 === 'number' ? window.__bbLoaderT0 : null;
-    var now = bbRendererNow();
-    var row = {
-      msSinceLoaderScript: loaderT0 != null ? Math.round((now - loaderT0) * 10) / 10 : null,
-      perfNow: Math.round(now * 10) / 10,
-      readyState: typeof document !== 'undefined' ? document.readyState : '?'
-    };
-    if (detail && typeof detail === 'object') {
-      for (var k in detail) {
-        if (Object.prototype.hasOwnProperty.call(detail, k)) row[k] = detail[k];
-      }
-    }
-    console.log(BB_RENDERER_LOG, msg, row);
-  }
-  bbRendererDiag('renderer.js IIFE executing (bundle evaluated)');
-
   function getVisitorId() {
     try {
       var key = 'bb_visitor';
@@ -469,7 +444,7 @@
         var bb = document.getElementById('bb-comments');
         if (bb && bb.parentNode) bb.parentNode.removeChild(bb);
       } catch (e3) {}
-      try { this._clearBootstrapLoading('_bailToNative'); } catch (e4) {}
+      try { this._clearBootstrapLoading(); } catch (e4) {}
     },
 
     _guard: function(label, fn) {
@@ -1483,11 +1458,10 @@
     },
 
     /** Remove loader.js full-screen spinner / scroll lock (native blog visible again). */
-    _clearBootstrapLoading: function(reason) {
+    _clearBootstrapLoading: function() {
       try {
-        bbRendererDiag('clearBootstrapLoading (dismiss loader overlay)', { reason: reason || '(not specified)' });
         if (typeof window !== 'undefined' && typeof window.__bbClearBootstrapLoading === 'function') {
-          window.__bbClearBootstrapLoading(reason);
+          window.__bbClearBootstrapLoading();
         }
       } catch (e) { /* ignore */ }
     },
@@ -1500,7 +1474,6 @@
      *   - previewFetchUrl: optional URL to fetch blog JSON from (preview mode)
      */
     init: function(config) {
-      bbRendererDiag('BlogOverlayRenderer.init() enter');
       this.config = config || {};
       var previewMode = Boolean(this.config.previewMode);
       var bbPreview = this._hasBbPreviewParam();
@@ -1511,7 +1484,7 @@
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
         this._suppressedByEditorMode = true;
         this._startEditorModeObserver();
-        this._clearBootstrapLoading('init: Squarespace edit mode');
+        this._clearBootstrapLoading();
         return;
       }
 
@@ -1520,7 +1493,7 @@
         var pathname = window.location.pathname || '/';
         if (!this._isOnBlogRoute(pathname, blogPath)) {
           console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
-          this._clearBootstrapLoading('init: not on blog route');
+          this._clearBootstrapLoading();
           return;
         }
       }
@@ -1528,7 +1501,7 @@
       var root = this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
-        this._clearBootstrapLoading('init: no blog container');
+        this._clearBootstrapLoading();
         return;
       }
       this._root = root;
@@ -1578,7 +1551,6 @@
       window.addEventListener('beforeunload', sendTimeOnPage);
       window.addEventListener('pagehide', sendTimeOnPage);
 
-      bbRendererDiag('init() calling render()');
       this.render();
     },
 
@@ -3958,8 +3930,7 @@
         this._removeOverlayNodes();
         this._restoreOriginalRootChildren();
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
-        bbRendererDiag('render() skip: edit mode');
-        this._clearBootstrapLoading('render: edit mode');
+        this._clearBootstrapLoading();
         return;
       }
       this._suppressedByEditorMode = false;
@@ -3969,8 +3940,7 @@
         var pathname = window.location.pathname || '/';
         if (!this._isOnBlogRoute(pathname, blogPath)) {
           console.log('[BlogOverlay] Skipping render: not on blog route');
-          bbRendererDiag('render() skip: not blog route', { pathname: pathname, blogPath: blogPath });
-          this._clearBootstrapLoading('render: not blog route');
+          this._clearBootstrapLoading();
           return;
         }
       }
@@ -3978,12 +3948,10 @@
       var root = this._root || this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
-        bbRendererDiag('render() skip: no root');
-        this._clearBootstrapLoading('render: no root');
+        this._clearBootstrapLoading();
         return;
       }
 
-      bbRendererDiag('render() fetching blog JSON');
       var fetchUrl = this.config.previewFetchUrl;
       if (!fetchUrl) {
         var blogPath = this.config && this.config.blogPath;
@@ -4086,25 +4054,20 @@
             }));
           }
           self._syncOverlayFiltersFromUrl();
-          bbRendererDiag('_renderContent() starting (async)', { itemCount: allItems.length });
-          var renderPhaseStart = bbRendererNow();
           Promise.resolve(self._renderContent(self.items)).then(
             function() {
-              bbRendererDiag('_renderContent() finished OK', { ms: Math.round((bbRendererNow() - renderPhaseStart) * 10) / 10 });
-              self._clearBootstrapLoading('after _renderContent success');
+              self._clearBootstrapLoading();
             },
             function(renderErr) {
               console.error('[BlogOverlay] Render error:', renderErr);
-              bbRendererDiag('_renderContent() rejected', { error: renderErr && renderErr.message ? renderErr.message : String(renderErr) });
-              self._clearBootstrapLoading('after _renderContent error');
+              self._clearBootstrapLoading();
             }
           );
           console.log('[BlogOverlay] Rendered', allItems.length, 'posts from blog JSON');
         })
         .catch(function(err) {
           console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
-          bbRendererDiag('blog JSON fetch chain failed', { error: err && err.message ? err.message : String(err) });
-          self._clearBootstrapLoading('blog JSON fetch failed');
+          self._clearBootstrapLoading();
         });
     },
 
@@ -4871,6 +4834,22 @@
       var hasAnyFilter = vs.hasAnyFilter;
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
       var siteAccentForPostCats = self._getSiteAccentColor();
+      /** Newsroom (listRows): compact row on narrow viewports / preview phone — smaller title, thumb height matches title+meta block */
+      var listRowsMobileCompact = false;
+      if (!isSinglePost && collectionLayout === 'listRows') {
+        try {
+          var lrVpNarrow = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia('(max-width: 767px)').matches : window.innerWidth <= 767);
+          var lrRootW = 0;
+          if (self._root && self._root.getBoundingClientRect) {
+            lrRootW = Math.round(self._root.getBoundingClientRect().width) || 0;
+          }
+          if (!lrRootW && self._root && self._root.clientWidth) lrRootW = self._root.clientWidth;
+          var lrPreviewPhone = Boolean(self._previewMode && self.config && self.config.previewDevice === 'mobile');
+          listRowsMobileCompact = lrVpNarrow || (lrRootW > 0 && lrRootW <= 767) || lrPreviewPhone;
+        } catch (eLrMob) {
+          listRowsMobileCompact = typeof window !== 'undefined' && window.innerWidth <= 767;
+        }
+      }
       var postHeaderSideGapPx;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
@@ -4958,7 +4937,7 @@
           rowEl = document.createElement('div');
           rowEl.style.display = 'flex';
           rowEl.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
-          rowEl.style.gap = '20px';
+          rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '12px' : '20px';
           rowEl.style.alignItems = 'flex-start';
           rowEl.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           contentEl = document.createElement('div');
@@ -5276,6 +5255,12 @@
         var h2 = document.createElement('h2');
         h2.className = 'blog-overlay-title';
         h2.style.margin = '0 0 8px 0';
+        if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
+          h2.style.fontSize = '1.05rem';
+          h2.style.lineHeight = '1.3';
+          h2.style.fontWeight = '700';
+          h2.style.margin = '0 0 6px 0';
+        }
         if (singlePostFullBleedHero) h2.style.color = '#fff';
         if (singlePostFullBleedHero) h2.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
         if (!isSinglePost) {
@@ -5312,7 +5297,14 @@
         } else {
           h2.textContent = post.title || 'Untitled';
         }
-        if (postCategoriesLine) headlineMount.appendChild(postCategoriesLine);
+        var listRowsMobileCatsAboveRow = Boolean(
+          postCategoriesLine &&
+          listRowsMobileCompact &&
+          collectionLayout === 'listRows' &&
+          !isSinglePost &&
+          isSideBySide
+        );
+        if (postCategoriesLine && !listRowsMobileCatsAboveRow) headlineMount.appendChild(postCategoriesLine);
         if (isFeaturedInLayout) {
           var featuredHeadlineStack = document.createElement('div');
           featuredHeadlineStack.className = 'blog-overlay-featured-headline-stack';
@@ -5404,6 +5396,10 @@
             metaRow.style.color = 'rgba(255,255,255,0.92)';
           }
           metaRow.appendChild(meta);
+          if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
+            meta.style.fontSize = '0.8rem';
+            metaRow.style.marginBottom = '6px';
+          }
           headlineMount.appendChild(metaRow);
         }
         var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
@@ -5586,6 +5582,27 @@
           if (isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
             ensureSinglePostHeaderInnerEl().appendChild(rowEl);
           } else {
+            if (listRowsMobileCatsAboveRow && postCategoriesLine) {
+              var catAlignRow = document.createElement('div');
+              catAlignRow.className = 'blog-overlay-list-rows-cat-align-row';
+              catAlignRow.style.display = 'flex';
+              catAlignRow.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
+              catAlignRow.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '12px' : '20px';
+              catAlignRow.style.alignItems = 'flex-start';
+              catAlignRow.style.width = '100%';
+              catAlignRow.style.boxSizing = 'border-box';
+              var catColSpacer = document.createElement('div');
+              catColSpacer.setAttribute('aria-hidden', 'true');
+              catColSpacer.style.flex = '0 0 ' + fiImageWidth + '%';
+              catColSpacer.style.minWidth = '0';
+              var catColText = document.createElement('div');
+              catColText.style.flex = '1';
+              catColText.style.minWidth = '0';
+              catColText.appendChild(postCategoriesLine);
+              catAlignRow.appendChild(catColSpacer);
+              catAlignRow.appendChild(catColText);
+              article.appendChild(catAlignRow);
+            }
             article.appendChild(rowEl);
           }
         }
@@ -7437,132 +7454,204 @@
 
       if (collectionLayout === 'editorial') {
         var posts = displayItemsForLoop;
-        var batchSize = 3;
-        for (var bi = 0; bi < posts.length; bi += batchSize) {
-          var batch = posts.slice(bi, bi + batchSize);
-          var rowA = (bi / batchSize) % 2 === 0;
-          var row = document.createElement('div');
-          row.style.display = 'grid';
-          row.style.gridTemplateColumns = rowA ? '2fr 1fr' : '1fr 2fr';
-          row.style.gridTemplateRows = '1fr';
-          row.style.gap = '2px';
-          row.style.marginBottom = (bi + batchSize < posts.length ? '2px' : '24px');
-          row.style.width = '100%';
-          row.style.maxWidth = '100%';
-          row.style.boxSizing = 'border-box';
-          row.style.aspectRatio = '2 / 1';
-          row.style.minHeight = '220px';
-          var stack = document.createElement('div');
-          stack.style.display = 'grid';
-          stack.style.gridTemplateRows = '1fr 1fr';
-          stack.style.gap = '2px';
-          stack.style.minHeight = '0';
-          stack.style.height = '100%';
-          stack.style.alignSelf = 'stretch';
-          var bigPost = batch[0];
-          var smallPosts = batch.slice(1);
-          var makeEditorialCard = function(p, isLarge) {
-            var cardUrl = p.assetUrl || p.thumbnailUrl || (p.assets && p.assets[0] && p.assets[0].assetUrl) || null;
-            if (cardUrl && self._isPlaceholderWithMap(cardUrl, placeholderMap)) cardUrl = null;
-            var bgStyle = self._featuredImageAreaBackground(cardUrl, placeholderMap, p, items);
-            var link = document.createElement('a');
-            link.href = self._getPostUrl(p) || (self._bbPreview ? '#post-' + items.indexOf(p) : '#');
-            link.style.display = 'block';
-            link.style.position = 'relative';
-            link.style.overflow = 'hidden';
-            link.style.textDecoration = 'none';
-            link.style.color = 'inherit';
-            link.style.width = '100%';
-            link.style.height = '100%';
-            link.style.minHeight = '0';
-            var bg = document.createElement('div');
-            bg.style.position = 'absolute';
-            bg.style.inset = '0';
-            bg.style.background = bgStyle;
-            bg.style.transition = 'transform 0.4s';
-            link.onmouseover = function() { bg.style.transform = 'scale(1.03)'; };
-            link.onmouseout = function() { bg.style.transform = 'scale(1)'; };
-            var overlay = document.createElement('div');
-            overlay.style.position = 'absolute';
-            overlay.style.inset = '0';
-            overlay.style.background = 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 55%, transparent 100%)';
-            var content = document.createElement('div');
-            content.style.position = 'absolute';
-            content.style.bottom = '0';
-            content.style.left = '0';
-            content.style.right = '0';
-            content.style.padding = isLarge ? '28px' : '16px 18px';
-            var title = document.createElement('div');
-            title.style.fontSize = isLarge ? '22px' : '14px';
-            title.style.fontWeight = isLarge ? '800' : '700';
-            title.style.lineHeight = '1.2';
-            title.style.color = '#fff';
-            title.textContent = p.title || 'Untitled';
-            if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
-              var edFpK = displayPostKey(featuredPost);
-              var edPk = displayPostKey(p);
-              if (p === featuredPost || (edFpK && edPk === edFpK)) {
-                var edBadge = document.createElement('div');
-                edBadge.textContent = 'FEATURED';
-                edBadge.style.position = 'absolute';
-                edBadge.style.top = '14px';
-                edBadge.style.left = '14px';
-                edBadge.style.zIndex = '4';
-                edBadge.style.background = self._getSiteAccentColor();
-                edBadge.style.color = '#fff';
-                edBadge.style.fontSize = '9px';
-                edBadge.style.fontWeight = '700';
-                edBadge.style.letterSpacing = '1.5px';
-                edBadge.style.textTransform = 'uppercase';
-                edBadge.style.padding = '3px 8px';
-                edBadge.style.borderRadius = '2px';
-                link.appendChild(edBadge);
-              }
-            }
-            var metaParts = [];
-            if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
-            if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
-            if (showReadingTime) metaParts.push((self._getReadingTimeMinutes(p.body) === 1 ? '1 min read' : self._getReadingTimeMinutes(p.body) + ' min read'));
-            var meta = document.createElement('div');
-            meta.style.fontSize = isLarge ? '11px' : '10px';
-            meta.style.color = 'rgba(255,255,255,0.5)';
-            meta.style.marginTop = isLarge ? '8px' : '5px';
-            meta.textContent = metaParts.join(' · ');
-            content.appendChild(title);
-            content.appendChild(meta);
-            link.appendChild(bg);
-            link.appendChild(overlay);
-            link.appendChild(content);
-            var idx = displayItems.indexOf(p);
-            if (idx >= 0) link.setAttribute('data-display-index', String(idx));
-            if (!isSinglePost) {
-              var edPostIdx = items.indexOf(p);
-              link.setAttribute('data-analytics-element', 'postTitle');
-              link.setAttribute('data-post-index', String(edPostIdx));
-              if (hasSearchQuery && searchQuery) {
-                link.setAttribute('data-search-term', searchQuery);
-              }
-            }
-            return link;
-          };
-          if (rowA) {
-            if (bigPost) {
-              var bigCard = makeEditorialCard(bigPost, true);
-              if (smallPosts.length === 0) bigCard.style.gridColumn = '1 / -1';
-              row.appendChild(bigCard);
-            }
-            for (var si = 0; si < smallPosts.length; si++) stack.appendChild(makeEditorialCard(smallPosts[si], false));
-            if (smallPosts.length > 0) row.appendChild(stack);
-          } else {
-            for (var si = 0; si < smallPosts.length; si++) stack.appendChild(makeEditorialCard(smallPosts[si], false));
-            if (smallPosts.length > 0) row.appendChild(stack);
-            if (bigPost) {
-              var bigCard = makeEditorialCard(bigPost, true);
-              if (smallPosts.length === 0) bigCard.style.gridColumn = '1 / -1';
-              row.appendChild(bigCard);
+        /* Mobile striping: real phones use the viewport. Configure / bbPreview use a wide window with a narrow overlay root (~375px), so also use root width and optional previewDevice. */
+        var editorialMobile = false;
+        var narrowByViewport = false;
+        var overlayW = 0;
+        try {
+          if (typeof window !== 'undefined') {
+            narrowByViewport = window.matchMedia
+              ? window.matchMedia('(max-width: 767px)').matches
+              : window.innerWidth <= 767;
+          }
+        } catch (eVp) {
+          narrowByViewport = typeof window !== 'undefined' && window.innerWidth <= 767;
+        }
+        try {
+          if (root && root.getBoundingClientRect) {
+            overlayW = Math.round(root.getBoundingClientRect().width) || 0;
+          }
+          if (!overlayW && root && root.clientWidth) overlayW = root.clientWidth;
+        } catch (eOw) {
+          overlayW = 0;
+        }
+        var previewDeviceMobile = Boolean(
+          self.config && self.config.previewDevice === 'mobile' &&
+          (self._previewMode || self._bbPreview)
+        );
+        editorialMobile =
+          narrowByViewport ||
+          previewDeviceMobile ||
+          (overlayW > 0 && overlayW <= 767);
+
+        var makeEditorialCard = function(p, isLarge) {
+          var cardUrl = p.assetUrl || p.thumbnailUrl || (p.assets && p.assets[0] && p.assets[0].assetUrl) || null;
+          if (cardUrl && self._isPlaceholderWithMap(cardUrl, placeholderMap)) cardUrl = null;
+          var bgStyle = self._featuredImageAreaBackground(cardUrl, placeholderMap, p, items);
+          var link = document.createElement('a');
+          link.href = self._getPostUrl(p) || (self._bbPreview ? '#post-' + items.indexOf(p) : '#');
+          link.style.display = 'block';
+          link.style.position = 'relative';
+          link.style.overflow = 'hidden';
+          link.style.textDecoration = 'none';
+          link.style.color = 'inherit';
+          link.style.width = '100%';
+          link.style.height = '100%';
+          link.style.minHeight = '0';
+          var bg = document.createElement('div');
+          bg.style.position = 'absolute';
+          bg.style.inset = '0';
+          bg.style.background = bgStyle;
+          bg.style.transition = 'transform 0.4s';
+          link.onmouseover = function() { bg.style.transform = 'scale(1.03)'; };
+          link.onmouseout = function() { bg.style.transform = 'scale(1)'; };
+          var overlay = document.createElement('div');
+          overlay.style.position = 'absolute';
+          overlay.style.inset = '0';
+          overlay.style.background = 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 55%, transparent 100%)';
+          var content = document.createElement('div');
+          content.style.position = 'absolute';
+          content.style.bottom = '0';
+          content.style.left = '0';
+          content.style.right = '0';
+          content.style.padding = isLarge ? '28px' : '16px 18px';
+          var title = document.createElement('div');
+          title.style.fontSize = isLarge ? '22px' : '14px';
+          title.style.fontWeight = isLarge ? '800' : '700';
+          title.style.lineHeight = '1.2';
+          title.style.color = '#fff';
+          title.textContent = p.title || 'Untitled';
+          if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
+            var edFpK = displayPostKey(featuredPost);
+            var edPk = displayPostKey(p);
+            if (p === featuredPost || (edFpK && edPk === edFpK)) {
+              var edBadge = document.createElement('div');
+              edBadge.textContent = 'FEATURED';
+              edBadge.style.position = 'absolute';
+              edBadge.style.top = '14px';
+              edBadge.style.left = '14px';
+              edBadge.style.zIndex = '4';
+              edBadge.style.background = self._getSiteAccentColor();
+              edBadge.style.color = '#fff';
+              edBadge.style.fontSize = '9px';
+              edBadge.style.fontWeight = '700';
+              edBadge.style.letterSpacing = '1.5px';
+              edBadge.style.textTransform = 'uppercase';
+              edBadge.style.padding = '3px 8px';
+              edBadge.style.borderRadius = '2px';
+              link.appendChild(edBadge);
             }
           }
-          main.appendChild(row);
+          var metaParts = [];
+          if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
+          if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
+          if (showReadingTime) metaParts.push((self._getReadingTimeMinutes(p.body) === 1 ? '1 min read' : self._getReadingTimeMinutes(p.body) + ' min read'));
+          var meta = document.createElement('div');
+          meta.style.fontSize = isLarge ? '11px' : '10px';
+          meta.style.color = 'rgba(255,255,255,0.5)';
+          meta.style.marginTop = isLarge ? '8px' : '5px';
+          meta.textContent = metaParts.join(' · ');
+          content.appendChild(title);
+          content.appendChild(meta);
+          link.appendChild(bg);
+          link.appendChild(overlay);
+          link.appendChild(content);
+          var idx = displayItems.indexOf(p);
+          if (idx >= 0) link.setAttribute('data-display-index', String(idx));
+          if (!isSinglePost) {
+            var edPostIdx = items.indexOf(p);
+            link.setAttribute('data-analytics-element', 'postTitle');
+            link.setAttribute('data-post-index', String(edPostIdx));
+            if (hasSearchQuery && searchQuery) {
+              link.setAttribute('data-search-term', searchQuery);
+            }
+          }
+          return link;
+        };
+
+        if (editorialMobile) {
+          /* Narrow viewports: equal-height rows alternating one full-width card, then two equal columns (matches Tailwind md breakpoint at 768px). */
+          var pi = 0;
+          var stripe = 0;
+          while (pi < posts.length) {
+            var edRow = document.createElement('div');
+            edRow.className = 'blog-overlay-editorial-row';
+            edRow.style.display = 'grid';
+            edRow.style.gridTemplateRows = '1fr';
+            edRow.style.gap = '2px';
+            edRow.style.width = '100%';
+            edRow.style.maxWidth = '100%';
+            edRow.style.boxSizing = 'border-box';
+            edRow.style.aspectRatio = '2 / 1';
+            edRow.style.minHeight = '220px';
+            if (stripe % 2 === 0) {
+              edRow.style.gridTemplateColumns = '1fr';
+              var pSingle = posts[pi];
+              pi += 1;
+              edRow.appendChild(makeEditorialCard(pSingle, true));
+            } else {
+              edRow.style.gridTemplateColumns = '1fr 1fr';
+              var pFirst = posts[pi];
+              pi += 1;
+              var cFirst = makeEditorialCard(pFirst, false);
+              edRow.appendChild(cFirst);
+              if (pi < posts.length) {
+                var pSecond = posts[pi];
+                pi += 1;
+                edRow.appendChild(makeEditorialCard(pSecond, false));
+              } else {
+                cFirst.style.gridColumn = '1 / -1';
+              }
+            }
+            stripe += 1;
+            edRow.style.marginBottom = pi < posts.length ? '2px' : '24px';
+            main.appendChild(edRow);
+          }
+        } else {
+          var batchSize = 3;
+          for (var bi = 0; bi < posts.length; bi += batchSize) {
+            var batch = posts.slice(bi, bi + batchSize);
+            var rowA = (bi / batchSize) % 2 === 0;
+            var row = document.createElement('div');
+            row.className = 'blog-overlay-editorial-row';
+            row.style.display = 'grid';
+            row.style.gridTemplateColumns = rowA ? '2fr 1fr' : '1fr 2fr';
+            row.style.gridTemplateRows = '1fr';
+            row.style.gap = '2px';
+            row.style.marginBottom = (bi + batchSize < posts.length ? '2px' : '24px');
+            row.style.width = '100%';
+            row.style.maxWidth = '100%';
+            row.style.boxSizing = 'border-box';
+            row.style.aspectRatio = '2 / 1';
+            row.style.minHeight = '220px';
+            var stack = document.createElement('div');
+            stack.style.display = 'grid';
+            stack.style.gridTemplateRows = '1fr 1fr';
+            stack.style.gap = '2px';
+            stack.style.minHeight = '0';
+            stack.style.height = '100%';
+            stack.style.alignSelf = 'stretch';
+            var bigPost = batch[0];
+            var smallPosts = batch.slice(1);
+            if (rowA) {
+              if (bigPost) {
+                var bigCard = makeEditorialCard(bigPost, true);
+                if (smallPosts.length === 0) bigCard.style.gridColumn = '1 / -1';
+                row.appendChild(bigCard);
+              }
+              for (var si = 0; si < smallPosts.length; si++) stack.appendChild(makeEditorialCard(smallPosts[si], false));
+              if (smallPosts.length > 0) row.appendChild(stack);
+            } else {
+              for (var sj = 0; sj < smallPosts.length; sj++) stack.appendChild(makeEditorialCard(smallPosts[sj], false));
+              if (smallPosts.length > 0) row.appendChild(stack);
+              if (bigPost) {
+                var bigCard2 = makeEditorialCard(bigPost, true);
+                if (smallPosts.length === 0) bigCard2.style.gridColumn = '1 / -1';
+                row.appendChild(bigCard2);
+              }
+            }
+            main.appendChild(row);
+          }
         }
       } else if (collectionLayout === 'showcase') {
         this._renderShowcasePostsIntoMain(main, items, vs, placeholderMap, navbarOffset);

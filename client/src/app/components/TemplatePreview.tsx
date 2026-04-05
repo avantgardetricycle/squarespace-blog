@@ -357,7 +357,38 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
               <SearchBar />
             </div>
           </div>
-          <div className="flex flex-col gap-1.5 min-h-0">
+          {/* Mobile (below md): alternating full-width row, then two equal columns — same as live renderer */}
+          <div className="flex md:hidden flex-col gap-1 min-h-0">
+            <div className={cn("rounded border border-[#e5e4e0] overflow-hidden aspect-[2/1]", imgPlaceholder)}>
+              <div className="h-full min-h-[48px]" />
+              <div className="p-1.5 text-[9px] font-medium line-clamp-1">Post title</div>
+            </div>
+            <div className="grid grid-cols-2 gap-1 aspect-[2/1] min-h-0">
+              <div className={cn("rounded border border-[#e5e4e0] overflow-hidden min-h-0", imgPlaceholder)}>
+                <div className="h-full min-h-[40px]" />
+                <div className="p-1 text-[8px] font-medium line-clamp-1">Post</div>
+              </div>
+              <div className={cn("rounded border border-[#e5e4e0] overflow-hidden min-h-0", imgPlaceholder)}>
+                <div className="h-full min-h-[40px]" />
+                <div className="p-1 text-[8px] font-medium line-clamp-1">Post</div>
+              </div>
+            </div>
+            <div className={cn("rounded border border-[#e5e4e0] overflow-hidden aspect-[2/1]", imgPlaceholder)}>
+              <div className="h-full min-h-[48px]" />
+              <div className="p-1.5 text-[9px] font-medium line-clamp-1">Post title</div>
+            </div>
+            <div className="grid grid-cols-2 gap-1 aspect-[2/1] min-h-0">
+              <div className={cn("rounded border border-[#e5e4e0] overflow-hidden min-h-0", imgPlaceholder)}>
+                <div className="h-full min-h-[40px]" />
+                <div className="p-1 text-[8px] font-medium line-clamp-1">Post</div>
+              </div>
+              <div className={cn("rounded border border-[#e5e4e0] overflow-hidden min-h-0", imgPlaceholder)}>
+                <div className="h-full min-h-[40px]" />
+                <div className="p-1 text-[8px] font-medium line-clamp-1">Post</div>
+              </div>
+            </div>
+          </div>
+          <div className="hidden md:flex flex-col gap-1.5 min-h-0">
             <div className="grid gap-1" style={{ gridTemplateColumns: "1fr 2fr" }}>
               <div className={cn("rounded border border-[#e5e4e0] overflow-hidden", imgPlaceholder)}>
                 <div className="aspect-[3/2]" />

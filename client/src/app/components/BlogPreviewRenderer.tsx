@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-03-26-breadcrumb-tag-cursor-fix";
+const RENDERER_VERSION = "2026-04-03-newsroom-category-align-title";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -18,6 +18,8 @@ interface RendererConfigOverrides {
   previewFeaturedDebug?: boolean;
   viewerMode?: "loggedOut" | "loggedIn";
   paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
+  /** Configure preview chrome: drives editorial mobile striping when the browser window is wider than the phone frame */
+  previewDevice?: "desktop" | "tablet" | "mobile";
 }
 
 interface BlogPreviewRendererProps {
@@ -45,6 +47,7 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     ...(overrides?.previewFeaturedDebug ? { previewFeaturedDebug: true } : {}),
     ...(overrides?.viewerMode ? { viewerMode: overrides.viewerMode } : {}),
     ...(overrides?.paywallMode ? { paywallMode: overrides.paywallMode } : {}),
+    ...(overrides?.previewDevice ? { previewDevice: overrides.previewDevice } : {}),
   };
 }
 

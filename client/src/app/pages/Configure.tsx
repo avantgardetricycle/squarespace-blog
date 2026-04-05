@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
   GripVertical,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -1211,6 +1212,9 @@ export default function Configure() {
   const [authorDropdownOpen, setAuthorDropdownOpen] = useState(false);
   const [installationModalOpen, setInstallationModalOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [clearSettingsModalOpen, setClearSettingsModalOpen] = useState(false);
+  const [clearSettingsCollection, setClearSettingsCollection] = useState(false);
+  const [clearSettingsPost, setClearSettingsPost] = useState(false);
   /** Cached API templates for comparing config to applied template (name + equality). */
   const [templateCatalogCollection, setTemplateCatalogCollection] = useState<Template[]>([]);
   const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
@@ -1715,9 +1719,10 @@ export default function Configure() {
       paywallMode: effectiveSite?.paywallMode ?? "auto",
       previewSelectedPostIndex,
       previewFeaturedDebug: previewDebugEnabled,
+      previewDevice: device,
       configUpdateCallback: (path: string, value: unknown) => updateConfigRef.current(path, value),
     };
-  }, [config, authors, effectiveSiteKey, effectiveSite, viewerMode, previewSelectedPostIndex, previewDebugEnabled]);
+  }, [config, authors, effectiveSiteKey, effectiveSite, viewerMode, previewSelectedPostIndex, previewDebugEnabled, device]);
 
   // Stable signature so preview components reliably detect config changes (avoids stale effect deps)
   const configSignature = useMemo(
@@ -1825,6 +1830,34 @@ export default function Configure() {
     if (savedCommentSettings) setCommentSettings(savedCommentSettings);
     toast.info("Changes reverted.");
   };
+
+  const handleConfirmClearSettings = useCallback(() => {
+    if (!clearSettingsCollection && !clearSettingsPost) return;
+    setConfig((prev) => {
+      const next: SiteConfigForm = { ...prev };
+      if (clearSettingsCollection) {
+        next.collectionConfig = {
+          loggedOut: JSON.parse(JSON.stringify(defaultCollectionConfig)) as CollectionLevelConfig,
+          loggedIn: JSON.parse(JSON.stringify(defaultCollectionConfig)) as CollectionLevelConfig,
+        };
+        next.collectionTemplateId = null;
+      }
+      if (clearSettingsPost) {
+        next.postConfig = {
+          loggedOut: JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig,
+          loggedIn: JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig,
+        };
+        next.postTemplateId = null;
+      }
+      const copy = JSON.parse(JSON.stringify(next)) as SiteConfigForm;
+      applyDerivedModules(copy);
+      return copy;
+    });
+    setClearSettingsModalOpen(false);
+    setClearSettingsCollection(false);
+    setClearSettingsPost(false);
+    toast.success("Selected layout settings were reset to defaults. Save to publish on your blog.");
+  }, [clearSettingsCollection, clearSettingsPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
@@ -2134,6 +2167,80 @@ export default function Configure() {
             >
               Use a template
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-[#9a1a3e] border-[#e5e4e0] hover:bg-[#fef2f4] hover:text-[#7a1532]"
+              disabled={configLoading || !effectiveSiteKey}
+              onClick={() => {
+                setClearSettingsCollection(false);
+                setClearSettingsPost(false);
+                setClearSettingsModalOpen(true);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+              Clear all settings
+            </Button>
+            <Dialog
+              open={clearSettingsModalOpen}
+              onOpenChange={(open) => {
+                setClearSettingsModalOpen(open);
+                if (!open) {
+                  setClearSettingsCollection(false);
+                  setClearSettingsPost(false);
+                }
+              }}
+            >
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Clear layout settings?</DialogTitle>
+                  <DialogDescription>
+                    This resets BetterBlog layout options to their defaults for the levels you choose. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                  <label className="flex items-start gap-3 cursor-pointer rounded-md border border-[#e5e4e0] p-3 hover:bg-[#f7f6f3]/80">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={clearSettingsCollection}
+                      onCheckedChange={(v) => setClearSettingsCollection(Boolean(v))}
+                    />
+                    <span>
+                      <span className="text-sm font-medium text-[#0a0a0a] block">Collection</span>
+                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, etc.</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer rounded-md border border-[#e5e4e0] p-3 hover:bg-[#f7f6f3]/80">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={clearSettingsPost}
+                      onCheckedChange={(v) => setClearSettingsPost(Boolean(v))}
+                    />
+                    <span>
+                      <span className="text-sm font-medium text-[#0a0a0a] block">Post</span>
+                      <span className="text-xs text-[#6b6b6b]">Single post: header, progress bar, post modules, sidebars, etc.</span>
+                    </span>
+                  </label>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setClearSettingsModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={!clearSettingsCollection && !clearSettingsPost}
+                    onClick={handleConfirmClearSettings}
+                  >
+                    Clear selected
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {unmodifiedTemplateInUse && (
               <p className="text-xs text-[#6b6b6b] leading-snug">
                 {unmodifiedTemplateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
