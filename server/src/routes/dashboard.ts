@@ -99,7 +99,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           },
           sites: {
             where: { status: 'active' },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
+            include: { sitePaywallSettings: true }
           }
         }
       }),
@@ -175,7 +176,14 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         paywallDetectionSource: s.paywallDetectionSource,
         status: s.status,
         verificationStatus: s.verificationStatus,
-        createdAt: s.createdAt
+        createdAt: s.createdAt,
+        paywallSettings: s.sitePaywallSettings
+          ? {
+              subscribeUrl: s.sitePaywallSettings.subscribeUrl,
+              footerDescription: s.sitePaywallSettings.footerDescription,
+              featureItems: s.sitePaywallSettings.featureItems
+            }
+          : null
       })),
       canCreateSite: maxSites === null || siteCount < maxSites
     })

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-04-03-analytics-time-on-post";
+const RENDERER_VERSION = "2026-04-03-loggedout-reading-time";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -18,6 +18,12 @@ interface RendererConfigOverrides {
   previewFeaturedDebug?: boolean;
   viewerMode?: "loggedOut" | "loggedIn";
   paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
+  paywallDetectionState?: "unknown" | "detected_paywalled" | "detected_unpaywalled";
+  paywallSettings?: {
+    subscribeUrl: string | null;
+    footerDescription: string | null;
+    featureItems: string[];
+  } | null;
   /** Configure preview chrome: drives editorial mobile striping when the browser window is wider than the phone frame */
   previewDevice?: "desktop" | "tablet" | "mobile";
 }
@@ -47,6 +53,8 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     ...(overrides?.previewFeaturedDebug ? { previewFeaturedDebug: true } : {}),
     ...(overrides?.viewerMode ? { viewerMode: overrides.viewerMode } : {}),
     ...(overrides?.paywallMode ? { paywallMode: overrides.paywallMode } : {}),
+    ...(overrides?.paywallDetectionState ? { paywallDetectionState: overrides.paywallDetectionState } : {}),
+    ...(overrides?.paywallSettings !== undefined ? { paywallSettings: overrides.paywallSettings } : {}),
     ...(overrides?.previewDevice ? { previewDevice: overrides.previewDevice } : {}),
   };
 }

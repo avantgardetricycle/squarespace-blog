@@ -122,14 +122,6 @@ router.get('/magic', async (req: Request, res: Response) => {
       data: { usedAt: new Date() }
     })
 
-    try {
-      console.log('[auth/magic] syncing subscription for userId', loginToken.userId)
-      await syncSubscriptionFromStripe(loginToken.userId)
-      console.log('[auth/magic] subscription sync complete')
-    } catch (err) {
-      console.error('[auth/magic] subscription sync on login failed:', err)
-    }
-
     const sessionToken = generateSessionToken()
     const sessionTokenHash = hashToken(sessionToken)
     const expiresAt = new Date()
@@ -153,6 +145,17 @@ router.get('/magic', async (req: Request, res: Response) => {
         path: '/'
       })
       .redirect(dashboardUrl)
+
+    // After redirect is queued: sync Stripe in the background so magic-link responses are fast
+    // and browsers/proxies are less likely to time out before Set-Cookie is applied.
+    const uid = loginToken.userId
+    void syncSubscriptionFromStripe(uid)
+      .then(() => {
+        console.log('[auth/magic] subscription sync complete for userId', uid)
+      })
+      .catch((err) => {
+        console.error('[auth/magic] subscription sync on login failed:', err)
+      })
   } catch (err) {
     console.error('Magic link error:', err)
     res.redirect(`${loginUrl}?error=server_error`)

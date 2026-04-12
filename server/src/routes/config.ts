@@ -25,6 +25,36 @@ function isRecord (value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+/** Optional payload with POST /api/config to upsert site_paywall_settings. */
+function normalizePaywallSettingsPayload (raw: unknown): {
+  subscribeUrl: string | null
+  footerDescription: string | null
+  featureItems: string[]
+} | null {
+  if (raw === undefined) return null
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>
+    const su = o.subscribeUrl
+    const subscribeUrl =
+      typeof su === 'string' && su.trim() ? su.trim().slice(0, 2048) : null
+    const fdRaw = o.footerDescription
+    const footerDescriptionRaw = typeof fdRaw === 'string' ? fdRaw.trim().slice(0, 160) : null
+    const footerDescription =
+      footerDescriptionRaw && footerDescriptionRaw.length > 0 ? footerDescriptionRaw : null
+    const featureItems: string[] = []
+    if (Array.isArray(o.featureItems)) {
+      for (const it of o.featureItems) {
+        if (typeof it !== 'string') continue
+        const t = it.trim().slice(0, 120)
+        if (t) featureItems.push(t)
+        if (featureItems.length >= 4) break
+      }
+    }
+    return { subscribeUrl, footerDescription, featureItems }
+  }
+  return null
+}
+
 function parseViewerModeQuery (value: unknown): ViewerMode | null {
   if (value === 'loggedIn') return 'loggedIn'
   if (value === 'loggedOut') return 'loggedOut'
@@ -511,7 +541,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           }
         }
       },
-      blogCommentSettings: true
+      blogCommentSettings: true,
+      sitePaywallSettings: true
     }
   })
 
@@ -715,6 +746,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
         }
 
+    const pw = site.sitePaywallSettings
+    const paywallSettings = pw
+      ? {
+          subscribeUrl: pw.subscribeUrl,
+          footerDescription: pw.footerDescription,
+          featureItems: pw.featureItems
+        }
+      : null
+
     const configData = {
       siteKey,
       siteId: site.id,
@@ -729,6 +769,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       paywallMode: site.paywallMode,
       paywallDetectionState: site.paywallDetectionState,
       paywallDetectionSource: site.paywallDetectionSource ?? null,
+      paywallSettings,
       ...(viewerMode ? { viewerMode } : {}),
       collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
       postTemplateId: siteConfigTyped.postTemplateId ?? null,
@@ -755,7 +796,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 // POST /api/config - Save/update site config (requires auth, must own site)
 router.post('/', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { siteKey, config } = req.body
+  const body = req.body as { siteKey?: string; config?: unknown; paywallSettings?: unknown }
+  const { siteKey, config } = body
 
   if (!siteKey || !config) {
     res.status(400).json({ error: 'siteKey and config are required' })
@@ -840,6 +882,25 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     })
 
     await upsertSiteConfig(site.id, data)
+
+    const paywallNorm = normalizePaywallSettingsPayload(body.paywallSettings)
+    if (paywallNorm) {
+      await prisma.sitePaywallSettings.upsert({
+        where: { siteId: site.id },
+        create: {
+          siteId: site.id,
+          subscribeUrl: paywallNorm.subscribeUrl,
+          footerDescription: paywallNorm.footerDescription,
+          featureItems: paywallNorm.featureItems
+        },
+        update: {
+          subscribeUrl: paywallNorm.subscribeUrl,
+          footerDescription: paywallNorm.footerDescription,
+          featureItems: paywallNorm.featureItems
+        }
+      })
+    }
+
     res.json({ success: true })
   } catch (error) {
     console.error('Failed to save config:', error)

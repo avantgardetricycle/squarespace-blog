@@ -64,6 +64,7 @@ model Site {
   googleAnalytics       SiteGoogleAnalytics?
   leadCaptures          LeadCapture[]
   blogCommentSettings   BlogCommentSettings?
+  sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
 
@@ -375,4 +376,16 @@ model BlogCommentSettings {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("blog_comment_settings")
+}
+
+model SitePaywallSettings {
+  siteId             String   @id @map("site_id")
+  subscribeUrl       String?  @map("subscribe_url") @db.Text
+  footerDescription  String?  @map("footer_description") @db.VarChar(160)
+  featureItems       String[] @default([]) @map("feature_items")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_paywall_settings")
 }

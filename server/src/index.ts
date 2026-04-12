@@ -46,7 +46,12 @@ app.use('/api/capture', cors({ origin: true, credentials: true }), captureRoutes
 // Comments: reader-facing comment API from overlay (any origin)
 app.use('/api/comments', cors({ origin: true, credentials: true }), commentsRoutes)
 
-// All other routes: strict CORS (app origin only)
+// Auth (magic link, logout): permissive CORS and MUST run before strict app-origin CORS.
+// Magic links are opened as top-level navigations from email clients (cross-site Origin/Referer).
+// Strict origin: appOrigin would not reflect those requests and can break Set-Cookie + redirect behavior.
+app.use('/api/auth', cors({ origin: true, credentials: true }), authRoutes)
+
+// Dashboard and other app APIs: strict CORS (SPA origin only)
 const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 app.use(
   cors({
@@ -54,7 +59,6 @@ app.use(
     credentials: true
   })
 )
-app.use('/api/auth', authRoutes)
 app.use('/api/comment-actions', commentActionsRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/blog-authors', blogAuthorsRoutes)

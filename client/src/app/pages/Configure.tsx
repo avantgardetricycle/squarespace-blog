@@ -18,6 +18,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Textarea } from "@/app/components/ui/textarea";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Slider } from "@/app/components/ui/slider";
 import { Switch } from "@/app/components/ui/switch";
@@ -54,6 +55,14 @@ import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+
+const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
+
+type PaywallFormState = {
+  subscribeUrl: string;
+  footerDescription: string;
+  featureItems: string[];
+};
 
 const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
 
@@ -1268,6 +1277,17 @@ export default function Configure() {
     socialMediaLinks: false,
     postHeader: false,
     comments: false,
+    paywall: false,
+  });
+  const [paywallForm, setPaywallForm] = useState<PaywallFormState>({
+    subscribeUrl: "",
+    footerDescription: "",
+    featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
+  });
+  const [savedPaywallForm, setSavedPaywallForm] = useState<PaywallFormState>({
+    subscribeUrl: "",
+    footerDescription: "",
+    featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const previewDebugEnabled = useMemo(() => isPreviewDebugEnabled(), []);
 
@@ -1325,6 +1345,31 @@ export default function Configure() {
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
   const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
   const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
+
+  const paywallSettingsSig = useMemo(() => {
+    if (!effectiveSite) return "";
+    return JSON.stringify({
+      subscribeUrl: effectiveSite.paywallSettings?.subscribeUrl ?? null,
+      footerDescription: effectiveSite.paywallSettings?.footerDescription ?? null,
+      featureItems: effectiveSite.paywallSettings?.featureItems ?? [],
+    });
+  }, [effectiveSite?.siteKey, effectiveSite?.paywallSettings]);
+
+  useEffect(() => {
+    if (!effectiveSite) return;
+    const ps = effectiveSite.paywallSettings;
+    const feats =
+      ps?.featureItems && ps.featureItems.length > 0
+        ? ps.featureItems.slice(0, 4)
+        : [...DEFAULT_PAYWALL_FEATURE_ITEMS];
+    const next: PaywallFormState = {
+      subscribeUrl: ps?.subscribeUrl ?? "",
+      footerDescription: ps?.footerDescription ?? "",
+      featureItems: feats.length ? feats : [...DEFAULT_PAYWALL_FEATURE_ITEMS],
+    };
+    setPaywallForm(next);
+    setSavedPaywallForm(next);
+  }, [effectiveSite?.siteKey, paywallSettingsSig]);
 
   useEffect(() => {
     if (!shouldShowViewerModeToggle) setViewerMode("loggedOut");
@@ -1717,12 +1762,34 @@ export default function Configure() {
       siteId: effectiveSite?.id ?? undefined,
       viewerMode,
       paywallMode: effectiveSite?.paywallMode ?? "auto",
+      paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
+      paywallSettings:
+        shouldShowViewerModeToggle
+          ? {
+              subscribeUrl: paywallForm.subscribeUrl.trim() || null,
+              footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
+              featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
+            }
+          : null,
       previewSelectedPostIndex,
       previewFeaturedDebug: previewDebugEnabled,
       previewDevice: device,
       configUpdateCallback: (path: string, value: unknown) => updateConfigRef.current(path, value),
     };
-  }, [config, authors, effectiveSiteKey, effectiveSite, viewerMode, previewSelectedPostIndex, previewDebugEnabled, device]);
+  }, [
+    config,
+    authors,
+    effectiveSiteKey,
+    effectiveSite,
+    viewerMode,
+    previewSelectedPostIndex,
+    previewDebugEnabled,
+    device,
+    shouldShowViewerModeToggle,
+    paywallForm.subscribeUrl,
+    paywallForm.footerDescription,
+    paywallForm.featureItems,
+  ]);
 
   // Stable signature so preview components reliably detect config changes (avoids stale effect deps)
   const configSignature = useMemo(
@@ -1732,9 +1799,28 @@ export default function Configure() {
         collection: config.collectionConfig,
         viewerMode,
         paywallMode: effectiveSite?.paywallMode ?? "auto",
+        paywallDetection: effectiveSite?.paywallDetectionState ?? "unknown",
+        paywallForm: shouldShowViewerModeToggle
+          ? {
+              subscribeUrl: paywallForm.subscribeUrl,
+              footerDescription: paywallForm.footerDescription,
+              featureItems: paywallForm.featureItems,
+            }
+          : null,
         previewSelectedPostIndex,
       }),
-    [config.postConfig, config.collectionConfig, viewerMode, effectiveSite?.paywallMode, previewSelectedPostIndex]
+    [
+      config.postConfig,
+      config.collectionConfig,
+      viewerMode,
+      effectiveSite?.paywallMode,
+      effectiveSite?.paywallDetectionState,
+      shouldShowViewerModeToggle,
+      paywallForm.subscribeUrl,
+      paywallForm.footerDescription,
+      paywallForm.featureItems,
+      previewSelectedPostIndex,
+    ]
   );
 
   useEffect(() => {
@@ -1780,7 +1866,21 @@ export default function Configure() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ siteKey: keyToSave, config: configToApiPayload(configToSave) }),
+          body: JSON.stringify({
+            siteKey: keyToSave,
+            config: configToApiPayload(configToSave),
+            ...(shouldShowViewerModeToggle
+              ? {
+                  paywallSettings: {
+                    subscribeUrl: paywallForm.subscribeUrl.trim() ? paywallForm.subscribeUrl.trim() : null,
+                    footerDescription: paywallForm.footerDescription.trim()
+                      ? paywallForm.footerDescription.trim().slice(0, 160)
+                      : null,
+                    featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
+                  },
+                }
+              : {}),
+          }),
         }),
         commentSettings
           ? fetch(`${apiBase}/api/dashboard/settings/comments`, {
@@ -1805,7 +1905,17 @@ export default function Configure() {
       ]);
       const configOk = configRes.ok;
       const commentsOk = !commentSettings || (commentsRes as Response).ok;
-      if (configOk) setSavedConfig(config);
+      if (configOk) {
+        setSavedConfig(config);
+        if (shouldShowViewerModeToggle) {
+          setSavedPaywallForm({
+            subscribeUrl: paywallForm.subscribeUrl,
+            footerDescription: paywallForm.footerDescription,
+            featureItems: paywallForm.featureItems.slice(0, 4),
+          });
+          getDashboardMe().then((d) => setMe(d ?? null));
+        }
+      }
       if (commentsOk && commentSettings) setSavedCommentSettings(commentSettings);
       if (configOk && commentsOk) {
         toast.success("Configuration saved successfully!");
@@ -1823,11 +1933,21 @@ export default function Configure() {
     } finally {
       setSaving(false);
     }
-  }, [effectiveSiteKey, siteKey, config, commentSettings, shouldShowViewerModeToggle]);
+  }, [
+    effectiveSiteKey,
+    siteKey,
+    config,
+    commentSettings,
+    shouldShowViewerModeToggle,
+    paywallForm.subscribeUrl,
+    paywallForm.footerDescription,
+    paywallForm.featureItems,
+  ]);
 
   const handleReset = () => {
     setConfig(savedConfig);
     if (savedCommentSettings) setCommentSettings(savedCommentSettings);
+    if (shouldShowViewerModeToggle) setPaywallForm(savedPaywallForm);
     toast.info("Changes reverted.");
   };
 
@@ -3633,6 +3753,101 @@ export default function Configure() {
                                   </div>
                                 );
                               })()}
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                    )}
+
+                    {selectedLevel === "collection" && shouldShowViewerModeToggle && (
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Paywall</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionExpanded((p) => ({ ...p, paywall: !p.paywall }))}
+                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                          aria-label={sectionExpanded.paywall ? "Collapse" : "Expand"}
+                        >
+                          {sectionExpanded.paywall ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <Collapsible open={sectionExpanded.paywall}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Subscribe URL (optional)</Label>
+                              <Input
+                                value={paywallForm.subscribeUrl}
+                                onChange={(e) => setPaywallForm((p) => ({ ...p, subscribeUrl: e.target.value }))}
+                                placeholder="https://…"
+                                className="text-sm"
+                              />
+                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
+                                Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Footer description (optional, max 160 characters)</Label>
+                              <Textarea
+                                value={paywallForm.footerDescription}
+                                onChange={(e) =>
+                                  setPaywallForm((p) => ({ ...p, footerDescription: e.target.value.slice(0, 160) }))
+                                }
+                                placeholder="Subscribe for full access to every story, the complete archive, and exclusive reading."
+                                rows={3}
+                                className="text-sm resize-y min-h-[72px]"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Feature checklist (optional, max 4)</Label>
+                              {paywallForm.featureItems.map((line, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <Input
+                                    value={line}
+                                    onChange={(e) =>
+                                      setPaywallForm((p) => {
+                                        const next = p.featureItems.slice();
+                                        next[idx] = e.target.value;
+                                        return { ...p, featureItems: next };
+                                      })
+                                    }
+                                    className="text-sm flex-1"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="p-2 rounded hover:bg-red-100 text-[#6b6b6b] shrink-0"
+                                    aria-label="Remove feature line"
+                                    onClick={() =>
+                                      setPaywallForm((p) => ({
+                                        ...p,
+                                        featureItems: p.featureItems.filter((_, i) => i !== idx),
+                                      }))
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))}
+                              {paywallForm.featureItems.length < 4 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1"
+                                  onClick={() =>
+                                    setPaywallForm((p) =>
+                                      p.featureItems.length >= 4
+                                        ? p
+                                        : { ...p, featureItems: [...p.featureItems, ""] }
+                                    )
+                                  }
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add item
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </CollapsibleContent>

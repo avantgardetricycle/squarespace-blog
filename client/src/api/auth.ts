@@ -23,6 +23,11 @@ export interface DashboardMe {
     paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
     paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
     paywallDetectionSource?: 'json_probe' | 'manual' | null
+    paywallSettings?: {
+      subscribeUrl: string | null
+      footerDescription: string | null
+      featureItems: string[]
+    } | null
     status: string
     verificationStatus: 'pending' | 'verified' | 'needs_attention'
     createdAt: string
