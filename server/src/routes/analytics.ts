@@ -516,7 +516,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
         const entry = postViews.get(pid)
         if (entry) {
           const s = Number((e.payload as { seconds?: number })?.seconds)
-          if (s) entry.timeSeconds.push(s)
+          if (Number.isFinite(s) && s >= 0) entry.timeSeconds.push(s)
         }
       }
     }

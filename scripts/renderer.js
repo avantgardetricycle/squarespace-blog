@@ -413,6 +413,8 @@
     _analyticsFlushScheduled: null,
     _analyticsSearchDebounce: null,
     _pageLoadTime: null,
+    _analyticsPageContextPostId: null,
+    _analyticsPageContextPostIndex: null,
     _progressScrollHandler: null,
     _progressScrollTarget: null,
     _tocScrollHandler: null,
@@ -1540,7 +1542,12 @@
       var sendTimeOnPage = function() {
         if (self._pageLoadTime != null) {
           var elapsed = (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - self._pageLoadTime;
-          self._analyticsTrack('time_on_page', { seconds: Math.round(elapsed / 1000) });
+          self._analyticsTrack(
+            'time_on_page',
+            { seconds: Math.round(elapsed / 1000) },
+            self._analyticsPageContextPostId,
+            self._analyticsPageContextPostIndex
+          );
           self._analyticsFlush();
           self._pageLoadTime = null;
         }
@@ -8351,6 +8358,9 @@
       }
 
       self._pageLoadTime = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      self._analyticsPageContextPostId =
+        isSinglePost && selectedIndex >= 0 && items[selectedIndex] ? (items[selectedIndex].id || null) : null;
+      self._analyticsPageContextPostIndex = isSinglePost && selectedIndex >= 0 ? selectedIndex : null;
 
       self._analyticsTrack('page_view', {
         view: isSinglePost ? 'post' : 'list',
