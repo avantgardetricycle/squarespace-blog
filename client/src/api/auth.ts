@@ -64,25 +64,38 @@ export interface CreatedSite {
   status: string
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
+  paywallSettings?: {
+    subscribeUrl: string | null
+    footerDescription: string | null
+    featureItems: string[]
+  } | null
 }
 
 export async function createSite(
   name?: string,
   url?: string,
-  paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
-): Promise<CreatedSite | null> {
+  paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled',
+  subscribeUrl?: string
+): Promise<{ site: CreatedSite; error?: undefined } | { site: null; error: string }> {
+  const body: Record<string, unknown> = {
+    name: name?.trim() || undefined,
+    url: url?.trim() || undefined,
+    paywallDetectionState
+  }
+  if (typeof subscribeUrl === 'string' && subscribeUrl.trim()) {
+    body.subscribeUrl = subscribeUrl.trim()
+  }
   const res = await fetch(`${API}/dashboard/sites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({
-      name: name?.trim() || undefined,
-      url: url?.trim() || undefined,
-      paywallDetectionState,
-    })
+    body: JSON.stringify(body)
   })
-  if (!res.ok) return null
-  return res.json()
+  const data = (await res.json().catch(() => ({}))) as { error?: string } & CreatedSite
+  if (!res.ok) {
+    return { site: null, error: typeof data.error === 'string' ? data.error : 'Failed to create site' }
+  }
+  return { site: data as CreatedSite }
 }
 
 export async function deleteSite(siteId: string): Promise<boolean> {
@@ -131,6 +144,11 @@ export type SitePatchResponse = {
   status: string
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
+  paywallSettings?: {
+    subscribeUrl: string | null
+    footerDescription: string | null
+    featureItems: string[]
+  } | null
 }
 
 export async function updateSite(
@@ -140,6 +158,7 @@ export async function updateSite(
     blogPassword?: string
     paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
     paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+    subscribeUrl?: string
   }
 ): Promise<{ ok: true; site: SitePatchResponse } | { ok: false; error?: string }> {
   const res = await fetch(`${API}/dashboard/sites/by-key/${encodeURIComponent(siteKey)}`, {

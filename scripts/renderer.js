@@ -801,6 +801,7 @@
       var self = this;
       var cs = (cfg && cfg.commentSettings) || {};
       if (!cs.commentsEnabled) return;
+      if (this._resolveViewerMode() !== 'loggedIn') return;
       var baseUrl = (cfg && cfg.baseUrl) || '';
       var siteKey = (cfg && cfg.siteKey) || '';
       if (!baseUrl || !siteKey) return;
@@ -1943,15 +1944,40 @@
       return null;
     },
 
-    _createMembersOnlyTeaserLabel: function() {
+    /**
+     * True when the post is a public preview on a paywalled blog (full teaser/body visible to logged-out JSON).
+     * Gated posts usually ship with empty or trivial body; previews include real HTML content.
+     */
+    _isPaywallPublicPreviewPost: function(post) {
+      if (!post || typeof post !== 'object') return false;
+      if (post.bbPaywallPublicPreview === true || post.bbIsPublicPreview === true) return true;
+      if (post.publicPreview === true) return true;
+      var body = post.body != null ? String(post.body) : '';
+      var plainBody = this._stripHtml(body).replace(/\s+/g, ' ').trim();
+      return plainBody.length >= 40;
+    },
+
+    /**
+     * @param {boolean|{ subscribeButton?: boolean, imageOverlay?: boolean }} opts - pass false to omit subscribe pill; or { imageOverlay: true } for editorial cards on dark imagery
+     */
+    _createMembersOnlyTeaserLabel: function(opts) {
       var self = this;
+      var o =
+        opts === true || opts === false
+          ? { subscribeButton: opts }
+          : opts && typeof opts === 'object'
+            ? opts
+            : {};
+      var includeSubscribe = o.subscribeButton !== false;
+      var imageOverlay = Boolean(o.imageOverlay);
       var colors = this._bbPaywallFooterColors();
+      var lockLabelColor = imageOverlay ? 'rgba(255,255,255,0.88)' : colors.secondary;
       var wrap = document.createElement('div');
       wrap.className = 'bb-members-only-label';
       wrap.style.display = 'flex';
       wrap.style.flexWrap = 'wrap';
       wrap.style.alignItems = 'center';
-      wrap.style.gap = '10px 14px';
+      wrap.style.gap = '10px 6px';
       wrap.style.marginTop = '4px';
       var lockNs = 'http://www.w3.org/2000/svg';
       var lockSvg = document.createElementNS(lockNs, 'svg');
@@ -1963,7 +1989,7 @@
       lockSvg.setAttribute('stroke', 'currentColor');
       lockSvg.setAttribute('stroke-width', '2');
       lockSvg.setAttribute('aria-hidden', 'true');
-      lockSvg.style.color = colors.secondary;
+      lockSvg.style.color = lockLabelColor;
       lockSvg.style.flexShrink = '0';
       var lockPath = document.createElementNS(lockNs, 'rect');
       lockPath.setAttribute('x', '5');
@@ -1977,30 +2003,57 @@
       lockSvg.appendChild(lockPath2);
       var label = document.createElement('span');
       label.className = 'bb-members-only-text';
-      label.textContent = 'Members only';
+      label.textContent = 'MEMBERS ONLY';
       label.style.fontSize = '0.72rem';
       label.style.fontWeight = '600';
       label.style.letterSpacing = '0.08em';
       label.style.textTransform = 'uppercase';
       label.style.fontVariant = 'small-caps';
-      label.style.color = colors.secondary;
+      label.style.color = lockLabelColor;
+      wrap.appendChild(lockSvg);
+      wrap.appendChild(label);
+      if (includeSubscribe) {
+        var pill = document.createElement('a');
+        pill.className = 'bb-subscribe-pill';
+        pill.href = self._resolvePaywallSubscribeHref();
+        pill.textContent = 'Subscribe to read';
+        pill.style.display = 'inline-flex';
+        pill.style.alignItems = 'center';
+        pill.style.padding = '6px 14px';
+        pill.style.borderRadius = '4px';
+        pill.style.background = colors.accent;
+        pill.style.color = '#fff';
+        pill.style.fontSize = '0.8rem';
+        pill.style.fontWeight = '600';
+        pill.style.textDecoration = 'none';
+        wrap.appendChild(pill);
+      }
+      return wrap;
+    },
+
+    _createSubscribeToReadPillLink: function(opts) {
+      var o = opts && typeof opts === 'object' ? opts : {};
+      var compact = Boolean(o.compact);
+      var colors = this._bbPaywallFooterColors();
       var pill = document.createElement('a');
       pill.className = 'bb-subscribe-pill';
-      pill.href = self._resolvePaywallSubscribeHref();
+      pill.href = this._resolvePaywallSubscribeHref();
       pill.textContent = 'Subscribe to read';
       pill.style.display = 'inline-flex';
       pill.style.alignItems = 'center';
-      pill.style.padding = '6px 14px';
+      pill.style.width = 'fit-content';
+      pill.style.maxWidth = '100%';
+      pill.style.boxSizing = 'border-box';
+      pill.style.padding = compact ? '8px 10px' : '6px 14px';
       pill.style.borderRadius = '4px';
       pill.style.background = colors.accent;
       pill.style.color = '#fff';
-      pill.style.fontSize = '0.8rem';
+      pill.style.fontSize = compact ? '0.75rem' : '0.8rem';
       pill.style.fontWeight = '600';
+      pill.style.lineHeight = '1.2';
       pill.style.textDecoration = 'none';
-      wrap.appendChild(lockSvg);
-      wrap.appendChild(label);
-      wrap.appendChild(pill);
-      return wrap;
+      pill.style.whiteSpace = 'nowrap';
+      return pill;
     },
 
     _appendPaywallFooter: function(footerZoneEl) {
@@ -5282,6 +5335,7 @@
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
+        var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
         var postIndex = isSinglePost ? selectedIndex : items.indexOf(post);
         var featLayoutKey = featuredPost ? displayPostKey(featuredPost) : null;
         var postLayoutKey = displayPostKey(post);
@@ -5745,6 +5799,7 @@
           isSideBySide
         );
         if (postCategoriesLine && !listRowsMobileCatsAboveRow) headlineMount.appendChild(postCategoriesLine);
+        var titleBlock = null;
         if (isFeaturedInLayout) {
           var featuredHeadlineStack = document.createElement('div');
           featuredHeadlineStack.className = 'blog-overlay-featured-headline-stack';
@@ -5772,9 +5827,50 @@
           featuredBadge.style.borderRadius = '2px';
           featuredHeadlineStack.appendChild(featuredBadge);
           featuredHeadlineStack.appendChild(h2);
-          headlineMount.appendChild(featuredHeadlineStack);
+          titleBlock = featuredHeadlineStack;
         } else {
-          headlineMount.appendChild(h2);
+          titleBlock = h2;
+        }
+        if (!isSinglePost && collectionLayout === 'listRows' && gatedCard) {
+          var nwPaywallCol = document.createElement('div');
+          nwPaywallCol.className = 'bb-paywall-collection-newsroom-cta';
+          nwPaywallCol.style.display = 'flex';
+          nwPaywallCol.style.flexDirection = 'column';
+          nwPaywallCol.style.alignItems = 'flex-end';
+          nwPaywallCol.style.gap = '8px';
+          nwPaywallCol.style.flex = '0 0 auto';
+          nwPaywallCol.style.maxWidth = '46%';
+          nwPaywallCol.style.marginTop = '0';
+          nwPaywallCol.style.marginBottom = '0';
+          var nwMoLbl = self._createMembersOnlyTeaserLabel(false);
+          nwMoLbl.style.width = 'auto';
+          nwMoLbl.style.maxWidth = '100%';
+          nwMoLbl.style.justifyContent = 'flex-end';
+          nwPaywallCol.appendChild(nwMoLbl);
+          nwPaywallCol.appendChild(self._createSubscribeToReadPillLink());
+          var titleRow = document.createElement('div');
+          titleRow.className = 'bb-paywall-collection-newsroom-title-row';
+          titleRow.style.display = 'flex';
+          titleRow.style.flexDirection = 'row';
+          titleRow.style.justifyContent = 'space-between';
+          titleRow.style.alignItems = 'flex-start';
+          titleRow.style.gap = '12px';
+          titleRow.style.width = '100%';
+          titleRow.style.boxSizing = 'border-box';
+          var titleLeft = document.createElement('div');
+          titleLeft.style.flex = '1';
+          titleLeft.style.minWidth = '0';
+          titleLeft.appendChild(titleBlock);
+          titleRow.appendChild(titleLeft);
+          titleRow.appendChild(nwPaywallCol);
+          headlineMount.appendChild(titleRow);
+        } else {
+          headlineMount.appendChild(titleBlock);
+        }
+        if (!isSinglePost && collectionLayout === 'digest' && gatedCard) {
+          var moDigestLbl = self._createMembersOnlyTeaserLabel(false);
+          moDigestLbl.style.marginTop = '6px';
+          headlineMount.appendChild(moDigestLbl);
         }
 
         if (phShowByline && postInfoWrap) {
@@ -5859,6 +5955,12 @@
           shareRow.style.width = '100%';
           shareRow.appendChild(shareLinks);
           headlineMount.appendChild(shareRow);
+        }
+
+        if (!isSinglePost && collectionLayout === 'grid' && gatedCard) {
+          var moMastheadLbl = self._createMembersOnlyTeaserLabel(false);
+          moMastheadLbl.style.marginTop = metaParts.length > 0 || shareLinks ? '6px' : '8px';
+          headlineMount.appendChild(moMastheadLbl);
         }
 
         if (isSinglePost && postInfoWrap) {
@@ -5969,9 +6071,8 @@
               firstHeading.remove();
             }
           }
-        } else if (paywallReplaceCollectionTeaser) {
-          var moRow = self._createMembersOnlyTeaserLabel();
-          if (moRow) body.appendChild(moRow);
+        } else if (gatedCard) {
+          /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
         } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
           if (collectionLayout === 'digest' && isFeaturedInLayout) {
             var digestFeaturedExcerpt = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
@@ -6068,8 +6169,9 @@
       var siteAccent = self._getSiteAccentColor();
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
 
-      for (var j = 0; j < displayItemsForLoop.length; j++) {
+        for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
+        var gatedShowcase = paywallReplaceCollectionTeaser && !isSinglePost && !self._isPaywallPublicPreviewPost(post);
         var postIndex = items.indexOf(post);
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
@@ -6137,7 +6239,7 @@
             shBadge.style.fontWeight = '700';
             shBadge.style.letterSpacing = '1.5px';
             shBadge.style.textTransform = 'uppercase';
-            shBadge.style.padding = '2px 6px';
+            shBadge.style.padding = '1px 6px';
             shBadge.style.borderRadius = '2px';
             shBadge.style.marginBottom = '8px';
             shBadge.style.alignSelf = 'flex-start';
@@ -6145,6 +6247,11 @@
             shBadge.style.maxWidth = '100%';
             bodyCol.appendChild(shBadge);
           }
+        }
+        if (gatedShowcase) {
+          var moScTop = self._createMembersOnlyTeaserLabel(false);
+          moScTop.style.marginBottom = '8px';
+          bodyCol.appendChild(moScTop);
         }
         var postCategoriesLineShowcase = !isSinglePost
           ? self._createCollectionPostCategoriesLine(post, siteAccent, categoryFilterUiEnabled)
@@ -6165,9 +6272,8 @@
         var excerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
         var bodyEl = document.createElement('div');
         bodyEl.className = 'blog-overlay-body';
-        if (paywallReplaceCollectionTeaser && !isSinglePost) {
-          var moShowcase = self._createMembersOnlyTeaserLabel();
-          if (moShowcase) bodyEl.appendChild(moShowcase);
+        if (gatedShowcase) {
+          /* Teaser replaced by masthead row above */
         } else if (excerptText) {
           bodyEl.textContent = excerptText;
           bodyEl.style.fontSize = '0.9rem';
@@ -6227,6 +6333,12 @@
         bodyCol.appendChild(h2);
         bodyCol.appendChild(bodyEl);
         bodyCol.appendChild(metaEl);
+        if (gatedShowcase) {
+          var scPill = self._createSubscribeToReadPillLink({ compact: true });
+          scPill.style.marginTop = '8px';
+          scPill.style.alignSelf = 'flex-start';
+          bodyCol.appendChild(scPill);
+        }
         bodyCol.appendChild(readLink);
         card.appendChild(bodyCol);
         var showcaseHasImage = imgUrlValid && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
@@ -7944,6 +8056,8 @@
           (overlayW > 0 && overlayW <= 767);
 
         var makeEditorialCard = function(p, isLarge) {
+          var gatedEditorialCard =
+            paywallReplaceEditorial && !isSinglePost && !self._isPaywallPublicPreviewPost(p);
           var cardUrl = p.assetUrl || p.thumbnailUrl || (p.assets && p.assets[0] && p.assets[0].assetUrl) || null;
           if (cardUrl && self._isPlaceholderWithMap(cardUrl, placeholderMap)) cardUrl = null;
           var bgStyle = self._featuredImageAreaBackground(cardUrl, placeholderMap, p, items);
@@ -8010,37 +8124,13 @@
           meta.style.color = 'rgba(255,255,255,0.5)';
           meta.style.marginTop = isLarge ? '8px' : '5px';
           meta.textContent = metaParts.join(' · ');
+          if (gatedEditorialCard) {
+            var edMoTop = self._createMembersOnlyTeaserLabel({ subscribeButton: false, imageOverlay: true });
+            edMoTop.style.marginBottom = isLarge ? '10px' : '8px';
+            content.appendChild(edMoTop);
+          }
           content.appendChild(title);
           content.appendChild(meta);
-          if (paywallReplaceEditorial && !isSinglePost) {
-            var edMo = document.createElement('div');
-            edMo.style.marginTop = '10px';
-            edMo.style.display = 'flex';
-            edMo.style.flexWrap = 'wrap';
-            edMo.style.alignItems = 'center';
-            edMo.style.gap = '8px';
-            var edLbl = document.createElement('span');
-            edLbl.textContent = 'Members only';
-            edLbl.style.fontSize = '0.65rem';
-            edLbl.style.fontWeight = '700';
-            edLbl.style.letterSpacing = '0.1em';
-            edLbl.style.textTransform = 'uppercase';
-            edLbl.style.fontVariant = 'small-caps';
-            edLbl.style.color = 'rgba(255,255,255,0.88)';
-            var edPill = document.createElement('a');
-            edPill.href = self._resolvePaywallSubscribeHref();
-            edPill.textContent = 'Subscribe to read';
-            edPill.style.padding = '5px 12px';
-            edPill.style.borderRadius = '4px';
-            edPill.style.background = self._getSiteAccentColor();
-            edPill.style.color = '#fff';
-            edPill.style.fontSize = '0.78rem';
-            edPill.style.fontWeight = '600';
-            edPill.style.textDecoration = 'none';
-            edMo.appendChild(edLbl);
-            edMo.appendChild(edPill);
-            content.appendChild(edMo);
-          }
           link.appendChild(bg);
           link.appendChild(overlay);
           link.appendChild(content);
@@ -8702,14 +8792,17 @@
 
           var commentCfg = cfg && cfg.commentSettings;
           var commentsTurnedOff = commentCfg && commentCfg.commentsEnabled === false;
-          self._setAllCommentUiHidden(!!commentsTurnedOff);
+          var viewerLoggedIn = self._resolveViewerMode() === 'loggedIn';
+          var hideCommentsForLoggedOutPost = isSinglePost && !viewerLoggedIn;
+          self._setAllCommentUiHidden(!!commentsTurnedOff || hideCommentsForLoggedOutPost);
           if (
             isSinglePost &&
             selectedIndex >= 0 &&
             items[selectedIndex] &&
             cfg &&
             commentCfg &&
-            commentCfg.commentsEnabled
+            commentCfg.commentsEnabled &&
+            viewerLoggedIn
           ) {
             try {
               self._initComments(main, items[selectedIndex], cfg);

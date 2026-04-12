@@ -49,6 +49,18 @@ import { getPlanDisplayName } from "@/lib/planLabels";
 const LOADER_URL =
   "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
 
+function isValidSignupPageUrl(input: string): boolean {
+  const t = input.trim();
+  if (!t) return false;
+  try {
+    const withScheme = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+    const u = new URL(withScheme);
+    return Boolean(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,11 +72,13 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [justCreatedSite, setJustCreatedSite] = useState<CreatedSite | null>(null);
   const [newBlogPaywalled, setNewBlogPaywalled] = useState<"yes" | "no">("no");
+  const [newBlogSubscribeUrl, setNewBlogSubscribeUrl] = useState("");
   const [siteToDelete, setSiteToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editingSite, setEditingSite] = useState<DashboardMe["sites"][number] | null>(null);
   const [editBlogName, setEditBlogName] = useState("");
   const [editBlogRequiresLogin, setEditBlogRequiresLogin] = useState<"yes" | "no">("no");
+  const [editBlogSubscribeUrl, setEditBlogSubscribeUrl] = useState("");
   const [savingBlogEdit, setSavingBlogEdit] = useState(false);
 
   useEffect(() => {
@@ -104,12 +118,30 @@ export default function Dashboard() {
       toast.error("You've reached your site limit");
       return;
     }
+    if (newBlogPaywalled === "yes") {
+      const su = newBlogSubscribeUrl.trim();
+      if (!su) {
+        toast.error("Enter the URL of your blog signup or subscription page.");
+        return;
+      }
+      if (!isValidSignupPageUrl(su)) {
+        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+        return;
+      }
+    }
     setCreating(true);
     try {
       const paywallDetectionState =
         newBlogPaywalled === "yes" ? "detected_paywalled" : "detected_unpaywalled";
-      const site = await createSite(newBlogName.trim(), newBlogUrl.trim(), paywallDetectionState);
-      if (site) {
+      const subscribeArg = newBlogPaywalled === "yes" ? newBlogSubscribeUrl.trim() : undefined;
+      const result = await createSite(
+        newBlogName.trim(),
+        newBlogUrl.trim(),
+        paywallDetectionState,
+        subscribeArg
+      );
+      if (result.site) {
+        const site = result.site;
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = [...prev.sites, site];
@@ -125,10 +157,11 @@ export default function Dashboard() {
         setNewBlogName("");
         setNewBlogUrl("");
         setNewBlogPaywalled("no");
+        setNewBlogSubscribeUrl("");
         setJustCreatedSite(site);
         setExpandedSiteId(site.id);
       } else {
-        toast.error("Failed to create site");
+        toast.error(result.error ?? "Failed to create site");
       }
     } finally {
       setCreating(false);
@@ -139,6 +172,7 @@ export default function Dashboard() {
     setEditingSite(site);
     setEditBlogName(site.name ?? "");
     setEditBlogRequiresLogin(site.paywallDetectionState === "detected_paywalled" ? "yes" : "no");
+    setEditBlogSubscribeUrl(site.paywallSettings?.subscribeUrl ?? "");
   };
 
   const handleSaveBlogEdit = async () => {
@@ -147,6 +181,17 @@ export default function Dashboard() {
       toast.error("Please enter a blog name");
       return;
     }
+    if (editBlogRequiresLogin === "yes") {
+      const su = editBlogSubscribeUrl.trim();
+      if (!su) {
+        toast.error("Enter the URL of your blog signup or subscription page.");
+        return;
+      }
+      if (!isValidSignupPageUrl(su)) {
+        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+        return;
+      }
+    }
     setSavingBlogEdit(true);
     try {
       const paywallDetectionState =
@@ -154,6 +199,9 @@ export default function Dashboard() {
       const result = await updateSite(editingSite.siteKey, {
         name: editBlogName.trim(),
         paywallDetectionState,
+        ...(editBlogRequiresLogin === "yes"
+          ? { subscribeUrl: editBlogSubscribeUrl.trim() }
+          : {}),
       });
       if (!result.ok) {
         toast.error(result.error ?? "Failed to save");
@@ -171,6 +219,7 @@ export default function Dashboard() {
                   name: s.name,
                   paywallDetectionState: s.paywallDetectionState,
                   paywallDetectionSource: s.paywallDetectionSource,
+                  paywallSettings: s.paywallSettings ?? row.paywallSettings,
                 }
               : row
           ),
@@ -297,6 +346,7 @@ export default function Dashboard() {
           if (!open) {
             setJustCreatedSite(null);
             setNewBlogPaywalled("no");
+            setNewBlogSubscribeUrl("");
           }
         }}
       >
@@ -457,6 +507,29 @@ export default function Dashboard() {
                     update this setting later if your blog&apos;s membership setup changes.
                   </p>
                 </div>
+                {newBlogPaywalled === "yes" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="blog-subscribe-url">
+                      Signup / subscription page URL <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="blog-subscribe-url"
+                      placeholder="https://yoursite.com/membership"
+                      value={newBlogSubscribeUrl}
+                      onChange={(e) => setNewBlogSubscribeUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddBlog();
+                        }
+                      }}
+                    />
+                    <p className="text-xs text-[#6b6b6b]">
+                      Where visitors go to become members (e.g. your Squarespace pricing or plan page). This link is used
+                      for subscribe buttons on the paywalled blog instead of the blog URL alone.
+                    </p>
+                  </div>
+                ) : null}
               </div>
               <DialogFooter>
                 <Button
@@ -571,91 +644,28 @@ export default function Dashboard() {
                 When set to Yes, Customize shows separate layout options for logged-in and logged-out visitors.
               </p>
             </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditingSite(null)}
-              disabled={savingBlogEdit}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleSaveBlogEdit()}
-              disabled={savingBlogEdit}
-              className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
-            >
-              {savingBlogEdit ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={!!editingSite}
-        onOpenChange={(open) => {
-          if (!open) setEditingSite(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Edit blog settings</DialogTitle>
-            <DialogDescription>
-              Change the display name and whether this blog expects visitors to log in before viewing posts.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {editingSite?.url ? (
-              <p className="text-xs text-[#6b6b6b] break-all">
-                Blog URL:{" "}
-                <span className="font-mono text-[#0a0a0a]">{editingSite.url}</span>
-              </p>
-            ) : null}
-            <div className="space-y-2">
-              <Label htmlFor="edit-blog-name">
-                Blog name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="edit-blog-name"
-                value={editBlogName}
-                onChange={(e) => setEditBlogName(e.target.value)}
-                placeholder="e.g., My Travel Blog"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void handleSaveBlogEdit();
-                  }
-                }}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Does this blog require a membership to view posts?</Label>
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
-                {(
-                  [
-                    { value: "yes", label: "Yes" },
-                    { value: "no", label: "No" },
-                  ] as const
-                ).map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setEditBlogRequiresLogin(value)}
-                    className={[
-                      "rounded-md border px-3 py-2 text-sm font-medium transition-colors",
-                      editBlogRequiresLogin === value
-                        ? "border-[#5B4FE8] bg-[#5B4FE8]/10 text-[#5B4FE8]"
-                        : "border-[#e5e4e0] bg-white text-[#0a0a0a] hover:bg-[#f5f5f3]",
-                    ].join(" ")}
-                  >
-                    {label}
-                  </button>
-                ))}
+            {editBlogRequiresLogin === "yes" ? (
+              <div className="space-y-2">
+                <Label htmlFor="edit-blog-subscribe-url">
+                  Signup / subscription page URL <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="edit-blog-subscribe-url"
+                  placeholder="https://yoursite.com/membership"
+                  value={editBlogSubscribeUrl}
+                  onChange={(e) => setEditBlogSubscribeUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleSaveBlogEdit();
+                    }
+                  }}
+                />
+                <p className="text-xs text-[#6b6b6b]">
+                  Used for subscribe links on the paywalled blog (overrides using the blog URL alone).
+                </p>
               </div>
-              <p className="text-xs text-[#6b6b6b]">
-                When set to Yes, Customize shows separate layout options for logged-in and logged-out visitors.
-              </p>
-            </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button

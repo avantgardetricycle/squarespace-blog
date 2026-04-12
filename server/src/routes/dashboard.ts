@@ -46,6 +46,36 @@ function parseBlogUrl(input: string): { url: string; blogPath: string } | null {
   }
 }
 
+/** Normalize visitor subscribe / pricing page URL for paywall CTAs (https if missing, max 2048). */
+function normalizeSubscribeUrlInput(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const t = raw.trim()
+  if (!t) return null
+  let toParse = t
+  if (!/^https?:\/\//i.test(toParse)) {
+    toParse = 'https://' + toParse
+  }
+  try {
+    const u = new URL(toParse)
+    if (!u.hostname) return null
+    return u.href.length > 2048 ? u.href.slice(0, 2048) : u.href
+  } catch {
+    return null
+  }
+}
+
+function paywallSettingsJson(s: {
+  subscribeUrl: string | null
+  footerDescription: string | null
+  featureItems: string[]
+}) {
+  return {
+    subscribeUrl: s.subscribeUrl,
+    footerDescription: s.footerDescription,
+    featureItems: s.featureItems
+  }
+}
+
 /**
  * Build the blog JSON fetch URL from site url and blogPath.
  */
@@ -300,7 +330,16 @@ router.post('/subscription/portal', requireSession, async (req: Request, res: Re
 // POST /api/dashboard/sites - Create new site
 router.post('/sites', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const { name, url, paywallDetectionState: rawPaywallState } = req.body ?? {}
+  const { name, url, paywallDetectionState: rawPaywallState, subscribeUrl: rawSubscribeTop } = req.body ?? {}
+  const rawSubscribeFromNested =
+    req.body &&
+    typeof req.body === 'object' &&
+    'paywallSettings' in req.body &&
+    req.body.paywallSettings !== null &&
+    typeof (req.body as { paywallSettings?: unknown }).paywallSettings === 'object'
+      ? (req.body as { paywallSettings: { subscribeUrl?: unknown } }).paywallSettings.subscribeUrl
+      : undefined
+  const rawSubscribeForCreate = rawSubscribeTop !== undefined ? rawSubscribeTop : rawSubscribeFromNested
 
   try {
     const [subscription, siteCount] = await Promise.all([
@@ -346,6 +385,15 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     const userPaywallState: PaywallDetectionState =
       VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
 
+    const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
+    if (userPaywallState === 'detected_paywalled' && !subscribeNormalized) {
+      res.status(400).json({
+        error:
+          'Paywalled blogs need a valid signup or subscription page URL. Enter the full URL where visitors can become members.'
+      })
+      return
+    }
+
     const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
     const verified = await verifyBlogUrl(blogJsonUrl)
 
@@ -383,6 +431,24 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
+    let createdPaywall: { subscribeUrl: string | null; footerDescription: string | null; featureItems: string[] } | null =
+      null
+    if (userPaywallState === 'detected_paywalled' && subscribeNormalized) {
+      await prisma.sitePaywallSettings.create({
+        data: {
+          siteId: updatedSite.id,
+          subscribeUrl: subscribeNormalized,
+          footerDescription: null,
+          featureItems: []
+        }
+      })
+      createdPaywall = {
+        subscribeUrl: subscribeNormalized,
+        footerDescription: null,
+        featureItems: []
+      }
+    }
+
     res.status(201).json({
       id: updatedSite.id,
       siteKey: updatedSite.siteKey,
@@ -394,7 +460,8 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       paywallDetectionSource: updatedSite.paywallDetectionSource,
       status: updatedSite.status,
       verificationStatus: updatedSite.verificationStatus,
-      createdAt: updatedSite.createdAt
+      createdAt: updatedSite.createdAt,
+      paywallSettings: createdPaywall
     })
   } catch (err) {
     console.error('Create site error:', err)
@@ -415,12 +482,29 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 
   try {
     const site = await prisma.site.findFirst({
-      where: { siteKey, userId: user.id }
+      where: { siteKey, userId: user.id },
+      include: { sitePaywallSettings: true }
     })
 
     if (!site) {
       res.status(404).json({ error: 'Site not found' })
       return
+    }
+
+    let normalizedSubscribePatch: string | null | undefined
+    if ('subscribeUrl' in req.body) {
+      const su = (req.body as { subscribeUrl?: unknown }).subscribeUrl
+      if (typeof su !== 'string') {
+        res.status(400).json({ error: 'subscribeUrl must be a string' })
+        return
+      }
+      normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
+      if (su.trim() && normalizedSubscribePatch === null) {
+        res.status(400).json({
+          error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+        })
+        return
+      }
     }
 
     const updates: {
@@ -453,18 +537,59 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       updates.paywallDetectionSource = 'manual'
     }
 
-    if (Object.keys(updates).length === 0) {
+    const transitioningToPaywalled =
+      'paywallDetectionState' in updates &&
+      updates.paywallDetectionState === 'detected_paywalled' &&
+      site.paywallDetectionState !== 'detected_paywalled'
+
+    if (transitioningToPaywalled && !normalizedSubscribePatch) {
+      res.status(400).json({
+        error:
+          'Enter the URL of your blog signup or subscription page (e.g. your Squarespace member pricing page).'
+      })
+      return
+    }
+
+    if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {
       res.status(400).json({ error: 'No valid updates provided' })
       return
     }
 
-    await prisma.site.update({
+    if (Object.keys(updates).length > 0) {
+      await prisma.site.update({
+        where: { id: site.id },
+        data: updates
+      })
+    }
+
+    const afterSite = await prisma.site.findUnique({
       where: { id: site.id },
-      data: updates
+      include: { sitePaywallSettings: true }
     })
 
+    if (afterSite!.paywallDetectionState === 'detected_paywalled') {
+      const existingPw = afterSite!.sitePaywallSettings
+      const effectiveUrl =
+        typeof normalizedSubscribePatch === 'string'
+          ? normalizedSubscribePatch
+          : existingPw?.subscribeUrl || null
+      if (!effectiveUrl) {
+        res.status(400).json({
+          error: 'Paywalled blogs need a signup page URL where visitors can subscribe.'
+        })
+        return
+      }
+      await prisma.sitePaywallSettings.upsert({
+        where: { siteId: site.id },
+        create: { siteId: site.id, subscribeUrl: effectiveUrl, featureItems: [] },
+        update:
+          typeof normalizedSubscribePatch === 'string' ? { subscribeUrl: normalizedSubscribePatch } : {}
+      })
+    }
+
     const updated = await prisma.site.findUnique({
-      where: { id: site.id }
+      where: { id: site.id },
+      include: { sitePaywallSettings: true }
     })
 
     res.json({
@@ -479,7 +604,14 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       paywallDetectionSource: updated!.paywallDetectionSource,
       status: updated!.status,
       verificationStatus: updated!.verificationStatus,
-      createdAt: updated!.createdAt
+      createdAt: updated!.createdAt,
+      paywallSettings: updated!.sitePaywallSettings
+        ? paywallSettingsJson({
+            subscribeUrl: updated!.sitePaywallSettings.subscribeUrl,
+            footerDescription: updated!.sitePaywallSettings.footerDescription,
+            featureItems: updated!.sitePaywallSettings.featureItems
+          })
+        : null
     })
   } catch (err) {
     console.error('Update site error:', err)
