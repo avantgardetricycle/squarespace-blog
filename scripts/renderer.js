@@ -6214,7 +6214,7 @@
         card.className = 'blog-overlay-showcase-card';
         card.style.display = 'grid';
         card.style.gap = '0';
-        card.style.marginTop = '10%';
+        card.style.marginTop = j === 0 ? '0' : '10%';
         card.style.marginBottom = '48px';
         card.style.gridTemplateColumns = '1fr';
         card.style.width = '100%';
