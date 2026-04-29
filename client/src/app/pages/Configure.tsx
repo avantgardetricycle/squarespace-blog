@@ -180,7 +180,7 @@ export interface PostHeaderConfig {
   contentAlignment: PostHeaderContentAlignment;
   /** When imagePosition is fullBleed: overlay = title on hero image; stacked = title block above full-bleed image */
   fullBleedLayout?: PostHeaderFullBleedLayout;
-  /** Horizontal padding for single-post header zone when image is side-by-side */
+  /** Padding between the viewport edge and a side-positioned post header image */
   sideGap?: number;
   showBreadcrumbs?: boolean;
   showTags?: boolean;
@@ -876,7 +876,7 @@ function parseLevelConfig(
     (v === "left" || v === "center" || v === "right") ? v : "left";
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
-  const validSideGap = (v: unknown): number => Math.min(120, Math.max(0, Number(v) || 24));
+  const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
         imagePosition: validImagePosition(phRaw.imagePosition),
@@ -3270,14 +3270,13 @@ export default function Configure() {
                                       </div>
                                     </div>
                                     <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Side gap</Label>
-                                      <p className="text-[10px] text-[#6b6b6b]">Horizontal space at the left and right edges of the post header zone</p>
+                                      <Label className="text-xs text-[#6b6b6b]">Image side padding</Label>
                                       <div className="flex items-center gap-3">
                                         <Slider
                                           value={[((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)]}
                                           onValueChange={([v]) => updateLevelConfigPath("postHeader.sideGap", v ?? 24)}
                                           min={0}
-                                          max={80}
+                                          max={150}
                                           step={2}
                                           className="flex-1"
                                         />
@@ -3285,6 +3284,22 @@ export default function Configure() {
                                           {((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)}px
                                         </span>
                                       </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
+                                      <Select
+                                        value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
+                                        onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="left">Left</SelectItem>
+                                          <SelectItem value="center">Center</SelectItem>
+                                          <SelectItem value="right">Right</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
                                   </>
                                 )}
@@ -3366,23 +3381,6 @@ export default function Configure() {
                                 </div>
                               </>
                             )}
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Content alignment</Label>
-                              <p className="text-[10px] text-[#6b6b6b]">Breadcrumbs and post info (title, author, date, etc.)</p>
-                              <Select
-                                value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
-                                onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="left">Left</SelectItem>
-                                  <SelectItem value="center">Center</SelectItem>
-                                  <SelectItem value="right">Right</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
                             <div className="flex items-center justify-between">
                               <div>
                                 <Label className="text-xs text-[#6b6b6b]">Show breadcrumbs</Label>

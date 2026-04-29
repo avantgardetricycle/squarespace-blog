@@ -5322,13 +5322,12 @@
           digestMobileFullBleed = typeof window !== 'undefined' && window.innerWidth <= 767;
         }
       }
-      var postHeaderSideGapPx;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
       var phAlign = postHeaderCfg && (postHeaderCfg.contentAlignment === 'left' || postHeaderCfg.contentAlignment === 'center' || postHeaderCfg.contentAlignment === 'right') ? postHeaderCfg.contentAlignment : 'left';
-      postHeaderSideGapPx = postHeaderCfg && typeof postHeaderCfg.sideGap === 'number'
-        ? Math.min(120, Math.max(0, Math.round(postHeaderCfg.sideGap)))
-        : 24;
+      var phSideImageGapPx = isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && postHeaderCfg && typeof postHeaderCfg.sideGap === 'number'
+        ? Math.min(150, Math.max(0, Math.round(postHeaderCfg.sideGap)))
+        : 0;
       var phShowBreadcrumbs = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showBreadcrumbs);
       var phShowTags = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showTags);
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
@@ -5563,6 +5562,10 @@
           } else if (isSideBySide) {
             fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             fiWrap.style.minWidth = '0';
+            if (isSinglePost && phSideImageGapPx > 0) {
+              if (phImagePos === 'rightOfInfo') fiWrap.style.marginRight = phSideImageGapPx + 'px';
+              else if (phImagePos === 'leftOfInfo') fiWrap.style.marginLeft = phSideImageGapPx + 'px';
+            }
           }
           var fiInner = document.createElement('div');
           fiInner.style.overflow = 'hidden';
@@ -6693,9 +6696,13 @@
       var headerZoneEl = null;
       var singlePostHeaderZoneEl = null;
       var singlePostHeaderInnerEl = null;
-      var postHeaderSideGapPx = 24;
+      var postHeaderCfgForZone = isSinglePost && cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      var postHeaderImagePosForZone = postHeaderCfgForZone && (postHeaderCfgForZone.imagePosition === 'leftOfInfo' || postHeaderCfgForZone.imagePosition === 'rightOfInfo') ? postHeaderCfgForZone.imagePosition : null;
+      var postHeaderSideGapPx = postHeaderImagePosForZone && typeof postHeaderCfgForZone.sideGap === 'number'
+        ? Math.min(150, Math.max(0, Math.round(postHeaderCfgForZone.sideGap)))
+        : 24;
       function ensureSinglePostHeaderInnerEl() {
-        var normalizedSideGap = Math.min(120, Math.max(0, Math.round(postHeaderSideGapPx)));
+        var normalizedSideGap = postHeaderImagePosForZone ? 0 : Math.min(150, Math.max(0, Math.round(postHeaderSideGapPx)));
         if (!singlePostHeaderZoneEl) {
           singlePostHeaderZoneEl = document.createElement('div');
           singlePostHeaderZoneEl.className = 'blog-overlay-header-zone blog-overlay-single-post-header-zone';
