@@ -4032,7 +4032,7 @@ export default function Configure() {
                               effectiveConfig.footerContent?.moduleOrder ?? []
                             );
                       const zoneModules = (side: "left" | "right") => (side === "left" ? derivedModules.left : derivedModules.right);
-                      const SidebarSection = ({ side }: { side: "left" | "right" }) => {
+                      const renderSidebarSection = (side: "left" | "right") => {
                         const cfg = side === "left" ? effectiveConfig.leftSidebar : effectiveConfig.rightSidebar;
                         const modules = zoneModules(side);
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
@@ -4074,7 +4074,7 @@ export default function Configure() {
                           updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
                         };
                         return (
-                          <div className="border-b border-[#e5e4e0]">
+                          <div key={`${side}-sidebar-section`} className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">{side === "left" ? "Left Sidebar" : "Right Sidebar"}</span>
                               <button
@@ -4189,8 +4189,8 @@ export default function Configure() {
                       };
                       return (
                         <>
-                          <SidebarSection side="left" />
-                          <SidebarSection side="right" />
+                          {renderSidebarSection("left")}
+                          {renderSidebarSection("right")}
                           {/* Navigation & Discovery */}
                           <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#1a7a5e] border-b border-[rgba(26,122,94,0.2)]">
                             Navigation & Discovery
