@@ -55,6 +55,7 @@ import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
 
 const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
 
@@ -2280,7 +2281,11 @@ export default function Configure() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <p className="text-sm text-[#6b6b6b]">
-                    In Squarespace, go to Settings → Advanced → Code Injection. Add this code to the header of your blog page.
+                    In Squarespace, go to Settings → Advanced → Code Injection → Header. Paste the
+                    full block below in order: the inline preloader first (reduces native blog flash),
+                    then the BetterBlog loader. The path inside the small script should match your
+                    blog URL prefix (we use your saved blog path when known; default is{" "}
+                    <code className="bg-[#f0eefc] px-1 rounded text-[#0a0a0a]">/blog</code>).
                   </p>
                   {typeof window !== "undefined" && window.location.protocol === "http:" && (
                     <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
@@ -2289,11 +2294,12 @@ export default function Configure() {
                   )}
                   {(() => {
                     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
-                    const snippet = `<script
-  src="${LOADER_URL}"
-  data-site-key="${effectiveSiteKey}"
-  data-api-base="${apiBase}"
-></script>`;
+                    const snippet = buildBetterBlogSquarespaceHeaderHtml({
+                      loaderUrl: LOADER_URL,
+                      siteKey: effectiveSiteKey,
+                      blogPath: effectiveSite?.blogPath ?? null,
+                      apiBase,
+                    });
                     return (
                       <div className="space-y-2">
                         <pre className="text-xs bg-[#f7f6f3] p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
@@ -2305,7 +2311,7 @@ export default function Configure() {
                           onClick={() => {
                             navigator.clipboard.writeText(snippet);
                             setCopiedSiteKey(effectiveSiteKey);
-                            toast.success("Code copied to clipboard");
+                            toast.success("Installation code copied to clipboard");
                             setTimeout(() => setCopiedSiteKey(null), 2000);
                           }}
                         >

@@ -45,6 +45,7 @@ import {
   type CreatedSite,
 } from "@/api/auth";
 import { getPlanDisplayName } from "@/lib/planLabels";
+import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
 
 const LOADER_URL =
   "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
@@ -95,11 +96,15 @@ export default function Dashboard() {
       : "Professional";
   const sites = me?.sites ?? [];
 
-  const handleCopy = (siteKey: string) => {
-    const scriptTag = `<script src="${LOADER_URL}" data-site-key="${siteKey}"></script>`;
-    navigator.clipboard.writeText(scriptTag);
+  const handleCopy = (siteKey: string, blogPath?: string | null) => {
+    const html = buildBetterBlogSquarespaceHeaderHtml({
+      loaderUrl: LOADER_URL,
+      siteKey,
+      blogPath,
+    });
+    navigator.clipboard.writeText(html);
     setCopiedSiteKey(siteKey);
-    toast.success("Script code copied to clipboard!");
+    toast.success("Installation code copied to clipboard!");
     setTimeout(() => setCopiedSiteKey(null), 2000);
   };
 
@@ -380,7 +385,10 @@ export default function Dashboard() {
                     <span className="font-medium text-[#0a0a0a]">
                       Settings → Advanced → Code Injection → Header
                     </span>
-                    .
+                    . Put the whole block in order: the inline preloader first, then the BetterBlog
+                    script tag. The preloader hides native Squarespace blog chrome until BetterBlog
+                    loads (adjust the path in the small script if your blog URL prefix is not{" "}
+                    <code className="bg-[#f0eefc] px-1 rounded text-[#0a0a0a]">/blog</code>).
                   </p>
                   <div className="relative min-w-0">
                     <div className="absolute right-2 top-2 z-10">
@@ -388,7 +396,7 @@ export default function Dashboard() {
                         size="sm"
                         variant="secondary"
                         className="h-8 px-2 bg-[#0a0a0a] hover:bg-[#2d2a5e] text-white border-none"
-                        onClick={() => handleCopy(justCreatedSite.siteKey)}
+                        onClick={() => handleCopy(justCreatedSite.siteKey, justCreatedSite.blogPath)}
                       >
                         {copiedSiteKey === justCreatedSite.siteKey ? (
                           <>
@@ -404,7 +412,13 @@ export default function Dashboard() {
                       </Button>
                     </div>
                     <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
-                      <code>{`<script src="${LOADER_URL}" data-site-key="${justCreatedSite.siteKey}"></script>`}</code>
+                      <code>
+                        {buildBetterBlogSquarespaceHeaderHtml({
+                          loaderUrl: LOADER_URL,
+                          siteKey: justCreatedSite.siteKey,
+                          blogPath: justCreatedSite.blogPath,
+                        })}
+                      </code>
                     </pre>
                   </div>
                 </div>
@@ -715,7 +729,11 @@ export default function Dashboard() {
               const isExpanded = expandedSiteId === site.id;
               const status = getVerificationStatus(site);
               const siteUrl = getSiteUrl(site);
-              const scriptTag = `<script src="${LOADER_URL}" data-site-key="${site.siteKey}"></script>`;
+              const headerInjectionHtml = buildBetterBlogSquarespaceHeaderHtml({
+                loaderUrl: LOADER_URL,
+                siteKey: site.siteKey,
+                blogPath: site.blogPath,
+              });
 
               return (
                 <div
@@ -802,7 +820,8 @@ export default function Dashboard() {
                         <span className="font-medium text-[#0a0a0a]">
                           Settings → Advanced → Code Injection → Header
                         </span>
-                        .
+                        . Keep the inline preloader above the BetterBlog script tag so native blog
+                        styling does not flash before the overlay loads.
                       </p>
                       <div className="relative">
                         <div className="absolute right-2 top-2 z-10">
@@ -810,7 +829,7 @@ export default function Dashboard() {
                             size="sm"
                             variant="secondary"
                             className="h-8 px-2 bg-neutral-800 hover:bg-neutral-700 text-white border-none"
-                            onClick={() => handleCopy(site.siteKey)}
+                            onClick={() => handleCopy(site.siteKey, site.blogPath)}
                           >
                             {copiedSiteKey === site.siteKey ? (
                               <>
@@ -826,7 +845,7 @@ export default function Dashboard() {
                           </Button>
                         </div>
                         <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner">
-                          <code>{scriptTag}</code>
+                          <code>{headerInjectionHtml}</code>
                         </pre>
                       </div>
                     </div>

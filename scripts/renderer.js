@@ -436,6 +436,9 @@
     _currentPageJsonIdentity: null,
     _currentPageAuthProbeUrl: null,
     _memberAccountsEnabledHint: false,
+    _lastBlogRoutePathname: null,
+    _lastBlogRouteSearch: '',
+    _lastBlogRouteHash: '',
     _lastAuthDebugSig: null,
     _lastPaywallDebugSig: null,
     _lastTocDebugViewSig: null,
@@ -1615,9 +1618,10 @@
       }
 
       if (!previewMode) {
-        var blogPath = this.config.blogPath;
+        var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
-        if (!this._isOnBlogRoute(pathname, blogPath)) {
+        if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
+        if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
           this._clearBootstrapLoading();
           return;
@@ -1664,6 +1668,9 @@
           window.parent.postMessage({ type: 'BETTERBLOG_PREVIEW_POST_SELECTED', postIndex: idx }, '*');
         }
       });
+      if (!previewMode && !bbPreview) {
+        this._startRouteChangeObserver();
+      }
 
       if (bbPreview) {
         this._setupPreviewMessageListener();
@@ -1701,6 +1708,108 @@
       } catch (e) {
         return false;
       }
+    },
+
+    _routeSignature: function() {
+      if (typeof window === 'undefined' || !window.location) return '';
+      return (window.location.pathname || '/') + '|' + (window.location.search || '') + '|' + (window.location.hash || '');
+    },
+
+    _currentBlogPathForRouteMatch: function() {
+      return (this.config && this.config.blogPath) || this._getBlogCollectionPath();
+    },
+
+    _isTransientAccountDrawerRoute: function(pathname) {
+      if (!pathname || typeof pathname !== 'string') return false;
+      var p = pathname.replace(/\/+$/, '') || '/';
+      return p === '/digital-products' || p.indexOf('/digital-products/') === 0
+        || p === '/account/digital-products' || p.indexOf('/account/digital-products/') === 0;
+    },
+
+    _rememberCurrentBlogRoute: function() {
+      if (typeof window === 'undefined' || !window.location) return;
+      var pathname = window.location.pathname || '/';
+      var blogPath = this._currentBlogPathForRouteMatch();
+      if (!this._isOnBlogRoute(pathname, blogPath)) return;
+      this._lastBlogRoutePathname = pathname;
+      this._lastBlogRouteSearch = window.location.search || '';
+      this._lastBlogRouteHash = window.location.hash || '';
+    },
+
+    _getEffectiveBlogPathname: function() {
+      if (typeof window === 'undefined' || !window.location) return '/';
+      var pathname = window.location.pathname || '/';
+      var blogPath = this._currentBlogPathForRouteMatch();
+      if (this._isOnBlogRoute(pathname, blogPath)) {
+        this._rememberCurrentBlogRoute();
+        return pathname;
+      }
+      if (this._isTransientAccountDrawerRoute(pathname) && this._lastBlogRoutePathname) {
+        return this._lastBlogRoutePathname;
+      }
+      return pathname;
+    },
+
+    _isOnEffectiveBlogRoute: function() {
+      if (typeof window === 'undefined' || !window.location) return false;
+      var pathname = window.location.pathname || '/';
+      var blogPath = this._currentBlogPathForRouteMatch();
+      if (this._isOnBlogRoute(pathname, blogPath)) return true;
+      return this._isTransientAccountDrawerRoute(pathname) && Boolean(this._lastBlogRoutePathname);
+    },
+
+    _startRouteChangeObserver: function() {
+      if (this._routeChangeObserverInstalled || typeof window === 'undefined') return;
+      this._routeChangeObserverInstalled = true;
+      this._lastRouteSignature = this._routeSignature();
+      var self = this;
+      var onRouteChange = function() {
+        setTimeout(function() {
+          var sig = self._routeSignature();
+          if (sig === self._lastRouteSignature) return;
+          self._lastRouteSignature = sig;
+          var pathname = window.location && window.location.pathname ? window.location.pathname : '/';
+          var blogPath = self._currentBlogPathForRouteMatch();
+          if (self._isOnBlogRoute(pathname, blogPath)) self._rememberCurrentBlogRoute();
+          if (!self._isOnEffectiveBlogRoute()) {
+            self._debugLog('route change outside blog route', { path: pathname, blogPath: blogPath || null });
+            return;
+          }
+          if (!self.items || self.items.length === 0) {
+            self.render();
+            return;
+          }
+          self._probeCurrentPageJsonAuth()
+            .then(function() {
+              return self._waitForPostAuthHydration();
+            })
+            .then(function() {
+              return self._renderContent(self.items);
+            })
+            .catch(function(err) {
+              console.error('[BlogOverlay] Route-change render error:', err);
+            });
+        }, 0);
+      };
+
+      var wrapHistoryMethod = function(name) {
+        try {
+          var original = window.history && window.history[name];
+          if (typeof original !== 'function') return;
+          if (original.__bbRouteWrapped) return;
+          var wrapped = function() {
+            var result = original.apply(this, arguments);
+            onRouteChange();
+            return result;
+          };
+          wrapped.__bbRouteWrapped = true;
+          wrapped.__bbOriginal = original;
+          window.history[name] = wrapped;
+        } catch (e) {}
+      };
+      wrapHistoryMethod('pushState');
+      wrapHistoryMethod('replaceState');
+      window.addEventListener('popstate', onRouteChange);
     },
 
     _setupPreviewMessageListener: function() {
@@ -1991,8 +2100,8 @@
     },
 
     _isCollectionIndexPath: function() {
-      var blogPath = (this.config && this.config.blogPath) || '/blog';
-      var pathname = (typeof window !== 'undefined' && window.location && window.location.pathname) ? window.location.pathname : '/';
+      var blogPath = this._currentBlogPathForRouteMatch();
+      var pathname = this._getEffectiveBlogPathname();
       pathname = pathname.replace(/\/+$/, '') || '/';
       var bp = String(blogPath).replace(/\/+$/, '') || '/';
       if (bp === '/' || bp === '') return pathname === '/' || pathname === '';
@@ -2327,6 +2436,12 @@
             return;
           }
           self._paywallFullySuppressed = false;
+          var pathname = typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') : '/';
+          var blogPath = self._currentBlogPathForRouteMatch();
+          if (!self._isOnEffectiveBlogRoute()) {
+            self._debugLog('paywall auth observer skipped outside blog route', { path: pathname, blogPath: blogPath || null });
+            return;
+          }
           if (self.items.length > 0) self._renderContent(self.items);
           else self.render();
         }, 280);
@@ -2454,7 +2569,11 @@
       if (typeof window === 'undefined' || !window.location) return null;
       try {
         if (this._isCollectionIndexPath() && this._getSelectedIndexFromHash() < 0) return null;
-        var url = new URL(window.location.href);
+        var effectivePathname = this._getEffectiveBlogPathname();
+        var effectiveSearch = effectivePathname === (window.location.pathname || '/')
+          ? (window.location.search || '')
+          : (this._lastBlogRouteSearch || '');
+        var url = new URL(effectivePathname + effectiveSearch, window.location.origin);
         url.hash = '';
         url.searchParams.set('format', 'json');
         if (this.config && this.config.blogPassword && String(this.config.blogPassword).trim()) {
@@ -2590,24 +2709,24 @@
         paywallDetectionState: cfg.paywallDetectionState || null,
         isPaywalledSite: this._isPaywalledSite()
       };
-      if (fromSquarespaceContext === 'loggedIn' || fromDom === 'loggedIn') {
-        this._rememberViewerModeHint('loggedIn');
-        this._logViewerModeResolution('positive logged-in signal', 'loggedIn', baseDetails);
-        return 'loggedIn';
-      }
       if (fromSquarespaceContext === 'loggedOut') {
         this._rememberViewerModeHint('loggedOut');
         this._logViewerModeResolution('Squarespace context logged out', 'loggedOut', baseDetails);
         return 'loggedOut';
       }
-      if (rememberedMode === 'loggedIn') {
-        this._logViewerModeResolution('remembered logged-in session hint', 'loggedIn', baseDetails);
-        return 'loggedIn';
-      }
       if (fromDom === 'loggedOut') {
         this._rememberViewerModeHint('loggedOut');
         this._logViewerModeResolution('explicit logged-out DOM signal', 'loggedOut', baseDetails);
         return 'loggedOut';
+      }
+      if (fromSquarespaceContext === 'loggedIn' || fromDom === 'loggedIn') {
+        this._rememberViewerModeHint('loggedIn');
+        this._logViewerModeResolution('positive logged-in signal', 'loggedIn', baseDetails);
+        return 'loggedIn';
+      }
+      if (rememberedMode === 'loggedIn') {
+        this._logViewerModeResolution('remembered logged-in session hint', 'loggedIn', baseDetails);
+        return 'loggedIn';
       }
       if (memberGatePresent) {
         this._rememberViewerModeHint('loggedOut');
@@ -4657,11 +4776,48 @@
     },
 
     /**
+     * Post slug/id segment after the blog collection path (e.g. /blog/my-post → "my-post").
+     * Returns null on collection index or paths that do not extend the configured blog prefix.
+     */
+    _getPostPathTailAfterBlogPrefix: function(pathnameNorm) {
+      var blogPathNorm = this._normalizePathForMatch(this._getBlogCollectionPath());
+      var pathParts = pathnameNorm.split('/').filter(function(s) {
+        return s.length > 0;
+      });
+      var blogParts =
+        blogPathNorm === '/' || blogPathNorm === ''
+          ? []
+          : blogPathNorm.split('/').filter(function(s) {
+              return s.length > 0;
+            });
+      if (pathParts.length <= blogParts.length) return null;
+      for (var bi = 0; bi < blogParts.length; bi++) {
+        if (pathParts[bi] !== blogParts[bi]) return null;
+      }
+      return pathParts[pathParts.length - 1];
+    },
+
+    /**
+     * Whether the URL tail identifies this post (Squarespace may use record id in the path after
+     * login while fullUrl still uses the slug, so full pathname equality alone misses the post).
+     */
+    _postMatchesPathTail: function(post, tail) {
+      if (!post || !tail) return false;
+      var id = post.id != null && post.id !== '' ? String(post.id) : '';
+      var urlId = post.urlId != null && post.urlId !== '' ? String(post.urlId) : '';
+      if (id && id === tail) return true;
+      if (urlId && urlId === tail) return true;
+      if (id && id.toLowerCase() === tail.toLowerCase()) return true;
+      if (urlId && urlId.toLowerCase() === tail.toLowerCase()) return true;
+      return false;
+    },
+
+    /**
      * Get selected post index from current path (matches post.fullUrl). Returns -1 for list view.
      */
     _getSelectedIndexFromPath: function(items) {
       if (!items || items.length === 0 || typeof window === 'undefined') return -1;
-      var pathname = (window.location.pathname || '/').replace(/\/+$/, '') || '/';
+      var pathname = this._getEffectiveBlogPathname().replace(/\/+$/, '') || '/';
       var pathnameNorm = this._normalizePathForMatch(pathname);
       for (var i = 0; i < items.length; i++) {
         var postUrl = items[i].fullUrl || '';
@@ -4677,6 +4833,15 @@
         if (pathnameNorm === postPathNorm) {
           console.log('[BlogOverlay] _getSelectedIndexFromPath: matched pathname', pathnameNorm, 'to post', i);
           return i;
+        }
+      }
+      var tail = this._getPostPathTailAfterBlogPrefix(pathnameNorm);
+      if (tail) {
+        for (var j = 0; j < items.length; j++) {
+          if (this._postMatchesPathTail(items[j], tail)) {
+            console.log('[BlogOverlay] _getSelectedIndexFromPath: matched path tail', JSON.stringify(tail), 'to post', j);
+            return j;
+          }
         }
       }
       if (pathname.indexOf('/') !== pathname.lastIndexOf('/')) {
@@ -4732,9 +4897,10 @@
       this._suppressedByEditorMode = false;
 
       if (!previewMode) {
-        var blogPath = this.config && this.config.blogPath;
+        var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
-        if (!this._isOnBlogRoute(pathname, blogPath)) {
+        if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
+        if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route');
           this._clearBootstrapLoading();
           return;
@@ -6989,14 +7155,27 @@
 
     _renderContent: async function(items) {
       var self = this;
+      if (!this._previewMode && !this._bbPreview && typeof window !== 'undefined' && window.location) {
+        var currentPathname = window.location.pathname || '/';
+        var currentBlogPath = this._currentBlogPathForRouteMatch();
+        if (!this._isOnEffectiveBlogRoute()) {
+          this._debugLog('render content skipped outside blog route', { path: currentPathname, blogPath: currentBlogPath || null });
+          return;
+        }
+      }
       if (self._blogOverlaySidebarRO) {
         try { self._blogOverlaySidebarRO.disconnect(); } catch (eRo) {}
         self._blogOverlaySidebarRO = null;
       }
       self._blogOverlaySidebarLayoutFn = null;
       this._clearPendingSearchRender();
-      var root = this._root || findBlogContainer() || document.getElementById('blogga-blogga-root');
+      var rootIsConnected = false;
+      try {
+        rootIsConnected = Boolean(this._root && this._root.isConnected !== false && document.documentElement && document.documentElement.contains(this._root));
+      } catch (eRoot) {}
+      var root = rootIsConnected ? this._root : (findBlogContainer() || document.getElementById('blogga-blogga-root'));
       if (!root) return;
+      this._root = root;
       if (this._progressScrollHandler) {
         var scrollTarget = this._progressScrollTarget || window;
         scrollTarget.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
