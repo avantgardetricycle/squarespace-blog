@@ -80,7 +80,7 @@ function resolvePrimaryBucket (raw: unknown): Record<string, unknown> | null {
   return null
 }
 
-/** showDate / showAuthor / showReadingTime from dashboard collectionConfig (loggedOut → loggedIn → DB column). */
+/** showDate / showAuthor / showReadingTime from dashboard collectionConfig (primary slice, then DB column). */
 function pickMetaBooleanFromCollectionConfig (
   collectionRaw: unknown,
   key: 'showDate' | 'showAuthor' | 'showReadingTime',
@@ -136,23 +136,6 @@ function pickLegacyColumnsFromCollectionConfig (collectionRaw: unknown, existing
     socialMediaLinks: get('socialMediaLinks', undefined as Record<string, unknown> | undefined),
     featuredImage: get('featuredImage', undefined as Record<string, unknown> | undefined),
   }
-}
-
-function normalizeContextBucket (
-  raw: unknown,
-  fallbackFactory: () => Record<string, unknown>,
-  fallbackForMissingLoggedIn?: Record<string, unknown> | null
-): { loggedOut: Record<string, unknown>; loggedIn: Record<string, unknown> } {
-  if (isContextBucket(raw)) {
-    const loggedOut = isRecord(raw.loggedOut) ? raw.loggedOut : (isRecord(raw.loggedIn) ? raw.loggedIn : fallbackFactory())
-    const loggedIn = isRecord(raw.loggedIn) ? raw.loggedIn : (fallbackForMissingLoggedIn ?? loggedOut)
-    return { loggedOut, loggedIn }
-  }
-  if (isRecord(raw)) {
-    return { loggedOut: raw, loggedIn: fallbackForMissingLoggedIn ?? raw }
-  }
-  const fallback = fallbackFactory()
-  return { loggedOut: fallback, loggedIn: fallbackForMissingLoggedIn ?? fallback }
 }
 
 function collectionFieldsForDefaultPost (cc: Record<string, unknown>): Record<string, unknown> {
@@ -682,7 +665,6 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       socialMediaLinks: sm,
       featuredImage
     }
-    const normalizedCollection = normalizeContextBucket(collectionConfig, () => legacyCollectionFallback)
     const normalizeCollectionLevel = (ccLevelRaw: Record<string, unknown>): Record<string, unknown> => {
       const ccPagination = (ccLevelRaw as { pagination?: { show?: boolean; mode?: string; postsPerPage?: number } }).pagination
       return {
@@ -696,23 +678,16 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           : { show: false, mode: 'pages', postsPerPage: 10 }
       }
     }
-    const cc = {
-      loggedOut: normalizeCollectionLevel(normalizedCollection.loggedOut),
-      loggedIn: normalizeCollectionLevel(normalizedCollection.loggedIn)
-    }
-    const normalizedPost = normalizeContextBucket(
-      postConfig,
-      () => buildDefaultPostConfig(cc.loggedOut, progressBar),
-      buildDefaultPostConfig(cc.loggedIn, progressBar)
-    )
-    const pc = {
-      loggedOut: normalizedPost.loggedOut,
-      loggedIn: normalizedPost.loggedIn
-    }
+    const primaryCollection = resolvePrimaryBucket(collectionConfig) ?? legacyCollectionFallback
+    const cc = normalizeCollectionLevel(primaryCollection as Record<string, unknown>)
+    const primaryPost = resolvePrimaryBucket(postConfig)
+    const pc =
+      primaryPost && isRecord(primaryPost)
+        ? primaryPost
+        : buildDefaultPostConfig(cc, progressBar)
     // When postSort is "popularity", fetch post view counts from analytics for the renderer
     let postViewCounts: Record<string, number> = {}
-    const sortContext = viewerMode === 'loggedIn' ? cc.loggedIn : cc.loggedOut
-    const ccPostSort = (sortContext as { postSort?: string }).postSort
+    const ccPostSort = (cc as { postSort?: string }).postSort
     if (ccPostSort === 'popularity') {
       const since = new Date()
       since.setDate(since.getDate() - 30)
@@ -827,13 +802,13 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     const existing = await getActiveSiteConfig(site.id)
     const existingRow = existing as Record<string, unknown> | null
 
-    // Extract booleans from the primary (loggedOut) context bucket of collectionConfig,
+    // Extract booleans from the primary slice of collectionConfig (flat or legacy bucket),
     // falling back to the existing DB column value, then to a sensible default.
     const showDate = pickMetaBooleanFromCollectionConfig(collectionRaw, 'showDate', existing?.showDate, true)
     const showAuthor = pickMetaBooleanFromCollectionConfig(collectionRaw, 'showAuthor', existing?.showAuthor, false)
     const showReadingTime = pickMetaBooleanFromCollectionConfig(collectionRaw, 'showReadingTime', existing?.showReadingTime, false)
 
-    // progressBar lives inside postConfig.loggedOut.progressBar
+    // progressBar lives inside postConfig (flat) under progressBar
     const existingPb = existing?.progressBar as ProgressBarPayload | null | undefined
     const progressBar = pickProgressBarFromPostConfig(postRaw, existingPb ?? undefined)
 

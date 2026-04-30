@@ -16,7 +16,6 @@ interface RendererConfigOverrides {
   previewSelectedPostIndex?: number;
   /** Log featured-post resolution (collection keys, item flags) in the browser console */
   previewFeaturedDebug?: boolean;
-  viewerMode?: "loggedOut" | "loggedIn";
   paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
   paywallDetectionState?: "unknown" | "detected_paywalled" | "detected_unpaywalled";
   paywallSettings?: {
@@ -51,7 +50,6 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
       ? { previewSelectedPostIndex: overrides.previewSelectedPostIndex }
       : {}),
     ...(overrides?.previewFeaturedDebug ? { previewFeaturedDebug: true } : {}),
-    ...(overrides?.viewerMode ? { viewerMode: overrides.viewerMode } : {}),
     ...(overrides?.paywallMode ? { paywallMode: overrides.paywallMode } : {}),
     ...(overrides?.paywallDetectionState ? { paywallDetectionState: overrides.paywallDetectionState } : {}),
     ...(overrides?.paywallSettings !== undefined ? { paywallSettings: overrides.paywallSettings } : {}),
@@ -66,9 +64,8 @@ function blogPreviewFeaturedDebugQuery(): string {
     : "";
 }
 
-function blogPreviewQuery(overrides: RendererConfigOverrides | null | undefined): string {
+function blogPreviewQuery(_overrides: RendererConfigOverrides | null | undefined): string {
   const params = new URLSearchParams();
-  if (overrides?.viewerMode) params.set("viewerMode", overrides.viewerMode);
   if (blogPreviewFeaturedDebugQuery()) params.set("bbFeaturedDebug", "1");
   const query = params.toString();
   return query ? `?${query}` : "";

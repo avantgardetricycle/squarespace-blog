@@ -433,9 +433,12 @@
     _fatalBailed: false,
     _fatalReason: null,
     _squarespaceJsonIdentity: null,
+    _currentPageJsonIdentity: null,
+    _currentPageAuthProbeUrl: null,
     _memberAccountsEnabledHint: false,
     _lastAuthDebugSig: null,
     _lastPaywallDebugSig: null,
+    _lastTocDebugViewSig: null,
 
     _bailToNative: function(reason, err) {
       if (this._fatalBailed) return;
@@ -510,6 +513,22 @@
       if (!this._isPaywallDebugEnabled()) return;
       if (payload !== undefined) console.log('[BlogOverlay][paywall-debug] ' + label, payload);
       else console.log('[BlogOverlay][paywall-debug] ' + label);
+    },
+
+    /** Add ?bbTocDebug=1 to the page URL (or bbPreviewDebug=1) to log Table of Contents wiring. */
+    _isTocDebugEnabled: function() {
+      try {
+        var params = new URLSearchParams(window.location.search || '');
+        return params.get('bbTocDebug') === '1' || params.get('bbPreviewDebug') === '1';
+      } catch (e) {
+        return false;
+      }
+    },
+
+    _tocDebug: function(label, payload) {
+      if (!this._isTocDebugEnabled()) return;
+      if (payload !== undefined) console.log('[BlogOverlay][toc-debug] ' + label, payload);
+      else console.log('[BlogOverlay][toc-debug] ' + label);
     },
 
     _emitPaywallRenderDebug: function(vs, extra) {
@@ -859,6 +878,9 @@
       }
       var commentsClosed = bbCommentsClosedForPost(post, cs.autoCloseAfterDays);
       var allowAnonymousComments = cs.allowAnonymousComments !== false;
+      var subscriberCommentsEnabled = cs.subscriberCommentsEnabled === true;
+      var loggedInOptionalEmail =
+        allowAnonymousComments && !subscriberCommentsEnabled;
       var mergedSqRootsForComments = [];
       var commentSortOrder =
         cs.sortOrder === 'oldest' || cs.sortOrder === 'most_liked' ? cs.sortOrder : 'newest';
@@ -1005,7 +1027,25 @@
           if (isDeletedStub) {
             meta.textContent = '[deleted]';
           } else {
-            meta.innerHTML = (c.display_name || 'Anonymous') + (c.verified_subscriber ? ' <span style="color:#5B4FE8;font-size:11px">✓</span>' : '');
+            meta.textContent = '';
+            var nameSpanEl = document.createElement('span');
+            nameSpanEl.textContent = c.display_name || 'Anonymous';
+            meta.appendChild(nameSpanEl);
+            if (c.verified_subscriber) {
+              var verSpan = document.createElement('span');
+              verSpan.style.color = '#5B4FE8';
+              verSpan.style.fontSize = '11px';
+              verSpan.textContent = ' \u2713';
+              meta.appendChild(verSpan);
+            }
+            var commentEmailRaw = c.email != null ? String(c.email).trim() : '';
+            if (commentEmailRaw) {
+              var emailSpanEl = document.createElement('span');
+              emailSpanEl.style.color = '#666';
+              emailSpanEl.style.fontSize = '0.85em';
+              emailSpanEl.textContent = ' (' + commentEmailRaw + ')';
+              meta.appendChild(emailSpanEl);
+            }
           }
           var time = document.createElement('span');
           time.style.fontSize = '0.8rem';
@@ -1146,7 +1186,7 @@
               } catch (e) {}
               if (currentCommentViewerMode().mode === 'loggedIn') {
                 rName.style.display = 'none';
-                rEmail.style.display = 'none';
+                rEmail.style.display = loggedInOptionalEmail ? 'block' : 'none';
               } else {
                 rName.style.display = 'block';
                 rEmail.style.display = 'block';
@@ -1165,7 +1205,7 @@
               if (!bd) { rBody.focus(); return; }
               var verifiedIdentity = bbGetVerifiedIdentity();
               var loggedInEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null);
-              if (modeNow === 'loggedIn' && !loggedInEmail) {
+              if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail) {
                 bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', function(confirmedEmail) {
                   if (!confirmedEmail) return;
                   replyEmailOverride = confirmedEmail;
@@ -1375,7 +1415,8 @@
           heading.textContent = 'Leave a comment';
           guestOnlyNote.style.display = 'none';
           nameInput.style.display = 'none';
-          emailInput.style.display = 'none';
+          emailInput.style.display = loggedInOptionalEmail ? 'block' : 'none';
+          emailInput.placeholder = 'Email (optional)';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
           submitBtn.style.display = 'inline-block';
@@ -1512,9 +1553,14 @@
         if (!body) { bodyArea.focus(); return; }
         if (modeNow === 'loggedIn') {
           var verifiedIdentity = bbGetVerifiedIdentity();
+          var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
           var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : mainEmailOverride;
+          if (loggedInOptionalEmail) {
+            submitMainCommentWithEmail(modeNow, name, body, typedEmail || useEmail || null);
+            return;
+          }
           if (!useEmail) {
-            bbPromptForEmail((emailInput && emailInput.value) || '', function(confirmedEmail) {
+            bbPromptForEmail(typedEmail || '', function(confirmedEmail) {
               if (!confirmedEmail) return;
               mainEmailOverride = confirmedEmail;
               submitMainCommentWithEmail(modeNow, name, body, confirmedEmail);
@@ -1768,6 +1814,59 @@
       return value === 'loggedIn' ? 'loggedIn' : (value === 'loggedOut' ? 'loggedOut' : null);
     },
 
+    _viewerModeStorageKey: function() {
+      var siteKey = this.config && this.config.siteKey ? String(this.config.siteKey) : '';
+      var blogPath = this.config && this.config.blogPath ? String(this.config.blogPath) : '';
+      return 'betterBlog.viewerModeHint:' + siteKey + ':' + blogPath;
+    },
+
+    _viewerModePageStorageKey: function() {
+      var base = this._viewerModeStorageKey();
+      var path = '';
+      try {
+        path = typeof window !== 'undefined' && window.location
+          ? (window.location.pathname || '/')
+          : '';
+      } catch (e) {}
+      return base + ':page:' + path;
+    },
+
+    _rememberViewerModeHint: function(mode) {
+      mode = this._normalizeViewerMode(mode);
+      if (!mode || typeof window === 'undefined' || !window.sessionStorage) return;
+      try {
+        var payload = JSON.stringify({
+          mode: mode,
+          ts: Date.now()
+        });
+        window.sessionStorage.setItem(this._viewerModeStorageKey(), payload);
+        window.sessionStorage.setItem(this._viewerModePageStorageKey(), payload);
+      } catch (e) {}
+    },
+
+    _readViewerModeHintFromStorage: function(key) {
+      if (typeof window === 'undefined' || !window.sessionStorage) return null;
+      try {
+        var raw = window.sessionStorage.getItem(key);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        var mode = parsed && this._normalizeViewerMode(parsed.mode);
+        var ts = parsed && typeof parsed.ts === 'number' ? parsed.ts : 0;
+        if (!mode || !ts || Date.now() - ts > 30 * 60 * 1000) {
+          window.sessionStorage.removeItem(key);
+          return null;
+        }
+        return mode;
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _getRememberedViewerModeHint: function() {
+      return this._readViewerModeHintFromStorage(this._viewerModePageStorageKey())
+        || this._readViewerModeHintFromStorage(this._viewerModeStorageKey());
+    },
+
     _getViewerModeFromQueryParam: function() {
       try {
         var params = new URLSearchParams(window.location.search || '');
@@ -1779,13 +1878,26 @@
 
     _extractSquarespaceIdentityFromObject: function(obj) {
       if (!obj || typeof obj !== 'object') return null;
+      var self = this;
       function fromAccount(account) {
         if (!account || typeof account !== 'object') return null;
+        var loggedInFlagKeys = ['authenticated', 'isAuthenticated', 'loggedIn', 'isLoggedIn', 'signedIn', 'isSignedIn', 'hasAccount'];
+        var hasExplicitLoggedOut = false;
+        for (var lk = 0; lk < loggedInFlagKeys.length; lk++) {
+          var flagVal = account[loggedInFlagKeys[lk]];
+          if (flagVal === true || flagVal === 1 || flagVal === 'true' || flagVal === '1') break;
+          if (flagVal === false || flagVal === 0 || flagVal === 'false' || flagVal === '0') hasExplicitLoggedOut = true;
+        }
         var first = account.firstName || account.givenName || '';
         var last = account.lastName || account.familyName || '';
         var full = ((first ? String(first).trim() : '') + ' ' + (last ? String(last).trim() : '')).trim();
-        var name = account.displayName || account.name || full || null;
+        var name = account.displayName || account.name || account.fullName || account.username || full || null;
         var email = account.email || account.loginEmail || account.username || null;
+        var id = account.id || account.accountId || account.profileId || account.memberId || null;
+        if (!name && !email && !id && hasExplicitLoggedOut) {
+          return { loggedIn: false, name: null, email: null };
+        }
+        if (!name && !email && !id && !hasExplicitLoggedOut) return null;
         return {
           loggedIn: true,
           name: name ? String(name).trim() : null,
@@ -1802,6 +1914,11 @@
         'userAccount',
         'customerAccount',
         'activeAccount',
+        'account',
+        'currentUser',
+        'user',
+        'viewer',
+        'visitor',
         'profile'
       ];
       for (var i = 0; i < accountKeys.length; i++) {
@@ -1812,8 +1929,15 @@
       // Boolean auth flags that may exist without account details.
       var boolKeys = ['authenticated', 'isAuthenticated', 'loggedIn', 'isLoggedIn', 'signedIn', 'isSignedIn'];
       for (var b = 0; b < boolKeys.length; b++) {
-        if (typeof obj[boolKeys[b]] === 'boolean') {
-          return { loggedIn: obj[boolKeys[b]], name: null, email: null };
+        var boolVal = obj[boolKeys[b]];
+        if (typeof boolVal === 'boolean') {
+          return { loggedIn: boolVal, name: null, email: null };
+        }
+        if (boolVal === 1 || boolVal === 'true' || boolVal === '1') {
+          return { loggedIn: true, name: null, email: null };
+        }
+        if (boolVal === 0 || boolVal === 'false' || boolVal === '0') {
+          return { loggedIn: false, name: null, email: null };
         }
       }
 
@@ -1823,6 +1947,12 @@
         'userAccountContext',
         'auth',
         'authentication',
+        'account',
+        'memberAccount',
+        'currentUser',
+        'viewer',
+        'visitor',
+        'customer',
         'context',
         'websiteContext',
         'pagePreviewContext'
@@ -1830,7 +1960,7 @@
       for (var n = 0; n < nestedKeys.length; n++) {
         var child = obj[nestedKeys[n]];
         if (child && typeof child === 'object') {
-          var nested = this._extractSquarespaceIdentityFromObject(child);
+          var nested = self._extractSquarespaceIdentityFromObject(child);
           if (nested) return nested;
         }
       }
@@ -1843,6 +1973,7 @@
         var ctxIdentity = this._extractSquarespaceIdentityFromObject(context);
         if (ctxIdentity) return ctxIdentity;
       } catch (e) {}
+      if (this._currentPageJsonIdentity) return this._currentPageJsonIdentity;
       if (this._squarespaceJsonIdentity) return this._squarespaceJsonIdentity;
       return null;
     },
@@ -2232,53 +2363,273 @@
         }
         return true;
       }
+      function ownedByBetterBlog(el) {
+        try {
+          return Boolean(el && el.closest && el.closest('#blog-overlay-list, .blog-overlay-wrapper, #bb-comments, .bb-comments-root'));
+        } catch (e) {
+          return false;
+        }
+      }
+      function firstShown(selector) {
+        try {
+          var els = document.querySelectorAll(selector);
+          for (var i = 0; i < els.length; i++) {
+            if (!ownedByBetterBlog(els[i]) && shown(els[i])) return els[i];
+          }
+        } catch (e) {}
+        return null;
+      }
       try {
-        var auth = document.querySelector('.user-accounts-panel .auth, .user-account .auth, [data-controller="UserAccount"] .auth');
-        var unauth = document.querySelector('.user-accounts-panel .unauth, .user-account .unauth, [data-controller="UserAccount"] .unauth');
+        var body = document.body;
+        var html = document.documentElement;
+        var authAttrEls = [body, html].filter(Boolean);
+        for (var ai = 0; ai < authAttrEls.length; ai++) {
+          var authAttrEl = authAttrEls[ai];
+          var attrNames = ['data-authenticated', 'data-logged-in', 'data-member-logged-in', 'data-user-logged-in'];
+          for (var an = 0; an < attrNames.length; an++) {
+            var attrVal = authAttrEl.getAttribute && authAttrEl.getAttribute(attrNames[an]);
+            if (attrVal === 'true' || attrVal === '1') return 'loggedIn';
+            if (attrVal === 'false' || attrVal === '0') return 'loggedOut';
+          }
+          var cls = authAttrEl.className ? String(authAttrEl.className) : '';
+          if (/\b(user|member|account)[-_]?(authenticated|logged[-_]?in|signed[-_]?in)\b/i.test(cls)) return 'loggedIn';
+          if (/\b(user|member|account)[-_]?(anonymous|logged[-_]?out|signed[-_]?out)\b/i.test(cls)) return 'loggedOut';
+        }
+        var auth = firstShown('.user-accounts-panel .auth, .user-account .auth, [data-controller="UserAccount"] .auth, .auth');
+        var unauth = firstShown('.user-accounts-panel .unauth, .user-account .unauth, [data-controller="UserAccount"] .unauth, .unauth');
         var authShown = shown(auth);
         var unauthShown = shown(unauth);
         if (authShown && !unauthShown) return 'loggedIn';
         if (unauthShown && !authShown) return 'loggedOut';
-        if (auth && !unauth) return 'loggedIn';
-        if (unauth && !auth) return 'loggedOut';
 
         // Additional membership/account UI heuristics for templates without .auth/.unauth wrappers.
-        var hasLogout = document.querySelector(
-          'a[href*=\"/account/logout\"],a[href*=\"/logout\"],a[data-action*=\"logout\" i],button[data-action*=\"logout\" i]'
+        var hasLogout = firstShown(
+          'a[href*=\"/account/logout\"],a[href*=\"/logout\"],a[data-action*=\"logout\" i],button[data-action*=\"logout\" i],[data-test*=\"logout\" i],[aria-label*=\"log out\" i],[aria-label*=\"sign out\" i]'
         );
-        var hasSignin = document.querySelector(
-          'a[href*=\"/account/login\"],a[href*=\"/login\"],a[data-action*=\"login\" i],a[data-action*=\"signin\" i],button[data-action*=\"signin\" i]'
+        var hasSignin = firstShown(
+          'a[href*=\"/account/login\"],a[href*=\"/login\"],a[data-action*=\"login\" i],a[data-action*=\"signin\" i],button[data-action*=\"signin\" i],[data-test*=\"login\" i],[data-test*=\"signin\" i],[aria-label*=\"log in\" i],[aria-label*=\"sign in\" i]'
         );
         if (hasLogout && !hasSignin) return 'loggedIn';
         if (hasSignin && !hasLogout) return 'loggedOut';
+
+        var accountMenu = document.querySelector(
+          '.user-accounts-panel .account, .user-account .account, .user-account-link[href*="/account"], a[href*="/account/dashboard"], a[href*="/account/profile"], [data-controller*="Account" i] [data-state="authenticated"]'
+        );
+        if (shown(accountMenu)) return 'loggedIn';
       } catch (e) {}
       return null;
+    },
+
+    _collectJsonAuthIdentity: function(json) {
+      if (!json || typeof json !== 'object') return null;
+      return this._extractSquarespaceIdentityFromObject(json)
+        || this._extractSquarespaceIdentityFromObject(json.website)
+        || this._extractSquarespaceIdentityFromObject(json.userAccountsContext)
+        || this._extractSquarespaceIdentityFromObject(json.pagePreviewContext)
+        || this._extractSquarespaceIdentityFromObject(json.context)
+        || this._extractSquarespaceIdentityFromObject(json.collection)
+        || null;
+    },
+
+    _updateJsonAuthSignals: function(json, source) {
+      var identity = this._collectJsonAuthIdentity(json);
+      if (source === 'currentPage') this._currentPageJsonIdentity = identity || null;
+      else this._squarespaceJsonIdentity = identity || null;
+      if (identity) {
+        if (identity.loggedIn === true || identity.loggedIn === false) {
+          this._rememberViewerModeHint(identity.loggedIn ? 'loggedIn' : 'loggedOut');
+        }
+      }
+      if (json && typeof json === 'object' && (
+        (json.userAccountsContext && typeof json.userAccountsContext === 'object')
+        || (json.pagePreviewContext && typeof json.pagePreviewContext === 'object')
+      )) {
+        this._memberAccountsEnabledHint = true;
+      }
+      return identity;
+    },
+
+    _currentPageJsonFetchUrl: function() {
+      if (this._previewMode || this._bbPreview) return null;
+      if (typeof window === 'undefined' || !window.location) return null;
+      try {
+        if (this._isCollectionIndexPath() && this._getSelectedIndexFromHash() < 0) return null;
+        var url = new URL(window.location.href);
+        url.hash = '';
+        url.searchParams.set('format', 'json');
+        if (this.config && this.config.blogPassword && String(this.config.blogPassword).trim()) {
+          url.searchParams.set('password', String(this.config.blogPassword).trim());
+        }
+        return url.toString();
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _probeCurrentPageJsonAuth: function() {
+      var url = this._currentPageJsonFetchUrl();
+      if (!url || url === this._currentPageAuthProbeUrl) return Promise.resolve(this._currentPageJsonIdentity);
+      var self = this;
+      this._currentPageAuthProbeUrl = url;
+      return fetch(url, { credentials: 'same-origin' })
+        .then(function(res) {
+          if (!res || !res.ok) return null;
+          return res.json();
+        })
+        .then(function(json) {
+          if (!json || typeof json !== 'object') return null;
+          return self._updateJsonAuthSignals(json, 'currentPage');
+        })
+        .catch(function() { return null; });
+    },
+
+    _waitForPostAuthHydration: function() {
+      if (this._previewMode || this._bbPreview) return Promise.resolve();
+      if (!this._isPaywalledSite()) return Promise.resolve();
+      if (this._isCollectionIndexPath() && this._getSelectedIndexFromHash() < 0) return Promise.resolve();
+      if (this._resolveViewerMode() === 'loggedIn') return Promise.resolve();
+      var self = this;
+      var started = Date.now();
+      return new Promise(function(resolve) {
+        var done = false;
+        var finish = function() {
+          if (done) return;
+          done = true;
+          if (observer) {
+            try { observer.disconnect(); } catch (e1) {}
+          }
+          resolve();
+        };
+        var check = function() {
+          if (self._resolveViewerMode() === 'loggedIn' || Date.now() - started > 1200) finish();
+        };
+        var observer = null;
+        if (document.body && typeof MutationObserver !== 'undefined') {
+          observer = new MutationObserver(function() {
+            setTimeout(check, 0);
+          });
+          try {
+            observer.observe(document.body, {
+              attributes: true,
+              childList: true,
+              subtree: true
+            });
+          } catch (e2) {}
+        }
+        setTimeout(check, 150);
+        setTimeout(check, 450);
+        setTimeout(check, 900);
+        setTimeout(finish, 1250);
+      });
+    },
+
+    _logViewerModeResolution: function(reason, resolvedMode, details) {
+      try {
+        var loc = typeof window !== 'undefined' && window.location
+          ? (window.location.pathname || '/') + (window.location.search || '') + (window.location.hash || '')
+          : '';
+        var payload = Object.assign({
+          reason: reason,
+          resolvedMode: resolvedMode,
+          path: loc
+        }, details || {});
+        var sig = JSON.stringify(payload);
+        if (sig === this._lastViewerModeResolutionLogSig) return;
+        this._lastViewerModeResolutionLogSig = sig;
+        console.log('[BetterBlog auth] viewer mode resolved', payload);
+      } catch (e) {}
     },
 
     _resolveViewerMode: function() {
       var cfg = this.config || {};
       var explicitConfig = this._normalizeViewerMode(cfg.viewerMode);
-      if (explicitConfig) return explicitConfig;
+      if (explicitConfig) {
+        this._logViewerModeResolution('explicit config viewerMode', explicitConfig, {
+          configViewerMode: cfg.viewerMode,
+          paywallMode: cfg.paywallMode || null,
+          paywallDetectionState: cfg.paywallDetectionState || null
+        });
+        return explicitConfig;
+      }
       var explicitQuery = this._getViewerModeFromQueryParam();
-      if (explicitQuery) return explicitQuery;
+      if (explicitQuery) {
+        this._logViewerModeResolution('viewerMode query param', explicitQuery, {
+          paywallMode: cfg.paywallMode || null,
+          paywallDetectionState: cfg.paywallDetectionState || null
+        });
+        return explicitQuery;
+      }
 
       var paywallMode = cfg.paywallMode;
-      if (paywallMode === 'force_logged_in') return 'loggedIn';
-      if (paywallMode === 'force_logged_out') return 'loggedOut';
+      if (paywallMode === 'force_logged_in') {
+        this._logViewerModeResolution('forced logged in', 'loggedIn', {
+          paywallMode: paywallMode,
+          paywallDetectionState: cfg.paywallDetectionState || null
+        });
+        return 'loggedIn';
+      }
+      if (paywallMode === 'force_logged_out') {
+        this._logViewerModeResolution('forced logged out', 'loggedOut', {
+          paywallMode: paywallMode,
+          paywallDetectionState: cfg.paywallDetectionState || null
+        });
+        return 'loggedOut';
+      }
 
       var fromSquarespaceContext = this._detectViewerModeFromSquarespaceContext();
-      if (fromSquarespaceContext) return fromSquarespaceContext;
       var fromDom = this._detectViewerModeFromDom();
-      if (fromDom) return fromDom;
+      var memberGatePresent = this._isMemberGatePresent();
+      var rememberedMode = this._getRememberedViewerModeHint();
+      var baseDetails = {
+        fromSquarespaceContext: fromSquarespaceContext,
+        fromDom: fromDom,
+        rememberedMode: rememberedMode,
+        memberGatePresent: memberGatePresent,
+        memberAccountsEnabledHint: Boolean(this._memberAccountsEnabledHint),
+        paywallMode: paywallMode || null,
+        paywallDetectionState: cfg.paywallDetectionState || null,
+        isPaywalledSite: this._isPaywalledSite()
+      };
+      if (fromSquarespaceContext === 'loggedIn' || fromDom === 'loggedIn') {
+        this._rememberViewerModeHint('loggedIn');
+        this._logViewerModeResolution('positive logged-in signal', 'loggedIn', baseDetails);
+        return 'loggedIn';
+      }
+      if (fromSquarespaceContext === 'loggedOut') {
+        this._rememberViewerModeHint('loggedOut');
+        this._logViewerModeResolution('Squarespace context logged out', 'loggedOut', baseDetails);
+        return 'loggedOut';
+      }
+      if (rememberedMode === 'loggedIn') {
+        this._logViewerModeResolution('remembered logged-in session hint', 'loggedIn', baseDetails);
+        return 'loggedIn';
+      }
+      if (fromDom === 'loggedOut') {
+        this._rememberViewerModeHint('loggedOut');
+        this._logViewerModeResolution('explicit logged-out DOM signal', 'loggedOut', baseDetails);
+        return 'loggedOut';
+      }
+      if (memberGatePresent) {
+        this._rememberViewerModeHint('loggedOut');
+        this._logViewerModeResolution('member gate present', 'loggedOut', baseDetails);
+        return 'loggedOut';
+      }
+      if (rememberedMode) {
+        this._logViewerModeResolution('remembered session hint', rememberedMode, baseDetails);
+        return rememberedMode;
+      }
 
       // Member areas: visible gate ⇒ logged out. If there is no gate, do not assume logged in on
       // paywalled blogs — Squarespace "blog posts only" mode shows the collection to logged-out
       // readers without the full-page gate, and we must still run logged-out paywall UI.
       if (this._memberAccountsEnabledHint) {
-        if (this._isMemberGatePresent()) return 'loggedOut';
-        if (!this._isPaywalledSite()) return 'loggedIn';
+        if (!this._isPaywalledSite()) {
+          this._logViewerModeResolution('member accounts hint on unpaywalled site', 'loggedIn', baseDetails);
+          return 'loggedIn';
+        }
       }
 
+      this._logViewerModeResolution('default logged out fallback', 'loggedOut', baseDetails);
       return 'loggedOut';
     },
 
@@ -2298,17 +2649,13 @@
     },
 
     _mergeContextBucketLevelConfig: function(prev, next, nestedKeys) {
-      var prevIsBucket = this._isContextBucket(prev);
-      var nextIsBucket = this._isContextBucket(next);
-      if (!prevIsBucket && !nextIsBucket) {
-        return this._mergeNestedLevelConfig(prev, next, nestedKeys);
-      }
-      var prevBucket = this._resolveLevelConfigForViewerMode(prev, this._resolveViewerMode()).normalized || {};
-      var nextBucket = this._resolveLevelConfigForViewerMode(next, this._resolveViewerMode()).normalized || {};
-      return {
-        loggedOut: this._mergeNestedLevelConfig(prevBucket.loggedOut, nextBucket.loggedOut, nestedKeys),
-        loggedIn: this._mergeNestedLevelConfig(prevBucket.loggedIn, nextBucket.loggedIn, nestedKeys)
-      };
+      var prevFlat = this._isContextBucket(prev)
+        ? (this._resolveLevelConfigForViewerMode(prev, this._resolveViewerMode()).active || {})
+        : (prev && typeof prev === 'object' && !Array.isArray(prev) ? prev : {});
+      var nextFlat = this._isContextBucket(next)
+        ? (this._resolveLevelConfigForViewerMode(next, this._resolveViewerMode()).active || {})
+        : (next && typeof next === 'object' && !Array.isArray(next) ? next : {});
+      return this._mergeNestedLevelConfig(prevFlat, nextFlat, nestedKeys);
     },
 
     updateConfig: function(newConfig) {
@@ -4238,7 +4585,7 @@
         cur = new URL(window.location.href);
       } catch (e2) {}
       if (cur) {
-        var passThrough = ['password', 'viewerMode', 'bbPreview', 'bbPreviewDebug'];
+        var passThrough = ['password', 'viewerMode', 'bbPreview', 'bbPreviewDebug', 'bbTocDebug'];
         for (var pi = 0; pi < passThrough.length; pi++) {
           var k = passThrough[pi];
           var v = cur.searchParams.get(k);
@@ -4454,13 +4801,7 @@
               || (json.pagePreviewContext && typeof json.pagePreviewContext === 'object')
             )
           );
-          self._squarespaceJsonIdentity =
-            self._extractSquarespaceIdentityFromObject(json)
-            || self._extractSquarespaceIdentityFromObject(json && json.website)
-            || self._extractSquarespaceIdentityFromObject(json && json.userAccountsContext)
-            || self._extractSquarespaceIdentityFromObject(json && json.pagePreviewContext)
-            || self._extractSquarespaceIdentityFromObject(json && json.context)
-            || null;
+          self._squarespaceJsonIdentity = self._updateJsonAuthSignals(json, 'collection');
           self._authDebug('render.jsonAuthSignals', {
             rootKeys: json && typeof json === 'object' ? Object.keys(json).slice(0, 60) : [],
             websiteKeys: json && json.website && typeof json.website === 'object' ? Object.keys(json.website).slice(0, 60) : [],
@@ -4503,7 +4844,15 @@
             }));
           }
           self._syncOverlayFiltersFromUrl();
-          Promise.resolve(self._renderContent(self.items)).then(
+          self._probeCurrentPageJsonAuth()
+            .then(function() {
+              self._emitAuthDebugSnapshot('render.afterCurrentPageProbe');
+              return self._waitForPostAuthHydration();
+            })
+            .then(function() {
+              return self._renderContent(self.items);
+            })
+            .then(
             function() {
               self._clearBootstrapLoading();
             },
@@ -4530,7 +4879,8 @@
 
       var headingLinks = tocEl.querySelectorAll('a[data-heading-index]');
       if (headingLinks.length > 0) {
-        var viewportTop = 120;
+        var navOffset = this._getNavbarOffset ? this._getNavbarOffset() : 0;
+        var viewportTop = Math.max(120, navOffset + 24);
         var activeIdx = -1;
         for (var hi = headingLinks.length - 1; hi >= 0; hi--) {
           var headingEl = document.getElementById('toc-' + hi);
@@ -4584,7 +4934,8 @@
       var postLinks = tocEl.querySelectorAll('a[data-post-index]');
       if (!articles.length || !postLinks.length) return;
 
-      var viewportTop = 100;
+      var navOffset = this._getNavbarOffset ? this._getNavbarOffset() : 0;
+      var viewportTop = Math.max(100, navOffset + 16);
       var activeIndex = -1;
       for (var i = articles.length - 1; i >= 0; i--) {
         var rect = articles[i].getBoundingClientRect();
@@ -4878,6 +5229,7 @@
       var self = this;
       var rawCfg = this.config || {};
       var viewerMode = this._resolveViewerMode();
+      var selectedIndex = this._getSelectedIndex(items);
       var resolvedCollection = this._resolveLevelConfigForViewerMode(rawCfg.collectionConfig, viewerMode);
       var resolvedPost = this._resolveLevelConfigForViewerMode(rawCfg.postConfig, viewerMode);
       var baseCfg = Object.assign({}, rawCfg, {
@@ -4885,7 +5237,6 @@
         postConfig: resolvedPost.active || rawCfg.postConfig,
         viewerModeResolved: viewerMode
       });
-      var selectedIndex = this._getSelectedIndex(items);
       var searchQuery = this._searchQuery || '';
       var hasSearchQuery = searchQuery.trim().length > 0;
       var categoryFilter = Array.isArray(this._categoryFilter) ? this._categoryFilter : [];
@@ -4999,6 +5350,101 @@
         if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
         if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
       }
+      var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
+      var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
+      var stripPaywalledLoggedOutChrome =
+        paywalledLoggedOut;
+      if (stripPaywalledLoggedOutChrome) {
+        var lsW = leftSidebarCfg && typeof leftSidebarCfg.width === 'number' ? leftSidebarCfg.width : 240;
+        var lsS = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? leftSidebarCfg.spaceAbove : 0;
+        var lsSticky = !leftSidebarCfg || leftSidebarCfg.sticky !== false;
+        var rsW = rightSidebarCfg && typeof rightSidebarCfg.width === 'number' ? rightSidebarCfg.width : 240;
+        var rsS = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? rightSidebarCfg.spaceAbove : 0;
+        var rsSticky = !rightSidebarCfg || rightSidebarCfg.sticky !== false;
+        var hcH = headerContentCfg && typeof headerContentCfg.height === 'number' ? headerContentCfg.height : 48;
+        var fcP = footerContentCfg && typeof footerContentCfg.topPadding === 'number' ? footerContentCfg.topPadding : 16;
+        leftSidebarCfg = { show: false, modules: [], moduleOrder: [], width: lsW, spaceAbove: lsS, sticky: lsSticky };
+        rightSidebarCfg = { show: false, modules: [], moduleOrder: [], width: rsW, spaceAbove: rsS, sticky: rsSticky };
+        headerContentCfg = { show: false, modules: [], moduleOrder: [], height: hcH };
+        footerContentCfg = { show: false, modules: [], moduleOrder: [], topPadding: fcP };
+        cfg = Object.assign({}, cfg, {
+          leftSidebar: leftSidebarCfg,
+          rightSidebar: rightSidebarCfg,
+          headerContent: headerContentCfg,
+          footerContent: footerContentCfg
+        });
+        if (isSinglePost) {
+          cfg = Object.assign({}, cfg, { socialMediaLinks: { show: false, platforms: [] } });
+          if (cfg.postHeader && typeof cfg.postHeader === 'object') {
+            cfg = Object.assign({}, cfg, {
+              postHeader: Object.assign({}, cfg.postHeader, {
+                showBreadcrumbs: false,
+                showTags: false,
+                showCategories: false
+              })
+            });
+          }
+          if (cfg.postModules && typeof cfg.postModules === 'object') {
+            var pmStrip = Object.assign({}, cfg.postModules);
+            for (var pmK in pmStrip) {
+              if (!Object.prototype.hasOwnProperty.call(pmStrip, pmK)) continue;
+              var pmEnt = pmStrip[pmK];
+              if (pmEnt && typeof pmEnt === 'object' && 'enabled' in pmEnt) {
+                pmStrip[pmK] = Object.assign({}, pmEnt, { enabled: false });
+              }
+            }
+            cfg = Object.assign({}, cfg, { postModules: pmStrip });
+          }
+        }
+      }
+      if (self._isTocDebugEnabled()) {
+        try {
+          var pmToc = cfg.postModules && cfg.postModules.tableOfContents ? cfg.postModules.tableOfContents : null;
+          var tocSig =
+            (isSinglePost ? 'post' : 'coll') +
+            '|' + String(viewerMode) +
+            '|uLC' + (useLevelConfig ? '1' : '0') +
+            '|L' + (leftSidebarCfg && leftSidebarCfg.show ? '1' : '0') + ':' + (leftSidebarCfg && Array.isArray(leftSidebarCfg.modules) ? leftSidebarCfg.modules.join(',') : '') +
+            '|Lo' + (leftSidebarCfg && Array.isArray(leftSidebarCfg.moduleOrder) ? leftSidebarCfg.moduleOrder.join(',') : '') +
+            '|R' + (rightSidebarCfg && rightSidebarCfg.show ? '1' : '0') + ':' + (rightSidebarCfg && Array.isArray(rightSidebarCfg.modules) ? rightSidebarCfg.modules.join(',') : '') +
+            '|Ro' + (rightSidebarCfg && Array.isArray(rightSidebarCfg.moduleOrder) ? rightSidebarCfg.moduleOrder.join(',') : '') +
+            '|H' + (headerContentCfg && headerContentCfg.show ? '1' : '0') + ':' + (headerContentCfg && Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules.join(',') : '') +
+            '|Ho' + (headerContentCfg && Array.isArray(headerContentCfg.moduleOrder) ? headerContentCfg.moduleOrder.join(',') : '') +
+            '|legShowToc' + (showTableOfContents ? '1' : '0') +
+            '|pmEn' + (pmToc && pmToc.enabled ? '1' : '0') + '|pmPos' + (pmToc && pmToc.position ? String(pmToc.position) : '—');
+          if (tocSig !== self._lastTocDebugViewSig) {
+            self._lastTocDebugViewSig = tocSig;
+            var hcRaw = cfg.headerContent && typeof cfg.headerContent === 'object' ? cfg.headerContent : null;
+            self._tocDebug('viewState', {
+              isSinglePost: isSinglePost,
+              selectedIndex: selectedIndex,
+              viewerMode: viewerMode,
+              useLevelConfig: useLevelConfig,
+              legacyShowTableOfContents: showTableOfContents,
+              postModulesTableOfContents: pmToc,
+              leftSidebar: leftSidebarCfg ? {
+                show: leftSidebarCfg.show,
+                modules: leftSidebarCfg.modules,
+                moduleOrder: leftSidebarCfg.moduleOrder
+              } : null,
+              rightSidebar: rightSidebarCfg ? {
+                show: rightSidebarCfg.show,
+                modules: rightSidebarCfg.modules,
+                moduleOrder: rightSidebarCfg.moduleOrder
+              } : null,
+              headerContent: hcRaw ? {
+                show: hcRaw.show,
+                modules: hcRaw.modules,
+                moduleOrder: hcRaw.moduleOrder,
+                tableOfContents: hcRaw.tableOfContents,
+                breadcrumbs: hcRaw.breadcrumbs
+              } : null,
+              hasMergedPostConfig: Boolean(baseCfg.postConfig && typeof baseCfg.postConfig === 'object'),
+              hint: 'Enable with ?bbTocDebug=1 on this page URL'
+            });
+          }
+        } catch (eTocVs) {}
+      }
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
@@ -5044,6 +5490,32 @@
           });
         }
       }
+
+      try {
+        var selectedPostForLog = isSinglePost && displayItems[0] ? displayItems[0] : null;
+        var renderLogPayload = {
+          path: typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') + (window.location.search || '') + (window.location.hash || '') : '',
+          viewerMode: viewerMode,
+          selectedIndex: selectedIndex,
+          isSinglePost: isSinglePost,
+          itemCount: items ? items.length : 0,
+          displayItemCount: displayItems.length,
+          selectedTitle: selectedPostForLog ? (selectedPostForLog.title || null) : null,
+          selectedFullUrl: selectedPostForLog ? (selectedPostForLog.fullUrl || null) : null,
+          selectedBodyLength: selectedPostForLog && selectedPostForLog.body ? String(selectedPostForLog.body).length : 0,
+          selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
+          paywallFullActive: paywallFullActiveForRender,
+          paywallShowFooter: paywalledLoggedOut,
+          paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
+          paywallDetectionState: rawCfg.paywallDetectionState || null,
+          paywallMode: rawCfg.paywallMode || null
+        };
+        var renderLogSig = JSON.stringify(renderLogPayload);
+        if (renderLogSig !== this._lastViewerModeRenderLogSig) {
+          this._lastViewerModeRenderLogSig = renderLogSig;
+          console.log('[BetterBlog auth] render state', renderLogPayload);
+        }
+      } catch (eLogState) {}
 
       return {
         baseCfg: baseCfg,
@@ -5097,11 +5569,9 @@
         displayItemsForLoop: displayItemsForLoop,
         displayPostKey: displayPostKey,
         categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
-        paywallFullActive: self._isSquarespaceFullPaywallActive(),
-        paywallShowFooter:
-          self._isPaywalledSite() && viewerMode === 'loggedOut' && !self._isSquarespaceFullPaywallActive(),
-        paywallReplaceCollectionTeaser:
-          self._isPaywalledSite() && viewerMode === 'loggedOut' && !self._isSquarespaceFullPaywallActive() && !isSinglePost,
+        paywallFullActive: paywallFullActiveForRender,
+        paywallShowFooter: paywalledLoggedOut,
+        paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
       };
     },
 
@@ -6638,21 +7108,6 @@
         if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
         if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
       }
-      if (paywallShowFooter) {
-        leftSidebarCfg = Object.assign({}, leftSidebarCfg, {
-          show: false,
-          modules: [],
-          moduleOrder: []
-        });
-        rightSidebarCfg = Object.assign({}, rightSidebarCfg, {
-          show: false,
-          modules: [],
-          moduleOrder: []
-        });
-        headerContentCfg = headerContentCfg
-          ? Object.assign({}, headerContentCfg, { show: false, modules: [], moduleOrder: [] })
-          : { show: false, modules: [], moduleOrder: [], height: 48 };
-      }
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
@@ -7084,7 +7539,18 @@
         return section;
       }
       function createTocModule(sidebarWidth) {
-        if (items.length === 0) return null;
+        if (self._isTocDebugEnabled()) {
+          self._tocDebug('createTocModule enter', {
+            itemsLength: items.length,
+            isSinglePost: isSinglePost,
+            selectedIndex: selectedIndex,
+            sidebarWidth: sidebarWidth
+          });
+        }
+        if (items.length === 0) {
+          if (self._isTocDebugEnabled()) self._tocDebug('createTocModule abort', { reason: 'items.length === 0' });
+          return null;
+        }
         var tocStyle = (cfg.postModules && cfg.postModules.tableOfContents && cfg.postModules.tableOfContents.style) || 'numbered';
         var themeColor = '#5B4FE8';
         var el = document.createElement('nav');
@@ -7119,7 +7585,47 @@
           el.appendChild(lineFill);
         }
 
+        function smoothScrollToTocTarget(targetId) {
+          if (!targetId) return;
+          var targetEl = document.getElementById(targetId);
+          if (!targetEl) return;
+          var navbarOffset = self._getNavbarOffset ? self._getNavbarOffset() : 0;
+          var topOffset = Math.max(0, navbarOffset + 8);
+          var scrollTarget = self._getScrollContainer ? self._getScrollContainer() : null;
+          if (
+            scrollTarget &&
+            scrollTarget !== window &&
+            scrollTarget !== document.body &&
+            scrollTarget !== document.documentElement
+          ) {
+            var containerRect = scrollTarget.getBoundingClientRect();
+            var targetRect = targetEl.getBoundingClientRect();
+            var nextTop = scrollTarget.scrollTop + (targetRect.top - containerRect.top) - topOffset;
+            scrollTarget.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+          } else if (typeof window !== 'undefined') {
+            var absoluteTop = targetEl.getBoundingClientRect().top + (window.pageYOffset || 0) - topOffset;
+            window.scrollTo({ top: Math.max(0, absoluteTop), behavior: 'smooth' });
+          }
+          requestAnimationFrame(function() { self._updateTocHighlight(); });
+        }
+
         function addTocLink(link, level, prefix) {
+          var href = link.getAttribute('href') || '';
+          if (/^#toc-\d+$/.test(href)) {
+            link.onclick = function(e) {
+              e.preventDefault();
+              try {
+                var tocLinks = el.querySelectorAll('a');
+                for (var li = 0; li < tocLinks.length; li++) {
+                  var other = tocLinks[li];
+                  var active = other === link;
+                  other.classList.toggle('blog-overlay-toc-active', active);
+                  other.style.fontWeight = active ? '700' : '';
+                }
+              } catch (e2) {}
+              smoothScrollToTocTarget(href.slice(1));
+            };
+          }
           link.style.display = 'block';
           link.style.padding = '4px 0';
           link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
@@ -7188,6 +7694,14 @@
             titleLink.textContent = post.title || 'Untitled';
             addTocLink(titleLink, 1, tocStyle === 'numbered' ? '1.' : null);
           }
+          if (self._isTocDebugEnabled()) {
+            self._tocDebug('createTocModule singlePost done', {
+              postTitle: post.title || null,
+              bodyHtmlLength: (bodyHtml || '').length,
+              headingCount: headings.length,
+              tocAnchorsBuilt: el.querySelectorAll('a').length
+            });
+          }
           self._tocScrollHandler = function() { self._updateTocHighlight(); };
           var scrollTarget = self._getScrollContainer() || window;
           scrollTarget.addEventListener('scroll', self._tocScrollHandler, { passive: true });
@@ -7196,6 +7710,16 @@
           return createSidebarSection('Table of Contents', el, isSinglePost);
         }
 
+        if (self._isTocDebugEnabled()) {
+          self._tocDebug('createTocModule collectionBranch', {
+            reason: !isSinglePost
+              ? 'notSinglePostView'
+              : (selectedIndex < 0 ? 'selectedIndexNegative' : 'selectedIndexOutOfRange'),
+            isSinglePost: isSinglePost,
+            selectedIndex: selectedIndex,
+            itemsLength: items.length
+          });
+        }
         for (var i = 0; i < items.length; i++) {
           var tocItem = items[i];
           var tocUrl = self._getPostUrl(tocItem);
@@ -7206,6 +7730,9 @@
           tocLink.textContent = tocItem.title || 'Untitled';
           var prefix = tocStyle === 'numbered' ? (i + 1) + '.' : null;
           addTocLink(tocLink, 1, prefix);
+        }
+        if (self._isTocDebugEnabled()) {
+          self._tocDebug('createTocModule collectionList done', { postLinkCount: items.length, tocAnchorsBuilt: el.querySelectorAll('a').length });
         }
         self._tocScrollHandler = function() { self._updateTocHighlight(); };
         var scrollTarget = self._getScrollContainer() || window;
@@ -7952,18 +8479,72 @@
       var lmCfg = isSinglePost
         ? ((cfg.postModules && cfg.postModules.leadMagnet) || (cfg.collectionModules && cfg.collectionModules.leadMagnet))
         : ((cfg.collectionModules && cfg.collectionModules.leadMagnet) || (cfg.postModules && cfg.postModules.leadMagnet));
-      function buildSidebarModules(sidebarCfg) {
-        if (!sidebarCfg || !sidebarCfg.show || !Array.isArray(sidebarCfg.modules) || sidebarCfg.modules.length === 0) return [];
-        self._warnDuplicateValues('sidebar', sidebarCfg.modules);
+      function buildSidebarModules(sidebarCfg, zoneLabel) {
+        if (zoneLabel == null) zoneLabel = '';
+        if (!sidebarCfg || !sidebarCfg.show) {
+          if (self._isTocDebugEnabled() && zoneLabel) {
+            var sm = sidebarCfg && sidebarCfg.modules;
+            var som = sidebarCfg && sidebarCfg.moduleOrder;
+            var wantsToc = (Array.isArray(sm) && sm.indexOf('tableOfContents') >= 0) ||
+              (Array.isArray(som) && som.indexOf('tableOfContents') >= 0);
+            if (wantsToc) {
+              self._tocDebug('buildSidebarModules skippedShowFalse', {
+                zone: zoneLabel,
+                sidebarShow: sidebarCfg ? sidebarCfg.show : null,
+                modules: sm,
+                moduleOrder: som
+              });
+            }
+          }
+          return [];
+        }
+        var avail = Array.isArray(sidebarCfg.modules) ? sidebarCfg.modules : [];
+        var mo = Array.isArray(sidebarCfg.moduleOrder) ? sidebarCfg.moduleOrder : [];
+        /* Match Configure effectiveZoneModuleOrder + _orderedZoneModules: header honors moduleOrder vs modules, but
+           an empty modules array with a non-empty moduleOrder must still resolve (otherwise e.g. TOC never renders). */
+        var moduleIds = (mo.length > 0 && avail.length === 0) ? mo.slice() : self._orderedZoneModules(avail, mo);
+        var tocWanted = (Array.isArray(avail) && avail.indexOf('tableOfContents') >= 0) ||
+          (Array.isArray(mo) && mo.indexOf('tableOfContents') >= 0);
+        var tocInResolved = moduleIds && moduleIds.indexOf('tableOfContents') >= 0;
+        if (self._isTocDebugEnabled() && zoneLabel && tocWanted) {
+          self._tocDebug('buildSidebarModules toc path', {
+            zone: zoneLabel,
+            show: sidebarCfg.show,
+            modulesRaw: avail.slice(),
+            moduleOrderRaw: mo.slice(),
+            moduleIdsResolved: moduleIds ? moduleIds.slice() : [],
+            tocInResolved: tocInResolved
+          });
+        }
+        if (!tocWanted && self._isTocDebugEnabled() && zoneLabel && moduleIds && moduleIds.indexOf('tableOfContents') >= 0) {
+          self._tocDebug('buildSidebarModules resolved', {
+            zone: zoneLabel,
+            show: sidebarCfg.show,
+            modulesRaw: avail.slice(),
+            moduleOrderRaw: mo.slice(),
+            moduleIdsResolved: moduleIds.slice()
+          });
+        }
+        if (!moduleIds || moduleIds.length === 0) {
+          if (self._isTocDebugEnabled() && zoneLabel) {
+            self._tocDebug('buildSidebarModules empty', { zone: zoneLabel, show: sidebarCfg.show, modules: avail, moduleOrder: mo });
+          }
+          return [];
+        }
+        self._warnDuplicateValues('sidebar', moduleIds);
         var width = Math.min(400, Math.max(160, sidebarCfg.width || 240));
         var mods = [];
         var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
-        for (var m = 0; m < sidebarCfg.modules.length; m++) {
-          var mod = sidebarCfg.modules[m];
+        for (var m = 0; m < moduleIds.length; m++) {
+          var mod = moduleIds[m];
           if (hideRecentPostsInBbPreview && mod === 'recentPosts') continue;
           var el = null;
-          if (mod === 'tableOfContents') el = createTocModule(width);
-          else if (mod === 'recentPosts') el = createRecentPostsModule(width);
+          if (mod === 'tableOfContents') {
+            el = createTocModule(width);
+            if (!el && self._isTocDebugEnabled()) {
+              self._tocDebug('buildSidebarModules tableOfContentsReturnedNull', { zone: zoneLabel });
+            }
+          } else if (mod === 'recentPosts') el = createRecentPostsModule(width);
           else if (mod === 'popularPosts') el = createPopularPostsModule(width);
           else if (mod === 'relevantPosts') el = createRelevantPostsModule(width);
           else if (mod === 'searchPosts' || mod === 'postSearch') {
@@ -8026,8 +8607,8 @@
         }
         return mods;
       }
-      var leftModules = buildSidebarModules(leftSidebarCfg);
-      var rightModules = buildSidebarModules(rightSidebarCfg);
+      var leftModules = buildSidebarModules(leftSidebarCfg, 'left');
+      var rightModules = buildSidebarModules(rightSidebarCfg, 'right');
 
       if (collectionLayout === 'editorial') {
         var posts = displayItemsForLoop;
@@ -8556,7 +9137,11 @@
                       headerToc.style.maxWidth = '100%';
                     }
                     headerEl.appendChild(headerToc);
+                  } else if (self._isTocDebugEnabled()) {
+                    self._tocDebug('header tableOfContents not appended', { reason: 'createTocModuleReturnedNull', itemsLength: items.length });
                   }
+                } else if (mod === 'tableOfContents' && self._isTocDebugEnabled()) {
+                  self._tocDebug('header tableOfContents skipped', { reason: 'items.length === 0' });
                 } else if (mod === 'postSearch' || mod === 'searchPosts') {
                   var searchWrap = document.createElement('div');
                   if (collectionHeaderRow) {
@@ -8834,6 +9419,15 @@
               applySidebarResponsiveLayout();
             });
             try { self._blogOverlaySidebarRO.observe(wrapper); } catch (eObs) {}
+          }
+          if (self._isTocDebugEnabled()) {
+            requestAnimationFrame(function() {
+              var n = 0;
+              try {
+                n = wrapper.querySelectorAll('.blog-overlay-toc').length;
+              } catch (eTocDom) {}
+              self._tocDebug('postRender', { tocNavElementsInWrapper: n, isSinglePost: isSinglePost, renderSeq: self._renderSeq });
+            });
           }
           var overlayCount = root.querySelectorAll('#blog-overlay-list').length;
           if (overlayCount > 1) {

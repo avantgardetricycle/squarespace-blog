@@ -238,6 +238,8 @@ router.get('/', async (req: Request, res: Response) => {
       created_at: c.createdAt.toISOString(),
       replies: kids.map((k) => formatNode(k)),
     }
+    const emailNorm = c.email && typeof c.email === 'string' ? c.email.trim() : ''
+    if (emailNorm) out.email = emailNorm
     if (ext) out.external_comment_id = ext
     if (c.importedFromSquarespace) out.imported_from_squarespace = true
     return out
@@ -602,6 +604,8 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
 
+  const createdEmailNorm =
+    comment.email && typeof comment.email === 'string' ? comment.email.trim() : ''
   res.status(201).json({
     id: comment.id,
     display_name: comment.displayName,
@@ -611,6 +615,7 @@ router.post('/', async (req: Request, res: Response) => {
     like_count: 0,
     created_at: comment.createdAt.toISOString(),
     replies: [],
+    ...(createdEmailNorm ? { email: createdEmailNorm } : {}),
   })
 })
 
