@@ -41,9 +41,19 @@ import {
   createSite,
   deleteSite,
   updateSite,
+  restoreSite,
   type DashboardMe,
   type CreatedSite,
 } from "@/api/auth";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 import { getPlanDisplayName } from "@/lib/planLabels";
 import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
 
@@ -81,6 +91,11 @@ export default function Dashboard() {
   const [editBlogRequiresLogin, setEditBlogRequiresLogin] = useState<"yes" | "no">("no");
   const [editBlogSubscribeUrl, setEditBlogSubscribeUrl] = useState("");
   const [savingBlogEdit, setSavingBlogEdit] = useState(false);
+  const [blogUrlConflict, setBlogUrlConflict] = useState<
+    | { kind: "active_duplicate"; existingSite: CreatedSite; message: string }
+    | { kind: "deleted_previous"; existingSite: CreatedSite; message: string }
+    | null
+  >(null);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -110,7 +125,7 @@ export default function Dashboard() {
 
   const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
 
-  const handleAddBlog = async () => {
+  const performAddBlog = async (opts?: { purgeDeletedSiteId?: string }) => {
     if (!newBlogName.trim()) {
       toast.error("Please enter a blog name");
       return;
@@ -139,12 +154,25 @@ export default function Dashboard() {
       const paywallDetectionState =
         newBlogPaywalled === "yes" ? "detected_paywalled" : "detected_unpaywalled";
       const subscribeArg = newBlogPaywalled === "yes" ? newBlogSubscribeUrl.trim() : undefined;
-      const result = await createSite(
-        newBlogName.trim(),
-        newBlogUrl.trim(),
-        paywallDetectionState,
-        subscribeArg
-      );
+      const result = await createSite(newBlogName.trim(), newBlogUrl.trim(), paywallDetectionState, subscribeArg, {
+        purgeDeletedSiteId: opts?.purgeDeletedSiteId,
+      });
+      if ("conflict" in result && result.conflict === "active_duplicate") {
+        setBlogUrlConflict({
+          kind: "active_duplicate",
+          existingSite: result.existingSite,
+          message: result.message,
+        });
+        return;
+      }
+      if ("conflict" in result && result.conflict === "deleted_previous") {
+        setBlogUrlConflict({
+          kind: "deleted_previous",
+          existingSite: result.existingSite,
+          message: result.message,
+        });
+        return;
+      }
       if (result.site) {
         const site = result.site;
         setMe((prev) => {
@@ -171,6 +199,60 @@ export default function Dashboard() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleAddBlog = () => void performAddBlog();
+
+  const handleUseExistingBlogFromConflict = () => {
+    if (!blogUrlConflict || blogUrlConflict.kind !== "active_duplicate") return;
+    const { existingSite } = blogUrlConflict;
+    setBlogUrlConflict(null);
+    setShowAddBlogModal(false);
+    setNewBlogName("");
+    setNewBlogUrl("");
+    setNewBlogPaywalled("no");
+    setNewBlogSubscribeUrl("");
+    setJustCreatedSite(null);
+    setExpandedSiteId(existingSite.id);
+    toast.success(
+      `Using your existing blog "${existingSite.name ?? "Untitled"}" — all customization history is unchanged.`
+    );
+  };
+
+  const handleRestoreDeletedBlog = async () => {
+    if (!blogUrlConflict || blogUrlConflict.kind !== "deleted_previous") return;
+    const { existingSite } = blogUrlConflict;
+    setBlogUrlConflict(null);
+    setCreating(true);
+    try {
+      const nameToUse = newBlogName.trim() || undefined;
+      const r = await restoreSite(existingSite.id, nameToUse);
+      if ("error" in r) {
+        toast.error(r.error);
+        return;
+      }
+      const fresh = await getDashboardMe();
+      if (fresh) setMe(fresh);
+      setShowAddBlogModal(false);
+      setNewBlogName("");
+      setNewBlogUrl("");
+      setNewBlogPaywalled("no");
+      setNewBlogSubscribeUrl("");
+      setJustCreatedSite(null);
+      setExpandedSiteId(r.site.id);
+      toast.success(
+        `Restored "${r.site.name ?? "your blog"}" — your previous layout and settings are back.`
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handlePurgeDeletedAndCreateNewBlog = () => {
+    if (!blogUrlConflict || blogUrlConflict.kind !== "deleted_previous") return;
+    const id = blogUrlConflict.existingSite.id;
+    setBlogUrlConflict(null);
+    void performAddBlog({ purgeDeletedSiteId: id });
   };
 
   const openEditBlog = (site: DashboardMe["sites"][number]) => {
@@ -565,13 +647,77 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog
+        open={!!blogUrlConflict}
+        onOpenChange={(open) => {
+          if (!open) setBlogUrlConflict(null);
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-[480px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {blogUrlConflict?.kind === "deleted_previous"
+                ? "Previously removed blog with this URL"
+                : "This blog URL is already in use"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-[#6b6b6b]">
+                <p>{blogUrlConflict?.message}</p>
+                {blogUrlConflict?.existingSite?.url ? (
+                  <p className="break-all font-mono text-xs text-[#0a0a0a]">
+                    {blogUrlConflict.existingSite.url}
+                  </p>
+                ) : null}
+                {blogUrlConflict?.kind === "active_duplicate" ? (
+                  <p>
+                    <span className="font-medium text-[#0a0a0a]">Use existing blog</span> opens that site below. You
+                    cannot run two active BetterBlog sites on the same Squarespace blog URL.
+                  </p>
+                ) : (
+                  <p>
+                    <span className="font-medium text-[#0a0a0a]">Restore</span> brings back the same site key and all
+                    saved layout and settings. <span className="font-medium text-[#0a0a0a]">Create new site</span>{" "}
+                    permanently deletes the old removed record and its history, then creates a fresh BetterBlog site for
+                    this URL.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel className="mt-0">Go back</AlertDialogCancel>
+            {blogUrlConflict?.kind === "active_duplicate" ? (
+              <Button type="button" variant="outline" onClick={handleUseExistingBlogFromConflict}>
+                Use existing blog
+              </Button>
+            ) : (
+              <>
+                <Button type="button" variant="outline" onClick={() => void handleRestoreDeletedBlog()} disabled={creating}>
+                  {creating ? "Restoring…" : "Restore removed blog"}
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
+                  onClick={handlePurgeDeletedAndCreateNewBlog}
+                  disabled={creating}
+                >
+                  Create new site
+                </Button>
+              </>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Delete confirmation modal */}
       <Dialog open={!!siteToDelete} onOpenChange={(open) => !open && setSiteToDelete(null)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Remove blog</DialogTitle>
             <DialogDescription>
-              Are you sure you want to remove &quot;{siteToDelete?.name}&quot;? This will delete the site and its configuration. This action cannot be undone.
+              Remove &quot;{siteToDelete?.name}&quot; from your dashboard? The Squarespace blog will no longer use
+              BetterBlog until you add it again. We keep a private record so you can restore the same customization if
+              you reconnect the same URL, or start fresh.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

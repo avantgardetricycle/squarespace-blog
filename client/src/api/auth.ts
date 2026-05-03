@@ -64,6 +64,8 @@ export interface CreatedSite {
   status: string
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
+  /** Present when API returns a previously soft-deleted site match (409 deleted_blog_url_match). */
+  deletedAt?: string | null
   paywallSettings?: {
     subscribeUrl: string | null
     footerDescription: string | null
@@ -71,12 +73,29 @@ export interface CreatedSite {
   } | null
 }
 
+export type CreateSiteResult =
+  | { site: CreatedSite }
+  | { site: null; error: string }
+  | {
+      site: null
+      conflict: 'active_duplicate'
+      existingSite: CreatedSite
+      message: string
+    }
+  | {
+      site: null
+      conflict: 'deleted_previous'
+      existingSite: CreatedSite
+      message: string
+    }
+
 export async function createSite(
   name?: string,
   url?: string,
   paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled',
-  subscribeUrl?: string
-): Promise<{ site: CreatedSite; error?: undefined } | { site: null; error: string }> {
+  subscribeUrl?: string,
+  options?: { purgeDeletedSiteId?: string }
+): Promise<CreateSiteResult> {
   const body: Record<string, unknown> = {
     name: name?.trim() || undefined,
     url: url?.trim() || undefined,
@@ -85,15 +104,65 @@ export async function createSite(
   if (typeof subscribeUrl === 'string' && subscribeUrl.trim()) {
     body.subscribeUrl = subscribeUrl.trim()
   }
+  if (typeof options?.purgeDeletedSiteId === 'string' && options.purgeDeletedSiteId.trim()) {
+    body.purgeDeletedSiteId = options.purgeDeletedSiteId.trim()
+  }
   const res = await fetch(`${API}/dashboard/sites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify(body)
   })
-  const data = (await res.json().catch(() => ({}))) as { error?: string } & CreatedSite
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string
+    message?: string
+    existingSite?: CreatedSite
+  } &
+    Partial<CreatedSite>
+
+  if (res.status === 409 && data.error === 'duplicate_blog_url' && data.existingSite) {
+    return {
+      site: null,
+      conflict: 'active_duplicate',
+      existingSite: data.existingSite,
+      message:
+        typeof data.message === 'string'
+          ? data.message
+          : 'You already have an active BetterBlog site for this blog URL.'
+    }
+  }
+
+  if (res.status === 409 && data.error === 'deleted_blog_url_match' && data.existingSite) {
+    return {
+      site: null,
+      conflict: 'deleted_previous',
+      existingSite: data.existingSite,
+      message:
+        typeof data.message === 'string'
+          ? data.message
+          : 'You previously removed a BetterBlog site with this same blog URL.'
+    }
+  }
+
   if (!res.ok) {
     return { site: null, error: typeof data.error === 'string' ? data.error : 'Failed to create site' }
+  }
+  return { site: data as CreatedSite }
+}
+
+export async function restoreSite(
+  siteId: string,
+  name?: string
+): Promise<{ site: CreatedSite } | { error: string }> {
+  const res = await fetch(`${API}/dashboard/sites/${encodeURIComponent(siteId)}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(name?.trim() ? { name: name.trim() } : {})
+  })
+  const data = (await res.json().catch(() => ({}))) as { error?: string } & Partial<CreatedSite>
+  if (!res.ok) {
+    return { error: typeof data.error === 'string' ? data.error : 'Failed to restore site' }
   }
   return { site: data as CreatedSite }
 }

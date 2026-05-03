@@ -166,7 +166,7 @@ router.post('/events', async (req: Request, res: Response) => {
 
   let resolvedSiteId: string
   if (siteId) {
-    const site = await prisma.site.findFirst({ where: { id: siteId } })
+    const site = await prisma.site.findFirst({ where: { id: siteId, deletedAt: null } })
     if (!site || site.status !== 'active') {
       res.status(404).json({ error: 'Site not found or inactive' })
       return
@@ -226,7 +226,7 @@ router.get('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id },
+    where: { siteKey, userId: user.id, deletedAt: null },
     include: { googleAnalytics: true }
   })
   if (!site) {
@@ -261,7 +261,7 @@ router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
   }
 
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id },
+    where: { siteKey, userId: user.id, deletedAt: null },
     include: { googleAnalytics: true }
   })
   if (!site) {
@@ -299,7 +299,7 @@ router.delete('/ga/:siteKey', requireSession, async (req: Request, res: Response
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id },
+    where: { siteKey, userId: user.id, deletedAt: null },
     include: { googleAnalytics: true }
   })
   if (!site) {
@@ -355,7 +355,7 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
   const timeRange = (req.query.timeRange as string) || '30d'
 
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id }
+    where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
@@ -422,7 +422,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
   const timeRange = (req.query.timeRange as string) || '30d'
 
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id }
+    where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
     res.status(404).json({ error: 'Site not found' })

@@ -91,6 +91,7 @@ const configResponse = {
     postHeader: {
       imagePosition: "fullBleed",
       contentAlignment: "left",
+      contentVerticalAlignment: "bottom",
       showBreadcrumbs: false,
       showTags: false,
       showCategories: false,

@@ -173,12 +173,15 @@ export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJust
 
 export type PostHeaderImagePosition = "fullBleed" | "leftOfInfo" | "rightOfInfo" | "belowInfo";
 export type PostHeaderContentAlignment = "left" | "center" | "right";
+export type PostHeaderContentVerticalAlignment = "top" | "center" | "bottom";
 
 export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 
 export interface PostHeaderConfig {
   imagePosition: PostHeaderImagePosition;
   contentAlignment: PostHeaderContentAlignment;
+  /** Vertical placement of post title/meta (side-by-side layouts + full-bleed hero). */
+  contentVerticalAlignment?: PostHeaderContentVerticalAlignment;
   /** When imagePosition is fullBleed: overlay = title on hero image; stacked = title block above full-bleed image */
   fullBleedLayout?: PostHeaderFullBleedLayout;
   /** Padding between the viewport edge and a side-positioned post header image */
@@ -396,6 +399,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
 const defaultPostHeader: PostHeaderConfig = {
   imagePosition: "fullBleed",
   contentAlignment: "left",
+  contentVerticalAlignment: "bottom",
   sideGap: 24,
   showBreadcrumbs: false,
   showTags: false,
@@ -860,6 +864,15 @@ function parseLevelConfig(
     (v === "fullBleed" || v === "leftOfInfo" || v === "rightOfInfo" || v === "belowInfo") ? v : "fullBleed";
   const validContentAlignment = (v: unknown): PostHeaderContentAlignment =>
     (v === "left" || v === "center" || v === "right") ? v : "left";
+  const validContentVerticalAlignment = (
+    v: unknown,
+    imagePosition: PostHeaderImagePosition,
+    fullBleedLayout?: PostHeaderFullBleedLayout
+  ): PostHeaderContentVerticalAlignment => {
+    if (v === "top" || v === "center" || v === "bottom") return v;
+    if (imagePosition === "fullBleed" && fullBleedLayout !== "stacked") return "bottom";
+    return "top";
+  };
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
   const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
@@ -867,6 +880,11 @@ function parseLevelConfig(
     ? (phRaw ? {
         imagePosition: validImagePosition(phRaw.imagePosition),
         contentAlignment: validContentAlignment(phRaw.contentAlignment),
+        contentVerticalAlignment: validContentVerticalAlignment(
+          phRaw.contentVerticalAlignment,
+          validImagePosition(phRaw.imagePosition),
+          validFullBleedLayout(phRaw.fullBleedLayout)
+        ),
         fullBleedLayout: validFullBleedLayout(phRaw.fullBleedLayout),
         sideGap: validSideGap(phRaw.sideGap),
         showBreadcrumbs: Boolean(phRaw.showBreadcrumbs ?? false),
@@ -1121,6 +1139,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     const phA = (a as PostLevelConfig).postHeader ?? defaultPostHeader;
     const phB = (b as PostLevelConfig).postHeader ?? defaultPostHeader;
     const phEqual = phA.imagePosition === phB.imagePosition && phA.contentAlignment === phB.contentAlignment &&
+      (phA.contentVerticalAlignment ?? defaultPostHeader.contentVerticalAlignment) === (phB.contentVerticalAlignment ?? defaultPostHeader.contentVerticalAlignment) &&
       (phA.fullBleedLayout ?? "overlay") === (phB.fullBleedLayout ?? "overlay") &&
       (phA.sideGap ?? 24) === (phB.sideGap ?? 24) &&
       (phA.showBreadcrumbs ?? false) === (phB.showBreadcrumbs ?? false) &&
@@ -2072,6 +2091,12 @@ export default function Configure() {
     if (path === "progressBar.color" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, color: value as string } };
     if (path === "postHeader.imagePosition" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, imagePosition: value as PostHeaderImagePosition } };
     if (path === "postHeader.contentAlignment" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, contentAlignment: value as PostHeaderContentAlignment } };
+    if (path === "postHeader.contentVerticalAlignment" && "postHeader" in cfg) {
+      return {
+        ...cfg,
+        postHeader: { ...(cfg as PostLevelConfig).postHeader!, contentVerticalAlignment: value as PostHeaderContentVerticalAlignment },
+      };
+    }
     if (path === "postHeader.fullBleedLayout" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, fullBleedLayout: value as PostHeaderFullBleedLayout } };
     if (path === "postHeader.sideGap" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, sideGap: value as number } };
     if (path === "postHeader.showBreadcrumbs" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showBreadcrumbs: value as boolean } };
@@ -3135,6 +3160,25 @@ export default function Configure() {
                                     <SelectItem value="stacked">Stacked (text above image)</SelectItem>
                                   </SelectContent>
                                 </Select>
+                                {((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
+                                  <Select
+                                    value={
+                                      (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "bottom"
+                                    }
+                                    onValueChange={(v) =>
+                                      updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="top">Top</SelectItem>
+                                      <SelectItem value="center">Center</SelectItem>
+                                      <SelectItem value="bottom">Bottom</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
                               </div>
                             )}
                             <div className="flex items-center justify-between">
@@ -3196,6 +3240,23 @@ export default function Configure() {
                                           <SelectItem value="left">Left</SelectItem>
                                           <SelectItem value="center">Center</SelectItem>
                                           <SelectItem value="right">Right</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Select
+                                        value={
+                                          (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                        }
+                                        onValueChange={(v) =>
+                                          updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                        }
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="top">Top</SelectItem>
+                                          <SelectItem value="center">Center</SelectItem>
+                                          <SelectItem value="bottom">Bottom</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>

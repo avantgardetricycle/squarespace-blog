@@ -8,7 +8,7 @@ const router = Router()
 
 async function getSiteForUser(siteKey: string, userId: number) {
   return prisma.site.findFirst({
-    where: { siteKey, userId },
+    where: { siteKey, userId, deletedAt: null },
   })
 }
 

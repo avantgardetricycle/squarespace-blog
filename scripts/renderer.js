@@ -5999,6 +5999,10 @@
         var fiShadow = Boolean(fiCfg.shadow);
         var fiCaption = Boolean(fiCfg.showCaption !== false);
         var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
+        var phFullBleedOverlay = isSinglePost && phImagePos === 'fullBleed' && fiShow && !(postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked');
+        var phVertRaw = postHeaderCfg && postHeaderCfg.contentVerticalAlignment;
+        var phVertical = (phVertRaw === 'center' || phVertRaw === 'bottom' || phVertRaw === 'top') ? phVertRaw : (phFullBleedOverlay ? 'bottom' : 'top');
+        var phVerticalAlignItems = phVertical === 'center' ? 'center' : phVertical === 'bottom' ? 'flex-end' : 'flex-start';
         var article = document.createElement('article');
         article.id = 'blog-post-' + j;
         var displayIdx = displayItems.indexOf(post);
@@ -6051,11 +6055,18 @@
           rowEl.style.display = 'flex';
           rowEl.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
           rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '12px' : '20px';
-          rowEl.style.alignItems = 'flex-start';
+          rowEl.style.alignItems = isSinglePost ? phVerticalAlignItems : 'flex-start';
           rowEl.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           contentEl = document.createElement('div');
           contentEl.style.flex = '1';
           contentEl.style.minWidth = '0';
+          if (isSinglePost) {
+            if (phImagePos === 'rightOfInfo' && phAlign === 'left') {
+              contentEl.style.marginLeft = '16px';
+            } else if (phImagePos === 'leftOfInfo' && phAlign === 'right') {
+              contentEl.style.marginRight = '16px';
+            }
+          }
         }
         var appendTo = isSideBySide ? contentEl : article;
         var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow;
@@ -6065,32 +6076,22 @@
         var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow;
         var fullBleedHeaderBlock = null;
         var stackedFullBleedWrap = null;
-        var leftRailHasModules = Boolean(leftSidebarCfg && leftSidebarCfg.show && Array.isArray(leftSidebarCfg.modules) && leftSidebarCfg.modules.length > 0);
-        var rightRailHasModules = Boolean(rightSidebarCfg && rightSidebarCfg.show && Array.isArray(rightSidebarCfg.modules) && rightSidebarCfg.modules.length > 0);
-        var leftRailWidth = leftRailHasModules ? Math.min(400, Math.max(160, leftSidebarCfg.width || 240)) + 24 : 0;
-        var rightRailWidth = rightRailHasModules ? Math.min(400, Math.max(160, rightSidebarCfg.width || 240)) + 24 : 0;
-        var hasSideRails = leftRailHasModules || rightRailHasModules;
-        var fullBleedWrapperPad = 16;
         if (singlePostFullBleedHero) {
           fullBleedHeaderBlock = document.createElement('div');
           fullBleedHeaderBlock.className = 'blog-overlay-post-header-fullbleed';
           fullBleedHeaderBlock.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
           fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
-          if (hasSideRails) {
-            fullBleedHeaderBlock.style.width = 'calc(100% + ' + (leftRailWidth + rightRailWidth + (fullBleedWrapperPad * 2)) + 'px)';
-            fullBleedHeaderBlock.style.maxWidth = 'none';
-            fullBleedHeaderBlock.style.marginLeft = (-(leftRailWidth + fullBleedWrapperPad)) + 'px';
-            fullBleedHeaderBlock.style.marginRight = (-(rightRailWidth + fullBleedWrapperPad)) + 'px';
-          } else {
-            fullBleedHeaderBlock.style.width = '100vw';
-            fullBleedHeaderBlock.style.maxWidth = '100vw';
-            fullBleedHeaderBlock.style.marginLeft = 'calc(50% - 50vw)';
-            fullBleedHeaderBlock.style.marginRight = 'calc(50% - 50vw)';
-          }
+          /* Header zone sits above the sidebar row (not in the center column). Rail widths must not
+           * shrink/shift breakout margins — that pulled title/meta under the viewport edge when a
+           * left sidebar existed. Always viewport-center full bleed for single-post hero. */
+          fullBleedHeaderBlock.style.width = '100vw';
+          fullBleedHeaderBlock.style.maxWidth = '100vw';
+          fullBleedHeaderBlock.style.marginLeft = 'calc(50% - 50vw)';
+          fullBleedHeaderBlock.style.marginRight = 'calc(50% - 50vw)';
           fullBleedHeaderBlock.style.position = 'relative';
           fullBleedHeaderBlock.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           fullBleedHeaderBlock.style.display = 'flex';
-          fullBleedHeaderBlock.style.alignItems = 'flex-end';
+          fullBleedHeaderBlock.style.alignItems = phVerticalAlignItems;
           fullBleedHeaderBlock.style.padding = '48px 24px 32px';
           fullBleedHeaderBlock.style.position = 'relative';
           var overlay = document.createElement('div');

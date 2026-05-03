@@ -15,8 +15,8 @@ const prisma = new PrismaClient({ adapter })
 export type { Site, SiteConfig, User, Config } from '../generated/prisma/client.js'
 
 export async function getSiteBySiteKey(siteKey: string) {
-  return prisma.site.findUnique({
-    where: { siteKey }
+  return prisma.site.findFirst({
+    where: { siteKey, deletedAt: null }
   })
 }
 

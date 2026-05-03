@@ -224,6 +224,7 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
   postHeader: {
     imagePosition: 'fullBleed',
     contentAlignment: 'left',
+    contentVerticalAlignment: 'bottom',
     showBreadcrumbs: false,
     showTags: false,
     showCategories: false
@@ -279,6 +280,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
   postHeader: {
     imagePosition: 'fullBleed',
     contentAlignment: 'center',
+    contentVerticalAlignment: 'bottom',
     fullBleedLayout: 'stacked',
     showBreadcrumbs: true,
     showTags: true,
@@ -351,6 +353,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
   postHeader: {
     imagePosition: 'belowInfo',
     contentAlignment: 'center',
+    contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: false,
     showCategories: true
@@ -392,6 +395,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
   postHeader: {
     imagePosition: 'rightOfInfo',
     contentAlignment: 'left',
+    contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: true,
     showCategories: true,
@@ -462,6 +466,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
   postHeader: {
     imagePosition: 'leftOfInfo',
     contentAlignment: 'left',
+    contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: true,
     showCategories: true,

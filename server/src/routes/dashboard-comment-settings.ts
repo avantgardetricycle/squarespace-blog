@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS = {
 /** Ensure site is owned by user */
 async function getSiteForUser(siteKey: string, userId: number) {
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId },
+    where: { siteKey, userId, deletedAt: null },
     include: { blogCommentSettings: true },
   })
   return site

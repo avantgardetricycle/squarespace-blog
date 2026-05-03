@@ -170,7 +170,11 @@ async function main() {
 
   const basePostConfig = {
     ...baseCollectionConfig,
-    postHeader: { imagePosition: 'fullBleed' as const, contentAlignment: 'left' as const },
+    postHeader: {
+      imagePosition: 'fullBleed' as const,
+      contentAlignment: 'left' as const,
+      contentVerticalAlignment: 'bottom' as const
+    },
     progressBar: { show: false, position: 'top' as const, thickness: 6, color: '#5B4FE8' }
   }
 
@@ -378,6 +382,7 @@ async function main() {
         postHeader: {
           imagePosition: 'fullBleed',
           contentAlignment: 'center',
+          contentVerticalAlignment: 'bottom',
           fullBleedLayout: 'stacked',
           showBreadcrumbs: true,
           showTags: true,
@@ -444,7 +449,7 @@ async function main() {
         showDate: true,
         showAuthor: true,
         showReadingTime: true,
-        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left' },
+        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
         rightSidebar: {
           show: true,
@@ -497,6 +502,7 @@ async function main() {
         postHeader: {
           imagePosition: 'rightOfInfo',
           contentAlignment: 'left',
+          contentVerticalAlignment: 'top',
           showBreadcrumbs: true,
           showTags: true,
           showCategories: true,
@@ -557,6 +563,7 @@ async function main() {
         postHeader: {
           imagePosition: 'leftOfInfo',
           contentAlignment: 'left',
+          contentVerticalAlignment: 'top',
           showBreadcrumbs: true,
           showTags: true,
           showCategories: true,
@@ -606,7 +613,14 @@ async function main() {
         showDate: true,
         showAuthor: true,
         showReadingTime: true,
-        postHeader: { imagePosition: 'belowInfo', contentAlignment: 'center', showBreadcrumbs: true, showTags: false, showCategories: true },
+        postHeader: {
+          imagePosition: 'belowInfo',
+          contentAlignment: 'center',
+          contentVerticalAlignment: 'top',
+          showBreadcrumbs: true,
+          showTags: false,
+          showCategories: true
+        },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         footerContent: {

@@ -10,7 +10,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
 
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id }
+    where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
@@ -59,7 +59,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
   }
 
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id }
+    where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
@@ -137,7 +137,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   }
 
   const site = await prisma.site.findFirst({
-    where: { id: author.siteId, userId: user.id }
+    where: { id: author.siteId, userId: user.id, deletedAt: null }
   })
   if (!site) {
     res.status(404).json({ error: 'Author not found' })

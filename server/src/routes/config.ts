@@ -167,7 +167,7 @@ function buildDefaultPostConfig (
       thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
       color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
     },
-    postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left' }
+    postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' }
   }
 }
 
@@ -512,8 +512,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
   console.log(`[config] GET ${siteKey} start (${reqId})`)
   try {
 
-  const site = await prisma.site.findUnique({
-    where: { siteKey },
+  const site = await prisma.site.findFirst({
+    where: { siteKey, deletedAt: null },
     include: {
       user: {
         include: {
@@ -780,7 +780,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
   }
 
   const site = await prisma.site.findFirst({
-    where: { siteKey, userId: user.id }
+    where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
     res.status(404).json({ error: 'Site not found' })

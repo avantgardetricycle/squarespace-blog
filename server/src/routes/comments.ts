@@ -53,8 +53,8 @@ function getSiteToken(req: Request): string | null {
 }
 
 async function getSiteWithSubscription(siteToken: string) {
-  const site = await prisma.site.findUnique({
-    where: { siteKey: siteToken },
+  const site = await prisma.site.findFirst({
+    where: { siteKey: siteToken, deletedAt: null },
     select: {
       id: true,
       userId: true,

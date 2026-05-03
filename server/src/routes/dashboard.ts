@@ -128,13 +128,13 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             take: 1
           },
           sites: {
-            where: { status: 'active' },
+            where: { status: 'active', deletedAt: null },
             orderBy: { createdAt: 'desc' },
             include: { sitePaywallSettings: true }
           }
         }
       }),
-      prisma.site.count({ where: { userId: user.id, status: 'active' } })
+      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
 
     if (!userWithRelations) {
@@ -347,12 +347,124 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         where: { userId: user.id, status: { in: ['trialing', 'active'] } },
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.site.count({ where: { userId: user.id, status: 'active' } })
+      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
 
     const maxSites = subscription?.maxSites ?? 1
     if (maxSites !== null && siteCount >= maxSites) {
       res.status(403).json({ error: 'Site limit reached for your plan' })
+      return
+    }
+
+    const siteName = typeof name === 'string' && name.trim() ? name.trim() : null
+    const siteUrlInput = typeof url === 'string' && url.trim() ? url.trim() : null
+    const parsed = siteUrlInput ? parseBlogUrl(siteUrlInput) : null
+    if (!parsed) {
+      res.status(400).json({ error: 'Please enter a valid blog URL (e.g. example.com/blog or https://example.com/blog)' })
+      return
+    }
+    const { url: siteUrl, blogPath } = parsed
+
+    const activeSameUrl = await prisma.site.findFirst({
+      where: {
+        userId: user.id,
+        url: siteUrl,
+        deletedAt: null
+      },
+      include: { sitePaywallSettings: true }
+    })
+    if (activeSameUrl) {
+      const pw = activeSameUrl.sitePaywallSettings
+      res.status(409).json({
+        error: 'duplicate_blog_url',
+        message:
+          'You already have an active BetterBlog site for this blog URL. Open that site in the list below to keep customizing. Two active sites cannot use the same Squarespace blog URL.',
+        existingSite: {
+          id: activeSameUrl.id,
+          siteKey: activeSameUrl.siteKey,
+          name: activeSameUrl.name,
+          url: activeSameUrl.url,
+          blogPath: activeSameUrl.blogPath,
+          paywallMode: activeSameUrl.paywallMode,
+          paywallDetectionState: activeSameUrl.paywallDetectionState,
+          paywallDetectionSource: activeSameUrl.paywallDetectionSource,
+          status: activeSameUrl.status,
+          verificationStatus: activeSameUrl.verificationStatus,
+          createdAt: activeSameUrl.createdAt,
+          paywallSettings: pw
+            ? {
+                subscribeUrl: pw.subscribeUrl,
+                footerDescription: pw.footerDescription,
+                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
+              }
+            : null
+        }
+      })
+      return
+    }
+
+    const purgeDeletedSiteIdRaw =
+      req.body &&
+      typeof req.body === 'object' &&
+      typeof (req.body as { purgeDeletedSiteId?: unknown }).purgeDeletedSiteId === 'string'
+        ? (req.body as { purgeDeletedSiteId: string }).purgeDeletedSiteId.trim()
+        : ''
+    if (purgeDeletedSiteIdRaw) {
+      const toPurge = await prisma.site.findFirst({
+        where: {
+          id: purgeDeletedSiteIdRaw,
+          userId: user.id,
+          deletedAt: { not: null },
+          url: siteUrl
+        }
+      })
+      if (!toPurge) {
+        res.status(400).json({
+          error: 'Invalid purgeDeletedSiteId',
+          message: 'The removed blog could not be cleared for a fresh install. Refresh and try again.'
+        })
+        return
+      }
+      await prisma.site.delete({ where: { id: toPurge.id } })
+    }
+
+    const deletedSameUrl = await prisma.site.findFirst({
+      where: {
+        userId: user.id,
+        url: siteUrl,
+        deletedAt: { not: null }
+      },
+      orderBy: { deletedAt: 'desc' },
+      include: { sitePaywallSettings: true }
+    })
+    if (deletedSameUrl) {
+      const pw = deletedSameUrl.sitePaywallSettings
+      res.status(409).json({
+        error: 'deleted_blog_url_match',
+        message:
+          'You previously removed a BetterBlog site with this same blog URL. You can restore it (all layout and settings history returns) or permanently clear it and add a brand-new site.',
+        existingSite: {
+          id: deletedSameUrl.id,
+          siteKey: deletedSameUrl.siteKey,
+          name: deletedSameUrl.name,
+          url: deletedSameUrl.url,
+          blogPath: deletedSameUrl.blogPath,
+          paywallMode: deletedSameUrl.paywallMode,
+          paywallDetectionState: deletedSameUrl.paywallDetectionState,
+          paywallDetectionSource: deletedSameUrl.paywallDetectionSource,
+          status: deletedSameUrl.status,
+          verificationStatus: deletedSameUrl.verificationStatus,
+          createdAt: deletedSameUrl.createdAt,
+          deletedAt: deletedSameUrl.deletedAt ? deletedSameUrl.deletedAt.toISOString() : null,
+          paywallSettings: pw
+            ? {
+                subscribeUrl: pw.subscribeUrl,
+                footerDescription: pw.footerDescription,
+                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
+              }
+            : null
+        }
+      })
       return
     }
 
@@ -371,15 +483,6 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       res.status(500).json({ error: 'Failed to generate unique site key' })
       return
     }
-
-    const siteName = typeof name === 'string' && name.trim() ? name.trim() : null
-    const siteUrlInput = typeof url === 'string' && url.trim() ? url.trim() : null
-    const parsed = siteUrlInput ? parseBlogUrl(siteUrlInput) : null
-    if (!parsed) {
-      res.status(400).json({ error: 'Please enter a valid blog URL (e.g. example.com/blog or https://example.com/blog)' })
-      return
-    }
-    const { url: siteUrl, blogPath } = parsed
 
     const VALID_PAYWALL_STATES: PaywallDetectionState[] = ['unknown', 'detected_paywalled', 'detected_unpaywalled']
     const userPaywallState: PaywallDetectionState =
@@ -469,6 +572,87 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
   }
 })
 
+// POST /api/dashboard/sites/:id/restore - Bring back a soft-deleted site (same siteKey + config history)
+router.post('/sites/:id/restore', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
+
+  if (!siteId) {
+    res.status(400).json({ error: 'Site ID required' })
+    return
+  }
+
+  try {
+    const target = await prisma.site.findFirst({
+      where: { id: siteId, userId: user.id, deletedAt: { not: null } },
+      include: { sitePaywallSettings: true }
+    })
+    if (!target) {
+      res.status(404).json({ error: 'No removed site found to restore' })
+      return
+    }
+
+    const [subscription, activeCount] = await Promise.all([
+      prisma.subscription.findFirst({
+        where: { userId: user.id, status: { in: ['trialing', 'active'] } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
+    ])
+    const maxSites = subscription?.maxSites ?? 1
+    if (maxSites !== null && activeCount >= maxSites) {
+      res.status(403).json({ error: 'Site limit reached for your plan' })
+      return
+    }
+
+    const bodyName =
+      req.body && typeof (req.body as { name?: unknown }).name === 'string'
+        ? (req.body as { name: string }).name.trim()
+        : ''
+    await prisma.site.update({
+      where: { id: siteId },
+      data: {
+        deletedAt: null,
+        ...(bodyName ? { name: bodyName } : {})
+      }
+    })
+
+    const restored = await prisma.site.findUnique({
+      where: { id: siteId },
+      include: { sitePaywallSettings: true }
+    })
+    if (!restored) {
+      res.status(500).json({ error: 'Failed to load restored site' })
+      return
+    }
+
+    const pw = restored.sitePaywallSettings
+    res.json({
+      id: restored.id,
+      siteKey: restored.siteKey,
+      name: restored.name,
+      url: restored.url,
+      blogPath: restored.blogPath,
+      paywallMode: restored.paywallMode,
+      paywallDetectionState: restored.paywallDetectionState,
+      paywallDetectionSource: restored.paywallDetectionSource,
+      status: restored.status,
+      verificationStatus: restored.verificationStatus,
+      createdAt: restored.createdAt,
+      paywallSettings: pw
+        ? paywallSettingsJson({
+            subscribeUrl: pw.subscribeUrl,
+            footerDescription: pw.footerDescription,
+            featureItems: pw.featureItems ?? []
+          })
+        : null
+    })
+  } catch (err) {
+    console.error('Restore site error:', err)
+    res.status(500).json({ error: 'Failed to restore site' })
+  }
+})
+
 // PATCH /api/dashboard/sites/by-key/:siteKey - Update site by siteKey (e.g. blog password)
 router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
@@ -482,7 +666,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 
   try {
     const site = await prisma.site.findFirst({
-      where: { siteKey, userId: user.id },
+      where: { siteKey, userId: user.id, deletedAt: null },
       include: { sitePaywallSettings: true }
     })
 
@@ -632,7 +816,7 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
 
   try {
     const site = await prisma.site.findFirst({
-      where: { id: siteId, userId: user.id }
+      where: { id: siteId, userId: user.id, deletedAt: null }
     })
 
     if (!site) {
@@ -704,7 +888,7 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
   }
 })
 
-// DELETE /api/dashboard/sites/:id - Delete site
+// DELETE /api/dashboard/sites/:id - Soft-delete site (keeps row for optional restore / URL matching)
 router.delete('/sites/:id', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
@@ -716,7 +900,7 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
 
   try {
     const site = await prisma.site.findFirst({
-      where: { id: siteId, userId: user.id }
+      where: { id: siteId, userId: user.id, deletedAt: null }
     })
 
     if (!site) {
@@ -724,8 +908,9 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
       return
     }
 
-    await prisma.site.delete({
-      where: { id: siteId }
+    await prisma.site.update({
+      where: { id: siteId },
+      data: { deletedAt: new Date() }
     })
 
     res.status(204).send()

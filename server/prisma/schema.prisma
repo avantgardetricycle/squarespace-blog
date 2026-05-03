@@ -56,6 +56,7 @@ model Site {
   channel             String   @default("stable") // stable | beta
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
 
   user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   siteConfigs            SiteConfig[]
@@ -70,6 +71,8 @@ model Site {
 
   @@index([siteKey])
   @@index([userId])
+  @@index([userId, deletedAt])
+  @@index([userId, url, deletedAt])
   @@map("sites")
 }
 
