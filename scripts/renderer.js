@@ -823,7 +823,14 @@
       var self = this;
       var cs = (cfg && cfg.commentSettings) || {};
       if (!cs.commentsEnabled) return;
-      if (this._resolveViewerMode() !== 'loggedIn') return;
+      var vm = this._resolveViewerMode();
+      if (
+        vm !== 'loggedIn' &&
+        this._isPaywalledSite() &&
+        !this._isPaywallPublicPreviewPost(post)
+      ) {
+        return;
+      }
       var baseUrl = (cfg && cfg.baseUrl) || '';
       var siteKey = (cfg && cfg.siteKey) || '';
       if (!baseUrl || !siteKey) return;
@@ -9565,7 +9572,14 @@
           var commentCfg = cfg && cfg.commentSettings;
           var commentsTurnedOff = commentCfg && commentCfg.commentsEnabled === false;
           var viewerLoggedIn = self._resolveViewerMode() === 'loggedIn';
-          var hideCommentsForLoggedOutPost = isSinglePost && !viewerLoggedIn;
+          var commentPostForGate =
+            isSinglePost && selectedIndex >= 0 && selectedIndex < items.length ? items[selectedIndex] : null;
+          var hideCommentsForLoggedOutPost =
+            isSinglePost &&
+            !viewerLoggedIn &&
+            self._isPaywalledSite() &&
+            commentPostForGate &&
+            !self._isPaywallPublicPreviewPost(commentPostForGate);
           self._setAllCommentUiHidden(!!commentsTurnedOff || hideCommentsForLoggedOutPost);
           if (
             isSinglePost &&
@@ -9574,7 +9588,7 @@
             cfg &&
             commentCfg &&
             commentCfg.commentsEnabled &&
-            viewerLoggedIn
+            (viewerLoggedIn || !hideCommentsForLoggedOutPost)
           ) {
             try {
               self._initComments(main, items[selectedIndex], cfg);
