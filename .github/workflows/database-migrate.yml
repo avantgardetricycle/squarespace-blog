@@ -1,0 +1,58 @@
+name: Database migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_seed:
+        description: Run prisma seed after migrate
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - "server/prisma/**"
+      - ".github/workflows/database-migrate.yml"
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Prisma generate
+        run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+
+      - name: Apply schema
+        run: npx prisma db push
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+
+      - name: Apply SQL migrations
+        run: |
+          for f in prisma/migrations/*.sql; do
+            echo "Applying $f"
+            npx prisma db execute --file "$f"
+          done
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}
+
+      - name: Seed database
+        if: github.event_name == 'workflow_dispatch' && inputs.run_seed
+        run: npm run db:seed
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL || secrets.DATABASE_URL }}

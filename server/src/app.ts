@@ -1,0 +1,111 @@
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import express, { type Express } from 'express'
+import cors from 'cors'
+import cookieParser from 'cookie-parser'
+import configRoutes from './routes/config.js'
+import authRoutes from './routes/auth.js'
+import dashboardRoutes from './routes/dashboard.js'
+import checkoutRoutes from './routes/checkout.js'
+import stripeWebhookRoutes from './routes/stripe-webhook.js'
+import blogAuthorsRoutes from './routes/blog-authors.js'
+import templatesRoutes from './routes/templates.js'
+import leadsRoutes from './routes/leads.js'
+import analyticsRoutes from './routes/analytics.js'
+import captureRoutes from './routes/capture.js'
+import commentsRoutes from './routes/comments.js'
+import commentActionsRoutes from './routes/comment-actions.js'
+
+export interface CreateAppOptions {
+  /** When false, Stripe webhook is served only by `api/webhooks/stripe` (Vercel). */
+  mountStripeWebhook?: boolean
+}
+
+export function createApp(options: CreateAppOptions = {}): Express {
+  const { mountStripeWebhook = true } = options
+  const app = express()
+
+  app.set('trust proxy', 1)
+
+  if (mountStripeWebhook) {
+    app.use(
+      '/api/webhooks/stripe',
+      express.raw({ type: 'application/json' }),
+      stripeWebhookRoutes
+    )
+  }
+
+  app.use(express.json())
+  app.use(cookieParser())
+
+  app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
+  app.use('/api/analytics', cors({ origin: true, credentials: true }), analyticsRoutes)
+  app.use('/api/capture', cors({ origin: true, credentials: true }), captureRoutes)
+  app.use('/api/comments', cors({ origin: true, credentials: true }), commentsRoutes)
+  app.use('/api/auth', cors({ origin: true, credentials: true }), authRoutes)
+
+  const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  app.use(
+    cors({
+      origin: appOrigin,
+      credentials: true
+    })
+  )
+  app.use('/api/comment-actions', commentActionsRoutes)
+  app.use('/api/dashboard', dashboardRoutes)
+  app.use('/api/blog-authors', blogAuthorsRoutes)
+  app.use('/api/templates', templatesRoutes)
+  app.use('/api/checkout', checkoutRoutes)
+  app.use('/api/leads', leadsRoutes)
+
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      isLive: process.env.IS_BETTER_BLOG_LIVE === 'true'
+    })
+  })
+
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const scriptsDir = path.join(__dirname, '../../scripts')
+  const rendererPath = path.join(scriptsDir, 'renderer.js')
+  const loaderPath = path.join(scriptsDir, 'loader.js')
+  if (fs.existsSync(rendererPath)) {
+    app.get('/renderer.js', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
+      res.setHeader('Surrogate-Control', 'no-store')
+      res.type('application/javascript')
+      res.sendFile(rendererPath)
+    })
+  }
+  if (fs.existsSync(loaderPath)) {
+    app.get('/loader.js', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
+      res.setHeader('Surrogate-Control', 'no-store')
+      res.type('application/javascript')
+      res.sendFile(loaderPath)
+    })
+  }
+
+  const clientDist = path.join(__dirname, '../../client/dist')
+  if (fs.existsSync(clientDist)) {
+    app.use(express.static(clientDist))
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        next()
+        return
+      }
+      res.sendFile(path.join(clientDist, 'index.html'))
+    })
+  } else {
+    app.get('/', (_req, res) => {
+      res.json({ name: 'BetterBlog API', status: 'ok', docs: '/api/health' })
+    })
+  }
+
+  return app
+}

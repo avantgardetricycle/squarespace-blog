@@ -1,97 +1,94 @@
 # Deployment
 
-## GitHub Pages (loader.js / renderer.js)
+## Vercel + Supabase (production)
 
-The `scripts/` directory is deployed to GitHub Pages on push to `main`. The loader fetches config from your API; when served from GitHub Pages it cannot infer the API URL from the script origin.
+### Overview
 
-**Required:** Set the `API_BASE_URL` repository variable so the loader knows where to fetch config:
+| Component | Role |
+| --------- | ---- |
+| **Vercel** | Express API (`api/index.ts`), SPA, `loader.js` / `renderer.js`, Stripe webhook |
+| **Vercel Queues** | Async Stripe jobs (`checkout.session.completed`, `customer.subscription.updated`) |
+| **Supabase** | Postgres for Prisma (`DATABASE_URL` pooler + `DIRECT_URL` for migrations) |
 
-1. GitHub repo → Settings → Secrets and variables → Actions → Variables
-2. Add `API_BASE_URL` = your Heroku app URL (e.g. `https://your-staging-app.herokuapp.com`)
+There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers are `api/queues/*.ts`.
 
-The deploy workflow injects this into `loader.js` before publishing. Without it, users must include `data-api-base` in their Squarespace snippet.
+### Supabase setup
+
+1. Create a Supabase project.
+2. In **Project Settings → Database**, copy:
+   - **Transaction pooler** URI → `DATABASE_URL` (port `6543`, `?pgbouncer=true` for Prisma).
+   - **Session / direct** URI → `DIRECT_URL` (port `5432`, for migrations).
+3. Migrate data from Heroku Postgres (dump/restore) before cutover.
+4. Optional: drop legacy `pgboss` schema on Supabase after cutover (no longer used).
+
+### Vercel setup
+
+1. Import the GitHub repo in Vercel.
+2. Build uses [vercel.json](vercel.json): `npm run build --workspace=server && npm run build --workspace=client`.
+3. Enable **Vercel Queues** on the project (beta).
+4. Set environment variables (Production + Preview):
+
+| Variable | Description |
+| -------- | ----------- |
+| `DATABASE_URL` | Supabase **pooled** connection string |
+| `DIRECT_URL` | Supabase **direct** connection string (migrations CI only if not running migrate on Vercel) |
+| `APP_URL` | `https://your-app.vercel.app` or custom domain |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for `https://your-app.vercel.app/api/webhooks/stripe` |
+| `STRIPE_ENVIRONMENT` | `sandbox` or `live` |
+| `SENDGRID_API_KEY` | SendGrid API key |
+| `SENDGRID_MAIL_FROM` | Verified sender |
+| `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
+| `HCAPTCHA_*` | hCaptcha keys |
+| `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA |
+
+5. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
+   Events: `checkout.session.completed`, `customer.subscription.updated`.
+
+### Database migrations (CI)
+
+[.github/workflows/database-migrate.yml](.github/workflows/database-migrate.yml) runs on `main` when `server/prisma/**` changes (and on manual dispatch).
+
+Repository secrets:
+
+- `DIRECT_URL` (preferred) or `DATABASE_URL` — **direct** Supabase URL for `prisma db push` and SQL files.
+
+Manual seed: Actions → Database migrate → Run workflow → enable **run_seed**.
+
+### Local development
+
+```bash
+# Terminal 1 — API (Stripe webhooks process inline by default)
+cp server/.env.example server/.env
+npm run dev --workspace=server
+
+# Terminal 2 — Vite client
+npm run dev --workspace=client
+```
+
+For **Vercel Queues** locally (matches production):
+
+```bash
+vercel link
+vercel env pull
+npm run dev:vercel
+```
+
+Set `STRIPE_QUEUE_INLINE_FALLBACK=false` to require queue publish in local API-only mode.
 
 ---
 
-# Heroku Deployment
+## GitHub Pages (loader.js / renderer.js) — optional CDN
 
-## Overview
+The `scripts/` directory can still be deployed to GitHub Pages. Set repository variable **`API_BASE_URL`** to your Vercel app URL (e.g. `https://your-app.vercel.app`) so [deploy-pages.yml](.github/workflows/deploy-pages.yml) injects it into `loader.js`.
 
-The app uses separate dynos for web (API) and worker (pg-boss job processing):
+If you serve scripts from Vercel instead, skip Pages deploy and point Squarespace at:
 
-- **web**: Express API, Stripe webhooks, health checks
-- **worker**: Processes Stripe webhook jobs (e.g. checkout.session.completed)
-- **release**: Runs `prisma db push` before each deploy to sync schema
+- `https://your-app.vercel.app/loader.js`
+- `https://your-app.vercel.app/renderer.js`
 
-## Required Config Vars
+---
 
-Set these for each Heroku app (staging and prod):
+## Heroku (legacy)
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Auto-set when Heroku Postgres add-on is attached. SSL is enforced automatically for remote hosts. |
-| `APP_URL` | Base URL for CORS, magic links, etc. When client is served from the same Heroku app, use the Heroku URL (e.g. `https://your-app.herokuapp.com`) |
-| `STRIPE_SECRET_KEY` | Stripe secret key |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret (create endpoint for each app's URL) |
-| `STRIPE_ENVIRONMENT` | `sandbox` for staging, `live` for prod |
-| `SENDGRID_API_KEY` | SendGrid API key for transactional email |
-| `SENDGRID_MAIL_FROM` | Sender address (e.g. `BetterBlog <no-reply@example.com>`) |
-
-## Scaling the Worker
-
-`app.json` defines the formation (web + worker) so **new** pipeline apps get the worker scaled automatically. For **existing** apps created before this was added, run once per app:
-
-```bash
-heroku ps:scale worker=1 -a your-staging-app
-heroku ps:scale worker=1 -a your-prod-app
-```
-
-After that, the worker starts with every deploy.
-
-## Deploy
-
-```bash
-git push heroku main
-# or, for pipeline: connect GitHub and use automatic deploys
-```
-
-## Stripe plan prices (`plans` table)
-
-Sandbox price IDs and `stripe_price_label` values for Essentials / Professional / Publication are updated via:
-
-- `server/prisma/seed.ts` (local `npm run db:seed` or equivalent), and/or
-- `server/prisma/migrations/update_plans_sandbox_stripe_2025.sql` (run manually on Heroku Postgres when you cannot re-seed).
-
-Internal `plan_key` values remain `starter`, `pro`, and `agency`.
-
-## Stripe Webhooks
-
-Create separate webhook endpoints for staging and prod:
-
-- Staging: `https://your-staging-app.herokuapp.com/api/webhooks/stripe`
-- Prod: `https://your-prod-app.herokuapp.com/api/webhooks/stripe`
-
-Use the corresponding signing secret in each app's config.
-
-Subscribe to these events in the Stripe Dashboard:
-- `checkout.session.completed`
-- `customer.subscription.updated`
-
-## Local Development: Running the Worker
-
-The worker is a **separate process** from the API server. Jobs are queued by the server but processed by the worker. For Stripe webhooks to update your database, you must run the worker:
-
-```bash
-# In a separate terminal (from project root):
-npm run dev:worker
-```
-
-Or from the server workspace: `npm run dev:worker --workspace=server`
-
-When the worker starts, you should see:
-```
-[worker] Starting pg-boss worker...
-[worker] Subscribed to queue: stripe.checkout.session.completed
-[worker] Subscribed to queue: stripe.customer.subscription.updated
-[worker] pg-boss workers registered. Listening for jobs on: ...
-```
+Heroku used `web` + `worker` dynos and pg-boss. That path is retired in favor of Vercel + Vercel Queues. [Procfile](Procfile) now defines `web` only for any transitional Heroku use.

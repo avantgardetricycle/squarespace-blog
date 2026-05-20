@@ -1,7 +1,6 @@
 {
   "name": "BetterBlog",
   "formation": {
-    "web": { "quantity": 1 },
-    "worker": { "quantity": 1 }
+    "web": { "quantity": 1 }
   }
 }

@@ -1,8 +1,9 @@
 /**
- * Returns DATABASE_URL for database connections.
- * For remote (Heroku): we strip sslmode from the URL so our ssl: { rejectUnauthorized: false }
- * config takes effect. Including sslmode=require in the URL would overwrite that and cause
- * "unable to get local issuer certificate" on Heroku dynos.
+ * Database connection helpers for Prisma + pg adapter.
+ *
+ * - Local: plain DATABASE_URL, no SSL.
+ * - Supabase: pooled DATABASE_URL (port 6543, pgbouncer) at runtime; DIRECT_URL for migrations.
+ * - Heroku (legacy): strip sslmode from URL and use rejectUnauthorized: false.
  */
 export function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL
@@ -12,24 +13,34 @@ export function getDatabaseUrl(): string {
   if (!isRemoteDatabase()) {
     return url
   }
-  // Strip sslmode so our ssl config object is used instead
+  if (isSupabaseDatabase()) {
+    return url
+  }
+  // Heroku: strip sslmode so our ssl config object is used instead
   return url
     .replace(/[?&]sslmode=[^&]+/g, '')
     .replace(/\?&/, '?')
     .replace(/\?$/, '')
 }
 
-/** Whether we're connecting to a remote DB (e.g. Heroku) */
 export function isRemoteDatabase(): boolean {
   const url = process.env.DATABASE_URL ?? ''
   return !url.includes('localhost') && !url.includes('127.0.0.1')
 }
 
+export function isSupabaseDatabase(): boolean {
+  const url = process.env.DATABASE_URL ?? ''
+  const direct = process.env.DIRECT_URL ?? ''
+  return url.includes('supabase.co') || direct.includes('supabase.co')
+}
+
 /**
- * SSL config for pg when connecting to Heroku Postgres.
- * Heroku dynos lack the full CA chain, causing "unable to get local issuer certificate".
- * rejectUnauthorized: false is the standard workaround for Heroku + pg.
+ * SSL config for pg when connecting to a remote DB.
  */
-export function getSslConfig(): { rejectUnauthorized: false } | false {
-  return isRemoteDatabase() ? { rejectUnauthorized: false } : false
+export function getSslConfig(): { rejectUnauthorized: boolean } | false {
+  if (!isRemoteDatabase()) return false
+  if (isSupabaseDatabase()) {
+    return { rejectUnauthorized: true }
+  }
+  return { rejectUnauthorized: false }
 }

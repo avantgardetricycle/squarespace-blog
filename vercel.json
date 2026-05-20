@@ -1,0 +1,54 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "buildCommand": "npm run build --workspace=server && npm run build --workspace=client",
+  "installCommand": "npm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/api/webhooks/stripe",
+      "destination": "/api/webhooks/stripe"
+    },
+    {
+      "source": "/api/queues/stripe-checkout-session-completed",
+      "destination": "/api/queues/stripe-checkout-session-completed"
+    },
+    {
+      "source": "/api/queues/stripe-customer-subscription-updated",
+      "destination": "/api/queues/stripe-customer-subscription-updated"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60,
+      "includeFiles": "scripts/**"
+    },
+    "api/webhooks/stripe.ts": {
+      "maxDuration": 30
+    },
+    "api/queues/stripe-checkout-session-completed.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "stripe.checkout.session.completed",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-customer-subscription-updated.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "stripe.customer.subscription.updated",
+          "consumer": "default"
+        }
+      ]
+    }
+  }
+}

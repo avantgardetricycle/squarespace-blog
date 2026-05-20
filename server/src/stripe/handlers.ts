@@ -1,5 +1,4 @@
 import Stripe from 'stripe'
-import { boss, stripeEventToQueueName } from './index.js'
 import prisma from '../db/index.js'
 import { hashToken, generateToken } from '../lib/auth.js'
 import { sendInviteEmailViaSendGrid } from '../lib/email.js'
@@ -14,32 +13,7 @@ function getStripe(): Stripe {
   return new Stripe(key)
 }
 
-/** Register all Stripe webhook workers. Call after boss.start(). */
-export async function registerStripeWorkers(): Promise<void> {
-  const checkoutQueue = stripeEventToQueueName('checkout.session.completed')
-  await boss.createQueue(checkoutQueue)
-  console.log('[worker] Subscribed to queue:', checkoutQueue)
-  await boss.work<CheckoutSessionCompletedPayload>(checkoutQueue, async (jobs) => {
-    for (const job of jobs) {
-      await handleCheckoutSessionCompleted(job.data)
-    }
-  })
-
-  const subUpdatedQueue = stripeEventToQueueName('customer.subscription.updated')
-  await boss.createQueue(subUpdatedQueue)
-  console.log('[worker] Subscribed to queue:', subUpdatedQueue)
-  await boss.work<SubscriptionUpdatedPayload>(subUpdatedQueue, async (jobs) => {
-    for (const job of jobs) {
-      console.log('[worker] customer.subscription.updated job received', {
-        jobId: job.id,
-        stripeEventId: job.data?.stripeEventId
-      })
-      await handleSubscriptionUpdated(job.data)
-    }
-  })
-}
-
-interface CheckoutSessionCompletedPayload {
+export interface CheckoutSessionCompletedPayload {
   stripeEventId: string
   type: string
   data: {
@@ -53,7 +27,7 @@ interface CheckoutSessionCompletedPayload {
   }
 }
 
-interface SubscriptionUpdatedPayload {
+export interface SubscriptionUpdatedPayload {
   stripeEventId: string
   type: string
   data: {
@@ -66,7 +40,7 @@ interface SubscriptionUpdatedPayload {
   }
 }
 
-async function handleCheckoutSessionCompleted(
+export async function handleCheckoutSessionCompleted(
   payload: CheckoutSessionCompletedPayload
 ): Promise<void> {
   const { stripeEventId, data } = payload
@@ -117,19 +91,18 @@ async function handleCheckoutSessionCompleted(
     const priceItem = subscription.items.data[0]
     const stripePriceId = priceItem?.price?.id ?? null
 
-    // Get plan/cadence from Stripe metadata
     const sessionMetadata = ((session.metadata ?? data.metadata) ?? {}) as Record<string, string>
     const subMetadata = (subscription.metadata ?? {}) as Record<string, string>
     const planKey = normalizePlanKey(subMetadata.plan_key ?? sessionMetadata.plan_key)
     const cadence = subMetadata.cadence ?? sessionMetadata.cadence ?? 'monthly'
+    void cadence
 
-    // Customer name: prefer our CheckoutSession (stored at create-session), then Stripe metadata, then customer_details
     let ourMetadata: { customerName?: string } = {}
     if (ourCheckoutSession?.metadataJson) {
       try {
         ourMetadata = JSON.parse(ourCheckoutSession.metadataJson) as { customerName?: string }
       } catch (parseErr) {
-        console.error('[worker] checkout.session.completed metadataJson parse error:', parseErr, ourCheckoutSession.metadataJson)
+        console.error('[stripe] checkout.session.completed metadataJson parse error:', parseErr, ourCheckoutSession.metadataJson)
       }
     }
 
@@ -152,7 +125,6 @@ async function handleCheckoutSessionCompleted(
     })
     const maxSites = plan?.maxSites ?? null
 
-    // Stripe uses snake_case; SDK object may vary. Fallback to trial_end for trialing.
     const subRecord = subscription as unknown as Record<string, unknown>
     const periodEnd =
       (typeof subRecord.current_period_end === 'number' ? subRecord.current_period_end : null) ??
@@ -161,7 +133,6 @@ async function handleCheckoutSessionCompleted(
     const currentPeriodEnd =
       typeof periodEnd === 'number' ? new Date(periodEnd * 1000) : null
 
-    // Use existing user if one exists (by email) to avoid duplicates
     const upsertPayload = {
       create: { email: normalizedEmail, name: customerName, stripeCustomerId },
       update: {
@@ -177,7 +148,6 @@ async function handleCheckoutSessionCompleted(
 
     const userName = (user as { name?: string | null }).name
 
-    // Explicitly set name when we have it (handles edge cases where upsert update may not apply)
     if (customerName && userName !== customerName) {
       await prisma.user.update({
         where: { id: user.id },
@@ -207,8 +177,7 @@ async function handleCheckoutSessionCompleted(
       }
     })
 
-    const shouldSendInvite =
-      status === 'trialing' || status === 'active'
+    const shouldSendInvite = status === 'trialing' || status === 'active'
     if (shouldSendInvite) {
       const rawToken = generateToken()
       const tokenHash = hashToken(rawToken)
@@ -240,7 +209,7 @@ async function handleCheckoutSessionCompleted(
       data: { status: 'processed', processedAt: new Date() }
     })
   } catch (err) {
-    console.error('[worker] checkout.session.completed failed:', err)
+    console.error('[stripe] checkout.session.completed failed:', err)
     await prisma.stripeWebhookEvent.update({
       where: { stripeEventId },
       data: {
@@ -253,26 +222,13 @@ async function handleCheckoutSessionCompleted(
   }
 }
 
-async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): Promise<void> {
+export async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): Promise<void> {
   const { stripeEventId, data } = payload
-
-  console.log('[worker] handleSubscriptionUpdated START', {
-    stripeEventId,
-    dataKeys: data ? Object.keys(data) : [],
-    dataId: data?.id,
-    dataCustomer: typeof data?.customer === 'string' ? data.customer : (data?.customer as { id?: string } | undefined)?.id
-  })
 
   const record = await prisma.stripeWebhookEvent.findUnique({
     where: { stripeEventId }
   })
-  console.log('[worker] handleSubscriptionUpdated record lookup', {
-    stripeEventId,
-    found: !!record,
-    status: record?.status
-  })
   if (record?.status === 'processed') {
-    console.log('[worker] handleSubscriptionUpdated SKIP: already processed')
     return
   }
 
@@ -285,11 +241,6 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
           ? (data.customer as { id?: string }).id
           : undefined
 
-    console.log('[worker] handleSubscriptionUpdated extracted', {
-      subscriptionId,
-      stripeCustomerId
-    })
-
     if (!subscriptionId || !stripeCustomerId) {
       throw new Error('Missing subscription ID or customer ID')
     }
@@ -298,14 +249,12 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
     const priceItem = data.items?.data?.[0]
     const stripePriceId = priceItem?.price?.id ?? null
 
-    // Stripe uses snake_case; webhook payload may vary. Use bracket notation and fallback to trial_end for trialing.
     const dataRecord = data as Record<string, unknown>
     let periodEnd: number | null =
       (typeof dataRecord.current_period_end === 'number' ? dataRecord.current_period_end : null) ??
       (typeof dataRecord.currentPeriodEnd === 'number' ? dataRecord.currentPeriodEnd : null) ??
       (typeof dataRecord.trial_end === 'number' ? dataRecord.trial_end : null)
 
-    // Fallback: fetch from Stripe if period not in payload (some webhook payloads omit expanded fields)
     if (periodEnd == null) {
       try {
         const stripe = getStripe()
@@ -315,11 +264,8 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
           (typeof subRecord.current_period_end === 'number' ? subRecord.current_period_end : null) ??
           (typeof subRecord.currentPeriodEnd === 'number' ? subRecord.currentPeriodEnd : null) ??
           (typeof subRecord.trial_end === 'number' ? subRecord.trial_end : null)
-        if (periodEnd != null) {
-          console.log('[worker] handleSubscriptionUpdated fetched period from Stripe API:', periodEnd)
-        }
       } catch (retrieveErr) {
-        console.warn('[worker] handleSubscriptionUpdated Stripe retrieve fallback failed:', retrieveErr)
+        console.warn('[stripe] subscription.updated Stripe retrieve fallback failed:', retrieveErr)
       }
     }
 
@@ -328,19 +274,6 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
     const cancelAtPeriodEnd = Boolean(
       dataRecord.cancel_at_period_end ?? dataRecord.cancelAtPeriodEnd
     )
-
-    console.log('[worker] handleSubscriptionUpdated parsed', {
-      status,
-      stripePriceId,
-      periodEndRaw: periodEnd,
-      currentPeriodEnd: currentPeriodEnd?.toISOString(),
-      cancelAtPeriodEnd,
-      debugPeriodValues: {
-        current_period_end: dataRecord.current_period_end,
-        currentPeriodEnd: dataRecord.currentPeriodEnd,
-        trial_end: dataRecord.trial_end
-      }
-    })
 
     const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
     const plan = stripePriceId
@@ -352,32 +285,16 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
         })
       : null
 
-    console.log('[worker] handleSubscriptionUpdated plan lookup', {
-      stripePriceId,
-      stripeEnv,
-      planFound: !!plan,
-      planKey: plan?.planKey
-    })
-
     const existingSub = await prisma.subscription.findFirst({
       where: {
-        OR: [
-          { stripeSubscriptionId: subscriptionId },
-          { stripeCustomerId }
-        ]
+        OR: [{ stripeSubscriptionId: subscriptionId }, { stripeCustomerId }]
       }
-    })
-
-    console.log('[worker] handleSubscriptionUpdated existingSub', {
-      found: !!existingSub,
-      existingSubId: existingSub?.id
     })
 
     const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
     const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
 
     if (existingSub) {
-      console.log('[worker] handleSubscriptionUpdated updating subscription', existingSub.id)
       await prisma.subscription.update({
         where: { id: existingSub.id },
         data: {
@@ -390,15 +307,9 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
           cancelAtPeriodEnd
         }
       })
-      console.log('[worker] handleSubscriptionUpdated subscription updated')
     } else {
       const user = await prisma.user.findFirst({
         where: { stripeCustomerId }
-      })
-      console.log('[worker] handleSubscriptionUpdated no existingSub, user lookup', {
-        stripeCustomerId,
-        userFound: !!user,
-        userId: user?.id
       })
       if (user) {
         await prisma.subscription.create({
@@ -414,21 +325,17 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
             cancelAtPeriodEnd
           }
         })
-        console.log('[worker] handleSubscriptionUpdated subscription created')
       } else {
-        console.log('[worker] handleSubscriptionUpdated WARN: no user found for stripeCustomerId, skipping create')
+        console.warn('[stripe] subscription.updated: no user for stripeCustomerId', stripeCustomerId)
       }
     }
 
-    console.log('[worker] handleSubscriptionUpdated marking event processed', stripeEventId)
     await prisma.stripeWebhookEvent.update({
       where: { stripeEventId },
       data: { status: 'processed', processedAt: new Date() }
     })
-    console.log('[worker] handleSubscriptionUpdated DONE', stripeEventId)
   } catch (err) {
-    console.error('[worker] customer.subscription.updated failed:', err)
-    console.error('[worker] customer.subscription.updated error stack:', err instanceof Error ? err.stack : 'no stack')
+    console.error('[stripe] customer.subscription.updated failed:', err)
     try {
       await prisma.stripeWebhookEvent.update({
         where: { stripeEventId },
@@ -438,10 +345,24 @@ async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayload): P
           error: err instanceof Error ? err.message : String(err)
         }
       })
-      console.log('[worker] handleSubscriptionUpdated marked event as failed')
     } catch (updateErr) {
-      console.error('[worker] handleSubscriptionUpdated FAILED to update event status:', updateErr)
+      console.error('[stripe] failed to mark event as failed:', updateErr)
     }
     throw err
   }
+}
+
+export async function dispatchStripeEvent(
+  eventType: string,
+  payload: CheckoutSessionCompletedPayload | SubscriptionUpdatedPayload
+): Promise<void> {
+  if (eventType === 'checkout.session.completed') {
+    await handleCheckoutSessionCompleted(payload as CheckoutSessionCompletedPayload)
+    return
+  }
+  if (eventType === 'customer.subscription.updated') {
+    await handleSubscriptionUpdated(payload as SubscriptionUpdatedPayload)
+    return
+  }
+  throw new Error(`Unhandled Stripe event type: ${eventType}`)
 }

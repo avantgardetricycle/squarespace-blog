@@ -9,6 +9,10 @@ function getDatabaseUrl(): string {
   return url;
 }
 
+function getDirectUrl(): string {
+  return process.env["DIRECT_URL"] ?? getDatabaseUrl();
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -17,5 +21,6 @@ export default defineConfig({
   },
   datasource: {
     url: getDatabaseUrl(),
+    directUrl: getDirectUrl(),
   },
 });
