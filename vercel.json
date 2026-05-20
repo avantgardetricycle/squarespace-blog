@@ -34,7 +34,7 @@
       "maxDuration": 60,
       "experimentalTriggers": [
         {
-          "type": "queue/v2beta",
+          "type": "queue/v1beta",
           "topic": "stripe.checkout.session.completed",
           "consumer": "default"
         }
@@ -44,7 +44,7 @@
       "maxDuration": 60,
       "experimentalTriggers": [
         {
-          "type": "queue/v2beta",
+          "type": "queue/v1beta",
           "topic": "stripe.customer.subscription.updated",
           "consumer": "default"
         }
