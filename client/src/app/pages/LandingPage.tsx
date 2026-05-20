@@ -159,7 +159,11 @@ export default function LandingPage() {
               </Button>
             ) : (
               <>
-                <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">Log in</Link>
+                {isLive === true ? (
+                  <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">
+                    Log in
+                  </Link>
+                ) : null}
                 {isLive === true ? (
                   <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
                     <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started</Link>
