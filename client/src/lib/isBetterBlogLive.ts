@@ -1,5 +1,8 @@
 const LOG_PREFIX = '[BetterBlog/isLive]'
 
+/** Do not wait for a hung Express cold start / DB connect on the landing page. */
+const HEALTH_FETCH_TIMEOUT_MS = 5_000
+
 /** Set at build time from `IS_BETTER_BLOG_LIVE` / `VITE_IS_BETTER_BLOG_LIVE` on Vercel. */
 export const BUILD_TIME_IS_LIVE = import.meta.env.VITE_IS_BETTER_BLOG_LIVE === 'true'
 
@@ -51,7 +54,9 @@ export async function resolveIsBetterBlogLive(): Promise<boolean> {
   console.info(LOG_PREFIX, 'resolving…', base)
 
   try {
-    const res = await fetch('/api/health')
+    const res = await fetch('/api/health', {
+      signal: AbortSignal.timeout(HEALTH_FETCH_TIMEOUT_MS),
+    })
     const contentType = res.headers.get('content-type')
     const text = await res.text()
     const bodyPreview = text.slice(0, 200)

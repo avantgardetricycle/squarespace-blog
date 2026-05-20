@@ -6,7 +6,11 @@ import { getDatabaseUrl, getSslConfig } from '../lib/db-connection.js'
 
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
-  ssl: getSslConfig()
+  ssl: getSslConfig(),
+  // Serverless: one connection per instance; fail fast instead of hanging until Vercel's 60s limit
+  max: 1,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 20_000,
 })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })

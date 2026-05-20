@@ -21,7 +21,8 @@ import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/l
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLive, setIsLive] = useState<boolean | null>(null);
+  /** Use build-time flag immediately; avoid "not live" UI while /api/health is pending. */
+  const [isLive, setIsLive] = useState<boolean>(BUILD_TIME_IS_LIVE);
   const [interestModalOpen, setInterestModalOpen] = useState(false);
   const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
 
@@ -41,7 +42,6 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    if (isLive === null) return;
     console.info("[BetterBlog/LandingPage] UI mode:", isLive ? "live (checkout + login)" : "not live (interest modal)");
   }, [isLive]);
 

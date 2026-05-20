@@ -48,6 +48,16 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
    Events: `checkout.session.completed`, `customer.subscription.updated`.
 
+### API 504 / 60s timeouts
+
+If Vercel logs show `Task timed out after 60 seconds` on `/api/dashboard/me`, `/api/checkout/prices`, etc.:
+
+1. **`DATABASE_URL` on Vercel** must be the Supabase **transaction pooler** (port **6543**, `?pgbouncer=true`), not the direct `5432` URL.
+2. Confirm the password and project ref in the connection string match **Project Settings → Database**.
+3. After deploy, `/api/health` should respond in under a second (standalone `api/health.ts`, no database). If `/api/health` is fast but other `/api/*` routes time out, the database connection from the Express app is the problem.
+
+The landing page uses the **build-time** `IS_BETTER_BLOG_LIVE` value immediately so the UI does not wait on `/api/health`.
+
 ### Staging (`staging.betterblog.xyz`) and Deployment Protection
 
 If **Vercel Authentication** (Deployment Protection) is enabled for Preview, browsers cannot call `/api/health` without logging in (401). The landing page used to treat that as “not live.” The client now falls back to the **build-time** value of `IS_BETTER_BLOG_LIVE` for that environment.

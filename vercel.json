@@ -7,6 +7,10 @@
   "outputDirectory": "client/dist",
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "/api/health"
+    },
+    {
       "source": "/loader.js",
       "destination": "/api"
     },
@@ -32,6 +36,9 @@
     }
   ],
   "functions": {
+    "api/health.ts": {
+      "maxDuration": 10
+    },
     "api/index.ts": {
       "maxDuration": 60,
       "includeFiles": "{scripts/**,server/dist/**,client/dist/**}"
