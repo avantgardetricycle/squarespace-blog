@@ -16,6 +16,7 @@ import {
   formatMajorAmount,
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
+import { resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
@@ -29,10 +30,7 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((data) => setIsLive(data.isLive === true))
-      .catch(() => setIsLive(false));
+    resolveIsBetterBlogLive().then(setIsLive);
   }, []);
 
   useEffect(() => {

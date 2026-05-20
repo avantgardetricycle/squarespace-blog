@@ -43,10 +43,18 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `SENDGRID_MAIL_FROM` | Verified sender |
 | `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
 | `HCAPTCHA_*` | hCaptcha keys |
-| `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA |
+| `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA (checkout + Log in). Set per environment (e.g. `true` on Preview / staging, `false` on Production). Baked into the client at build time; `/api/health` overrides when reachable. |
 
 6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
    Events: `checkout.session.completed`, `customer.subscription.updated`.
+
+### Staging (`staging.betterblog.xyz`) and Deployment Protection
+
+If **Vercel Authentication** (Deployment Protection) is enabled for Preview, browsers cannot call `/api/health` without logging in (401). The landing page used to treat that as “not live.” The client now falls back to the **build-time** value of `IS_BETTER_BLOG_LIVE` for that environment.
+
+After changing `IS_BETTER_BLOG_LIVE`, **redeploy** the branch (env vars are applied at build time for the fallback).
+
+Optional: disable Deployment Protection for Preview, or add `staging.betterblog.xyz` to the protection allowlist, if you want runtime `/api/health` to drive the UI.
 
 ### Database migrations (CI)
 
