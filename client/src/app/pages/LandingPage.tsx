@@ -16,7 +16,7 @@ import {
   formatMajorAmount,
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
-import { resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
+import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
@@ -30,8 +30,20 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    resolveIsBetterBlogLive().then(setIsLive);
+    console.info("[BetterBlog/LandingPage] mount", {
+      buildTimeRaw: BUILD_TIME_RAW,
+      buildTimeIsLive: BUILD_TIME_IS_LIVE,
+    });
+    resolveIsBetterBlogLive().then((live) => {
+      console.info("[BetterBlog/LandingPage] isLive state →", live);
+      setIsLive(live);
+    });
   }, []);
+
+  useEffect(() => {
+    if (isLive === null) return;
+    console.info("[BetterBlog/LandingPage] UI mode:", isLive ? "live (checkout + login)" : "not live (interest modal)");
+  }, [isLive]);
 
   useEffect(() => {
     fetchPublicPlanPrices()

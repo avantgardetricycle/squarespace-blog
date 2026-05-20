@@ -11,6 +11,14 @@ const buildTimeIsLive =
   process.env.VITE_IS_BETTER_BLOG_LIVE === 'true' ||
   process.env.IS_BETTER_BLOG_LIVE === 'true'
 
+console.info('[BetterBlog/build] is-live env at client build:', {
+  IS_BETTER_BLOG_LIVE: process.env.IS_BETTER_BLOG_LIVE ?? '(unset)',
+  VITE_IS_BETTER_BLOG_LIVE: process.env.VITE_IS_BETTER_BLOG_LIVE ?? '(unset)',
+  bakedViteIsBetterBlogLive: buildTimeIsLive ? 'true' : 'false',
+  VERCEL_ENV: process.env.VERCEL_ENV ?? '(unset)',
+  VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF ?? '(unset)',
+})
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {

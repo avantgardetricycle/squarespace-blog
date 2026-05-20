@@ -60,9 +60,20 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use('/api/leads', leadsRoutes)
 
   app.get('/api/health', (_req, res) => {
+    const isBetterBlogLiveEnv = process.env.IS_BETTER_BLOG_LIVE
+    const isLive = isBetterBlogLiveEnv === 'true'
+    const debug = {
+      vercelEnv: process.env.VERCEL_ENV,
+      gitBranch: process.env.VERCEL_GIT_COMMIT_REF,
+      gitCommitRef: process.env.VERCEL_GIT_COMMIT_REF,
+      deploymentId: process.env.VERCEL_DEPLOYMENT_ID,
+      isBetterBlogLiveEnv: isBetterBlogLiveEnv ?? null,
+    }
+    console.info('[BetterBlog/health]', { isLive, ...debug })
     res.json({
       status: 'ok',
-      isLive: process.env.IS_BETTER_BLOG_LIVE === 'true'
+      isLive,
+      debug,
     })
   })
 
