@@ -1,6 +1,5 @@
 import 'dotenv/config'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { processStripeWebhook } from '../../server/dist/stripe/webhook.js'
 
 export const config = {
   api: {
@@ -26,6 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const { processStripeWebhook } = await import('../../server/dist/stripe/webhook.js')
     const rawBody = await readRawBody(req)
     const result = await processStripeWebhook(rawBody, req.headers['stripe-signature'] as string | undefined)
     res.status(result.status).json(result.body)
