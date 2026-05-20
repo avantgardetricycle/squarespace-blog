@@ -4,7 +4,16 @@
   "buildCommand": "npm run build --workspace=server && npm run build --workspace=client",
   "installCommand": "npm install --include=dev",
   "framework": null,
+  "outputDirectory": "client/dist",
   "rewrites": [
+    {
+      "source": "/loader.js",
+      "destination": "/api"
+    },
+    {
+      "source": "/renderer.js",
+      "destination": "/api"
+    },
     {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"

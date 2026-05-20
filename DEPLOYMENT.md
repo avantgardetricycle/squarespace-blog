@@ -24,9 +24,10 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 ### Vercel setup
 
 1. Import the GitHub repo in Vercel.
-2. Build uses [vercel.json](vercel.json): `npm run build --workspace=server && npm run build --workspace=client`.
-3. Enable **Vercel Queues** on the project (beta).
-4. Set environment variables (Production + Preview).
+2. **Framework Preset**: Other (or leave auto). **Root Directory**: repository root (not `server/`). **Output Directory**: leave blank or `client/dist` — [vercel.json](vercel.json) sets `outputDirectory` to `client/dist` after the Vite build. Do not use `public` unless you add that folder.
+3. Build uses [vercel.json](vercel.json): `npm run build --workspace=server && npm run build --workspace=client`.
+4. Enable **Vercel Queues** on the project (beta).
+5. Set environment variables (Production + Preview).
 
    **Do not set `NODE_ENV=production` in Vercel env vars.** Vercel sets it during install; adding it yourself makes `npm install` skip `devDependencies` and breaks `tsc` / Vite. Use `VERCEL_ENV` or `STRIPE_ENVIRONMENT` for environment-specific behavior instead.
 
@@ -44,7 +45,7 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `HCAPTCHA_*` | hCaptcha keys |
 | `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA |
 
-5. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
+6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
    Events: `checkout.session.completed`, `customer.subscription.updated`.
 
 ### Database migrations (CI)
