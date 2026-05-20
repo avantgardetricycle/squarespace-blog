@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "buildCommand": "npm run build --workspace=server && npm run build --workspace=client",
-  "installCommand": "npm install",
+  "installCommand": "npm install --include=dev",
   "framework": null,
   "rewrites": [
     {
@@ -25,13 +25,15 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
-      "includeFiles": "scripts/**"
+      "includeFiles": "{scripts/**,server/dist/**,client/dist/**}"
     },
     "api/webhooks/stripe.ts": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "server/dist/**"
     },
     "api/queues/stripe-checkout-session-completed.ts": {
       "maxDuration": 60,
+      "includeFiles": "server/dist/**",
       "experimentalTriggers": [
         {
           "type": "queue/v1beta",
@@ -42,6 +44,7 @@
     },
     "api/queues/stripe-customer-subscription-updated.ts": {
       "maxDuration": 60,
+      "includeFiles": "server/dist/**",
       "experimentalTriggers": [
         {
           "type": "queue/v1beta",

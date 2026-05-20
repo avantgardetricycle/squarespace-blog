@@ -26,7 +26,9 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 1. Import the GitHub repo in Vercel.
 2. Build uses [vercel.json](vercel.json): `npm run build --workspace=server && npm run build --workspace=client`.
 3. Enable **Vercel Queues** on the project (beta).
-4. Set environment variables (Production + Preview):
+4. Set environment variables (Production + Preview).
+
+   **Do not set `NODE_ENV=production` in Vercel env vars.** Vercel sets it during install; adding it yourself makes `npm install` skip `devDependencies` and breaks `tsc` / Vite. Use `VERCEL_ENV` or `STRIPE_ENVIRONMENT` for environment-specific behavior instead.
 
 | Variable | Description |
 | -------- | ----------- |

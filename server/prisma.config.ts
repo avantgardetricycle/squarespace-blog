@@ -5,8 +5,12 @@ import { defineConfig } from "prisma/config";
 
 function getDatabaseUrl(): string {
   const url = process.env["DATABASE_URL"];
-  if (!url) throw new Error("DATABASE_URL is required");
-  return url;
+  if (url) return url;
+  // Prisma CLI (e.g. generate) loads this file without needing a live DB.
+  if (process.argv.some((arg) => arg.includes("generate"))) {
+    return "postgresql://build:build@127.0.0.1:5432/build";
+  }
+  throw new Error("DATABASE_URL is required");
 }
 
 function getDirectUrl(): string {
