@@ -29,12 +29,17 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   app.set('trust proxy', 1)
 
-  // Vercel rewrites /api/* → /api; serverless-http strips the /api prefix so Express sees /dashboard/me not /api/dashboard/me.
+  // Vercel rewrite + serverless-http often exposes path /api only; restore full path from handler header.
   app.use((req, _res, next) => {
-    const pathOnly = req.path || '/'
+    const forwarded = req.headers['x-betterblog-original-path']
     const query = req.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
-    if (!pathOnly.startsWith('/api/') && pathOnly !== '/api') {
-      req.url = `/api${pathOnly === '/' ? '' : pathOnly}${query}`
+    if (typeof forwarded === 'string' && forwarded.startsWith('/api')) {
+      req.url = forwarded.includes('?') ? forwarded : `${forwarded}${query}`
+    } else {
+      const pathOnly = req.path || '/'
+      if (!pathOnly.startsWith('/api/') && pathOnly !== '/api') {
+        req.url = `/api${pathOnly === '/' ? '' : pathOnly}${query}`
+      }
     }
     next()
   })

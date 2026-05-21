@@ -35,10 +35,16 @@ async function getHandler(): Promise<ServerlessHandler> {
 
 export default async function expressHandler(req: VercelRequest, res: VercelResponse) {
   const t0 = Date.now()
+  const incomingUrl = req.url ?? '/'
+  // serverless-http reduces rewritten /api/* requests to path /api; pass the real path into Express.
+  if (incomingUrl.startsWith('/api/')) {
+    req.headers['x-betterblog-original-path'] = incomingUrl
+  }
   debugLog('C', 'handler entry', {
     method: req.method,
-    url: req.url,
+    url: incomingUrl,
     path: (req as { path?: string }).path,
+    forwardedPath: req.headers['x-betterblog-original-path'],
   })
   try {
     const fn = await getHandler()
