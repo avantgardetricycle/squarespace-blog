@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import prisma from '../db/index.js'
+import { debugLog } from './debug-log.js'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -94,8 +95,14 @@ function interpretStripePrice(price: Stripe.Price): {
 
 export async function loadPublicPlanPrices(): Promise<PublicPlanPrices> {
   const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+  const t0 = Date.now()
+  debugLog('I', 'loadPublicPlanPrices: plan.findMany start')
   const rows = await prisma.plan.findMany({
     where: { stripeEnvironment: stripeEnv }
+  })
+  debugLog('I', 'loadPublicPlanPrices: plan.findMany done', {
+    ms: Date.now() - t0,
+    rowCount: rows.length,
   })
 
   if (rows.length === 0) {
@@ -106,7 +113,9 @@ export async function loadPublicPlanPrices(): Promise<PublicPlanPrices> {
   const uniqueIds = [...new Set(rows.map((r) => r.stripePriceId))]
   let stripePrices: Stripe.Price[]
   try {
+    debugLog('I', 'loadPublicPlanPrices: stripe.retrieve start', { count: uniqueIds.length })
     stripePrices = await Promise.all(uniqueIds.map((id) => stripe.prices.retrieve(id)))
+    debugLog('I', 'loadPublicPlanPrices: stripe.retrieve done', { ms: Date.now() - t0 })
   } catch (err) {
     rethrowIfPlanPriceMissingInStripeAccount(err)
   }

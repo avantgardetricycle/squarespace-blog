@@ -5,6 +5,8 @@ import { optionalSession, SessionUser } from '../middleware/session.js'
 import { getAppUrl } from '../lib/url.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
 import { loadPublicPlanPrices, planPriceStripeErrorMessage } from '../lib/stripePlanPrices.js'
+import { debugLog } from '../lib/debug-log.js'
+import { pingDatabase } from '../db/index.js'
 import { isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
 
 const router = Router()
@@ -34,10 +36,19 @@ router.post('/check-email', async (req: Request, res: Response) => {
 
 // GET /api/checkout/prices — amounts from Stripe (for landing + pre-checkout UI)
 router.get('/prices', async (_req: Request, res: Response) => {
+  const t0 = Date.now()
+  debugLog('I', 'checkout/prices start')
   try {
+    await pingDatabase(15_000)
+    debugLog('I', 'checkout/prices after db ping', { ms: Date.now() - t0 })
     const data = await loadPublicPlanPrices()
+    debugLog('I', 'checkout/prices success', { ms: Date.now() - t0 })
     res.json(data)
   } catch (err) {
+    debugLog('I', 'checkout/prices error', {
+      ms: Date.now() - t0,
+      error: err instanceof Error ? err.message : String(err),
+    })
     console.error('Checkout prices error:', err)
     const message = err instanceof Error ? err.message : 'Failed to load prices'
     res.status(500).json({ error: message })

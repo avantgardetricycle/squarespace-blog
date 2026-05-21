@@ -47,6 +47,22 @@ function getPrisma(): PrismaClient {
   return prismaInstance
 }
 
+/** Fail fast instead of hanging until Vercel's 60s function limit. */
+export async function pingDatabase(timeoutMs = 15_000): Promise<number> {
+  const t0 = Date.now()
+  debugLog('H', 'pingDatabase start', { timeoutMs })
+  const client = getPrisma()
+  await Promise.race([
+    client.$queryRaw`SELECT 1`,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`DB ping timeout after ${timeoutMs}ms`)), timeoutMs)
+    }),
+  ])
+  const ms = Date.now() - t0
+  debugLog('H', 'pingDatabase ok', { ms })
+  return ms
+}
+
 const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
     const client = getPrisma()

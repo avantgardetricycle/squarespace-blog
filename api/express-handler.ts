@@ -49,7 +49,13 @@ export default async function expressHandler(req: VercelRequest, res: VercelResp
   try {
     const fn = await getHandler()
     debugLog('C', 'handler invoking express', { ms: Date.now() - t0 })
-    return await fn(req, res)
+    const result = await fn(req, res)
+    debugLog('J', 'handler express returned', {
+      ms: Date.now() - t0,
+      headersSent: res.headersSent,
+      statusCode: res.statusCode,
+    })
+    return result
   } catch (err) {
     debugLog('C', 'handler error', {
       ms: Date.now() - t0,

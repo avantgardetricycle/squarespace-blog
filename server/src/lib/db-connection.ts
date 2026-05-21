@@ -60,7 +60,8 @@ export function isSupabaseSslNoVerify(): boolean {
 export function getSslConfig(): { rejectUnauthorized: boolean } | false {
   if (!isRemoteDatabase()) return false
   if (isSupabaseDatabase()) {
-    if (isSupabaseSslNoVerify()) {
+    // Local: SUPABASE_SSL_NO_VERIFY. Vercel: pooler TLS often needs relaxed verify (same as local fix).
+    if (isSupabaseSslNoVerify() || process.env.VERCEL === '1') {
       return { rejectUnauthorized: false }
     }
     return { rejectUnauthorized: true }
