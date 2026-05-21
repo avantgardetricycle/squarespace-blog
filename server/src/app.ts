@@ -16,6 +16,7 @@ import analyticsRoutes from './routes/analytics.js'
 import captureRoutes from './routes/capture.js'
 import commentsRoutes from './routes/comments.js'
 import commentActionsRoutes from './routes/comment-actions.js'
+import { debugLog } from './lib/debug-log.js'
 
 export interface CreateAppOptions {
   /** When false, Stripe webhook is served only by `api/webhooks/stripe` (Vercel). */
@@ -27,6 +28,24 @@ export function createApp(options: CreateAppOptions = {}): Express {
   const app = express()
 
   app.set('trust proxy', 1)
+
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/')) {
+      next()
+      return
+    }
+    const t0 = Date.now()
+    debugLog('E', 'API request start', { method: req.method, path: req.path })
+    res.on('finish', () => {
+      debugLog('E', 'API request finish', {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        ms: Date.now() - t0,
+      })
+    })
+    next()
+  })
 
   if (mountStripeWebhook) {
     app.use(

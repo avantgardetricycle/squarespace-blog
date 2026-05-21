@@ -3,17 +3,60 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../lib/db-connection.js'
+import { debugLog } from '../lib/debug-log.js'
 
-const pool = new Pool({
-  connectionString: getDatabaseUrl(),
-  ssl: getSslConfig(),
-  // Serverless: one connection per instance; fail fast instead of hanging until Vercel's 60s limit
-  max: 1,
-  connectionTimeoutMillis: 10_000,
-  idleTimeoutMillis: 20_000,
+let pool: Pool | null = null
+let prismaInstance: PrismaClient | null = null
+
+function createPool(): Pool {
+  const t0 = Date.now()
+  debugLog('D', 'creating pg Pool', {
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    port: (() => {
+      try {
+        return new URL(getDatabaseUrl()).port
+      } catch {
+        return 'unknown'
+      }
+    })(),
+    sslMode: getSslConfig() === false ? 'off' : 'on',
+  })
+  const p = new Pool({
+    connectionString: getDatabaseUrl(),
+    ssl: getSslConfig(),
+    max: 1,
+    connectionTimeoutMillis: 15_000,
+    idleTimeoutMillis: 20_000,
+    allowExitOnIdle: true,
+  })
+  p.on('error', (err) => {
+    debugLog('D', 'pg Pool error', { error: err.message })
+  })
+  debugLog('D', 'pg Pool created', { ms: Date.now() - t0 })
+  return p
+}
+
+function getPrisma(): PrismaClient {
+  if (!prismaInstance) {
+    const t0 = Date.now()
+    pool = createPool()
+    const adapter = new PrismaPg(pool)
+    prismaInstance = new PrismaClient({ adapter })
+    debugLog('D', 'PrismaClient constructed', { ms: Date.now() - t0 })
+  }
+  return prismaInstance
+}
+
+const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getPrisma()
+    const value = Reflect.get(client, prop, receiver)
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(client)
+    }
+    return value
+  },
 })
-const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
 
 // Re-export Prisma types for consumers
 export type { Site, SiteConfig, User, Config } from '../generated/prisma/client.js'
@@ -79,7 +122,7 @@ export interface SiteConfigData {
 }
 
 export async function upsertSiteConfig(siteId: string, data: SiteConfigData) {
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     await tx.siteConfig.updateMany({
       where: { siteId, isActive: true },
       data: { isActive: false }

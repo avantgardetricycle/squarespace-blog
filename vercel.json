@@ -32,7 +32,12 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/api"
+      "destination": "/api",
+      "missing": [
+        {
+          "type": "filesystem"
+        }
+      ]
     }
   ],
   "functions": {

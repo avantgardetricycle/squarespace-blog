@@ -5,6 +5,21 @@
  * - Supabase: pooled DATABASE_URL (port 6543, pgbouncer) at runtime; DIRECT_URL for migrations.
  * - Heroku (legacy): strip sslmode from URL and use rejectUnauthorized: false.
  */
+function appendPoolerQueryParams(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.searchParams.has('pgbouncer') && parsed.port === '6543') {
+      parsed.searchParams.set('pgbouncer', 'true')
+    }
+    if (!parsed.searchParams.has('connect_timeout')) {
+      parsed.searchParams.set('connect_timeout', '15')
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 export function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL
   if (!url) {
@@ -14,7 +29,7 @@ export function getDatabaseUrl(): string {
     return url
   }
   if (isSupabaseDatabase()) {
-    return url
+    return appendPoolerQueryParams(url)
   }
   // Heroku: strip sslmode so our ssl config object is used instead
   return url
