@@ -31,13 +31,12 @@
       "destination": "/api/queues/stripe-customer-subscription-updated"
     },
     {
-      "source": "/(.*)",
-      "destination": "/api",
-      "missing": [
-        {
-          "type": "filesystem"
-        }
-      ]
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ],
   "functions": {
