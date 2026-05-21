@@ -1,13 +1,13 @@
 import 'dotenv/config'
-import serverless from 'serverless-http'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-type ServerlessHandler = (
+type ExpressHandler = (
   req: VercelRequest,
-  res: VercelResponse
-) => void | Promise<unknown>
+  res: VercelResponse,
+  next?: (err?: unknown) => void
+) => void
 
-let cached: ServerlessHandler | null = null
+let cached: ExpressHandler | null = null
 
 function debugLog(hypothesisId: string, message: string, data: Record<string, unknown> = {}): void {
   const payload = {
@@ -20,17 +20,67 @@ function debugLog(hypothesisId: string, message: string, data: Record<string, un
   console.info('[BetterBlog/debug]', JSON.stringify(payload))
 }
 
-async function getHandler(): Promise<ServerlessHandler> {
+async function getHandler(): Promise<ExpressHandler> {
   if (!cached) {
     const t0 = Date.now()
     debugLog('A', 'getHandler: import app start')
     const { createApp } = await import('../server/dist/app.js')
     debugLog('A', 'getHandler: import app done', { ms: Date.now() - t0 })
     const t1 = Date.now()
-    cached = serverless(createApp({ mountStripeWebhook: false })) as ServerlessHandler
-    debugLog('B', 'getHandler: serverless wrap done', { ms: Date.now() - t1 })
+    cached = createApp({ mountStripeWebhook: false }) as ExpressHandler
+    debugLog('B', 'getHandler: express app created', { ms: Date.now() - t1 })
   }
   return cached
+}
+
+function runExpress(handler: ExpressHandler, req: VercelRequest, res: VercelResponse): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+
+    const cleanup = () => {
+      res.off('finish', onFinish)
+      res.off('close', onClose)
+    }
+
+    const settle = (event: 'finish' | 'close') => {
+      if (settled) return
+      settled = true
+      cleanup()
+      debugLog('K', 'vercel response completed', {
+        event,
+        headersSent: res.headersSent,
+        statusCode: res.statusCode,
+      })
+      resolve()
+    }
+
+    const fail = (err: unknown) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(err)
+    }
+
+    const onFinish = () => settle('finish')
+    const onClose = () => settle('close')
+
+    res.once('finish', onFinish)
+    res.once('close', onClose)
+
+    try {
+      handler(req, res, (err?: unknown) => {
+        if (err) {
+          fail(err)
+          return
+        }
+        if (!res.headersSent && !(res as { writableEnded?: boolean }).writableEnded) {
+          res.status(404).send('Not Found')
+        }
+      })
+    } catch (err) {
+      fail(err)
+    }
+  })
 }
 
 export default async function expressHandler(req: VercelRequest, res: VercelResponse) {
@@ -49,13 +99,12 @@ export default async function expressHandler(req: VercelRequest, res: VercelResp
   try {
     const fn = await getHandler()
     debugLog('C', 'handler invoking express', { ms: Date.now() - t0 })
-    const result = await fn(req, res)
+    await runExpress(fn, req, res)
     debugLog('J', 'handler express returned', {
       ms: Date.now() - t0,
       headersSent: res.headersSent,
       statusCode: res.statusCode,
     })
-    return result
   } catch (err) {
     debugLog('C', 'handler error', {
       ms: Date.now() - t0,
