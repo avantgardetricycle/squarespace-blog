@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "db:push": "prisma db push --accept-data-loss",
     "db:check": "tsx scripts/check-db-connection.ts",
+    "db:seed-plans": "tsx scripts/seed-plans.ts",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "generate-email-logo": "tsx scripts/generate-email-logo.ts"

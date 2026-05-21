@@ -16,7 +16,6 @@ import analyticsRoutes from './routes/analytics.js'
 import captureRoutes from './routes/capture.js'
 import commentsRoutes from './routes/comments.js'
 import commentActionsRoutes from './routes/comment-actions.js'
-import { debugLog } from './lib/debug-log.js'
 
 export interface CreateAppOptions {
   /** When false, Stripe webhook is served only by `api/webhooks/stripe` (Vercel). */
@@ -29,7 +28,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   app.set('trust proxy', 1)
 
-  // Vercel rewrite + serverless-http often exposes path /api only; restore full path from handler header.
+  // Vercel rewrites /api/* to the API function; restore the full path before routing.
   app.use((req, _res, next) => {
     const forwarded = req.headers['x-betterblog-original-path']
     const query = req.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
@@ -41,30 +40,6 @@ export function createApp(options: CreateAppOptions = {}): Express {
         req.url = `/api${pathOnly === '/' ? '' : pathOnly}${query}`
       }
     }
-    next()
-  })
-
-  app.use((req, res, next) => {
-    debugLog('F', 'request received', {
-      method: req.method,
-      path: req.path,
-      url: req.url,
-      originalUrl: req.originalUrl,
-    })
-    if (!req.path.startsWith('/api/') && !req.originalUrl.startsWith('/api/')) {
-      next()
-      return
-    }
-    const t0 = Date.now()
-    debugLog('E', 'API request start', { method: req.method, path: req.path })
-    res.on('finish', () => {
-      debugLog('E', 'API request finish', {
-        method: req.method,
-        path: req.path,
-        status: res.statusCode,
-        ms: Date.now() - t0,
-      })
-    })
     next()
   })
 

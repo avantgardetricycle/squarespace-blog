@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import prisma from '../db/index.js'
 import { hashToken } from '../lib/auth.js'
-import { debugLog } from '../lib/debug-log.js'
 
 export interface SessionUser {
   id: number
@@ -22,13 +21,10 @@ export async function requireSession(
 
   const tokenHash = hashToken(token)
 
-  const t0 = Date.now()
-  debugLog('G', 'requireSession: prisma.session.findFirst start')
   const session = await prisma.session.findFirst({
     where: { sessionTokenHash: tokenHash },
     include: { user: true }
   })
-  debugLog('G', 'requireSession: prisma.session.findFirst done', { ms: Date.now() - t0 })
 
   if (!session) {
     res.status(401).json({ error: 'Invalid session. Please log in again.' })

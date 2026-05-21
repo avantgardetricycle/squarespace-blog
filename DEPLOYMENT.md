@@ -38,7 +38,7 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `APP_URL` | `https://your-app.vercel.app` or custom domain |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `https://your-app.vercel.app/api/webhooks/stripe` |
-| `STRIPE_ENVIRONMENT` | `sandbox` or `live` |
+| `STRIPE_ENVIRONMENT` | `sandbox` (Preview / test key) or `live` (Production / live key). Aliases: `test`/`staging` → sandbox; `production`/`prod` → live. If unset, inferred from `STRIPE_SECRET_KEY` (`sk_test` / `sk_live`). |
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_MAIL_FROM` | Verified sender |
 | `ENCRYPTION_KEY` | 32-byte hex for comment encryption |

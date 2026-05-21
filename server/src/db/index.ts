@@ -3,24 +3,11 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../lib/db-connection.js'
-import { debugLog } from '../lib/debug-log.js'
 
 let pool: Pool | null = null
 let prismaInstance: PrismaClient | null = null
 
 function createPool(): Pool {
-  const t0 = Date.now()
-  debugLog('D', 'creating pg Pool', {
-    hasDatabaseUrl: !!process.env.DATABASE_URL,
-    port: (() => {
-      try {
-        return new URL(getDatabaseUrl()).port
-      } catch {
-        return 'unknown'
-      }
-    })(),
-    sslMode: getSslConfig() === false ? 'off' : 'on',
-  })
   const p = new Pool({
     connectionString: getDatabaseUrl(),
     ssl: getSslConfig(),
@@ -30,37 +17,18 @@ function createPool(): Pool {
     allowExitOnIdle: true,
   })
   p.on('error', (err) => {
-    debugLog('D', 'pg Pool error', { error: err.message })
+    console.error('Postgres pool error:', err)
   })
-  debugLog('D', 'pg Pool created', { ms: Date.now() - t0 })
   return p
 }
 
 function getPrisma(): PrismaClient {
   if (!prismaInstance) {
-    const t0 = Date.now()
     pool = createPool()
     const adapter = new PrismaPg(pool)
     prismaInstance = new PrismaClient({ adapter })
-    debugLog('D', 'PrismaClient constructed', { ms: Date.now() - t0 })
   }
   return prismaInstance
-}
-
-/** Fail fast instead of hanging until Vercel's 60s function limit. */
-export async function pingDatabase(timeoutMs = 15_000): Promise<number> {
-  const t0 = Date.now()
-  debugLog('H', 'pingDatabase start', { timeoutMs })
-  const client = getPrisma()
-  await Promise.race([
-    client.$queryRaw`SELECT 1`,
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`DB ping timeout after ${timeoutMs}ms`)), timeoutMs)
-    }),
-  ])
-  const ms = Date.now() - t0
-  debugLog('H', 'pingDatabase ok', { ms })
-  return ms
 }
 
 const prisma = new Proxy({} as PrismaClient, {
