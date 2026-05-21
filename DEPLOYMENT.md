@@ -33,8 +33,8 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 
 | Variable | Description |
 | -------- | ----------- |
-| `DATABASE_URL` | Supabase **pooled** connection string |
-| `DIRECT_URL` | Supabase **direct** connection string (migrations CI only if not running migrate on Vercel) |
+| `DATABASE_URL` | Supabase **transaction pooler** (`postgres.[ref]` @ `*.pooler.supabase.com:6543`, `?pgbouncer=true`) — see [docs/SUPABASE_CONNECTION.md](docs/SUPABASE_CONNECTION.md) |
+| `DIRECT_URL` | Supabase **session pooler** (`:5432`) or **direct** (`db.[ref].supabase.co:5432`) — for `prisma db push` / CI |
 | `APP_URL` | `https://your-app.vercel.app` or custom domain |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `https://your-app.vercel.app/api/webhooks/stripe` |

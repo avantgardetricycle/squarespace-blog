@@ -34,13 +34,38 @@ export function isSupabaseDatabase(): boolean {
   return url.includes('supabase.co') || direct.includes('supabase.co')
 }
 
+/** Local dev only — set `SUPABASE_SSL_NO_VERIFY=true` in server/.env */
+export function isSupabaseSslNoVerify(): boolean {
+  return process.env.SUPABASE_SSL_NO_VERIFY === 'true'
+}
+
 /**
  * SSL config for pg when connecting to a remote DB.
  */
 export function getSslConfig(): { rejectUnauthorized: boolean } | false {
   if (!isRemoteDatabase()) return false
   if (isSupabaseDatabase()) {
+    if (isSupabaseSslNoVerify()) {
+      return { rejectUnauthorized: false }
+    }
     return { rejectUnauthorized: true }
   }
   return { rejectUnauthorized: false }
+}
+
+/**
+ * Append Prisma-compatible sslmode for local Supabase TLS issues.
+ * Used by prisma.config.ts for CLI commands only.
+ */
+export function applySupabaseSslModeForPrisma(url: string): string {
+  if (!isSupabaseSslNoVerify() || !url.includes('supabase.co')) return url
+  try {
+    const parsed = new URL(url)
+    if (!parsed.searchParams.has('sslmode')) {
+      parsed.searchParams.set('sslmode', 'no-verify')
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
 }

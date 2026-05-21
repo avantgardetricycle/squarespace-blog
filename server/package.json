@@ -9,6 +9,7 @@
     "build": "prisma generate && tsc && cp -r src/generated dist/ && npm run generate-email-logo && cp src/emails/logo-email.png dist/emails/",
     "start": "node dist/index.js",
     "db:push": "prisma db push --accept-data-loss",
+    "db:check": "tsx scripts/check-db-connection.ts",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "generate-email-logo": "tsx scripts/generate-email-logo.ts"
