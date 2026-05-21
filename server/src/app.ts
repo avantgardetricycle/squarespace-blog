@@ -30,7 +30,13 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.set('trust proxy', 1)
 
   app.use((req, res, next) => {
-    if (!req.path.startsWith('/api/')) {
+    debugLog('F', 'request received', {
+      method: req.method,
+      path: req.path,
+      url: req.url,
+      originalUrl: req.originalUrl,
+    })
+    if (!req.path.startsWith('/api/') && !req.originalUrl.startsWith('/api/')) {
       next()
       return
     }
