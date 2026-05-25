@@ -5,14 +5,15 @@ const configureUrl = "/dashboard/configure?siteKey=e2e-site";
 
 async function openConfigure(page: Page) {
   await setupApiMocks(page);
-  await page.goto(configureUrl);
-  await expect(page).toHaveURL(/\/dashboard\/configure/);
+  await page.goto(configureUrl, { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL((url) => new URL(url).pathname === "/dashboard/configure");
+  await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
   await expect(page.getByRole("button", { name: "Collection", exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('iframe[title="Blog preview"]')).toBeVisible();
 }
 
 function showDateSwitch(page: Page) {
-  return page.locator("div", { has: page.getByText("Show Date", { exact: true }) }).locator('[role="switch"]');
+  return page.locator("#show-date");
 }
 
 function frame(page: Page) {

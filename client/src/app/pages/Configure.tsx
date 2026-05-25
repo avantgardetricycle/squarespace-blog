@@ -1211,6 +1211,7 @@ export default function Configure() {
   const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
   const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
+  const [previewViewSyncToken, setPreviewViewSyncToken] = useState(0);
   const [commentSettings, setCommentSettings] = useState<{
     commentsEnabled: boolean;
     allowAnonymousComments: boolean;
@@ -2174,7 +2175,11 @@ export default function Configure() {
             <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
               <button
                 type="button"
-                onClick={() => setSelectedLevel("collection")}
+                onClick={() => {
+                  setSelectedLevel("collection");
+                  setSelectedPostIndex(-1);
+                  setPreviewViewSyncToken((token) => token + 1);
+                }}
                 className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
                   selectedLevel === "collection" ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
                 }`}
@@ -4947,6 +4952,7 @@ export default function Configure() {
                     config={rendererConfig}
                     configSignature={configSignature}
                     selectPostIndex={previewSelectedPostIndex}
+                    viewSyncToken={previewViewSyncToken}
                     className="min-h-full"
                   />
                 );

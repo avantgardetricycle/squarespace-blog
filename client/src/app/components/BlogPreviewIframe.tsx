@@ -25,6 +25,8 @@ interface BlogPreviewIframeProps {
   configSignature?: string;
   /** When set, tells the iframe to switch to single-post view for this index (e.g. when editing post-level config) */
   selectPostIndex?: number;
+  /** Bumped to re-send selectPostIndex when the parent re-selects the same view (e.g. Collection tab re-click). */
+  viewSyncToken?: number;
   className?: string;
 }
 
@@ -89,11 +91,14 @@ export default function BlogPreviewIframe({
   config,
   configSignature,
   selectPostIndex,
+  viewSyncToken,
   className = "",
 }: BlogPreviewIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
+  const selectPostIndexRef = useRef(selectPostIndex);
+  selectPostIndexRef.current = selectPostIndex;
   /** Set when we receive READY; iframe may redirect www↔non-www so we use its actual origin for postMessage */
   const resolvedTargetOriginRef = useRef<string | null>(null);
 
@@ -170,28 +175,32 @@ export default function BlogPreviewIframe({
     return () => window.removeEventListener("message", handleMessage);
   }, [blogUrl]);
 
+  // Use resolved origin from READY when available (iframe may redirect www↔non-www).
+  // When null (e.g. missed READY after nav/reload), use "*" so config still gets through.
+  const getEffectiveTargetOrigin = () =>
+    resolvedTargetOriginRef.current ?? "*";
+
+  const sendSelectPostIndex = useCallback(() => {
+    const postIndex = selectPostIndexRef.current;
+    if (typeof postIndex !== "number") return;
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    iframe.contentWindow.postMessage(
+      { type: MESSAGE_TYPE_SELECT_POST, postIndex },
+      getEffectiveTargetOrigin()
+    );
+  }, [blogUrl]);
+
   // Tell iframe to switch views when selectPostIndex changes.
   // -1 => collection/list view, >=0 => single-post view
   useEffect(() => {
-    if (typeof selectPostIndex !== "number") return;
-    const iframe = iframeRef.current;
-    if (!iframe?.contentWindow) return;
-    const targetOrigin = getEffectiveTargetOrigin();
-    iframe.contentWindow.postMessage(
-      { type: MESSAGE_TYPE_SELECT_POST, postIndex: selectPostIndex },
-      targetOrigin
-    );
-  }, [selectPostIndex, blogUrl]);
+    sendSelectPostIndex();
+  }, [selectPostIndex, blogUrl, viewSyncToken, sendSelectPostIndex]);
 
   // Reset resolved origin when blogUrl changes (e.g. user switched sites)
   useEffect(() => {
     resolvedTargetOriginRef.current = null;
   }, [blogUrl]);
-
-  // Use resolved origin from READY when available (iframe may redirect www↔non-www).
-  // When null (e.g. missed READY after nav/reload), use "*" so config still gets through.
-  const getEffectiveTargetOrigin = () =>
-    resolvedTargetOriginRef.current ?? "*";
 
   const sendConfig = useCallback(() => {
     const iframe = iframeRef.current;
@@ -261,6 +270,7 @@ export default function BlogPreviewIframe({
   const handleIframeLoad = () => {
     if (DEBUG) console.log("[BlogPreviewIframe] iframe onLoad, sending config");
     sendConfig();
+    sendSelectPostIndex();
   };
 
   return (
