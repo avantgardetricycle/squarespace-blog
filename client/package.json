@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "cp ../scripts/loader.js public/ && cp ../dist/renderer.js public/renderer.js 2>/dev/null || cp ../scripts/renderer.js public/renderer.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
