@@ -12,6 +12,7 @@ import {
 } from '../lib/stripePlanPrices.js'
 import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
+import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { randomBytes } from 'crypto'
 
 const router = Router()
@@ -145,7 +146,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
     const subscription = userWithRelations.subscriptions[0] ?? null
     const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
 
-    const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+    const stripeEnv = getStripeEnvironment()
     const planRecord =
       subscription?.stripePriceId
         ? await prisma.plan.findFirst({

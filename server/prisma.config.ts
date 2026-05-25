@@ -3,10 +3,44 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+/** Commands that need DDL — must use DIRECT_URL (:5432), not transaction pooler (:6543). */
+const SCHEMA_CLI_MARKERS = ["db push", "migrate", "db execute", "db pull", "studio"];
+
+function isPrismaSchemaCli(): boolean {
+  const argvJoined = process.argv.join(" ");
+  return SCHEMA_CLI_MARKERS.some((marker) => argvJoined.includes(marker));
+}
+
+/** Local dev: SUPABASE_SSL_NO_VERIFY=true → sslmode=no-verify on Postgres URLs */
+function applySupabaseSslModeForPrisma(url: string): string {
+  if (process.env.SUPABASE_SSL_NO_VERIFY !== "true" || !url.includes("supabase.co")) {
+    return url;
+  }
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has("sslmode")) {
+      parsed.searchParams.set("sslmode", "no-verify");
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function getDatabaseUrl(): string {
+  if (isPrismaSchemaCli()) {
+    const direct = process.env["DIRECT_URL"];
+    if (!direct) {
+      throw new Error(
+        "DIRECT_URL is required for Prisma schema commands (db push, migrate, db execute, etc.). " +
+          "Use Supabase session pooler port 5432 or db.[ref].supabase.co:5432 — not DATABASE_URL port 6543."
+      );
+    }
+    return applySupabaseSslModeForPrisma(direct);
+  }
+
   const url = process.env["DATABASE_URL"];
-  if (url) return url;
-  // Prisma CLI (e.g. generate) loads this file without needing a live DB.
+  if (url) return applySupabaseSslModeForPrisma(url);
   if (process.argv.some((arg) => arg.includes("generate"))) {
     return "postgresql://build:build@127.0.0.1:5432/build";
   }
@@ -14,7 +48,9 @@ function getDatabaseUrl(): string {
 }
 
 function getDirectUrl(): string {
-  return process.env["DIRECT_URL"] ?? getDatabaseUrl();
+  const direct = process.env["DIRECT_URL"];
+  if (direct) return applySupabaseSslModeForPrisma(direct);
+  return getDatabaseUrl();
 }
 
 export default defineConfig({

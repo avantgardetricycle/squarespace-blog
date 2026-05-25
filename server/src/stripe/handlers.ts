@@ -4,6 +4,7 @@ import { hashToken, generateToken } from '../lib/auth.js'
 import { sendInviteEmailViaSendGrid } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
 import { normalizePlanKey } from '../lib/planKeys.js'
+import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 
 const TOKEN_EXPIRY_HOURS = 24
 
@@ -116,7 +117,7 @@ export async function handleCheckoutSessionCompleted(
         customerDetails.name)
         ?.trim() || null
 
-    const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+    const stripeEnv = getStripeEnvironment()
     const plan = await prisma.plan.findFirst({
       where: {
         stripePriceId: stripePriceId ?? undefined,
@@ -275,7 +276,7 @@ export async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayl
       dataRecord.cancel_at_period_end ?? dataRecord.cancelAtPeriodEnd
     )
 
-    const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+    const stripeEnv = getStripeEnvironment()
     const plan = stripePriceId
       ? await prisma.plan.findFirst({
           where: {

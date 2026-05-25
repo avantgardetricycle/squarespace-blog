@@ -3,7 +3,7 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../src/lib/db-connection.js'
-import { buildStripePriceLabel } from '../src/lib/planLabels.js'
+import { seedPlans } from '../src/lib/plan-seed-data.js'
 
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
@@ -21,15 +21,6 @@ const defaultUserConfig = {
   rendererUrl: '/renderer.js'
 }
 
-const SANDBOX_PLANS = [
-  { planKey: 'essentials', cadence: 'monthly', stripePriceId: 'price_1TEaw1FNhpDahMYtkTRXKh6q', maxSites: 1 },
-  { planKey: 'essentials', cadence: 'annual', stripePriceId: 'price_1TEbDwFNhpDahMYtRctRNNaK', maxSites: 1 },
-  { planKey: 'professional', cadence: 'monthly', stripePriceId: 'price_1TEbF1FNhpDahMYtETj6pLFZ', maxSites: 3 },
-  { planKey: 'professional', cadence: 'annual', stripePriceId: 'price_1TEbFWFNhpDahMYtVN7ItqqY', maxSites: 3 },
-  { planKey: 'publication', cadence: 'monthly', stripePriceId: 'price_1TEbGEFNhpDahMYtW1NRSMNP', maxSites: null },
-  { planKey: 'publication', cadence: 'annual', stripePriceId: 'price_1TEbGhFNhpDahMYt5ghEqi90', maxSites: null },
-] as const
-
 const defaultSiteConfig = {
   showDate: true,
   showAuthor: false,
@@ -43,43 +34,14 @@ const defaultSiteConfig = {
 }
 
 async function main() {
-  // Migrate legacy plan_key / plan labels (starter/pro/agency → essentials/professional/publication)
-  await prisma.$executeRaw`UPDATE plans SET plan_key = 'essentials' WHERE plan_key = 'starter'`
-  await prisma.$executeRaw`UPDATE plans SET plan_key = 'professional' WHERE plan_key = 'pro'`
-  await prisma.$executeRaw`UPDATE plans SET plan_key = 'publication' WHERE plan_key = 'agency'`
+  await seedPlans(prisma, ['sandbox'])
+
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'essentials' WHERE plan = 'starter'`
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'professional' WHERE plan = 'pro'`
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'publication' WHERE plan = 'agency'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'essentials' WHERE plan = 'starter'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'professional' WHERE plan = 'pro'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'publication' WHERE plan = 'agency'`
-
-  // Seed plans (sandbox)
-  for (const p of SANDBOX_PLANS) {
-    const stripePriceLabel = buildStripePriceLabel(p.planKey, p.cadence)
-    await prisma.plan.upsert({
-      where: {
-        planKey_cadence_stripeEnvironment: {
-          planKey: p.planKey,
-          cadence: p.cadence,
-          stripeEnvironment: 'sandbox'
-        }
-      },
-      create: {
-        planKey: p.planKey,
-        cadence: p.cadence,
-        stripePriceId: p.stripePriceId,
-        stripePriceLabel,
-        maxSites: p.maxSites,
-        stripeEnvironment: 'sandbox'
-      },
-      update: {
-        stripePriceId: p.stripePriceId,
-        stripePriceLabel,
-        maxSites: p.maxSites
-      }
-    })
-  }
 
   // Seed demo user if not exists
   let demoUser = await prisma.user.findUnique({

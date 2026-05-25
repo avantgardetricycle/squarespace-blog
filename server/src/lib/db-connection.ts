@@ -5,6 +5,21 @@
  * - Supabase: pooled DATABASE_URL (port 6543, pgbouncer) at runtime; DIRECT_URL for migrations.
  * - Heroku (legacy): strip sslmode from URL and use rejectUnauthorized: false.
  */
+function appendPoolerQueryParams(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (!parsed.searchParams.has('pgbouncer') && parsed.port === '6543') {
+      parsed.searchParams.set('pgbouncer', 'true')
+    }
+    if (!parsed.searchParams.has('connect_timeout')) {
+      parsed.searchParams.set('connect_timeout', '15')
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 export function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL
   if (!url) {
@@ -14,7 +29,7 @@ export function getDatabaseUrl(): string {
     return url
   }
   if (isSupabaseDatabase()) {
-    return url
+    return appendPoolerQueryParams(url)
   }
   // Heroku: strip sslmode so our ssl config object is used instead
   return url
@@ -34,13 +49,39 @@ export function isSupabaseDatabase(): boolean {
   return url.includes('supabase.co') || direct.includes('supabase.co')
 }
 
+/** Local dev only — set `SUPABASE_SSL_NO_VERIFY=true` in server/.env */
+export function isSupabaseSslNoVerify(): boolean {
+  return process.env.SUPABASE_SSL_NO_VERIFY === 'true'
+}
+
 /**
  * SSL config for pg when connecting to a remote DB.
  */
 export function getSslConfig(): { rejectUnauthorized: boolean } | false {
   if (!isRemoteDatabase()) return false
   if (isSupabaseDatabase()) {
+    // Local: SUPABASE_SSL_NO_VERIFY. Vercel: pooler TLS often needs relaxed verify (same as local fix).
+    if (isSupabaseSslNoVerify() || process.env.VERCEL === '1') {
+      return { rejectUnauthorized: false }
+    }
     return { rejectUnauthorized: true }
   }
   return { rejectUnauthorized: false }
+}
+
+/**
+ * Append Prisma-compatible sslmode for local Supabase TLS issues.
+ * Used by prisma.config.ts for CLI commands only.
+ */
+export function applySupabaseSslModeForPrisma(url: string): string {
+  if (!isSupabaseSslNoVerify() || !url.includes('supabase.co')) return url
+  try {
+    const parsed = new URL(url)
+    if (!parsed.searchParams.has('sslmode')) {
+      parsed.searchParams.set('sslmode', 'no-verify')
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
 }

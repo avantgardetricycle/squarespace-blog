@@ -5,6 +5,8 @@ This is a one-time cutover checklist. The application code expects:
 - `DATABASE_URL` — Supabase **transaction pooler** (port `6543`) for Vercel/server runtime
 - `DIRECT_URL` — Supabase **session** connection (port `5432`) for Prisma CLI and GitHub Actions migrations
 
+See **[SUPABASE_CONNECTION.md](./SUPABASE_CONNECTION.md)** for correct URI format, password encoding, and why `supabase db push` does not create Prisma tables.
+
 ## Steps
 
 1. Create a Supabase project in the same region you plan to use on Vercel when possible.

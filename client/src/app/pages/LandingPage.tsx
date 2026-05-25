@@ -16,11 +16,13 @@ import {
   formatMajorAmount,
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
+import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLive, setIsLive] = useState<boolean | null>(null);
+  /** Use build-time flag immediately; avoid "not live" UI while /api/health is pending. */
+  const [isLive, setIsLive] = useState<boolean>(BUILD_TIME_IS_LIVE);
   const [interestModalOpen, setInterestModalOpen] = useState(false);
   const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
 
@@ -29,11 +31,19 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((data) => setIsLive(data.isLive === true))
-      .catch(() => setIsLive(false));
+    console.info("[BetterBlog/LandingPage] mount", {
+      buildTimeRaw: BUILD_TIME_RAW,
+      buildTimeIsLive: BUILD_TIME_IS_LIVE,
+    });
+    resolveIsBetterBlogLive().then((live) => {
+      console.info("[BetterBlog/LandingPage] isLive state →", live);
+      setIsLive(live);
+    });
   }, []);
+
+  useEffect(() => {
+    console.info("[BetterBlog/LandingPage] UI mode:", isLive ? "live (checkout + login)" : "not live (interest modal)");
+  }, [isLive]);
 
   useEffect(() => {
     fetchPublicPlanPrices()
@@ -159,7 +169,11 @@ export default function LandingPage() {
               </Button>
             ) : (
               <>
-                <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">Log in</Link>
+                {isLive === true ? (
+                  <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">
+                    Log in
+                  </Link>
+                ) : null}
                 {isLive === true ? (
                   <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
                     <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started</Link>

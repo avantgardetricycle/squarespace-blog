@@ -1,6 +1,7 @@
 import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { normalizePlanKey } from './planKeys.js'
+import { getStripeEnvironment } from './stripeEnvironment.js'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -20,7 +21,7 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
     return
   }
   const stripe = getStripe()
-  const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+  const stripeEnv = getStripeEnvironment()
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

@@ -28,6 +28,21 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   app.set('trust proxy', 1)
 
+  // Vercel rewrites /api/* to the API function; restore the full path before routing.
+  app.use((req, _res, next) => {
+    const forwarded = req.headers['x-betterblog-original-path']
+    const query = req.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+    if (typeof forwarded === 'string' && forwarded.startsWith('/api')) {
+      req.url = forwarded.includes('?') ? forwarded : `${forwarded}${query}`
+    } else {
+      const pathOnly = req.path || '/'
+      if (!pathOnly.startsWith('/api/') && pathOnly !== '/api') {
+        req.url = `/api${pathOnly === '/' ? '' : pathOnly}${query}`
+      }
+    }
+    next()
+  })
+
   if (mountStripeWebhook) {
     app.use(
       '/api/webhooks/stripe',
@@ -60,9 +75,20 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use('/api/leads', leadsRoutes)
 
   app.get('/api/health', (_req, res) => {
+    const isBetterBlogLiveEnv = process.env.IS_BETTER_BLOG_LIVE
+    const isLive = isBetterBlogLiveEnv === 'true'
+    const debug = {
+      vercelEnv: process.env.VERCEL_ENV,
+      gitBranch: process.env.VERCEL_GIT_COMMIT_REF,
+      gitCommitRef: process.env.VERCEL_GIT_COMMIT_REF,
+      deploymentId: process.env.VERCEL_DEPLOYMENT_ID,
+      isBetterBlogLiveEnv: isBetterBlogLiveEnv ?? null,
+    }
+    console.info('[BetterBlog/health]', { isLive, ...debug })
     res.json({
       status: 'ok',
-      isLive: process.env.IS_BETTER_BLOG_LIVE === 'true'
+      isLive,
+      debug,
     })
   })
 

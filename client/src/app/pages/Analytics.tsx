@@ -38,6 +38,7 @@ import {
   Download,
 } from "lucide-react";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { GoogleAnalyticsModal, type GAConfig } from "@/app/components/GoogleAnalyticsModal";
 
 interface AnalyticsData {
@@ -216,13 +217,7 @@ export default function Analytics() {
   }
 
   if (!me?.sites.length) {
-    return (
-      <div className="min-h-screen bg-[#f7f6f3] p-6 flex items-center justify-center">
-        <div className="text-[#6b6b6b] text-center">
-          Add a blog in the dashboard to view analytics.
-        </div>
-      </div>
-    );
+    return <NoBlogsPlaceholder />;
   }
 
   return (

@@ -4,7 +4,8 @@ import prisma from '../db/index.js'
 import { optionalSession, SessionUser } from '../middleware/session.js'
 import { getAppUrl } from '../lib/url.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
-import { loadPublicPlanPrices, planPriceStripeErrorMessage } from '../lib/stripePlanPrices.js'
+import { loadPublicPlanPrices } from '../lib/stripePlanPrices.js'
+import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
 
 const router = Router()
@@ -53,7 +54,7 @@ function getStripe(): Stripe {
 // POST /api/checkout/create-session - Create Stripe Checkout session
 router.post('/create-session', optionalSession, async (req: Request, res: Response) => {
   const { planKey, cadence, name, email } = req.body ?? {}
-  const stripeEnv = process.env.STRIPE_ENVIRONMENT ?? 'sandbox'
+  const stripeEnv = getStripeEnvironment()
 
   if (!planKey || !cadence) {
     res.status(400).json({ error: 'planKey and cadence are required' })
@@ -155,11 +156,6 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     res.json({ url: session.url })
   } catch (err) {
     console.error('Checkout session error:', err)
-    const priceMsg = planPriceStripeErrorMessage(err)
-    if (priceMsg) {
-      res.status(500).json({ error: priceMsg })
-      return
-    }
     const message = err instanceof Error ? err.message : 'Failed to create checkout session'
     res.status(500).json({ error: message })
   }

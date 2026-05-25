@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useSearchParams, Link } from "react-router";
+import { useSearchParams } from "react-router";
 import {
   Copy,
   Monitor,
@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -1210,6 +1211,7 @@ export default function Configure() {
   const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
   const [selectedPostIndex, setSelectedPostIndex] = useState<number>(-1);
   const [selectedLevel, setSelectedLevel] = useState<ConfigLevel>("collection");
+  const [previewViewSyncToken, setPreviewViewSyncToken] = useState(0);
   const [commentSettings, setCommentSettings] = useState<{
     commentsEnabled: boolean;
     allowAnonymousComments: boolean;
@@ -2142,14 +2144,7 @@ export default function Configure() {
   }
 
   if (!me || me.sites.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-center">
-        <p className="text-[#6b6b6b]">No blogs yet. Add a blog from the dashboard to get started.</p>
-        <Button asChild>
-          <Link to="/dashboard">Go to Dashboard</Link>
-        </Button>
-      </div>
-    );
+    return <NoBlogsPlaceholder />;
   }
 
   return (
@@ -2180,7 +2175,11 @@ export default function Configure() {
             <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
               <button
                 type="button"
-                onClick={() => setSelectedLevel("collection")}
+                onClick={() => {
+                  setSelectedLevel("collection");
+                  setSelectedPostIndex(-1);
+                  setPreviewViewSyncToken((token) => token + 1);
+                }}
                 className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
                   selectedLevel === "collection" ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
                 }`}
@@ -4953,6 +4952,7 @@ export default function Configure() {
                     config={rendererConfig}
                     configSignature={configSignature}
                     selectPostIndex={previewSelectedPostIndex}
+                    viewSyncToken={previewViewSyncToken}
                     className="min-h-full"
                   />
                 );

@@ -177,26 +177,58 @@ const json = async (route: Route, status: number, body: unknown) => {
   });
 };
 
+function apiPath(url: URL): string {
+  const path = url.pathname.replace(/\/$/, "");
+  return path || "/";
+}
+
+const commentSettingsResponse = {
+  commentsEnabled: true,
+  allowAnonymousComments: true,
+  subscriberCommentsEnabled: false,
+  apiKeyVerified: false,
+  requireApproval: false,
+  autoCloseAfterDays: null,
+  notifyEmail: true,
+  notificationEmail: null,
+  allowLikes: true,
+  allowThreadedReplies: true,
+  sortOrder: "newest",
+};
+
 export async function setupApiMocks(page: Page): Promise<void> {
   await page.route("**/api/**", async (route) => {
     const req = route.request();
     const method = req.method();
     const url = new URL(req.url());
-    const path = url.pathname;
+    const path = apiPath(url);
+
+    // Vite serves client modules under /src/api/* — do not intercept those.
+    if (!path.startsWith("/api/") && path !== "/api") {
+      await route.continue();
+      return;
+    }
 
     if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, dashboardMe);
     if (method === "GET" && path === "/api/checkout/prices") return json(route, 200, checkoutPlanPrices);
+    if (method === "GET" && path === "/api/health") return json(route, 200, { status: "ok", isLive: true });
     if (method === "GET" && path === `/api/config/${siteKey}`) return json(route, 200, configResponse);
     if (method === "POST" && path === "/api/config") return json(route, 200, { ok: true });
     if (method === "GET" && path === `/api/config/blog-preview/${siteKey}`) return json(route, 200, configurePreviewResponse);
     if (method === "GET" && path === `/api/blog-authors/${siteKey}`) return json(route, 200, authorsResponse);
     if (method === "POST" && path === "/api/blog-authors") return json(route, 200, authorsResponse[0]);
     if (method === "PATCH" && path.startsWith("/api/blog-authors/")) return json(route, 200, authorsResponse[0]);
+    if (method === "GET" && path === "/api/dashboard/settings/comments") return json(route, 200, commentSettingsResponse);
+    if (method === "PUT" && path === "/api/dashboard/settings/comments") return json(route, 200, commentSettingsResponse);
+    if (method === "POST" && path === "/api/dashboard/settings/comments/verify-api-key") {
+      return json(route, 200, { verified: false });
+    }
+    if (method === "GET" && path === "/api/templates") return json(route, 200, { templates: [] });
     if (method === "POST" && path === "/api/config/check-placeholder-images") return json(route, 200, { urls: {} });
     if (method === "POST" && path === "/api/analytics/events") return json(route, 200, { ok: true });
     if (method === "POST" && path === "/api/capture") return json(route, 200, { ok: true });
     if (method === "POST" && path === "/api/auth/logout") return json(route, 200, { ok: true });
 
-    return json(route, 200, {});
+    await route.fulfill({ status: 404, contentType: "text/plain", body: `Unmocked API route: ${method} ${path}` });
   });
 }
