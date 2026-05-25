@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -2142,14 +2143,7 @@ export default function Configure() {
   }
 
   if (!me || me.sites.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-center">
-        <p className="text-[#6b6b6b]">No blogs yet. Add a blog from the dashboard to get started.</p>
-        <Button asChild>
-          <Link to="/dashboard">Go to Dashboard</Link>
-        </Button>
-      </div>
-    );
+    return <NoBlogsPlaceholder />;
   }
 
   return (

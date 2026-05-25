@@ -33,6 +33,7 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -690,12 +691,7 @@ export default function Comments() {
 
   const sites = me.sites || [];
   if (sites.length === 0) {
-    return (
-      <div className="py-12">
-        <h1 className="text-2xl font-semibold mb-4">Comments</h1>
-        <p className="text-[#6b6b6b]">Add a blog to get started.</p>
-      </div>
-    );
+    return <NoBlogsPlaceholder />;
   }
 
   return (
