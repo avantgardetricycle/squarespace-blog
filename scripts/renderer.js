@@ -427,6 +427,8 @@
     _paywallFullySuppressed: false,
     _suppressedByEditorMode: false,
     _originalRootChildren: null,
+    _rootInjectionGuard: null,
+    _rootInjectionGuardTarget: null,
     _searchRenderTimer: null,
     _SEARCH_RENDER_DEBOUNCE_MS: 260,
     _lastCollectionShellKey: '',
@@ -451,6 +453,7 @@
         reason: this._fatalReason,
         error: err && err.message ? err.message : err
       });
+      try { this._stopRootInjectionGuard(); } catch (e0) {}
       try { this._removeOverlayNodes(); } catch (e1) {}
       try { this._restoreOriginalRootChildren(); } catch (e2) {}
       try {
@@ -686,9 +689,61 @@
       }
     },
 
+    /**
+     * Squarespace's blog Y bundles can occasionally re-inject native blog
+     * markup into the same container BetterBlog took over — most often when
+     * Squarespace's SPA router hydrates post-DOMContentLoaded. Once the
+     * loading overlay has been cleared, any such injection is a visible
+     * "flash of Squarespace blog" inside BetterBlog's container.
+     *
+     * This guard watches `root` for direct-child additions that aren't ours
+     * and removes them synchronously. Set up at the end of _renderContent,
+     * torn down at the start of the next render and on every bail/edit/paywall
+     * path that intentionally hands the container back to Squarespace.
+     */
+    _startRootInjectionGuard: function(root) {
+      if (this._previewMode || this._bbPreview) return;
+      if (typeof MutationObserver !== 'function' || !root) return;
+      if (this._rootInjectionGuard && this._rootInjectionGuardTarget === root) return;
+      this._stopRootInjectionGuard();
+      var self = this;
+      this._rootInjectionGuard = new MutationObserver(function(mutations) {
+        for (var m = 0; m < mutations.length; m++) {
+          var added = mutations[m].addedNodes;
+          if (!added) continue;
+          for (var n = 0; n < added.length; n++) {
+            var node = added[n];
+            if (!node || node.nodeType !== 1) continue;
+            if (node.id === 'blog-overlay-list' || node.id === 'blog-overlay-progress') continue;
+            try {
+              if (node.parentNode === root) root.removeChild(node);
+            } catch (e) { /* ignore */ }
+          }
+        }
+      });
+      try {
+        this._rootInjectionGuard.observe(root, { childList: true });
+        this._rootInjectionGuardTarget = root;
+      } catch (e) {
+        this._rootInjectionGuard = null;
+        this._rootInjectionGuardTarget = null;
+      }
+    },
+
+    _stopRootInjectionGuard: function() {
+      if (!this._rootInjectionGuard) {
+        this._rootInjectionGuardTarget = null;
+        return;
+      }
+      try { this._rootInjectionGuard.disconnect(); } catch (e) { /* ignore */ }
+      this._rootInjectionGuard = null;
+      this._rootInjectionGuardTarget = null;
+    },
+
     _onEditorModeChange: function() {
       if (this._isSquarespaceEditingUi()) {
         this._suppressedByEditorMode = true;
+        this._stopRootInjectionGuard();
         this._removeOverlayNodes();
         this._restoreOriginalRootChildren();
         return;
@@ -1780,6 +1835,7 @@
           if (self._isOnBlogRoute(pathname, blogPath)) self._rememberCurrentBlogRoute();
           if (!self._isOnEffectiveBlogRoute()) {
             self._debugLog('route change outside blog route', { path: pathname, blogPath: blogPath || null });
+            self._stopRootInjectionGuard();
             return;
           }
           if (!self.items || self.items.length === 0) {
@@ -2437,6 +2493,7 @@
           var fullNow = self._isSquarespaceFullPaywallActive();
           if (fullNow) {
             self._paywallFullySuppressed = true;
+            self._stopRootInjectionGuard();
             self._removeOverlayNodes();
             self._restoreOriginalRootChildren();
             self._clearBootstrapLoading();
@@ -7171,6 +7228,8 @@
           return;
         }
       }
+      // Stop guarding while we mutate root ourselves; we'll re-arm at the end.
+      this._stopRootInjectionGuard();
       if (self._blogOverlaySidebarRO) {
         try { self._blogOverlaySidebarRO.disconnect(); } catch (eRo) {}
         self._blogOverlaySidebarRO = null;
@@ -9752,6 +9811,10 @@
           setTimeout(checkDepth, 500);
         }
       }
+
+      // Arm the root-injection guard last so late-loading Squarespace Y bundles
+      // can't repopulate `root` after the loading overlay has been cleared.
+      self._startRootInjectionGuard(root);
     }
   };
 
