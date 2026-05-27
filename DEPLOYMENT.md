@@ -101,7 +101,7 @@ Set `STRIPE_QUEUE_INLINE_FALLBACK=false` to require queue publish in local API-o
 
 ## GitHub Pages (loader.js / renderer.js) — optional CDN
 
-The `scripts/` directory can still be deployed to GitHub Pages. Set repository variable **`API_BASE_URL`** to your Vercel app URL (e.g. `https://your-app.vercel.app`) so [deploy-pages.yml](.github/workflows/deploy-pages.yml) injects it into `loader.js`.
+The `scripts/` directory can still be deployed to GitHub Pages. Set repository variable **`API_BASE_URL`** to your app URL (e.g. `https://staging.betterblog.xyz`) so [deploy-pages.yml](.github/workflows/deploy-pages.yml) passes it into `scripts/build.mjs`, which injects the API base into `loader.js` **before** minification.
 
 If you serve scripts from Vercel instead, skip Pages deploy and point Squarespace at:
 

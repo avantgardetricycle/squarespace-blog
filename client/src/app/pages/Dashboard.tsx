@@ -56,9 +56,7 @@ import {
 } from "@/app/components/ui/alert-dialog";
 import { getPlanDisplayName } from "@/lib/planLabels";
 import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
-
-const LOADER_URL =
-  "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
+import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
 
 function isValidSignupPageUrl(input: string): boolean {
   const t = input.trim();
@@ -113,9 +111,10 @@ export default function Dashboard() {
 
   const handleCopy = (siteKey: string, blogPath?: string | null) => {
     const html = buildBetterBlogSquarespaceHeaderHtml({
-      loaderUrl: LOADER_URL,
+      loaderUrl: getBetterBlogLoaderUrl(),
       siteKey,
       blogPath,
+      apiBase: getBetterBlogApiBase(),
     });
     navigator.clipboard.writeText(html);
     setCopiedSiteKey(siteKey);
@@ -496,9 +495,10 @@ export default function Dashboard() {
                     <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
                       <code>
                         {buildBetterBlogSquarespaceHeaderHtml({
-                          loaderUrl: LOADER_URL,
+                          loaderUrl: getBetterBlogLoaderUrl(),
                           siteKey: justCreatedSite.siteKey,
                           blogPath: justCreatedSite.blogPath,
+                          apiBase: getBetterBlogApiBase(),
                         })}
                       </code>
                     </pre>
@@ -876,9 +876,10 @@ export default function Dashboard() {
               const status = getVerificationStatus(site);
               const siteUrl = getSiteUrl(site);
               const headerInjectionHtml = buildBetterBlogSquarespaceHeaderHtml({
-                loaderUrl: LOADER_URL,
+                loaderUrl: getBetterBlogLoaderUrl(),
                 siteKey: site.siteKey,
                 blogPath: site.blogPath,
+                apiBase: getBetterBlogApiBase(),
               });
 
               return (
