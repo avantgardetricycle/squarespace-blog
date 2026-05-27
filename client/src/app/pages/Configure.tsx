@@ -57,6 +57,7 @@ import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
+import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
 
 const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
 
@@ -65,8 +66,6 @@ type PaywallFormState = {
   footerDescription: string;
   featureItems: string[];
 };
-
-const LOADER_URL = "https://avantgardetricycle.github.io/squarespace-blog/loader.js";
 
 function isPreviewDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
@@ -2317,12 +2316,11 @@ export default function Configure() {
                     </p>
                   )}
                   {(() => {
-                    const apiBase = typeof window !== "undefined" ? window.location.origin : "";
                     const snippet = buildBetterBlogSquarespaceHeaderHtml({
-                      loaderUrl: LOADER_URL,
+                      loaderUrl: getBetterBlogLoaderUrl(),
                       siteKey: effectiveSiteKey,
                       blogPath: effectiveSite?.blogPath ?? null,
-                      apiBase,
+                      apiBase: getBetterBlogApiBase(),
                     });
                     return (
                       <div className="space-y-2">

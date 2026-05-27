@@ -53,16 +53,32 @@
 
   // 1. Read attributes from the injected script tag
   var script = document.currentScript;
-  var siteKey = script.getAttribute('data-site-key');
-  var injectedBase = '__API_BASE_URL__';
-  var apiBase = script.getAttribute('data-api-base')
-    || (injectedBase !== '__API_' + 'BASE_URL__' ? injectedBase : '')
-    || (function() {
-      try {
-        if (script && script.src) return new URL(script.src).origin;
-      } catch (e) {}
-      return '';
-    })();
+  if (!script) {
+    var scripts = document.getElementsByTagName('script');
+    for (var si = scripts.length - 1; si >= 0; si--) {
+      var candidate = scripts[si];
+      if (candidate && candidate.src && candidate.src.indexOf('loader.js') >= 0) {
+        script = candidate;
+        break;
+      }
+    }
+  }
+  var siteKey = script && script.getAttribute('data-site-key');
+  // Placeholder is replaced at build time (see scripts/build.mjs) BEFORE minify.
+  // Do not compare to the placeholder string — terser constant-folds that away.
+  // After injection the value starts with "ht" (https://); the placeholder starts with "__".
+  var injectedApiBase = '__API_BASE_URL__';
+  var attrApiBase = script && script.getAttribute('data-api-base');
+  var apiBase = '';
+  if (attrApiBase && String(attrApiBase).trim()) {
+    apiBase = String(attrApiBase).trim();
+  } else if (injectedApiBase && injectedApiBase.slice(0, 2) === 'ht') {
+    apiBase = injectedApiBase;
+  } else {
+    try {
+      if (script && script.src) apiBase = new URL(script.src).origin;
+    } catch (e) {}
+  }
   var normalizedApiBase = apiBase.replace(/\/+$/, '');
 
   if (!siteKey) {
