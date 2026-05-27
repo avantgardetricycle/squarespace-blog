@@ -116,6 +116,7 @@ html.bb-loading-blog::after {
 })();
 </script>
 <script
+  defer
   src="${loaderUrl}"
   data-site-key="${siteKey}"${apiAttr}
 ></script>`;

@@ -444,6 +444,12 @@
     _lastAuthDebugSig: null,
     _lastPaywallDebugSig: null,
     _lastTocDebugViewSig: null,
+    _htmlTextCache: null,
+    _readingTimeCache: null,
+    _searchableTextCache: null,
+    _blogJsonPageCount: 0,
+    _paginationGen: 0,
+    _perfReported: false,
 
     _bailToNative: function(reason, err) {
       if (this._fatalBailed) return;
@@ -1666,6 +1672,8 @@
      */
     init: function(config) {
       this.config = config || {};
+      this._perfMark('rendererInit');
+      this._perfReported = false;
       var previewMode = Boolean(this.config.previewMode);
       var bbPreview = this._hasBbPreviewParam();
       this._previewMode = previewMode;
@@ -2884,6 +2892,87 @@
       }
     },
 
+    _perfNow: function() {
+      return (typeof performance !== 'undefined' && typeof performance.now === 'function')
+        ? performance.now()
+        : Date.now();
+    },
+
+    _perfMark: function(name) {
+      try {
+        window.__bbPerf = window.__bbPerf || {};
+        window.__bbPerf[name] = this._perfNow();
+      } catch (e) { /* ignore */ }
+    },
+
+    _perfDelta: function(endMark, startMark) {
+      try {
+        var p = window.__bbPerf;
+        if (!p || p[endMark] == null || p[startMark] == null) return null;
+        return Math.round(p[endMark] - p[startMark]);
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _perfShouldSample: function() {
+      if (this._bbPreview || (this.config && this.config.previewMode)) return false;
+      var rate = this.config && typeof this.config.perfSampleRate === 'number'
+        ? this.config.perfSampleRate
+        : 0.15;
+      if (rate <= 0) return false;
+      if (rate >= 1) return true;
+      return Math.random() < rate;
+    },
+
+    _perfOnVisible: function() {
+      if (this._perfReported) return;
+      this._perfReported = true;
+      if (!this._perfShouldSample()) return;
+      var p = window.__bbPerf || {};
+      var conn = null;
+      try {
+        var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (c) {
+          conn = {
+            effectiveType: c.effectiveType || null,
+            downlink: typeof c.downlink === 'number' ? c.downlink : null,
+            rtt: typeof c.rtt === 'number' ? c.rtt : null,
+            saveData: Boolean(c.saveData)
+          };
+        }
+      } catch (eConn) { /* ignore */ }
+      var isSinglePost = false;
+      try {
+        if (this.items && this.items.length) {
+          var vs = this._computeCollectionViewState(this.items);
+          isSinglePost = Boolean(vs && vs.isSinglePost);
+        }
+      } catch (eVs) { /* ignore */ }
+      var layout = '';
+      try {
+        var cfg = this.config && this.config.collectionConfig;
+        layout = (cfg && cfg.collectionLayout) ? String(cfg.collectionLayout) : '';
+      } catch (eLay) { /* ignore */ }
+      this._analyticsTrack('render_perf', {
+        loaderToConfig: this._perfDelta('configResponse', 'loaderEval'),
+        configToRenderer: this._perfDelta('rendererInit', 'rendererRequest'),
+        rendererToJsonFirst: this._perfDelta('blogJsonFirstPage', 'rendererInit'),
+        jsonFirstToDom: this._perfDelta('renderDomCommitted', 'blogJsonFirstPage'),
+        domToVisible: this._perfDelta('visible', 'renderDomCommitted'),
+        totalToVisible: this._perfDelta('visible', 'loaderEval'),
+        blogJsonPages: this._blogJsonPageCount || 1,
+        postCount: this.items ? this.items.length : 0,
+        viewType: isSinglePost ? 'post' : 'collection',
+        collectionLayout: layout,
+        isPaywalled: this._isPaywalledSite ? this._isPaywalledSite() : false,
+        connection: conn,
+        deviceMemory: typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null,
+        hwConcurrency: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null
+      });
+      this._analyticsFlush();
+    },
+
     _analyticsTrack: function(type, payload, postId, postIndex) {
       if (this._bbPreview || (this.config && this.config.previewMode)) return;
       var siteKey = this.config && this.config.siteKey;
@@ -3016,11 +3105,13 @@
      */
     _getReadingTimeMinutes: function(html) {
       if (!html || typeof html !== 'string') return 0;
-      var div = document.createElement('div');
-      div.innerHTML = html;
-      var text = (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
-      var words = text ? text.split(/\s+/).length : 0;
-      return Math.max(1, Math.ceil(words / 200));
+      var cache = this._readingTimeCache || (this._readingTimeCache = Object.create(null));
+      if (cache[html] != null) return cache[html];
+      var text = this._stripHtml(html);
+      var words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+      var mins = Math.max(1, Math.ceil(words / 200));
+      cache[html] = mins;
+      return mins;
     },
 
     /**
@@ -3070,10 +3161,14 @@
      */
     _stripHtml: function(html) {
       if (!html || typeof html !== 'string') return '';
+      var cache = this._htmlTextCache || (this._htmlTextCache = Object.create(null));
+      if (cache[html]) return cache[html];
       var div = document.createElement('div');
       div.innerHTML = html;
       var raw = typeof div.innerText === 'string' ? div.innerText : (div.textContent || '');
-      return raw.replace(/\s+/g, ' ').trim();
+      var plain = raw.replace(/\s+/g, ' ').trim();
+      cache[html] = plain;
+      return plain;
     },
 
     /**
@@ -3129,12 +3224,18 @@
       if (!query || typeof query !== 'string') return items;
       var q = query.toLowerCase();
       var results = [];
+      var searchCache = this._searchableTextCache || (this._searchableTextCache = Object.create(null));
       for (var i = 0; i < items.length; i++) {
         var post = items[i];
-        var title = (post.title || '').toLowerCase();
-        var excerpt = (post.excerpt || '').toLowerCase();
-        var bodyText = this._stripHtml(post.body || '').toLowerCase();
-        var searchable = title + ' ' + excerpt + ' ' + bodyText;
+        var cacheKey = post && (post.id || post.urlId || post.fullUrl) ? String(post.id || post.urlId || post.fullUrl) : String(i);
+        var searchable = searchCache[cacheKey];
+        if (!searchable) {
+          var title = (post.title || '').toLowerCase();
+          var excerpt = (post.excerpt || '').toLowerCase();
+          var bodyText = this._stripHtml(post.body || '').toLowerCase();
+          searchable = title + ' ' + excerpt + ' ' + bodyText;
+          searchCache[cacheKey] = searchable;
+        }
         if (searchable.indexOf(q) !== -1) results.push(post);
       }
       return results;
@@ -4995,104 +5096,161 @@
       var urlWithPassword = appendPassword(fetchUrl, this.config && this.config.blogPassword);
       var allItems = [];
       var firstJson = null;
-      var fetchNext = function(url) {
-        return fetch(url).then(function(res) { return res.json(); }).then(function(json) {
-          var pageItems = Array.isArray(json && json.items) ? json.items : [];
-          if (!pageItems.length && json && json.collection && Array.isArray(json.collection.items)) {
-            pageItems = json.collection.items;
-          }
-          for (var pi = 0; pi < pageItems.length; pi++) {
-            // Squarespace may return null entries for member-area-gated posts — skip them.
-            if (pageItems[pi] && typeof pageItems[pi] === 'object') allItems.push(pageItems[pi]);
-          }
-          if (!firstJson) firstJson = json;
-          var coll = json && json.collection && typeof json.collection === 'object' ? json.collection : null;
-          var pag = json && json.pagination && typeof json.pagination === 'object' ? json.pagination : (coll && coll.pagination && typeof coll.pagination === 'object' ? coll.pagination : null);
-          var nextUrl = (pag && pag.nextPageUrl) || (coll && (coll.nextPageUrl || coll.nextPage)) || (json.nextPageUrl || json.nextPage);
-          if (nextUrl && typeof nextUrl === 'string') {
-            var absUrl = nextUrl.indexOf('http') === 0 ? nextUrl : (typeof window !== 'undefined' && window.location ? new URL(nextUrl, window.location.origin).href : nextUrl);
-            try {
-              var u = new URL(absUrl);
-              if (!u.searchParams.has('format')) u.searchParams.set('format', 'json');
-              absUrl = u.toString();
-            } catch (e) {}
-            return fetchNext(appendPassword(absUrl, self.config && self.config.blogPassword));
-          }
-          return Promise.resolve();
+      self._blogJsonPageCount = 0;
+      self._paginationGen = (self._paginationGen || 0) + 1;
+      var paginationGen = self._paginationGen;
+
+      function getNextPageUrl(json) {
+        if (!json || typeof json !== 'object') return null;
+        var coll = json.collection && typeof json.collection === 'object' ? json.collection : null;
+        var pag = json.pagination && typeof json.pagination === 'object'
+          ? json.pagination
+          : (coll && coll.pagination && typeof coll.pagination === 'object' ? coll.pagination : null);
+        var nextUrl = (pag && pag.nextPageUrl) || (coll && (coll.nextPageUrl || coll.nextPage)) || (json.nextPageUrl || json.nextPage);
+        if (!nextUrl || typeof nextUrl !== 'string') return null;
+        var absUrl = nextUrl.indexOf('http') === 0
+          ? nextUrl
+          : (typeof window !== 'undefined' && window.location
+            ? new URL(nextUrl, window.location.origin).href
+            : nextUrl);
+        try {
+          var u = new URL(absUrl);
+          if (!u.searchParams.has('format')) u.searchParams.set('format', 'json');
+          absUrl = u.toString();
+        } catch (e) {}
+        return appendPassword(absUrl, self.config && self.config.blogPassword);
+      }
+
+      function mergePageItems(json) {
+        var pageItems = Array.isArray(json && json.items) ? json.items : [];
+        if (!pageItems.length && json && json.collection && Array.isArray(json.collection.items)) {
+          pageItems = json.collection.items;
+        }
+        for (var pi = 0; pi < pageItems.length; pi++) {
+          if (pageItems[pi] && typeof pageItems[pi] === 'object') allItems.push(pageItems[pi]);
+        }
+        self._blogJsonPageCount += 1;
+        return json;
+      }
+
+      function applyCollectionMetadata(json) {
+        self._memberAccountsEnabledHint = Boolean(
+          json && typeof json === 'object' && (
+            (json.userAccountsContext && typeof json.userAccountsContext === 'object')
+            || (json.pagePreviewContext && typeof json.pagePreviewContext === 'object')
+          )
+        );
+        self._squarespaceJsonIdentity = self._updateJsonAuthSignals(json, 'collection');
+        self._authDebug('render.jsonAuthSignals', {
+          rootKeys: json && typeof json === 'object' ? Object.keys(json).slice(0, 60) : [],
+          websiteKeys: json && json.website && typeof json.website === 'object' ? Object.keys(json.website).slice(0, 60) : [],
+          contextKeys: json && json.context && typeof json.context === 'object' ? Object.keys(json.context).slice(0, 60) : [],
+          userAccountsContextKeys:
+            json && json.userAccountsContext && typeof json.userAccountsContext === 'object'
+              ? Object.keys(json.userAccountsContext).slice(0, 60)
+              : [],
+          userAccountsContextFlags:
+            json && json.userAccountsContext && typeof json.userAccountsContext === 'object'
+              ? {
+                  authenticated: json.userAccountsContext.authenticated,
+                  isAuthenticated: json.userAccountsContext.isAuthenticated,
+                  loggedIn: json.userAccountsContext.loggedIn,
+                  isLoggedIn: json.userAccountsContext.isLoggedIn,
+                  signedIn: json.userAccountsContext.signedIn,
+                  isSignedIn: json.userAccountsContext.isSignedIn
+                }
+              : null,
+          extractedJsonIdentity: self._squarespaceJsonIdentity
         });
-      };
-      fetchNext(urlWithPassword)
-        .then(function() {
-          self.items = allItems;
-          var json = firstJson;
-          self._memberAccountsEnabledHint = Boolean(
-            json && typeof json === 'object' && (
-              (json.userAccountsContext && typeof json.userAccountsContext === 'object')
-              || (json.pagePreviewContext && typeof json.pagePreviewContext === 'object')
-            )
-          );
-          self._squarespaceJsonIdentity = self._updateJsonAuthSignals(json, 'collection');
-          self._authDebug('render.jsonAuthSignals', {
-            rootKeys: json && typeof json === 'object' ? Object.keys(json).slice(0, 60) : [],
-            websiteKeys: json && json.website && typeof json.website === 'object' ? Object.keys(json.website).slice(0, 60) : [],
-            contextKeys: json && json.context && typeof json.context === 'object' ? Object.keys(json.context).slice(0, 60) : [],
-            userAccountsContextKeys:
-              json && json.userAccountsContext && typeof json.userAccountsContext === 'object'
-                ? Object.keys(json.userAccountsContext).slice(0, 60)
-                : [],
-            userAccountsContextFlags:
-              json && json.userAccountsContext && typeof json.userAccountsContext === 'object'
-                ? {
-                    authenticated: json.userAccountsContext.authenticated,
-                    isAuthenticated: json.userAccountsContext.isAuthenticated,
-                    loggedIn: json.userAccountsContext.loggedIn,
-                    isLoggedIn: json.userAccountsContext.isLoggedIn,
-                    signedIn: json.userAccountsContext.signedIn,
-                    isSignedIn: json.userAccountsContext.isSignedIn
-                  }
-                : null,
-            extractedJsonIdentity: self._squarespaceJsonIdentity
+        self._emitAuthDebugSnapshot('render.afterJsonIdentity');
+        var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);
+        var collection = json && json.collection ? json.collection : null;
+        self._blogMeta = {
+          siteTitle: (website && website.title) ? String(website.title) : '',
+          blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
+        };
+        self._collection = collection;
+        if (self._featuredDebugEnabled()) {
+          var collKeys = collection && typeof collection === 'object' ? Object.keys(collection) : [];
+          console.warn('[BlogOverlay][featured-debug] collection keys (sample)', collKeys.slice(0, 100));
+          console.warn('[BlogOverlay][featured-debug] collection featured refs', self._getCollectionFeaturedRefIds());
+          console.warn('[BlogOverlay][featured-debug] items', allItems.map(function(it, idx) {
+            if (!it || typeof it !== 'object') return { idx: idx, type: typeof it };
+            var interesting = Object.keys(it).filter(function(k) { return /feat|star|pin|promo|highlight|record/i.test(k); });
+            var snap = {};
+            for (var ii = 0; ii < interesting.length; ii++) snap[interesting[ii]] = it[interesting[ii]];
+            return { idx: idx, title: it.title, id: it.id, urlId: it.urlId, fullUrl: it.fullUrl, interestingKeys: interesting, snapshot: snap, marker: self._itemIsSquarespaceFeatured(it) };
+          }));
+        }
+      }
+
+      function paintFromCurrentItems(includeAuthProbe) {
+        if (paginationGen !== self._paginationGen) return Promise.resolve();
+        self.items = allItems.slice();
+        self._syncOverlayFiltersFromUrl();
+        if (!includeAuthProbe) {
+          return self._renderContent(self.items);
+        }
+        return self._probeCurrentPageJsonAuth()
+          .then(function() {
+            if (paginationGen !== self._paginationGen) return;
+            self._perfMark('authProbeDone');
+            self._emitAuthDebugSnapshot('render.afterCurrentPageProbe');
+            return self._waitForPostAuthHydration();
+          })
+          .then(function() {
+            if (paginationGen !== self._paginationGen) return;
+            return self._renderContent(self.items);
           });
-          self._emitAuthDebugSnapshot('render.afterJsonIdentity');
-          var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);
-          var collection = json && json.collection ? json.collection : null;
-          self._blogMeta = {
-            siteTitle: (website && website.title) ? String(website.title) : '',
-            blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
-          };
-          self._collection = collection;
-          if (self._featuredDebugEnabled()) {
-            var collKeys = collection && typeof collection === 'object' ? Object.keys(collection) : [];
-            console.warn('[BlogOverlay][featured-debug] collection keys (sample)', collKeys.slice(0, 100));
-            console.warn('[BlogOverlay][featured-debug] collection featured refs', self._getCollectionFeaturedRefIds());
-            console.warn('[BlogOverlay][featured-debug] items', allItems.map(function(it, idx) {
-              if (!it || typeof it !== 'object') return { idx: idx, type: typeof it };
-              var interesting = Object.keys(it).filter(function(k) { return /feat|star|pin|promo|highlight|record/i.test(k); });
-              var snap = {};
-              for (var ii = 0; ii < interesting.length; ii++) snap[interesting[ii]] = it[interesting[ii]];
-              return { idx: idx, title: it.title, id: it.id, urlId: it.urlId, fullUrl: it.fullUrl, interestingKeys: interesting, snapshot: snap, marker: self._itemIsSquarespaceFeatured(it) };
-            }));
-          }
-          self._syncOverlayFiltersFromUrl();
-          self._probeCurrentPageJsonAuth()
-            .then(function() {
-              self._emitAuthDebugSnapshot('render.afterCurrentPageProbe');
-              return self._waitForPostAuthHydration();
-            })
-            .then(function() {
-              return self._renderContent(self.items);
-            })
-            .then(
-            function() {
-              self._clearBootstrapLoading();
-            },
-            function(renderErr) {
-              console.error('[BlogOverlay] Render error:', renderErr);
-              self._clearBootstrapLoading();
-            }
-          );
-          console.log('[BlogOverlay] Rendered', allItems.length, 'posts from blog JSON');
+      }
+
+      function fetchBlogPage(url) {
+        return fetch(url).then(function(res) { return res.json(); }).then(mergePageItems);
+      }
+
+      function fetchRemainingPages(nextUrl) {
+        if (!nextUrl || paginationGen !== self._paginationGen) {
+          self._perfMark('blogJsonDone');
+          return Promise.resolve();
+        }
+        return fetchBlogPage(nextUrl)
+          .then(function(pageJson) {
+            if (paginationGen !== self._paginationGen) return pageJson;
+            self.items = allItems.slice();
+            return self._renderContent(self.items).then(function() { return pageJson; });
+          })
+          .then(function(pageJson) {
+            if (paginationGen !== self._paginationGen) return;
+            return fetchRemainingPages(getNextPageUrl(pageJson));
+          });
+      }
+
+      self._perfMark('blogJsonRequest');
+      fetchBlogPage(urlWithPassword)
+        .then(function(json) {
+          if (paginationGen !== self._paginationGen) return;
+          firstJson = json;
+          applyCollectionMetadata(json);
+          self._perfMark('blogJsonFirstPage');
+          return paintFromCurrentItems(true);
         })
+        .then(
+          function() {
+            if (paginationGen !== self._paginationGen) return;
+            self._clearBootstrapLoading();
+            self._debugLog('render first paint', { posts: allItems.length, pages: self._blogJsonPageCount });
+            var nextUrl = getNextPageUrl(firstJson);
+            if (!nextUrl) {
+              self._perfMark('blogJsonDone');
+              return;
+            }
+            return fetchRemainingPages(nextUrl);
+          },
+          function(renderErr) {
+            console.error('[BlogOverlay] Render error:', renderErr);
+            self._clearBootstrapLoading();
+          }
+        )
         .catch(function(err) {
           console.error('[BlogOverlay] Failed to fetch blog JSON:', err);
           self._clearBootstrapLoading();
@@ -6987,7 +7145,10 @@
         var metaParts = [];
         if (showDate) { var ds = self._getDate(post); if (ds) metaParts.push(ds); }
         if (showAuthor) { var as = self._getAuthorsForPost(post, cfg); if (as) metaParts.push(as); }
-        if (showReadingTime) metaParts.push((self._getReadingTimeMinutes(post.body) === 1 ? '1 min read' : self._getReadingTimeMinutes(post.body) + ' min read'));
+        if (showReadingTime) {
+          var minsShowcase = self._getReadingTimeMinutes(post.body);
+          metaParts.push(minsShowcase === 1 ? '1 min read' : minsShowcase + ' min read');
+        }
         var metaEl = document.createElement('div');
         metaEl.className = 'blog-overlay-meta-row';
         metaEl.style.display = 'flex';
@@ -7220,6 +7381,7 @@
 
     _renderContent: async function(items) {
       var self = this;
+      this._perfMark('renderStart');
       if (!this._previewMode && !this._bbPreview && typeof window !== 'undefined' && window.location) {
         var currentPathname = window.location.pathname || '/';
         var currentBlogPath = this._currentBlogPathForRouteMatch();
@@ -8962,7 +9124,10 @@
           var metaParts = [];
           if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
           if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
-          if (showReadingTime) metaParts.push((self._getReadingTimeMinutes(p.body) === 1 ? '1 min read' : self._getReadingTimeMinutes(p.body) + ' min read'));
+          if (showReadingTime) {
+            var minsGrid = self._getReadingTimeMinutes(p.body);
+            metaParts.push(minsGrid === 1 ? '1 min read' : minsGrid + ' min read');
+          }
           var meta = document.createElement('div');
           meta.style.fontSize = isLarge ? '11px' : '10px';
           meta.style.color = 'rgba(255,255,255,0.5)';
@@ -9824,6 +9989,7 @@
 
       // Arm the root-injection guard last so late-loading Squarespace Y bundles
       // can't repopulate `root` after the loading overlay has been cleared.
+      self._perfMark('renderDomCommitted');
       self._startRootInjectionGuard(root);
     }
   };

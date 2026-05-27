@@ -24,11 +24,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies (terser for script minify)
+        run: npm ci
+
+      - name: Build minified scripts for Pages
+        run: node scripts/build.mjs --out ./pages-scripts
+
       - name: Inject API base URL into loader
         run: |
           API_BASE="${{ vars.API_BASE_URL }}"
           if [ -n "$API_BASE" ]; then
-            sed -i "s|__API_BASE_URL__|$API_BASE|g" scripts/loader.js
+            sed -i "s|__API_BASE_URL__|$API_BASE|g" pages-scripts/loader.js
           fi
 
       - name: Setup Pages
@@ -37,8 +48,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Publish the scripts directory as the site root so loader.js is at /loader.js
-          path: ./scripts
+          # Publish minified loader/renderer so loader.js is at /loader.js
+          path: ./pages-scripts
 
       - name: Deploy to GitHub Pages
         id: deployment

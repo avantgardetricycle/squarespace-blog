@@ -94,8 +94,13 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
   const scriptsDir = path.join(__dirname, '../../scripts')
-  const rendererPath = path.join(scriptsDir, 'renderer.js')
-  const loaderPath = path.join(scriptsDir, 'loader.js')
+  const scriptsDistDir = path.join(scriptsDir, 'dist')
+  const useDist =
+    process.env.NODE_ENV === 'production' &&
+    fs.existsSync(path.join(scriptsDistDir, 'renderer.js'))
+  const scriptBase = useDist ? scriptsDistDir : scriptsDir
+  const rendererPath = path.join(scriptBase, 'renderer.js')
+  const loaderPath = path.join(scriptBase, 'loader.js')
   if (fs.existsSync(rendererPath)) {
     app.get('/renderer.js', (_req, res) => {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')

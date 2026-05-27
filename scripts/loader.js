@@ -1,6 +1,22 @@
 (function() {
   'use strict';
 
+  try {
+    window.__bbPerf = window.__bbPerf || {};
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      window.__bbPerf.loaderEval = performance.now();
+    }
+  } catch (ePerfInit) { /* ignore */ }
+
+  function perfMark(name) {
+    try {
+      if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+        window.__bbPerf = window.__bbPerf || {};
+        window.__bbPerf[name] = performance.now();
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   function hasEditClass(el) {
     if (!el || !el.classList) return false;
     return el.classList.contains('sqs-edit-mode-active')
@@ -121,6 +137,12 @@
       } catch (e) { /* ignore */ }
       removeLegacyOverlay();
       try { window.__bbBootstrapLoadingActive = false; } catch (e) { /* ignore */ }
+      perfMark('visible');
+      try {
+        if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer._perfOnVisible === 'function') {
+          window.BlogOverlayRenderer._perfOnVisible();
+        }
+      } catch (eVis) { /* ignore */ }
     };
 
     var scheduleRemove = function () {
@@ -178,6 +200,66 @@
     else clearBootstrapLoading();
   } catch (earlyBootErr) { /* ignore */ }
 
+  var configPromise = null;
+
+  function fetchConfig() {
+    if (configPromise) return configPromise;
+    perfMark('configRequest');
+    configPromise = fetch(normalizedApiBase + '/api/config/' + encodeURIComponent(siteKey))
+      .then(function(response) {
+        if (!response.ok) {
+          throw new Error('Blog config HTTP ' + response.status);
+        }
+        return response.json();
+      })
+      .then(function(config) {
+        perfMark('configResponse');
+        return config;
+      });
+    return configPromise;
+  }
+
+  function appendRendererScript(config) {
+    var renderer = document.createElement('script');
+    var rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js';
+    renderer.src = rendererUrl;
+    renderer.async = true;
+
+    renderer.onload = function() {
+      perfMark('rendererLoaded');
+      if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer.init === 'function') {
+        window.BlogOverlayRenderer.init(config);
+      } else {
+        clearBootstrapLoading();
+        console.error('[BlogOverlay] Renderer loaded, but BlogOverlayRenderer.init was not found');
+      }
+    };
+    renderer.onerror = function() {
+      clearBootstrapLoading();
+      console.error('[BlogOverlay] Failed to load renderer.js');
+    };
+
+    perfMark('rendererRequest');
+    var head = document.head || document.getElementsByTagName('head')[0];
+    if (head) {
+      head.appendChild(renderer);
+      return;
+    }
+    var waited = 0;
+    var waitForHead = setInterval(function() {
+      waited += 1;
+      var h = document.head || document.getElementsByTagName('head')[0];
+      if (h) {
+        clearInterval(waitForHead);
+        h.appendChild(renderer);
+      } else if (waited > 200) {
+        clearInterval(waitForHead);
+        clearBootstrapLoading();
+        console.error('[BlogOverlay] document.head not available; cannot load renderer');
+      }
+    }, 10);
+  }
+
   function startLoader() {
     if (isSquarespaceEditingUi()) {
       console.log('[BlogOverlay] Skipping loader: Squarespace editing UI detected');
@@ -186,32 +268,9 @@
     }
     installBootstrapLoading();
 
-    fetch(normalizedApiBase + '/api/config/' + encodeURIComponent(siteKey))
-      .then(function(response) {
-        if (!response.ok) {
-          throw new Error('Blog config HTTP ' + response.status);
-        }
-        return response.json();
-      })
+    fetchConfig()
       .then(function(config) {
-        var renderer = document.createElement('script');
-        var rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js';
-        renderer.src = rendererUrl;
-        renderer.async = true;
-
-        renderer.onload = function() {
-          if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer.init === 'function') {
-            window.BlogOverlayRenderer.init(config);
-          } else {
-            clearBootstrapLoading();
-            console.error('[BlogOverlay] Renderer loaded, but BlogOverlayRenderer.init was not found');
-          }
-        };
-        renderer.onerror = function() {
-          clearBootstrapLoading();
-          console.error('[BlogOverlay] Failed to load renderer.js');
-        };
-        document.head.appendChild(renderer);
+        appendRendererScript(config);
       })
       .catch(function(error) {
         clearBootstrapLoading();
@@ -222,9 +281,9 @@
       });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', startLoader, { once: true });
-  } else {
+  // Start immediately — do not wait for DOMContentLoaded. The config fetch begins
+  // inside startLoader; only appending the renderer <script> needs document.head.
+  if (!isSquarespaceEditingUi()) {
     startLoader();
   }
 })();

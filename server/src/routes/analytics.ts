@@ -8,7 +8,7 @@ import { requireSession, SessionUser } from '../middleware/session.js'
 
 const router = Router()
 
-const EVENT_TYPES = ['page_view', 'scroll_depth', 'click', 'search', 'search_click', 'time_on_page'] as const
+const EVENT_TYPES = ['page_view', 'scroll_depth', 'click', 'search', 'search_click', 'time_on_page', 'render_perf'] as const
 
 function parseTimeRange(range: string): { days: number } {
   switch (range) {

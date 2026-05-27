@@ -33,3 +33,5 @@ npm-debug.log*
 *.local
 client/public/loader.js
 client/public/renderer.js
+scripts/dist/
+pages-scripts/
