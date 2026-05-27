@@ -7228,8 +7228,18 @@
           return;
         }
       }
-      // Stop guarding while we mutate root ourselves; we'll re-arm at the end.
-      this._stopRootInjectionGuard();
+      // NOTE: do *not* tear down the root-injection guard here. The guard's
+      // allow-list already ignores BetterBlog's own #blog-overlay-list and
+      // #blog-overlay-progress nodes, and `_renderContent` only ever appends
+      // those two as direct children of `root`. Keeping the guard active
+      // across the async re-render closes the window in which Squarespace's
+      // SPA router can re-inject native blog markup into `root` between when
+      // the previous overlay is torn down (line ~7250) and when the new one
+      // is committed. The guard is still torn down on bail / editor / paywall
+      // paths, which is where re-injection is intentional. The
+      // `SPA navigation from collection to post` e2e test specifically
+      // regresses on this assumption — if you re-introduce the
+      // `_stopRootInjectionGuard()` call here, that test will fail.
       if (self._blogOverlaySidebarRO) {
         try { self._blogOverlaySidebarRO.disconnect(); } catch (eRo) {}
         self._blogOverlaySidebarRO = null;
