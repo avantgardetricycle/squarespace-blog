@@ -1983,6 +1983,31 @@
       return fromOrder.concat(remaining);
     },
 
+    _isCollectionHeaderFilterModule: function(mod) {
+      return mod === 'filterByCategory' || mod === 'filterByTag' || mod === 'filterByTagsAndCategories';
+    },
+
+    /** Collection header: filter left, search then sort right (email/lead magnet not shown in header). */
+    _canonicalCollectionHeaderModuleOrder: function(modules) {
+      var self = this;
+      var list = Array.isArray(modules) ? modules : [];
+      var filterMod = null;
+      var searchMod = null;
+      var hasSort = false;
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (m === 'emailCapture' || m === 'leadMagnet') continue;
+        if (!filterMod && self._isCollectionHeaderFilterModule(m)) filterMod = m;
+        if (!searchMod && (m === 'searchPosts' || m === 'postSearch')) searchMod = m;
+        if (m === 'postSort') hasSort = true;
+      }
+      var out = [];
+      if (filterMod) out.push(filterMod);
+      if (searchMod) out.push(searchMod);
+      if (hasSort) out.push('postSort');
+      return out;
+    },
+
     _isContextBucket: function(value) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
       var hasLoggedOut = value.loggedOut && typeof value.loggedOut === 'object' && !Array.isArray(value.loggedOut);
@@ -9428,6 +9453,10 @@
               headerEl.style.display = 'flex';
               var collectionHeaderRow = !isSinglePost;
               if (collectionHeaderRow) {
+                hcModules = self._canonicalCollectionHeaderModuleOrder(hcModules);
+              }
+              var collectionHeaderUtilityStarted = false;
+              if (collectionHeaderRow) {
                 headerEl.style.flexDirection = 'row';
                 headerEl.style.flexWrap = 'wrap';
                 headerEl.style.alignItems = 'center';
@@ -9566,6 +9595,10 @@
                 } else if (mod === 'postSearch' || mod === 'searchPosts') {
                   var searchWrap = document.createElement('div');
                   if (collectionHeaderRow) {
+                    if (!collectionHeaderUtilityStarted) {
+                      collectionHeaderUtilityStarted = true;
+                      searchWrap.style.marginLeft = 'auto';
+                    }
                     searchWrap.style.flex = '0 1 280px';
                     searchWrap.style.width = 'auto';
                     searchWrap.style.minWidth = '160px';
@@ -9654,32 +9687,32 @@
                   var sortMod = self._createPostSortModule(cfg, 200, true);
                   if (sortMod) {
                     sortMod.style.display = 'inline-block';
-                    sortMod.style.marginRight = collectionHeaderRow ? '0' : '16px';
                     if (collectionHeaderRow) {
+                      if (!collectionHeaderUtilityStarted) {
+                        collectionHeaderUtilityStarted = true;
+                        sortMod.style.marginLeft = 'auto';
+                      } else {
+                        sortMod.style.marginLeft = '12px';
+                      }
+                      sortMod.style.marginRight = '0';
                       sortMod.style.flex = '0 0 auto';
+                    } else {
+                      sortMod.style.marginRight = '16px';
                     }
                     headerEl.appendChild(sortMod);
                   }
-                } else if (mod === 'emailCapture' && ecCfg) {
+                } else if (!collectionHeaderRow && mod === 'emailCapture' && ecCfg) {
                   var ecHeaderForm = createEmailCaptureForm(ecCfg, 280);
                   if (ecHeaderForm) {
                     ecHeaderForm.style.display = 'inline-block';
                     ecHeaderForm.style.minWidth = '200px';
-                    if (collectionHeaderRow) {
-                      ecHeaderForm.style.flex = '1 1 240px';
-                      ecHeaderForm.style.maxWidth = '100%';
-                    }
                     headerEl.appendChild(ecHeaderForm);
                   }
-                } else if (mod === 'leadMagnet' && lmCfg) {
+                } else if (!collectionHeaderRow && mod === 'leadMagnet' && lmCfg) {
                   var lmHeaderForm = createLeadMagnetForm(lmCfg, 280);
                   if (lmHeaderForm) {
                     lmHeaderForm.style.display = 'inline-block';
                     lmHeaderForm.style.minWidth = '200px';
-                    if (collectionHeaderRow) {
-                      lmHeaderForm.style.flex = '1 1 240px';
-                      lmHeaderForm.style.maxWidth = '100%';
-                    }
                     headerEl.appendChild(lmHeaderForm);
                   }
                 }
