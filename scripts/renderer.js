@@ -5477,51 +5477,201 @@
       return fb;
     },
 
+    _isSiteMarginDebugEnabled: function() {
+      try {
+        var params = new URLSearchParams(window.location.search || '');
+        return params.get('bbSiteMarginDebug') === '1' || params.get('bbPreviewDebug') === '1';
+      } catch (e) {
+        return false;
+      }
+    },
+
+    /** Map a layout box to viewport-relative left/right inset (px). Returns null if full-bleed width. */
+    _insetsFromBoundingRect: function(rect) {
+      if (!rect || typeof window === 'undefined') return null;
+      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+      if (vw <= 0 || rect.width < 80 || rect.width >= vw - 2) return null;
+      var left = Math.max(0, Math.round(rect.left));
+      var right = Math.max(0, Math.round(vw - rect.right));
+      if (left + right < 2) return null;
+      if (left > vw * 0.45 || right > vw * 0.45) return null;
+      return { left: left, right: right };
+    },
+
+    /** Blog collection/post section (7.1 page-section), not the full-width #siteWrapper. */
+    _findBlogPageSection: function(startEl) {
+      if (startEl && startEl.closest) {
+        try {
+          var fromRoot = startEl.closest('section.page-section, section[data-section-id]');
+          if (fromRoot) return fromRoot;
+        } catch (e) { /* ignore */ }
+      }
+      try {
+        var sections = document.querySelectorAll('section.page-section, section[data-section-id]');
+        for (var i = 0; i < sections.length; i++) {
+          var s = sections[i];
+          if (!s.querySelector) continue;
+          if (s.querySelector(
+            'article, .blog-item, .blog-article, .blog-post, .blog-list, .blog-list-wrapper, ' +
+            '.collection-items, [data-controller*="Blog"], [data-controller*="blog"]'
+          )) {
+            return s;
+          }
+        }
+      } catch (e2) { /* ignore */ }
+      return null;
+    },
+
+    _horizontalPaddingFromComputedStyle: function(el) {
+      if (!el || !window.getComputedStyle) return null;
+      try {
+        var cs = window.getComputedStyle(el);
+        var pl = parseFloat(cs.paddingLeft) || 0;
+        var pr = parseFloat(cs.paddingRight) || 0;
+        var ml = parseFloat(cs.marginLeft) || 0;
+        var mr = parseFloat(cs.marginRight) || 0;
+        var left = Math.round(pl + ml);
+        var right = Math.round(pr + mr);
+        if (left + right < 2) return null;
+        return { left: left, right: right };
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _insetsFromSquarespaceCssVars: function(anchorEl) {
+      if (!window.getComputedStyle) return null;
+      var targets = [document.documentElement, document.body];
+      if (anchorEl) targets.push(anchorEl);
+      var names = [
+        '--site-gutter', '--site-gutter-width', '--sqs-site-gutter',
+        '--outer-padding', '--page-padding', '--page-padding-horizontal',
+        '--inset-padding', '--content-padding', '--content-padding-horizontal',
+        '--siteMargin', '--site-margin'
+      ];
+      for (var t = 0; t < targets.length; t++) {
+        var el = targets[t];
+        if (!el) continue;
+        try {
+          var cs = window.getComputedStyle(el);
+          for (var i = 0; i < names.length; i++) {
+            var raw = cs.getPropertyValue(names[i]);
+            if (!raw) continue;
+            var px = parseFloat(String(raw).replace(/px$/i, '').trim());
+            if (isFinite(px) && px >= 2) return { left: Math.round(px), right: Math.round(px) };
+          }
+        } catch (e) { /* ignore */ }
+      }
+      return null;
+    },
+
     /**
-     * Horizontal inset of the Squarespace blog column vs the viewport (site margin + section padding).
-     * Measured from the host root element so overlay content aligns with native Squarespace layout.
+     * Horizontal inset of the Squarespace content column vs the viewport (site margin + section padding).
+     * Defaults to {0,0} when nothing reliable is found (easier to debug until detection is tuned).
      */
     _getSquarespaceSiteContentInsets: function() {
       var zero = { left: 0, right: 0 };
+      this._siteContentInsetsSource = 'default-zero';
       if (typeof window === 'undefined') return zero;
+
       var root = this._root || (this.config && this.config.rootEl) || findBlogContainer() || document.getElementById('blogga-blogga-root');
+      var section = this._findBlogPageSection(root);
+      var finish = function(source, insets) {
+        this._siteContentInsetsSource = source;
+        if (this._isSiteMarginDebugEnabled()) {
+          console.log('[BlogOverlay][site-margin] ' + source, insets);
+        }
+        return insets;
+      }.bind(this);
+
+      /* 1. Section .content-wrapper (7.1 blog column — not the full-width mount root). */
+      if (section && section.querySelectorAll) {
+        try {
+          var wrappers = section.querySelectorAll('.content-wrapper');
+          for (var w = 0; w < wrappers.length; w++) {
+            var fromCw = this._insetsFromBoundingRect(wrappers[w].getBoundingClientRect());
+            if (fromCw) return finish('section.content-wrapper.rect', fromCw);
+          }
+        } catch (eCw) { /* ignore */ }
+      }
+
+      /* 2. Closest .content-wrapper ancestor of the mount root. */
+      if (root && root.closest) {
+        try {
+          var closestCw = root.closest('.content-wrapper');
+          if (closestCw) {
+            var fromClosest = this._insetsFromBoundingRect(closestCw.getBoundingClientRect());
+            if (fromClosest) return finish('root.closest.content-wrapper.rect', fromClosest);
+          }
+        } catch (eClosest) { /* ignore */ }
+      }
+
+      /* 3. Native blog items still in the DOM (outside our overlay). */
+      try {
+        var nativeSel = 'article, .blog-item, .blog-article, .blog-post, .entry.post, .entry';
+        var natives = document.querySelectorAll(nativeSel);
+        for (var n = 0; n < natives.length; n++) {
+          var node = natives[n];
+          if (node.closest && node.closest('#blog-overlay-list, .blog-overlay-wrapper')) continue;
+          var fromNative = this._insetsFromBoundingRect(node.getBoundingClientRect());
+          if (fromNative) return finish('native-blog-item.rect', fromNative);
+        }
+      } catch (eNat) { /* ignore */ }
+
+      /* 4. Section horizontal padding (Site Styles → Site margin often lands here). */
+      if (section) {
+        var fromSectionPad = this._horizontalPaddingFromComputedStyle(section);
+        if (fromSectionPad) return finish('section.padding', fromSectionPad);
+        try {
+          var bg = section.querySelector('.section-background, .section-background-content');
+          if (bg) {
+            var fromBg = this._horizontalPaddingFromComputedStyle(bg);
+            if (fromBg) return finish('section.background.padding', fromBg);
+          }
+        } catch (eBg) { /* ignore */ }
+      }
+
+      /* 5. Site header content column (site margin applies to header too). */
+      try {
+        var headerCw = document.querySelector(
+          '#header .content-wrapper, header .content-wrapper, .header-layout .content-wrapper, .header-display .content-wrapper'
+        );
+        if (headerCw) {
+          var fromHeader = this._insetsFromBoundingRect(headerCw.getBoundingClientRect());
+          if (fromHeader) return finish('header.content-wrapper.rect', fromHeader);
+        }
+      } catch (eHdr) { /* ignore */ }
+
+      /* 6. Theme CSS variables (when exposed on :root / section). */
+      var fromVars = this._insetsFromSquarespaceCssVars(section || root);
+      if (fromVars) return finish('css-variables', fromVars);
+
+      /* 7. Narrowest ancestor box of mount root (skip full-width main/#content picks). */
       if (root && root.getBoundingClientRect) {
-        try {
-          var rect = root.getBoundingClientRect();
-          var vw = window.innerWidth || document.documentElement.clientWidth || 0;
-          if (vw > 0 && rect.width > 0 && rect.width < vw - 2) {
-            var left = Math.max(0, Math.round(rect.left));
-            var right = Math.max(0, Math.round(vw - rect.right));
-            if (left < vw * 0.45 && right < vw * 0.45) return { left: left, right: right };
+        var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        var el = root.parentElement;
+        var narrowest = null;
+        for (var d = 0; el && d < 24; d++) {
+          if (el.classList && el.classList.contains('page-section')) {
+            var fromPagePad = this._horizontalPaddingFromComputedStyle(el);
+            if (fromPagePad) return finish('ancestor.page-section.padding', fromPagePad);
           }
-        } catch (eRect) { /* ignore */ }
+          try {
+            var r = el.getBoundingClientRect();
+            if (r.width > 0 && r.width < vw - 4) {
+              var cand = this._insetsFromBoundingRect(r);
+              if (cand && (!narrowest || r.width < narrowest.width)) {
+                narrowest = { insets: cand, width: r.width };
+              }
+            }
+          } catch (eA) { /* ignore */ }
+          if (el.id === 'siteWrapper' || el.id === 'site-wrapper') break;
+          el = el.parentElement;
+        }
+        if (narrowest) return finish('narrowest-ancestor.rect', narrowest.insets);
       }
-      if (!root || !window.getComputedStyle) return zero;
-      var el = root.parentElement;
-      for (var depth = 0; el && depth < 18; depth++) {
-        try {
-          var cn = el.className && typeof el.className === 'string' ? el.className : '';
-          var isLayoutHost = el.classList && (
-            el.classList.contains('page-section') ||
-            el.classList.contains('content-wrapper') ||
-            cn.indexOf('content-wrapper') >= 0 ||
-            cn.indexOf('sqs-layout') >= 0
-          );
-          if (isLayoutHost) {
-            var cs = window.getComputedStyle(el);
-            var pl = parseFloat(cs.paddingLeft) || 0;
-            var pr = parseFloat(cs.paddingRight) || 0;
-            var ml = parseFloat(cs.marginLeft) || 0;
-            var mr = parseFloat(cs.marginRight) || 0;
-            var left = Math.round(pl + ml);
-            var right = Math.round(pr + mr);
-            if (left > 0 || right > 0) return { left: left, right: right };
-          }
-        } catch (eWalk) { /* ignore */ }
-        if (el.id === 'siteWrapper' || el.id === 'site-wrapper') break;
-        el = el.parentElement;
-      }
-      return zero;
+
+      return finish('default-zero', zero);
     },
 
     /** Break out to the viewport width (full-bleed images only). */
@@ -7564,6 +7714,8 @@
         isSinglePost: isSinglePost,
         hasAnyFilter: hasAnyFilter,
         usingLevel: isSinglePost ? 'postConfig' : 'collectionConfig',
+        siteContentInsets: this._siteContentInsets || null,
+        siteContentInsetsSource: this._siteContentInsetsSource || null,
         leftSidebarModules: cfg.leftSidebar && Array.isArray(cfg.leftSidebar.modules) ? cfg.leftSidebar.modules.slice() : [],
         rightSidebarModules: cfg.rightSidebar && Array.isArray(cfg.rightSidebar.modules) ? cfg.rightSidebar.modules.slice() : [],
         footerModules: cfg.footerContent && Array.isArray(cfg.footerContent.modules) ? cfg.footerContent.modules.slice() : []
