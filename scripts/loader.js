@@ -58,72 +58,109 @@
     return;
   }
 
-  var BB_BOOTSTRAP_STYLE_ID = 'bb-bootstrap-loading-style';
-  var BB_BOOTSTRAP_OVERLAY_ID = 'bb-bootstrap-overlay';
+  // Single source of truth for the loading state. The Header injection's inline
+  // <style id="bb-critical-preload-style"> already drives this class; we mirror
+  // both the class and the style here so the loader still works on older sites
+  // that haven't re-pasted the Header snippet, or in iframes where only the
+  // loader script is injected.
+  var BB_LOADING_CLASS = 'bb-loading-blog';
+  var BB_STYLE_ID = 'bb-critical-preload-style';
 
-  function clearBootstrapLoading() {
+  // Legacy ids/classes from earlier mitigations — clean them up if present so a
+  // partially-upgraded install doesn't leave stale overlays around.
+  var BB_LEGACY_OVERLAY_ID = 'bb-bootstrap-overlay';
+  var BB_LEGACY_STYLE_ID = 'bb-bootstrap-loading-style';
+  var BB_LEGACY_CLASS = 'bb-bootstrap-loading';
+
+  /**
+   * Inject the same critical CSS the Header snippet uses. No-op when the
+   * Header snippet was pasted (style element already exists).
+   * KEEP IN SYNC with client/src/lib/betterBlogInstallationSnippet.ts.
+   */
+  function ensureCriticalStyle() {
+    if (!document.head && !document.documentElement) return;
+    if (document.getElementById(BB_STYLE_ID)) return;
+    var style = document.createElement('style');
+    style.id = BB_STYLE_ID;
+    style.textContent = [
+      'html.' + BB_LOADING_CLASS + ' body{visibility:hidden!important;}',
+      'html.' + BB_LOADING_CLASS + '::before{content:"";position:fixed;inset:0;background:#ffffff;z-index:2147483646;}',
+      'html.' + BB_LOADING_CLASS + '::after{content:"";position:fixed;top:50%;left:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border:3px solid #e8e6e3;border-top-color:#5B4FE8;border-radius:50%;animation:bb-bootstrap-spin 0.75s linear infinite;z-index:2147483647;}',
+      '@keyframes bb-bootstrap-spin{to{transform:rotate(360deg)}}'
+    ].join('');
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function removeLegacyOverlay() {
     try {
-      document.documentElement.classList.remove('bb-bootstrap-loading');
-      var ov = document.getElementById(BB_BOOTSTRAP_OVERLAY_ID);
+      var ov = document.getElementById(BB_LEGACY_OVERLAY_ID);
       if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
-      var st = document.getElementById(BB_BOOTSTRAP_STYLE_ID);
-      if (st && st.parentNode) st.parentNode.removeChild(st);
+      var ls = document.getElementById(BB_LEGACY_STYLE_ID);
+      if (ls && ls.parentNode) ls.parentNode.removeChild(ls);
+      if (document.documentElement && document.documentElement.classList) {
+        document.documentElement.classList.remove(BB_LEGACY_CLASS);
+      }
     } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Remove the loading state only after BetterBlog has had at least one frame
+   * to paint its own content. Otherwise a single browser frame can show the
+   * native Squarespace blog between when our content lands in the DOM and when
+   * it actually paints.
+   *
+   * - Double requestAnimationFrame flushes layout and paint commit.
+   * - document.fonts.ready (capped at 600ms) avoids a font-swap reflow flash.
+   */
+  function clearBootstrapLoading() {
+    var doRemove = function () {
+      try {
+        if (document.documentElement && document.documentElement.classList) {
+          document.documentElement.classList.remove(BB_LOADING_CLASS);
+        }
+      } catch (e) { /* ignore */ }
+      removeLegacyOverlay();
+      try { window.__bbBootstrapLoadingActive = false; } catch (e) { /* ignore */ }
+    };
+
+    var scheduleRemove = function () {
+      if (typeof requestAnimationFrame !== 'function') return doRemove();
+      requestAnimationFrame(function () {
+        requestAnimationFrame(doRemove);
+      });
+    };
+
     try {
-      window.__bbBootstrapLoadingActive = false;
-    } catch (e2) { /* ignore */ }
+      var fontsReady = document.fonts && document.fonts.ready;
+      if (fontsReady && typeof fontsReady.then === 'function') {
+        var settled = false;
+        var fontsTimeoutId = setTimeout(function () {
+          if (!settled) { settled = true; scheduleRemove(); }
+        }, 600);
+        fontsReady.then(
+          function () {
+            if (!settled) { settled = true; clearTimeout(fontsTimeoutId); scheduleRemove(); }
+          },
+          function () {
+            if (!settled) { settled = true; clearTimeout(fontsTimeoutId); scheduleRemove(); }
+          }
+        );
+      } else {
+        scheduleRemove();
+      }
+    } catch (e) {
+      scheduleRemove();
+    }
   }
 
   function installBootstrapLoading() {
     if (window.__bbBootstrapLoadingActive) return;
-    if (!document.documentElement || !document.body) return;
+    if (!document.documentElement) return;
     try {
       window.__bbBootstrapLoadingActive = true;
       window.__bbClearBootstrapLoading = clearBootstrapLoading;
-
-      if (!document.getElementById(BB_BOOTSTRAP_STYLE_ID)) {
-        var style = document.createElement('style');
-        style.id = BB_BOOTSTRAP_STYLE_ID;
-        style.textContent = [
-          'html.bb-bootstrap-loading { overflow: hidden; }',
-          '#' + BB_BOOTSTRAP_OVERLAY_ID + '{',
-          'position:fixed;inset:0;z-index:2147483646;',
-          'display:flex;align-items:center;justify-content:center;',
-          'flex-direction:column;gap:16px;',
-          'background:rgba(255,255,255,0.97);',
-          'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;',
-          '}',
-          '#' + BB_BOOTSTRAP_OVERLAY_ID + ' .bb-bootstrap-spinner{',
-          'width:40px;height:40px;border-radius:50%;',
-          'border:3px solid #e8e6e3;border-top-color:#5B4FE8;',
-          'animation:bb-bootstrap-spin 0.75s linear infinite;',
-          '}',
-          '@keyframes bb-bootstrap-spin{to{transform:rotate(360deg)}}',
-          '#' + BB_BOOTSTRAP_OVERLAY_ID + ' .bb-bootstrap-label{',
-          'font-size:13px;color:#666;letter-spacing:0.02em;',
-          '}'
-        ].join('');
-        (document.head || document.documentElement).appendChild(style);
-      }
-
-      if (!document.getElementById(BB_BOOTSTRAP_OVERLAY_ID)) {
-        var overlay = document.createElement('div');
-        overlay.id = BB_BOOTSTRAP_OVERLAY_ID;
-        overlay.setAttribute('role', 'status');
-        overlay.setAttribute('aria-live', 'polite');
-        overlay.setAttribute('aria-busy', 'true');
-        var sp = document.createElement('div');
-        sp.className = 'bb-bootstrap-spinner';
-        sp.setAttribute('aria-hidden', 'true');
-        var lab = document.createElement('div');
-        lab.className = 'bb-bootstrap-label';
-        lab.textContent = 'Loading blog…';
-        overlay.appendChild(sp);
-        overlay.appendChild(lab);
-        document.body.appendChild(overlay);
-      }
-
-      document.documentElement.classList.add('bb-bootstrap-loading');
+      ensureCriticalStyle();
+      document.documentElement.classList.add(BB_LOADING_CLASS);
     } catch (e) {
       try { window.__bbBootstrapLoadingActive = false; } catch (e2) { /* ignore */ }
     }
@@ -131,15 +168,20 @@
 
   window.__bbClearBootstrapLoading = clearBootstrapLoading;
 
-  // If the script runs after <body> exists (e.g. footer injection), show the spinner immediately
-  // instead of waiting for DOMContentLoaded.
+  // The Header injection already added bb-loading-blog synchronously. We
+  // (re)assert it here as a belt-and-suspenders fallback for sites that only
+  // installed the loader script. Safe to call before <body> exists because the
+  // class lives on <html>, and the overlay is rendered via :before/:after
+  // pseudo-elements on <html>.
   try {
-    if (document.body && !isSquarespaceEditingUi()) installBootstrapLoading();
+    if (!isSquarespaceEditingUi()) installBootstrapLoading();
+    else clearBootstrapLoading();
   } catch (earlyBootErr) { /* ignore */ }
 
   function startLoader() {
     if (isSquarespaceEditingUi()) {
       console.log('[BlogOverlay] Skipping loader: Squarespace editing UI detected');
+      clearBootstrapLoading();
       return;
     }
     installBootstrapLoading();
