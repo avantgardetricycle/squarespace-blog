@@ -138,8 +138,8 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   },
   headerContent: {
     show: true,
-    modules: ['filterByCategory', 'searchPosts'],
-    moduleOrder: ['filterByCategory', 'searchPosts'],
+    modules: ['filterByCategory', 'searchPosts', 'postSort'],
+    moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
     height: 48
   },
   footerContent: {

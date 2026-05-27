@@ -923,7 +923,6 @@
       var bbDiv = document.createElement('div');
       bbDiv.id = 'bb-comments';
       bbDiv.style.marginTop = '32px';
-      bbDiv.style.marginLeft = '10%';
       bbDiv.style.paddingTop = '24px';
       bbDiv.style.borderTop = '1px solid #eee';
 
@@ -5478,6 +5477,63 @@
       return fb;
     },
 
+    /**
+     * Horizontal inset of the Squarespace blog column vs the viewport (site margin + section padding).
+     * Measured from the host root element so overlay content aligns with native Squarespace layout.
+     */
+    _getSquarespaceSiteContentInsets: function() {
+      var zero = { left: 0, right: 0 };
+      if (typeof window === 'undefined') return zero;
+      var root = this._root || (this.config && this.config.rootEl) || findBlogContainer() || document.getElementById('blogga-blogga-root');
+      if (root && root.getBoundingClientRect) {
+        try {
+          var rect = root.getBoundingClientRect();
+          var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+          if (vw > 0 && rect.width > 0 && rect.width < vw - 2) {
+            var left = Math.max(0, Math.round(rect.left));
+            var right = Math.max(0, Math.round(vw - rect.right));
+            if (left < vw * 0.45 && right < vw * 0.45) return { left: left, right: right };
+          }
+        } catch (eRect) { /* ignore */ }
+      }
+      if (!root || !window.getComputedStyle) return zero;
+      var el = root.parentElement;
+      for (var depth = 0; el && depth < 18; depth++) {
+        try {
+          var cn = el.className && typeof el.className === 'string' ? el.className : '';
+          var isLayoutHost = el.classList && (
+            el.classList.contains('page-section') ||
+            el.classList.contains('content-wrapper') ||
+            cn.indexOf('content-wrapper') >= 0 ||
+            cn.indexOf('sqs-layout') >= 0
+          );
+          if (isLayoutHost) {
+            var cs = window.getComputedStyle(el);
+            var pl = parseFloat(cs.paddingLeft) || 0;
+            var pr = parseFloat(cs.paddingRight) || 0;
+            var ml = parseFloat(cs.marginLeft) || 0;
+            var mr = parseFloat(cs.marginRight) || 0;
+            var left = Math.round(pl + ml);
+            var right = Math.round(pr + mr);
+            if (left > 0 || right > 0) return { left: left, right: right };
+          }
+        } catch (eWalk) { /* ignore */ }
+        if (el.id === 'siteWrapper' || el.id === 'site-wrapper') break;
+        el = el.parentElement;
+      }
+      return zero;
+    },
+
+    /** Break out to the viewport width (full-bleed images only). */
+    _applyViewportFullBleed: function(el) {
+      if (!el || !el.style) return;
+      el.style.width = '100vw';
+      el.style.maxWidth = '100vw';
+      el.style.marginLeft = 'calc(50% - 50vw)';
+      el.style.marginRight = 'calc(50% - 50vw)';
+      el.style.boxSizing = 'border-box';
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
@@ -6284,8 +6340,9 @@
             digestFeaturedIntro.style.maxWidth = '100%';
             digestFeaturedIntro.style.boxSizing = 'border-box';
             if (digestMobileFullBleed) {
-              digestFeaturedIntro.style.paddingLeft = '16px';
-              digestFeaturedIntro.style.paddingRight = '16px';
+              var dInset = self._siteContentInsets || { left: 0, right: 0 };
+              digestFeaturedIntro.style.paddingLeft = (dInset.left || 0) + 'px';
+              digestFeaturedIntro.style.paddingRight = (dInset.right || 0) + 'px';
               digestFeaturedIntro.style.paddingTop = '12px';
             }
           }
@@ -6328,13 +6385,8 @@
           fullBleedHeaderBlock.className = 'blog-overlay-post-header-fullbleed';
           fullBleedHeaderBlock.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
           fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
-          /* Header zone sits above the sidebar row (not in the center column). Rail widths must not
-           * shrink/shift breakout margins — that pulled title/meta under the viewport edge when a
-           * left sidebar existed. Always viewport-center full bleed for single-post hero. */
-          fullBleedHeaderBlock.style.width = '100vw';
-          fullBleedHeaderBlock.style.maxWidth = '100vw';
-          fullBleedHeaderBlock.style.marginLeft = 'calc(50% - 50vw)';
-          fullBleedHeaderBlock.style.marginRight = 'calc(50% - 50vw)';
+          /* Full-bleed post hero: viewport width (exception to site side margins). */
+          self._applyViewportFullBleed(fullBleedHeaderBlock);
           fullBleedHeaderBlock.style.position = 'relative';
           fullBleedHeaderBlock.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           fullBleedHeaderBlock.style.display = 'flex';
@@ -6374,10 +6426,7 @@
           stackedFullBleedWrap = document.createElement('div');
           stackedFullBleedWrap.className = 'blog-overlay-featured-image blog-overlay-featured-image-stacked-fullbleed';
           stackedFullBleedWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
-          stackedFullBleedWrap.style.width = '100vw';
-          stackedFullBleedWrap.style.maxWidth = '100vw';
-          stackedFullBleedWrap.style.marginLeft = 'calc(50% - 50vw)';
-          stackedFullBleedWrap.style.marginRight = 'calc(50% - 50vw)';
+          self._applyViewportFullBleed(stackedFullBleedWrap);
           var stackFiInner = document.createElement('div');
           stackFiInner.style.overflow = 'hidden';
           stackFiInner.style.position = 'relative';
@@ -6428,20 +6477,14 @@
             fiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
             if (!isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
               if (collectionLayout === 'digest' && isFeaturedInLayout && digestMobileFullBleed) {
-                fiWrap.style.marginLeft = 'calc(50% - 50vw)';
-                fiWrap.style.marginRight = 'calc(50% - 50vw)';
-                fiWrap.style.width = '100vw';
-                fiWrap.style.maxWidth = '100vw';
-                fiWrap.style.boxSizing = 'border-box';
+                self._applyViewportFullBleed(fiWrap);
               } else {
                 fiWrap.style.marginLeft = '0';
                 fiWrap.style.marginRight = '0';
                 fiWrap.style.width = '100%';
               }
             } else {
-              fiWrap.style.marginLeft = '-16px';
-              fiWrap.style.marginRight = '-16px';
-              fiWrap.style.width = 'calc(100% + 32px)';
+              self._applyViewportFullBleed(fiWrap);
             }
           } else if (isSideBySide) {
             fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
@@ -6489,8 +6532,9 @@
             capEl.style.marginTop = '6px';
             capEl.style.fontStyle = 'italic';
             if (digestFeaturedViewportBleed) {
-              capEl.style.paddingLeft = '16px';
-              capEl.style.paddingRight = '16px';
+              var capInset = self._siteContentInsets || { left: 0, right: 0 };
+              capEl.style.paddingLeft = (capInset.left || 0) + 'px';
+              capEl.style.paddingRight = (capInset.right || 0) + 'px';
               capEl.style.boxSizing = 'border-box';
             }
             fiWrap.appendChild(capEl);
@@ -6886,7 +6930,8 @@
             var stackedInfoWrap = document.createElement('div');
             stackedInfoWrap.style.maxWidth = '860px';
             stackedInfoWrap.style.margin = '0 auto';
-            stackedInfoWrap.style.padding = '0 16px';
+            var stackInset = self._siteContentInsets || { left: 0, right: 0 };
+            stackedInfoWrap.style.padding = '0 ' + (stackInset.right || 0) + 'px 0 ' + (stackInset.left || 0) + 'px';
             stackedInfoWrap.style.boxSizing = 'border-box';
             stackedInfoWrap.appendChild(postInfoWrap);
             stackedHeaderBlock.appendChild(stackedInfoWrap);
@@ -6901,9 +6946,9 @@
           var belowFiWrap = document.createElement('div');
           belowFiWrap.className = 'blog-overlay-featured-image';
           belowFiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
-          belowFiWrap.style.marginLeft = '-16px';
-          belowFiWrap.style.marginRight = '-16px';
-          belowFiWrap.style.width = 'calc(100% + 32px)';
+          belowFiWrap.style.marginLeft = '0';
+          belowFiWrap.style.marginRight = '0';
+          belowFiWrap.style.width = '100%';
           var belowFiInner = document.createElement('div');
           belowFiInner.style.overflow = 'hidden';
           belowFiInner.style.position = 'relative';
@@ -7351,10 +7396,10 @@
         mainEl.style.gap = '0';
         mainEl.style.gridTemplateColumns = '';
         if (collectionLayout === 'showcase') {
-          mainEl.style.width = '80%';
+          mainEl.style.width = '100%';
           mainEl.style.maxWidth = '100%';
-          mainEl.style.marginLeft = '10%';
-          mainEl.style.marginRight = '10%';
+          mainEl.style.marginLeft = '0';
+          mainEl.style.marginRight = '0';
           mainEl.style.boxSizing = 'border-box';
         } else {
           mainEl.style.width = '';
@@ -7440,6 +7485,7 @@
       var root = rootIsConnected ? this._root : (findBlogContainer() || document.getElementById('blogga-blogga-root'));
       if (!root) return;
       this._root = root;
+      this._siteContentInsets = this._getSquarespaceSiteContentInsets();
       if (this._progressScrollHandler) {
         var scrollTarget = this._progressScrollTarget || window;
         scrollTarget.removeEventListener('scroll', this._progressScrollHandler, { passive: true });
@@ -7567,12 +7613,14 @@
       wrapper.id = 'blog-overlay-list';
       wrapper.className = 'blog-overlay-wrapper';
       wrapper.style.display = 'block';
-      wrapper.style.padding = '16px';
-      wrapper.style.margin = '16px 0';
+      var siteInsets = self._siteContentInsets || self._getSquarespaceSiteContentInsets();
+      var sitePadL = siteInsets.left || 0;
+      var sitePadR = siteInsets.right || 0;
       var navbarOffset = this._getNavbarOffset();
-      if (navbarOffset > 0) {
-        wrapper.style.paddingTop = (navbarOffset + 16) + 'px';
-      }
+      var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
+      wrapper.style.padding = wrapperPadTop + 'px ' + sitePadR + 'px 16px ' + sitePadL + 'px';
+      wrapper.style.margin = '16px 0';
+      wrapper.style.boxSizing = 'border-box';
       /* Attach early so paywall/auth observers never see a "no listing" gap across async awaits. */
       root.prepend(wrapper);
       /* Do not set fontFamily - inherit from site for consistent typography */
@@ -7606,10 +7654,10 @@
           singlePostHeaderZoneEl.className = 'blog-overlay-header-zone blog-overlay-single-post-header-zone';
           singlePostHeaderZoneEl.style.position = 'relative';
           singlePostHeaderZoneEl.style.zIndex = '100';
-          singlePostHeaderZoneEl.style.width = '100vw';
-          singlePostHeaderZoneEl.style.maxWidth = '100vw';
-          singlePostHeaderZoneEl.style.marginLeft = 'calc(50% - 50vw)';
-          singlePostHeaderZoneEl.style.marginRight = 'calc(50% - 50vw)';
+          singlePostHeaderZoneEl.style.width = '100%';
+          singlePostHeaderZoneEl.style.maxWidth = '100%';
+          singlePostHeaderZoneEl.style.marginLeft = '0';
+          singlePostHeaderZoneEl.style.marginRight = '0';
           singlePostHeaderZoneEl.style.paddingTop = '16px';
           singlePostHeaderZoneEl.style.paddingBottom = '16px';
           singlePostHeaderZoneEl.style.boxSizing = 'border-box';
@@ -7656,10 +7704,10 @@
         main.style.alignItems = 'stretch';
         main.style.gap = '0';
         main.style.gridTemplateColumns = '';
-        main.style.width = '80%';
+        main.style.width = '100%';
         main.style.maxWidth = '100%';
-        main.style.marginLeft = '10%';
-        main.style.marginRight = '10%';
+        main.style.marginLeft = '0';
+        main.style.marginRight = '0';
         main.style.boxSizing = 'border-box';
       } else {
         /* listRows, editorial, etc. — single column of sections; editorial rows are their own grids. */
@@ -7674,11 +7722,11 @@
         headerZoneEl.className = 'blog-overlay-header-zone';
         headerZoneEl.style.position = 'relative';
         headerZoneEl.style.zIndex = '100';
-        headerZoneEl.style.width = '100vw';
-        headerZoneEl.style.maxWidth = '100vw';
-        headerZoneEl.style.marginLeft = 'calc(50% - 50vw)';
-        headerZoneEl.style.marginRight = 'calc(50% - 50vw)';
-        headerZoneEl.style.padding = '16px 24px';
+        headerZoneEl.style.width = '100%';
+        headerZoneEl.style.maxWidth = '100%';
+        headerZoneEl.style.marginLeft = '0';
+        headerZoneEl.style.marginRight = '0';
+        headerZoneEl.style.padding = '16px 0';
         headerZoneEl.style.boxSizing = 'border-box';
         headerZoneEl.style.background = 'transparent';
         headerZoneEl.style.borderBottom = '1px solid #eee';
@@ -9392,10 +9440,10 @@
               main.style.width = '';
               main.style.maxWidth = '';
               if (collectionLayout === 'showcase') {
-                main.style.width = '80%';
+                main.style.width = '100%';
                 main.style.maxWidth = '100%';
-                main.style.marginLeft = '10%';
-                main.style.marginRight = '10%';
+                main.style.marginLeft = '0';
+                main.style.marginRight = '0';
                 main.style.boxSizing = 'border-box';
               } else {
                 main.style.marginLeft = '';
