@@ -5522,14 +5522,52 @@
       return null;
     },
 
+    /**
+     * Convert a CSS length (px, vw, vh, rem, em, %) to pixels.
+     * getPropertyValue on custom properties returns authored values (e.g. "10vw"), not computed px.
+     */
+    _parseCssLengthToPx: function(raw, refEl) {
+      if (raw == null || typeof window === 'undefined' || !window.getComputedStyle) return null;
+      var s = String(raw).trim();
+      if (!s || s.indexOf('calc(') >= 0) return null;
+      var m = s.match(/^([-+]?[0-9]*\.?[0-9]+)\s*([a-z%]*)$/i);
+      if (!m) return null;
+      var n = parseFloat(m[1]);
+      if (!isFinite(n)) return null;
+      var unit = (m[2] || 'px').toLowerCase();
+      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+      var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      var rootFs = 16;
+      try {
+        rootFs = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+      } catch (eFs) { /* ignore */ }
+      if (unit === 'px' || unit === '') return n;
+      if (unit === 'vw' && vw > 0) return (n * vw) / 100;
+      if (unit === 'vh' && vh > 0) return (n * vh) / 100;
+      if (unit === 'vmin' && vw > 0 && vh > 0) return (n * Math.min(vw, vh)) / 100;
+      if (unit === 'vmax' && vw > 0 && vh > 0) return (n * Math.max(vw, vh)) / 100;
+      if (unit === 'rem') return n * rootFs;
+      if (unit === 'em') {
+        var baseFs = rootFs;
+        if (refEl) {
+          try {
+            baseFs = parseFloat(window.getComputedStyle(refEl).fontSize) || rootFs;
+          } catch (eEm) { /* ignore */ }
+        }
+        return n * baseFs;
+      }
+      if (unit === '%' && vw > 0) return (n * vw) / 100;
+      return null;
+    },
+
     _horizontalPaddingFromComputedStyle: function(el) {
       if (!el || !window.getComputedStyle) return null;
       try {
         var cs = window.getComputedStyle(el);
-        var pl = parseFloat(cs.paddingLeft) || 0;
-        var pr = parseFloat(cs.paddingRight) || 0;
-        var ml = parseFloat(cs.marginLeft) || 0;
-        var mr = parseFloat(cs.marginRight) || 0;
+        var pl = this._parseCssLengthToPx(cs.paddingLeft, el) || 0;
+        var pr = this._parseCssLengthToPx(cs.paddingRight, el) || 0;
+        var ml = this._parseCssLengthToPx(cs.marginLeft, el) || 0;
+        var mr = this._parseCssLengthToPx(cs.marginRight, el) || 0;
         var left = Math.round(pl + ml);
         var right = Math.round(pr + mr);
         if (left + right < 2) return null;
@@ -5557,8 +5595,11 @@
           for (var i = 0; i < names.length; i++) {
             var raw = cs.getPropertyValue(names[i]);
             if (!raw) continue;
-            var px = parseFloat(String(raw).replace(/px$/i, '').trim());
-            if (isFinite(px) && px >= 2) return { left: Math.round(px), right: Math.round(px) };
+            var px = this._parseCssLengthToPx(raw, el);
+            if (px != null && isFinite(px) && px >= 2) {
+              this._siteContentInsetsRaw = names[i] + ':' + String(raw).trim();
+              return { left: Math.round(px), right: Math.round(px) };
+            }
           }
         } catch (e) { /* ignore */ }
       }
@@ -5579,7 +5620,7 @@
       var finish = function(source, insets) {
         this._siteContentInsetsSource = source;
         if (this._isSiteMarginDebugEnabled()) {
-          console.log('[BlogOverlay][site-margin] ' + source, insets);
+          console.log('[BlogOverlay][site-margin] ' + source, insets, this._siteContentInsetsRaw ? { raw: this._siteContentInsetsRaw } : '');
         }
         return insets;
       }.bind(this);
