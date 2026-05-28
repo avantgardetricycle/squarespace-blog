@@ -6411,7 +6411,6 @@
         paginationEl.style.gap = '12px';
         paginationEl.style.marginTop = '24px';
         paginationEl.style.paddingTop = '20px';
-        paginationEl.style.borderTop = '1px solid #eee';
         paginationEl.style.width = '100%';
         paginationEl.style.boxSizing = 'border-box';
         if (paginationMode === 'infiniteScroll') {
@@ -6624,7 +6623,6 @@
         if (displayIdx >= 0) article.setAttribute('data-display-index', String(displayIdx));
         article.style.marginBottom = '24px';
         article.style.paddingBottom = '24px';
-        article.style.borderBottom = '1px solid #eee';
         if (navbarOffset > 0) {
           article.style.scrollMarginTop = (navbarOffset + 8) + 'px';
         }
@@ -7989,7 +7987,6 @@
           singlePostHeaderZoneEl.style.paddingBottom = '16px';
           singlePostHeaderZoneEl.style.boxSizing = 'border-box';
           singlePostHeaderZoneEl.style.background = 'transparent';
-          singlePostHeaderZoneEl.style.borderBottom = '1px solid #eee';
         }
         singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
         singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
@@ -8056,7 +8053,6 @@
         headerZoneEl.style.padding = '16px 0';
         headerZoneEl.style.boxSizing = 'border-box';
         headerZoneEl.style.background = 'transparent';
-        headerZoneEl.style.borderBottom = '1px solid #eee';
         headerModulesHostEl = document.createElement('div');
         headerModulesHostEl.className = 'blog-overlay-header-modules-host';
         headerModulesHostEl.style.marginTop = '0';
@@ -9799,7 +9795,6 @@
               headerEl.className = 'blog-overlay-header-content';
               headerEl.style.marginBottom = '16px';
               headerEl.style.paddingBottom = '12px';
-              headerEl.style.borderBottom = '1px solid #eee';
               headerEl.style.display = 'flex';
               var collectionHeaderRow = !isSinglePost;
               if (collectionHeaderRow) {
@@ -10109,7 +10104,6 @@
               footerEl.style.paddingLeft = footerLeftPad + 'px';
               footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = footerTopPad + 'px';
-              footerEl.style.borderTop = '1px solid #eee';
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
