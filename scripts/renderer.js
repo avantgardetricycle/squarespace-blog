@@ -420,6 +420,10 @@
     _tocScrollHandler: null,
     _tocScrollTarget: null,
     _renderSeq: 0,
+    _renderContentInProgress: false,
+    _placeholderImageMap: null,
+    _placeholderMapFetchKey: null,
+    _placeholderMapFetchInFlight: null,
     _editorModeObserver: null,
     _paywallAuthObserver: null,
     _paywallAuthDebounce: null,
@@ -2555,6 +2559,7 @@
         if (self._paywallAuthDebounce) return;
         self._paywallAuthDebounce = setTimeout(function() {
           self._paywallAuthDebounce = null;
+          if (self._renderContentInProgress) return;
           var snap = self._resolveViewerMode() + '|' + (self._isSquarespaceFullPaywallActive() ? '1' : '0');
           if (snap === self._lastPaywallAuthSnapshot) return;
           self._lastPaywallAuthSnapshot = snap;
@@ -5164,6 +5169,9 @@
       var firstJson = null;
       self._blogJsonPageCount = 0;
       self._paginationGen = (self._paginationGen || 0) + 1;
+      self._placeholderImageMap = null;
+      self._placeholderMapFetchKey = null;
+      self._placeholderMapFetchInFlight = null;
       var paginationGen = self._paginationGen;
 
       function getNextPageUrl(json) {
@@ -6312,15 +6320,40 @@
       return placeholderMap;
     },
 
+    _placeholderImageUrlsKey: function(featuredPost, displayItemsForLoop) {
+      var urlsToCheck = [];
+      function addImgUrl(u) {
+        if (u && typeof u === 'string' && u.trim() && (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) && urlsToCheck.indexOf(u) < 0) urlsToCheck.push(u);
+      }
+      if (featuredPost) {
+        addImgUrl(featuredPost.assetUrl || featuredPost.thumbnailUrl || (featuredPost.assets && featuredPost.assets[0] && featuredPost.assets[0].assetUrl) || null);
+      }
+      for (var ui = 0; ui < (displayItemsForLoop ? displayItemsForLoop.length : 0); ui++) {
+        var pu = displayItemsForLoop[ui];
+        addImgUrl(pu && (pu.assetUrl || pu.thumbnailUrl || (pu.assets && pu.assets[0] && pu.assets[0].assetUrl) || null));
+      }
+      if (urlsToCheck.length === 0) return '';
+      urlsToCheck.sort();
+      return urlsToCheck.join('\n');
+    },
+
     _schedulePlaceholderMapFollowUp: function(featuredPost, displayItemsForLoop, renderSeq) {
       var self = this;
       if (self._previewMode || self._bbPreview) return;
       var baseUrl = self.config && self.config.baseUrl;
       if (!baseUrl) return;
+      var fetchKey = self._placeholderImageUrlsKey(featuredPost, displayItemsForLoop);
+      if (!fetchKey) return;
+      if (fetchKey === self._placeholderMapFetchKey && self._placeholderImageMap) return;
+      if (self._placeholderMapFetchInFlight === fetchKey) return;
+      self._placeholderMapFetchInFlight = fetchKey;
       self._fetchPlaceholderImageMap(featuredPost, displayItemsForLoop)
         .then(function(resolved) {
+          self._placeholderMapFetchInFlight = null;
           if (renderSeq !== self._renderSeq) return;
           if (!resolved || typeof resolved !== 'object') return;
+          self._placeholderMapFetchKey = fetchKey;
+          self._placeholderImageMap = resolved;
           var needsPatch = false;
           for (var pk in resolved) {
             if (Object.prototype.hasOwnProperty.call(resolved, pk) && resolved[pk] === true) {
@@ -6329,12 +6362,12 @@
             }
           }
           if (needsPatch && self.items && self.items.length) {
-            self._armBootstrapLoading();
             self._renderContent(self.items);
-            self._clearBootstrapLoading();
           }
         })
-        .catch(function() {});
+        .catch(function() {
+          self._placeholderMapFetchInFlight = null;
+        });
     },
 
     _buildItemIndexMap: function(items) {
@@ -7764,6 +7797,7 @@
       var root = rootIsConnected ? this._root : (findBlogContainer() || document.getElementById('blogga-blogga-root'));
       if (!root) return;
       this._root = root;
+      this._renderContentInProgress = true;
       this._siteContentInsets = this._getSquarespaceSiteContentInsets();
       if (this._progressScrollHandler) {
         var scrollTarget = this._progressScrollTarget || window;
@@ -8115,7 +8149,9 @@
           });
         }
       }
-      var placeholderMap = {};
+      var placeholderMap = (self._placeholderImageMap && typeof self._placeholderImageMap === 'object')
+        ? self._placeholderImageMap
+        : {};
       var placeholderRenderSeq = self._renderSeq;
       self._schedulePlaceholderMapFollowUp(featuredPost, displayItemsForLoop, placeholderRenderSeq);
       if (faCfg && faCfg.position === 'header' && featuredPost) {
@@ -10342,6 +10378,7 @@
       // can't repopulate `root` after the loading overlay has been cleared.
       self._perfMark('renderDomCommitted');
       self._startRootInjectionGuard(root);
+      this._renderContentInProgress = false;
     }
   };
 
