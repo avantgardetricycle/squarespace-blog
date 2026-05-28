@@ -150,6 +150,8 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'grid',
         gridColumns: 3,
+        showAuthor: true,
+        showReadingTime: true,
         pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
@@ -223,6 +225,8 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'digest',
         gridColumns: 2,
+        showAuthor: true,
+        showReadingTime: true,
         pagination: { show: true, mode: 'pages', postsPerPage: 10 },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
         rightSidebar: {

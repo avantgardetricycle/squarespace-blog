@@ -7,6 +7,9 @@ const router = Router()
 const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   collectionLayout: 'grid' as const,
   gridColumns: 3 as const,
+  showDate: true,
+  showAuthor: true,
+  showReadingTime: true,
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
@@ -118,6 +121,9 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
 const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   collectionLayout: 'digest' as const,
   gridColumns: 2 as const,
+  showDate: true,
+  showAuthor: true,
+  showReadingTime: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {

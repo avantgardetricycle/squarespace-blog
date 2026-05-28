@@ -3357,7 +3357,7 @@
     },
 
     /**
-     * Categories line above post title (Newsroom / Showcase). Small caps + accent; optional filter buttons.
+     * Categories line above post title (Newsroom, Showcase, Masthead, Digest). Small caps + accent; optional filter buttons.
      */
     _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled) {
       var self = this;
@@ -6605,7 +6605,8 @@
           fiLayout = 'fullBleed';
         }
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
-        var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : '16:9');
+        var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : '16:9');
+        if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
@@ -6984,7 +6985,7 @@
           if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
         }
 
-        var postCategoriesLine = (!isSinglePost && collectionLayout === 'listRows')
+        var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))
           ? self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, categoryFilterUiEnabled)
           : null;
 
@@ -8167,7 +8168,7 @@
           var heroInner = document.createElement('div');
           heroInner.style.position = 'relative';
           heroInner.style.width = '100%';
-          heroInner.style.aspectRatio = '21 / 8';
+          heroInner.style.aspectRatio = '21 / 9';
           heroInner.style.overflow = 'hidden';
           heroInner.style.borderRadius = '4px';
           heroInner.style.background = 'linear-gradient(160deg, #1a1a2e 0%, #2d1a3a 45%, #0f2027 100%)';
