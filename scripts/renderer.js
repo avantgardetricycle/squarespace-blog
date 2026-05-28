@@ -2703,8 +2703,14 @@
       if (!this._isPaywalledSite()) return Promise.resolve();
       if (this._isCollectionIndexPath() && this._getSelectedIndexFromHash() < 0) return Promise.resolve();
       if (this._resolveViewerMode() === 'loggedIn') return Promise.resolve();
+      var identity = this._currentPageJsonIdentity || this._squarespaceJsonIdentity;
+      if (identity && (identity.loggedIn === true || identity.loggedIn === false)) {
+        return Promise.resolve();
+      }
+      if (!this._memberAccountsEnabledHint) return Promise.resolve();
       var self = this;
       var started = Date.now();
+      var maxWaitMs = 650;
       return new Promise(function(resolve) {
         var done = false;
         var finish = function() {
@@ -2716,7 +2722,7 @@
           resolve();
         };
         var check = function() {
-          if (self._resolveViewerMode() === 'loggedIn' || Date.now() - started > 1200) finish();
+          if (self._resolveViewerMode() === 'loggedIn' || Date.now() - started > maxWaitMs) finish();
         };
         var observer = null;
         if (document.body && typeof MutationObserver !== 'undefined') {
@@ -2731,10 +2737,10 @@
             });
           } catch (e2) {}
         }
-        setTimeout(check, 150);
+        setTimeout(check, 100);
+        setTimeout(check, 250);
         setTimeout(check, 450);
-        setTimeout(check, 900);
-        setTimeout(finish, 1250);
+        setTimeout(finish, maxWaitMs);
       });
     },
 
@@ -3172,7 +3178,7 @@
       }
       var idx = 0;
       if (post && items && Array.isArray(items)) {
-        var ix = items.indexOf(post);
+        var ix = this._postIndexInItems(items, post, this._itemIndexMap);
         if (ix >= 0) idx = ix;
       }
       var g = this._editorialImagePlaceholderGradients;
@@ -6270,6 +6276,49 @@
       return placeholderMap;
     },
 
+    _schedulePlaceholderMapFollowUp: function(featuredPost, displayItemsForLoop, renderSeq) {
+      var self = this;
+      if (self._previewMode || self._bbPreview) return;
+      var baseUrl = self.config && self.config.baseUrl;
+      if (!baseUrl) return;
+      self._fetchPlaceholderImageMap(featuredPost, displayItemsForLoop)
+        .then(function(resolved) {
+          if (renderSeq !== self._renderSeq) return;
+          if (!resolved || typeof resolved !== 'object') return;
+          var needsPatch = false;
+          for (var pk in resolved) {
+            if (Object.prototype.hasOwnProperty.call(resolved, pk) && resolved[pk] === true) {
+              needsPatch = true;
+              break;
+            }
+          }
+          if (needsPatch && self.items && self.items.length) {
+            self._renderContent(self.items);
+          }
+        })
+        .catch(function() {});
+    },
+
+    _buildItemIndexMap: function(items) {
+      if (!items || !items.length) return null;
+      try {
+        if (typeof Map === 'function') {
+          var map = new Map();
+          for (var i = 0; i < items.length; i++) map.set(items[i], i);
+          return map;
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    },
+
+    _postIndexInItems: function(items, post, itemIndexMap) {
+      if (itemIndexMap && typeof itemIndexMap.get === 'function') {
+        var mapped = itemIndexMap.get(post);
+        if (typeof mapped === 'number') return mapped;
+      }
+      return items.indexOf(post);
+    },
+
     _buildCollectionPaginationNav: function(vs) {
       var self = this;
       var accentPag = self._getSiteAccentColor();
@@ -6465,7 +6514,7 @@
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
-        var postIndex = isSinglePost ? selectedIndex : items.indexOf(post);
+        var postIndex = isSinglePost ? selectedIndex : self._postIndexInItems(items, post, self._itemIndexMap);
         var featLayoutKey = featuredPost ? displayPostKey(featuredPost) : null;
         var postLayoutKey = displayPostKey(post);
         var isFeaturedInLayout = !isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && !!featuredPost && (post === featuredPost || (featLayoutKey && postLayoutKey === featLayoutKey));
@@ -7295,7 +7344,7 @@
         for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedShowcase = paywallReplaceCollectionTeaser && !isSinglePost && !self._isPaywallPublicPreviewPost(post);
-        var postIndex = items.indexOf(post);
+        var postIndex = self._postIndexInItems(items, post, self._itemIndexMap);
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
         var imgUrlValid = imgUrl && typeof imgUrl === 'string' && imgUrl.trim().length > 0 && imgUrl !== '#' && (imgUrl.indexOf('http://') === 0 || imgUrl.indexOf('https://') === 0);
@@ -7602,6 +7651,7 @@
       }
 
       var navbarOffset = this._getNavbarOffset();
+      this._itemIndexMap = this._buildItemIndexMap(items);
       mainEl.replaceChildren();
       if (collectionLayout === 'showcase') {
         this._renderShowcasePostsIntoMain(mainEl, items, vs, placeholderMap, navbarOffset);
@@ -7801,6 +7851,8 @@
       var featuredPost = vs.featuredPost;
       var displayItemsForLoop = vs.displayItemsForLoop;
       var displayPostKey = vs.displayPostKey;
+      var itemIndexMap = self._buildItemIndexMap(items);
+      self._itemIndexMap = itemIndexMap;
 
       var wrapper = document.createElement('div');
       wrapper.id = 'blog-overlay-list';
@@ -7814,8 +7866,9 @@
       wrapper.style.padding = wrapperPadTop + 'px ' + sitePadR + 'px 16px ' + sitePadL + 'px';
       wrapper.style.margin = '16px 0';
       wrapper.style.boxSizing = 'border-box';
-      /* Attach early so paywall/auth observers never see a "no listing" gap across async awaits. */
-      root.prepend(wrapper);
+      /* Build off-document first, then commit in one prepend to reduce layout thrash (#8). */
+      var overlayFragment = document.createDocumentFragment();
+      overlayFragment.appendChild(wrapper);
       /* Do not set fontFamily - inherit from site for consistent typography */
 
       var main = document.createElement('div');
@@ -8017,38 +8070,11 @@
         }
       }
       var placeholderMap = {};
-      var baseUrl = self.config && self.config.baseUrl;
-      var urlsToCheck = [];
-      function addImgUrl(u) {
-        if (u && typeof u === 'string' && u.trim() && (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) && urlsToCheck.indexOf(u) < 0) urlsToCheck.push(u);
-      }
-      if (featuredPost) {
-        addImgUrl(featuredPost.assetUrl || featuredPost.thumbnailUrl || (featuredPost.assets && featuredPost.assets[0] && featuredPost.assets[0].assetUrl) || null);
-      }
-      for (var ui = 0; ui < displayItemsForLoop.length; ui++) {
-        var pu = displayItemsForLoop[ui];
-        addImgUrl(pu && (pu.assetUrl || pu.thumbnailUrl || (pu.assets && pu.assets[0] && pu.assets[0].assetUrl) || null));
-      }
-      if (urlsToCheck.length > 0 && baseUrl) {
-        try {
-          var res = await fetch(baseUrl.replace(/\/+$/, '') + '/api/config/check-placeholder-images', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls: urlsToCheck })
-          });
-          if (res.ok) {
-            var data = await res.json();
-            if (data.placeholders && typeof data.placeholders === 'object') placeholderMap = data.placeholders;
-          } else {
-            placeholderMap = null;
-          }
-        } catch (e) {
-          placeholderMap = null;
-        }
-      }
+      var placeholderRenderSeq = self._renderSeq;
+      self._schedulePlaceholderMapFollowUp(featuredPost, displayItemsForLoop, placeholderRenderSeq);
       if (faCfg && faCfg.position === 'header' && featuredPost) {
           var heroLink = document.createElement('a');
-          heroLink.href = self._getPostUrl(featuredPost) || (self._bbPreview ? '#post-' + items.indexOf(featuredPost) : '#');
+          heroLink.href = self._getPostUrl(featuredPost) || (self._bbPreview ? '#post-' + self._postIndexInItems(items, featuredPost, itemIndexMap) : '#');
           heroLink.style.display = 'block';
           heroLink.style.textDecoration = 'none';
           heroLink.style.color = '#fff';
@@ -8458,7 +8484,7 @@
         var popularItems = ranked.slice(0, count);
         for (var r = 0; r < popularItems.length; r++) {
           var ppPost = popularItems[r];
-          var ppIdx = items.indexOf(ppPost);
+          var ppIdx = self._postIndexInItems(items, ppPost, itemIndexMap);
           if (ppIdx < 0) ppIdx = r;
           var ppUrl = self._getPostUrl(ppPost);
           var ppEntry = document.createElement('div');
@@ -8539,7 +8565,7 @@
           grid.style.boxSizing = 'border-box';
           for (var rf = 0; rf < relevantItems.length; rf++) {
             var fp = relevantItems[rf];
-            var fIdx = items.indexOf(fp);
+            var fIdx = self._postIndexInItems(items, fp, itemIndexMap);
             if (fIdx < 0) continue;
             var fUrl = self._getPostUrl(fp);
             var card = document.createElement('a');
@@ -8610,7 +8636,7 @@
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 220) + 'px';
         for (var r = 0; r < relevantItems.length; r++) {
-          var rpIdx = items.indexOf(relevantItems[r]);
+          var rpIdx = self._postIndexInItems(items, relevantItems[r], itemIndexMap);
           if (rpIdx < 0) continue;
           var rpPost = relevantItems[r];
           var rpUrl = self._getPostUrl(rpPost);
@@ -8634,7 +8660,7 @@
         if (selectedIndex >= 0 && selectedIndex < items.length) {
           activeIdx = selectedIndex;
         } else if (displayItems && displayItems.length === 1) {
-          var idxFromDisplay = items.indexOf(displayItems[0]);
+          var idxFromDisplay = self._postIndexInItems(items, displayItems[0], itemIndexMap);
           if (idxFromDisplay >= 0) activeIdx = idxFromDisplay;
         } else if (self._previewMode && self.config && typeof self.config.previewSelectedPostIndex === 'number') {
           activeIdx = Math.min(Math.max(0, self.config.previewSelectedPostIndex), Math.max(0, items.length - 1));
@@ -8685,7 +8711,7 @@
             cell.appendChild(catEl);
           }
 
-          var idx = items.indexOf(postObj);
+          var idx = self._postIndexInItems(items, postObj, itemIndexMap);
           var titleLink = document.createElement('a');
           titleLink.href = self._getPostUrl(postObj) || '#post-' + idx;
           titleLink.setAttribute('data-analytics-element', side === 'prev' ? 'previousArticle' : 'nextArticle');
@@ -9334,7 +9360,7 @@
           if (cardUrl && self._isPlaceholderWithMap(cardUrl, placeholderMap)) cardUrl = null;
           var bgStyle = self._featuredImageAreaBackground(cardUrl, placeholderMap, p, items);
           var link = document.createElement('a');
-          link.href = self._getPostUrl(p) || (self._bbPreview ? '#post-' + items.indexOf(p) : '#');
+          link.href = self._getPostUrl(p) || (self._bbPreview ? '#post-' + self._postIndexInItems(items, p, itemIndexMap) : '#');
           link.style.display = 'block';
           link.style.position = 'relative';
           link.style.overflow = 'hidden';
@@ -9412,7 +9438,7 @@
           var idx = displayItems.indexOf(p);
           if (idx >= 0) link.setAttribute('data-display-index', String(idx));
           if (!isSinglePost) {
-            var edPostIdx = items.indexOf(p);
+            var edPostIdx = self._postIndexInItems(items, p, itemIndexMap);
             link.setAttribute('data-analytics-element', 'postTitle');
             link.setAttribute('data-post-index', String(edPostIdx));
             if (hasSearchQuery && searchQuery) {
@@ -10105,6 +10131,9 @@
             }
           }
           if (footerZoneEl.childNodes.length > 0) wrapper.appendChild(footerZoneEl);
+
+          /* Commit overlay in one DOM operation (#8). */
+          root.prepend(overlayFragment);
 
           if (!isSinglePost) {
             this._lastCollectionShellKey = collectionLayout + '|' + gridColsDigestOrGrid;
