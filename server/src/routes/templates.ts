@@ -17,7 +17,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -25,7 +25,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
@@ -132,7 +132,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
@@ -140,7 +140,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
     width: 280,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: {
     show: true,
@@ -184,7 +184,7 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -192,7 +192,7 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: {
     show: true,
@@ -241,7 +241,7 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 200,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
@@ -249,7 +249,7 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     moduleOrder: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
     width: 300,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   footerContent: {
     show: true,
@@ -298,7 +298,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     moduleOrder: ['tableOfContents'],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
@@ -306,7 +306,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
     width: 280,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48 },
   footerContent: {
@@ -370,7 +370,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 200,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -378,7 +378,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   footerContent: {
     show: true,
@@ -413,7 +413,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
@@ -421,7 +421,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
     width: 280,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48 },
   footerContent: {
@@ -484,7 +484,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -492,7 +492,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 56 },
   footerContent: {

@@ -113,8 +113,8 @@ async function main() {
     showReadingTime: false,
     postSort: 'date' as const,
     pagination: { show: false, postsPerPage: 10 },
-    leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: true },
-    rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: true },
+    leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
+    rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [] as string[], height: 48 },
     socialMediaLinks: { show: false, platforms: [] as string[] },
     featuredImage: {
@@ -153,8 +153,8 @@ async function main() {
         showAuthor: true,
         showReadingTime: true,
         pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
           sort: {},
@@ -209,8 +209,8 @@ async function main() {
           },
           leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
         },
-        leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 },
         featuredArticle: { show: true, position: 'inLayout' }
       },
@@ -228,14 +228,14 @@ async function main() {
         showAuthor: true,
         showReadingTime: true,
         pagination: { show: true, mode: 'pages', postsPerPage: 10 },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
           modules: ['emailCapture', 'popularPosts', 'filterByCategory'],
           moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
           width: 280,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
@@ -360,7 +360,7 @@ async function main() {
           moduleOrder: ['tableOfContents'],
           width: 240,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         rightSidebar: {
           show: true,
@@ -368,7 +368,7 @@ async function main() {
           moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
           width: 280,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
         footerContent: {
@@ -416,14 +416,14 @@ async function main() {
         showAuthor: true,
         showReadingTime: true,
         postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
           modules: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
           moduleOrder: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
           width: 300,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         footerContent: {
           show: true,
@@ -474,14 +474,14 @@ async function main() {
           showCategories: true,
           showByline: true
         },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
           width: 280,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
         footerContent: {
@@ -535,8 +535,8 @@ async function main() {
           showCategories: true,
           showByline: true
         },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         headerContent: { show: false, modules: [], moduleOrder: [], height: 56 },
         footerContent: {
           show: true,
@@ -587,8 +587,8 @@ async function main() {
           showTags: false,
           showCategories: true
         },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         footerContent: {
           show: true,
           modules: ['authorProfiles', 'prevNextArticle'],

@@ -152,8 +152,8 @@ function buildDefaultPostConfig (
 ): Record<string, unknown> {
   return {
     ...collectionFieldsForDefaultPost(cc),
-    leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-    rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+    leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+    rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
     footerContent: {
       show: false,
@@ -603,15 +603,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const rendererUrl = `${baseUrl}/renderer.js`
 
     const ls = leftSidebar && typeof leftSidebar === 'object'
-      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((leftSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (leftSidebar as { sticky?: boolean }).sticky !== false }
+      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((leftSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (leftSidebar as { sticky?: boolean }).sticky === true }
       : (tableOfContents.show && tableOfContents.position === 'left') || (recentPostsSidebar.show && recentPostsSidebar.position === 'left')
-        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'left' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'left' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: true }
-        : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true }
+        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'left' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'left' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: false }
+        : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false }
     const rs = rightSidebar && typeof rightSidebar === 'object'
-      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((rightSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (rightSidebar as { sticky?: boolean }).sticky !== false }
+      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((rightSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (rightSidebar as { sticky?: boolean }).sticky === true }
       : (tableOfContents.show && tableOfContents.position === 'right') || (recentPostsSidebar.show && recentPostsSidebar.position === 'right')
-        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: true }
-        : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true }
+        ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: false }
+        : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false }
     const hc = headerContent && typeof headerContent === 'object'
       ? (() => {
           const modules = Array.isArray(headerContent.modules) ? headerContent.modules : [];

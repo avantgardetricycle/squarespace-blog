@@ -6045,20 +6045,20 @@
       var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
       if (!useLevelConfig) {
         if (!leftSidebarCfg && cfg.showTableOfContents) {
-          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: true } : null;
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
         }
         if (!rightSidebarCfg && cfg.showTableOfContents) {
-          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: true } : null;
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
         }
         if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: true } : leftSidebarCfg;
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : leftSidebarCfg;
         }
         if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: true } : rightSidebarCfg;
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : rightSidebarCfg;
         }
       } else {
-        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
-        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
@@ -6067,10 +6067,10 @@
       if (stripPaywalledLoggedOutChrome) {
         var lsW = leftSidebarCfg && typeof leftSidebarCfg.width === 'number' ? leftSidebarCfg.width : 240;
         var lsS = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? leftSidebarCfg.spaceAbove : 0;
-        var lsSticky = !leftSidebarCfg || leftSidebarCfg.sticky !== false;
+        var lsSticky = Boolean(leftSidebarCfg && leftSidebarCfg.sticky === true);
         var rsW = rightSidebarCfg && typeof rightSidebarCfg.width === 'number' ? rightSidebarCfg.width : 240;
         var rsS = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? rightSidebarCfg.spaceAbove : 0;
-        var rsSticky = !rightSidebarCfg || rightSidebarCfg.sticky !== false;
+        var rsSticky = Boolean(rightSidebarCfg && rightSidebarCfg.sticky === true);
         var hcH = headerContentCfg && typeof headerContentCfg.height === 'number' ? headerContentCfg.height : 48;
         var fcP = footerContentCfg && typeof footerContentCfg.topPadding === 'number' ? footerContentCfg.topPadding : 16;
         leftSidebarCfg = { show: false, modules: [], moduleOrder: [], width: lsW, spaceAbove: lsS, sticky: lsSticky };
@@ -7898,20 +7898,20 @@
       var sidebarPosition = vs.sidebarPosition;
       if (!useLevelConfig) {
         if (!leftSidebarCfg && cfg.showTableOfContents) {
-          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: true } : null;
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
         }
         if (!rightSidebarCfg && cfg.showTableOfContents) {
-          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: true } : null;
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
         }
         if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: true } : leftSidebarCfg;
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : leftSidebarCfg;
         }
         if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: true } : rightSidebarCfg;
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : rightSidebarCfg;
         }
       } else {
-        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
-        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: true };
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
       }
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
@@ -9637,8 +9637,8 @@
           var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : 240;
           var leftSpaceAbove = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, leftSidebarCfg.spaceAbove)) : 0;
           var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
-          var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky !== false;
-          var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky !== false;
+          var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
+          var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
           var collectionHeaderStickyOffset = 0;
           if (!isSinglePost) {
             var collectionTitleBand = 0;

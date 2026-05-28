@@ -388,8 +388,8 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   gridColumns: 3,
   collectionModules: defaultCollectionModules,
   featuredArticle: defaultFeaturedArticle,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
   socialMediaLinks: { show: false, platforms: [] },
@@ -411,8 +411,8 @@ const defaultPostConfig: PostLevelConfig = {
   ...defaultCollectionConfig,
   postModules: defaultPostModules,
   postHeader: defaultPostHeader,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
@@ -671,11 +671,11 @@ function parseLevelConfig(
   );
   const hcModuleOrder = level === "collection" ? validHeaderCollection(hcOrderSource) : validHeaderPost(hcOrderSource);
   const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky !== false }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
+    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky === true }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
   const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky !== false }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
+    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky === true }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
   const headerContent = hc
     ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
     : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
@@ -4045,7 +4045,7 @@ export default function Configure() {
                                   <div className="flex items-center justify-between">
                                     <Label className="text-xs text-[#6b6b6b]">Sticky (move with scroll)</Label>
                                     <Switch
-                                      checked={cfg.sticky !== false}
+                                      checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
                                     />
                                   </div>
