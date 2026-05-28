@@ -1662,6 +1662,34 @@
       } catch (e) { /* ignore */ }
     },
 
+    /** Re-show the Header preload overlay (SPA route changes, hash post picks). */
+    _armBootstrapLoading: function() {
+      if (this._previewMode || this._bbPreview) return;
+      try {
+        if (typeof window !== 'undefined' && typeof window.__bbInstallBootstrapLoading === 'function') {
+          window.__bbInstallBootstrapLoading();
+          return;
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        if (document.documentElement && document.documentElement.classList) {
+          document.documentElement.classList.add('bb-loading-blog');
+        }
+      } catch (e2) { /* ignore */ }
+    },
+
+    _isBootstrapLoadingActive: function() {
+      try {
+        return Boolean(
+          document.documentElement &&
+          document.documentElement.classList &&
+          document.documentElement.classList.contains('bb-loading-blog')
+        );
+      } catch (e) {
+        return false;
+      }
+    },
+
     /**
      * Initialize the renderer with user config
      * @param {Object} config - User configuration from the API
@@ -1731,7 +1759,11 @@
 
       var self = this;
       window.addEventListener('hashchange', function() {
-        if (self.items.length) self._renderContent(self.items);
+        if (self.items.length) {
+          if (!previewMode && !bbPreview) self._armBootstrapLoading();
+          self._renderContent(self.items);
+          if (!previewMode && !bbPreview) self._clearBootstrapLoading();
+        }
         if (bbPreview && window.parent !== window) {
           var idx = self._getSelectedIndex(self.items);
           window.parent.postMessage({ type: 'BETTERBLOG_PREVIEW_POST_SELECTED', postIndex: idx }, '*');
@@ -1849,6 +1881,7 @@
             self.render();
             return;
           }
+          self._armBootstrapLoading();
           self._probeCurrentPageJsonAuth()
             .then(function() {
               return self._waitForPostAuthHydration();
@@ -1858,6 +1891,9 @@
             })
             .catch(function(err) {
               console.error('[BlogOverlay] Route-change render error:', err);
+            })
+            .finally(function() {
+              self._clearBootstrapLoading();
             });
         }, 0);
       };
@@ -6293,7 +6329,9 @@
             }
           }
           if (needsPatch && self.items && self.items.length) {
+            self._armBootstrapLoading();
             self._renderContent(self.items);
+            self._clearBootstrapLoading();
           }
         })
         .catch(function() {});
@@ -6917,17 +6955,17 @@
           ? self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, categoryFilterUiEnabled)
           : null;
 
-        var h2 = document.createElement('h2');
-        h2.className = 'blog-overlay-title';
-        h2.style.margin = '0 0 8px 0';
+        var titleEl = document.createElement(isSinglePost ? 'h2' : 'h3');
+        titleEl.className = 'blog-overlay-title';
+        titleEl.style.margin = '0 0 8px 0';
         if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
-          h2.style.fontSize = '1.05rem';
-          h2.style.lineHeight = '1.3';
-          h2.style.fontWeight = '700';
-          h2.style.margin = '0 0 6px 0';
+          titleEl.style.fontSize = '1.05rem';
+          titleEl.style.lineHeight = '1.3';
+          titleEl.style.fontWeight = '700';
+          titleEl.style.margin = '0 0 6px 0';
         }
-        if (singlePostFullBleedHero) h2.style.color = '#fff';
-        if (singlePostFullBleedHero) h2.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+        if (singlePostFullBleedHero) titleEl.style.color = '#fff';
+        if (singlePostFullBleedHero) titleEl.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
         if (!isSinglePost) {
           var postUrl = self._getPostUrl(post);
           var titleLink = document.createElement('a');
@@ -6958,9 +6996,9 @@
                 };
               })(postIndex);
             }
-          h2.appendChild(titleLink);
+          titleEl.appendChild(titleLink);
         } else {
-          h2.textContent = post.title || 'Untitled';
+          titleEl.textContent = post.title || 'Untitled';
         }
         var listRowsMobileCatsAboveRow = Boolean(
           postCategoriesLine &&
@@ -6997,10 +7035,10 @@
           featuredBadge.style.lineHeight = '1';
           featuredBadge.style.borderRadius = '2px';
           featuredHeadlineStack.appendChild(featuredBadge);
-          featuredHeadlineStack.appendChild(h2);
+          featuredHeadlineStack.appendChild(titleEl);
           titleBlock = featuredHeadlineStack;
         } else {
-          titleBlock = h2;
+          titleBlock = titleEl;
         }
         if (!isSinglePost && collectionLayout === 'listRows' && gatedCard) {
           var nwPaywallCol = document.createElement('div');
@@ -7429,9 +7467,9 @@
           ? self._createCollectionPostCategoriesLine(post, siteAccent, categoryFilterUiEnabled)
           : null;
         if (postCategoriesLineShowcase) bodyCol.appendChild(postCategoriesLineShowcase);
-        var h2 = document.createElement('h2');
-        h2.className = 'blog-overlay-title';
-        h2.style.margin = '0 0 8px 0';
+        var titleEl = document.createElement('h3');
+        titleEl.className = 'blog-overlay-title';
+        titleEl.style.margin = '0 0 8px 0';
         var titleLink = document.createElement('a');
         titleLink.href = postUrl;
         titleLink.textContent = post.title || 'Untitled';
@@ -7440,7 +7478,7 @@
         titleLink.style.cursor = 'pointer';
         setShowcasePostAnalytics(titleLink);
         wireShowcaseNavLink(titleLink);
-        h2.appendChild(titleLink);
+        titleEl.appendChild(titleLink);
         var excerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
         var bodyEl = document.createElement('div');
         bodyEl.className = 'blog-overlay-body';
@@ -7505,7 +7543,7 @@
         arrowPath.setAttribute('d', 'M5 12h14m-7-7l7 7-7 7');
         arrowSvg.appendChild(arrowPath);
         readLink.appendChild(arrowSvg);
-        bodyCol.appendChild(h2);
+        bodyCol.appendChild(titleEl);
         bodyCol.appendChild(bodyEl);
         bodyCol.appendChild(metaEl);
         if (gatedShowcase) {
@@ -7866,9 +7904,17 @@
       wrapper.style.padding = wrapperPadTop + 'px ' + sitePadR + 'px 16px ' + sitePadL + 'px';
       wrapper.style.margin = '16px 0';
       wrapper.style.boxSizing = 'border-box';
-      /* Build off-document first, then commit in one prepend to reduce layout thrash (#8). */
+      /*
+       * Cold load: build off-document, commit once at the end (#8).
+       * SPA / follow-up re-renders (body already visible): commit the shell
+       * immediately so root is never empty while Squarespace hydrates post markup.
+       */
       var overlayFragment = document.createDocumentFragment();
       overlayFragment.appendChild(wrapper);
+      var deferOverlayCommit = self._isBootstrapLoadingActive();
+      if (!deferOverlayCommit) {
+        root.prepend(overlayFragment);
+      }
       /* Do not set fontFamily - inherit from site for consistent typography */
 
       var main = document.createElement('div');
@@ -8158,7 +8204,7 @@
             heroCat.style.marginBottom = '8px';
             heroContent.appendChild(heroCat);
           }
-          var heroTitle = document.createElement('h2');
+          var heroTitle = document.createElement('h3');
           heroTitle.textContent = featuredPost.title || 'Untitled';
           heroTitle.style.fontSize = 'clamp(1.5rem, 4vw, 2.25rem)';
           heroTitle.style.fontWeight = '900';
@@ -10132,8 +10178,10 @@
           }
           if (footerZoneEl.childNodes.length > 0) wrapper.appendChild(footerZoneEl);
 
-          /* Commit overlay in one DOM operation (#8). */
-          root.prepend(overlayFragment);
+          /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
+          if (deferOverlayCommit) {
+            root.prepend(overlayFragment);
+          }
 
           if (!isSinglePost) {
             this._lastCollectionShellKey = collectionLayout + '|' + gridColsDigestOrGrid;

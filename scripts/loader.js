@@ -205,6 +205,7 @@
   }
 
   window.__bbClearBootstrapLoading = clearBootstrapLoading;
+  window.__bbInstallBootstrapLoading = installBootstrapLoading;
 
   // The Header injection already added bb-loading-blog synchronously. We
   // (re)assert it here as a belt-and-suspenders fallback for sites that only
