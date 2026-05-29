@@ -246,16 +246,16 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
   },
   rightSidebar: {
     show: true,
-    modules: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
-    moduleOrder: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
+    modules: ['popularPosts', 'relevantPosts', 'filterByCategory', 'emailCapture'],
+    moduleOrder: ['popularPosts', 'relevantPosts', 'filterByCategory', 'emailCapture'],
     width: 300,
     spaceAbove: 0,
     sticky: false
   },
   footerContent: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+    modules: ['authorProfiles', 'relevantPosts'],
+    moduleOrder: ['authorProfiles', 'relevantPosts'],
     topPadding: 16
   },
   postModules: {
@@ -265,14 +265,14 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     emailCapture: {
-      enabled: false,
-      position: 'none',
+      enabled: true,
+      position: 'rightSidebar',
       header: 'Subscribe to our newsletter',
       buttonText: 'Subscribe'
     },
     leadMagnet: {
-      enabled: true,
-      position: 'footer',
+      enabled: false,
+      position: 'none',
       resourceTitle: 'Free resource',
       description: 'Subscribe to get our guide in your inbox.',
       buttonText: 'Get it free'

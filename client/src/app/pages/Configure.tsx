@@ -129,7 +129,7 @@ function resolveInitialAuthorForProfileEdit(
 
 export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
-export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
 export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
@@ -429,7 +429,7 @@ const defaultSiteConfig: SiteConfigForm = {
   postTemplateId: null,
 };
 
-const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "prevNextArticle", "emailCapture", "leadMagnet"] as const;
 
 const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
