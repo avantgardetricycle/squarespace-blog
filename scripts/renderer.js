@@ -8534,7 +8534,9 @@
       function createPopularPostsModule(sidebarWidth) {
         if (items.length === 0) return null;
         var pmPop = cfg.postModules && cfg.postModules.popularPosts && typeof cfg.postModules.popularPosts === 'object' ? cfg.postModules.popularPosts : null;
-        var count = Math.max(1, Math.min(20, parseInt(pmPop && pmPop.count, 10) || 5));
+        var cmPop = cfg.collectionModules && cfg.collectionModules.popularPosts && typeof cfg.collectionModules.popularPosts === 'object' ? cfg.collectionModules.popularPosts : null;
+        var popCountRaw = isSinglePost ? (pmPop && pmPop.count) : (cmPop && cmPop.count != null ? cmPop.count : (pmPop && pmPop.count));
+        var count = Math.max(1, Math.min(20, parseInt(popCountRaw, 10) || 5));
         var el = document.createElement('aside');
         el.className = 'blog-overlay-popular-posts';
         el.style.flexShrink = '0';
@@ -9383,8 +9385,9 @@
             el = combinedEl ? createSidebarSection('Filter', combinedEl) : null;
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
-          } else if (mod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
-            var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, width || 200);
+          } else if (mod === 'authorProfiles') {
+            var authorPost = (isSinglePost && displayItems.length > 0) ? displayItems[0] : null;
+            var authorResult = self._createAuthorProfilesModule(authorPost, cfg, width || 200);
             el = authorResult ? createSidebarSection(authorResult.header, authorResult.content, isSinglePost) : null;
           } else if (mod === 'emailCapture' && ecCfg) {
             var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);

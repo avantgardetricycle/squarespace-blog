@@ -231,8 +231,8 @@ async function main() {
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
-          modules: ['emailCapture', 'popularPosts', 'filterByCategory'],
-          moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
+          modules: ['authorProfiles', 'emailCapture', 'popularPosts', 'filterByCategory'],
+          moduleOrder: ['authorProfiles', 'emailCapture', 'popularPosts', 'filterByCategory'],
           width: 280,
           spaceAbove: 0,
           sticky: false
@@ -242,6 +242,7 @@ async function main() {
           sort: {},
           search: {},
           recentPosts: {},
+          popularPosts: { count: 5 },
           emailCapture: {
             header: 'Subscribe to our newsletter',
             buttonText: 'Subscribe'
@@ -360,7 +361,7 @@ async function main() {
           moduleOrder: ['tableOfContents'],
           width: 240,
           spaceAbove: 0,
-          sticky: false
+          sticky: true
         },
         rightSidebar: {
           show: true,
@@ -373,8 +374,8 @@ async function main() {
         headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
         footerContent: {
           show: true,
-          modules: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
-          moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
+          modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+          moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           topPadding: 16
         },
         socialMediaLinks: {
@@ -389,8 +390,8 @@ async function main() {
           popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           emailCapture: {
-            enabled: true,
-            position: 'footer',
+            enabled: false,
+            position: 'none',
             header: 'Subscribe to our newsletter',
             buttonText: 'Subscribe'
           },

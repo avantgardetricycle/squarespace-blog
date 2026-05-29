@@ -127,7 +127,7 @@ function resolveInitialAuthorForProfileEdit(
   return authorList[0] ?? null;
 }
 
-export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
 export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
@@ -151,6 +151,7 @@ export interface CollectionModulesConfig {
   sort: Record<string, never>;
   search: Record<string, never>;
   recentPosts: Record<string, never>;
+  popularPosts: { count: number };
   emailCapture: { header: string; byline?: string; buttonText: string };
   leadMagnet: { resourceTitle: string; description: string; buttonText: string };
 }
@@ -359,6 +360,7 @@ const defaultCollectionModules: CollectionModulesConfig = {
   sort: {},
   search: {},
   recentPosts: {},
+  popularPosts: { count: 5 },
   emailCapture: { header: "Subscribe to our newsletter", buttonText: "Subscribe" },
   leadMagnet: { resourceTitle: "", description: "", buttonText: "Get it free" },
 };
@@ -444,7 +446,7 @@ function orderCollectionHeaderModules(moduleIds: string[]): string[] {
   if (moduleIds.includes("postSort")) out.push("postSort");
   return out;
 }
-const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
+const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 const COLLECTION_FOOTER_MODULES = ["emailCapture", "leadMagnet"] as const;
 const COLLECTION_FILTER_IDS = ["filterByCategory", "filterByTag", "filterByTagsAndCategories"] as const;
 type FeatureModuleLocation = Exclude<ModulePosition, "none">;
@@ -731,6 +733,9 @@ function parseLevelConfig(
         sort: {},
         search: {},
         recentPosts: {},
+        popularPosts: {
+          count: Math.min(20, Math.max(1, Number((cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? (cmRaw.popularPosts as { count?: unknown }).count : undefined) ?? 5) || 5)),
+        },
         emailCapture: {
           header: typeof ec.header === "string" ? ec.header : "Subscribe to our newsletter",
           byline: typeof ec.byline === "string" ? ec.byline : undefined,
@@ -754,6 +759,7 @@ function parseLevelConfig(
       sort: {},
       search: {},
       recentPosts: {},
+      popularPosts: { count: 5 },
       emailCapture: { header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { resourceTitle: "", description: "", buttonText: "Get it free" },
     };
@@ -764,6 +770,7 @@ function parseLevelConfig(
     const s = cmRaw.sort && typeof cmRaw.sort === "object" ? cmRaw.sort as Record<string, unknown> : {};
     const sr = cmRaw.search && typeof cmRaw.search === "object" ? cmRaw.search as Record<string, unknown> : {};
     const rp = cmRaw.recentPosts && typeof cmRaw.recentPosts === "object" ? cmRaw.recentPosts as Record<string, unknown> : {};
+    const pop = cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? cmRaw.popularPosts as Record<string, unknown> : {};
     const ec = cmRaw.emailCapture && typeof cmRaw.emailCapture === "object" ? cmRaw.emailCapture as Record<string, unknown> : {};
     const lm = cmRaw.leadMagnet && typeof cmRaw.leadMagnet === "object" ? cmRaw.leadMagnet as Record<string, unknown> : {};
     const filterId = filterConfigToModuleId(Boolean(f.filterByTags ?? (f.filterType === "tag" || f.filterType === "tagsAndCategories")), Boolean(f.filterByCategories ?? ((f.filterType === "category" || f.filterType === "tagsAndCategories") || (!f.filterByTags && !f.filterByCategories))));
@@ -772,6 +779,7 @@ function parseLevelConfig(
     const sortPos = pos(s.position, "header");
     const searchPos = pos(sr.position, "header");
     const recentPos = pos(rp.position, "rightSidebar");
+    const popPos = pos(pop.position, "rightSidebar");
     const ecPos = pos(ec.position, "footer");
     const lmPos = pos(lm.position, "footer");
     const header: string[] = [];
@@ -796,6 +804,10 @@ function parseLevelConfig(
     if (Boolean(rp.enabled ?? false) && recentPos !== "none") {
       if (recentPos === "leftSidebar") left.push("recentPosts");
       else if (recentPos === "rightSidebar") right.push("recentPosts");
+    }
+    if (Boolean(pop.enabled ?? false) && popPos !== "none") {
+      if (popPos === "leftSidebar") left.push("popularPosts");
+      else if (popPos === "rightSidebar") right.push("popularPosts");
     }
     if (Boolean(ec.enabled ?? false) && ecPos !== "none") {
       if (ecPos === "header") header.push("emailCapture");
@@ -2054,6 +2066,7 @@ export default function Configure() {
       else if (path === "collectionModules.leadMagnet.resourceTitle") cm.leadMagnet = { ...cm.leadMagnet, resourceTitle: value as string };
       else if (path === "collectionModules.leadMagnet.description") cm.leadMagnet = { ...cm.leadMagnet, description: value as string };
       else if (path === "collectionModules.leadMagnet.buttonText") cm.leadMagnet = { ...cm.leadMagnet, buttonText: value as string };
+      else if (path === "collectionModules.popularPosts.count") cm.popularPosts = { ...cm.popularPosts, count: Math.min(20, Math.max(1, Number(value) || 5)) };
       else return cfg;
       return syncModuleOrderFromExplicit(cfg as CollectionLevelConfig, cm, undefined) as typeof cfg;
     }
@@ -4153,6 +4166,35 @@ export default function Configure() {
                                       </label>
                                     </div>
                                     <p className="text-[10px] text-[#6b6b6b]">Style is determined by position: header = pills, sidebar = dropdown.</p>
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSectionCollapseOnly
+                                title="Popular Posts"
+                                expanded={sectionExpanded.popularPosts}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
+                                content={
+                                  <div className="space-y-3">
+                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 5]}
+                                          onValueChange={([v]) => updateLevelConfigPath("collectionModules.popularPosts.count", v ?? 5)}
+                                          min={1}
+                                          max={20}
+                                          step={1}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
+                                          {(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 5}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts.
+                                    </p>
                                   </div>
                                 }
                               />
