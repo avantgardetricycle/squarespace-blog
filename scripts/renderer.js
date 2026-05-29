@@ -7466,6 +7466,7 @@
         bodyCol.style.display = 'flex';
         bodyCol.style.flexDirection = 'column';
         bodyCol.style.justifyContent = 'center';
+        bodyCol.style.alignSelf = 'center';
         bodyCol.style.padding = '24px 0';
         if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
           var shFpK = displayPostKey(featuredPost);
