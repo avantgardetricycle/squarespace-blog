@@ -2379,6 +2379,7 @@ export default function Configure() {
             open={templateModalOpen}
             onOpenChange={setTemplateModalOpen}
             onSelectTemplate={handleSelectTemplate}
+            initialLevel={selectedLevel}
           />
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>

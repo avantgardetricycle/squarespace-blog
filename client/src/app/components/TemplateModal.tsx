@@ -24,12 +24,15 @@ interface TemplateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectTemplate: (template: Template, level: "collection" | "post") => void;
+  /** Tab to show when the modal opens (matches Collection / Post in Configure). */
+  initialLevel?: "collection" | "post";
 }
 
 export function TemplateModal({
   open,
   onOpenChange,
   onSelectTemplate,
+  initialLevel = "collection",
 }: TemplateModalProps) {
   const [collectionTemplates, setCollectionTemplates] = useState<Template[]>([]);
   const [postTemplates, setPostTemplates] = useState<Template[]>([]);
@@ -42,6 +45,8 @@ export function TemplateModal({
 
   useEffect(() => {
     if (!open) return;
+    setActiveTab(initialLevel);
+    setIndex(0);
     setLoading(true);
     Promise.all([
       fetch("/api/templates?level=collection", { credentials: "include" }).then(
@@ -60,7 +65,7 @@ export function TemplateModal({
         setPostTemplates([]);
       })
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, initialLevel]);
 
   useEffect(() => {
     setIndex(0);

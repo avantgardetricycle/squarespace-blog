@@ -3358,7 +3358,7 @@
 
     /**
      * Categories line above post title (Newsroom, Showcase, Masthead, Digest, Editorial). Small caps + accent; optional filter buttons.
-     * opts.onDark: light text for editorial cards on imagery; opts.compact: smaller type on small editorial tiles.
+     * opts.onDark: accent pill badges on editorial imagery (like FEATURED); opts.compact: smaller badges on small editorial tiles.
      */
     _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled, opts) {
       var self = this;
@@ -3370,13 +3370,66 @@
       var accent = siteAccent || '#5B4FE8';
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-post-categories-line';
-      wrap.style.fontVariant = 'small-caps';
-      wrap.style.fontSize = compact ? '0.65rem' : (onDark ? '0.7rem' : '0.85rem');
-      wrap.style.letterSpacing = '0.04em';
-      wrap.style.color = onDark && !categoryFilterUiEnabled ? 'rgba(255,255,255,0.88)' : accent;
       wrap.style.marginBottom = '6px';
       wrap.style.lineHeight = '1.35';
-      if (onDark) wrap.style.textShadow = '0 1px 2px rgba(0,0,0,0.35)';
+
+      function applyEditorialCategoryBadgeStyle(el) {
+        el.style.display = 'inline-block';
+        el.style.background = accent;
+        el.style.color = '#fff';
+        el.style.fontFamily = 'inherit';
+        el.style.fontSize = compact ? '8px' : '9px';
+        el.style.fontWeight = '700';
+        el.style.letterSpacing = '1.5px';
+        el.style.textTransform = 'uppercase';
+        el.style.fontVariant = 'normal';
+        el.style.padding = compact ? '2px 6px' : '3px 8px';
+        el.style.borderRadius = '2px';
+        el.style.border = 'none';
+        el.style.margin = '0';
+        el.style.lineHeight = '1.2';
+        el.style.textShadow = 'none';
+        el.style.textDecoration = 'none';
+        el.style.boxSizing = 'border-box';
+        el.style.verticalAlign = 'baseline';
+      }
+
+      if (onDark) {
+        wrap.style.display = 'flex';
+        wrap.style.flexWrap = 'wrap';
+        wrap.style.gap = compact ? '5px' : '6px';
+        wrap.style.alignItems = 'center';
+        for (var di = 0; di < cats.length; di++) {
+          var catDark = cats[di];
+          var darkEl = categoryFilterUiEnabled ? document.createElement('button') : document.createElement('span');
+          if (categoryFilterUiEnabled) {
+            darkEl.type = 'button';
+            darkEl.style.cursor = 'pointer';
+            darkEl.setAttribute('aria-label', 'Show posts in category: ' + catDark);
+            (function(catName) {
+              darkEl.onclick = function(e) {
+                e.preventDefault();
+                self._categoryFilter = [catName];
+                self._currentPage = 1;
+                if (typeof window !== 'undefined') {
+                  try { window.history.replaceState(null, '', window.location.pathname + (window.location.search || '')); } catch (err) {}
+                  window.location.hash = '';
+                }
+                self._renderContent(self.items);
+              };
+            })(catDark);
+          }
+          darkEl.textContent = catDark;
+          applyEditorialCategoryBadgeStyle(darkEl);
+          wrap.appendChild(darkEl);
+        }
+        return wrap;
+      }
+
+      wrap.style.fontVariant = 'small-caps';
+      wrap.style.fontSize = '0.85rem';
+      wrap.style.letterSpacing = '0.04em';
+      wrap.style.color = accent;
       if (!categoryFilterUiEnabled) {
         wrap.textContent = cats.join(', ');
         return wrap;
