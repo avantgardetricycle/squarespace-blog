@@ -3535,12 +3535,79 @@
     },
 
     /**
-     * Create Filter by Category module. placement: 'header' = pills, 'sidebar' = input + dropdown (chips).
+     * Sidebar topic/tag badges (toggle select with site accent).
+     * filterKey: 'category' | 'tag'
+     */
+    _createSidebarTopicBadgeList: function(values, filterKey, width, opts) {
+      var self = this;
+      opts = opts || {};
+      var clearOtherOnSelect = opts.clearOtherOnSelect === true;
+      var accent = self._getSiteAccentColor();
+      var filterProp = filterKey === 'category' ? '_categoryFilter' : '_tagFilter';
+      var otherProp = filterKey === 'category' ? '_tagFilter' : '_categoryFilter';
+      var wrap = document.createElement('div');
+      wrap.className = 'blog-overlay-topic-badges-wrap';
+      wrap.style.width = '100%';
+      wrap.style.boxSizing = 'border-box';
+      if (width) wrap.style.maxWidth = width + 'px';
+      if (!values || values.length === 0) {
+        var empty = document.createElement('p');
+        empty.textContent = filterKey === 'category' ? 'No topics yet' : 'No tags yet';
+        empty.style.fontSize = '0.8rem';
+        empty.style.color = '#888';
+        empty.style.margin = '0';
+        wrap.appendChild(empty);
+        return wrap;
+      }
+      var badgesWrap = document.createElement('div');
+      badgesWrap.className = 'blog-overlay-topic-badges';
+      badgesWrap.style.display = 'flex';
+      badgesWrap.style.flexWrap = 'wrap';
+      badgesWrap.style.gap = '8px';
+      for (var i = 0; i < values.length; i++) {
+        (function(val) {
+          var sel = Array.isArray(self[filterProp]) ? self[filterProp] : [];
+          var isActive = sel.length === 1 && sel[0] === val;
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = val;
+          btn.style.padding = '8px 14px';
+          btn.style.fontSize = '0.8125rem';
+          btn.style.fontWeight = '700';
+          btn.style.lineHeight = '1.2';
+          btn.style.borderRadius = '3px';
+          btn.style.cursor = 'pointer';
+          btn.style.fontFamily = 'inherit';
+          btn.style.border = '1px solid ' + (isActive ? accent : '#d0d0d0');
+          btn.style.background = isActive ? accent : '#fff';
+          btn.style.color = isActive ? '#fff' : '#1a1a1a';
+          btn.style.transition = 'background 0.12s ease, color 0.12s ease, border-color 0.12s ease';
+          btn.onclick = function() {
+            var current = Array.isArray(self[filterProp]) ? self[filterProp].slice() : [];
+            var activeNow = current.length === 1 && current[0] === val;
+            self[filterProp] = activeNow ? [] : [val];
+            if (!activeNow && clearOtherOnSelect) self[otherProp] = [];
+            self._currentPage = 1;
+            self._renderContent(self.items);
+          };
+          badgesWrap.appendChild(btn);
+        })(values[i]);
+      }
+      wrap.appendChild(badgesWrap);
+      return wrap;
+    },
+
+    /**
+     * Create Filter by Category module. placement: 'header' = pills, 'sidebar' = topic badges.
      */
     _createFilterByCategoryModule: function(items, width, noLabel, placement) {
       var self = this;
       var categories = this._getAllCategories(items);
       var usePills = placement === 'header';
+
+      if (placement === 'sidebar') {
+        return this._createSidebarTopicBadgeList(categories, 'category', width);
+      }
 
       if (usePills && categories.length >= 0) {
         var pillsWrap = document.createElement('div');
@@ -3757,12 +3824,16 @@
     },
 
     /**
-     * Create Filter by Tag module. placement: 'header' = pills, 'sidebar' = input + dropdown (chips).
+     * Create Filter by Tag module. placement: 'header' = pills, 'sidebar' = topic badges.
      */
     _createFilterByTagModule: function(items, width, noLabel, placement) {
       var self = this;
       var tags = this._getAllTags(items);
       var usePills = placement === 'header';
+
+      if (placement === 'sidebar') {
+        return this._createSidebarTopicBadgeList(tags, 'tag', width);
+      }
 
       if (usePills && tags.length >= 0) {
         var pillsWrap = document.createElement('div');
@@ -4260,13 +4331,55 @@
 
     /**
      * Create combined Filter by Tags & Categories module (single component).
-     * placement: 'header' = pills, 'sidebar' = chips + dropdown.
+     * placement: 'header' = pills, 'sidebar' = topic badges.
      */
     _createFilterByTagsAndCategoriesModule: function(items, width, noLabel, placement) {
       var self = this;
       var categories = this._getAllCategories(items);
       var tags = this._getAllTags(items);
       var usePills = placement === 'header';
+
+      if (placement === 'sidebar') {
+        var combinedWrap = document.createElement('div');
+        combinedWrap.style.width = '100%';
+        combinedWrap.style.boxSizing = 'border-box';
+        if (width) combinedWrap.style.maxWidth = width + 'px';
+        var badgeOpts = { clearOtherOnSelect: true };
+        if (categories.length > 0) {
+          combinedWrap.appendChild(self._createSidebarTopicBadgeList(categories, 'category', null, badgeOpts));
+        }
+        if (tags.length > 0) {
+          if (categories.length > 0) {
+            var tagSpacer = document.createElement('div');
+            tagSpacer.style.height = '16px';
+            combinedWrap.appendChild(tagSpacer);
+            var tagMiniHeader = document.createElement('div');
+            tagMiniHeader.textContent = 'Tags';
+            tagMiniHeader.style.fontSize = '0.7rem';
+            tagMiniHeader.style.fontWeight = '700';
+            tagMiniHeader.style.letterSpacing = '0.08em';
+            tagMiniHeader.style.textTransform = 'uppercase';
+            tagMiniHeader.style.color = '#111';
+            tagMiniHeader.style.marginBottom = '8px';
+            combinedWrap.appendChild(tagMiniHeader);
+            var tagBar = document.createElement('div');
+            tagBar.style.height = '2px';
+            tagBar.style.background = '#111';
+            tagBar.style.marginBottom = '12px';
+            combinedWrap.appendChild(tagBar);
+          }
+          combinedWrap.appendChild(self._createSidebarTopicBadgeList(tags, 'tag', null, badgeOpts));
+        }
+        if (categories.length === 0 && tags.length === 0) {
+          var noFilters = document.createElement('p');
+          noFilters.textContent = 'No filters available';
+          noFilters.style.fontSize = '0.8rem';
+          noFilters.style.color = '#888';
+          noFilters.style.margin = '0';
+          combinedWrap.appendChild(noFilters);
+        }
+        return combinedWrap;
+      }
 
       if (usePills && (categories.length > 0 || tags.length > 0)) {
         var pillsWrap = document.createElement('div');
@@ -7957,12 +8070,14 @@
       main.style.flex = '1';
       main.style.minWidth = '0';
       var collectionPaginationEl = null;
+      var BB_SIDEBAR_LAYOUT_GAP = 24;
+      var BB_POST_SIDEBAR_ROW_GAP = BB_SIDEBAR_LAYOUT_GAP + 12;
       var mainRowEl = document.createElement('div');
       mainRowEl.className = 'blog-overlay-main-row';
       mainRowEl.style.display = 'flex';
       mainRowEl.style.flexDirection = 'row';
       mainRowEl.style.alignItems = 'flex-start';
-      mainRowEl.style.gap = '24px';
+      mainRowEl.style.gap = BB_SIDEBAR_LAYOUT_GAP + 'px';
       mainRowEl.style.width = '100%';
       mainRowEl.style.boxSizing = 'border-box';
       var headerZoneEl = null;
@@ -8319,10 +8434,14 @@
           header.style.textTransform = 'uppercase';
         }
         header.style.marginBottom = '8px';
+        if (headerText === 'Topics' || headerText === 'Tags') {
+          header.style.fontWeight = '700';
+          header.style.color = '#111';
+        }
         section.appendChild(header);
         var bar = document.createElement('div');
-        bar.style.height = '1px';
-        bar.style.background = '#e5e4e0';
+        bar.style.height = (headerText === 'Topics' || headerText === 'Tags') ? '2px' : '1px';
+        bar.style.background = (headerText === 'Topics' || headerText === 'Tags') ? '#111' : '#e5e4e0';
         bar.style.marginBottom = '12px';
         section.appendChild(bar);
         section.appendChild(content);
@@ -9377,12 +9496,12 @@
             searchWrap.appendChild(searchInput);
             el = createSidebarSection('Search Posts', searchWrap);
           } else if (mod === 'filterByCategory') {
-            el = createSidebarSection('Filter', self._createFilterByCategoryModule(items, width || 200, true, 'sidebar'));
+            el = createSidebarSection('Topics', self._createFilterByCategoryModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTag') {
-            el = createSidebarSection('Filter', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
+            el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTagsAndCategories') {
             var combinedEl = self._createFilterByTagsAndCategoriesModule(items, width || 200, true, 'sidebar');
-            el = combinedEl ? createSidebarSection('Filter', combinedEl) : null;
+            el = combinedEl ? createSidebarSection('Topics', combinedEl) : null;
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles') {
@@ -9682,7 +9801,6 @@
           }
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
 
-          var BB_SIDEBAR_LAYOUT_GAP = 24;
           var BB_SIDEBAR_MIN_MAIN = 300;
           function applySidebarResponsiveLayout() {
             var leftHas = leftSidebarEl.childNodes.length > 0;
@@ -9690,6 +9808,7 @@
             if (!leftHas && !rightHas) {
               mainRowEl.style.flexDirection = 'row';
               mainRowEl.style.alignItems = 'flex-start';
+              mainRowEl.style.gap = BB_SIDEBAR_LAYOUT_GAP + 'px';
               main.style.order = '';
               main.style.flex = '1';
               main.style.minWidth = '0';
@@ -9699,9 +9818,11 @@
             if (!cw && typeof window !== 'undefined' && window.innerWidth) cw = window.innerWidth;
             var gapCount = (leftHas && rightHas) ? 2 : 1;
             var sideSum = (leftHas ? leftSidebarWidth : 0) + (rightHas ? rightSidebarWidth : 0);
-            var stack = cw < sideSum + BB_SIDEBAR_MIN_MAIN + gapCount * BB_SIDEBAR_LAYOUT_GAP;
+            var desktopRowGap = isSinglePost ? BB_POST_SIDEBAR_ROW_GAP : BB_SIDEBAR_LAYOUT_GAP;
+            var stack = cw < sideSum + BB_SIDEBAR_MIN_MAIN + gapCount * desktopRowGap;
 
             if (stack) {
+              mainRowEl.style.gap = BB_SIDEBAR_LAYOUT_GAP + 'px';
               mainRowEl.style.flexDirection = 'column';
               mainRowEl.style.alignItems = 'stretch';
               main.style.order = '0';
@@ -9736,6 +9857,7 @@
             } else {
               mainRowEl.style.flexDirection = 'row';
               mainRowEl.style.alignItems = 'flex-start';
+              mainRowEl.style.gap = desktopRowGap + 'px';
               main.style.order = '';
               main.style.flex = '1';
               main.style.minWidth = '0';

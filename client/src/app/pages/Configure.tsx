@@ -4165,7 +4165,7 @@ export default function Configure() {
                                         <span className="text-sm">Tags</span>
                                       </label>
                                     </div>
-                                    <p className="text-[10px] text-[#6b6b6b]">Style is determined by position: header = pills, sidebar = dropdown.</p>
+                                    <p className="text-[10px] text-[#6b6b6b]">Style is determined by position: header = pills, sidebar = topic badges.</p>
                                   </div>
                                 }
                               />
