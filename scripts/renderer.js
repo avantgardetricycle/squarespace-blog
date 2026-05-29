@@ -1200,7 +1200,7 @@
             replyFormShell.appendChild(replyFormTitle);
             var rName = document.createElement('input');
             rName.type = 'text';
-            rName.placeholder = 'Name (required)';
+            rName.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
             rName.setAttribute('maxlength', String(NAME_MAX));
             rName.style.cssText = 'display:block;width:100%;max-width:400px;padding:9px 11px;margin-bottom:8px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
             replyFormShell.appendChild(rName);
@@ -1232,7 +1232,7 @@
               var nm = (rName.value || '').trim();
               var bd = (rBody.value || '').trim();
               rBodyCount.textContent = BODY_MAX - rBody.value.length + ' characters left';
-              var ok = modeNow === 'loggedIn' ? !!bd : !!nm && !!bd;
+              var ok = modeNow === 'loggedIn' ? !!bd : (allowAnonymousComments ? !!bd : !!nm && !!bd);
               rSubmit.disabled = !ok;
               rSubmit.style.opacity = ok ? '1' : '0.55';
               rSubmit.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -1275,7 +1275,7 @@
               var modeNow = currentCommentViewerMode().mode;
               var nm = (rName.value || '').trim();
               var bd = (rBody.value || '').trim();
-              if (modeNow !== 'loggedIn' && !nm) { rName.focus(); return; }
+              if (modeNow !== 'loggedIn' && !allowAnonymousComments && !nm) { rName.focus(); return; }
               if (!bd) { rBody.focus(); return; }
               var verifiedIdentity = bbGetVerifiedIdentity();
               var loggedInEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null);
@@ -1416,7 +1416,7 @@
 
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
-      nameInput.placeholder = 'Name (required)';
+      nameInput.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
       nameInput.setAttribute('maxlength', String(NAME_MAX));
       nameInput.style.cssText = 'display:block;width:100%;max-width:400px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
       formWrap.appendChild(nameInput);
@@ -1454,7 +1454,7 @@
         var bd = (bodyArea.value || '').trim();
         mainBodyCount.textContent = BODY_MAX - bodyArea.value.length + ' characters left';
         var guestsMayPost = allowAnonymousComments || modeNow === 'loggedIn';
-        var ok = guestsMayPost && (modeNow === 'loggedIn' ? !!bd : !!nm && !!bd);
+        var ok = guestsMayPost && (modeNow === 'loggedIn' ? !!bd : (allowAnonymousComments ? !!bd : !!nm && !!bd));
         submitBtn.disabled = !ok;
         submitBtn.style.opacity = ok ? '1' : '0.55';
         submitBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -1623,7 +1623,7 @@
         var modeNow = currentCommentViewerMode().mode;
         var name = (nameInput.value || '').trim();
         var body = (bodyArea.value || '').trim();
-        if (modeNow !== 'loggedIn' && !name) { nameInput.focus(); return; }
+        if (modeNow !== 'loggedIn' && !allowAnonymousComments && !name) { nameInput.focus(); return; }
         if (!body) { bodyArea.focus(); return; }
         if (modeNow === 'loggedIn') {
           var verifiedIdentity = bbGetVerifiedIdentity();
@@ -3357,21 +3357,26 @@
     },
 
     /**
-     * Categories line above post title (Newsroom, Showcase, Masthead, Digest). Small caps + accent; optional filter buttons.
+     * Categories line above post title (Newsroom, Showcase, Masthead, Digest, Editorial). Small caps + accent; optional filter buttons.
+     * opts.onDark: light text for editorial cards on imagery; opts.compact: smaller type on small editorial tiles.
      */
-    _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled) {
+    _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled, opts) {
       var self = this;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var onDark = opts.onDark === true;
+      var compact = opts.compact === true;
       var cats = self._getPostCategories(post);
       if (cats.length === 0) return null;
       var accent = siteAccent || '#5B4FE8';
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-post-categories-line';
       wrap.style.fontVariant = 'small-caps';
-      wrap.style.fontSize = '0.85rem';
+      wrap.style.fontSize = compact ? '0.65rem' : (onDark ? '0.7rem' : '0.85rem');
       wrap.style.letterSpacing = '0.04em';
-      wrap.style.color = accent;
+      wrap.style.color = onDark && !categoryFilterUiEnabled ? 'rgba(255,255,255,0.88)' : accent;
       wrap.style.marginBottom = '6px';
       wrap.style.lineHeight = '1.35';
+      if (onDark) wrap.style.textShadow = '0 1px 2px rgba(0,0,0,0.35)';
       if (!categoryFilterUiEnabled) {
         wrap.textContent = cats.join(', ');
         return wrap;
@@ -8028,6 +8033,8 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
+      var siteAccentForPostCats = self._getSiteAccentColor();
       var fiCfg = vs.fiCfg;
       var faCfg = vs.faCfg;
       var collectionLayout = vs.collectionLayout;
@@ -9627,6 +9634,16 @@
           meta.style.color = 'rgba(255,255,255,0.5)';
           meta.style.marginTop = isLarge ? '8px' : '5px';
           meta.textContent = metaParts.join(' · ');
+          var edCategoriesLine = self._createCollectionPostCategoriesLine(
+            p,
+            siteAccentForPostCats,
+            categoryFilterUiEnabled,
+            { onDark: true, compact: !isLarge }
+          );
+          if (edCategoriesLine) {
+            edCategoriesLine.style.marginBottom = isLarge ? '8px' : '5px';
+            content.appendChild(edCategoriesLine);
+          }
           if (gatedEditorialCard) {
             var edMoTop = self._createMembersOnlyTeaserLabel({ subscribeButton: false, imageOverlay: true });
             edMoTop.style.marginBottom = isLarge ? '10px' : '8px';

@@ -339,17 +339,20 @@ router.post('/', async (req: Request, res: Response) => {
     const t = body.email.trim().toLowerCase()
     if (t) email = t.length > MAX_EMAIL ? t.slice(0, MAX_EMAIL) : t
   }
-  const allowAnonymousFallback = !displayNameRaw && !!email
-  if ((!displayNameRaw && !allowAnonymousFallback) || displayNameRaw.length > MAX_DISPLAY_NAME) {
-    res.status(400).json({ error: 'display_name is required (max 100 characters)' })
+  if (displayNameRaw.length > MAX_DISPLAY_NAME) {
+    res.status(400).json({ error: 'display_name must be at most 100 characters' })
     return
   }
-  if (!settings.allowAnonymousComments && displayNameRaw) {
-    res.status(403).json({
-      error:
-        'Anonymous comments are disabled. Sign in with your site member account and confirm your member email to comment.',
-    })
-    return
+  if (!settings.allowAnonymousComments) {
+    const guestNameOnly = !!displayNameRaw && !email
+    const guestNoCredentials = !displayNameRaw && !email
+    if (guestNameOnly || guestNoCredentials) {
+      res.status(403).json({
+        error:
+          'Anonymous comments are disabled. Sign in with your site member account and confirm your member email to comment.',
+      })
+      return
+    }
   }
   let resolvedParentId: string | null =
     typeof body.parent_id === 'string' && body.parent_id.trim() ? body.parent_id.trim() : null
