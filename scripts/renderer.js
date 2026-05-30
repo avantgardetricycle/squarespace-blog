@@ -716,6 +716,9 @@
       if (typeof MutationObserver !== 'function' || !root) return;
       if (this._rootInjectionGuard && this._rootInjectionGuardTarget === root) return;
       this._stopRootInjectionGuard();
+      // #region agent log
+      console.warn('[BB-DEBUG-7918cd] rootInjectionGuard STARTED on', root.tagName, root.id || '(no id)', root.className || '(no class)');
+      // #endregion
       var self = this;
       this._rootInjectionGuard = new MutationObserver(function(mutations) {
         for (var m = 0; m < mutations.length; m++) {
@@ -725,6 +728,9 @@
             var node = added[n];
             if (!node || node.nodeType !== 1) continue;
             if (node.id === 'blog-overlay-list' || node.id === 'blog-overlay-progress') continue;
+            // #region agent log
+            console.warn('[BB-DEBUG-7918cd] rootInjectionGuard REMOVING node:', node.tagName, node.id || '', node.className || '', 'hypothesisId=H3');
+            // #endregion
             try {
               if (node.parentNode === root) root.removeChild(node);
             } catch (e) { /* ignore */ }
@@ -751,6 +757,10 @@
     },
 
     _onEditorModeChange: function() {
+      // #region agent log
+      var _editorNow = this._isSquarespaceEditingUi();
+      console.warn('[BB-DEBUG-7918cd] _onEditorModeChange fired: isEditUi=' + _editorNow + ' wasSuppressed=' + this._suppressedByEditorMode + ' htmlClasses=' + (document.documentElement ? document.documentElement.className : ''));
+      // #endregion
       if (this._isSquarespaceEditingUi()) {
         this._suppressedByEditorMode = true;
         this._stopRootInjectionGuard();
@@ -1710,8 +1720,27 @@
       this._previewMode = previewMode;
       this._bbPreview = bbPreview;
 
+      // #region agent log
+      var _rendererDbg = {
+        previewMode: previewMode,
+        bbPreview: bbPreview,
+        inIframe: window.parent !== window,
+        pathname: window.location.pathname,
+        href: window.location.href,
+        htmlClasses: document.documentElement ? document.documentElement.className : '(none)',
+        bodyClasses: document.body ? document.body.className : '(none)',
+        hasBbLoadingClass: document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : false,
+        isEditUi: (!previewMode && !bbPreview) ? this._isSquarespaceEditingUi() : 'skipped'
+      };
+      console.warn('[BB-DEBUG-7918cd] renderer.init', JSON.stringify(_rendererDbg));
+      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'renderer.js:init',message:'renderer init state',data:_rendererDbg,timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
+      // #endregion
+
       if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
+        // #region agent log
+        console.warn('[BB-DEBUG-7918cd] renderer BAILED: edit mode detected');
+        // #endregion
         this._suppressedByEditorMode = true;
         this._startEditorModeObserver();
         this._clearBootstrapLoading();
@@ -8002,6 +8031,9 @@
           toRemove.push(child);
         }
       }
+      // #region agent log
+      console.warn('[BB-DEBUG-7918cd] _renderContent replacing root children:', toRemove.length, 'nodes in', root.tagName, root.id || '', 'hypothesisId=H4');
+      // #endregion
       if (!this._originalRootChildren) this._originalRootChildren = [];
       if (this._originalRootChildren.length === 0 && toRemove.length > 0) {
         this._originalRootChildren = toRemove.slice();
