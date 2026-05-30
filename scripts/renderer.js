@@ -759,13 +759,20 @@
     _onEditorModeChange: function() {
       // #region agent log
       var _editorNow = this._isSquarespaceEditingUi();
-      console.warn('[BB-DEBUG-7918cd] _onEditorModeChange fired: isEditUi=' + _editorNow + ' wasSuppressed=' + this._suppressedByEditorMode + ' htmlClasses=' + (document.documentElement ? document.documentElement.className : ''));
+      var _inIframe = window.parent !== window;
+      console.warn('[BB-DEBUG-7918cd] _onEditorModeChange fired: isEditUi=' + _editorNow + ' wasSuppressed=' + this._suppressedByEditorMode + ' inIframe=' + _inIframe + ' htmlClasses=' + (document.documentElement ? document.documentElement.className : ''));
       // #endregion
       if (this._isSquarespaceEditingUi()) {
         this._suppressedByEditorMode = true;
         this._stopRootInjectionGuard();
         this._removeOverlayNodes();
         this._restoreOriginalRootChildren();
+        return;
+      }
+      if (this._suppressedByEditorMode && window.parent !== window) {
+        // #region agent log
+        console.warn('[BB-DEBUG-7918cd] _onEditorModeChange: edit classes removed but still in iframe — staying suppressed (hypothesisId=FIX)');
+        // #endregion
         return;
       }
       if (this._suppressedByEditorMode) {
