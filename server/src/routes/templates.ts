@@ -176,7 +176,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
 const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
   collectionLayout: 'listRows' as const,
   showDate: true,
-  showAuthor: false,
+  showAuthor: true,
   showReadingTime: true,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {

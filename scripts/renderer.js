@@ -7386,6 +7386,19 @@
             var minsSingle = self._getReadingTimeMinutes(post.body);
             metaParts.push(minsSingle === 1 ? '1 min read' : minsSingle + ' min read');
           }
+        } else if (collectionLayout === 'listRows') {
+          if (showAuthor) {
+            var listRowsAuthorStr = self._getAuthorsForPost(post, cfg);
+            if (listRowsAuthorStr) metaParts.push(listRowsAuthorStr);
+          }
+          if (showDate) {
+            var listRowsDateStr = self._getDate(post);
+            if (listRowsDateStr) metaParts.push(listRowsDateStr);
+          }
+          if (showReadingTime) {
+            var listRowsMins = self._getReadingTimeMinutes(post.body);
+            metaParts.push(listRowsMins === 1 ? '1 min read' : listRowsMins + ' min read');
+          }
         } else {
           if (showDate) {
             var dateStr = self._getDate(post);
@@ -7564,7 +7577,7 @@
               body.style.color = '#666';
               body.style.lineHeight = '1.5';
             }
-          } else if (collectionLayout === 'listRows') {
+          } else if (collectionLayout === 'listRows' && !listRowsMobileCompact) {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
             if (excerptText) {
               body.textContent = excerptText;

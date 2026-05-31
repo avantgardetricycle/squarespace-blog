@@ -192,6 +192,8 @@ async function main() {
       collectionConfig: {
         ...baseCollectionConfig,
         collectionLayout: 'listRows',
+        showDate: true,
+        showAuthor: true,
         showReadingTime: true,
         headerContent: {
           show: true,
