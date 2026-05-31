@@ -5982,6 +5982,27 @@
       el.style.boxSizing = 'border-box';
     },
 
+    /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
+    _isNarrowCollectionViewport: function() {
+      try {
+        var narrowByViewport = typeof window !== 'undefined' && (window.matchMedia
+          ? window.matchMedia('(max-width: 767px)').matches
+          : window.innerWidth <= 767);
+        var overlayW = 0;
+        if (this._root && this._root.getBoundingClientRect) {
+          overlayW = Math.round(this._root.getBoundingClientRect().width) || 0;
+        }
+        if (!overlayW && this._root && this._root.clientWidth) overlayW = this._root.clientWidth;
+        var previewDeviceMobile = Boolean(
+          this.config && this.config.previewDevice === 'mobile' &&
+          (this._previewMode || this._bbPreview)
+        );
+        return narrowByViewport || previewDeviceMobile || (overlayW > 0 && overlayW <= 767);
+      } catch (eNarrowVp) {
+        return typeof window !== 'undefined' && window.innerWidth <= 767;
+      }
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
@@ -6385,6 +6406,8 @@
       var gridColsDigestOrGrid = gridColsFromConfig != null
         ? gridColsFromConfig
         : (collectionLayout === 'digest' ? 2 : 3);
+      var gridMobileNarrow = !isSinglePost && collectionLayout === 'grid' && self._isNarrowCollectionViewport();
+      var gridColsEffective = gridMobileNarrow ? 2 : gridColsDigestOrGrid;
 
       var featuredPost = null;
       var displayItemsForLoop = displayItems;
@@ -6482,6 +6505,8 @@
         collectionLayout: collectionLayout,
         collectionLayoutRaw: collectionLayoutRaw,
         gridColsDigestOrGrid: gridColsDigestOrGrid,
+        gridColsEffective: gridColsEffective,
+        gridMobileNarrow: gridMobileNarrow,
         featuredPost: featuredPost,
         displayItemsForLoop: displayItemsForLoop,
         displayPostKey: displayPostKey,
@@ -6734,6 +6759,8 @@
       var fiCfg = vs.fiCfg;
       var collectionLayout = vs.collectionLayout;
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
+      var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
+      var gridMobileNarrow = Boolean(vs.gridMobileNarrow);
       var leftSidebarCfg = vs.leftSidebarCfg;
       var rightSidebarCfg = vs.rightSidebarCfg;
       var displayItems = vs.displayItems;
@@ -6838,7 +6865,13 @@
           article.style.marginTop = '12px';
         }
         if (isFeaturedInLayout && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
-          article.style.gridColumn = '1 / span ' + gridColsDigestOrGrid;
+          var featuredSpanCols = collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid;
+          article.style.gridColumn = '1 / span ' + featuredSpanCols;
+        }
+        if (!isSinglePost && collectionLayout === 'grid') {
+          article.style.minWidth = '0';
+          article.style.width = '100%';
+          article.style.boxSizing = 'border-box';
         }
         var digestFeaturedIntro = null;
         if (isFeaturedInLayout && collectionLayout === 'digest') {
@@ -7542,13 +7575,15 @@
           }
           // digest, non-featured cards: no excerpt (body left empty; omitted below)
         } else {
-          // grid layout — show a short teaser (first 2 sentences) rather than the full post HTML
-          var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
-          if (gridExcerptText) {
-            body.textContent = gridExcerptText;
-            body.style.fontSize = '0.9rem';
-            body.style.color = '#666';
-            body.style.lineHeight = '1.5';
+          // grid layout — short teaser on desktop; hidden on narrow viewports (Masthead mobile)
+          if (!gridMobileNarrow) {
+            var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+            if (gridExcerptText) {
+              body.textContent = gridExcerptText;
+              body.style.fontSize = '0.9rem';
+              body.style.color = '#666';
+              body.style.lineHeight = '1.5';
+            }
           }
         }
         if (isSinglePost) {
@@ -7865,7 +7900,7 @@
         return fallback('header-featured-active', { featuredTitle: vs.featuredPost && vs.featuredPost.title });
       }
 
-      var shellKey = vs.collectionLayout + '|' + vs.gridColsDigestOrGrid;
+      var shellKey = vs.collectionLayout + '|' + (vs.gridColsEffective != null ? vs.gridColsEffective : vs.gridColsDigestOrGrid);
       if (this._lastCollectionShellKey && this._lastCollectionShellKey !== shellKey) {
         return fallback('shell-key-mismatch', {
           expected: this._lastCollectionShellKey,
@@ -7898,9 +7933,11 @@
 
       var collectionLayout = vs.collectionLayout;
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
+      var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
       if (collectionLayout === 'grid' || collectionLayout === 'digest') {
         mainEl.style.display = 'grid';
-        mainEl.style.gridTemplateColumns = 'repeat(' + gridColsDigestOrGrid + ', 1fr)';
+        var gridColsForShell = collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid;
+        mainEl.style.gridTemplateColumns = 'repeat(' + gridColsForShell + ', 1fr)';
         mainEl.style.gap = '24px';
         mainEl.style.width = '';
         mainEl.style.maxWidth = '';
@@ -8132,6 +8169,8 @@
       var collectionLayout = vs.collectionLayout;
       var collectionLayoutRaw = vs.collectionLayoutRaw;
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
+      var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
+      var gridMobileNarrow = Boolean(vs.gridMobileNarrow);
       var featuredPost = vs.featuredPost;
       var displayItemsForLoop = vs.displayItemsForLoop;
       var displayPostKey = vs.displayPostKey;
@@ -8235,8 +8274,9 @@
         main.style.gridTemplateColumns = '';
       } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
         main.style.display = 'grid';
-        main.style.gridTemplateColumns = 'repeat(' + gridColsDigestOrGrid + ', 1fr)';
-        main.style.gap = '24px';
+        var gridColsForMain = collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid;
+        main.style.gridTemplateColumns = 'repeat(' + gridColsForMain + ', 1fr)';
+        main.style.gap = gridMobileNarrow && collectionLayout === 'grid' ? '16px' : '24px';
       } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
@@ -8367,23 +8407,27 @@
       var placeholderRenderSeq = self._renderSeq;
       self._schedulePlaceholderMapFollowUp(featuredPost, displayItemsForLoop, placeholderRenderSeq);
       if (faCfg && faCfg.position === 'header' && featuredPost) {
+          var mastheadHeroMobile = collectionLayout === 'grid' && gridMobileNarrow;
           var heroLink = document.createElement('a');
           heroLink.href = self._getPostUrl(featuredPost) || (self._bbPreview ? '#post-' + self._postIndexInItems(items, featuredPost, itemIndexMap) : '#');
           heroLink.style.display = 'block';
           heroLink.style.textDecoration = 'none';
           heroLink.style.color = '#fff';
-          heroLink.style.marginBottom = '24px';
+          heroLink.style.marginBottom = mastheadHeroMobile ? '16px' : '24px';
           heroLink.setAttribute('data-analytics-element', 'featuredHero');
-          heroLink.className = 'blog-overlay-featured-hero';
+          heroLink.className = 'blog-overlay-featured-hero' + (mastheadHeroMobile ? ' blog-overlay-featured-hero-mobile' : '');
+          if (mastheadHeroMobile) {
+            self._applyViewportFullBleed(heroLink);
+          }
 
           var heroInner = document.createElement('div');
           heroInner.style.position = 'relative';
           heroInner.style.width = '100%';
-          heroInner.style.aspectRatio = '21 / 9';
+          heroInner.style.aspectRatio = mastheadHeroMobile ? '4 / 3' : '21 / 9';
           heroInner.style.overflow = 'hidden';
-          heroInner.style.borderRadius = '4px';
+          heroInner.style.borderRadius = mastheadHeroMobile ? '0' : '4px';
           heroInner.style.background = 'linear-gradient(160deg, #1a1a2e 0%, #2d1a3a 45%, #0f2027 100%)';
-          heroInner.style.minHeight = '200px';
+          heroInner.style.minHeight = mastheadHeroMobile ? '260px' : '200px';
 
           var heroImgUrl = featuredPost.assetUrl || featuredPost.thumbnailUrl || (featuredPost.assets && featuredPost.assets[0] && featuredPost.assets[0].assetUrl) || null;
           if (heroImgUrl && self._isPlaceholderWithMap(heroImgUrl, placeholderMap)) heroImgUrl = null;
@@ -8418,11 +8462,20 @@
           heroContent.style.position = 'absolute';
           heroContent.style.left = '0';
           heroContent.style.right = '0';
-          heroContent.style.bottom = '0';
-          heroContent.style.padding = '28px 32px 32px';
           heroContent.style.zIndex = '2';
           heroContent.style.boxSizing = 'border-box';
           heroContent.style.maxWidth = '100%';
+          if (mastheadHeroMobile) {
+            heroContent.style.top = '0';
+            heroContent.style.bottom = '0';
+            heroContent.style.display = 'flex';
+            heroContent.style.flexDirection = 'column';
+            heroContent.style.justifyContent = 'flex-end';
+            heroContent.style.padding = '20px';
+          } else {
+            heroContent.style.bottom = '0';
+            heroContent.style.padding = '28px 32px 32px';
+          }
 
           var heroMuted = 'rgba(255,255,255,0.78)';
           var heroBody = 'rgba(255,255,255,0.9)';
@@ -8438,8 +8491,17 @@
           heroBadge.style.textTransform = 'uppercase';
           heroBadge.style.padding = '2px 8px';
           heroBadge.style.borderRadius = '2px';
-          heroBadge.style.marginBottom = '16px';
-          heroContent.appendChild(heroBadge);
+          if (mastheadHeroMobile) {
+            heroBadge.style.position = 'absolute';
+            heroBadge.style.top = '16px';
+            heroBadge.style.left = '16px';
+            heroBadge.style.zIndex = '3';
+            heroBadge.style.marginBottom = '0';
+            heroInner.appendChild(heroBadge);
+          } else {
+            heroBadge.style.marginBottom = '16px';
+            heroContent.appendChild(heroBadge);
+          }
           var heroCats = self._getPostCategories(featuredPost);
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
@@ -8468,7 +8530,7 @@
           } else if (heroDeck.length > 400) {
             heroDeck = self._truncateText(heroSrc, 280);
           }
-          if (heroDeck) {
+          if (heroDeck && !mastheadHeroMobile) {
             var heroDeckEl = document.createElement('div');
             heroDeckEl.textContent = heroDeck;
             heroDeckEl.style.fontSize = '15px';
@@ -8503,6 +8565,9 @@
           heroLink.appendChild(heroInner);
           if (!isSinglePost && headerZoneEl && headerModulesHostEl) {
             heroLink.style.marginTop = '0';
+            if (mastheadHeroMobile) {
+              headerZoneEl.style.overflow = 'visible';
+            }
             headerZoneEl.insertBefore(heroLink, headerModulesHostEl);
           } else {
             main.insertBefore(heroLink, main.firstChild);
@@ -10451,7 +10516,7 @@
           }
 
           if (!isSinglePost) {
-            this._lastCollectionShellKey = collectionLayout + '|' + gridColsDigestOrGrid;
+            this._lastCollectionShellKey = collectionLayout + '|' + (collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid);
           } else {
             this._lastCollectionShellKey = '';
           }
