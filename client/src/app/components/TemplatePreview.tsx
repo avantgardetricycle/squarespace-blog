@@ -37,7 +37,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
       <div className={compact ? "p-2 space-y-0" : "p-2.5 space-y-0.5"}>
         <div className="text-[11px] font-semibold text-[#333] line-clamp-1">{title}</div>
         {!compact && <div className={cn(textMuted, "line-clamp-2")}>{excerpt}</div>}
-        <div className={cn(textMuted, "text-[10px]")}>Author · Mar 7</div>
+        <div className={cn(textMuted, "text-[10px]")}>Author · Mar 7 · 5 min</div>
       </div>
     </div>
   );

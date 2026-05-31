@@ -9364,7 +9364,8 @@
         card.style.boxSizing = 'border-box';
         card.style.border = '1px solid #e5e4e0';
         card.style.borderRadius = '10px';
-        card.style.padding = '16px';
+        card.style.padding = '16px 20px';
+        card.style.background = '#fff';
         card.style.display = 'flex';
         card.style.gap = '16px';
         card.style.alignItems = 'center';
