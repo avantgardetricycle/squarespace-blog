@@ -3406,8 +3406,8 @@
       var accent = siteAccent || '#5B4FE8';
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-post-categories-line';
-      wrap.style.marginBottom = '6px';
-      wrap.style.lineHeight = '1.35';
+      wrap.style.marginBottom = compact ? '0' : '6px';
+      wrap.style.lineHeight = compact ? '1.25' : '1.35';
 
       function applyEditorialCategoryBadgeStyle(el) {
         el.style.display = 'inline-block';
@@ -3463,7 +3463,7 @@
       }
 
       wrap.style.fontVariant = 'small-caps';
-      wrap.style.fontSize = '0.85rem';
+      wrap.style.fontSize = compact ? '0.75rem' : '0.85rem';
       wrap.style.letterSpacing = '0.04em';
       wrap.style.color = accent;
       if (!categoryFilterUiEnabled) {
@@ -6773,7 +6773,7 @@
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
       var siteAccentForPostCats = self._getSiteAccentColor();
       var paywallReplaceCollectionTeaser = Boolean(vs.paywallReplaceCollectionTeaser);
-      /** Newsroom (listRows): compact row on narrow viewports / preview phone — smaller title, thumb height matches title+meta block */
+      /** Newsroom (listRows): compact row on narrow viewports / preview phone — tighter spacing, fixed thumb, stacked text */
       var listRowsMobileCompact = false;
       if (!isSinglePost && collectionLayout === 'listRows') {
         try {
@@ -6857,6 +6857,11 @@
         if (displayIdx >= 0) article.setAttribute('data-display-index', String(displayIdx));
         article.style.marginBottom = '24px';
         article.style.paddingBottom = '24px';
+        if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
+          article.style.marginBottom = '12px';
+          article.style.paddingBottom = '0';
+          article.classList.add('blog-overlay-list-rows-mobile-compact');
+        }
         if (navbarOffset > 0) {
           article.style.scrollMarginTop = (navbarOffset + 8) + 'px';
         }
@@ -6908,12 +6913,22 @@
           rowEl = document.createElement('div');
           rowEl.style.display = 'flex';
           rowEl.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
-          rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '12px' : '20px';
+          rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '10px' : '20px';
           rowEl.style.alignItems = isSinglePost ? phVerticalAlignItems : 'flex-start';
-          rowEl.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
+          rowEl.style.marginBottom = (collectionLayout === 'listRows' && listRowsMobileCompact)
+            ? '0'
+            : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           contentEl = document.createElement('div');
           contentEl.style.flex = '1';
           contentEl.style.minWidth = '0';
+          if (collectionLayout === 'listRows' && listRowsMobileCompact) {
+            contentEl.style.display = 'flex';
+            contentEl.style.flexDirection = 'column';
+            contentEl.style.justifyContent = 'flex-start';
+            contentEl.style.alignItems = 'flex-start';
+            contentEl.style.gap = '4px';
+            contentEl.style.alignSelf = 'flex-start';
+          }
           if (isSinglePost) {
             if (phImagePos === 'rightOfInfo' && phAlign === 'left') {
               contentEl.style.marginLeft = '16px';
@@ -7037,8 +7052,15 @@
               self._applyViewportFullBleed(fiWrap);
             }
           } else if (isSideBySide) {
-            fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
+            if (collectionLayout === 'listRows' && listRowsMobileCompact) {
+              fiWrap.style.flex = '0 0 88px';
+              fiWrap.style.width = '88px';
+              fiWrap.style.maxWidth = '88px';
+            } else {
+              fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
+            }
             fiWrap.style.minWidth = '0';
+            fiWrap.style.alignSelf = 'flex-start';
             if (isSinglePost && phSideImageGapPx > 0) {
               if (phImagePos === 'rightOfInfo') fiWrap.style.marginRight = phSideImageGapPx + 'px';
               else if (phImagePos === 'leftOfInfo') fiWrap.style.marginLeft = phSideImageGapPx + 'px';
@@ -7054,8 +7076,13 @@
           else if (fiRounded === 'large') fiInner.style.borderRadius = '12px';
           if (fiShadow && !digestFeaturedViewportBleed) fiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
           if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
-            fiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
+            fiInner.style.aspectRatio = (collectionLayout === 'listRows' && listRowsMobileCompact)
+              ? '4 / 3'
+              : fiRatio.replace(':', ' / ');
             fiInner.style.width = '100%';
+          }
+          if (collectionLayout === 'listRows' && listRowsMobileCompact && isSideBySide) {
+            fiInner.style.maxHeight = '66px';
           }
           if (imgUrl) {
             var img = document.createElement('img');
@@ -7224,7 +7251,9 @@
         }
 
         var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))
-          ? self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, categoryFilterUiEnabled)
+          ? self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, categoryFilterUiEnabled, {
+            compact: collectionLayout === 'listRows' && listRowsMobileCompact
+          })
           : null;
 
         var titleEl = document.createElement(isSinglePost ? 'h2' : 'h3');
@@ -7234,7 +7263,7 @@
           titleEl.style.fontSize = '1.05rem';
           titleEl.style.lineHeight = '1.3';
           titleEl.style.fontWeight = '700';
-          titleEl.style.margin = '0 0 6px 0';
+          titleEl.style.margin = '0';
         }
         if (singlePostFullBleedHero) titleEl.style.color = '#fff';
         if (singlePostFullBleedHero) titleEl.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
@@ -7272,13 +7301,8 @@
         } else {
           titleEl.textContent = post.title || 'Untitled';
         }
-        var listRowsMobileCatsAboveRow = Boolean(
-          postCategoriesLine &&
-          listRowsMobileCompact &&
-          collectionLayout === 'listRows' &&
-          !isSinglePost &&
-          isSideBySide
-        );
+        /* Keep categories in the text column on mobile — separate cat row adds height and vertical spread. */
+        var listRowsMobileCatsAboveRow = false;
         if (postCategoriesLine && !listRowsMobileCatsAboveRow) headlineMount.appendChild(postCategoriesLine);
         var titleBlock = null;
         if (isFeaturedInLayout) {
@@ -7287,7 +7311,7 @@
           featuredHeadlineStack.style.display = 'flex';
           featuredHeadlineStack.style.flexDirection = 'column';
           featuredHeadlineStack.style.alignItems = 'flex-start';
-          featuredHeadlineStack.style.gap = '6px';
+          featuredHeadlineStack.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '4px' : '6px';
           featuredHeadlineStack.style.width = '100%';
           var featuredBadge = document.createElement('span');
           featuredBadge.className = 'blog-overlay-featured-badge';
@@ -7416,7 +7440,7 @@
         if (metaParts.length > 0) {
           var metaRow = document.createElement('div');
           metaRow.className = 'blog-overlay-meta-row';
-          metaRow.style.marginBottom = '8px';
+          metaRow.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) ? '0' : '8px';
           var meta = document.createElement('div');
           meta.className = 'blog-overlay-meta';
           meta.textContent = metaParts.join(' · ');
@@ -7428,9 +7452,12 @@
           metaRow.appendChild(meta);
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
             meta.style.fontSize = '0.8rem';
-            metaRow.style.marginBottom = '6px';
+            meta.style.lineHeight = '1.35';
           }
           headlineMount.appendChild(metaRow);
+        }
+        if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact && postCategoriesLine) {
+          postCategoriesLine.style.marginBottom = '0';
         }
         var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
         var showShare = smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
