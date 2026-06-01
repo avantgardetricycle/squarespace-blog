@@ -5839,36 +5839,109 @@
       return 0;
     },
 
-    /** Sticky sidebar pin: a few px below the fixed nav bar, not the full document header block. */
+    /** Sticky sidebar pin: a few px below the viewport top (fixed rail sync handles nav overlap). */
     _getSidebarStickyTopPx: function() {
-      if (typeof window === 'undefined' || !document || !window.getComputedStyle) {
-        return 8;
-      }
-      var best = 0;
-      var selectors = [
-        '.header-display',
-        '.header-inner',
-        '#header .header-inner',
-        '[data-section-type="header"] .header-inner',
-        '#header',
-        'header'
-      ];
-      for (var i = 0; i < selectors.length; i++) {
-        try {
-          var el = document.querySelector(selectors[i]);
-          if (!el) continue;
-          var cs = window.getComputedStyle(el);
-          var pos = cs && cs.position ? cs.position : '';
-          if (pos !== 'fixed' && pos !== 'sticky') continue;
-          var rect = el.getBoundingClientRect();
-          var h = Math.round(rect.height || el.offsetHeight || 0);
-          if (h > 0 && h < 220) best = Math.max(best, h);
-        } catch (e) { /* ignore */ }
-      }
-      if (best > 0) return best + 8;
-      var nav = this._getNavbarOffset();
-      if (nav > 0) return Math.min(nav, 80) + 8;
       return 8;
+    },
+
+    _clearStickySidebarRailFixed: function(rail, anchorWrap) {
+      if (!rail) return;
+      rail.style.position = '';
+      rail.style.top = '';
+      rail.style.left = '';
+      rail.style.right = '';
+      rail.style.width = '';
+      rail.style.zIndex = '';
+      if (anchorWrap) anchorWrap.style.minHeight = '';
+    },
+
+    _syncStickySidebarRail: function(rail, anchorWrap, mainRow, topPx, side) {
+      if (!rail || !anchorWrap || !mainRow) return;
+      if (rail.getAttribute('data-bb-sticky-rail') !== '1') {
+        this._clearStickySidebarRailFixed(rail, anchorWrap);
+        return;
+      }
+      var cs = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(rail) : null;
+      if (cs && cs.position === 'static') {
+        this._clearStickySidebarRailFixed(rail, anchorWrap);
+        return;
+      }
+      var stickTop = typeof topPx === 'number' ? topPx : 8;
+      var rowRect = mainRow.getBoundingClientRect();
+      var wrapRect = anchorWrap.getBoundingClientRect();
+      var railH = rail.offsetHeight;
+      var railW = anchorWrap.offsetWidth || rail.offsetWidth;
+      if (rowRect.top >= stickTop - 1) {
+        rail.setAttribute('data-bb-anchor-left', String(Math.round(wrapRect.left)));
+        rail.setAttribute('data-bb-anchor-width', String(Math.round(railW)));
+      }
+      var leftPx = parseFloat(rail.getAttribute('data-bb-anchor-left'));
+      if (!isFinite(leftPx)) leftPx = wrapRect.left;
+      var widthPx = parseFloat(rail.getAttribute('data-bb-anchor-width'));
+      if (!isFinite(widthPx)) widthPx = railW;
+      var shouldStick = rowRect.top < stickTop && rowRect.bottom > stickTop + railH + 2;
+      if (shouldStick) {
+        var maxTop = rowRect.bottom - railH - 2;
+        var fixedTop = Math.min(stickTop, maxTop);
+        rail.style.position = 'fixed';
+        rail.style.top = fixedTop + 'px';
+        rail.style.left = leftPx + 'px';
+        rail.style.width = widthPx + 'px';
+        rail.style.right = 'auto';
+        rail.style.zIndex = '40';
+        anchorWrap.style.minHeight = railH + 'px';
+      } else {
+        this._clearStickySidebarRailFixed(rail, anchorWrap);
+        rail.style.position = 'relative';
+      }
+    },
+
+    _bindStickySidebarRails: function(opts) {
+      var self = this;
+      if (self._blogOverlayStickySidebarAbort) {
+        try { self._blogOverlayStickySidebarAbort(); } catch (eAbort) { /* ignore */ }
+        self._blogOverlayStickySidebarAbort = null;
+      }
+      self._blogOverlayStickySidebarSyncFn = null;
+      var mainRow = opts && opts.mainRowEl;
+      var topPx = opts && typeof opts.topPx === 'number' ? opts.topPx : 8;
+      var rails = opts && opts.rails ? opts.rails : [];
+      if (!mainRow || !rails.length) return;
+      var syncAll = function() {
+        for (var i = 0; i < rails.length; i++) {
+          var entry = rails[i];
+          self._syncStickySidebarRail(entry.rail, entry.wrap, mainRow, topPx, entry.side);
+        }
+      };
+      var scrollHandler = function() { syncAll(); };
+      if (typeof window !== 'undefined') {
+        window.addEventListener('scroll', scrollHandler, { passive: true });
+        window.addEventListener('resize', scrollHandler, { passive: true });
+      }
+      var scrollEl = self._getScrollContainer();
+      if (scrollEl && scrollEl.addEventListener) {
+        scrollEl.addEventListener('scroll', scrollHandler, { passive: true });
+      }
+      self._blogOverlayStickySidebarAbort = function() {
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('scroll', scrollHandler);
+          window.removeEventListener('resize', scrollHandler);
+        }
+        if (scrollEl && scrollEl.removeEventListener) {
+          scrollEl.removeEventListener('scroll', scrollHandler);
+        }
+        for (var j = 0; j < rails.length; j++) {
+          self._clearStickySidebarRailFixed(rails[j].rail, rails[j].wrap);
+        }
+      };
+      self._blogOverlayStickySidebarSyncFn = syncAll;
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() {
+          requestAnimationFrame(syncAll);
+        });
+      } else {
+        syncAll();
+      }
     },
 
     _getScrollContainer: function() {
@@ -8464,6 +8537,11 @@
         try { self._blogOverlaySidebarRO.disconnect(); } catch (eRo) {}
         self._blogOverlaySidebarRO = null;
       }
+      if (self._blogOverlayStickySidebarAbort) {
+        try { self._blogOverlayStickySidebarAbort(); } catch (eStickyAbort) { /* ignore */ }
+        self._blogOverlayStickySidebarAbort = null;
+      }
+      self._blogOverlayStickySidebarSyncFn = null;
       self._blogOverlaySidebarLayoutFn = null;
       this._clearPendingSearchRender();
       var rootIsConnected = false;
@@ -10449,43 +10527,59 @@
           var leftPadTop = leftSpaceAbove;
           var rightPadTop = rightSpaceAbove;
           var leftSidebarEl = document.createElement('div');
+          leftSidebarEl.className = 'blog-overlay-sidebar-rail';
           leftSidebarEl.style.display = 'flex';
           leftSidebarEl.style.flexDirection = 'column';
           leftSidebarEl.style.gap = '16px';
-          leftSidebarEl.style.flexShrink = '0';
-          leftSidebarEl.style.width = leftSidebarWidth + 'px';
+          leftSidebarEl.style.width = '100%';
+          leftSidebarEl.style.boxSizing = 'border-box';
           if (leftSticky) {
-            leftSidebarEl.style.position = 'sticky';
-            leftSidebarEl.style.top = stickySidebarTopPx + 'px';
-            leftSidebarEl.style.alignSelf = 'flex-start';
+            leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
+            leftSidebarEl.style.position = 'relative';
             leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
           } else {
             leftSidebarEl.style.position = 'static';
             if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
           }
           for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
+          var leftSidebarWrapEl = document.createElement('div');
+          leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          leftSidebarWrapEl.style.flexShrink = '0';
+          leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
+          leftSidebarWrapEl.style.alignSelf = 'flex-start';
+          leftSidebarWrapEl.style.position = 'relative';
+          leftSidebarWrapEl.style.boxSizing = 'border-box';
+          if (leftSidebarEl.childNodes.length) leftSidebarWrapEl.appendChild(leftSidebarEl);
 
           var rightSidebarEl = document.createElement('div');
+          rightSidebarEl.className = 'blog-overlay-sidebar-rail';
           rightSidebarEl.style.display = 'flex';
           rightSidebarEl.style.flexDirection = 'column';
           rightSidebarEl.style.gap = '16px';
-          rightSidebarEl.style.flexShrink = '0';
-          rightSidebarEl.style.width = rightSidebarWidth + 'px';
+          rightSidebarEl.style.width = '100%';
+          rightSidebarEl.style.boxSizing = 'border-box';
           if (rightSticky) {
-            rightSidebarEl.style.position = 'sticky';
-            rightSidebarEl.style.top = stickySidebarTopPx + 'px';
-            rightSidebarEl.style.alignSelf = 'flex-start';
+            rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
+            rightSidebarEl.style.position = 'relative';
             rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
           } else {
             rightSidebarEl.style.position = 'static';
             if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
           }
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
+          var rightSidebarWrapEl = document.createElement('div');
+          rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          rightSidebarWrapEl.style.flexShrink = '0';
+          rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
+          rightSidebarWrapEl.style.alignSelf = 'flex-start';
+          rightSidebarWrapEl.style.position = 'relative';
+          rightSidebarWrapEl.style.boxSizing = 'border-box';
+          if (rightSidebarEl.childNodes.length) rightSidebarWrapEl.appendChild(rightSidebarEl);
 
           var BB_SIDEBAR_MIN_MAIN = 300;
           function applySidebarResponsiveLayout() {
-            var leftHas = leftSidebarEl.childNodes.length > 0;
-            var rightHas = rightSidebarEl.childNodes.length > 0;
+            var leftHas = leftSidebarWrapEl.childNodes.length > 0;
+            var rightHas = rightSidebarWrapEl.childNodes.length > 0;
             if (!leftHas && !rightHas) {
               mainRowEl.style.flexDirection = 'row';
               mainRowEl.style.alignItems = 'flex-start';
@@ -10516,26 +10610,28 @@
                 main.style.marginRight = '0';
               }
               if (leftHas) {
-                leftSidebarEl.style.order = '1';
-                leftSidebarEl.style.width = '100%';
-                leftSidebarEl.style.maxWidth = '100%';
-                leftSidebarEl.style.flexShrink = '1';
-                leftSidebarEl.style.boxSizing = 'border-box';
+                leftSidebarWrapEl.style.order = '1';
+                leftSidebarWrapEl.style.width = '100%';
+                leftSidebarWrapEl.style.maxWidth = '100%';
+                leftSidebarWrapEl.style.flexShrink = '1';
+                leftSidebarWrapEl.style.alignSelf = 'stretch';
+                leftSidebarEl.removeAttribute('data-bb-sticky-rail');
                 leftSidebarEl.style.position = 'static';
                 leftSidebarEl.style.top = '';
-                leftSidebarEl.style.alignSelf = 'stretch';
                 leftSidebarEl.style.paddingTop = leftPadTop > 0 ? leftPadTop + 'px' : '';
+                self._clearStickySidebarRailFixed(leftSidebarEl, leftSidebarWrapEl);
               }
               if (rightHas) {
-                rightSidebarEl.style.order = '2';
-                rightSidebarEl.style.width = '100%';
-                rightSidebarEl.style.maxWidth = '100%';
-                rightSidebarEl.style.flexShrink = '1';
-                rightSidebarEl.style.boxSizing = 'border-box';
+                rightSidebarWrapEl.style.order = '2';
+                rightSidebarWrapEl.style.width = '100%';
+                rightSidebarWrapEl.style.maxWidth = '100%';
+                rightSidebarWrapEl.style.flexShrink = '1';
+                rightSidebarWrapEl.style.alignSelf = 'stretch';
+                rightSidebarEl.removeAttribute('data-bb-sticky-rail');
                 rightSidebarEl.style.position = 'static';
                 rightSidebarEl.style.top = '';
-                rightSidebarEl.style.alignSelf = 'stretch';
                 rightSidebarEl.style.paddingTop = rightPadTop > 0 ? rightPadTop + 'px' : '';
+                self._clearStickySidebarRailFixed(rightSidebarEl, rightSidebarWrapEl);
               }
             } else {
               mainRowEl.style.flexDirection = 'row';
@@ -10558,39 +10654,46 @@
                 main.style.boxSizing = '';
               }
               if (leftHas) {
-                leftSidebarEl.style.order = '';
-                leftSidebarEl.style.width = leftSidebarWidth + 'px';
-                leftSidebarEl.style.maxWidth = '';
-                leftSidebarEl.style.flexShrink = '0';
+                leftSidebarWrapEl.style.order = '';
+                leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
+                leftSidebarWrapEl.style.maxWidth = '';
+                leftSidebarWrapEl.style.flexShrink = '0';
+                leftSidebarWrapEl.style.alignSelf = 'flex-start';
                 if (leftSticky) {
-                  leftSidebarEl.style.position = 'sticky';
-                  leftSidebarEl.style.top = stickySidebarTopPx + 'px';
-                  leftSidebarEl.style.alignSelf = 'flex-start';
+                  leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
+                  leftSidebarEl.style.position = 'relative';
+                  leftSidebarEl.style.top = '';
                   leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
                 } else {
+                  leftSidebarEl.removeAttribute('data-bb-sticky-rail');
                   leftSidebarEl.style.position = 'static';
                   leftSidebarEl.style.top = '';
-                  leftSidebarEl.style.alignSelf = '';
                   leftSidebarEl.style.paddingTop = leftPadTop > 0 ? leftPadTop + 'px' : '';
+                  self._clearStickySidebarRailFixed(leftSidebarEl, leftSidebarWrapEl);
                 }
               }
               if (rightHas) {
-                rightSidebarEl.style.order = '';
-                rightSidebarEl.style.width = rightSidebarWidth + 'px';
-                rightSidebarEl.style.maxWidth = '';
-                rightSidebarEl.style.flexShrink = '0';
+                rightSidebarWrapEl.style.order = '';
+                rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
+                rightSidebarWrapEl.style.maxWidth = '';
+                rightSidebarWrapEl.style.flexShrink = '0';
+                rightSidebarWrapEl.style.alignSelf = 'flex-start';
                 if (rightSticky) {
-                  rightSidebarEl.style.position = 'sticky';
-                  rightSidebarEl.style.top = stickySidebarTopPx + 'px';
-                  rightSidebarEl.style.alignSelf = 'flex-start';
+                  rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
+                  rightSidebarEl.style.position = 'relative';
+                  rightSidebarEl.style.top = '';
                   rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
                 } else {
+                  rightSidebarEl.removeAttribute('data-bb-sticky-rail');
                   rightSidebarEl.style.position = 'static';
                   rightSidebarEl.style.top = '';
-                  rightSidebarEl.style.alignSelf = '';
                   rightSidebarEl.style.paddingTop = rightPadTop > 0 ? rightPadTop + 'px' : '';
+                  self._clearStickySidebarRailFixed(rightSidebarEl, rightSidebarWrapEl);
                 }
               }
+            }
+            if (typeof self._blogOverlayStickySidebarSyncFn === 'function') {
+              self._blogOverlayStickySidebarSyncFn();
             }
           }
 
@@ -11032,7 +11135,7 @@
           var pinPostHeaderInMainColumn = isSinglePost &&
             singlePostHeaderZoneEl &&
             singlePostHeaderZoneEl.childNodes.length > 0 &&
-            (leftSidebarEl.childNodes.length > 0 || rightSidebarEl.childNodes.length > 0);
+            (leftSidebarWrapEl.childNodes.length > 0 || rightSidebarWrapEl.childNodes.length > 0);
           if (singlePostHeaderZoneEl && singlePostHeaderZoneEl.childNodes.length) {
             if (pinPostHeaderInMainColumn) {
               singlePostHeaderZoneEl.style.paddingTop = '0';
@@ -11041,10 +11144,25 @@
               wrapper.appendChild(singlePostHeaderZoneEl);
             }
           }
-          if (leftSidebarEl.childNodes.length) mainRowEl.appendChild(leftSidebarEl);
+          if (leftSidebarWrapEl.childNodes.length) mainRowEl.appendChild(leftSidebarWrapEl);
           mainRowEl.appendChild(main);
-          if (rightSidebarEl.childNodes.length) mainRowEl.appendChild(rightSidebarEl);
+          if (rightSidebarWrapEl.childNodes.length) mainRowEl.appendChild(rightSidebarWrapEl);
           wrapper.appendChild(mainRowEl);
+
+          var stickySidebarRails = [];
+          if (leftSticky && leftSidebarWrapEl.childNodes.length) {
+            stickySidebarRails.push({ rail: leftSidebarEl, wrap: leftSidebarWrapEl, side: 'left' });
+          }
+          if (rightSticky && rightSidebarWrapEl.childNodes.length) {
+            stickySidebarRails.push({ rail: rightSidebarEl, wrap: rightSidebarWrapEl, side: 'right' });
+          }
+          if (stickySidebarRails.length) {
+            self._bindStickySidebarRails({
+              mainRowEl: mainRowEl,
+              topPx: stickySidebarTopPx,
+              rails: stickySidebarRails
+            });
+          }
 
           if (collectionPaginationEl) {
             var paginationZoneEl = document.createElement('div');
