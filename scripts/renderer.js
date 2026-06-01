@@ -7367,9 +7367,11 @@
           postInfoWrap.style.gap = '8px';
         }
         var headlineMount = postInfoWrap || digestFeaturedIntro || appendTo;
+        var postBreadcrumbNav = null;
         if (isSinglePost && phShowBreadcrumbs) {
-          var bcNav = document.createElement('nav');
-          bcNav.setAttribute('aria-label', 'Breadcrumb');
+          postBreadcrumbNav = document.createElement('nav');
+          postBreadcrumbNav.setAttribute('aria-label', 'Breadcrumb');
+          var bcNav = postBreadcrumbNav;
           bcNav.style.fontSize = '0.85rem';
           bcNav.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.9)' : '#666';
           bcNav.style.display = 'flex';
@@ -7431,7 +7433,6 @@
           var pu = self._getPostUrl(post);
           if (pu) bcNav.appendChild(makeLink(pt, pu, null, 'breadcrumb'));
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
-          headlineMount.appendChild(bcNav);
         }
 
         if (isSinglePost && (phShowTags || phShowCategories)) {
@@ -7815,6 +7816,60 @@
             ensureSinglePostHeaderInnerEl().appendChild(belowFiWrap);
           } else {
             article.appendChild(belowFiWrap);
+          }
+        }
+
+        if (isSinglePost && postBreadcrumbNav) {
+          postBreadcrumbNav.className = 'blog-overlay-post-breadcrumbs';
+          postBreadcrumbNav.style.marginBottom = '8px';
+          postBreadcrumbNav.style.flexShrink = '0';
+          postBreadcrumbNav.style.width = '100%';
+          postBreadcrumbNav.style.boxSizing = 'border-box';
+          function wrapPostImageWithBreadcrumbs(imageEl) {
+            if (!imageEl || !imageEl.parentNode) return;
+            var imgCol = document.createElement('div');
+            imgCol.className = 'blog-overlay-post-header-image-col';
+            imgCol.style.display = 'flex';
+            imgCol.style.flexDirection = 'column';
+            imgCol.style.alignItems = 'stretch';
+            imgCol.style.alignSelf = imageEl.style.alignSelf || 'flex-start';
+            if (imageEl.style.flex) imgCol.style.flex = imageEl.style.flex;
+            if (imageEl.style.width) imgCol.style.width = imageEl.style.width;
+            if (imageEl.style.maxWidth) imgCol.style.maxWidth = imageEl.style.maxWidth;
+            if (imageEl.style.minWidth) imgCol.style.minWidth = imageEl.style.minWidth;
+            if (imageEl.style.marginLeft) imgCol.style.marginLeft = imageEl.style.marginLeft;
+            if (imageEl.style.marginRight) imgCol.style.marginRight = imageEl.style.marginRight;
+            imageEl.style.flex = '';
+            imageEl.style.width = '100%';
+            imageEl.style.maxWidth = '100%';
+            imageEl.style.marginLeft = '';
+            imageEl.style.marginRight = '';
+            imageEl.style.alignSelf = 'stretch';
+            imageEl.parentNode.insertBefore(imgCol, imageEl);
+            imgCol.appendChild(postBreadcrumbNav);
+            imgCol.appendChild(imageEl);
+          }
+          if (singlePostFullBleedHero && fullBleedHeaderBlock) {
+            postBreadcrumbNav.style.position = 'absolute';
+            postBreadcrumbNav.style.top = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '24px' : '20px');
+            postBreadcrumbNav.style.left = '24px';
+            postBreadcrumbNav.style.right = '24px';
+            postBreadcrumbNav.style.zIndex = '2';
+            postBreadcrumbNav.style.marginBottom = '0';
+            var heroOverlayEl = fullBleedHeaderBlock.querySelector('[aria-hidden="true"]');
+            if (heroOverlayEl && heroOverlayEl.nextSibling) {
+              fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, heroOverlayEl.nextSibling);
+            } else {
+              fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
+            }
+          } else if (singlePostBelowInfo && belowFiWrap) {
+            wrapPostImageWithBreadcrumbs(belowFiWrap);
+          } else if (singlePostFullBleedStacked && stackedFullBleedWrap) {
+            wrapPostImageWithBreadcrumbs(stackedFullBleedWrap);
+          } else if (fiWrap && fiWrap.parentNode) {
+            wrapPostImageWithBreadcrumbs(fiWrap);
+          } else {
+            headlineMount.insertBefore(postBreadcrumbNav, headlineMount.firstChild);
           }
         }
 
