@@ -239,10 +239,17 @@
   // pseudo-elements on <html>.
   try {
     var _earlyEditResult = isSquarespaceEditingUi();
+    var _inIframeEarly = false;
+    try { _inIframeEarly = window.parent !== window; } catch (e) { _inIframeEarly = true; }
     // #region agent log
-    console.warn('[BB-DEBUG-7918cd] loader early boot: isEditUi=' + _earlyEditResult + ' bbLoadingClass=' + (document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : 'N/A'));
+    console.warn('[BB-DEBUG-7918cd] loader early boot: isEditUi=' + _earlyEditResult + ' inIframe=' + _inIframeEarly + ' bbLoadingClass=' + (document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : 'N/A'));
     // #endregion
-    if (!_earlyEditResult) installBootstrapLoading();
+    if (_inIframeEarly && !isExplicitPreviewContext()) {
+      // #region agent log
+      console.warn('[BB-DEBUG-7918cd] loader: IFRAME detected, skipping bootstrap overlay (hypothesisId=H2_FIX)');
+      // #endregion
+      clearBootstrapLoading();
+    } else if (!_earlyEditResult) installBootstrapLoading();
     else clearBootstrapLoading();
   } catch (earlyBootErr) { /* ignore */ }
 
@@ -312,7 +319,15 @@
       clearBootstrapLoading();
       return;
     }
-    installBootstrapLoading();
+    var _inIframeStart = false;
+    try { _inIframeStart = window.parent !== window; } catch (e) { _inIframeStart = true; }
+    if (!_inIframeStart || isExplicitPreviewContext()) {
+      installBootstrapLoading();
+    } else {
+      // #region agent log
+      console.warn('[BB-DEBUG-7918cd] startLoader: IFRAME detected, skipping installBootstrapLoading (hypothesisId=H2_FIX)');
+      // #endregion
+    }
 
     fetchConfig()
       .then(function(config) {

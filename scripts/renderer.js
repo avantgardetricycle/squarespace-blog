@@ -769,12 +769,6 @@
         this._restoreOriginalRootChildren();
         return;
       }
-      if (this._suppressedByEditorMode && window.parent !== window) {
-        // #region agent log
-        console.warn('[BB-DEBUG-7918cd] _onEditorModeChange: edit classes removed but still in iframe — staying suppressed (hypothesisId=FIX)');
-        // #endregion
-        return;
-      }
       if (this._suppressedByEditorMode) {
         this._suppressedByEditorMode = false;
         if (this.items.length > 0) this._renderContent(this.items);
