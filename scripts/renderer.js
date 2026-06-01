@@ -7171,6 +7171,7 @@
         var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && !!imgUrl;
         var fullBleedHeaderBlock = null;
         var stackedFullBleedWrap = null;
+        var stackedHeaderBlock = null;
         if (singlePostFullBleedHero) {
           fullBleedHeaderBlock = document.createElement('div');
           fullBleedHeaderBlock.className = 'blog-overlay-post-header-fullbleed';
@@ -7748,7 +7749,7 @@
               headerZoneRef.current.style.position = 'relative';
               headerZoneRef.current.style.zIndex = '100';
             }
-            var stackedHeaderBlock = document.createElement('div');
+            stackedHeaderBlock = document.createElement('div');
             stackedHeaderBlock.className = 'blog-overlay-post-header-stacked';
             stackedHeaderBlock.style.width = '100%';
             stackedHeaderBlock.style.boxSizing = 'border-box';
@@ -7825,7 +7826,8 @@
           postBreadcrumbNav.style.flexShrink = '0';
           postBreadcrumbNav.style.width = '100%';
           postBreadcrumbNav.style.boxSizing = 'border-box';
-          function wrapPostImageWithBreadcrumbs(imageEl) {
+          var bcJustify = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
+          function wrapPostImageWithBreadcrumbs(imageEl, justifyContent) {
             if (!imageEl || !imageEl.parentNode) return;
             var imgCol = document.createElement('div');
             imgCol.className = 'blog-overlay-post-header-image-col';
@@ -7845,11 +7847,24 @@
             imageEl.style.marginLeft = '';
             imageEl.style.marginRight = '';
             imageEl.style.alignSelf = 'stretch';
+            postBreadcrumbNav.style.justifyContent = justifyContent || 'flex-start';
             imageEl.parentNode.insertBefore(imgCol, imageEl);
             imgCol.appendChild(postBreadcrumbNav);
             imgCol.appendChild(imageEl);
           }
-          if (singlePostFullBleedHero && fullBleedHeaderBlock) {
+          if (singlePostFullBleedStacked && stackedHeaderBlock && postInfoWrap) {
+            var stackedInfoWrap = stackedHeaderBlock.firstElementChild;
+            if (stackedInfoWrap) {
+              postBreadcrumbNav.style.justifyContent = bcJustify;
+              postBreadcrumbNav.style.position = '';
+              postBreadcrumbNav.style.top = '';
+              postBreadcrumbNav.style.left = '';
+              postBreadcrumbNav.style.right = '';
+              postBreadcrumbNav.style.zIndex = '';
+              stackedInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap);
+            }
+          } else if (singlePostFullBleedHero && fullBleedHeaderBlock) {
+            postBreadcrumbNav.style.justifyContent = bcJustify;
             postBreadcrumbNav.style.position = 'absolute';
             postBreadcrumbNav.style.top = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '24px' : '20px');
             postBreadcrumbNav.style.left = '24px';
@@ -7862,13 +7877,15 @@
             } else {
               fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
             }
+          } else if (isSideBySide && fiWrap && fiWrap.parentNode) {
+            var sideBcJustify = phImagePos === 'rightOfInfo' ? bcJustify : 'flex-start';
+            wrapPostImageWithBreadcrumbs(fiWrap, sideBcJustify);
           } else if (singlePostBelowInfo && belowFiWrap) {
-            wrapPostImageWithBreadcrumbs(belowFiWrap);
-          } else if (singlePostFullBleedStacked && stackedFullBleedWrap) {
-            wrapPostImageWithBreadcrumbs(stackedFullBleedWrap);
+            wrapPostImageWithBreadcrumbs(belowFiWrap, bcJustify);
           } else if (fiWrap && fiWrap.parentNode) {
-            wrapPostImageWithBreadcrumbs(fiWrap);
+            wrapPostImageWithBreadcrumbs(fiWrap, bcJustify);
           } else {
+            postBreadcrumbNav.style.justifyContent = bcJustify;
             headlineMount.insertBefore(postBreadcrumbNav, headlineMount.firstChild);
           }
         }
