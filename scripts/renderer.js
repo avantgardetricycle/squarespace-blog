@@ -9760,7 +9760,7 @@
           previewDeviceMobile ||
           (overlayW > 0 && overlayW <= 767);
 
-        var makeEditorialCard = function(p, isLarge) {
+        var makeEditorialCard = function(p, isLarge, mobilePairCard) {
           var gatedEditorialCard =
             paywallReplaceEditorial && !isSinglePost && !self._isPaywallPublicPreviewPost(p);
           var cardUrl = p.assetUrl || p.thumbnailUrl || (p.assets && p.assets[0] && p.assets[0].assetUrl) || null;
@@ -9768,7 +9768,6 @@
           var bgStyle = self._featuredImageAreaBackground(cardUrl, placeholderMap, p, items);
           var link = document.createElement('a');
           link.href = self._getPostUrl(p) || (self._bbPreview ? '#post-' + self._postIndexInItems(items, p, itemIndexMap) : '#');
-          link.style.display = 'block';
           link.style.position = 'relative';
           link.style.overflow = 'hidden';
           link.style.textDecoration = 'none';
@@ -9776,24 +9775,30 @@
           link.style.width = '100%';
           link.style.height = '100%';
           link.style.minHeight = '0';
+          if (mobilePairCard) {
+            link.style.display = 'grid';
+            link.style.gridTemplateRows = 'subgrid';
+            link.style.gridRow = '1 / -1';
+            link.className = 'blog-overlay-editorial-card blog-overlay-editorial-card-mobile-pair';
+          } else {
+            link.style.display = 'block';
+          }
           var bg = document.createElement('div');
           bg.style.position = 'absolute';
           bg.style.inset = '0';
           bg.style.background = bgStyle;
           bg.style.transition = 'transform 0.4s';
+          bg.style.zIndex = '0';
           link.onmouseover = function() { bg.style.transform = 'scale(1.03)'; };
           link.onmouseout = function() { bg.style.transform = 'scale(1)'; };
           var overlay = document.createElement('div');
           overlay.style.position = 'absolute';
           overlay.style.inset = '0';
           overlay.style.background = 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 55%, transparent 100%)';
-          var content = document.createElement('div');
-          content.style.position = 'absolute';
-          content.style.bottom = '0';
-          content.style.left = '0';
-          content.style.right = '0';
-          content.style.padding = isLarge ? '28px' : '16px 18px';
+          overlay.style.zIndex = '1';
+          overlay.style.pointerEvents = 'none';
           var title = document.createElement('div');
+          title.className = 'blog-overlay-editorial-card-title';
           title.style.fontSize = isLarge ? '22px' : '14px';
           title.style.fontWeight = isLarge ? '800' : '700';
           title.style.lineHeight = '1.2';
@@ -9828,9 +9833,9 @@
             metaParts.push(minsGrid === 1 ? '1 min read' : minsGrid + ' min read');
           }
           var meta = document.createElement('div');
+          meta.className = 'blog-overlay-editorial-card-meta';
           meta.style.fontSize = isLarge ? '11px' : '10px';
           meta.style.color = 'rgba(255,255,255,0.5)';
-          meta.style.marginTop = isLarge ? '8px' : '5px';
           meta.textContent = metaParts.join(' · ');
           var edCategoriesLine = self._createCollectionPostCategoriesLine(
             p,
@@ -9838,20 +9843,75 @@
             categoryFilterUiEnabled,
             { onDark: true, compact: !isLarge }
           );
-          if (edCategoriesLine) {
-            edCategoriesLine.style.marginBottom = isLarge ? '8px' : '5px';
-            content.appendChild(edCategoriesLine);
+          if (mobilePairCard) {
+            var edSpacer = document.createElement('div');
+            edSpacer.className = 'blog-overlay-editorial-card-spacer';
+            edSpacer.setAttribute('aria-hidden', 'true');
+            edSpacer.style.gridRow = '1';
+            edSpacer.style.minHeight = '0';
+            edSpacer.style.zIndex = '2';
+
+            var edAboveTitle = document.createElement('div');
+            edAboveTitle.className = 'blog-overlay-editorial-card-above-title';
+            edAboveTitle.style.gridRow = '2';
+            edAboveTitle.style.zIndex = '2';
+            edAboveTitle.style.padding = '0 18px';
+            edAboveTitle.style.display = 'flex';
+            edAboveTitle.style.flexDirection = 'column';
+            edAboveTitle.style.gap = '5px';
+            edAboveTitle.style.boxSizing = 'border-box';
+            if (edCategoriesLine) {
+              edCategoriesLine.style.marginBottom = '0';
+              edAboveTitle.appendChild(edCategoriesLine);
+            }
+            if (gatedEditorialCard) {
+              var edMoPair = self._createMembersOnlyTeaserLabel({ subscribeButton: false, imageOverlay: true });
+              edMoPair.style.marginBottom = '0';
+              edAboveTitle.appendChild(edMoPair);
+            }
+
+            title.style.gridRow = '3';
+            title.style.zIndex = '2';
+            title.style.margin = '0';
+            title.style.padding = '0 18px';
+            title.style.boxSizing = 'border-box';
+
+            meta.style.gridRow = '4';
+            meta.style.zIndex = '2';
+            meta.style.marginTop = '5px';
+            meta.style.padding = '0 18px 16px';
+            meta.style.boxSizing = 'border-box';
+
+            link.appendChild(bg);
+            link.appendChild(overlay);
+            link.appendChild(edSpacer);
+            link.appendChild(edAboveTitle);
+            link.appendChild(title);
+            link.appendChild(meta);
+          } else {
+            var content = document.createElement('div');
+            content.style.position = 'absolute';
+            content.style.bottom = '0';
+            content.style.left = '0';
+            content.style.right = '0';
+            content.style.zIndex = '2';
+            content.style.padding = isLarge ? '28px' : '16px 18px';
+            meta.style.marginTop = isLarge ? '8px' : '5px';
+            if (edCategoriesLine) {
+              edCategoriesLine.style.marginBottom = isLarge ? '8px' : '5px';
+              content.appendChild(edCategoriesLine);
+            }
+            if (gatedEditorialCard) {
+              var edMoTop = self._createMembersOnlyTeaserLabel({ subscribeButton: false, imageOverlay: true });
+              edMoTop.style.marginBottom = isLarge ? '10px' : '8px';
+              content.appendChild(edMoTop);
+            }
+            content.appendChild(title);
+            content.appendChild(meta);
+            link.appendChild(bg);
+            link.appendChild(overlay);
+            link.appendChild(content);
           }
-          if (gatedEditorialCard) {
-            var edMoTop = self._createMembersOnlyTeaserLabel({ subscribeButton: false, imageOverlay: true });
-            edMoTop.style.marginBottom = isLarge ? '10px' : '8px';
-            content.appendChild(edMoTop);
-          }
-          content.appendChild(title);
-          content.appendChild(meta);
-          link.appendChild(bg);
-          link.appendChild(overlay);
-          link.appendChild(content);
           var idx = displayItems.indexOf(p);
           if (idx >= 0) link.setAttribute('data-display-index', String(idx));
           if (!isSinglePost) {
@@ -9886,15 +9946,17 @@
               pi += 1;
               edRow.appendChild(makeEditorialCard(pSingle, true));
             } else {
+              /* Subgrid rows: image fill, optional badges, shared title baseline, meta below title. */
+              edRow.style.gridTemplateRows = 'minmax(0, 1fr) auto auto auto';
               edRow.style.gridTemplateColumns = '1fr 1fr';
               var pFirst = posts[pi];
               pi += 1;
-              var cFirst = makeEditorialCard(pFirst, false);
+              var cFirst = makeEditorialCard(pFirst, false, true);
               edRow.appendChild(cFirst);
               if (pi < posts.length) {
                 var pSecond = posts[pi];
                 pi += 1;
-                edRow.appendChild(makeEditorialCard(pSecond, false));
+                edRow.appendChild(makeEditorialCard(pSecond, false, true));
               } else {
                 cFirst.style.gridColumn = '1 / -1';
               }
