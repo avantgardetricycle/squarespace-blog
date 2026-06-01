@@ -9271,6 +9271,7 @@
           ppLink.style.display = 'block';
           ppLink.style.fontSize = '0.9rem';
           ppLink.style.fontWeight = '500';
+          ppLink.style.lineHeight = '1.25';
           ppLink.style.textDecoration = 'none';
           ppEntry.appendChild(ppLink);
           el.appendChild(ppEntry);
@@ -9424,6 +9425,7 @@
           rpLink.style.display = 'block';
           rpLink.style.fontSize = '0.9rem';
           rpLink.style.fontWeight = '500';
+          rpLink.style.lineHeight = '1.25';
           rpLink.style.textDecoration = 'none';
           rpEntry.appendChild(rpLink);
           el.appendChild(rpEntry);
