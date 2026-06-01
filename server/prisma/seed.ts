@@ -314,6 +314,7 @@ async function main() {
         collectionLayout: 'editorial',
         showAuthor: true,
         showReadingTime: true,
+        pagination: { show: true, mode: 'pages', postsPerPage: 10 },
         gridColumns: 3,
         headerContent: {
           show: true,

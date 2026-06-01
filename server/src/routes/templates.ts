@@ -63,6 +63,7 @@ const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   featuredArticle: { show: true, position: 'inLayout' as const },
   headerContent: {
     show: true,
