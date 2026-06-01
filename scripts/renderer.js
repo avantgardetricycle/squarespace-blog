@@ -4838,6 +4838,136 @@
     },
 
     /**
+     * Collection header search: full input on desktop; mobile icon expands to input on tap.
+     */
+    _createCollectionHeaderSearchControl: function(siteAccentUi, opts) {
+      var self = this;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var mobile = opts.mobile === true;
+      var accent = siteAccentUi || self._getSiteAccentColor();
+      var hasQuery = Boolean(self._searchQuery && String(self._searchQuery).trim());
+      if (hasQuery) self._headerSearchExpanded = true;
+      if (self._headerSearchExpanded == null) self._headerSearchExpanded = false;
+
+      var searchWrap = document.createElement('div');
+      searchWrap.className = 'blog-overlay-header-search' + (mobile ? ' blog-overlay-header-search-mobile' : '');
+
+      function wireSearchInput(searchInput) {
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search posts…';
+        searchInput.setAttribute('aria-label', 'Search posts');
+        searchInput.value = self._searchQuery || '';
+        searchInput.style.padding = '8px 12px';
+        searchInput.style.fontSize = '0.9rem';
+        searchInput.style.border = '1px solid #ddd';
+        searchInput.style.borderRadius = '6px';
+        searchInput.style.outline = 'none';
+        searchInput.style.boxSizing = 'border-box';
+        searchInput.onfocus = function() {
+          searchInput.style.borderColor = accent;
+          searchInput.style.boxShadow = '0 0 0 2px color-mix(in srgb, ' + accent + ' 22%, transparent)';
+        };
+        searchInput.onblur = function() { searchInput.style.borderColor = '#ddd'; searchInput.style.boxShadow = ''; };
+        searchInput.oninput = function() {
+          self._searchQuery = searchInput.value;
+          self._scheduleSearchDrivenRender();
+        };
+        searchInput.onkeydown = function(e) {
+          if (e.key === 'Escape') {
+            self._clearPendingSearchRender();
+            searchInput.value = '';
+            self._searchQuery = '';
+            self._currentPage = 1;
+            if (mobile) self._headerSearchExpanded = false;
+            self._renderContent(self.items);
+            searchInput.blur();
+          }
+        };
+        searchInput.className = 'blog-overlay-search-input';
+      }
+
+      if (mobile) {
+        searchWrap.style.display = 'flex';
+        searchWrap.style.alignItems = 'center';
+        searchWrap.style.justifyContent = 'flex-start';
+        searchWrap.style.flex = '1 1 auto';
+        searchWrap.style.minWidth = '0';
+        searchWrap.style.gap = '8px';
+
+        var searchBtn = document.createElement('button');
+        searchBtn.type = 'button';
+        searchBtn.className = 'blog-overlay-header-search-toggle';
+        searchBtn.setAttribute('aria-label', 'Search posts');
+        searchBtn.style.display = 'inline-flex';
+        searchBtn.style.alignItems = 'center';
+        searchBtn.style.justifyContent = 'center';
+        searchBtn.style.width = '36px';
+        searchBtn.style.height = '36px';
+        searchBtn.style.padding = '0';
+        searchBtn.style.border = '1px solid #ddd';
+        searchBtn.style.borderRadius = '6px';
+        searchBtn.style.background = '#fff';
+        searchBtn.style.color = '#555';
+        searchBtn.style.cursor = 'pointer';
+        searchBtn.style.flexShrink = '0';
+        searchBtn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>';
+
+        var searchInputShell = document.createElement('div');
+        searchInputShell.className = 'blog-overlay-header-search-input-shell';
+        searchInputShell.style.flex = self._headerSearchExpanded ? '1 1 auto' : '0 0 0';
+        searchInputShell.style.minWidth = '0';
+        searchInputShell.style.maxWidth = self._headerSearchExpanded ? '100%' : '0';
+        searchInputShell.style.width = self._headerSearchExpanded ? 'auto' : '0';
+        searchInputShell.style.opacity = self._headerSearchExpanded ? '1' : '0';
+        searchInputShell.style.overflow = 'hidden';
+        searchInputShell.style.transition = 'max-width 0.2s ease, opacity 0.15s ease';
+
+        var searchInput = document.createElement('input');
+        wireSearchInput(searchInput);
+        searchInput.style.width = '100%';
+        searchInputShell.appendChild(searchInput);
+
+        function setSearchExpanded(expanded, focusInput) {
+          self._headerSearchExpanded = expanded;
+          searchBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          if (expanded) {
+            searchInputShell.style.flex = '1 1 auto';
+            searchInputShell.style.width = 'auto';
+            searchInputShell.style.maxWidth = '100%';
+            searchInputShell.style.opacity = '1';
+            if (focusInput) {
+              try { searchInput.focus(); } catch (eFocus) {}
+            }
+          } else {
+            searchInputShell.style.flex = '0 0 0';
+            searchInputShell.style.width = '0';
+            searchInputShell.style.maxWidth = '0';
+            searchInputShell.style.opacity = '0';
+          }
+        }
+
+        setSearchExpanded(Boolean(self._headerSearchExpanded), Boolean(self._headerSearchExpanded));
+        searchBtn.onclick = function() {
+          setSearchExpanded(!self._headerSearchExpanded, true);
+        };
+
+        searchWrap.appendChild(searchBtn);
+        searchWrap.appendChild(searchInputShell);
+      } else {
+        searchWrap.style.flex = '0 1 280px';
+        searchWrap.style.width = 'auto';
+        searchWrap.style.minWidth = '160px';
+        searchWrap.style.maxWidth = '320px';
+        var desktopInput = document.createElement('input');
+        wireSearchInput(desktopInput);
+        desktopInput.style.width = '100%';
+        searchWrap.appendChild(desktopInput);
+      }
+
+      return searchWrap;
+    },
+
+    /**
      * Create Author Profiles module (post level - shows profile for post authors)
      */
     _createAuthorProfilesModule: function(post, cfg, width, opts) {
@@ -6406,8 +6536,12 @@
       var gridColsDigestOrGrid = gridColsFromConfig != null
         ? gridColsFromConfig
         : (collectionLayout === 'digest' ? 2 : 3);
-      var gridMobileNarrow = !isSinglePost && collectionLayout === 'grid' && self._isNarrowCollectionViewport();
-      var gridColsEffective = gridMobileNarrow ? 2 : gridColsDigestOrGrid;
+      var collectionMobileGridNarrow = !isSinglePost &&
+        (collectionLayout === 'grid' || collectionLayout === 'digest') &&
+        self._isNarrowCollectionViewport();
+      var gridMobileNarrow = collectionLayout === 'grid' && collectionMobileGridNarrow;
+      var digestMobileNarrow = collectionLayout === 'digest' && collectionMobileGridNarrow;
+      var gridColsEffective = collectionMobileGridNarrow ? 2 : gridColsDigestOrGrid;
 
       var featuredPost = null;
       var displayItemsForLoop = displayItems;
@@ -6507,6 +6641,8 @@
         gridColsDigestOrGrid: gridColsDigestOrGrid,
         gridColsEffective: gridColsEffective,
         gridMobileNarrow: gridMobileNarrow,
+        digestMobileNarrow: digestMobileNarrow,
+        collectionMobileGridNarrow: collectionMobileGridNarrow,
         featuredPost: featuredPost,
         displayItemsForLoop: displayItemsForLoop,
         displayPostKey: displayPostKey,
@@ -6761,6 +6897,8 @@
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
       var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
       var gridMobileNarrow = Boolean(vs.gridMobileNarrow);
+      var digestMobileNarrow = Boolean(vs.digestMobileNarrow);
+      var collectionMobileGridNarrow = Boolean(vs.collectionMobileGridNarrow) || gridMobileNarrow || digestMobileNarrow;
       var leftSidebarCfg = vs.leftSidebarCfg;
       var rightSidebarCfg = vs.rightSidebarCfg;
       var displayItems = vs.displayItems;
@@ -6789,22 +6927,8 @@
           listRowsMobileCompact = typeof window !== 'undefined' && window.innerWidth <= 767;
         }
       }
-      /** Digest: featured hero image breaks out to viewport width on narrow viewports / preview phone */
-      var digestMobileFullBleed = false;
-      if (!isSinglePost && collectionLayout === 'digest') {
-        try {
-          var dVpNarrow = typeof window !== 'undefined' && (window.matchMedia ? window.matchMedia('(max-width: 767px)').matches : window.innerWidth <= 767);
-          var dRootW = 0;
-          if (self._root && self._root.getBoundingClientRect) {
-            dRootW = Math.round(self._root.getBoundingClientRect().width) || 0;
-          }
-          if (!dRootW && self._root && self._root.clientWidth) dRootW = self._root.clientWidth;
-          var dPreviewPhone = Boolean(self._previewMode && self.config && self.config.previewDevice === 'mobile');
-          digestMobileFullBleed = dVpNarrow || (dRootW > 0 && dRootW <= 767) || dPreviewPhone;
-        } catch (eDigMob) {
-          digestMobileFullBleed = typeof window !== 'undefined' && window.innerWidth <= 767;
-        }
-      }
+      /** Digest mobile: full-bleed featured image, 2-col grid (see collectionMobileGridNarrow in view state). */
+      var digestMobileFullBleed = digestMobileNarrow;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
       var phAlign = postHeaderCfg && (postHeaderCfg.contentAlignment === 'left' || postHeaderCfg.contentAlignment === 'center' || postHeaderCfg.contentAlignment === 'right') ? postHeaderCfg.contentAlignment : 'left';
@@ -6870,13 +6994,16 @@
           article.style.marginTop = '12px';
         }
         if (isFeaturedInLayout && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
-          var featuredSpanCols = collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid;
-          article.style.gridColumn = '1 / span ' + featuredSpanCols;
+          article.style.gridColumn = '1 / span ' + gridColsEffective;
         }
-        if (!isSinglePost && collectionLayout === 'grid') {
+        if (!isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
           article.style.minWidth = '0';
           article.style.width = '100%';
+          article.style.maxWidth = '100%';
           article.style.boxSizing = 'border-box';
+        }
+        if (digestMobileNarrow && isFeaturedInLayout && collectionLayout === 'digest') {
+          article.style.overflow = 'visible';
         }
         var digestFeaturedIntro = null;
         if (isFeaturedInLayout && collectionLayout === 'digest') {
@@ -6899,6 +7026,7 @@
               digestFeaturedIntro.style.paddingLeft = (dInset.left || 0) + 'px';
               digestFeaturedIntro.style.paddingRight = (dInset.right || 0) + 'px';
               digestFeaturedIntro.style.paddingTop = '12px';
+              digestFeaturedIntro.style.paddingBottom = '0';
             }
           }
         }
@@ -7041,8 +7169,9 @@
           if (fiLayout === 'fullBleed') {
             fiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
             if (!isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
-              if (collectionLayout === 'digest' && isFeaturedInLayout && digestMobileFullBleed) {
+              if (digestMobileFullBleed && isFeaturedInLayout) {
                 self._applyViewportFullBleed(fiWrap);
+                fiWrap.style.marginTop = '0';
               } else {
                 fiWrap.style.marginLeft = '0';
                 fiWrap.style.marginRight = '0';
@@ -7692,6 +7821,7 @@
       var searchQuery = vs.searchQuery;
       var siteAccent = self._getSiteAccentColor();
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
+      var showcaseMobile = !isSinglePost && self._isNarrowCollectionViewport();
 
         for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
@@ -7732,11 +7862,11 @@
           }
         }
         var card = document.createElement('div');
-        card.className = 'blog-overlay-showcase-card';
+        card.className = 'blog-overlay-showcase-card' + (showcaseMobile ? ' blog-overlay-showcase-card-mobile' : '');
         card.style.display = 'grid';
         card.style.gap = '0';
-        card.style.marginTop = j === 0 ? '0' : '7.5%';
-        card.style.marginBottom = '36px';
+        card.style.marginTop = j === 0 ? '0' : (showcaseMobile ? '20px' : '7.5%');
+        card.style.marginBottom = showcaseMobile ? '20px' : '36px';
         card.style.gridTemplateColumns = '1fr';
         card.style.width = '100%';
         card.style.maxWidth = '100%';
@@ -7747,9 +7877,10 @@
         var bodyCol = document.createElement('div');
         bodyCol.style.display = 'flex';
         bodyCol.style.flexDirection = 'column';
-        bodyCol.style.justifyContent = 'center';
-        bodyCol.style.alignSelf = 'center';
-        bodyCol.style.padding = '24px 0';
+        bodyCol.style.justifyContent = showcaseMobile ? 'flex-start' : 'center';
+        bodyCol.style.alignSelf = showcaseMobile ? 'start' : 'center';
+        bodyCol.style.padding = showcaseMobile ? '10px 8px' : '24px 0';
+        bodyCol.style.minWidth = '0';
         if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
           var shFpK = displayPostKey(featuredPost);
           var shPk = displayPostKey(post);
@@ -7766,7 +7897,7 @@
             shBadge.style.textTransform = 'uppercase';
             shBadge.style.padding = '1px 6px';
             shBadge.style.borderRadius = '2px';
-            shBadge.style.marginBottom = '8px';
+            shBadge.style.marginBottom = showcaseMobile ? '4px' : '8px';
             shBadge.style.alignSelf = 'flex-start';
             shBadge.style.width = 'fit-content';
             shBadge.style.maxWidth = '100%';
@@ -7779,12 +7910,20 @@
           bodyCol.appendChild(moScTop);
         }
         var postCategoriesLineShowcase = !isSinglePost
-          ? self._createCollectionPostCategoriesLine(post, siteAccent, categoryFilterUiEnabled)
+          ? self._createCollectionPostCategoriesLine(post, siteAccent, categoryFilterUiEnabled, { compact: showcaseMobile })
           : null;
-        if (postCategoriesLineShowcase) bodyCol.appendChild(postCategoriesLineShowcase);
+        if (postCategoriesLineShowcase) {
+          if (showcaseMobile) postCategoriesLineShowcase.style.marginBottom = '4px';
+          bodyCol.appendChild(postCategoriesLineShowcase);
+        }
         var titleEl = document.createElement('h3');
         titleEl.className = 'blog-overlay-title';
-        titleEl.style.margin = '0 0 8px 0';
+        titleEl.style.margin = showcaseMobile ? '0 0 4px 0' : '0 0 8px 0';
+        if (showcaseMobile) {
+          titleEl.style.fontSize = '1.05rem';
+          titleEl.style.lineHeight = '1.25';
+          titleEl.style.fontWeight = '700';
+        }
         var titleLink = document.createElement('a');
         titleLink.href = postUrl;
         titleLink.textContent = post.title || 'Untitled';
@@ -7794,16 +7933,19 @@
         setShowcasePostAnalytics(titleLink);
         wireShowcaseNavLink(titleLink);
         titleEl.appendChild(titleLink);
-        var excerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
-        var bodyEl = document.createElement('div');
-        bodyEl.className = 'blog-overlay-body';
-        if (gatedShowcase) {
-          /* Teaser replaced by masthead row above */
-        } else if (excerptText) {
-          bodyEl.textContent = excerptText;
-          bodyEl.style.fontSize = '0.9rem';
-          bodyEl.style.color = '#666';
-          bodyEl.style.lineHeight = '1.5';
+        var excerptText = showcaseMobile ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+        var bodyEl = null;
+        if (!showcaseMobile) {
+          bodyEl = document.createElement('div');
+          bodyEl.className = 'blog-overlay-body';
+          if (gatedShowcase) {
+            /* Teaser replaced by masthead row above */
+          } else if (excerptText) {
+            bodyEl.textContent = excerptText;
+            bodyEl.style.fontSize = '0.9rem';
+            bodyEl.style.color = '#666';
+            bodyEl.style.lineHeight = '1.5';
+          }
         }
         var metaParts = [];
         if (showDate) { var ds = self._getDate(post); if (ds) metaParts.push(ds); }
@@ -7817,9 +7959,10 @@
         metaEl.style.display = 'flex';
         metaEl.style.alignItems = 'center';
         metaEl.style.marginBottom = '0';
-        metaEl.style.gap = '12px';
+        metaEl.style.gap = showcaseMobile ? '6px' : '12px';
         metaEl.style.flexWrap = 'wrap';
-        metaEl.style.fontSize = '0.85rem';
+        metaEl.style.fontSize = showcaseMobile ? '0.75rem' : '0.85rem';
+        metaEl.style.lineHeight = showcaseMobile ? '1.35' : '';
         metaEl.style.color = '#666';
         metaEl.textContent = metaParts.join(' · ');
         var readLink = document.createElement('a');
@@ -7827,9 +7970,9 @@
         readLink.className = 'blog-overlay-showcase-read-link';
         readLink.style.display = 'inline-flex';
         readLink.style.alignItems = 'center';
-        readLink.style.gap = '6px';
-        readLink.style.marginTop = '12px';
-        readLink.style.fontSize = '0.9rem';
+        readLink.style.gap = showcaseMobile ? '4px' : '6px';
+        readLink.style.marginTop = showcaseMobile ? '6px' : '12px';
+        readLink.style.fontSize = showcaseMobile ? '0.8rem' : '0.9rem';
         readLink.style.fontWeight = '600';
         readLink.style.color = siteAccent;
         readLink.style.textDecoration = 'none';
@@ -7844,8 +7987,8 @@
         readLink.appendChild(readLabel);
         var arrowNs = 'http://www.w3.org/2000/svg';
         var arrowSvg = document.createElementNS(arrowNs, 'svg');
-        arrowSvg.setAttribute('width', '16');
-        arrowSvg.setAttribute('height', '16');
+        arrowSvg.setAttribute('width', showcaseMobile ? '14' : '16');
+        arrowSvg.setAttribute('height', showcaseMobile ? '14' : '16');
         arrowSvg.setAttribute('viewBox', '0 0 24 24');
         arrowSvg.setAttribute('fill', 'none');
         arrowSvg.setAttribute('stroke', 'currentColor');
@@ -7859,7 +8002,7 @@
         arrowSvg.appendChild(arrowPath);
         readLink.appendChild(arrowSvg);
         bodyCol.appendChild(titleEl);
-        bodyCol.appendChild(bodyEl);
+        if (bodyEl) bodyCol.appendChild(bodyEl);
         bodyCol.appendChild(metaEl);
         if (gatedShowcase) {
           var scPill = self._createSubscribeToReadPillLink({ compact: true });
@@ -7874,7 +8017,7 @@
         var imgCol = document.createElement('div');
         imgCol.style.overflow = 'hidden';
         imgCol.style.borderRadius = '4px';
-        imgCol.style.aspectRatio = '3 / 2';
+        imgCol.style.aspectRatio = showcaseMobile ? '1 / 1' : '3 / 2';
         imgCol.style.width = '100%';
         imgCol.style.height = 'auto';
         imgCol.style.alignSelf = 'start';
@@ -7914,10 +8057,23 @@
           imgLink.appendChild(phEl);
         }
         imgCol.appendChild(imgLink);
-        card.style.gridTemplateColumns = imgLeft ? '58% 42%' : '42% 58%';
-        bodyCol.style.padding = '48px 56px';
-        if (imgLeft) { bodyCol.style.paddingRight = '0'; bodyCol.style.paddingLeft = '56px'; }
-        else { bodyCol.style.paddingLeft = '0'; bodyCol.style.paddingRight = '56px'; bodyCol.style.order = '1'; }
+        if (showcaseMobile) {
+          card.style.gridTemplateColumns = imgLeft ? '55% 45%' : '45% 55%';
+          bodyCol.style.padding = '10px 8px';
+          if (imgLeft) {
+            bodyCol.style.paddingLeft = '8px';
+            bodyCol.style.paddingRight = '0';
+          } else {
+            bodyCol.style.paddingLeft = '0';
+            bodyCol.style.paddingRight = '8px';
+            bodyCol.style.order = '1';
+          }
+        } else {
+          card.style.gridTemplateColumns = imgLeft ? '58% 42%' : '42% 58%';
+          bodyCol.style.padding = '48px 56px';
+          if (imgLeft) { bodyCol.style.paddingRight = '0'; bodyCol.style.paddingLeft = '56px'; }
+          else { bodyCol.style.paddingLeft = '0'; bodyCol.style.paddingRight = '56px'; bodyCol.style.order = '1'; }
+        }
         card.insertBefore(imgCol, bodyCol);
         card.onmouseover = function() { showcaseHoverTarget.style.transform = 'scale(1.03)'; };
         card.onmouseout = function() { showcaseHoverTarget.style.transform = 'scale(1)'; };
@@ -7976,14 +8132,15 @@
       var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
       if (collectionLayout === 'grid' || collectionLayout === 'digest') {
         mainEl.style.display = 'grid';
-        var gridColsForShell = collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid;
-        mainEl.style.gridTemplateColumns = 'repeat(' + gridColsForShell + ', 1fr)';
-        mainEl.style.gap = '24px';
-        mainEl.style.width = '';
-        mainEl.style.maxWidth = '';
+        mainEl.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
+        mainEl.style.gap = (vs.collectionMobileGridNarrow ? '16px' : '24px');
+        mainEl.style.width = '100%';
+        mainEl.style.maxWidth = '100%';
+        mainEl.style.minWidth = '0';
+        mainEl.style.boxSizing = 'border-box';
+        mainEl.style.overflow = vs.collectionMobileGridNarrow ? 'hidden' : '';
         mainEl.style.marginLeft = '';
         mainEl.style.marginRight = '';
-        mainEl.style.boxSizing = '';
       } else {
         mainEl.style.display = 'flex';
         mainEl.style.flexDirection = 'column';
@@ -8211,6 +8368,8 @@
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
       var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
       var gridMobileNarrow = Boolean(vs.gridMobileNarrow);
+      var digestMobileNarrow = Boolean(vs.digestMobileNarrow);
+      var collectionMobileGridNarrow = Boolean(vs.collectionMobileGridNarrow) || gridMobileNarrow || digestMobileNarrow;
       var featuredPost = vs.featuredPost;
       var displayItemsForLoop = vs.displayItemsForLoop;
       var displayPostKey = vs.displayPostKey;
@@ -8229,6 +8388,10 @@
       wrapper.style.padding = wrapperPadTop + 'px ' + sitePadR + 'px 16px ' + sitePadL + 'px';
       wrapper.style.margin = '16px 0';
       wrapper.style.boxSizing = 'border-box';
+      if (collectionMobileGridNarrow) {
+        wrapper.style.overflowX = 'hidden';
+        wrapper.style.maxWidth = '100%';
+      }
       /*
        * Cold load: build off-document, commit once at the end (#8).
        * SPA / follow-up re-renders (body already visible): commit the shell
@@ -8314,9 +8477,13 @@
         main.style.gridTemplateColumns = '';
       } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
         main.style.display = 'grid';
-        var gridColsForMain = collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid;
-        main.style.gridTemplateColumns = 'repeat(' + gridColsForMain + ', 1fr)';
-        main.style.gap = gridMobileNarrow && collectionLayout === 'grid' ? '16px' : '24px';
+        main.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
+        main.style.gap = collectionMobileGridNarrow ? '16px' : '24px';
+        main.style.width = '100%';
+        main.style.maxWidth = '100%';
+        main.style.minWidth = '0';
+        main.style.boxSizing = 'border-box';
+        main.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
       } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
@@ -8352,10 +8519,10 @@
         headerModulesHostEl.className = 'blog-overlay-header-modules-host';
         headerModulesHostEl.style.marginTop = '0';
         headerModulesHostEl.style.display = 'flex';
-        headerModulesHostEl.style.flexDirection = 'row';
-        headerModulesHostEl.style.flexWrap = 'wrap';
-        headerModulesHostEl.style.alignItems = 'center';
-        headerModulesHostEl.style.gap = '12px 16px';
+        headerModulesHostEl.style.flexDirection = self._isNarrowCollectionViewport() ? 'column' : 'row';
+        headerModulesHostEl.style.flexWrap = self._isNarrowCollectionViewport() ? 'nowrap' : 'wrap';
+        headerModulesHostEl.style.alignItems = self._isNarrowCollectionViewport() ? 'stretch' : 'center';
+        headerModulesHostEl.style.gap = self._isNarrowCollectionViewport() ? '10px' : '12px 16px';
         headerModulesHostEl.style.width = '100%';
         headerModulesHostEl.style.maxWidth = '100%';
         headerModulesHostEl.style.boxSizing = 'border-box';
@@ -8628,9 +8795,9 @@
         var header = document.createElement('div');
         header.textContent = headerText;
         header.style.fontSize = '0.7rem';
-        header.style.fontWeight = '600';
+        header.style.fontWeight = '700';
         header.style.letterSpacing = '0.08em';
-        header.style.color = '#6b6b6b';
+        header.style.color = '#111';
         if (styled) {
           header.style.fontVariant = 'small-caps';
           header.style.textTransform = 'none';
@@ -8638,14 +8805,10 @@
           header.style.textTransform = 'uppercase';
         }
         header.style.marginBottom = '8px';
-        if (headerText === 'Topics' || headerText === 'Tags') {
-          header.style.fontWeight = '700';
-          header.style.color = '#111';
-        }
         section.appendChild(header);
         var bar = document.createElement('div');
-        bar.style.height = (headerText === 'Topics' || headerText === 'Tags') ? '2px' : '1px';
-        bar.style.background = (headerText === 'Topics' || headerText === 'Tags') ? '#111' : '#e5e4e0';
+        bar.style.height = '2px';
+        bar.style.background = '#111';
         bar.style.marginBottom = '12px';
         section.appendChild(bar);
         section.appendChild(content);
@@ -9860,6 +10023,7 @@
             edAboveTitle.style.flexDirection = 'column';
             edAboveTitle.style.gap = '5px';
             edAboveTitle.style.boxSizing = 'border-box';
+            edAboveTitle.style.alignSelf = 'start';
             if (edCategoriesLine) {
               edCategoriesLine.style.marginBottom = '0';
               edAboveTitle.appendChild(edCategoriesLine);
@@ -9870,24 +10034,34 @@
               edAboveTitle.appendChild(edMoPair);
             }
 
-            title.style.gridRow = '3';
-            title.style.zIndex = '2';
             title.style.margin = '0';
-            title.style.padding = '0 18px';
-            title.style.boxSizing = 'border-box';
+            title.style.padding = '0';
+            meta.style.margin = '0';
+            meta.style.padding = '0';
+            meta.style.lineHeight = '1.35';
 
-            meta.style.gridRow = '4';
-            meta.style.zIndex = '2';
-            meta.style.marginTop = '5px';
-            meta.style.padding = '0 18px 16px';
-            meta.style.boxSizing = 'border-box';
+            var edTitleBlock = document.createElement('div');
+            edTitleBlock.className = 'blog-overlay-editorial-card-title-block';
+            edTitleBlock.style.gridRow = '3';
+            edTitleBlock.style.zIndex = '2';
+            edTitleBlock.style.display = 'flex';
+            edTitleBlock.style.flexDirection = 'column';
+            edTitleBlock.style.alignItems = 'flex-start';
+            edTitleBlock.style.alignSelf = 'start';
+            edTitleBlock.style.justifyContent = 'flex-start';
+            edTitleBlock.style.gap = '5px';
+            edTitleBlock.style.padding = '0 18px 16px';
+            edTitleBlock.style.boxSizing = 'border-box';
+            edTitleBlock.style.width = '100%';
+            edTitleBlock.style.minHeight = '0';
+            edTitleBlock.appendChild(title);
+            edTitleBlock.appendChild(meta);
 
             link.appendChild(bg);
             link.appendChild(overlay);
             link.appendChild(edSpacer);
             link.appendChild(edAboveTitle);
-            link.appendChild(title);
-            link.appendChild(meta);
+            link.appendChild(edTitleBlock);
           } else {
             var content = document.createElement('div');
             content.style.position = 'absolute';
@@ -9946,8 +10120,8 @@
               pi += 1;
               edRow.appendChild(makeEditorialCard(pSingle, true));
             } else {
-              /* Subgrid rows: image fill, optional badges, shared title baseline, meta below title. */
-              edRow.style.gridTemplateRows = 'minmax(0, 1fr) auto auto auto';
+              /* Subgrid rows: image fill, optional badges, title+meta stack (titles align; meta wraps naturally). */
+              edRow.style.gridTemplateRows = 'minmax(0, 1fr) auto auto';
               edRow.style.gridTemplateColumns = '1fr 1fr';
               var pFirst = posts[pi];
               pi += 1;
@@ -10204,13 +10378,43 @@
                 hcModules = self._canonicalCollectionHeaderModuleOrder(hcModules);
               }
               var collectionHeaderUtilityStarted = false;
+              var headerMobile = collectionHeaderRow && self._isNarrowCollectionViewport();
+              var headerFilterRow = null;
+              var headerUtilityRow = null;
+              if (headerMobile) {
+                headerFilterRow = document.createElement('div');
+                headerFilterRow.className = 'blog-overlay-header-filter-row';
+                headerFilterRow.style.display = 'flex';
+                headerFilterRow.style.flexWrap = 'wrap';
+                headerFilterRow.style.alignItems = 'center';
+                headerFilterRow.style.gap = '8px 10px';
+                headerFilterRow.style.width = '100%';
+                headerFilterRow.style.boxSizing = 'border-box';
+                headerUtilityRow = document.createElement('div');
+                headerUtilityRow.className = 'blog-overlay-header-utility-row';
+                headerUtilityRow.style.display = 'flex';
+                headerUtilityRow.style.alignItems = 'center';
+                headerUtilityRow.style.justifyContent = 'space-between';
+                headerUtilityRow.style.gap = '10px';
+                headerUtilityRow.style.width = '100%';
+                headerUtilityRow.style.boxSizing = 'border-box';
+              }
               if (collectionHeaderRow) {
-                headerEl.style.flexDirection = 'row';
-                headerEl.style.flexWrap = 'wrap';
-                headerEl.style.alignItems = 'center';
-                headerEl.style.alignContent = 'center';
-                headerEl.style.justifyContent = 'flex-start';
-                headerEl.style.gap = '12px 16px';
+                if (headerMobile) {
+                  headerEl.style.flexDirection = 'column';
+                  headerEl.style.flexWrap = 'nowrap';
+                  headerEl.style.alignItems = 'stretch';
+                  headerEl.style.alignContent = 'stretch';
+                  headerEl.style.justifyContent = 'flex-start';
+                  headerEl.style.gap = '10px';
+                } else {
+                  headerEl.style.flexDirection = 'row';
+                  headerEl.style.flexWrap = 'wrap';
+                  headerEl.style.alignItems = 'center';
+                  headerEl.style.alignContent = 'center';
+                  headerEl.style.justifyContent = 'flex-start';
+                  headerEl.style.gap = '12px 16px';
+                }
                 headerEl.style.width = '100%';
                 headerEl.style.maxWidth = '100%';
                 headerEl.style.boxSizing = 'border-box';
@@ -10341,101 +10545,100 @@
                 } else if (mod === 'tableOfContents' && self._isTocDebugEnabled()) {
                   self._tocDebug('header tableOfContents skipped', { reason: 'items.length === 0' });
                 } else if (mod === 'postSearch' || mod === 'searchPosts') {
-                  var searchWrap = document.createElement('div');
-                  if (collectionHeaderRow) {
-                    if (!collectionHeaderUtilityStarted) {
-                      collectionHeaderUtilityStarted = true;
-                      searchWrap.style.marginLeft = 'auto';
+                  var searchWrap = self._createCollectionHeaderSearchControl(siteAccentUi, { mobile: headerMobile });
+                  if (!headerMobile) {
+                    if (collectionHeaderRow) {
+                      if (!collectionHeaderUtilityStarted) {
+                        collectionHeaderUtilityStarted = true;
+                        searchWrap.style.marginLeft = 'auto';
+                      }
+                    } else {
+                      searchWrap.style.width = '100%';
+                      searchWrap.style.maxWidth = '320px';
+                      searchWrap.style.flex = '';
+                      searchWrap.style.minWidth = '';
                     }
-                    searchWrap.style.flex = '0 1 280px';
-                    searchWrap.style.width = 'auto';
-                    searchWrap.style.minWidth = '160px';
-                    searchWrap.style.maxWidth = '320px';
-                  } else {
-                    searchWrap.style.width = '100%';
-                    searchWrap.style.maxWidth = '320px';
                   }
-                  var searchInput = document.createElement('input');
-                  searchInput.type = 'text';
-                  searchInput.placeholder = 'Search posts…';
-                  searchInput.setAttribute('aria-label', 'Search posts');
-                  searchInput.value = this._searchQuery || '';
-                  searchInput.style.width = '100%';
-                  searchInput.style.padding = '8px 12px';
-                  searchInput.style.fontSize = '0.9rem';
-                  searchInput.style.border = '1px solid #ddd';
-                  searchInput.style.borderRadius = '6px';
-                  searchInput.style.outline = 'none';
-                  searchInput.style.boxSizing = 'border-box';
-                  searchInput.onfocus = function() {
-                    searchInput.style.borderColor = siteAccentUi;
-                    searchInput.style.boxShadow = '0 0 0 2px color-mix(in srgb, ' + siteAccentUi + ' 22%, transparent)';
-                  };
-                  searchInput.onblur = function() { searchInput.style.borderColor = '#ddd'; searchInput.style.boxShadow = ''; };
-                  searchInput.oninput = function() {
-                    self._searchQuery = searchInput.value;
-                    self._scheduleSearchDrivenRender();
-                  };
-                  searchInput.onkeydown = function(e) {
-                    if (e.key === 'Escape') {
-                      self._clearPendingSearchRender();
-                      searchInput.value = '';
-                      self._searchQuery = '';
-                      self._currentPage = 1;
-                      self._renderContent(self.items);
-                      searchInput.blur();
-                    }
-                  };
-                  searchInput.className = 'blog-overlay-search-input';
-                  searchWrap.appendChild(searchInput);
-                  headerEl.appendChild(searchWrap);
+                  if (headerMobile && headerUtilityRow) headerUtilityRow.appendChild(searchWrap);
+                  else headerEl.appendChild(searchWrap);
                 } else if (mod === 'filterByCategory') {
                   var catMod = self._createFilterByCategoryModule(items, null, false, 'header');
                   if (catMod) {
-                    if (collectionHeaderRow) {
-                      catMod.style.flex = '1 1 200px';
-                      catMod.style.width = 'auto';
-                      catMod.style.minWidth = '140px';
-                      catMod.style.maxWidth = '100%';
-                    } else {
+                    if (headerMobile && headerFilterRow) {
+                      catMod.style.flex = '1 1 100%';
                       catMod.style.width = '100%';
                       catMod.style.minWidth = '0';
+                      catMod.style.maxWidth = '100%';
+                      headerFilterRow.appendChild(catMod);
+                    } else {
+                      if (collectionHeaderRow) {
+                        catMod.style.flex = '1 1 200px';
+                        catMod.style.width = 'auto';
+                        catMod.style.minWidth = '140px';
+                        catMod.style.maxWidth = '100%';
+                      } else {
+                        catMod.style.width = '100%';
+                        catMod.style.minWidth = '0';
+                      }
+                      headerEl.appendChild(catMod);
                     }
-                    headerEl.appendChild(catMod);
                   }
                 } else if (mod === 'filterByTag') {
                   var tagMod = self._createFilterByTagModule(items, null, false, 'header');
                   if (tagMod) {
-                    if (collectionHeaderRow) {
-                      tagMod.style.flex = '1 1 200px';
-                      tagMod.style.width = 'auto';
-                      tagMod.style.minWidth = '140px';
-                      tagMod.style.maxWidth = '100%';
-                    } else {
+                    if (headerMobile && headerFilterRow) {
+                      tagMod.style.flex = '1 1 100%';
                       tagMod.style.width = '100%';
                       tagMod.style.minWidth = '0';
+                      tagMod.style.maxWidth = '100%';
+                      headerFilterRow.appendChild(tagMod);
+                    } else {
+                      if (collectionHeaderRow) {
+                        tagMod.style.flex = '1 1 200px';
+                        tagMod.style.width = 'auto';
+                        tagMod.style.minWidth = '140px';
+                        tagMod.style.maxWidth = '100%';
+                      } else {
+                        tagMod.style.width = '100%';
+                        tagMod.style.minWidth = '0';
+                      }
+                      headerEl.appendChild(tagMod);
                     }
-                    headerEl.appendChild(tagMod);
                   }
                 } else if (mod === 'filterByTagsAndCategories') {
                   var combinedMod = self._createFilterByTagsAndCategoriesModule(items, null, false, 'header');
                   if (combinedMod) {
-                    if (collectionHeaderRow) {
-                      combinedMod.style.flex = '1 1 240px';
-                      combinedMod.style.width = 'auto';
-                      combinedMod.style.minWidth = '160px';
-                      combinedMod.style.maxWidth = '100%';
-                    } else {
+                    if (headerMobile && headerFilterRow) {
+                      combinedMod.style.flex = '1 1 100%';
                       combinedMod.style.width = '100%';
                       combinedMod.style.minWidth = '0';
+                      combinedMod.style.maxWidth = '100%';
+                      headerFilterRow.appendChild(combinedMod);
+                    } else {
+                      if (collectionHeaderRow) {
+                        combinedMod.style.flex = '1 1 240px';
+                        combinedMod.style.width = 'auto';
+                        combinedMod.style.minWidth = '160px';
+                        combinedMod.style.maxWidth = '100%';
+                      } else {
+                        combinedMod.style.width = '100%';
+                        combinedMod.style.minWidth = '0';
+                      }
+                      headerEl.appendChild(combinedMod);
                     }
-                    headerEl.appendChild(combinedMod);
                   }
                 } else if (mod === 'postSort') {
-                  var sortMod = self._createPostSortModule(cfg, 200, true);
+                  var sortMod = self._createPostSortModule(cfg, headerMobile ? 148 : 200, true);
                   if (sortMod) {
                     sortMod.style.display = 'inline-block';
-                    if (collectionHeaderRow) {
+                    if (headerMobile) {
+                      sortMod.style.flex = '0 0 auto';
+                      sortMod.style.width = 'auto';
+                      sortMod.style.marginLeft = '0';
+                      sortMod.style.marginRight = '0';
+                      var sortSelect = sortMod.querySelector('select');
+                      if (sortSelect) sortSelect.style.width = 'auto';
+                    } else if (collectionHeaderRow) {
                       if (!collectionHeaderUtilityStarted) {
                         collectionHeaderUtilityStarted = true;
                         sortMod.style.marginLeft = 'auto';
@@ -10447,7 +10650,8 @@
                     } else {
                       sortMod.style.marginRight = '16px';
                     }
-                    headerEl.appendChild(sortMod);
+                    if (headerMobile && headerUtilityRow) headerUtilityRow.appendChild(sortMod);
+                    else headerEl.appendChild(sortMod);
                   }
                 } else if (!collectionHeaderRow && mod === 'emailCapture' && ecCfg) {
                   var ecHeaderForm = createEmailCaptureForm(ecCfg, 280);
@@ -10463,6 +10667,14 @@
                     lmHeaderForm.style.minWidth = '200px';
                     headerEl.appendChild(lmHeaderForm);
                   }
+                }
+              }
+              if (headerMobile) {
+                if (headerFilterRow && headerFilterRow.childNodes.length > 0) {
+                  headerEl.appendChild(headerFilterRow);
+                }
+                if (headerUtilityRow && headerUtilityRow.childNodes.length > 0) {
+                  headerEl.appendChild(headerUtilityRow);
                 }
               }
               if (headerEl.childNodes.length > 0) {
@@ -10618,7 +10830,7 @@
           }
 
           if (!isSinglePost) {
-            this._lastCollectionShellKey = collectionLayout + '|' + (collectionLayout === 'grid' ? gridColsEffective : gridColsDigestOrGrid);
+            this._lastCollectionShellKey = collectionLayout + '|' + gridColsEffective;
           } else {
             this._lastCollectionShellKey = '';
           }
