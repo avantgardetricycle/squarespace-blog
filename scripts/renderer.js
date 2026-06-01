@@ -6167,6 +6167,45 @@
       }
     },
 
+    /**
+     * After layout: extend el to the viewport left/right edges using measured gaps.
+     * @param {Element} el - element to widen
+     * @param {Element} [refEl] - box to measure (defaults to el)
+     * @returns {boolean} true when bleed styles were applied
+     */
+    _applyMeasuredViewportHorizontalBleed: function(el, refEl) {
+      if (!el || !el.style || typeof window === 'undefined') return false;
+      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+      if (!vw) return false;
+      var ref = refEl && refEl.getBoundingClientRect ? refEl : el;
+      var rect;
+      try { rect = ref.getBoundingClientRect(); } catch (eRect) { return false; }
+      if (!rect) return false;
+      var leftGap = Math.max(0, Math.round(rect.left));
+      var rightGap = Math.max(0, Math.round(vw - rect.right));
+      if (leftGap < 1 && rightGap < 1) return false;
+      el.style.width = 'calc(100% + ' + (leftGap + rightGap) + 'px)';
+      el.style.maxWidth = 'none';
+      el.style.marginLeft = (-leftGap) + 'px';
+      el.style.marginRight = (-rightGap) + 'px';
+      el.style.boxSizing = 'border-box';
+      return true;
+    },
+
+    /** Digest mobile featured hero: measure and bleed to viewport after the overlay is in the DOM. */
+    _syncDigestMobileFeaturedImageBleed: function(wrapper) {
+      if (!wrapper || !wrapper.querySelector) return;
+      var imgs = wrapper.querySelectorAll('.blog-overlay-digest-featured-article .blog-overlay-featured-image[data-digest-viewport-bleed]');
+      for (var i = 0; i < imgs.length; i++) {
+        var fiWrap = imgs[i];
+        fiWrap.style.width = '';
+        fiWrap.style.maxWidth = '';
+        fiWrap.style.marginLeft = '';
+        fiWrap.style.marginRight = '';
+        this._applyMeasuredViewportHorizontalBleed(fiWrap, fiWrap);
+      }
+    },
+
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
     _isNarrowCollectionViewport: function() {
       try {
@@ -7229,7 +7268,7 @@
             fiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
             if (!isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
               if (digestMobileFullBleed && isFeaturedInLayout) {
-                self._applyOverlayHorizontalBleed(fiWrap);
+                fiWrap.setAttribute('data-digest-viewport-bleed', '1');
                 fiWrap.style.marginTop = '0';
               } else {
                 fiWrap.style.marginLeft = '0';
@@ -8207,7 +8246,7 @@
         mainEl.style.maxWidth = '100%';
         mainEl.style.minWidth = '0';
         mainEl.style.boxSizing = 'border-box';
-        mainEl.style.overflow = vs.collectionMobileGridNarrow ? 'hidden' : '';
+        mainEl.style.overflow = (vs.collectionMobileGridNarrow && collectionLayout === 'digest') ? 'visible' : (vs.collectionMobileGridNarrow ? 'hidden' : '');
         mainEl.style.marginLeft = '';
         mainEl.style.marginRight = '';
       } else {
@@ -8266,6 +8305,23 @@
       if (typeof self._blogOverlaySidebarLayoutFn === 'function') {
         requestAnimationFrame(function() {
           self._blogOverlaySidebarLayoutFn();
+        });
+      }
+      if (
+        collectionLayout === 'digest' &&
+        vs.digestMobileNarrow &&
+        vs.featuredPost &&
+        vs.faCfg &&
+        vs.faCfg.show &&
+        vs.faCfg.position === 'inLayout'
+      ) {
+        var wrapperForBleed = document.getElementById('blog-overlay-list');
+        var digestBleedSeq = self._renderSeq;
+        requestAnimationFrame(function() {
+          requestAnimationFrame(function() {
+            if (self._renderSeq !== digestBleedSeq || !wrapperForBleed) return;
+            self._syncDigestMobileFeaturedImageBleed(wrapperForBleed);
+          });
         });
       }
       return true;
@@ -8458,8 +8514,12 @@
       wrapper.style.margin = '16px 0';
       wrapper.style.boxSizing = 'border-box';
       if (collectionMobileGridNarrow) {
-        wrapper.style.overflowX = 'hidden';
         wrapper.style.maxWidth = '100%';
+        if (collectionLayout === 'digest') {
+          wrapper.style.overflowX = 'visible';
+        } else {
+          wrapper.style.overflowX = 'hidden';
+        }
       }
       /*
        * Cold load: build off-document, commit once at the end (#8).
@@ -8552,7 +8612,7 @@
         main.style.maxWidth = '100%';
         main.style.minWidth = '0';
         main.style.boxSizing = 'border-box';
-        main.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
+        main.style.overflow = (collectionMobileGridNarrow && collectionLayout === 'digest') ? 'visible' : (collectionMobileGridNarrow ? 'hidden' : '');
       } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
@@ -10913,6 +10973,24 @@
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
           if (deferOverlayCommit) {
             root.prepend(overlayFragment);
+          }
+
+          if (
+            !isSinglePost &&
+            collectionLayout === 'digest' &&
+            digestMobileNarrow &&
+            featuredPost &&
+            faCfg &&
+            faCfg.show &&
+            faCfg.position === 'inLayout'
+          ) {
+            var digestBleedRenderSeq = self._renderSeq;
+            requestAnimationFrame(function() {
+              requestAnimationFrame(function() {
+                if (self._renderSeq !== digestBleedRenderSeq) return;
+                self._syncDigestMobileFeaturedImageBleed(wrapper);
+              });
+            });
           }
 
           if (!isSinglePost) {
