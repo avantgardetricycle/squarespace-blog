@@ -4852,22 +4852,41 @@
       var searchWrap = document.createElement('div');
       searchWrap.className = 'blog-overlay-header-search' + (mobile ? ' blog-overlay-header-search-mobile' : '');
 
-      function wireSearchInput(searchInput) {
+      var inputBorderColor = '#e8e7e4';
+
+      function wireSearchInput(searchInput, inputOpts) {
+        inputOpts = inputOpts && typeof inputOpts === 'object' ? inputOpts : {};
+        var embeddedInField = inputOpts.embeddedInField === true;
         searchInput.type = 'text';
         searchInput.placeholder = 'Search posts…';
         searchInput.setAttribute('aria-label', 'Search posts');
         searchInput.value = self._searchQuery || '';
-        searchInput.style.padding = '8px 12px';
+        searchInput.style.padding = embeddedInField ? '8px 12px 8px 0' : '8px 12px';
         searchInput.style.fontSize = '0.9rem';
-        searchInput.style.border = '1px solid #ddd';
-        searchInput.style.borderRadius = '6px';
+        searchInput.style.border = embeddedInField ? 'none' : ('1px solid ' + inputBorderColor);
+        searchInput.style.borderRadius = embeddedInField ? '0' : '6px';
         searchInput.style.outline = 'none';
         searchInput.style.boxSizing = 'border-box';
+        searchInput.style.background = embeddedInField ? 'transparent' : '#fff';
+        searchInput.style.color = 'inherit';
         searchInput.onfocus = function() {
+          if (embeddedInField && inputOpts.fieldEl) {
+            inputOpts.fieldEl.style.borderColor = accent;
+            inputOpts.fieldEl.style.boxShadow = '0 0 0 2px color-mix(in srgb, ' + accent + ' 22%, transparent)';
+            return;
+          }
           searchInput.style.borderColor = accent;
           searchInput.style.boxShadow = '0 0 0 2px color-mix(in srgb, ' + accent + ' 22%, transparent)';
         };
-        searchInput.onblur = function() { searchInput.style.borderColor = '#ddd'; searchInput.style.boxShadow = ''; };
+        searchInput.onblur = function() {
+          if (embeddedInField && inputOpts.fieldEl) {
+            inputOpts.fieldEl.style.borderColor = inputBorderColor;
+            inputOpts.fieldEl.style.boxShadow = '';
+            return;
+          }
+          searchInput.style.borderColor = inputBorderColor;
+          searchInput.style.boxShadow = '';
+        };
         searchInput.oninput = function() {
           self._searchQuery = searchInput.value;
           self._scheduleSearchDrivenRender();
@@ -4887,12 +4906,22 @@
       }
 
       if (mobile) {
+        var mobileFieldHeight = '38px';
         searchWrap.style.display = 'flex';
         searchWrap.style.alignItems = 'center';
         searchWrap.style.justifyContent = 'flex-start';
-        searchWrap.style.flex = '1 1 auto';
+        searchWrap.style.flex = self._headerSearchExpanded ? '1 1 auto' : '0 0 auto';
         searchWrap.style.minWidth = '0';
-        searchWrap.style.gap = '8px';
+
+        var searchField = document.createElement('div');
+        searchField.className = 'blog-overlay-header-search-field';
+        searchField.style.display = 'inline-flex';
+        searchField.style.alignItems = 'center';
+        searchField.style.boxSizing = 'border-box';
+        searchField.style.minHeight = mobileFieldHeight;
+        searchField.style.borderRadius = '6px';
+        searchField.style.overflow = 'hidden';
+        searchField.style.transition = 'border-color 0.15s ease, flex 0.2s ease, max-width 0.2s ease, opacity 0.15s ease';
 
         var searchBtn = document.createElement('button');
         searchBtn.type = 'button';
@@ -4901,58 +4930,64 @@
         searchBtn.style.display = 'inline-flex';
         searchBtn.style.alignItems = 'center';
         searchBtn.style.justifyContent = 'center';
-        searchBtn.style.width = '36px';
-        searchBtn.style.height = '36px';
+        searchBtn.style.width = mobileFieldHeight;
+        searchBtn.style.height = mobileFieldHeight;
         searchBtn.style.padding = '0';
-        searchBtn.style.border = '1px solid #ddd';
-        searchBtn.style.borderRadius = '6px';
-        searchBtn.style.background = '#fff';
+        searchBtn.style.border = 'none';
+        searchBtn.style.borderRadius = '0';
+        searchBtn.style.background = 'transparent';
         searchBtn.style.color = '#555';
         searchBtn.style.cursor = 'pointer';
         searchBtn.style.flexShrink = '0';
         searchBtn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>';
 
-        var searchInputShell = document.createElement('div');
-        searchInputShell.className = 'blog-overlay-header-search-input-shell';
-        searchInputShell.style.flex = self._headerSearchExpanded ? '1 1 auto' : '0 0 0';
-        searchInputShell.style.minWidth = '0';
-        searchInputShell.style.maxWidth = self._headerSearchExpanded ? '100%' : '0';
-        searchInputShell.style.width = self._headerSearchExpanded ? 'auto' : '0';
-        searchInputShell.style.opacity = self._headerSearchExpanded ? '1' : '0';
-        searchInputShell.style.overflow = 'hidden';
-        searchInputShell.style.transition = 'max-width 0.2s ease, opacity 0.15s ease';
-
         var searchInput = document.createElement('input');
-        wireSearchInput(searchInput);
-        searchInput.style.width = '100%';
-        searchInputShell.appendChild(searchInput);
+        wireSearchInput(searchInput, { embeddedInField: true, fieldEl: searchField });
+        searchInput.style.minWidth = '0';
+        searchInput.style.transition = 'max-width 0.2s ease, opacity 0.15s ease, padding 0.15s ease';
 
         function setSearchExpanded(expanded, focusInput) {
           self._headerSearchExpanded = expanded;
           searchBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
           if (expanded) {
-            searchInputShell.style.flex = '1 1 auto';
-            searchInputShell.style.width = 'auto';
-            searchInputShell.style.maxWidth = '100%';
-            searchInputShell.style.opacity = '1';
+            searchWrap.style.flex = '1 1 auto';
+            searchField.style.flex = '1 1 auto';
+            searchField.style.width = 'auto';
+            searchField.style.maxWidth = '100%';
+            searchField.style.border = '1px solid ' + inputBorderColor;
+            searchField.style.background = '#fff';
+            searchInput.style.flex = '1 1 auto';
+            searchInput.style.width = '100%';
+            searchInput.style.maxWidth = '100%';
+            searchInput.style.opacity = '1';
+            searchInput.style.padding = '8px 12px 8px 0';
             if (focusInput) {
               try { searchInput.focus(); } catch (eFocus) {}
             }
           } else {
-            searchInputShell.style.flex = '0 0 0';
-            searchInputShell.style.width = '0';
-            searchInputShell.style.maxWidth = '0';
-            searchInputShell.style.opacity = '0';
+            searchWrap.style.flex = '0 0 auto';
+            searchField.style.flex = '0 0 auto';
+            searchField.style.width = 'auto';
+            searchField.style.maxWidth = 'none';
+            searchField.style.border = 'none';
+            searchField.style.background = 'transparent';
+            searchField.style.boxShadow = '';
+            searchInput.style.flex = '0 0 0';
+            searchInput.style.width = '0';
+            searchInput.style.maxWidth = '0';
+            searchInput.style.opacity = '0';
+            searchInput.style.padding = '0';
           }
         }
+
+        searchField.appendChild(searchBtn);
+        searchField.appendChild(searchInput);
+        searchWrap.appendChild(searchField);
 
         setSearchExpanded(Boolean(self._headerSearchExpanded), Boolean(self._headerSearchExpanded));
         searchBtn.onclick = function() {
           setSearchExpanded(!self._headerSearchExpanded, true);
         };
-
-        searchWrap.appendChild(searchBtn);
-        searchWrap.appendChild(searchInputShell);
       } else {
         searchWrap.style.flex = '0 1 280px';
         searchWrap.style.width = 'auto';
@@ -7877,8 +7912,8 @@
         var bodyCol = document.createElement('div');
         bodyCol.style.display = 'flex';
         bodyCol.style.flexDirection = 'column';
-        bodyCol.style.justifyContent = showcaseMobile ? 'flex-start' : 'center';
-        bodyCol.style.alignSelf = showcaseMobile ? 'start' : 'center';
+        bodyCol.style.justifyContent = 'center';
+        bodyCol.style.alignSelf = 'center';
         bodyCol.style.padding = showcaseMobile ? '10px 8px' : '24px 0';
         bodyCol.style.minWidth = '0';
         if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
@@ -8013,14 +8048,14 @@
         bodyCol.appendChild(readLink);
         card.appendChild(bodyCol);
         var showcaseHasImage = imgUrlValid && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
-        card.style.alignItems = 'start';
+        card.style.alignItems = 'center';
         var imgCol = document.createElement('div');
         imgCol.style.overflow = 'hidden';
         imgCol.style.borderRadius = '4px';
         imgCol.style.aspectRatio = showcaseMobile ? '1 / 1' : '3 / 2';
         imgCol.style.width = '100%';
         imgCol.style.height = 'auto';
-        imgCol.style.alignSelf = 'start';
+        imgCol.style.alignSelf = 'center';
         imgCol.style.minWidth = '0';
         if (!imgLeft) imgCol.style.order = '2';
         var imgLink = document.createElement('a');
@@ -10637,7 +10672,24 @@
                       sortMod.style.marginLeft = '0';
                       sortMod.style.marginRight = '0';
                       var sortSelect = sortMod.querySelector('select');
-                      if (sortSelect) sortSelect.style.width = 'auto';
+                      if (sortSelect) {
+                        sortSelect.style.width = 'auto';
+                        sortSelect.style.minWidth = '108px';
+                        sortSelect.style.height = '38px';
+                        sortSelect.style.minHeight = '38px';
+                        sortSelect.style.padding = '8px 28px 8px 12px';
+                        sortSelect.style.fontSize = '0.9rem';
+                        sortSelect.style.lineHeight = '1.25';
+                        sortSelect.style.color = '#111';
+                        sortSelect.style.webkitTextFillColor = '#111';
+                        sortSelect.style.border = '1px solid #e8e7e4';
+                        sortSelect.style.borderRadius = '6px';
+                        sortSelect.style.background = '#fff';
+                        sortSelect.style.boxSizing = 'border-box';
+                        sortSelect.style.cursor = 'pointer';
+                        sortSelect.style.appearance = 'none';
+                        sortSelect.style.webkitAppearance = 'none';
+                      }
                     } else if (collectionHeaderRow) {
                       if (!collectionHeaderUtilityStarted) {
                         collectionHeaderUtilityStarted = true;
