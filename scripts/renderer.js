@@ -5839,6 +5839,38 @@
       return 0;
     },
 
+    /** Sticky sidebar pin: a few px below the fixed nav bar, not the full document header block. */
+    _getSidebarStickyTopPx: function() {
+      if (typeof window === 'undefined' || !document || !window.getComputedStyle) {
+        return 8;
+      }
+      var best = 0;
+      var selectors = [
+        '.header-display',
+        '.header-inner',
+        '#header .header-inner',
+        '[data-section-type="header"] .header-inner',
+        '#header',
+        'header'
+      ];
+      for (var i = 0; i < selectors.length; i++) {
+        try {
+          var el = document.querySelector(selectors[i]);
+          if (!el) continue;
+          var cs = window.getComputedStyle(el);
+          var pos = cs && cs.position ? cs.position : '';
+          if (pos !== 'fixed' && pos !== 'sticky') continue;
+          var rect = el.getBoundingClientRect();
+          var h = Math.round(rect.height || el.offsetHeight || 0);
+          if (h > 0 && h < 220) best = Math.max(best, h);
+        } catch (e) { /* ignore */ }
+      }
+      if (best > 0) return best + 8;
+      var nav = this._getNavbarOffset();
+      if (nav > 0) return Math.min(nav, 80) + 8;
+      return 8;
+    },
+
     _getScrollContainer: function() {
       var root = this._root;
       if (!root) return null;
@@ -10411,8 +10443,8 @@
           var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
-          var stickySidebarTopPx = navbarOffset + 12;
-          var stickySidebarPadTop = 8;
+          var stickySidebarTopPx = self._getSidebarStickyTopPx();
+          var stickySidebarPadTop = 0;
           var postHeaderCfgForRails = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
           var leftPadTop = leftSpaceAbove;
           var rightPadTop = rightSpaceAbove;
@@ -10997,7 +11029,18 @@
           }
 
           if (headerZoneEl && headerZoneEl.childNodes.length) wrapper.appendChild(headerZoneEl);
-          if (singlePostHeaderZoneEl && singlePostHeaderZoneEl.childNodes.length) wrapper.appendChild(singlePostHeaderZoneEl);
+          var pinPostHeaderInMainColumn = isSinglePost &&
+            singlePostHeaderZoneEl &&
+            singlePostHeaderZoneEl.childNodes.length > 0 &&
+            (leftSidebarEl.childNodes.length > 0 || rightSidebarEl.childNodes.length > 0);
+          if (singlePostHeaderZoneEl && singlePostHeaderZoneEl.childNodes.length) {
+            if (pinPostHeaderInMainColumn) {
+              singlePostHeaderZoneEl.style.paddingTop = '0';
+              main.insertBefore(singlePostHeaderZoneEl, main.firstChild);
+            } else {
+              wrapper.appendChild(singlePostHeaderZoneEl);
+            }
+          }
           if (leftSidebarEl.childNodes.length) mainRowEl.appendChild(leftSidebarEl);
           mainRowEl.appendChild(main);
           if (rightSidebarEl.childNodes.length) mainRowEl.appendChild(rightSidebarEl);
