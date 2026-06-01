@@ -8992,13 +8992,6 @@
         var section = document.createElement('div');
         section.className = 'blog-overlay-sidebar-section';
         section.style.marginBottom = '20px';
-        if (styled) {
-          var lineAbove = document.createElement('div');
-          lineAbove.style.height = '1px';
-          lineAbove.style.background = '#e5e4e0';
-          lineAbove.style.marginBottom = '10px';
-          section.appendChild(lineAbove);
-        }
         var header = document.createElement('div');
         header.textContent = headerText;
         header.style.fontSize = '0.7rem';
@@ -10418,14 +10411,8 @@
           var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
-          var collectionHeaderStickyOffset = 0;
-          if (!isSinglePost) {
-            var collectionTitleBand = 0;
-            var headerModulesBand = (headerContentCfg && headerContentCfg.show)
-              ? (Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48)) + 16)
-              : 0;
-            collectionHeaderStickyOffset = collectionTitleBand + headerModulesBand;
-          }
+          var stickySidebarTopPx = navbarOffset + 12;
+          var stickySidebarPadTop = 8;
           var postHeaderCfgForRails = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
           var leftPadTop = leftSpaceAbove;
           var rightPadTop = rightSpaceAbove;
@@ -10435,13 +10422,14 @@
           leftSidebarEl.style.gap = '16px';
           leftSidebarEl.style.flexShrink = '0';
           leftSidebarEl.style.width = leftSidebarWidth + 'px';
-          if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
           if (leftSticky) {
             leftSidebarEl.style.position = 'sticky';
-            leftSidebarEl.style.top = (navbarOffset + 16 + collectionHeaderStickyOffset) + 'px';
+            leftSidebarEl.style.top = stickySidebarTopPx + 'px';
             leftSidebarEl.style.alignSelf = 'flex-start';
+            leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
           } else {
             leftSidebarEl.style.position = 'static';
+            if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
           }
           for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
 
@@ -10451,13 +10439,14 @@
           rightSidebarEl.style.gap = '16px';
           rightSidebarEl.style.flexShrink = '0';
           rightSidebarEl.style.width = rightSidebarWidth + 'px';
-          if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
           if (rightSticky) {
             rightSidebarEl.style.position = 'sticky';
-            rightSidebarEl.style.top = (navbarOffset + 16 + collectionHeaderStickyOffset) + 'px';
+            rightSidebarEl.style.top = stickySidebarTopPx + 'px';
             rightSidebarEl.style.alignSelf = 'flex-start';
+            rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
           } else {
             rightSidebarEl.style.position = 'static';
+            if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
           }
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
 
@@ -10503,6 +10492,7 @@
                 leftSidebarEl.style.position = 'static';
                 leftSidebarEl.style.top = '';
                 leftSidebarEl.style.alignSelf = 'stretch';
+                leftSidebarEl.style.paddingTop = leftPadTop > 0 ? leftPadTop + 'px' : '';
               }
               if (rightHas) {
                 rightSidebarEl.style.order = '2';
@@ -10513,6 +10503,7 @@
                 rightSidebarEl.style.position = 'static';
                 rightSidebarEl.style.top = '';
                 rightSidebarEl.style.alignSelf = 'stretch';
+                rightSidebarEl.style.paddingTop = rightPadTop > 0 ? rightPadTop + 'px' : '';
               }
             } else {
               mainRowEl.style.flexDirection = 'row';
@@ -10541,12 +10532,14 @@
                 leftSidebarEl.style.flexShrink = '0';
                 if (leftSticky) {
                   leftSidebarEl.style.position = 'sticky';
-                  leftSidebarEl.style.top = (navbarOffset + 16 + collectionHeaderStickyOffset) + 'px';
+                  leftSidebarEl.style.top = stickySidebarTopPx + 'px';
                   leftSidebarEl.style.alignSelf = 'flex-start';
+                  leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
                 } else {
                   leftSidebarEl.style.position = 'static';
                   leftSidebarEl.style.top = '';
                   leftSidebarEl.style.alignSelf = '';
+                  leftSidebarEl.style.paddingTop = leftPadTop > 0 ? leftPadTop + 'px' : '';
                 }
               }
               if (rightHas) {
@@ -10556,12 +10549,14 @@
                 rightSidebarEl.style.flexShrink = '0';
                 if (rightSticky) {
                   rightSidebarEl.style.position = 'sticky';
-                  rightSidebarEl.style.top = (navbarOffset + 16 + collectionHeaderStickyOffset) + 'px';
+                  rightSidebarEl.style.top = stickySidebarTopPx + 'px';
                   rightSidebarEl.style.alignSelf = 'flex-start';
+                  rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
                 } else {
                   rightSidebarEl.style.position = 'static';
                   rightSidebarEl.style.top = '';
                   rightSidebarEl.style.alignSelf = '';
+                  rightSidebarEl.style.paddingTop = rightPadTop > 0 ? rightPadTop + 'px' : '';
                 }
               }
             }
