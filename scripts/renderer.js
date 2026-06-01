@@ -7880,8 +7880,14 @@
           } else if (isSideBySide && fiWrap && fiWrap.parentNode) {
             var sideBcJustify = phImagePos === 'rightOfInfo' ? bcJustify : 'flex-start';
             wrapPostImageWithBreadcrumbs(fiWrap, sideBcJustify);
-          } else if (singlePostBelowInfo && belowFiWrap) {
-            wrapPostImageWithBreadcrumbs(belowFiWrap, bcJustify);
+          } else if (singlePostBelowInfo && postInfoWrap && postInfoWrap.parentNode) {
+            postBreadcrumbNav.style.justifyContent = bcJustify;
+            postBreadcrumbNav.style.position = '';
+            postBreadcrumbNav.style.top = '';
+            postBreadcrumbNav.style.left = '';
+            postBreadcrumbNav.style.right = '';
+            postBreadcrumbNav.style.zIndex = '';
+            postInfoWrap.parentNode.insertBefore(postBreadcrumbNav, postInfoWrap);
           } else if (fiWrap && fiWrap.parentNode) {
             wrapPostImageWithBreadcrumbs(fiWrap, bcJustify);
           } else {
