@@ -6147,6 +6147,26 @@
       el.style.boxSizing = 'border-box';
     },
 
+    /**
+     * Edge-to-edge within the overlay wrapper (cancels wrapper side padding).
+     * Prefer this on narrow collection layouts where the wrapper uses overflow-x: hidden.
+     */
+    _applyOverlayHorizontalBleed: function(el) {
+      if (!el || !el.style) return;
+      var ins = this._siteContentInsets || { left: 0, right: 0 };
+      var padL = Math.max(0, ins.left || 0);
+      var padR = Math.max(0, ins.right || 0);
+      if (padL > 0 || padR > 0) {
+        el.style.width = 'calc(100% + ' + (padL + padR) + 'px)';
+        el.style.maxWidth = 'none';
+        el.style.marginLeft = (-padL) + 'px';
+        el.style.marginRight = (-padR) + 'px';
+        el.style.boxSizing = 'border-box';
+      } else {
+        this._applyViewportFullBleed(el);
+      }
+    },
+
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
     _isNarrowCollectionViewport: function() {
       try {
@@ -7039,6 +7059,7 @@
         }
         if (digestMobileNarrow && isFeaturedInLayout && collectionLayout === 'digest') {
           article.style.overflow = 'visible';
+          article.style.textAlign = 'left';
         }
         var digestFeaturedIntro = null;
         if (isFeaturedInLayout && collectionLayout === 'digest') {
@@ -7057,11 +7078,14 @@
             digestFeaturedIntro.style.maxWidth = '100%';
             digestFeaturedIntro.style.boxSizing = 'border-box';
             if (digestMobileFullBleed) {
-              var dInset = self._siteContentInsets || { left: 0, right: 0 };
-              digestFeaturedIntro.style.paddingLeft = (dInset.left || 0) + 'px';
-              digestFeaturedIntro.style.paddingRight = (dInset.right || 0) + 'px';
+              digestFeaturedIntro.style.paddingLeft = '0';
+              digestFeaturedIntro.style.paddingRight = '0';
               digestFeaturedIntro.style.paddingTop = '12px';
               digestFeaturedIntro.style.paddingBottom = '0';
+              digestFeaturedIntro.style.textAlign = 'left';
+              digestFeaturedIntro.style.display = 'flex';
+              digestFeaturedIntro.style.flexDirection = 'column';
+              digestFeaturedIntro.style.alignItems = 'flex-start';
             }
           }
         }
@@ -7205,7 +7229,7 @@
             fiWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
             if (!isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
               if (digestMobileFullBleed && isFeaturedInLayout) {
-                self._applyViewportFullBleed(fiWrap);
+                self._applyOverlayHorizontalBleed(fiWrap);
                 fiWrap.style.marginTop = '0';
               } else {
                 fiWrap.style.marginLeft = '0';
@@ -7273,9 +7297,9 @@
             capEl.style.marginTop = '6px';
             capEl.style.fontStyle = 'italic';
             if (digestFeaturedViewportBleed) {
-              var capInset = self._siteContentInsets || { left: 0, right: 0 };
-              capEl.style.paddingLeft = (capInset.left || 0) + 'px';
-              capEl.style.paddingRight = (capInset.right || 0) + 'px';
+              capEl.style.paddingLeft = '0';
+              capEl.style.paddingRight = '0';
+              capEl.style.textAlign = 'left';
               capEl.style.boxSizing = 'border-box';
             }
             fiWrap.appendChild(capEl);
@@ -7428,6 +7452,10 @@
           titleEl.style.lineHeight = '1.3';
           titleEl.style.fontWeight = '700';
           titleEl.style.margin = '0';
+        }
+        if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && digestMobileNarrow) {
+          titleEl.style.textAlign = 'left';
+          titleEl.style.width = '100%';
         }
         if (singlePostFullBleedHero) titleEl.style.color = '#fff';
         if (singlePostFullBleedHero) titleEl.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
@@ -7618,6 +7646,11 @@
             meta.style.fontSize = '0.8rem';
             meta.style.lineHeight = '1.35';
           }
+          if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && digestMobileNarrow) {
+            metaRow.style.textAlign = 'left';
+            metaRow.style.width = '100%';
+            meta.style.textAlign = 'left';
+          }
           headlineMount.appendChild(metaRow);
         }
         if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact && postCategoriesLine) {
@@ -7767,6 +7800,7 @@
               body.style.fontSize = '0.9rem';
               body.style.color = '#666';
               body.style.lineHeight = '1.5';
+              if (digestMobileNarrow) body.style.textAlign = 'left';
             }
           } else if (collectionLayout === 'listRows' && !listRowsMobileCompact) {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
