@@ -1752,6 +1752,21 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
+        // #region agent log
+        try {
+          this._ensureBlogRouteHydrated();
+          console.warn('[BB-DEBUG-d12b8c] init routeGate', JSON.stringify({
+            pathname: pathname,
+            blogPath: blogPath,
+            isOnBlogRoute: this._isOnBlogRoute(pathname, blogPath),
+            isTransientAccountDrawerRoute: this._isTransientAccountDrawerRoute(pathname),
+            lastBlogRoutePathname: this._lastBlogRoutePathname || null,
+            isOnEffectiveBlogRoute: this._isOnEffectiveBlogRoute(),
+            viewerMode: this._resolveViewerMode()
+          }));
+          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.routeGate',message:'init route gate decision',data:{pathname:pathname,blogPath:blogPath,isTransientAccountDrawerRoute:this._isTransientAccountDrawerRoute(pathname),lastBlogRoutePathname:this._lastBlogRoutePathname||null,isOnEffectiveBlogRoute:this._isOnEffectiveBlogRoute()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
+        } catch (e) {}
+        // #endregion
         if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
           this._clearBootstrapLoading();
@@ -1874,6 +1889,51 @@
         || p === '/account/digital-products' || p.indexOf('/account/digital-products/') === 0;
     },
 
+    _blogRouteStorageKey: function() {
+      var siteKey = this.config && this.config.siteKey ? String(this.config.siteKey) : '';
+      var blogPath = this.config && this.config.blogPath ? String(this.config.blogPath) : '';
+      return 'betterBlog.lastBlogRoute:' + siteKey + ':' + blogPath;
+    },
+
+    /**
+     * Squarespace's member-area login does an Ajax navigation to the account
+     * drawer (/account/digital-products), which re-executes the injected loader
+     * and creates a brand-new renderer with empty in-memory route state. Persist
+     * the last blog route in sessionStorage so that fresh renderer can still
+     * recognize the transient drawer route as "effectively on the blog" and
+     * render behind/after the drawer without requiring a manual reload.
+     */
+    _persistBlogRoute: function() {
+      if (typeof window === 'undefined' || !window.sessionStorage) return;
+      try {
+        window.sessionStorage.setItem(this._blogRouteStorageKey(), JSON.stringify({
+          pathname: this._lastBlogRoutePathname,
+          search: this._lastBlogRouteSearch || '',
+          hash: this._lastBlogRouteHash || '',
+          ts: Date.now()
+        }));
+      } catch (e) {}
+    },
+
+    /** Hydrate in-memory last-blog-route from sessionStorage when this (possibly fresh) renderer has none. */
+    _ensureBlogRouteHydrated: function() {
+      if (this._lastBlogRoutePathname) return;
+      if (typeof window === 'undefined' || !window.sessionStorage) return;
+      try {
+        var raw = window.sessionStorage.getItem(this._blogRouteStorageKey());
+        if (!raw) return;
+        var parsed = JSON.parse(raw);
+        var ts = parsed && typeof parsed.ts === 'number' ? parsed.ts : 0;
+        if (!parsed || !parsed.pathname || !ts || Date.now() - ts > 30 * 60 * 1000) {
+          window.sessionStorage.removeItem(this._blogRouteStorageKey());
+          return;
+        }
+        this._lastBlogRoutePathname = parsed.pathname;
+        this._lastBlogRouteSearch = parsed.search || '';
+        this._lastBlogRouteHash = parsed.hash || '';
+      } catch (e) {}
+    },
+
     _rememberCurrentBlogRoute: function() {
       if (typeof window === 'undefined' || !window.location) return;
       var pathname = window.location.pathname || '/';
@@ -1882,6 +1942,7 @@
       this._lastBlogRoutePathname = pathname;
       this._lastBlogRouteSearch = window.location.search || '';
       this._lastBlogRouteHash = window.location.hash || '';
+      this._persistBlogRoute();
     },
 
     _getEffectiveBlogPathname: function() {
@@ -1892,8 +1953,9 @@
         this._rememberCurrentBlogRoute();
         return pathname;
       }
-      if (this._isTransientAccountDrawerRoute(pathname) && this._lastBlogRoutePathname) {
-        return this._lastBlogRoutePathname;
+      if (this._isTransientAccountDrawerRoute(pathname)) {
+        this._ensureBlogRouteHydrated();
+        if (this._lastBlogRoutePathname) return this._lastBlogRoutePathname;
       }
       return pathname;
     },
@@ -1903,7 +1965,9 @@
       var pathname = window.location.pathname || '/';
       var blogPath = this._currentBlogPathForRouteMatch();
       if (this._isOnBlogRoute(pathname, blogPath)) return true;
-      return this._isTransientAccountDrawerRoute(pathname) && Boolean(this._lastBlogRoutePathname);
+      if (!this._isTransientAccountDrawerRoute(pathname)) return false;
+      this._ensureBlogRouteHydrated();
+      return Boolean(this._lastBlogRoutePathname);
     },
 
     _startRouteChangeObserver: function() {
