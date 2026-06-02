@@ -2518,6 +2518,70 @@
       return wrap;
     },
 
+    /** Masthead (grid) paywalled collection: centered lock badge over the card thumbnail. */
+    _appendMastheadPaywallImageLock: function(fiInner) {
+      if (!fiInner) return;
+      fiInner.style.position = 'relative';
+      var shade = document.createElement('div');
+      shade.className = 'bb-paywall-card-image-shade';
+      shade.setAttribute('aria-hidden', 'true');
+      shade.style.position = 'absolute';
+      shade.style.top = '0';
+      shade.style.left = '0';
+      shade.style.right = '0';
+      shade.style.bottom = '0';
+      shade.style.background = 'rgba(0, 0, 0, 0.38)';
+      shade.style.pointerEvents = 'none';
+      shade.style.zIndex = '2';
+      var badge = document.createElement('div');
+      badge.className = 'bb-paywall-card-image-lock';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.style.position = 'absolute';
+      badge.style.top = '0';
+      badge.style.left = '0';
+      badge.style.right = '0';
+      badge.style.bottom = '0';
+      badge.style.display = 'flex';
+      badge.style.alignItems = 'center';
+      badge.style.justifyContent = 'center';
+      badge.style.pointerEvents = 'none';
+      badge.style.zIndex = '3';
+      var ring = document.createElement('div');
+      ring.style.width = '52px';
+      ring.style.height = '52px';
+      ring.style.borderRadius = '50%';
+      ring.style.border = '2px solid rgba(255, 255, 255, 0.9)';
+      ring.style.display = 'flex';
+      ring.style.alignItems = 'center';
+      ring.style.justifyContent = 'center';
+      ring.style.boxSizing = 'border-box';
+      ring.style.background = 'rgba(0, 0, 0, 0.2)';
+      var lockNs = 'http://www.w3.org/2000/svg';
+      var lockSvg = document.createElementNS(lockNs, 'svg');
+      lockSvg.setAttribute('width', '22');
+      lockSvg.setAttribute('height', '22');
+      lockSvg.setAttribute('viewBox', '0 0 24 24');
+      lockSvg.setAttribute('fill', 'none');
+      lockSvg.setAttribute('stroke', 'currentColor');
+      lockSvg.setAttribute('stroke-width', '2');
+      lockSvg.style.color = '#fff';
+      lockSvg.style.display = 'block';
+      var lockBody = document.createElementNS(lockNs, 'rect');
+      lockBody.setAttribute('x', '5');
+      lockBody.setAttribute('y', '11');
+      lockBody.setAttribute('width', '14');
+      lockBody.setAttribute('height', '10');
+      lockBody.setAttribute('rx', '2');
+      var lockShackle = document.createElementNS(lockNs, 'path');
+      lockShackle.setAttribute('d', 'M7 11V7a5 5 0 0 1 10 0v4');
+      lockSvg.appendChild(lockBody);
+      lockSvg.appendChild(lockShackle);
+      ring.appendChild(lockSvg);
+      badge.appendChild(ring);
+      fiInner.appendChild(shade);
+      fiInner.appendChild(badge);
+    },
+
     _createSubscribeToReadPillLink: function(opts) {
       var o = opts && typeof opts === 'object' ? opts : {};
       var compact = Boolean(o.compact);
@@ -7793,6 +7857,9 @@
             fiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
             if (!fiFixedAspectCrop && !digestFeaturedViewportBleed) fiInner.style.minHeight = '200px';
           }
+          if (!isSinglePost && collectionLayout === 'grid' && gatedCard) {
+            self._appendMastheadPaywallImageLock(fiInner);
+          }
           fiWrap.appendChild(fiInner);
           if (fiCaption && imgCaption) {
             var capEl = document.createElement('div');
@@ -8002,9 +8069,12 @@
         }
         /* Keep categories in the text column on mobile — separate cat row adds height and vertical spread. */
         var listRowsMobileCatsAboveRow = false;
-        if (postCategoriesLine && !listRowsMobileCatsAboveRow) headlineMount.appendChild(postCategoriesLine);
+        var mastheadPaywallGatedCard = gatedCard && collectionLayout === 'grid';
+        if (postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard) {
+          headlineMount.appendChild(postCategoriesLine);
+        }
         var titleBlock = null;
-        if (isFeaturedInLayout) {
+        if (isFeaturedInLayout && !mastheadPaywallGatedCard) {
           var featuredHeadlineStack = document.createElement('div');
           featuredHeadlineStack.className = 'blog-overlay-featured-headline-stack';
           featuredHeadlineStack.style.display = 'flex';
@@ -8136,7 +8206,7 @@
             metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
           }
         }
-        if (metaParts.length > 0) {
+        if (metaParts.length > 0 && !mastheadPaywallGatedCard) {
           var metaRow = document.createElement('div');
           metaRow.className = 'blog-overlay-meta-row';
           metaRow.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) ? '0' : '8px';
@@ -8171,7 +8241,7 @@
         }
         var shareImageUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero) : null;
-        if (shareLinks) {
+        if (shareLinks && !mastheadPaywallGatedCard) {
           var shareRow = document.createElement('div');
           shareRow.className = 'blog-overlay-share-row';
           shareRow.style.marginBottom = '8px';
@@ -8182,9 +8252,9 @@
           headlineMount.appendChild(shareRow);
         }
 
-        if (!isSinglePost && collectionLayout === 'grid' && gatedCard) {
+        if (mastheadPaywallGatedCard) {
           var moMastheadLbl = self._createMembersOnlyTeaserLabel(false);
-          moMastheadLbl.style.marginTop = metaParts.length > 0 || shareLinks ? '6px' : '8px';
+          moMastheadLbl.style.marginTop = '8px';
           headlineMount.appendChild(moMastheadLbl);
         }
 
