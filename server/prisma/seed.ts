@@ -497,7 +497,13 @@ async function main() {
           topPadding: 16
         },
         socialMediaLinks: { show: false, platforms: [] },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'rightJustified', imageWidthPercent: 38 },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'rightJustified',
+          imageWidthPercent: 38,
+          aspectBehavior: 'cropped',
+          aspectRatio: '4:3'
+        },
         progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' },
         postModules: {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },

@@ -636,7 +636,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           layoutMode: (fi.layoutMode === 'fullBleed' ? 'fullBleed' : fi.layoutMode === 'rightJustified' ? 'rightJustified' : 'leftJustified') as 'fullBleed' | 'leftJustified' | 'rightJustified',
           imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
           aspectBehavior: (fi.aspectBehavior === 'cropped' ? 'cropped' : 'original') as 'original' | 'cropped',
-          aspectRatio: (fi.aspectRatio === '3:2' ? '3:2' : fi.aspectRatio === '1:1' ? '1:1' : '16:9') as '16:9' | '3:2' | '1:1',
+          aspectRatio: (fi.aspectRatio === '4:3' ? '4:3' : fi.aspectRatio === '3:2' ? '3:2' : fi.aspectRatio === '1:1' ? '1:1' : '16:9') as '16:9' | '4:3' | '3:2' | '1:1',
           roundedCorners: (fi.roundedCorners === 'small' ? 'small' : fi.roundedCorners === 'large' ? 'large' : 'off') as 'off' | 'small' | 'large',
           shadow: Boolean(fi.shadow),
           showCaption: Boolean(fi.showCaption ?? true),

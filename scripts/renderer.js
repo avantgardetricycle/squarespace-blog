@@ -1757,6 +1757,19 @@
           this._clearBootstrapLoading();
           return;
         }
+        // #region agent log
+        try {
+          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.paywallBranch',message:'init paywall branch decision',data:{
+            isPaywalledSite: this._isPaywalledSite(),
+            viewerMode: this._resolveViewerMode(),
+            fullPaywallActive: this._isSquarespaceFullPaywallActive(),
+            isLikelyCollectionIndex: this._isLikelyBlogCollectionIndexView(),
+            hasSquarespacePostListing: this._hasSquarespacePostListing(),
+            selectedIndexFromHash: this._getSelectedIndexFromHash(),
+            pathname: pathname
+          },timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
+        } catch (e) {}
+        // #endregion
         if (this._isSquarespaceFullPaywallActive()) {
           console.log('[BlogOverlay] Full collection paywall (Squarespace owns page); skipping overlay');
           this._paywallFullySuppressed = true;
@@ -1901,6 +1914,11 @@
       var onRouteChange = function() {
         setTimeout(function() {
           var sig = self._routeSignature();
+          // #region agent log
+          try {
+            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:onRouteChange',message:'route change observed',data:{sig:sig,lastSig:self._lastRouteSignature,changed:sig!==self._lastRouteSignature,viewerMode:self._resolveViewerMode()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
+          } catch (e) {}
+          // #endregion
           if (sig === self._lastRouteSignature) return;
           self._lastRouteSignature = sig;
           var pathname = window.location && window.location.pathname ? window.location.pathname : '/';
@@ -2580,17 +2598,65 @@
     },
 
     _startPaywallAuthObserver: function() {
+      // #region agent log
+      try {
+        var _l1 = {
+          alreadyInstalled: !!this._paywallAuthObserver,
+          previewMode: !!this._previewMode,
+          bbPreview: !!this._bbPreview,
+          isPaywalledSite: this._isPaywalledSite(),
+          paywallDetectionState: this.config && this.config.paywallDetectionState,
+          paywallMode: this.config && this.config.paywallMode,
+          willEarlyReturn: (!!this._paywallAuthObserver || !!this._previewMode || !!this._bbPreview || !this._isPaywalledSite())
+        };
+        fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:_startPaywallAuthObserver',message:'auth observer install decision',data:_l1,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+      } catch (e) {}
+      // #endregion
       if (this._paywallAuthObserver || this._previewMode || this._bbPreview) return;
       if (!this._isPaywalledSite()) return;
       var self = this;
       this._lastPaywallAuthSnapshot =
         this._resolveViewerMode() + '|' + (this._isSquarespaceFullPaywallActive() ? '1' : '0');
       this._paywallAuthObserver = new MutationObserver(function() {
+        // #region agent log
+        try {
+          if (!self._dbgObserverFiredOnce) {
+            self._dbgObserverFiredOnce = true;
+            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.fire',message:'auth observer fired (first mutation)',data:{baselineSnapshot:self._lastPaywallAuthSnapshot},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
+          }
+        } catch (e) {}
+        // #endregion
         if (self._paywallAuthDebounce) return;
         self._paywallAuthDebounce = setTimeout(function() {
           self._paywallAuthDebounce = null;
-          if (self._renderContentInProgress) return;
+          if (self._renderContentInProgress) {
+            // #region agent log
+            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'skipped: renderContentInProgress',data:{},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
+            // #endregion
+            return;
+          }
           var snap = self._resolveViewerMode() + '|' + (self._isSquarespaceFullPaywallActive() ? '1' : '0');
+          // #region agent log
+          try {
+            var _ctx = (window.Static && window.Static.SQUARESPACE_CONTEXT) || {};
+            var _uac = _ctx.userAccountsContext || {};
+            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'settled snapshot compare',data:{
+              snap: snap,
+              lastSnapshot: self._lastPaywallAuthSnapshot,
+              snapshotChanged: snap !== self._lastPaywallAuthSnapshot,
+              viewerMode: self._resolveViewerMode(),
+              fullPaywallActive: self._isSquarespaceFullPaywallActive(),
+              fromSquarespaceContext: self._detectViewerModeFromSquarespaceContext(),
+              fromDom: self._detectViewerModeFromDom(),
+              rememberedMode: self._getRememberedViewerModeHint(),
+              memberGatePresent: self._isMemberGatePresent(),
+              hasSquarespacePostListing: self._hasSquarespacePostListing(),
+              ctxAuthenticated: _ctx.authenticated,
+              uacAuthenticated: _uac.authenticated,
+              uacIsAuthenticated: _uac.isAuthenticated
+            },timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){});
+          } catch (e) {}
+          // #endregion
           if (snap === self._lastPaywallAuthSnapshot) return;
           self._lastPaywallAuthSnapshot = snap;
           var fullNow = self._isSquarespaceFullPaywallActive();
@@ -2605,6 +2671,24 @@
           self._paywallFullySuppressed = false;
           var pathname = typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') : '/';
           var blogPath = self._currentBlogPathForRouteMatch();
+          // #region agent log
+          try {
+            var _rootConnected = false;
+            try { _rootConnected = Boolean(self._root && document.documentElement && document.documentElement.contains(self._root)); } catch (eR) {}
+            var _fbc = null;
+            try { var _f = findBlogContainer(); _fbc = _f ? ((_f.tagName||'') + '#' + (_f.id||'') + '.' + (typeof _f.className==='string'?_f.className.slice(0,40):'')) : null; } catch (eF) {}
+            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'snapshot changed - about to gate/render',data:{
+              pathname: pathname,
+              blogPath: blogPath || null,
+              isOnEffectiveBlogRoute: self._isOnEffectiveBlogRoute(),
+              isTransientAccountDrawerRoute: self._isTransientAccountDrawerRoute(pathname),
+              itemsLength: self.items ? self.items.length : -1,
+              rootConnected: _rootConnected,
+              rootId: self._root ? (self._root.id || '(no id)') : '(no root)',
+              findBlogContainerNow: _fbc
+            },timestamp:Date.now(),hypothesisId:'H3,H4'})}).catch(function(){});
+          } catch (e) {}
+          // #endregion
           if (!self._isOnEffectiveBlogRoute()) {
             self._debugLog('paywall auth observer skipped outside blog route', { path: pathname, blogPath: blogPath || null });
             return;
@@ -7155,8 +7239,14 @@
           fiLayout = 'fullBleed';
         }
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
-        var fiRatio = (fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : '16:9');
+        var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
+        /** Reporter (rightOfInfo header): always 4:3 cover crop regardless of saved aspectBehavior. */
+        var reporterPostHeaderCrop = isSinglePost && phImagePos === 'rightOfInfo' && fiShow;
+        if (reporterPostHeaderCrop) {
+          fiRatio = '4:3';
+          fiAspect = 'cropped';
+        }
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
