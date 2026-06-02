@@ -6211,88 +6211,292 @@
       return null;
     },
 
-    /**
-     * Horizontal inset of the Squarespace content column vs the viewport (site margin + section padding).
-     * Defaults to {0,0} when nothing reliable is found (easier to debug until detection is tuned).
-     */
-    _getSquarespaceSiteContentInsets: function() {
-      var zero = { left: 0, right: 0 };
-      this._siteContentInsetsSource = 'default-zero';
-      if (typeof window === 'undefined') return zero;
+    _findHeaderContentWrapper: function() {
+      try {
+        return document.querySelector(
+          '#header .content-wrapper, header .content-wrapper, .header-layout .content-wrapper, ' +
+          '.header-display .content-wrapper, [data-section-type="header"] .content-wrapper'
+        );
+      } catch (e) {
+        return null;
+      }
+    },
 
-      var root = this._root || (this.config && this.config.rootEl) || findBlogContainer() || document.getElementById('blogga-blogga-root');
-      var section = this._findBlogPageSection(root);
-      var finish = function(source, insets) {
-        this._siteContentInsetsSource = source;
-        if (this._isSiteMarginDebugEnabled()) {
-          console.log('[BlogOverlay][site-margin] ' + source, insets, this._siteContentInsetsRaw ? { raw: this._siteContentInsetsRaw } : '');
+    _pushContentColumnInsetProbe: function(probes, source, el) {
+      if (!probes || !el || !el.getBoundingClientRect) return;
+      try {
+        var rect = el.getBoundingClientRect();
+        var ins = this._insetsFromBoundingRect(rect);
+        if (ins) {
+          probes.push({
+            source: source,
+            insets: ins,
+            width: Math.round(rect.width || 0)
+          });
         }
-        return insets;
-      }.bind(this);
+      } catch (e) { /* ignore */ }
+    },
 
-      /* 1. Section .content-wrapper (7.1 blog column — not the full-width mount root). */
+    _collectContentColumnInsetProbes: function(root, section) {
+      var probes = [];
+      var self = this;
+
+      self._pushContentColumnInsetProbe(probes, 'header.content-wrapper.rect', self._findHeaderContentWrapper());
+
       if (section && section.querySelectorAll) {
         try {
           var wrappers = section.querySelectorAll('.content-wrapper');
           for (var w = 0; w < wrappers.length; w++) {
-            var fromCw = this._insetsFromBoundingRect(wrappers[w].getBoundingClientRect());
-            if (fromCw) return finish('section.content-wrapper.rect', fromCw);
+            self._pushContentColumnInsetProbe(probes, 'section.content-wrapper.rect', wrappers[w]);
           }
         } catch (eCw) { /* ignore */ }
+        try {
+          var sectionContent = section.querySelector(
+            '.content.sqs-layout, .sqs-layout, .page-section-content, .section-content'
+          );
+          self._pushContentColumnInsetProbe(probes, 'section.content.rect', sectionContent);
+        } catch (eSc) { /* ignore */ }
       }
 
-      /* 2. Closest .content-wrapper ancestor of the mount root. */
       if (root && root.closest) {
         try {
           var closestCw = root.closest('.content-wrapper');
           if (closestCw) {
-            var fromClosest = this._insetsFromBoundingRect(closestCw.getBoundingClientRect());
-            if (fromClosest) return finish('root.closest.content-wrapper.rect', fromClosest);
+            self._pushContentColumnInsetProbe(probes, 'root.closest.content-wrapper.rect', closestCw);
           }
         } catch (eClosest) { /* ignore */ }
       }
 
-      /* 3. Native blog items still in the DOM (outside our overlay). */
       try {
         var nativeSel = 'article, .blog-item, .blog-article, .blog-post, .entry.post, .entry';
         var natives = document.querySelectorAll(nativeSel);
         for (var n = 0; n < natives.length; n++) {
           var node = natives[n];
           if (node.closest && node.closest('#blog-overlay-list, .blog-overlay-wrapper')) continue;
-          var fromNative = this._insetsFromBoundingRect(node.getBoundingClientRect());
-          if (fromNative) return finish('native-blog-item.rect', fromNative);
+          self._pushContentColumnInsetProbe(probes, 'native-blog-item.rect', node);
         }
       } catch (eNat) { /* ignore */ }
 
-      /* 4. Section horizontal padding (Site Styles → Site margin often lands here). */
+      return probes;
+    },
+
+    /** Merge geometry probes: use the largest left/right inset so we never under-shoot the live column. */
+    _pickMaxContentColumnInsets: function(probes) {
+      if (!probes || !probes.length) return null;
+      var left = 0;
+      var right = 0;
+      var width = 0;
+      var sources = [];
+      for (var i = 0; i < probes.length; i++) {
+        var p = probes[i];
+        if (!p || !p.insets) continue;
+        if (p.insets.left > left) left = p.insets.left;
+        if (p.insets.right > right) right = p.insets.right;
+        if ((p.width || 0) > width) width = p.width;
+        sources.push(p.source);
+      }
+      if (left + right < 2) return null;
+      return {
+        insets: { left: left, right: right },
+        width: width,
+        source: sources.join('+')
+      };
+    },
+
+    _shouldSkipHorizontalWrapperInset: function(root, insets) {
+      if (!root || !root.getBoundingClientRect) return false;
+      try {
+        var rect = root.getBoundingClientRect();
+        var threshold = 14;
+        if (insets && insets.left >= 6 && Math.abs(rect.left - insets.left) <= threshold) return true;
+        var cw = root.closest && root.closest('.content-wrapper');
+        if (cw && cw.getBoundingClientRect) {
+          var cwRect = cw.getBoundingClientRect();
+          if (Math.abs(rect.left - cwRect.left) <= threshold && rect.width <= cwRect.width + 6) return true;
+        }
+      } catch (e) { /* ignore */ }
+      return false;
+    },
+
+    _finishSiteContentInsets: function(source, insets, root, meta) {
+      var out = {
+        left: Math.max(0, insets && insets.left ? insets.left : 0),
+        right: Math.max(0, insets && insets.right ? insets.right : 0)
+      };
+      this._siteContentInsetsSource = source;
+      this._siteContentColumnWidth = meta && meta.width ? meta.width : null;
+      this._siteContentInsetsSkipHorizontal = this._shouldSkipHorizontalWrapperInset(root, out);
+      if (this._isSiteMarginDebugEnabled()) {
+        console.log('[BlogOverlay][site-margin] ' + source, out, {
+          skipHorizontal: this._siteContentInsetsSkipHorizontal,
+          columnWidth: this._siteContentColumnWidth,
+          raw: this._siteContentInsetsRaw || null
+        });
+      }
+      return out;
+    },
+
+    _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
+      if (!wrapper || !wrapper.style) return;
+      var ins = this._siteContentInsets || { left: 0, right: 0 };
+      var skip = this._siteContentInsetsSkipHorizontal === true;
+      var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      var padL = skip ? 0 : Math.max(0, ins.left || 0);
+      var padR = skip ? 0 : Math.max(0, ins.right || 0);
+      wrapper.style.paddingTop = padT + 'px';
+      wrapper.style.paddingRight = padR + 'px';
+      wrapper.style.paddingBottom = '16px';
+      wrapper.style.paddingLeft = padL + 'px';
+      wrapper.style.boxSizing = 'border-box';
+      wrapper.style.marginTop = '16px';
+      wrapper.style.marginBottom = '16px';
+      var colW = this._siteContentColumnWidth;
+      if (!skip && colW && colW > 80) {
+        wrapper.style.maxWidth = colW + 'px';
+        wrapper.style.width = '100%';
+        wrapper.style.marginLeft = padL + 'px';
+        wrapper.style.marginRight = padR + 'px';
+        wrapper.style.paddingLeft = '0';
+        wrapper.style.paddingRight = '0';
+      } else {
+        wrapper.style.maxWidth = '';
+        wrapper.style.width = '';
+        wrapper.style.marginLeft = '';
+        wrapper.style.marginRight = '';
+      }
+    },
+
+    _syncSiteContentInsetsToWrapper: function() {
+      var wrapper = this._blogOverlayWrapperEl;
+      var root = this._blogOverlayInsetRoot || this._root;
+      if (!wrapper || !wrapper.parentNode) return;
+      var prevL = (this._siteContentInsets && this._siteContentInsets.left) || 0;
+      var prevR = (this._siteContentInsets && this._siteContentInsets.right) || 0;
+      var prevSkip = this._siteContentInsetsSkipHorizontal === true;
+      var prevW = this._siteContentColumnWidth || 0;
+      this._siteContentInsets = this._getSquarespaceSiteContentInsets();
+      var nextL = (this._siteContentInsets && this._siteContentInsets.left) || 0;
+      var nextR = (this._siteContentInsets && this._siteContentInsets.right) || 0;
+      var nextSkip = this._siteContentInsetsSkipHorizontal === true;
+      var nextW = this._siteContentColumnWidth || 0;
+      if (
+        Math.abs(nextL - prevL) < 2 &&
+        Math.abs(nextR - prevR) < 2 &&
+        nextSkip === prevSkip &&
+        Math.abs(nextW - prevW) < 2
+      ) {
+        return;
+      }
+      var padTop = 16;
+      try {
+        var parsed = parseInt(wrapper.style.paddingTop, 10);
+        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
+      } catch (ePad) { /* ignore */ }
+      this._applySiteContentInsetsToWrapper(wrapper, padTop);
+    },
+
+    _teardownSiteContentInsetSync: function() {
+      if (this._blogOverlaySiteInsetAbort) {
+        try { this._blogOverlaySiteInsetAbort(); } catch (e) { /* ignore */ }
+        this._blogOverlaySiteInsetAbort = null;
+      }
+      this._blogOverlayWrapperEl = null;
+      this._blogOverlayInsetRoot = null;
+    },
+
+    _bindSiteContentInsetSync: function(wrapper, root) {
+      var self = this;
+      self._teardownSiteContentInsetSync();
+      if (!wrapper || !root || typeof window === 'undefined') return;
+      self._blogOverlayWrapperEl = wrapper;
+      self._blogOverlayInsetRoot = root;
+      var debounceTimer = null;
+      var sync = function() {
+        self._syncSiteContentInsetsToWrapper();
+      };
+      var debouncedSync = function() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(sync, 80);
+      };
+      if (window.addEventListener) {
+        window.addEventListener('resize', debouncedSync, { passive: true });
+      }
+      var section = self._findBlogPageSection(root);
+      if (typeof ResizeObserver !== 'undefined') {
+        self._blogOverlaySiteInsetRO = new ResizeObserver(debouncedSync);
+        try { self._blogOverlaySiteInsetRO.observe(document.documentElement); } catch (eRo1) { /* ignore */ }
+        if (section) {
+          try { self._blogOverlaySiteInsetRO.observe(section); } catch (eRo2) { /* ignore */ }
+        }
+        var headerCw = self._findHeaderContentWrapper();
+        if (headerCw) {
+          try { self._blogOverlaySiteInsetRO.observe(headerCw); } catch (eRo3) { /* ignore */ }
+        }
+      }
+      self._blogOverlaySiteInsetAbort = function() {
+        if (window.removeEventListener) window.removeEventListener('resize', debouncedSync);
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if (self._blogOverlaySiteInsetRO) {
+          try { self._blogOverlaySiteInsetRO.disconnect(); } catch (eDisc) { /* ignore */ }
+          self._blogOverlaySiteInsetRO = null;
+        }
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() {
+          requestAnimationFrame(sync);
+        });
+      } else {
+        sync();
+      }
+      [150, 450, 800, 1500, 2500].forEach(function(delay) {
+        setTimeout(sync, delay);
+      });
+    },
+
+    /**
+     * Horizontal inset of the Squarespace content column vs the viewport (site margin + section padding).
+     * Geometry-first: max of header/blog column rects; CSS vars are last-resort fallbacks.
+     */
+    _getSquarespaceSiteContentInsets: function() {
+      var zero = { left: 0, right: 0 };
+      this._siteContentInsetsRaw = null;
+      this._siteContentColumnWidth = null;
+      this._siteContentInsetsSkipHorizontal = false;
+      if (typeof window === 'undefined') {
+        this._siteContentInsetsSource = 'default-zero';
+        return zero;
+      }
+
+      var root = this._root || (this.config && this.config.rootEl) || findBlogContainer() || document.getElementById('blogga-blogga-root');
+      var section = this._findBlogPageSection(root);
+
+      var geometryProbes = this._collectContentColumnInsetProbes(root, section);
+      var mergedGeometry = this._pickMaxContentColumnInsets(geometryProbes);
+      if (mergedGeometry) {
+        return this._finishSiteContentInsets(
+          'geometry.max(' + mergedGeometry.source + ')',
+          mergedGeometry.insets,
+          root,
+          { width: mergedGeometry.width }
+        );
+      }
+
       if (section) {
         var fromSectionPad = this._horizontalPaddingFromComputedStyle(section);
-        if (fromSectionPad) return finish('section.padding', fromSectionPad);
+        if (fromSectionPad) {
+          return this._finishSiteContentInsets('section.padding', fromSectionPad, root, null);
+        }
         try {
           var bg = section.querySelector('.section-background, .section-background-content');
           if (bg) {
             var fromBg = this._horizontalPaddingFromComputedStyle(bg);
-            if (fromBg) return finish('section.background.padding', fromBg);
+            if (fromBg) {
+              return this._finishSiteContentInsets('section.background.padding', fromBg, root, null);
+            }
           }
         } catch (eBg) { /* ignore */ }
       }
 
-      /* 5. Site header content column (site margin applies to header too). */
-      try {
-        var headerCw = document.querySelector(
-          '#header .content-wrapper, header .content-wrapper, .header-layout .content-wrapper, .header-display .content-wrapper'
-        );
-        if (headerCw) {
-          var fromHeader = this._insetsFromBoundingRect(headerCw.getBoundingClientRect());
-          if (fromHeader) return finish('header.content-wrapper.rect', fromHeader);
-        }
-      } catch (eHdr) { /* ignore */ }
-
-      /* 6. Theme CSS variables (when exposed on :root / section). */
-      var fromVars = this._insetsFromSquarespaceCssVars(section || root);
-      if (fromVars) return finish('css-variables', fromVars);
-
-      /* 7. Narrowest ancestor box of mount root (skip full-width main/#content picks). */
       if (root && root.getBoundingClientRect) {
         var vw = window.innerWidth || document.documentElement.clientWidth || 0;
         var el = root.parentElement;
@@ -6300,24 +6504,33 @@
         for (var d = 0; el && d < 24; d++) {
           if (el.classList && el.classList.contains('page-section')) {
             var fromPagePad = this._horizontalPaddingFromComputedStyle(el);
-            if (fromPagePad) return finish('ancestor.page-section.padding', fromPagePad);
+            if (fromPagePad) {
+              return this._finishSiteContentInsets('ancestor.page-section.padding', fromPagePad, root, null);
+            }
           }
           try {
             var r = el.getBoundingClientRect();
             if (r.width > 0 && r.width < vw - 4) {
               var cand = this._insetsFromBoundingRect(r);
               if (cand && (!narrowest || r.width < narrowest.width)) {
-                narrowest = { insets: cand, width: r.width };
+                narrowest = { insets: cand, width: Math.round(r.width) };
               }
             }
           } catch (eA) { /* ignore */ }
           if (el.id === 'siteWrapper' || el.id === 'site-wrapper') break;
           el = el.parentElement;
         }
-        if (narrowest) return finish('narrowest-ancestor.rect', narrowest.insets);
+        if (narrowest) {
+          return this._finishSiteContentInsets('narrowest-ancestor.rect', narrowest.insets, root, { width: narrowest.width });
+        }
       }
 
-      return finish('default-zero', zero);
+      var fromVars = this._insetsFromSquarespaceCssVars(section || root);
+      if (fromVars) {
+        return this._finishSiteContentInsets('css-variables', fromVars, root, null);
+      }
+
+      return this._finishSiteContentInsets('default-zero', zero, root, null);
     },
 
     /** Break out to the viewport width (full-bleed images only). */
@@ -8626,6 +8839,7 @@
         self._blogOverlayStickySidebarAbort = null;
       }
       self._blogOverlayStickySidebarSyncFn = null;
+      self._teardownSiteContentInsetSync();
       self._blogOverlaySidebarLayoutFn = null;
       this._clearPendingSearchRender();
       var rootIsConnected = false;
@@ -8777,14 +8991,9 @@
       wrapper.id = 'blog-overlay-list';
       wrapper.className = 'blog-overlay-wrapper';
       wrapper.style.display = 'block';
-      var siteInsets = self._siteContentInsets || self._getSquarespaceSiteContentInsets();
-      var sitePadL = siteInsets.left || 0;
-      var sitePadR = siteInsets.right || 0;
       var navbarOffset = this._getNavbarOffset();
       var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
-      wrapper.style.padding = wrapperPadTop + 'px ' + sitePadR + 'px 16px ' + sitePadL + 'px';
-      wrapper.style.margin = '16px 0';
-      wrapper.style.boxSizing = 'border-box';
+      self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
         wrapper.style.maxWidth = '100%';
         if (collectionLayout === 'digest') {
@@ -11329,6 +11538,7 @@
             });
             try { self._blogOverlaySidebarRO.observe(wrapper); } catch (eObs) {}
           }
+          self._bindSiteContentInsetSync(wrapper, root);
           if (self._isTocDebugEnabled()) {
             requestAnimationFrame(function() {
               var n = 0;
@@ -11375,7 +11585,7 @@
       var applyNavbarOffset = function(offset) {
         if (offset <= 0 || !wrapper.parentNode) return;
         lastAppliedOffset = offset;
-        wrapper.style.paddingTop = (offset + 16) + 'px';
+        self._applySiteContentInsetsToWrapper(wrapper, offset + 16);
         var progressTrack = document.getElementById('blog-overlay-progress');
         if (progressTrack && progressTrack.style.position === 'fixed') {
           progressTrack.style.top = offset + 'px';
