@@ -7562,6 +7562,7 @@
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
+        var nwPaywallColSide = null;
         var postIndex = isSinglePost ? selectedIndex : self._postIndexInItems(items, post, self._itemIndexMap);
         var featLayoutKey = featuredPost ? displayPostKey(featuredPost) : null;
         var postLayoutKey = displayPostKey(post);
@@ -7577,7 +7578,7 @@
           if (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') fiImageWidth = fiImageWidth;
         } else if (collectionLayout === 'listRows' && fiShow) {
           fiLayout = 'leftJustified';
-          fiImageWidth = 28;
+          fiImageWidth = 14;
         } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
           fiLayout = 'fullBleed';
         }
@@ -7672,20 +7673,23 @@
           rowEl.style.display = 'flex';
           rowEl.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
           rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '10px' : '20px';
-          rowEl.style.alignItems = isSinglePost ? phVerticalAlignItems : 'flex-start';
+          rowEl.style.alignItems =
+            (!isSinglePost && collectionLayout === 'listRows')
+              ? 'center'
+              : (isSinglePost ? phVerticalAlignItems : 'flex-start');
           rowEl.style.marginBottom = (collectionLayout === 'listRows' && listRowsMobileCompact)
             ? '0'
             : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           contentEl = document.createElement('div');
           contentEl.style.flex = '1';
           contentEl.style.minWidth = '0';
-          if (collectionLayout === 'listRows' && listRowsMobileCompact) {
+          if (!isSinglePost && collectionLayout === 'listRows') {
             contentEl.style.display = 'flex';
             contentEl.style.flexDirection = 'column';
-            contentEl.style.justifyContent = 'flex-start';
+            contentEl.style.justifyContent = 'center';
             contentEl.style.alignItems = 'flex-start';
-            contentEl.style.gap = '4px';
-            contentEl.style.alignSelf = 'flex-start';
+            contentEl.style.alignSelf = 'center';
+            contentEl.style.gap = listRowsMobileCompact ? '4px' : '6px';
           }
           if (isSinglePost) {
             if (phImagePos === 'rightOfInfo' && phAlign === 'left') {
@@ -7813,14 +7817,14 @@
             }
           } else if (isSideBySide) {
             if (collectionLayout === 'listRows' && listRowsMobileCompact) {
-              fiWrap.style.flex = '0 0 88px';
-              fiWrap.style.width = '88px';
-              fiWrap.style.maxWidth = '88px';
+              fiWrap.style.flex = '0 0 44px';
+              fiWrap.style.width = '44px';
+              fiWrap.style.maxWidth = '44px';
             } else {
               fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             }
             fiWrap.style.minWidth = '0';
-            fiWrap.style.alignSelf = 'flex-start';
+            fiWrap.style.alignSelf = (!isSinglePost && collectionLayout === 'listRows') ? 'center' : 'flex-start';
             if (isSinglePost && phSideImageGapPx > 0) {
               if (phImagePos === 'rightOfInfo') fiWrap.style.marginRight = phSideImageGapPx + 'px';
               else if (phImagePos === 'leftOfInfo') fiWrap.style.marginLeft = phSideImageGapPx + 'px';
@@ -7842,7 +7846,7 @@
             fiInner.style.width = '100%';
           }
           if (collectionLayout === 'listRows' && listRowsMobileCompact && isSideBySide) {
-            fiInner.style.maxHeight = '66px';
+            fiInner.style.maxHeight = '33px';
           }
           if (imgUrl) {
             var img = document.createElement('img');
@@ -7882,6 +7886,7 @@
           if (isSideBySide && rowEl) {
             rowEl.appendChild(contentEl);
             rowEl.insertBefore(fiWrap, contentEl);
+            if (nwPaywallColSide) rowEl.appendChild(nwPaywallColSide);
           } else if (!singlePostBelowInfo) {
             article.insertBefore(fiWrap, article.firstChild);
           }
@@ -8122,38 +8127,25 @@
           nwMoMobile.style.marginTop = '6px';
           headlineMount.appendChild(nwMoMobile);
         } else if (newsroomPaywallGatedCard) {
-          var nwPaywallCol = document.createElement('div');
-          nwPaywallCol.className = 'bb-paywall-collection-newsroom-cta';
-          nwPaywallCol.style.display = 'flex';
-          nwPaywallCol.style.flexDirection = 'column';
-          nwPaywallCol.style.alignItems = 'flex-end';
-          nwPaywallCol.style.gap = '8px';
-          nwPaywallCol.style.flex = '0 0 auto';
-          nwPaywallCol.style.maxWidth = '46%';
-          nwPaywallCol.style.marginTop = '0';
-          nwPaywallCol.style.marginBottom = '0';
+          nwPaywallColSide = document.createElement('div');
+          nwPaywallColSide.className = 'bb-paywall-collection-newsroom-cta';
+          nwPaywallColSide.style.display = 'flex';
+          nwPaywallColSide.style.flexDirection = 'column';
+          nwPaywallColSide.style.alignItems = 'center';
+          nwPaywallColSide.style.justifyContent = 'center';
+          nwPaywallColSide.style.alignSelf = 'center';
+          nwPaywallColSide.style.gap = '8px';
+          nwPaywallColSide.style.flex = '0 0 auto';
+          nwPaywallColSide.style.maxWidth = '40%';
+          nwPaywallColSide.style.marginTop = '0';
+          nwPaywallColSide.style.marginBottom = '0';
           var nwMoLbl = self._createMembersOnlyTeaserLabel(false);
           nwMoLbl.style.width = 'auto';
           nwMoLbl.style.maxWidth = '100%';
-          nwMoLbl.style.justifyContent = 'flex-end';
-          nwPaywallCol.appendChild(nwMoLbl);
-          nwPaywallCol.appendChild(self._createSubscribeToReadPillLink());
-          var titleRow = document.createElement('div');
-          titleRow.className = 'bb-paywall-collection-newsroom-title-row';
-          titleRow.style.display = 'flex';
-          titleRow.style.flexDirection = 'row';
-          titleRow.style.justifyContent = 'space-between';
-          titleRow.style.alignItems = 'flex-start';
-          titleRow.style.gap = '12px';
-          titleRow.style.width = '100%';
-          titleRow.style.boxSizing = 'border-box';
-          var titleLeft = document.createElement('div');
-          titleLeft.style.flex = '1';
-          titleLeft.style.minWidth = '0';
-          titleLeft.appendChild(titleBlock);
-          titleRow.appendChild(titleLeft);
-          titleRow.appendChild(nwPaywallCol);
-          headlineMount.appendChild(titleRow);
+          nwMoLbl.style.justifyContent = 'center';
+          nwPaywallColSide.appendChild(nwMoLbl);
+          nwPaywallColSide.appendChild(self._createSubscribeToReadPillLink());
+          headlineMount.appendChild(titleBlock);
         } else {
           headlineMount.appendChild(titleBlock);
         }
@@ -8505,7 +8497,7 @@
         }
         var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
         if (isSideBySide) {
-          rowEl.appendChild(contentEl);
+          if (!nwPaywallColSide) rowEl.appendChild(contentEl);
           if (isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
             ensureSinglePostHeaderInnerEl().appendChild(rowEl);
           } else {
@@ -8806,7 +8798,7 @@
             bodyCol.style.paddingLeft = '8px';
             bodyCol.style.paddingRight = '0';
           } else {
-            bodyCol.style.paddingLeft = '0';
+            bodyCol.style.paddingLeft = '12px';
             bodyCol.style.paddingRight = '8px';
             bodyCol.style.order = '1';
           }
