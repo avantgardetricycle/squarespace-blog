@@ -2727,6 +2727,336 @@
       });
     },
 
+    _resolvePaywallSignInHref: function() {
+      var ps = this.config && this.config.paywallSettings;
+      var custom = ps && typeof ps.signInUrl === 'string' ? ps.signInUrl.trim() : '';
+      if (custom) return custom;
+      try {
+        return window.location.origin + '/account/login';
+      } catch (e) {
+        return '/account/login';
+      }
+    },
+
+    /** Inline article gate (single post): card overlaid on faded second-paragraph teaser. */
+    _createPaywallInlineArticleCard: function() {
+      var colors = this._bbPaywallFooterColors();
+      var ps = this.config && this.config.paywallSettings;
+      var defaultDesc = 'Subscribe for unlimited access to every article, the full archive, and ad-free reading.';
+      var desc = (ps && typeof ps.inlineDescription === 'string' && ps.inlineDescription.trim())
+        ? ps.inlineDescription.trim()
+        : (ps && typeof ps.footerDescription === 'string' && ps.footerDescription.trim())
+          ? ps.footerDescription.trim()
+          : defaultDesc;
+      var features = (ps && Array.isArray(ps.featureItems) && ps.featureItems.length)
+        ? ps.featureItems.slice(0, 4)
+        : ['Unlimited articles', 'Full archive', 'Ad-free', 'Cancel anytime'];
+      var priceBit = this._extractPaywallPriceLabel();
+      var subLabel = priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
+
+      var card = document.createElement('div');
+      card.className = 'bb-paywall-inline-card';
+      card.style.width = '100%';
+      card.style.boxSizing = 'border-box';
+      card.style.background = '#fff';
+      card.style.border = '1px solid rgba(0,0,0,0.1)';
+      card.style.borderRadius = '8px';
+      card.style.padding = '28px 24px 24px';
+      card.style.textAlign = 'center';
+      card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
+
+      var eyebrow = document.createElement('div');
+      eyebrow.textContent = 'MEMBER EXCLUSIVE';
+      eyebrow.style.fontSize = '0.65rem';
+      eyebrow.style.fontWeight = '700';
+      eyebrow.style.letterSpacing = '0.2em';
+      eyebrow.style.textTransform = 'uppercase';
+      eyebrow.style.color = colors.accent;
+      eyebrow.style.marginBottom = '10px';
+
+      var headline = document.createElement('h2');
+      headline.textContent = 'Continue reading with a membership';
+      headline.style.margin = '0 0 10px';
+      headline.style.fontSize = 'clamp(1.15rem, 3vw, 1.5rem)';
+      headline.style.fontWeight = '700';
+      headline.style.lineHeight = '1.25';
+      headline.style.color = colors.text;
+
+      var p = document.createElement('p');
+      p.textContent = desc;
+      p.style.margin = '0 auto 20px';
+      p.style.fontSize = '0.92rem';
+      p.style.lineHeight = '1.55';
+      p.style.color = colors.secondary;
+      p.style.maxWidth = '420px';
+
+      var btnRow = document.createElement('div');
+      btnRow.style.display = 'flex';
+      btnRow.style.flexWrap = 'wrap';
+      btnRow.style.gap = '10px';
+      btnRow.style.justifyContent = 'center';
+      btnRow.style.marginBottom = '18px';
+
+      var subBtn = document.createElement('a');
+      subBtn.href = this._resolvePaywallSubscribeHref();
+      subBtn.textContent = subLabel;
+      subBtn.style.display = 'inline-flex';
+      subBtn.style.alignItems = 'center';
+      subBtn.style.justifyContent = 'center';
+      subBtn.style.padding = '10px 18px';
+      subBtn.style.borderRadius = '4px';
+      subBtn.style.background = colors.accent;
+      subBtn.style.color = '#fff';
+      subBtn.style.fontWeight = '600';
+      subBtn.style.textDecoration = 'none';
+      subBtn.style.fontSize = '0.9rem';
+
+      var signBtn = document.createElement('a');
+      signBtn.href = this._resolvePaywallSignInHref();
+      signBtn.textContent = 'Sign in';
+      signBtn.style.display = 'inline-flex';
+      signBtn.style.alignItems = 'center';
+      signBtn.style.justifyContent = 'center';
+      signBtn.style.padding = '10px 18px';
+      signBtn.style.borderRadius = '4px';
+      signBtn.style.background = '#fff';
+      signBtn.style.color = colors.text;
+      signBtn.style.border = '1px solid rgba(0,0,0,0.18)';
+      signBtn.style.fontWeight = '600';
+      signBtn.style.textDecoration = 'none';
+      signBtn.style.fontSize = '0.9rem';
+
+      btnRow.appendChild(subBtn);
+      btnRow.appendChild(signBtn);
+
+      var list = document.createElement('div');
+      list.style.display = 'flex';
+      list.style.flexWrap = 'wrap';
+      list.style.gap = '8px 18px';
+      list.style.justifyContent = 'center';
+      list.style.fontSize = '0.82rem';
+      list.style.color = colors.secondary;
+      for (var fi = 0; fi < features.length; fi++) {
+        var row = document.createElement('div');
+        row.style.display = 'inline-flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '6px';
+        var check = document.createElement('span');
+        check.textContent = '✓';
+        check.style.color = colors.accent;
+        check.style.fontWeight = '700';
+        var tx = document.createElement('span');
+        tx.textContent = features[fi];
+        row.appendChild(check);
+        row.appendChild(tx);
+        list.appendChild(row);
+      }
+
+      card.appendChild(eyebrow);
+      card.appendChild(headline);
+      card.appendChild(p);
+      card.appendChild(btnRow);
+      card.appendChild(list);
+      return card;
+    },
+
+    _applySinglePostPaywallBodyTeaser: function(bodyEl) {
+      if (!bodyEl) return;
+      var self = this;
+      var paras = [];
+      var allP = bodyEl.querySelectorAll('p');
+      for (var pi = 0; pi < allP.length; pi++) {
+        var pt = (allP[pi].textContent || '').replace(/\s+/g, ' ').trim();
+        if (pt.length > 12) paras.push(allP[pi]);
+      }
+      if (paras.length < 2) {
+        var plain = self._plainTextFromBlogHtml(bodyEl.innerHTML).replace(/\r/g, '').trim();
+        var chunks = plain.split(/\n\s*\n+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 12; });
+        if (chunks.length < 2) {
+          var sentences = plain.match(/[^.!?]+[.!?]+/g) || [plain];
+          if (sentences.length >= 2) {
+            chunks = [sentences[0].trim(), sentences.slice(1).join(' ').trim()];
+          } else if (plain.length > 80) {
+            var mid = Math.min(plain.length, Math.max(120, Math.floor(plain.length * 0.42)));
+            var splitAt = plain.indexOf(' ', mid);
+            if (splitAt < 0) splitAt = mid;
+            chunks = [plain.slice(0, splitAt).trim(), plain.slice(splitAt).trim()];
+          }
+        }
+        if (chunks.length >= 2) {
+          paras = [
+            (function(t) { var el = document.createElement('p'); el.textContent = t; return el; })(chunks[0]),
+            (function(t) { var el = document.createElement('p'); el.textContent = t; return el; })(chunks[1])
+          ];
+        } else if (chunks.length === 1) {
+          paras = [(function(t) { var el = document.createElement('p'); el.textContent = t; return el; })(chunks[0])];
+        }
+      }
+      if (paras.length === 0) return;
+
+      var zone = document.createElement('div');
+      zone.className = 'bb-paywall-body-teaser-zone';
+      zone.style.position = 'relative';
+      zone.style.marginTop = '1.25em';
+
+      bodyEl.innerHTML = '';
+      bodyEl.style.position = 'relative';
+      bodyEl.appendChild(paras[0].cloneNode(true));
+
+      if (paras.length < 2) {
+        var soloCardWrap = document.createElement('div');
+        soloCardWrap.style.marginTop = '24px';
+        soloCardWrap.style.display = 'flex';
+        soloCardWrap.style.justifyContent = 'center';
+        soloCardWrap.appendChild(self._createPaywallInlineArticleCard());
+        bodyEl.appendChild(soloCardWrap);
+        return;
+      }
+
+      var faded = document.createElement('div');
+      faded.className = 'bb-paywall-body-teaser-fade';
+      faded.style.position = 'relative';
+      faded.style.maxHeight = '5.5em';
+      faded.style.overflow = 'hidden';
+      faded.style.opacity = '0.42';
+      faded.style.marginTop = '1em';
+      faded.style.webkitMaskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
+      faded.style.maskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
+      var p2 = paras[1].cloneNode(true);
+      p2.style.margin = '0';
+      faded.appendChild(p2);
+      zone.appendChild(faded);
+
+      var cardWrap = document.createElement('div');
+      cardWrap.className = 'bb-paywall-inline-card-wrap';
+      cardWrap.style.position = 'absolute';
+      cardWrap.style.left = '50%';
+      cardWrap.style.top = '50%';
+      cardWrap.style.transform = 'translate(-50%, -42%)';
+      cardWrap.style.width = 'min(100%, 520px)';
+      cardWrap.style.zIndex = '2';
+      cardWrap.style.padding = '0 8px';
+      cardWrap.style.boxSizing = 'border-box';
+      cardWrap.style.pointerEvents = 'auto';
+      cardWrap.appendChild(self._createPaywallInlineArticleCard());
+      zone.appendChild(cardWrap);
+      bodyEl.appendChild(zone);
+    },
+
+    _isPaywallGatedModulePost: function(post) {
+      return (
+        this._isPaywalledSite() &&
+        this._resolveViewerMode() === 'loggedOut' &&
+        !this._isPaywallPublicPreviewPost(post)
+      );
+    },
+
+    /**
+     * Sidebar/footer post card. Gated: lock on image, category, title, Members Only.
+     * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement }
+     */
+    _createModulePostCard: function(post, opts) {
+      var self = this;
+      if (!post) return null;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var variant = opts.variant === 'footer' ? 'footer' : 'list';
+      var items = opts.items || self.items || [];
+      var itemIndexMap = opts.itemIndexMap;
+      var placeholderMap = opts.placeholderMap || {};
+      var gated = self._isPaywallGatedModulePost(post);
+      var postIdx = typeof opts.postIndex === 'number'
+        ? opts.postIndex
+        : self._postIndexInItems(items, post, itemIndexMap);
+      var postUrl = self._getPostUrl(post) || (postIdx >= 0 ? '#post-' + postIdx : '#');
+      var accent = self._getSiteAccentColor();
+      var analytics = opts.analyticsElement || 'relevantPosts';
+
+      var card = document.createElement('a');
+      card.href = postUrl;
+      card.setAttribute('data-analytics-element', analytics);
+      card.style.textDecoration = 'none';
+      card.style.color = 'inherit';
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.gap = variant === 'footer' ? '10px' : '8px';
+      card.style.minWidth = '0';
+
+      var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
+      if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
+      var imgWrap = document.createElement('div');
+      imgWrap.style.position = 'relative';
+      imgWrap.style.borderRadius = '4px';
+      imgWrap.style.overflow = 'hidden';
+      imgWrap.style.aspectRatio = '16 / 9';
+      imgWrap.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
+      if (imgUrl) {
+        var im = document.createElement('img');
+        im.src = imgUrl;
+        im.alt = post.title || '';
+        im.style.width = '100%';
+        im.style.height = '100%';
+        im.style.objectFit = 'cover';
+        im.style.display = 'block';
+        imgWrap.appendChild(im);
+      }
+      if (gated) self._appendPaywallCardImageLock(imgWrap);
+      card.appendChild(imgWrap);
+
+      var cats = self._getPostCategories(post);
+      if (cats.length > 0) {
+        var catEl = document.createElement('div');
+        catEl.textContent = cats[0];
+        catEl.style.fontSize = variant === 'footer' ? '10px' : '9px';
+        catEl.style.fontWeight = '700';
+        catEl.style.letterSpacing = '1.5px';
+        catEl.style.textTransform = 'uppercase';
+        catEl.style.color = accent;
+        catEl.style.lineHeight = '1.2';
+        card.appendChild(catEl);
+      }
+
+      var titleEl = document.createElement('div');
+      titleEl.textContent = post.title || 'Untitled';
+      titleEl.style.fontSize = variant === 'footer' ? '0.95rem' : '0.9rem';
+      titleEl.style.fontWeight = '600';
+      titleEl.style.lineHeight = '1.35';
+      titleEl.style.color = '#1a1a1a';
+      card.appendChild(titleEl);
+
+      if (gated) {
+        var mo = self._createMembersOnlyTeaserLabel(false);
+        mo.style.marginTop = '0';
+        card.appendChild(mo);
+      } else if (variant === 'footer') {
+        var deckEl = document.createElement('div');
+        deckEl.textContent = (opts.deckText != null ? opts.deckText : '');
+        if (!deckEl.textContent) {
+          var deckSrc = self._plainTextFromBlogHtml(post.body || post.excerpt || '').replace(/\r/g, '').trim();
+          var deckLines = deckSrc.split('\n');
+          for (var dl = 0; dl < deckLines.length; dl++) {
+            var dL = deckLines[dl].trim();
+            if (dL) { deckEl.textContent = self._truncateText(dL, 160); break; }
+          }
+          if (!deckEl.textContent) deckEl.textContent = self._truncateText(deckSrc, 160);
+        }
+        deckEl.style.fontSize = '0.85rem';
+        deckEl.style.color = '#555';
+        deckEl.style.lineHeight = '1.45';
+        deckEl.style.whiteSpace = 'nowrap';
+        deckEl.style.textOverflow = 'ellipsis';
+        deckEl.style.overflow = 'hidden';
+        if (deckEl.textContent) card.appendChild(deckEl);
+      } else {
+        var ex = document.createElement('div');
+        ex.textContent = self._truncateText(post.body || post.excerpt || '', 120);
+        ex.style.fontSize = '0.8rem';
+        ex.style.color = '#666';
+        ex.style.lineHeight = '1.4';
+        if (ex.textContent) card.appendChild(ex);
+      }
+      return card;
+    },
+
     _startPaywallAuthObserver: function() {
       // #region agent log
       try {
@@ -7199,7 +7529,8 @@
           selectedBodyLength: selectedPostForLog && selectedPostForLog.body ? String(selectedPostForLog.body).length : 0,
           selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
           paywallFullActive: paywallFullActiveForRender,
-          paywallShowFooter: paywalledLoggedOut,
+          paywallShowFooter: paywalledLoggedOut && !isSinglePost,
+          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && !self._isPaywallPublicPreviewPost(selectedPostForLog),
           paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
           paywallDetectionState: rawCfg.paywallDetectionState || null,
           paywallMode: rawCfg.paywallMode || null
@@ -7268,7 +7599,8 @@
         displayPostKey: displayPostKey,
         categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
         paywallFullActive: paywallFullActiveForRender,
-        paywallShowFooter: paywalledLoggedOut,
+        paywallShowFooter: paywalledLoggedOut && !isSinglePost,
+        paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && !self._isPaywallPublicPreviewPost(displayItems[0]),
         paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
       };
     },
@@ -7531,6 +7863,7 @@
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
       var siteAccentForPostCats = self._getSiteAccentColor();
       var paywallReplaceCollectionTeaser = Boolean(vs.paywallReplaceCollectionTeaser);
+      var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       /** Newsroom (listRows): compact row on narrow viewports / preview phone — tighter spacing, fixed thumb, stacked text */
       var listRowsMobileCompact = false;
       if (!isSinglePost && collectionLayout === 'listRows') {
@@ -8451,6 +8784,9 @@
             if (firstHeading && /^Section\s+\d+$/i.test((firstHeading.textContent || '').trim())) {
               firstHeading.remove();
             }
+          }
+          if (paywallGateSinglePostBody) {
+            self._applySinglePostPaywallBodyTeaser(body);
           }
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
@@ -9817,20 +10153,18 @@
         for (var r = 0; r < popularItems.length; r++) {
           var ppPost = popularItems[r];
           var ppIdx = self._postIndexInItems(items, ppPost, itemIndexMap);
-          if (ppIdx < 0) ppIdx = r;
-          var ppUrl = self._getPostUrl(ppPost);
+          var ppCard = self._createModulePostCard(ppPost, {
+            variant: 'list',
+            items: items,
+            itemIndexMap: itemIndexMap,
+            placeholderMap: placeholderMap,
+            postIndex: ppIdx,
+            analyticsElement: 'popularPosts'
+          });
+          if (!ppCard) continue;
           var ppEntry = document.createElement('div');
-          ppEntry.style.marginBottom = '12px';
-          var ppLink = document.createElement('a');
-          ppLink.href = ppUrl || '#post-' + ppIdx;
-          ppLink.setAttribute('data-analytics-element', 'popularPosts');
-          ppLink.textContent = ppPost.title || 'Untitled';
-          ppLink.style.display = 'block';
-          ppLink.style.fontSize = '0.9rem';
-          ppLink.style.fontWeight = '500';
-          ppLink.style.lineHeight = '1.25';
-          ppLink.style.textDecoration = 'none';
-          ppEntry.appendChild(ppLink);
+          ppEntry.style.marginBottom = '14px';
+          ppEntry.appendChild(ppCard);
           el.appendChild(ppEntry);
         }
         return createSidebarSection('Popular Posts', el, isSinglePost);
@@ -9844,25 +10178,19 @@
         var recentItems = items.slice(0, recentPostsCount);
         for (var r = 0; r < recentItems.length; r++) {
           var rpPost = recentItems[r];
-          var rpUrl = self._getPostUrl(rpPost);
+          var rpIdx = self._postIndexInItems(items, rpPost, itemIndexMap);
+          var rpCard = self._createModulePostCard(rpPost, {
+            variant: 'list',
+            items: items,
+            itemIndexMap: itemIndexMap,
+            placeholderMap: placeholderMap,
+            postIndex: rpIdx >= 0 ? rpIdx : r,
+            analyticsElement: 'recentPosts'
+          });
+          if (!rpCard) continue;
           var rpEntry = document.createElement('div');
-          rpEntry.style.marginBottom = '12px';
-          var rpLink = document.createElement('a');
-          rpLink.href = rpUrl || '#post-' + r;
-          rpLink.setAttribute('data-analytics-element', 'recentPosts');
-          rpLink.textContent = rpPost.title || 'Untitled';
-          rpLink.style.display = 'block';
-          rpLink.style.fontSize = '0.9rem';
-          rpLink.style.fontWeight = '500';
-          rpLink.style.textDecoration = 'none';
-          rpLink.style.marginBottom = '4px';
-          rpEntry.appendChild(rpLink);
-          var rpExcerpt = document.createElement('div');
-          rpExcerpt.textContent = self._truncateText(rpPost.body || rpPost.excerpt || '', 120);
-          rpExcerpt.style.fontSize = '0.8rem';
-          rpExcerpt.style.color = '#666';
-          rpExcerpt.style.lineHeight = '1.4';
-          rpEntry.appendChild(rpExcerpt);
+          rpEntry.style.marginBottom = '14px';
+          rpEntry.appendChild(rpCard);
           el.appendChild(rpEntry);
         }
         return createSidebarSection('Recent Posts', el);
@@ -9900,51 +10228,16 @@
             var fp = relevantItems[rf];
             var fIdx = self._postIndexInItems(items, fp, itemIndexMap);
             if (fIdx < 0) continue;
-            var fUrl = self._getPostUrl(fp);
-            var card = document.createElement('a');
-            card.href = fUrl || '#post-' + fIdx;
-            card.setAttribute('data-analytics-element', 'relevantPosts');
-            card.style.textDecoration = 'none';
-            card.style.color = 'inherit';
-            card.style.display = 'flex';
-            card.style.flexDirection = 'column';
-            card.style.gap = '10px';
-            card.style.minWidth = '0';
-            var imgWrap = document.createElement('div');
-            imgWrap.style.borderRadius = '4px';
-            imgWrap.style.overflow = 'hidden';
-            imgWrap.style.aspectRatio = '16 / 9';
-            imgWrap.style.background = '#e8e8e8';
-            var fu = fp.assetUrl || fp.thumbnailUrl || (fp.assets && fp.assets[0] && fp.assets[0].assetUrl) || null;
-            if (fu && self._isPlaceholderWithMap(fu, placeholderMap)) fu = null;
-            if (fu) {
-              var im = document.createElement('img');
-              im.src = fu;
-              im.alt = fp.title || '';
-              im.style.width = '100%';
-              im.style.height = '100%';
-              im.style.objectFit = 'cover';
-              im.style.display = 'block';
-              imgWrap.appendChild(im);
-            }
-            card.appendChild(imgWrap);
-            var tEl = document.createElement('div');
-            tEl.textContent = fp.title || 'Untitled';
-            tEl.style.fontSize = '0.95rem';
-            tEl.style.fontWeight = '600';
-            tEl.style.lineHeight = '1.35';
-            tEl.style.color = '#1a1a1a';
-            card.appendChild(tEl);
-            var deckEl = document.createElement('div');
-            deckEl.textContent = relevantPostFooterFirstLine(fp);
-            deckEl.style.fontSize = '0.85rem';
-            deckEl.style.color = '#555';
-            deckEl.style.lineHeight = '1.45';
-            deckEl.style.whiteSpace = 'nowrap';
-            deckEl.style.textOverflow = 'ellipsis';
-            deckEl.style.overflow = 'hidden';
-            card.appendChild(deckEl);
-            grid.appendChild(card);
+            var card = self._createModulePostCard(fp, {
+              variant: 'footer',
+              items: items,
+              itemIndexMap: itemIndexMap,
+              placeholderMap: placeholderMap,
+              postIndex: fIdx,
+              analyticsElement: 'relevantPosts',
+              deckText: relevantPostFooterFirstLine(fp)
+            });
+            if (card) grid.appendChild(card);
           }
           var footSection = document.createElement('div');
           footSection.className = 'blog-overlay-sidebar-section blog-overlay-more-to-read';
@@ -9972,19 +10265,18 @@
           var rpIdx = self._postIndexInItems(items, relevantItems[r], itemIndexMap);
           if (rpIdx < 0) continue;
           var rpPost = relevantItems[r];
-          var rpUrl = self._getPostUrl(rpPost);
+          var rpCard = self._createModulePostCard(rpPost, {
+            variant: 'list',
+            items: items,
+            itemIndexMap: itemIndexMap,
+            placeholderMap: placeholderMap,
+            postIndex: rpIdx,
+            analyticsElement: 'relevantPosts'
+          });
+          if (!rpCard) continue;
           var rpEntry = document.createElement('div');
-          rpEntry.style.marginBottom = '12px';
-          var rpLink = document.createElement('a');
-          rpLink.href = rpUrl || '#post-' + rpIdx;
-          rpLink.setAttribute('data-analytics-element', 'relevantPosts');
-          rpLink.textContent = rpPost.title || 'Untitled';
-          rpLink.style.display = 'block';
-          rpLink.style.fontSize = '0.9rem';
-          rpLink.style.fontWeight = '500';
-          rpLink.style.lineHeight = '1.25';
-          rpLink.style.textDecoration = 'none';
-          rpEntry.appendChild(rpLink);
+          rpEntry.style.marginBottom = '14px';
+          rpEntry.appendChild(rpCard);
           el.appendChild(rpEntry);
         }
         return createSidebarSection('Related Posts', el, isSinglePost);
@@ -11527,7 +11819,7 @@
             headerModulesHostEl.style.marginTop = '0';
           }
 
-          if (footerContentCfg && footerContentCfg.show && !paywallShowFooter) {
+          if (footerContentCfg && footerContentCfg.show) {
             var fcModules = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
             self._warnDuplicateValues('footer', fcModules);
             if (fcModules.length > 0) {
