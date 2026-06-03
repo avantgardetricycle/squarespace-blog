@@ -7863,7 +7863,7 @@
             fiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
             if (!fiFixedAspectCrop && !digestFeaturedViewportBleed) fiInner.style.minHeight = '200px';
           }
-          if (!isSinglePost && gatedCard && (collectionLayout === 'grid' || collectionLayout === 'listRows')) {
+          if (!isSinglePost && gatedCard && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest')) {
             self._appendPaywallCardImageLock(fiInner);
           }
           fiWrap.appendChild(fiInner);
@@ -8084,13 +8084,14 @@
         /* Keep categories in the text column on mobile — separate cat row adds height and vertical spread. */
         var listRowsMobileCatsAboveRow = false;
         var mastheadPaywallGatedCard = gatedCard && collectionLayout === 'grid';
+        var digestPaywallGatedCard = gatedCard && collectionLayout === 'digest';
         var newsroomPaywallGatedCard = gatedCard && collectionLayout === 'listRows';
         var newsroomPaywallMobile = newsroomPaywallGatedCard && listRowsMobileCompact;
-        if (postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard) {
+        if (postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard && !digestPaywallGatedCard) {
           headlineMount.appendChild(postCategoriesLine);
         }
         var titleBlock = null;
-        if (isFeaturedInLayout && !mastheadPaywallGatedCard && !newsroomPaywallMobile) {
+        if (isFeaturedInLayout && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var featuredHeadlineStack = document.createElement('div');
           featuredHeadlineStack.className = 'blog-overlay-featured-headline-stack';
           featuredHeadlineStack.style.display = 'flex';
@@ -8149,9 +8150,9 @@
         } else {
           headlineMount.appendChild(titleBlock);
         }
-        if (!isSinglePost && collectionLayout === 'digest' && gatedCard) {
+        if (digestPaywallGatedCard) {
           var moDigestLbl = self._createMembersOnlyTeaserLabel(false);
-          moDigestLbl.style.marginTop = '6px';
+          moDigestLbl.style.marginTop = '8px';
           headlineMount.appendChild(moDigestLbl);
         }
 
@@ -8214,7 +8215,7 @@
             metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
           }
         }
-        if (metaParts.length > 0 && !mastheadPaywallGatedCard && !newsroomPaywallMobile) {
+        if (metaParts.length > 0 && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var metaRow = document.createElement('div');
           metaRow.className = 'blog-overlay-meta-row';
           metaRow.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) ? '0' : '8px';
@@ -8249,7 +8250,7 @@
         }
         var shareImageUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero) : null;
-        if (shareLinks && !mastheadPaywallGatedCard && !newsroomPaywallMobile) {
+        if (shareLinks && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var shareRow = document.createElement('div');
           shareRow.className = 'blog-overlay-share-row';
           shareRow.style.marginBottom = '8px';
@@ -8454,7 +8455,7 @@
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
         } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
-          if (collectionLayout === 'digest' && isFeaturedInLayout) {
+          if (collectionLayout === 'digest' && isFeaturedInLayout && !gatedCard) {
             var digestFeaturedExcerpt = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (digestFeaturedExcerpt) {
               body.textContent = digestFeaturedExcerpt;
