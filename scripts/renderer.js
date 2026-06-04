@@ -8265,7 +8265,8 @@
           var bcNav = postBreadcrumbNav;
           bcNav.style.fontSize = '0.85rem';
           bcNav.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.9)' : '#666';
-          bcNav.style.display = 'flex';
+          bcNav.style.setProperty('display', 'flex', 'important');
+          bcNav.style.setProperty('flex-direction', 'row', 'important');
           bcNav.style.flexWrap = 'wrap';
           bcNav.style.alignItems = 'center';
           bcNav.style.gap = '0';
@@ -8329,16 +8330,18 @@
         if (isSinglePost && (phShowTags || phShowCategories)) {
           var tagsCatsWrap = document.createElement('div');
           tagsCatsWrap.className = 'blog-overlay-tags-categories';
-          tagsCatsWrap.style.display = 'flex';
+          tagsCatsWrap.style.setProperty('display', 'flex', 'important');
+          tagsCatsWrap.style.setProperty('flex-direction', 'row', 'important');
           tagsCatsWrap.style.flexWrap = 'wrap';
           tagsCatsWrap.style.gap = '6px';
           tagsCatsWrap.style.marginBottom = '8px';
+          tagsCatsWrap.style.width = '100%';
           tagsCatsWrap.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           var makeTagEl = function(label, href, onClick) {
             var span = document.createElement('a');
             span.textContent = label;
             span.href = href || '#';
-            span.style.display = 'inline-block';
+            span.style.setProperty('display', 'inline-block', 'important');
             span.style.fontSize = '0.65rem';
             span.style.fontWeight = '600';
             span.style.letterSpacing = '0.05em';
@@ -11536,7 +11539,8 @@
                   breadcrumbEl.setAttribute('aria-label', 'Breadcrumb');
                   breadcrumbEl.style.fontSize = '0.85rem';
                   breadcrumbEl.style.color = '#666';
-                  breadcrumbEl.style.display = 'flex';
+                  breadcrumbEl.style.setProperty('display', 'flex', 'important');
+                  breadcrumbEl.style.setProperty('flex-direction', 'row', 'important');
                   breadcrumbEl.style.flexWrap = 'wrap';
                   breadcrumbEl.style.alignItems = 'center';
                   breadcrumbEl.style.gap = '0';
