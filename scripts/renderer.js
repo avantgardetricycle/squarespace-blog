@@ -7924,12 +7924,11 @@
           fiLayout = 'fullBleed';
         }
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
-        var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : '16:9');
+        var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
-        /** Reporter (rightOfInfo header): always 4:3 cover crop regardless of saved aspectBehavior. */
+        /** Reporter (rightOfInfo header): always cover crop regardless of saved aspectBehavior. */
         var reporterPostHeaderCrop = isSinglePost && phImagePos === 'rightOfInfo' && fiShow;
         if (reporterPostHeaderCrop) {
-          fiRatio = '4:3';
           fiAspect = 'cropped';
         }
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
@@ -10487,6 +10486,7 @@
           emailInputF.style.borderRadius = '6px';
           emailInputF.style.outline = 'none';
           emailInputF.style.boxSizing = 'border-box';
+          emailInputF.style.background = 'transparent';
           emailInputF.style.flex = '1 1 160px';
           emailInputF.style.minWidth = '140px';
           emailInputF.style.maxWidth = '320px';
@@ -10704,8 +10704,8 @@
         card.style.flexWrap = 'wrap';
 
         var left = document.createElement('div');
-        left.style.flex = '1 1 320px';
-        left.style.minWidth = '220px';
+        left.style.flex = '1 1 200px';
+        left.style.minWidth = '0';
         var title = document.createElement('div');
         title.textContent = resourceTitle;
         title.style.fontSize = '0.95rem';
@@ -10724,8 +10724,8 @@
         card.appendChild(left);
 
         var right = document.createElement('div');
-        right.style.flex = '1 1 280px';
-        right.style.minWidth = '240px';
+        right.style.flex = '1 1 260px';
+        right.style.minWidth = '0';
         right.style.display = 'flex';
         right.style.flexDirection = 'column';
         right.style.gap = '8px';
@@ -10734,27 +10734,31 @@
         formRow.style.display = 'flex';
         formRow.style.gap = '8px';
         formRow.style.alignItems = 'center';
+        formRow.style.justifyContent = 'flex-end';
         formRow.style.flexWrap = 'wrap';
+        formRow.style.width = '100%';
         var emailInput = document.createElement('input');
         emailInput.type = 'email';
         emailInput.name = 'bb-lead-magnet-footer-email';
         emailInput.id = 'bb-lead-magnet-footer-email';
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.flex = '1 1 180px';
-        emailInput.style.minWidth = '160px';
-        emailInput.style.padding = '8px 10px';
+        emailInput.style.flex = '1 1 160px';
+        emailInput.style.minWidth = '140px';
+        emailInput.style.maxWidth = '320px';
+        emailInput.style.padding = '8px 12px';
         emailInput.style.fontSize = '0.9rem';
         emailInput.style.border = '1px solid #ddd';
         emailInput.style.borderRadius = '6px';
         emailInput.style.outline = 'none';
         emailInput.style.boxSizing = 'border-box';
+        emailInput.style.background = 'transparent';
         formRow.appendChild(emailInput);
 
         var btn = document.createElement('button');
         btn.textContent = buttonText;
         btn.type = 'button';
-        btn.style.padding = '8px 14px';
+        btn.style.padding = '8px 16px';
         btn.style.fontSize = '0.9rem';
         btn.style.fontWeight = '500';
         btn.style.background = siteAccentUi;
@@ -10762,6 +10766,7 @@
         btn.style.border = 'none';
         btn.style.borderRadius = '6px';
         btn.style.cursor = 'pointer';
+        btn.style.flexShrink = '0';
         btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
         btn.onmouseout = function() { btn.style.filter = ''; };
         formRow.appendChild(btn);
@@ -10769,6 +10774,8 @@
 
         var msgEl = document.createElement('div');
         msgEl.style.fontSize = '0.85rem';
+        msgEl.style.textAlign = 'right';
+        msgEl.style.width = '100%';
         right.appendChild(msgEl);
         card.appendChild(right);
 

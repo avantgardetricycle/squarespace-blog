@@ -194,7 +194,7 @@ export interface PostHeaderConfig {
   showByline?: boolean;
 }
 export type FeaturedImageAspectBehavior = "original" | "cropped";
-export type FeaturedImageAspectRatio = "16:9" | "4:3" | "3:2" | "1:1";
+export type FeaturedImageAspectRatio = "16:9" | "4:3" | "3:2" | "2:3" | "1:1";
 export type FeaturedImageRoundedCorners = "off" | "small" | "large";
 export type FeaturedImageVerticalSpacing = "tight" | "normal" | "spacious";
 
@@ -639,7 +639,7 @@ function parseLevelConfig(
     layoutMode: (fi.layoutMode === "fullBleed" ? "fullBleed" : fi.layoutMode === "rightJustified" ? "rightJustified" : "leftJustified") as FeaturedImageLayoutMode,
     imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
     aspectBehavior: fi.aspectBehavior === "cropped" ? "cropped" : "original",
-    aspectRatio: (fi.aspectRatio === "4:3" ? "4:3" : fi.aspectRatio === "3:2" ? "3:2" : fi.aspectRatio === "1:1" ? "1:1" : "16:9") as FeaturedImageAspectRatio,
+    aspectRatio: (fi.aspectRatio === "4:3" ? "4:3" : fi.aspectRatio === "3:2" ? "3:2" : fi.aspectRatio === "2:3" ? "2:3" : fi.aspectRatio === "1:1" ? "1:1" : "16:9") as FeaturedImageAspectRatio,
     roundedCorners: (fi.roundedCorners === "small" ? "small" : fi.roundedCorners === "large" ? "large" : "off") as FeaturedImageRoundedCorners,
     shadow: Boolean(fi.shadow),
     showCaption: Boolean(fi.showCaption ?? true),
@@ -3314,6 +3314,7 @@ export default function Configure() {
                                         <SelectItem value="16:9">16:9</SelectItem>
                                         <SelectItem value="4:3">4:3</SelectItem>
                                         <SelectItem value="3:2">3:2</SelectItem>
+                                        <SelectItem value="2:3">2:3</SelectItem>
                                         <SelectItem value="1:1">1:1</SelectItem>
                                       </SelectContent>
                                     </Select>
@@ -3505,6 +3506,7 @@ export default function Configure() {
                                     <SelectItem value="16:9">16:9</SelectItem>
                                     <SelectItem value="4:3">4:3</SelectItem>
                                     <SelectItem value="3:2">3:2</SelectItem>
+                                    <SelectItem value="2:3">2:3</SelectItem>
                                     <SelectItem value="1:1">1:1</SelectItem>
                                   </SelectContent>
                                 </Select>

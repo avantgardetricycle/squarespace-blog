@@ -438,7 +438,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     layoutMode: 'rightJustified',
     imageWidthPercent: 38,
     aspectBehavior: 'cropped',
-    aspectRatio: '4:3',
+    aspectRatio: '2:3',
     roundedCorners: 'off',
     shadow: false,
     showCaption: true,

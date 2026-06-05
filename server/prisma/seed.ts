@@ -502,7 +502,7 @@ async function main() {
           layoutMode: 'rightJustified',
           imageWidthPercent: 38,
           aspectBehavior: 'cropped',
-          aspectRatio: '4:3'
+          aspectRatio: '2:3'
         },
         progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' },
         postModules: {

@@ -79,7 +79,7 @@ export interface FeaturedImageConfig {
   layoutMode?: 'fullBleed' | 'leftJustified' | 'rightJustified'
   imageWidthPercent?: number
   aspectBehavior?: 'original' | 'cropped'
-  aspectRatio?: '16:9' | '4:3' | '3:2' | '1:1'
+  aspectRatio?: '16:9' | '4:3' | '3:2' | '2:3' | '1:1'
   roundedCorners?: 'off' | 'small' | 'large'
   shadow?: boolean
   showCaption?: boolean

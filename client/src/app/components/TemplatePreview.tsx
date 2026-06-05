@@ -433,7 +433,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
               <div className="text-[11px] font-bold text-[#333] mt-0.5">Article Headline Goes Here</div>
               <div className={cn(textMuted, "text-[9px] mt-0.5")}>By Author · Mar 7 · 8 min</div>
             </div>
-            <div className={cn(imgPlaceholder, "w-[45%] aspect-[4/3] shrink-0 rounded")} />
+            <div className={cn(imgPlaceholder, "w-[45%] aspect-[2/3] shrink-0 rounded")} />
           </div>
           <div className="flex gap-3 min-h-0 mt-2">
             <div className="flex-1 min-w-0">
