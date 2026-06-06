@@ -7888,8 +7888,8 @@
           listRowsMobileCompact = typeof window !== 'undefined' && window.innerWidth <= 767;
         }
       }
-      /** Digest mobile: full-bleed featured image, 2-col grid (see collectionMobileGridNarrow in view state). */
-      var digestMobileFullBleed = digestMobileNarrow;
+      /** Digest mobile: inset images (2-col grid); featured hero no longer viewport-bleeds on narrow viewports. */
+      var digestMobileFullBleed = false;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
       var phAlign = postHeaderCfg && (postHeaderCfg.contentAlignment === 'left' || postHeaderCfg.contentAlignment === 'center' || postHeaderCfg.contentAlignment === 'right') ? postHeaderCfg.contentAlignment : 'left';
@@ -9212,8 +9212,8 @@
         mainEl.style.maxWidth = '100%';
         mainEl.style.minWidth = '0';
         mainEl.style.boxSizing = 'border-box';
-        mainEl.style.overflow = (vs.collectionMobileGridNarrow && collectionLayout === 'digest') ? 'visible' : (vs.collectionMobileGridNarrow ? 'hidden' : '');
-        if (vs.gridMobileNarrow) {
+        mainEl.style.overflow = vs.collectionMobileGridNarrow ? 'hidden' : '';
+        if (vs.collectionMobileGridNarrow) {
           mainEl.style.paddingLeft = '12px';
           mainEl.style.paddingRight = '12px';
         } else {
@@ -9586,8 +9586,8 @@
         main.style.maxWidth = '100%';
         main.style.minWidth = '0';
         main.style.boxSizing = 'border-box';
-        main.style.overflow = (collectionMobileGridNarrow && collectionLayout === 'digest') ? 'visible' : (collectionMobileGridNarrow ? 'hidden' : '');
-        if (gridMobileNarrow) {
+        main.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
+        if (collectionMobileGridNarrow) {
           main.style.paddingLeft = '12px';
           main.style.paddingRight = '12px';
         } else {
@@ -11988,24 +11988,6 @@
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
           if (deferOverlayCommit) {
             root.prepend(overlayFragment);
-          }
-
-          if (
-            !isSinglePost &&
-            collectionLayout === 'digest' &&
-            digestMobileNarrow &&
-            featuredPost &&
-            faCfg &&
-            faCfg.show &&
-            faCfg.position === 'inLayout'
-          ) {
-            var digestBleedRenderSeq = self._renderSeq;
-            requestAnimationFrame(function() {
-              requestAnimationFrame(function() {
-                if (self._renderSeq !== digestBleedRenderSeq) return;
-                self._syncDigestMobileFeaturedImageBleed(wrapper);
-              });
-            });
           }
 
           if (!isSinglePost) {
