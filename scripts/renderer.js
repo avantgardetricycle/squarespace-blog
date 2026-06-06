@@ -11502,6 +11502,8 @@
                 headerFilterRow.style.gap = '8px 10px';
                 headerFilterRow.style.width = '100%';
                 headerFilterRow.style.boxSizing = 'border-box';
+                headerFilterRow.style.paddingLeft = '12px';
+                headerFilterRow.style.paddingRight = '12px';
                 headerUtilityRow = document.createElement('div');
                 headerUtilityRow.className = 'blog-overlay-header-utility-row';
                 headerUtilityRow.style.display = 'flex';
