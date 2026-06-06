@@ -11976,7 +11976,13 @@
           }
           if (footerZoneEl.childNodes.length > 0) {
             footerZoneEl.style.boxSizing = 'border-box';
-            main.appendChild(footerZoneEl);
+            footerZoneEl.style.width = '100%';
+            footerZoneEl.style.maxWidth = '100%';
+            if (isSinglePost) {
+              main.appendChild(footerZoneEl);
+            } else {
+              wrapper.appendChild(footerZoneEl);
+            }
           }
 
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
