@@ -2526,10 +2526,11 @@
       return wrap;
     },
 
-    /** Paywalled collection card: centered lock badge over the card image area. opts.compact: smaller ring (editorial). */
+    /** Paywalled collection card: centered lock badge over the card image area. opts.compact: smaller ring (editorial). opts.thumbnail: tiny ring (Newsroom mobile list thumb). */
     _appendPaywallCardImageLock: function(hostEl, opts) {
       if (!hostEl) return;
       var o = opts && typeof opts === 'object' ? opts : {};
+      var thumbnail = Boolean(o.thumbnail);
       var compact = Boolean(o.compact);
       if (!hostEl.style.position || hostEl.style.position === 'static') hostEl.style.position = 'relative';
       var shade = document.createElement('div');
@@ -2557,10 +2558,10 @@
       badge.style.pointerEvents = 'none';
       badge.style.zIndex = '3';
       var ring = document.createElement('div');
-      ring.style.width = compact ? '40px' : '52px';
-      ring.style.height = compact ? '40px' : '52px';
+      ring.style.width = thumbnail ? '24px' : (compact ? '40px' : '52px');
+      ring.style.height = thumbnail ? '24px' : (compact ? '40px' : '52px');
       ring.style.borderRadius = '50%';
-      ring.style.border = compact ? '1.5px solid rgba(255, 255, 255, 0.9)' : '2px solid rgba(255, 255, 255, 0.9)';
+      ring.style.border = thumbnail ? '1px solid rgba(255, 255, 255, 0.9)' : (compact ? '1.5px solid rgba(255, 255, 255, 0.9)' : '2px solid rgba(255, 255, 255, 0.9)');
       ring.style.display = 'flex';
       ring.style.alignItems = 'center';
       ring.style.justifyContent = 'center';
@@ -2568,8 +2569,8 @@
       ring.style.background = 'rgba(0, 0, 0, 0.2)';
       var lockNs = 'http://www.w3.org/2000/svg';
       var lockSvg = document.createElementNS(lockNs, 'svg');
-      lockSvg.setAttribute('width', compact ? '18' : '22');
-      lockSvg.setAttribute('height', compact ? '18' : '22');
+      lockSvg.setAttribute('width', thumbnail ? '11' : (compact ? '18' : '22'));
+      lockSvg.setAttribute('height', thumbnail ? '11' : (compact ? '18' : '22'));
       lockSvg.setAttribute('viewBox', '0 0 24 24');
       lockSvg.setAttribute('fill', 'none');
       lockSvg.setAttribute('stroke', 'currentColor');
@@ -7956,10 +7957,13 @@
           article.style.borderBottom = '1px solid #e8e6e3';
           article.style.marginBottom = '0';
           if (listRowsMobileCompact) {
-            article.style.paddingBottom = '14px';
+            article.style.paddingTop = '7px';
+            article.style.paddingBottom = '7px';
+            article.style.paddingLeft = '8px';
             article.classList.add('blog-overlay-list-rows-mobile-compact');
           } else {
-            article.style.paddingBottom = '24px';
+            article.style.paddingTop = '12px';
+            article.style.paddingBottom = '12px';
           }
           if (j === displayItemsForLoop.length - 1) {
             article.style.borderBottom = 'none';
@@ -8031,7 +8035,7 @@
               : ((!isSinglePost && collectionLayout === 'listRows')
                   ? 'center'
                   : (isSinglePost ? phVerticalAlignItems : 'flex-start'));
-          rowEl.style.marginBottom = (collectionLayout === 'listRows' && listRowsMobileCompact)
+          rowEl.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows')
             ? '0'
             : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           contentEl = document.createElement('div');
@@ -8043,7 +8047,7 @@
             contentEl.style.justifyContent = 'center';
             contentEl.style.alignItems = 'flex-start';
             contentEl.style.alignSelf = 'center';
-            contentEl.style.gap = listRowsMobileCompact ? '2px' : '6px';
+            contentEl.style.gap = '2px';
           }
           if (isSinglePost) {
             if (phImagePos === 'rightOfInfo' && phAlign === 'left') {
@@ -8171,9 +8175,9 @@
             }
           } else if (isSideBySide) {
             if (collectionLayout === 'listRows' && listRowsMobileCompact) {
-              fiWrap.style.flex = '0 0 53px';
-              fiWrap.style.width = '53px';
-              fiWrap.style.maxWidth = '53px';
+              fiWrap.style.flex = '0 0 80px';
+              fiWrap.style.width = '80px';
+              fiWrap.style.maxWidth = '80px';
             } else {
               fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             }
@@ -8200,7 +8204,7 @@
             fiInner.style.width = '100%';
           }
           if (collectionLayout === 'listRows' && listRowsMobileCompact && isSideBySide) {
-            fiInner.style.maxHeight = '40px';
+            fiInner.style.maxHeight = '60px';
           }
           if (imgUrl) {
             var img = document.createElement('img');
@@ -8218,7 +8222,9 @@
             if (!fiFixedAspectCrop && !digestFeaturedViewportBleed) fiInner.style.minHeight = '200px';
           }
           if (!isSinglePost && gatedCard && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest')) {
-            self._appendPaywallCardImageLock(fiInner);
+            self._appendPaywallCardImageLock(fiInner, {
+              thumbnail: collectionLayout === 'listRows' && listRowsMobileCompact
+            });
           }
           fiWrap.appendChild(fiInner);
           if (fiCaption && imgCaption) {
@@ -8377,14 +8383,21 @@
 
         var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))
           ? self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, categoryFilterUiEnabled, {
-            compact: collectionLayout === 'listRows' && listRowsMobileCompact
+            compact: collectionLayout === 'listRows'
           })
           : null;
 
-        var titleEl = document.createElement(isSinglePost ? 'h2' : 'h3');
+        var listRowsDesktop = !isSinglePost && collectionLayout === 'listRows' && !listRowsMobileCompact;
+        var titleEl = document.createElement(isSinglePost ? 'h2' : (listRowsDesktop ? 'h4' : 'h3'));
         titleEl.className = 'blog-overlay-title';
         titleEl.style.margin = '0 0 8px 0';
         if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
+          titleEl.style.fontSize = '1.05rem';
+          titleEl.style.lineHeight = '1.2';
+          titleEl.style.fontWeight = '700';
+          titleEl.style.margin = '0 0 2px 0';
+        }
+        if (listRowsDesktop) {
           titleEl.style.fontSize = '1.05rem';
           titleEl.style.lineHeight = '1.2';
           titleEl.style.fontWeight = '700';
@@ -8458,7 +8471,7 @@
           featuredHeadlineStack.style.display = 'flex';
           featuredHeadlineStack.style.flexDirection = 'column';
           featuredHeadlineStack.style.alignItems = 'flex-start';
-          featuredHeadlineStack.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '4px' : '6px';
+          featuredHeadlineStack.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '4px' : (collectionLayout === 'listRows' ? '2px' : '6px');
           featuredHeadlineStack.style.width = '100%';
           var featuredBadge = document.createElement('span');
           featuredBadge.className = 'blog-overlay-featured-badge';
@@ -8580,7 +8593,7 @@
         if (metaParts.length > 0 && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var metaRow = document.createElement('div');
           metaRow.className = 'blog-overlay-meta-row';
-          metaRow.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) ? '0' : '8px';
+          metaRow.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) ? '0' : (listRowsDesktop ? '2px' : '8px');
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
             metaRow.style.marginTop = '0';
           }
@@ -8597,6 +8610,10 @@
             meta.style.fontSize = '0.8rem';
             meta.style.lineHeight = '1.2';
             meta.style.margin = '0';
+          }
+          if (listRowsDesktop) {
+            meta.style.fontSize = '0.8125rem';
+            meta.style.lineHeight = '1.25';
           }
           if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
             meta.style.fontSize = '0.5rem';
@@ -8826,12 +8843,13 @@
               if (digestMobileNarrow) body.style.textAlign = 'left';
             }
           } else if (collectionLayout === 'listRows' && !listRowsMobileCompact) {
-            var excerptText = self._truncateText(post.excerpt || post.body || '', 160);
+            var excerptText = self._truncateText(post.excerpt || post.body || '', 120);
             if (excerptText) {
               body.textContent = excerptText;
-              body.style.fontSize = '0.9rem';
+              body.style.fontSize = '0.875rem';
               body.style.color = '#666';
-              body.style.lineHeight = '1.5';
+              body.style.lineHeight = '1.35';
+              body.style.marginTop = '0';
             }
           }
           // digest, non-featured cards: no excerpt (body left empty; omitted below)
