@@ -11921,7 +11921,7 @@
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
-              footerEl.style.alignItems = 'stretch';
+              footerEl.style.alignItems = 'center';
               footerEl.style.width = '100%';
               footerEl.style.boxSizing = 'border-box';
               footerEl.style.minHeight = footerHeight + 'px';
@@ -11959,6 +11959,11 @@
                   }
                 } else if (fmod === 'prevNextArticle') {
                   fmodEl = createPrevNextArticleModule();
+                  if (fmodEl) {
+                    fmodEl.style.width = '100%';
+                    fmodEl.style.maxWidth = '720px';
+                    fmodEl.style.minWidth = '0';
+                  }
                 }
                 if (fmodEl) footerEl.appendChild(fmodEl);
               }
