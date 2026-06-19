@@ -9270,15 +9270,9 @@
         if (vs.collectionMobileGridNarrow) {
           mainEl.style.paddingLeft = '12px';
           mainEl.style.paddingRight = '12px';
-          if (vs.gridMobileNarrow) {
-            mainEl.style.gap = '';
-            mainEl.style.rowGap = '8px';
-            mainEl.style.columnGap = '16px';
-          } else {
-            mainEl.style.gap = '16px';
-            mainEl.style.rowGap = '';
-            mainEl.style.columnGap = '';
-          }
+          mainEl.style.gap = vs.gridMobileNarrow ? '8px 16px' : '16px';
+          mainEl.style.rowGap = '';
+          mainEl.style.columnGap = '';
         } else {
           mainEl.style.gap = '24px';
           mainEl.style.rowGap = '';
@@ -9655,15 +9649,9 @@
         if (collectionMobileGridNarrow) {
           main.style.paddingLeft = '12px';
           main.style.paddingRight = '12px';
-          if (gridMobileNarrow) {
-            main.style.gap = '';
-            main.style.rowGap = '8px';
-            main.style.columnGap = '16px';
-          } else {
-            main.style.gap = '16px';
-            main.style.rowGap = '';
-            main.style.columnGap = '';
-          }
+          main.style.gap = gridMobileNarrow ? '8px 16px' : '16px';
+          main.style.rowGap = '';
+          main.style.columnGap = '';
         } else {
           main.style.gap = '24px';
           main.style.rowGap = '';
