@@ -8401,12 +8401,13 @@
               var firstA = tagsCatsWrap.querySelector('a');
               var csA = firstA ? window.getComputedStyle(firstA) : null;
               var piwCS = postInfoWrap ? window.getComputedStyle(postInfoWrap) : null;
-              fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f89e23'},body:JSON.stringify({sessionId:'f89e23',runId:runId,location:'renderer.js:8396',message:'tagsCatsWrap layout state',data:{extra:extra,wrap:{computedDisplay:cs.display,computedFlexDir:cs.flexDirection,computedFlexWrap:cs.flexWrap,computedAlignItems:cs.alignItems,computedWidth:cs.width,inlineStyle:tagsCatsWrap.getAttribute('style')},firstA:csA?{computedDisplay:csA.display,computedWidth:csA.width,computedFlexBasis:csA.flexBasis,computedMaxWidth:csA.maxWidth,inlineStyle:firstA.getAttribute('style')}:null,parentWrap:piwCS?{computedDisplay:piwCS.display,computedFlexDir:piwCS.flexDirection,computedAlignItems:piwCS.alignItems,inlineStyle:postInfoWrap.getAttribute('style')}:null},timestamp:Date.now()})}).catch(function(){});
+              var payload = {runId:runId,extra:extra,wrap:{computedDisplay:cs.display,computedFlexDir:cs.flexDirection,computedFlexWrap:cs.flexWrap,computedAlignItems:cs.alignItems,computedWidth:cs.width,inlineStyle:tagsCatsWrap.getAttribute('style')},firstA:csA?{computedDisplay:csA.display,computedWidth:csA.width,computedFlexBasis:csA.flexBasis,computedMaxWidth:csA.maxWidth,inlineStyle:firstA.getAttribute('style')}:null,parentWrap:piwCS?{computedDisplay:piwCS.display,computedFlexDir:piwCS.flexDirection,computedAlignItems:piwCS.alignItems,inlineStyle:postInfoWrap.getAttribute('style')}:null};
+              console.log('[BB-DBGTAG] tagsCatsWrap layout state', JSON.stringify(payload));
             };
             __tcDebugLog('initial','immediately-after-append');
             var __tcObs = new MutationObserver(function(mutations) {
               mutations.forEach(function(m) {
-                fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f89e23'},body:JSON.stringify({sessionId:'f89e23',runId:'mutation',hypothesisId:'H-B',location:'renderer.js:mutobs',message:'tagsCatsWrap style mutated by external code',data:{attrName:m.attributeName,oldVal:m.oldValue,newStyle:tagsCatsWrap.getAttribute('style'),mutationType:m.type},timestamp:Date.now()})}).catch(function(){});
+                console.warn('[BB-DBGTAG] tagsCatsWrap MUTATED by external code', JSON.stringify({attrName:m.attributeName,oldVal:m.oldValue,newStyle:tagsCatsWrap.getAttribute('style'),mutationType:m.type}));
                 __tcObs.disconnect();
               });
             });
