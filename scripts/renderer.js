@@ -7940,7 +7940,7 @@
           fiLayout = 'fullBleed';
         }
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
-        var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : '16:9');
+        var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : fiCfg.aspectRatio === '21:8' ? '21:8' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
         /** Reporter (rightOfInfo header): always cover crop regardless of saved aspectBehavior. */
         var reporterPostHeaderCrop = isSinglePost && phImagePos === 'rightOfInfo' && fiShow;
@@ -8394,6 +8394,28 @@
             }
           }
           if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
+          // #region agent log
+          if (tagsCatsWrap.childNodes.length > 0) {
+            var __tcDebugLog = function(runId, extra) {
+              var cs = window.getComputedStyle(tagsCatsWrap);
+              var firstA = tagsCatsWrap.querySelector('a');
+              var csA = firstA ? window.getComputedStyle(firstA) : null;
+              var piwCS = postInfoWrap ? window.getComputedStyle(postInfoWrap) : null;
+              fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f89e23'},body:JSON.stringify({sessionId:'f89e23',runId:runId,location:'renderer.js:8396',message:'tagsCatsWrap layout state',data:{extra:extra,wrap:{computedDisplay:cs.display,computedFlexDir:cs.flexDirection,computedFlexWrap:cs.flexWrap,computedAlignItems:cs.alignItems,computedWidth:cs.width,inlineStyle:tagsCatsWrap.getAttribute('style')},firstA:csA?{computedDisplay:csA.display,computedWidth:csA.width,computedFlexBasis:csA.flexBasis,computedMaxWidth:csA.maxWidth,inlineStyle:firstA.getAttribute('style')}:null,parentWrap:piwCS?{computedDisplay:piwCS.display,computedFlexDir:piwCS.flexDirection,computedAlignItems:piwCS.alignItems,inlineStyle:postInfoWrap.getAttribute('style')}:null},timestamp:Date.now()})}).catch(function(){});
+            };
+            __tcDebugLog('initial','immediately-after-append');
+            var __tcObs = new MutationObserver(function(mutations) {
+              mutations.forEach(function(m) {
+                fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f89e23'},body:JSON.stringify({sessionId:'f89e23',runId:'mutation',hypothesisId:'H-B',location:'renderer.js:mutobs',message:'tagsCatsWrap style mutated by external code',data:{attrName:m.attributeName,oldVal:m.oldValue,newStyle:tagsCatsWrap.getAttribute('style'),mutationType:m.type},timestamp:Date.now()})}).catch(function(){});
+                __tcObs.disconnect();
+              });
+            });
+            __tcObs.observe(tagsCatsWrap, {attributes:true,attributeOldValue:true,attributeFilter:['style','class']});
+            setTimeout(function() {
+              __tcDebugLog('delayed','100ms-after-append');
+            }, 100);
+          }
+          // #endregion
         }
 
         var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))
