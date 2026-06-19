@@ -6787,13 +6787,28 @@
       return false;
     },
 
+    _siteContentInsetVwBufferPx: function() {
+      if (typeof window === 'undefined') return 0;
+      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
+      return vw > 0 ? Math.round(vw * 0.02) : 0;
+    },
+
     _finishSiteContentInsets: function(source, insets, root, meta) {
       var out = {
         left: Math.max(0, insets && insets.left ? insets.left : 0),
         right: Math.max(0, insets && insets.right ? insets.right : 0)
       };
+      var bufferPx = this._siteContentInsetVwBufferPx();
+      if (bufferPx > 0) {
+        out.left += bufferPx;
+        out.right += bufferPx;
+      }
       this._siteContentInsetsSource = source;
-      this._siteContentColumnWidth = meta && meta.width ? meta.width : null;
+      var colW = meta && meta.width ? meta.width : null;
+      if (colW && bufferPx > 0) {
+        colW = Math.max(80, colW - bufferPx * 2);
+      }
+      this._siteContentColumnWidth = colW;
       this._siteContentInsetsSkipHorizontal = this._shouldSkipHorizontalWrapperInset(root, out);
       if (this._isSiteMarginDebugEnabled()) {
         console.log('[BlogOverlay][site-margin] ' + source, out, {
