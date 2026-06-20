@@ -8405,7 +8405,7 @@
               var payload = {runId:runId,extra:extra,wrap:{computedDisplay:cs.display,computedFlexDir:cs.flexDirection,computedFlexWrap:cs.flexWrap,computedAlignItems:cs.alignItems,computedWidth:cs.width,inlineStyle:tagsCatsWrap.getAttribute('style')},firstA:csA?{computedDisplay:csA.display,computedWidth:csA.width,computedFlexBasis:csA.flexBasis,computedMaxWidth:csA.maxWidth,inlineStyle:firstA.getAttribute('style')}:null,parentWrap:piwCS?{computedDisplay:piwCS.display,computedFlexDir:piwCS.flexDirection,computedAlignItems:piwCS.alignItems,inlineStyle:postInfoWrap.getAttribute('style')}:null};
               console.log('[BB-DBGTAG] tagsCatsWrap layout state', JSON.stringify(payload));
             };
-            __tcDebugLog('post-fix-initial','immediately-after-append');
+            __tcDebugLog('post-fix-2-initial','immediately-after-append');
             var __tcObs = new MutationObserver(function(mutations) {
               mutations.forEach(function(m) {
                 console.warn('[BB-DBGTAG] tagsCatsWrap MUTATED by external code', JSON.stringify({attrName:m.attributeName,oldVal:m.oldValue,newStyle:tagsCatsWrap.getAttribute('style'),mutationType:m.type}));
@@ -8414,7 +8414,7 @@
             });
             __tcObs.observe(tagsCatsWrap, {attributes:true,attributeOldValue:true,attributeFilter:['style','class']});
             setTimeout(function() {
-              __tcDebugLog('post-fix-delayed','100ms-after-append');
+              __tcDebugLog('post-fix-2-delayed','100ms-after-append');
               var el = tagsCatsWrap;
               var chain = [];
               for (var ci = 0; ci < 10 && el; ci++) {
@@ -8744,10 +8744,12 @@
             stackedHeaderBlock.style.paddingTop = '8px';
             stackedHeaderBlock.style.marginBottom = '8px';
             var stackedInfoWrap = document.createElement('div');
-            stackedInfoWrap.style.maxWidth = '860px';
-            stackedInfoWrap.style.margin = '0 auto';
             var stackInset = self._siteContentInsets || { left: 0, right: 0 };
-            stackedInfoWrap.style.padding = '0 ' + (stackInset.right || 0) + 'px 0 ' + (stackInset.left || 0) + 'px';
+            var stackPadL = stackInset.left || 0;
+            var stackPadR = stackInset.right || 0;
+            stackedInfoWrap.style.maxWidth = (860 + stackPadL + stackPadR) + 'px';
+            stackedInfoWrap.style.margin = '0 auto';
+            stackedInfoWrap.style.padding = '0 ' + stackPadR + 'px 0 ' + stackPadL + 'px';
             stackedInfoWrap.style.boxSizing = 'border-box';
             stackedInfoWrap.appendChild(postInfoWrap);
             stackedHeaderBlock.appendChild(stackedInfoWrap);
