@@ -149,16 +149,6 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
     </div>
   );
 
-  const EmailCapture = () => (
-    <div>
-      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Newsletter</div>
-      <div className="flex gap-1 mt-0.5">
-        <div className="flex-1 h-5 rounded border border-[#e5e4e0] bg-white" />
-        <div className="w-12 h-5 rounded bg-[#5B4FE8]" />
-      </div>
-    </div>
-  );
-
   const LeadMagnet = () => (
     <div>
       <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Lead magnet</div>
@@ -442,7 +432,6 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
             <div className="w-[28%] min-w-[80px] shrink-0 flex flex-col gap-2 py-1 pl-2 border-l border-[#e5e4e0] space-y-2">
               <AuthorProfile />
               <RelatedPosts />
-              <EmailCapture />
             </div>
           </div>
           <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
@@ -529,7 +518,6 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
           <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
             <AuthorProfile />
             <MoreToRead />
-            <EmailCapture />
             <LeadMagnet />
           </div>
         </div>

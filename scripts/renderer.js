@@ -8395,37 +8395,6 @@
             }
           }
           if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
-          // #region agent log
-          if (tagsCatsWrap.childNodes.length > 0) {
-            var __tcDebugLog = function(runId, extra) {
-              var cs = window.getComputedStyle(tagsCatsWrap);
-              var firstA = tagsCatsWrap.querySelector('a');
-              var csA = firstA ? window.getComputedStyle(firstA) : null;
-              var piwCS = postInfoWrap ? window.getComputedStyle(postInfoWrap) : null;
-              var payload = {runId:runId,extra:extra,wrap:{computedDisplay:cs.display,computedFlexDir:cs.flexDirection,computedFlexWrap:cs.flexWrap,computedAlignItems:cs.alignItems,computedWidth:cs.width,inlineStyle:tagsCatsWrap.getAttribute('style')},firstA:csA?{computedDisplay:csA.display,computedWidth:csA.width,computedFlexBasis:csA.flexBasis,computedMaxWidth:csA.maxWidth,inlineStyle:firstA.getAttribute('style')}:null,parentWrap:piwCS?{computedDisplay:piwCS.display,computedFlexDir:piwCS.flexDirection,computedAlignItems:piwCS.alignItems,inlineStyle:postInfoWrap.getAttribute('style')}:null};
-              console.log('[BB-DBGTAG] tagsCatsWrap layout state', JSON.stringify(payload));
-            };
-            __tcDebugLog('post-fix-2-initial','immediately-after-append');
-            var __tcObs = new MutationObserver(function(mutations) {
-              mutations.forEach(function(m) {
-                console.warn('[BB-DBGTAG] tagsCatsWrap MUTATED by external code', JSON.stringify({attrName:m.attributeName,oldVal:m.oldValue,newStyle:tagsCatsWrap.getAttribute('style'),mutationType:m.type}));
-                __tcObs.disconnect();
-              });
-            });
-            __tcObs.observe(tagsCatsWrap, {attributes:true,attributeOldValue:true,attributeFilter:['style','class']});
-            setTimeout(function() {
-              __tcDebugLog('post-fix-2-delayed','100ms-after-append');
-              var el = tagsCatsWrap;
-              var chain = [];
-              for (var ci = 0; ci < 10 && el; ci++) {
-                var cs2 = window.getComputedStyle(el);
-                chain.push({i:ci,tag:el.tagName,cls:el.className.substring(0,60),id:el.id||'',iw:el.style.width||'',id2:el.style.display||'',cw:cs2.width,cd:cs2.display});
-                el = el.parentElement;
-              }
-              console.log('[BB-DBGTAG] ancestor chain', JSON.stringify(chain));
-            }, 100);
-          }
-          // #endregion
         }
 
         var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))

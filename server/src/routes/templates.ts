@@ -247,8 +247,8 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
   },
   rightSidebar: {
     show: true,
-    modules: ['popularPosts', 'relevantPosts', 'filterByCategory', 'emailCapture'],
-    moduleOrder: ['popularPosts', 'relevantPosts', 'filterByCategory', 'emailCapture'],
+    modules: ['popularPosts', 'relevantPosts', 'filterByCategory'],
+    moduleOrder: ['popularPosts', 'relevantPosts', 'filterByCategory'],
     width: 300,
     spaceAbove: 0,
     sticky: false
@@ -265,12 +265,6 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'footer' },
     popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    emailCapture: {
-      enabled: true,
-      position: 'rightSidebar',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: false,
       position: 'none',
@@ -338,12 +332,6 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'rightSidebar' },
     popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    emailCapture: {
-      enabled: false,
-      position: 'none',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: true,
       position: 'footer',
@@ -419,8 +407,8 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
   },
   rightSidebar: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+    modules: ['authorProfiles', 'relevantPosts'],
+    moduleOrder: ['authorProfiles', 'relevantPosts'],
     width: 280,
     spaceAbove: 0,
     sticky: false
@@ -451,12 +439,6 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'rightSidebar' },
     popularPosts: { enabled: false, position: 'none', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    emailCapture: {
-      enabled: true,
-      position: 'rightSidebar',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: true,
       position: 'footer',
@@ -521,12 +503,6 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'footer' },
     popularPosts: { enabled: false, position: 'none', count: 5 },
     relevantPosts: { enabled: false, position: 'none' },
-    emailCapture: {
-      enabled: false,
-      position: 'none',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: true,
       position: 'footer',
