@@ -3,7 +3,7 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../src/lib/db-connection.js'
-import { seedPlans } from '../src/lib/plan-seed-data.js'
+import { seedPlans, type StripePlanEnvironment } from '../src/lib/plan-seed-data.js'
 
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
@@ -33,17 +33,48 @@ const defaultSiteConfig = {
   headerContent: { show: false, modules: [], height: 48 }
 }
 
-async function main() {
-  await seedPlans(prisma, ['sandbox'])
+type SeedTarget = 'staging' | 'production'
 
+type SeedTargetConfig = {
+  planEnvironment: StripePlanEnvironment
+  seedDemoFixtures: boolean
+}
+
+const SEED_TARGETS: Record<SeedTarget, SeedTargetConfig> = {
+  staging: {
+    planEnvironment: 'sandbox',
+    seedDemoFixtures: true
+  },
+  production: {
+    planEnvironment: 'live',
+    seedDemoFixtures: false
+  }
+}
+
+function parseSeedTarget (argv: string[]): SeedTarget {
+  const targetArg = argv.find((arg) => arg.startsWith('--target='))
+  const rawTarget = (targetArg?.slice('--target='.length) ?? process.env.SEED_TARGET ?? 'staging').toLowerCase()
+
+  if (rawTarget === 'staging' || rawTarget === 'preview' || rawTarget === 'sandbox') return 'staging'
+  if (rawTarget === 'production' || rawTarget === 'prod' || rawTarget === 'live') return 'production'
+
+  throw new Error(`Invalid seed target "${rawTarget}". Use staging or production.`)
+}
+
+function hasFlag (argv: string[], flag: string): boolean {
+  return argv.includes(flag) || process.env[flag.replace(/^--/, '').replace(/-/g, '_').toUpperCase()] === 'true'
+}
+
+async function migrateLegacySubscriptionPlanAliases () {
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'essentials' WHERE plan = 'starter'`
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'professional' WHERE plan = 'pro'`
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'publication' WHERE plan = 'agency'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'essentials' WHERE plan = 'starter'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'professional' WHERE plan = 'pro'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'publication' WHERE plan = 'agency'`
+}
 
-  // Seed demo user if not exists
+async function seedDemoFixtures () {
   let demoUser = await prisma.user.findUnique({
     where: { email: 'demo@example.com' }
   })
@@ -105,8 +136,9 @@ async function main() {
       })
     }
   }
+}
 
-  // Seed template configs (collection + post templates)
+async function seedTemplateConfigs () {
   const baseCollectionConfig = {
     showDate: true,
     showAuthor: false,
@@ -647,7 +679,34 @@ async function main() {
     })
   }
 
-  console.log('Seed completed')
+  console.log('Template seed completed')
+}
+
+async function main () {
+  const argv = process.argv.slice(2)
+  const target = parseSeedTarget(argv)
+  const config = SEED_TARGETS[target]
+  const includeLegacySubscriptionMigration = hasFlag(argv, '--include-legacy-plan-migration')
+
+  console.log(`Seeding ${target} reference data`)
+
+  const planResults = await seedPlans(prisma, [config.planEnvironment])
+  for (const { environment, upserted } of planResults) {
+    console.log(`Seeded ${upserted} plan row(s) for stripe_environment=${environment}`)
+  }
+
+  if (includeLegacySubscriptionMigration) {
+    await migrateLegacySubscriptionPlanAliases()
+    console.log('Migrated legacy subscription and checkout plan aliases')
+  }
+
+  if (config.seedDemoFixtures) {
+    await seedDemoFixtures()
+    console.log('Demo fixtures seeded')
+  }
+
+  await seedTemplateConfigs()
+  console.log(`${target} seed completed`)
 }
 
 main()
@@ -657,4 +716,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect()
+    await pool.end()
   })

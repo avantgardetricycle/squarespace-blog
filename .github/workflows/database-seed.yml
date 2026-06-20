@@ -1,0 +1,105 @@
+name: Database seed
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "server/prisma/**"
+      - "server/src/lib/plan-seed-data.ts"
+      - "server/src/lib/planLabels.ts"
+      - "server/src/lib/stripeEnvironment.ts"
+      - "server/package.json"
+      - "package-lock.json"
+      - ".github/workflows/database-seed.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Database environment to seed"
+        type: choice
+        required: true
+        default: staging
+        options:
+          - staging
+          - production
+          - both
+      include_legacy_plan_migration:
+        description: "Also update legacy subscription/checkout plan aliases"
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-seed-${{ github.event_name == 'workflow_dispatch' && inputs.target || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  seed-staging:
+    name: Seed staging
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.target == 'staging' || inputs.target == 'both'))
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+      SUPABASE_SSL_NO_VERIFY: ${{ secrets.STAGING_SUPABASE_SSL_NO_VERIFY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm --workspace=server exec prisma generate
+
+      - name: Seed staging database
+        run: |
+          set -euo pipefail
+          flags="--target=staging"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.include_legacy_plan_migration }}" = "true" ]; then
+            flags="$flags --include-legacy-plan-migration"
+          fi
+          npm run db:seed --workspace=server -- $flags
+
+  seed-production:
+    name: Seed production
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.target == 'production' || inputs.target == 'both')
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+      SUPABASE_SSL_NO_VERIFY: ${{ secrets.PRODUCTION_SUPABASE_SSL_NO_VERIFY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm --workspace=server exec prisma generate
+
+      - name: Seed production database
+        run: npm run db:seed --workspace=server -- --target=production
