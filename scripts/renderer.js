@@ -8280,6 +8280,7 @@
           postInfoWrap.style.alignItems = alignStyle || 'flex-start';
           postInfoWrap.style.textAlign = textAlignStyle || 'left';
           postInfoWrap.style.gap = '8px';
+          postInfoWrap.style.width = '100%';
         }
         var headlineMount = postInfoWrap || digestFeaturedIntro || appendTo;
         var postBreadcrumbNav = null;
@@ -8404,7 +8405,7 @@
               var payload = {runId:runId,extra:extra,wrap:{computedDisplay:cs.display,computedFlexDir:cs.flexDirection,computedFlexWrap:cs.flexWrap,computedAlignItems:cs.alignItems,computedWidth:cs.width,inlineStyle:tagsCatsWrap.getAttribute('style')},firstA:csA?{computedDisplay:csA.display,computedWidth:csA.width,computedFlexBasis:csA.flexBasis,computedMaxWidth:csA.maxWidth,inlineStyle:firstA.getAttribute('style')}:null,parentWrap:piwCS?{computedDisplay:piwCS.display,computedFlexDir:piwCS.flexDirection,computedAlignItems:piwCS.alignItems,inlineStyle:postInfoWrap.getAttribute('style')}:null};
               console.log('[BB-DBGTAG] tagsCatsWrap layout state', JSON.stringify(payload));
             };
-            __tcDebugLog('initial','immediately-after-append');
+            __tcDebugLog('post-fix-initial','immediately-after-append');
             var __tcObs = new MutationObserver(function(mutations) {
               mutations.forEach(function(m) {
                 console.warn('[BB-DBGTAG] tagsCatsWrap MUTATED by external code', JSON.stringify({attrName:m.attributeName,oldVal:m.oldValue,newStyle:tagsCatsWrap.getAttribute('style'),mutationType:m.type}));
@@ -8413,7 +8414,7 @@
             });
             __tcObs.observe(tagsCatsWrap, {attributes:true,attributeOldValue:true,attributeFilter:['style','class']});
             setTimeout(function() {
-              __tcDebugLog('delayed','100ms-after-append');
+              __tcDebugLog('post-fix-delayed','100ms-after-append');
             }, 100);
           }
           // #endregion
