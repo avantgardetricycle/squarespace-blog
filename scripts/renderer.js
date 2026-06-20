@@ -8415,6 +8415,14 @@
             __tcObs.observe(tagsCatsWrap, {attributes:true,attributeOldValue:true,attributeFilter:['style','class']});
             setTimeout(function() {
               __tcDebugLog('post-fix-delayed','100ms-after-append');
+              var el = tagsCatsWrap;
+              var chain = [];
+              for (var ci = 0; ci < 10 && el; ci++) {
+                var cs2 = window.getComputedStyle(el);
+                chain.push({i:ci,tag:el.tagName,cls:el.className.substring(0,60),id:el.id||'',iw:el.style.width||'',id2:el.style.display||'',cw:cs2.width,cd:cs2.display});
+                el = el.parentElement;
+              }
+              console.log('[BB-DBGTAG] ancestor chain', JSON.stringify(chain));
             }, 100);
           }
           // #endregion
