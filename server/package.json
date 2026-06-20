@@ -11,7 +11,7 @@
     "db:push": "prisma db push --accept-data-loss",
     "db:check": "tsx scripts/check-db-connection.ts",
     "db:seed-plans": "tsx scripts/seed-plans.ts",
-    "db:seed": "prisma db seed",
+    "db:seed": "prisma db seed --",
     "db:seed:staging": "prisma db seed -- --target=staging",
     "db:seed:production": "prisma db seed -- --target=production",
     "db:studio": "prisma studio",

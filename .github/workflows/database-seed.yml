@@ -67,11 +67,11 @@ jobs:
       - name: Seed staging database
         run: |
           set -euo pipefail
-          flags="--target=staging"
+          flags=""
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.include_legacy_plan_migration }}" = "true" ]; then
-            flags="$flags --include-legacy-plan-migration"
+            flags="--include-legacy-plan-migration"
           fi
-          npm run db:seed --workspace=server -- $flags
+          npm run db:seed:staging --workspace=server -- $flags
 
   seed-production:
     name: Seed production
@@ -102,4 +102,4 @@ jobs:
         run: npm --workspace=server exec prisma generate
 
       - name: Seed production database
-        run: npm run db:seed --workspace=server -- --target=production
+        run: npm run db:seed:production --workspace=server
