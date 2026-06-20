@@ -127,12 +127,12 @@ function resolveInitialAuthorForProfileEdit(
   return authorList[0] ?? null;
 }
 
-export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
-export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
-export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "emailCapture", "leadMagnet"] as const;
+export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
 export type HeaderCollectionModuleType = (typeof HEADER_COLLECTION_MODULES)[number];
 export const HEADER_POST_MODULES = ["breadcrumbs", "tableOfContents", "authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
 export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
@@ -151,6 +151,7 @@ export interface CollectionModulesConfig {
   sort: Record<string, never>;
   search: Record<string, never>;
   recentPosts: Record<string, never>;
+  popularPosts: { count: number };
   emailCapture: { header: string; byline?: string; buttonText: string };
   leadMagnet: { resourceTitle: string; description: string; buttonText: string };
 }
@@ -193,7 +194,7 @@ export interface PostHeaderConfig {
   showByline?: boolean;
 }
 export type FeaturedImageAspectBehavior = "original" | "cropped";
-export type FeaturedImageAspectRatio = "16:9" | "3:2" | "1:1";
+export type FeaturedImageAspectRatio = "16:9" | "4:3" | "3:2" | "2:3" | "1:1";
 export type FeaturedImageRoundedCorners = "off" | "small" | "large";
 export type FeaturedImageVerticalSpacing = "tight" | "normal" | "spacious";
 
@@ -359,6 +360,7 @@ const defaultCollectionModules: CollectionModulesConfig = {
   sort: {},
   search: {},
   recentPosts: {},
+  popularPosts: { count: 5 },
   emailCapture: { header: "Subscribe to our newsletter", buttonText: "Subscribe" },
   leadMagnet: { resourceTitle: "", description: "", buttonText: "Get it free" },
 };
@@ -388,8 +390,8 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   gridColumns: 3,
   collectionModules: defaultCollectionModules,
   featuredArticle: defaultFeaturedArticle,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
   socialMediaLinks: { show: false, platforms: [] },
@@ -411,8 +413,8 @@ const defaultPostConfig: PostLevelConfig = {
   ...defaultCollectionConfig,
   postModules: defaultPostModules,
   postHeader: defaultPostHeader,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
@@ -427,11 +429,24 @@ const defaultSiteConfig: SiteConfigForm = {
   postTemplateId: null,
 };
 
-const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "prevNextArticle", "emailCapture", "leadMagnet"] as const;
 
-const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "emailCapture", "leadMagnet"] as const;
-const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "emailCapture", "leadMagnet"] as const;
+const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
+const COLLECTION_HEADER_ADDABLE_MODULES = ["searchPosts", "postSort"] as const;
+
+/** Canonical collection header order: filter (left), then search, then sort (right group). */
+function orderCollectionHeaderModules(moduleIds: string[]): string[] {
+  const filterId = moduleIds.find((m) =>
+    COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])
+  );
+  const out: string[] = [];
+  if (filterId) out.push(filterId);
+  if (moduleIds.includes("searchPosts")) out.push("searchPosts");
+  if (moduleIds.includes("postSort")) out.push("postSort");
+  return out;
+}
+const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 const COLLECTION_FOOTER_MODULES = ["emailCapture", "leadMagnet"] as const;
 const COLLECTION_FILTER_IDS = ["filterByCategory", "filterByTag", "filterByTagsAndCategories"] as const;
 type FeatureModuleLocation = Exclude<ModulePosition, "none">;
@@ -579,8 +594,9 @@ function applyDerivedModules(config: SiteConfigForm): void {
     effectiveZoneModuleOrder(cc.rightSidebar.moduleOrder, cc.rightSidebar.modules),
     effectiveZoneModuleOrder(cc.footerContent?.moduleOrder, cc.footerContent?.modules)
   );
-  cc.headerContent.modules = coll.header;
-  cc.headerContent.moduleOrder = [...coll.header];
+  const collHeader = orderCollectionHeaderModules(coll.header);
+  cc.headerContent.modules = collHeader;
+  cc.headerContent.moduleOrder = [...collHeader];
   cc.leftSidebar.modules = coll.left;
   cc.leftSidebar.moduleOrder = [...coll.left];
   cc.rightSidebar.modules = coll.right;
@@ -623,7 +639,7 @@ function parseLevelConfig(
     layoutMode: (fi.layoutMode === "fullBleed" ? "fullBleed" : fi.layoutMode === "rightJustified" ? "rightJustified" : "leftJustified") as FeaturedImageLayoutMode,
     imageWidthPercent: Math.min(60, Math.max(25, Number(fi.imageWidthPercent) || 40)),
     aspectBehavior: fi.aspectBehavior === "cropped" ? "cropped" : "original",
-    aspectRatio: (fi.aspectRatio === "3:2" ? "3:2" : fi.aspectRatio === "1:1" ? "1:1" : "16:9") as FeaturedImageAspectRatio,
+    aspectRatio: (fi.aspectRatio === "4:3" ? "4:3" : fi.aspectRatio === "3:2" ? "3:2" : fi.aspectRatio === "2:3" ? "2:3" : fi.aspectRatio === "1:1" ? "1:1" : "16:9") as FeaturedImageAspectRatio,
     roundedCorners: (fi.roundedCorners === "small" ? "small" : fi.roundedCorners === "large" ? "large" : "off") as FeaturedImageRoundedCorners,
     shadow: Boolean(fi.shadow),
     showCaption: Boolean(fi.showCaption ?? true),
@@ -657,11 +673,11 @@ function parseLevelConfig(
   );
   const hcModuleOrder = level === "collection" ? validHeaderCollection(hcOrderSource) : validHeaderPost(hcOrderSource);
   const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky !== false }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
+    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky === true }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
   const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky !== false }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: true };
+    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky === true }
+    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
   const headerContent = hc
     ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
     : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
@@ -717,6 +733,9 @@ function parseLevelConfig(
         sort: {},
         search: {},
         recentPosts: {},
+        popularPosts: {
+          count: Math.min(20, Math.max(1, Number((cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? (cmRaw.popularPosts as { count?: unknown }).count : undefined) ?? 5) || 5)),
+        },
         emailCapture: {
           header: typeof ec.header === "string" ? ec.header : "Subscribe to our newsletter",
           byline: typeof ec.byline === "string" ? ec.byline : undefined,
@@ -740,6 +759,7 @@ function parseLevelConfig(
       sort: {},
       search: {},
       recentPosts: {},
+      popularPosts: { count: 5 },
       emailCapture: { header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { resourceTitle: "", description: "", buttonText: "Get it free" },
     };
@@ -750,6 +770,7 @@ function parseLevelConfig(
     const s = cmRaw.sort && typeof cmRaw.sort === "object" ? cmRaw.sort as Record<string, unknown> : {};
     const sr = cmRaw.search && typeof cmRaw.search === "object" ? cmRaw.search as Record<string, unknown> : {};
     const rp = cmRaw.recentPosts && typeof cmRaw.recentPosts === "object" ? cmRaw.recentPosts as Record<string, unknown> : {};
+    const pop = cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? cmRaw.popularPosts as Record<string, unknown> : {};
     const ec = cmRaw.emailCapture && typeof cmRaw.emailCapture === "object" ? cmRaw.emailCapture as Record<string, unknown> : {};
     const lm = cmRaw.leadMagnet && typeof cmRaw.leadMagnet === "object" ? cmRaw.leadMagnet as Record<string, unknown> : {};
     const filterId = filterConfigToModuleId(Boolean(f.filterByTags ?? (f.filterType === "tag" || f.filterType === "tagsAndCategories")), Boolean(f.filterByCategories ?? ((f.filterType === "category" || f.filterType === "tagsAndCategories") || (!f.filterByTags && !f.filterByCategories))));
@@ -758,6 +779,7 @@ function parseLevelConfig(
     const sortPos = pos(s.position, "header");
     const searchPos = pos(sr.position, "header");
     const recentPos = pos(rp.position, "rightSidebar");
+    const popPos = pos(pop.position, "rightSidebar");
     const ecPos = pos(ec.position, "footer");
     const lmPos = pos(lm.position, "footer");
     const header: string[] = [];
@@ -782,6 +804,10 @@ function parseLevelConfig(
     if (Boolean(rp.enabled ?? false) && recentPos !== "none") {
       if (recentPos === "leftSidebar") left.push("recentPosts");
       else if (recentPos === "rightSidebar") right.push("recentPosts");
+    }
+    if (Boolean(pop.enabled ?? false) && popPos !== "none") {
+      if (popPos === "leftSidebar") left.push("popularPosts");
+      else if (popPos === "rightSidebar") right.push("popularPosts");
     }
     if (Boolean(ec.enabled ?? false) && ecPos !== "none") {
       if (ecPos === "header") header.push("emailCapture");
@@ -894,6 +920,7 @@ function parseLevelConfig(
       } : defaultPostHeader)
     : undefined;
   const collDerived = deriveCollectionModules(collectionModules, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
+  const collHeaderOrdered = orderCollectionHeaderModules(collDerived.header);
   const postDerived = derivePostModules(postModules, postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
   const base: CollectionLevelConfig = {
     showDate: Boolean(raw?.showDate ?? true),
@@ -906,7 +933,7 @@ function parseLevelConfig(
     collectionModules,
     leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: finalLsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
     rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: finalRsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-    headerContent: { ...headerContent, modules: collDerived.header, moduleOrder: finalHcOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
+    headerContent: { ...headerContent, modules: collHeaderOrdered, moduleOrder: collHeaderOrdered } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
     footerContent: { ...footerContent, modules: collDerived.footer, moduleOrder: finalFcOrder },
     socialMediaLinks,
     featuredImage,
@@ -2039,6 +2066,7 @@ export default function Configure() {
       else if (path === "collectionModules.leadMagnet.resourceTitle") cm.leadMagnet = { ...cm.leadMagnet, resourceTitle: value as string };
       else if (path === "collectionModules.leadMagnet.description") cm.leadMagnet = { ...cm.leadMagnet, description: value as string };
       else if (path === "collectionModules.leadMagnet.buttonText") cm.leadMagnet = { ...cm.leadMagnet, buttonText: value as string };
+      else if (path === "collectionModules.popularPosts.count") cm.popularPosts = { ...cm.popularPosts, count: Math.min(20, Math.max(1, Number(value) || 5)) };
       else return cfg;
       return syncModuleOrderFromExplicit(cfg as CollectionLevelConfig, cm, undefined) as typeof cfg;
     }
@@ -2351,6 +2379,7 @@ export default function Configure() {
             open={templateModalOpen}
             onOpenChange={setTemplateModalOpen}
             onSelectTemplate={handleSelectTemplate}
+            initialLevel={selectedLevel}
           />
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
@@ -3283,7 +3312,9 @@ export default function Configure() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="16:9">16:9</SelectItem>
+                                        <SelectItem value="4:3">4:3</SelectItem>
                                         <SelectItem value="3:2">3:2</SelectItem>
+                                        <SelectItem value="2:3">2:3</SelectItem>
                                         <SelectItem value="1:1">1:1</SelectItem>
                                       </SelectContent>
                                     </Select>
@@ -3473,7 +3504,9 @@ export default function Configure() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="16:9">16:9</SelectItem>
+                                    <SelectItem value="4:3">4:3</SelectItem>
                                     <SelectItem value="3:2">3:2</SelectItem>
+                                    <SelectItem value="2:3">2:3</SelectItem>
                                     <SelectItem value="1:1">1:1</SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -3561,149 +3594,103 @@ export default function Configure() {
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Module order</Label>
-                              <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
+                              <Label className="text-xs text-[#6b6b6b]">Modules</Label>
+                              <p className="text-[10px] text-[#6b6b6b]">
+                                Filters align left; search and sort align right (search before sort when both are on).
+                              </p>
                               {(() => {
-                                const headerDerived = selectedLevel === "collection"
-                                  ? deriveCollectionModules(
-                                      (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules,
-                                      effectiveConfig.headerContent.moduleOrder ?? [],
-                                      effectiveConfig.leftSidebar.moduleOrder ?? [],
-                                      effectiveConfig.rightSidebar.moduleOrder ?? [],
-                                      effectiveConfig.footerContent?.moduleOrder ?? []
-                                    ).header
-                                  : derivePostModules(
-                                      (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
-                                      effectiveConfig as PostLevelConfig,
-                                      effectiveConfig.headerContent.moduleOrder ?? [],
-                                      effectiveConfig.leftSidebar.moduleOrder ?? [],
-                                      effectiveConfig.rightSidebar.moduleOrder ?? [],
-                                      effectiveConfig.footerContent?.moduleOrder ?? []
-                                    ).header;
-                                const headerModules = headerDerived;
+                                const collCfg = effectiveConfig as CollectionLevelConfig;
+                                const cm = collCfg.collectionModules ?? defaultCollectionModules;
                                 const order = effectiveConfig.headerContent.moduleOrder ?? [];
-                                const orderedHeader = (() => {
-                                  const set = new Set(headerModules);
-                                  const fromOrder = order.filter((m) => set.has(m));
-                                  const remaining = headerModules.filter((m) => !order.includes(m));
-                                  return [...fromOrder, ...remaining];
-                                })();
-                                const moveModule = (fromIdx: number, toIdx: number) => {
-                                  // Must reorder the same list as the UI (orderedHeader). Using only `order` filtered
-                                  // by headerModules drops canonical IDs when moduleOrder still has legacy filter ids
-                                  // after a template load — indices then point at the wrong row and a module vanishes.
-                                  const list = orderedHeader.slice();
-                                  const [removed] = list.splice(fromIdx, 1);
-                                  list.splice(toIdx, 0, removed);
-                                  updateLevelConfigPath("headerContent.moduleOrder", list);
-                                };
-                                const handleRemoveHeader = (moduleId: string) => {
-                                  if (selectedLevel === "collection") {
-                                    const order = effectiveConfig.headerContent.moduleOrder ?? [];
-                                    updateLevelConfigPath("headerContent.moduleOrder", order.filter((m) => m !== moduleId));
-                                  } else {
-                                    const pm = (effectiveConfig as PostLevelConfig).postModules;
-                                    if (moduleId === "tableOfContents" && pm?.tableOfContents) {
-                                      updateLevelConfigPath("postModules.tableOfContents.enabled", false);
-                                    } else if (moduleId === "breadcrumbs") {
-                                      updateLevelConfigPath("postHeader.showBreadcrumbs", false);
-                                    } else if (moduleId === "authorProfiles" && pm?.authorProfiles) {
-                                      updateLevelConfigPath("postModules.authorProfiles.enabled", false);
-                                    } else if (moduleId === "relevantPosts" && pm?.relevantPosts) {
-                                      updateLevelConfigPath("postModules.relevantPosts.enabled", false);
-                                    } else if (moduleId === "emailCapture" && pm?.emailCapture) {
-                                      updateLevelConfigPath("postModules.emailCapture.enabled", false);
-                                    } else if (moduleId === "leadMagnet" && pm?.leadMagnet) {
-                                      updateLevelConfigPath("postModules.leadMagnet.enabled", false);
-                                    }
-                                  }
-                                };
-                                const handleAddHeader = (moduleId: string) => {
-                                  if (selectedLevel !== "collection") return;
-                                  const order = effectiveConfig.headerContent.moduleOrder ?? [];
-                                  if (order.includes(moduleId)) return;
-                                  updateLevelConfigPath("headerContent.moduleOrder", [...order, moduleId]);
-                                };
+                                const filterId = filterConfigToModuleId(
+                                  cm.filter.filterByTags,
+                                  cm.filter.filterByCategories
+                                );
+                                const activeModules = orderCollectionHeaderModules(
+                                  deriveCollectionModules(
+                                    cm,
+                                    order,
+                                    effectiveConfig.leftSidebar.moduleOrder ?? [],
+                                    effectiveConfig.rightSidebar.moduleOrder ?? [],
+                                    effectiveConfig.footerContent?.moduleOrder ?? []
+                                  ).header
+                                );
                                 const HEADER_LABELS: Record<string, string> = {
-                                  tableOfContents: "Table of Contents",
-                                  breadcrumbs: "Breadcrumbs",
                                   filterByCategory: "Filter by Category",
                                   filterByTag: "Filter by Tag",
                                   filterByTagsAndCategories: "Filter by Tags & Categories",
                                   searchPosts: "Search Posts",
                                   postSort: "Sort Posts",
-                                  authorProfiles: "Author Profiles",
-                                  relevantPosts: "Related Posts",
-                                  prevNextArticle: "Previous/Next Article",
-                                  emailCapture: "Email Capture",
-                                  leadMagnet: "Lead Magnet",
                                 };
-                                const headerAvailable = selectedLevel === "collection"
-                                  ? (() => {
-                                      const order = effectiveConfig.headerContent.moduleOrder ?? [];
-                                      const filterId = filterConfigToModuleId((effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByTags ?? false, (effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByCategories ?? true);
-                                      return [...COLLECTION_HEADER_MODULES].filter((m) =>
-                                        COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])
-                                          ? m === filterId && !order.includes(filterId)
-                                          : !order.includes(m)
-                                      );
-                                    })()
-                                  : [];
+                                const handleRemoveHeader = (moduleId: string) => {
+                                  const next = order.filter((m) => {
+                                    if (m === moduleId) return false;
+                                    if (
+                                      COLLECTION_FILTER_IDS.includes(moduleId as (typeof COLLECTION_FILTER_IDS)[number]) &&
+                                      COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])
+                                    ) {
+                                      return false;
+                                    }
+                                    return true;
+                                  });
+                                  updateLevelConfigPath("headerContent.moduleOrder", orderCollectionHeaderModules(next));
+                                };
+                                const handleAddHeader = (moduleId: string) => {
+                                  let next = order.filter(
+                                    (m) =>
+                                      !COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number]) ||
+                                      !COLLECTION_FILTER_IDS.includes(moduleId as (typeof COLLECTION_FILTER_IDS)[number])
+                                  );
+                                  if (!next.includes(moduleId)) next = [...next, moduleId];
+                                  updateLevelConfigPath("headerContent.moduleOrder", orderCollectionHeaderModules(next));
+                                };
+                                const headerAvailable: string[] = [];
+                                if (!order.includes(filterId)) headerAvailable.push(filterId);
+                                for (const m of COLLECTION_HEADER_ADDABLE_MODULES) {
+                                  if (!order.includes(m)) headerAvailable.push(m);
+                                }
                                 return (
-                                  <div className="space-y-1.5">
-                                    {selectedLevel === "collection" && headerAvailable.length > 0 && (
-                                      <div className="flex items-center gap-2">
-                                        <Select
-                                          value=""
-                                          onValueChange={(v) => { if (v) handleAddHeader(v); }}
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap gap-2">
+                                      {activeModules.map((m) => (
+                                        <span
+                                          key={m}
+                                          className="inline-flex items-center gap-1 rounded-md bg-[#5B4FE8]/10 px-2 py-1 text-sm text-[#5B4FE8]"
                                         >
-                                          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Add module…" /></SelectTrigger>
-                                          <SelectContent>
-                                            {headerAvailable.map((m) => (
-                                              <SelectItem key={m} value={m}>{HEADER_LABELS[m] ?? m}</SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    )}
-                                    {orderedHeader.length === 0 ? (
-                                      <p className="text-xs text-[#6b6b6b] py-2">
-                                        {selectedLevel === "collection" ? "No modules in header. Add modules above." : "No modules in header. Enable modules in Navigation &amp; Discovery and choose header position."}
-                                      </p>
-                                    ) : (
-                                      orderedHeader.map((m, idx) => (
-                                        <div
-                                          key={`${m}-${idx}`}
-                                          draggable
-                                          onDragStart={(e) => {
-                                            e.dataTransfer.setData("text/plain", String(idx));
-                                            e.dataTransfer.effectAllowed = "move";
-                                          }}
-                                          onDragOver={(e) => {
-                                            e.preventDefault();
-                                            e.dataTransfer.dropEffect = "move";
-                                          }}
-                                          onDrop={(e) => {
-                                            e.preventDefault();
-                                            const fromIdx = Number(e.dataTransfer.getData("text/plain"));
-                                            if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
-                                          }}
-                                          onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
-                                        >
-                                          <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
-                                          <span className="flex-1 min-w-0 truncate">{HEADER_LABELS[m] ?? m}</span>
+                                          {HEADER_LABELS[m] ?? m}
                                           <button
                                             type="button"
-                                            onClick={(e) => { e.stopPropagation(); handleRemoveHeader(m); }}
-                                            className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
+                                            onClick={() => handleRemoveHeader(m)}
+                                            className="hover:opacity-70"
                                             aria-label={`Remove ${HEADER_LABELS[m] ?? m}`}
                                           >
-                                            <X className="h-4 w-4" />
+                                            <X className="h-3 w-3" />
                                           </button>
-                                        </div>
-                                      ))
-                                    )}
+                                        </span>
+                                      ))}
+                                    </div>
+                                    {headerAvailable.length > 0 ? (
+                                      <Select
+                                        value=""
+                                        onValueChange={(v) => {
+                                          if (v) handleAddHeader(v);
+                                        }}
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue placeholder="Add module…" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {headerAvailable.map((m) => (
+                                            <SelectItem key={m} value={m}>
+                                              {HEADER_LABELS[m] ?? m}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : null}
+                                    {activeModules.length === 0 ? (
+                                      <p className="text-xs text-[#6b6b6b] py-1">No modules in header. Add modules above.</p>
+                                    ) : null}
                                   </div>
                                 );
                               })()}
@@ -4076,7 +4063,7 @@ export default function Configure() {
                                   <div className="flex items-center justify-between">
                                     <Label className="text-xs text-[#6b6b6b]">Sticky (move with scroll)</Label>
                                     <Switch
-                                      checked={cfg.sticky !== false}
+                                      checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
                                     />
                                   </div>
@@ -4183,7 +4170,36 @@ export default function Configure() {
                                         <span className="text-sm">Tags</span>
                                       </label>
                                     </div>
-                                    <p className="text-[10px] text-[#6b6b6b]">Style is determined by position: header = pills, sidebar = dropdown.</p>
+                                    <p className="text-[10px] text-[#6b6b6b]">Style is determined by position: header = pills, sidebar = topic badges.</p>
+                                  </div>
+                                }
+                              />
+                              <ModuleSettingSectionCollapseOnly
+                                title="Popular Posts"
+                                expanded={sectionExpanded.popularPosts}
+                                onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
+                                content={
+                                  <div className="space-y-3">
+                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 5]}
+                                          onValueChange={([v]) => updateLevelConfigPath("collectionModules.popularPosts.count", v ?? 5)}
+                                          min={1}
+                                          max={20}
+                                          step={1}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
+                                          {(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 5}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts.
+                                    </p>
                                   </div>
                                 }
                               />
@@ -4193,7 +4209,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("emailCapture", ["header", "leftSidebar", "rightSidebar", "footer"])}
+                                    {renderFeatureLocationControl("emailCapture", ["leftSidebar", "rightSidebar", "footer"])}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -4227,7 +4243,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("leadMagnet", ["header", "leftSidebar", "rightSidebar", "footer"])}
+                                    {renderFeatureLocationControl("leadMagnet", ["leftSidebar", "rightSidebar", "footer"])}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input

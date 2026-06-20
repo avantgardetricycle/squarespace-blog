@@ -3,7 +3,7 @@ import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../src/lib/db-connection.js'
-import { seedPlans } from '../src/lib/plan-seed-data.js'
+import { seedPlans, type StripePlanEnvironment } from '../src/lib/plan-seed-data.js'
 
 const pool = new Pool({
   connectionString: getDatabaseUrl(),
@@ -33,17 +33,48 @@ const defaultSiteConfig = {
   headerContent: { show: false, modules: [], height: 48 }
 }
 
-async function main() {
-  await seedPlans(prisma, ['sandbox'])
+type SeedTarget = 'staging' | 'production'
 
+type SeedTargetConfig = {
+  planEnvironment: StripePlanEnvironment
+  seedDemoFixtures: boolean
+}
+
+const SEED_TARGETS: Record<SeedTarget, SeedTargetConfig> = {
+  staging: {
+    planEnvironment: 'sandbox',
+    seedDemoFixtures: true
+  },
+  production: {
+    planEnvironment: 'live',
+    seedDemoFixtures: false
+  }
+}
+
+function parseSeedTarget (argv: string[]): SeedTarget {
+  const targetArg = argv.find((arg) => arg.startsWith('--target='))
+  const rawTarget = (targetArg?.slice('--target='.length) ?? process.env.SEED_TARGET ?? 'staging').toLowerCase()
+
+  if (rawTarget === 'staging' || rawTarget === 'preview' || rawTarget === 'sandbox') return 'staging'
+  if (rawTarget === 'production' || rawTarget === 'prod' || rawTarget === 'live') return 'production'
+
+  throw new Error(`Invalid seed target "${rawTarget}". Use staging or production.`)
+}
+
+function hasFlag (argv: string[], flag: string): boolean {
+  return argv.includes(flag) || process.env[flag.replace(/^--/, '').replace(/-/g, '_').toUpperCase()] === 'true'
+}
+
+async function migrateLegacySubscriptionPlanAliases () {
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'essentials' WHERE plan = 'starter'`
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'professional' WHERE plan = 'pro'`
   await prisma.$executeRaw`UPDATE subscriptions SET plan = 'publication' WHERE plan = 'agency'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'essentials' WHERE plan = 'starter'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'professional' WHERE plan = 'pro'`
   await prisma.$executeRaw`UPDATE checkout_sessions SET plan = 'publication' WHERE plan = 'agency'`
+}
 
-  // Seed demo user if not exists
+async function seedDemoFixtures () {
   let demoUser = await prisma.user.findUnique({
     where: { email: 'demo@example.com' }
   })
@@ -105,16 +136,17 @@ async function main() {
       })
     }
   }
+}
 
-  // Seed template configs (collection + post templates)
+async function seedTemplateConfigs () {
   const baseCollectionConfig = {
     showDate: true,
     showAuthor: false,
     showReadingTime: false,
     postSort: 'date' as const,
     pagination: { show: false, postsPerPage: 10 },
-    leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: true },
-    rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: true },
+    leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
+    rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [] as string[], height: 48 },
     socialMediaLinks: { show: false, platforms: [] as string[] },
     featuredImage: {
@@ -150,9 +182,12 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'grid',
         gridColumns: 3,
+        showDate: true,
+        showAuthor: true,
+        showReadingTime: true,
         pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
           sort: {},
@@ -189,6 +224,8 @@ async function main() {
       collectionConfig: {
         ...baseCollectionConfig,
         collectionLayout: 'listRows',
+        showDate: true,
+        showAuthor: true,
         showReadingTime: true,
         headerContent: {
           show: true,
@@ -207,8 +244,8 @@ async function main() {
           },
           leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
         },
-        leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 30 },
         featuredArticle: { show: true, position: 'inLayout' }
       },
@@ -223,21 +260,25 @@ async function main() {
         ...baseCollectionConfig,
         collectionLayout: 'digest',
         gridColumns: 2,
+        showDate: true,
+        showAuthor: true,
+        showReadingTime: true,
         pagination: { show: true, mode: 'pages', postsPerPage: 10 },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
-          modules: ['emailCapture', 'popularPosts', 'filterByCategory'],
-          moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
+          modules: ['authorProfiles', 'emailCapture', 'popularPosts', 'filterByCategory'],
+          moduleOrder: ['authorProfiles', 'emailCapture', 'popularPosts', 'filterByCategory'],
           width: 280,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
           sort: {},
           search: {},
           recentPosts: {},
+          popularPosts: { count: 5 },
           emailCapture: {
             header: 'Subscribe to our newsletter',
             buttonText: 'Subscribe'
@@ -246,8 +287,8 @@ async function main() {
         },
         headerContent: {
           show: true,
-          modules: ['filterByCategory', 'searchPosts'],
-          moduleOrder: ['filterByCategory', 'searchPosts'],
+          modules: ['filterByCategory', 'searchPosts', 'postSort'],
+          moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
           height: 48
         },
         footerContent: {
@@ -305,6 +346,7 @@ async function main() {
         collectionLayout: 'editorial',
         showAuthor: true,
         showReadingTime: true,
+        pagination: { show: true, mode: 'pages', postsPerPage: 10 },
         gridColumns: 3,
         headerContent: {
           show: true,
@@ -364,13 +406,13 @@ async function main() {
           moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
           width: 280,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
         footerContent: {
           show: true,
-          modules: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
-          moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
+          modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+          moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           topPadding: 16
         },
         socialMediaLinks: {
@@ -384,12 +426,6 @@ async function main() {
           authorProfiles: { enabled: true, position: 'rightSidebar' },
           popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
-          emailCapture: {
-            enabled: true,
-            position: 'footer',
-            header: 'Subscribe to our newsletter',
-            buttonText: 'Subscribe'
-          },
           leadMagnet: {
             enabled: true,
             position: 'footer',
@@ -412,19 +448,19 @@ async function main() {
         showAuthor: true,
         showReadingTime: true,
         postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
-          modules: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
-          moduleOrder: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
+          modules: ['popularPosts', 'relevantPosts', 'filterByCategory'],
+          moduleOrder: ['popularPosts', 'relevantPosts', 'filterByCategory'],
           width: 300,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         footerContent: {
           show: true,
-          modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+          modules: ['authorProfiles', 'relevantPosts'],
+          moduleOrder: ['authorProfiles', 'relevantPosts'],
           topPadding: 16
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
@@ -434,15 +470,9 @@ async function main() {
           authorProfiles: { enabled: true, position: 'footer' },
           popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
-          emailCapture: {
+          leadMagnet: {
             enabled: false,
             position: 'none',
-            header: 'Subscribe to our newsletter',
-            buttonText: 'Subscribe'
-          },
-          leadMagnet: {
-            enabled: true,
-            position: 'footer',
             resourceTitle: 'Free resource',
             description: 'Subscribe to get our guide in your inbox.',
             buttonText: 'Get it free'
@@ -470,14 +500,14 @@ async function main() {
           showCategories: true,
           showByline: true
         },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
-          modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
-          moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+          modules: ['authorProfiles', 'relevantPosts'],
+          moduleOrder: ['authorProfiles', 'relevantPosts'],
           width: 280,
           spaceAbove: 0,
-          sticky: true
+          sticky: false
         },
         headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
         footerContent: {
@@ -487,7 +517,13 @@ async function main() {
           topPadding: 16
         },
         socialMediaLinks: { show: false, platforms: [] },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'rightJustified', imageWidthPercent: 38 },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'rightJustified',
+          imageWidthPercent: 38,
+          aspectBehavior: 'cropped',
+          aspectRatio: '2:3'
+        },
         progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' },
         postModules: {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
@@ -495,12 +531,6 @@ async function main() {
           authorProfiles: { enabled: true, position: 'rightSidebar' },
           popularPosts: { enabled: false, position: 'none', count: 5 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
-          emailCapture: {
-            enabled: true,
-            position: 'rightSidebar',
-            header: 'Subscribe to our newsletter',
-            buttonText: 'Subscribe'
-          },
           leadMagnet: {
             enabled: true,
             position: 'footer',
@@ -531,8 +561,8 @@ async function main() {
           showCategories: true,
           showByline: true
         },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         headerContent: { show: false, modules: [], moduleOrder: [], height: 56 },
         footerContent: {
           show: true,
@@ -548,12 +578,6 @@ async function main() {
           authorProfiles: { enabled: true, position: 'footer' },
           popularPosts: { enabled: false, position: 'none', count: 5 },
           relevantPosts: { enabled: false, position: 'none' },
-          emailCapture: {
-            enabled: false,
-            position: 'none',
-            header: 'Subscribe to our newsletter',
-            buttonText: 'Subscribe'
-          },
           leadMagnet: {
             enabled: true,
             position: 'footer',
@@ -583,8 +607,8 @@ async function main() {
           showTags: false,
           showCategories: true
         },
-        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: true },
-        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: true },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         footerContent: {
           show: true,
           modules: ['authorProfiles', 'prevNextArticle'],
@@ -655,7 +679,34 @@ async function main() {
     })
   }
 
-  console.log('Seed completed')
+  console.log('Template seed completed')
+}
+
+async function main () {
+  const argv = process.argv.slice(2)
+  const target = parseSeedTarget(argv)
+  const config = SEED_TARGETS[target]
+  const includeLegacySubscriptionMigration = hasFlag(argv, '--include-legacy-plan-migration')
+
+  console.log(`Seeding ${target} reference data`)
+
+  const planResults = await seedPlans(prisma, [config.planEnvironment])
+  for (const { environment, upserted } of planResults) {
+    console.log(`Seeded ${upserted} plan row(s) for stripe_environment=${environment}`)
+  }
+
+  if (includeLegacySubscriptionMigration) {
+    await migrateLegacySubscriptionPlanAliases()
+    console.log('Migrated legacy subscription and checkout plan aliases')
+  }
+
+  if (config.seedDemoFixtures) {
+    await seedDemoFixtures()
+    console.log('Demo fixtures seeded')
+  }
+
+  await seedTemplateConfigs()
+  console.log(`${target} seed completed`)
 }
 
 main()
@@ -665,4 +716,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect()
+    await pool.end()
   })

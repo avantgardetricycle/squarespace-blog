@@ -102,6 +102,7 @@ html.bb-loading-blog::after {
       bodyClass.indexOf(" sqs-edit-mode-active ") >= 0 ||
       bodyClass.indexOf(" sqs-site-styles-editing ") >= 0
     ) return;
+    try { if (window.parent !== window) return; } catch (e2) { return; }
     var path = location.pathname || "/";
     var onBlogRoute = prefix === "/"
       ? path === "/"

@@ -37,7 +37,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
       <div className={compact ? "p-2 space-y-0" : "p-2.5 space-y-0.5"}>
         <div className="text-[11px] font-semibold text-[#333] line-clamp-1">{title}</div>
         {!compact && <div className={cn(textMuted, "line-clamp-2")}>{excerpt}</div>}
-        <div className={cn(textMuted, "text-[10px]")}>Author · Mar 7</div>
+        <div className={cn(textMuted, "text-[10px]")}>Author · Mar 7 · 5 min</div>
       </div>
     </div>
   );
@@ -145,16 +145,6 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
       <div className={cn(textMuted, "text-[9px] mt-0.5 space-y-0.5")}>
         <div className="line-clamp-1">Related post title</div>
         <div className="line-clamp-1">Another related</div>
-      </div>
-    </div>
-  );
-
-  const EmailCapture = () => (
-    <div>
-      <div className={cn(textMuted, "text-[9px] font-medium uppercase")}>Newsletter</div>
-      <div className="flex gap-1 mt-0.5">
-        <div className="flex-1 h-5 rounded border border-[#e5e4e0] bg-white" />
-        <div className="w-12 h-5 rounded bg-[#5B4FE8]" />
       </div>
     </div>
   );
@@ -433,7 +423,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
               <div className="text-[11px] font-bold text-[#333] mt-0.5">Article Headline Goes Here</div>
               <div className={cn(textMuted, "text-[9px] mt-0.5")}>By Author · Mar 7 · 8 min</div>
             </div>
-            <div className={cn(imgPlaceholder, "w-[45%] aspect-[3/2] shrink-0 rounded")} />
+            <div className={cn(imgPlaceholder, "w-[45%] aspect-[2/3] shrink-0 rounded")} />
           </div>
           <div className="flex gap-3 min-h-0 mt-2">
             <div className="flex-1 min-w-0">
@@ -442,7 +432,6 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
             <div className="w-[28%] min-w-[80px] shrink-0 flex flex-col gap-2 py-1 pl-2 border-l border-[#e5e4e0] space-y-2">
               <AuthorProfile />
               <RelatedPosts />
-              <EmailCapture />
             </div>
           </div>
           <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
@@ -529,7 +518,6 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
           <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
             <AuthorProfile />
             <MoreToRead />
-            <EmailCapture />
             <LeadMagnet />
           </div>
         </div>

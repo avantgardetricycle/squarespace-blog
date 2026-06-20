@@ -34,6 +34,20 @@
   }
 
   function isSquarespaceEditingUi() {
+    // #region agent log
+    var _dbg = { hypothesisId: 'H1', location: 'loader.js:isSquarespaceEditingUi' };
+    try {
+      _dbg.isPreview = isExplicitPreviewContext();
+      _dbg.htmlClasses = document.documentElement ? document.documentElement.className : '(no html)';
+      _dbg.bodyClasses = document.body ? document.body.className : '(no body)';
+      _dbg.bodyExists = !!document.body;
+      _dbg.hasEditClassHtml = hasEditClass(document.documentElement);
+      _dbg.hasEditClassBody = hasEditClass(document.body);
+      _dbg.inIframe = window.parent !== window;
+      _dbg.pathname = window.location.pathname;
+      _dbg.href = window.location.href;
+    } catch (e) { _dbg.earlyErr = String(e); }
+    // #endregion
     if (isExplicitPreviewContext()) return false;
     if (hasEditClass(document.documentElement) || hasEditClass(document.body)) return true;
     var markers = [
@@ -43,11 +57,22 @@
       '[data-sqs-editor]',
       '[data-sqs-edit-mode]'
     ];
+    // #region agent log
+    _dbg.markerResults = {};
+    // #endregion
     for (var i = 0; i < markers.length; i++) {
       try {
+        // #region agent log
+        _dbg.markerResults[markers[i]] = !!document.querySelector(markers[i]);
+        // #endregion
         if (document.querySelector(markers[i])) return true;
       } catch (e) {}
     }
+    // #region agent log
+    _dbg.result = false;
+    console.warn('[BB-DEBUG-7918cd] isSquarespaceEditingUi', JSON.stringify(_dbg));
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'loader.js:isSquarespaceEditingUi',message:'edit detection result',data:_dbg,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
+    // #endregion
     return false;
   }
 
@@ -205,6 +230,7 @@
   }
 
   window.__bbClearBootstrapLoading = clearBootstrapLoading;
+  window.__bbInstallBootstrapLoading = installBootstrapLoading;
 
   // The Header injection already added bb-loading-blog synchronously. We
   // (re)assert it here as a belt-and-suspenders fallback for sites that only
@@ -212,7 +238,18 @@
   // class lives on <html>, and the overlay is rendered via :before/:after
   // pseudo-elements on <html>.
   try {
-    if (!isSquarespaceEditingUi()) installBootstrapLoading();
+    var _earlyEditResult = isSquarespaceEditingUi();
+    var _inIframeEarly = false;
+    try { _inIframeEarly = window.parent !== window; } catch (e) { _inIframeEarly = true; }
+    // #region agent log
+    console.warn('[BB-DEBUG-7918cd] loader early boot: isEditUi=' + _earlyEditResult + ' inIframe=' + _inIframeEarly + ' bbLoadingClass=' + (document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : 'N/A'));
+    // #endregion
+    if (_inIframeEarly && !isExplicitPreviewContext()) {
+      // #region agent log
+      console.warn('[BB-DEBUG-7918cd] loader: IFRAME detected, skipping bootstrap overlay (hypothesisId=H2_FIX)');
+      // #endregion
+      clearBootstrapLoading();
+    } else if (!_earlyEditResult) installBootstrapLoading();
     else clearBootstrapLoading();
   } catch (earlyBootErr) { /* ignore */ }
 
@@ -282,7 +319,15 @@
       clearBootstrapLoading();
       return;
     }
-    installBootstrapLoading();
+    var _inIframeStart = false;
+    try { _inIframeStart = window.parent !== window; } catch (e) { _inIframeStart = true; }
+    if (!_inIframeStart || isExplicitPreviewContext()) {
+      installBootstrapLoading();
+    } else {
+      // #region agent log
+      console.warn('[BB-DEBUG-7918cd] startLoader: IFRAME detected, skipping installBootstrapLoading (hypothesisId=H2_FIX)');
+      // #endregion
+    }
 
     fetchConfig()
       .then(function(config) {
@@ -299,7 +344,11 @@
 
   // Start immediately — do not wait for DOMContentLoaded. The config fetch begins
   // inside startLoader; only appending the renderer <script> needs document.head.
-  if (!isSquarespaceEditingUi()) {
+  var _startEditResult = isSquarespaceEditingUi();
+  // #region agent log
+  console.warn('[BB-DEBUG-7918cd] loader startLoader gate: isEditUi=' + _startEditResult);
+  // #endregion
+  if (!_startEditResult) {
     startLoader();
   }
 })();

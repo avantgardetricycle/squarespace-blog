@@ -7,6 +7,9 @@ const router = Router()
 const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   collectionLayout: 'grid' as const,
   gridColumns: 3 as const,
+  showDate: true,
+  showAuthor: true,
+  showReadingTime: true,
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
@@ -14,7 +17,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -22,7 +25,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
@@ -60,6 +63,7 @@ const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   featuredArticle: { show: true, position: 'inLayout' as const },
   headerContent: {
     show: true,
@@ -118,6 +122,9 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
 const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   collectionLayout: 'digest' as const,
   gridColumns: 2 as const,
+  showDate: true,
+  showAuthor: true,
+  showReadingTime: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
@@ -126,20 +133,20 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
-    modules: ['emailCapture', 'popularPosts', 'filterByCategory'],
-    moduleOrder: ['emailCapture', 'popularPosts', 'filterByCategory'],
+    modules: ['authorProfiles', 'emailCapture', 'popularPosts', 'filterByCategory'],
+    moduleOrder: ['authorProfiles', 'emailCapture', 'popularPosts', 'filterByCategory'],
     width: 280,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: {
     show: true,
-    modules: ['filterByCategory', 'searchPosts'],
-    moduleOrder: ['filterByCategory', 'searchPosts'],
+    modules: ['filterByCategory', 'searchPosts', 'postSort'],
+    moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
     height: 48
   },
   footerContent: {
@@ -153,6 +160,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     sort: {},
     search: {},
     recentPosts: {},
+    popularPosts: { count: 5 },
     emailCapture: {
       header: 'Subscribe to our newsletter',
       buttonText: 'Subscribe'
@@ -169,7 +177,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
 const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
   collectionLayout: 'listRows' as const,
   showDate: true,
-  showAuthor: false,
+  showAuthor: true,
   showReadingTime: true,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
@@ -178,7 +186,7 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -186,7 +194,7 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: {
     show: true,
@@ -235,20 +243,20 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 200,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
-    modules: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
-    moduleOrder: ['popularPosts', 'relevantPosts', 'filterByTagsAndCategories'],
+    modules: ['popularPosts', 'relevantPosts', 'filterByCategory'],
+    moduleOrder: ['popularPosts', 'relevantPosts', 'filterByCategory'],
     width: 300,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   footerContent: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+    modules: ['authorProfiles', 'relevantPosts'],
+    moduleOrder: ['authorProfiles', 'relevantPosts'],
     topPadding: 16
   },
   postModules: {
@@ -257,15 +265,9 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'footer' },
     popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    emailCapture: {
+    leadMagnet: {
       enabled: false,
       position: 'none',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
-    leadMagnet: {
-      enabled: true,
-      position: 'footer',
       resourceTitle: 'Free resource',
       description: 'Subscribe to get our guide in your inbox.',
       buttonText: 'Get it free'
@@ -300,13 +302,13 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
     width: 280,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48 },
   footerContent: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture', 'leadMagnet'],
+    modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+    moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     topPadding: 16
   },
   socialMediaLinks: {
@@ -317,8 +319,8 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     show: true,
     layoutMode: 'fullBleed',
     imageWidthPercent: 40,
-    aspectBehavior: 'original',
-    aspectRatio: '16:9',
+    aspectBehavior: 'cropped',
+    aspectRatio: '21:8',
     roundedCorners: 'off',
     shadow: false,
     showCaption: true,
@@ -330,12 +332,6 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'rightSidebar' },
     popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    emailCapture: {
-      enabled: true,
-      position: 'footer',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: true,
       position: 'footer',
@@ -364,7 +360,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 200,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -372,7 +368,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   footerContent: {
     show: true,
@@ -407,15 +403,15 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+    modules: ['authorProfiles', 'relevantPosts'],
+    moduleOrder: ['authorProfiles', 'relevantPosts'],
     width: 280,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48 },
   footerContent: {
@@ -429,8 +425,8 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     show: true,
     layoutMode: 'rightJustified',
     imageWidthPercent: 38,
-    aspectBehavior: 'original',
-    aspectRatio: '16:9',
+    aspectBehavior: 'cropped',
+    aspectRatio: '3:2',
     roundedCorners: 'off',
     shadow: false,
     showCaption: true,
@@ -443,12 +439,6 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'rightSidebar' },
     popularPosts: { enabled: false, position: 'none', count: 5 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    emailCapture: {
-      enabled: true,
-      position: 'rightSidebar',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: true,
       position: 'footer',
@@ -478,7 +468,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   rightSidebar: {
     show: false,
@@ -486,7 +476,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     moduleOrder: [],
     width: 240,
     spaceAbove: 0,
-    sticky: true
+    sticky: false
   },
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 56 },
   footerContent: {
@@ -513,12 +503,6 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'footer' },
     popularPosts: { enabled: false, position: 'none', count: 5 },
     relevantPosts: { enabled: false, position: 'none' },
-    emailCapture: {
-      enabled: false,
-      position: 'none',
-      header: 'Subscribe to our newsletter',
-      buttonText: 'Subscribe'
-    },
     leadMagnet: {
       enabled: true,
       position: 'footer',

@@ -66,15 +66,24 @@ After changing `IS_BETTER_BLOG_LIVE`, **redeploy** the branch (env vars are appl
 
 Optional: disable Deployment Protection for Preview, or add `staging.betterblog.xyz` to the protection allowlist, if you want runtime `/api/health` to drive the UI.
 
-### Database migrations (CI)
+### Database seed (CI)
 
-[.github/workflows/database-migrate.yml](.github/workflows/database-migrate.yml) runs on `main` when `server/prisma/**` changes (and on manual dispatch).
+[.github/workflows/database-seed.yml](.github/workflows/database-seed.yml) keeps reference data aligned with code.
 
 Repository secrets:
 
-- `DIRECT_URL` (preferred) or `DATABASE_URL` — **direct** Supabase URL for `prisma db push` and SQL files.
+- `STAGING_DATABASE_URL` — staging Supabase transaction pooler URL.
+- `STAGING_DIRECT_URL` — staging Supabase session/direct URL for Prisma CLI.
+- `PRODUCTION_DATABASE_URL` — production Supabase transaction pooler URL.
+- `PRODUCTION_DIRECT_URL` — production Supabase session/direct URL for Prisma CLI.
 
-Manual seed: Actions → Database migrate → Run workflow → enable **run_seed**.
+Behavior:
+
+- Pushes to `main` that touch seed-related files automatically run the staging seed.
+- Manual dispatch can run `staging`, `production`, or `both`.
+- Production uses the `production` GitHub Environment, so configure environment protection if you want approval before it runs.
+- Production seeding updates reference data only: live Stripe plans and built-in templates. Demo fixtures are staging-only.
+- The optional **include_legacy_plan_migration** input updates old `starter` / `pro` / `agency` values in `subscriptions` and `checkout_sessions`; leave it off unless you are intentionally running that one-time cleanup.
 
 ### Local development
 
