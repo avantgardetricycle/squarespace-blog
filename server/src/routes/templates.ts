@@ -160,7 +160,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     sort: {},
     search: {},
     recentPosts: {},
-    popularPosts: { count: 5 },
+    popularPosts: { count: 3 },
     emailCapture: {
       header: 'Subscribe to our newsletter',
       buttonText: 'Subscribe'
@@ -263,7 +263,7 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: false, position: 'none' },
     authorProfiles: { enabled: true, position: 'footer' },
-    popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+    popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     leadMagnet: {
       enabled: false,
@@ -330,7 +330,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     tableOfContents: { enabled: true, position: 'leftSidebar', style: 'bookmark' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'rightSidebar' },
-    popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+    popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     leadMagnet: {
       enabled: true,
@@ -437,7 +437,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'rightSidebar' },
-    popularPosts: { enabled: false, position: 'none', count: 5 },
+    popularPosts: { enabled: false, position: 'none', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     leadMagnet: {
       enabled: true,
@@ -501,7 +501,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'footer' },
-    popularPosts: { enabled: false, position: 'none', count: 5 },
+    popularPosts: { enabled: false, position: 'none', count: 3 },
     relevantPosts: { enabled: false, position: 'none' },
     leadMagnet: {
       enabled: true,

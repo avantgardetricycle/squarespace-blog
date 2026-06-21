@@ -748,7 +748,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ...(viewerMode ? { viewerMode } : {}),
       collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
       postTemplateId: siteConfigTyped.postTemplateId ?? null,
-      recentPostsCount: 5,
+      recentPostsCount: 3,
       baseUrl,
       commentSettings,
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})

@@ -360,7 +360,7 @@ const defaultCollectionModules: CollectionModulesConfig = {
   sort: {},
   search: {},
   recentPosts: {},
-  popularPosts: { count: 5 },
+  popularPosts: { count: 3 },
   emailCapture: { header: "Subscribe to our newsletter", buttonText: "Subscribe" },
   leadMagnet: { resourceTitle: "", description: "", buttonText: "Get it free" },
 };
@@ -369,7 +369,7 @@ const defaultPostModules: PostModulesConfig = {
   tableOfContents: { enabled: false, position: "none", style: "numbered" as TocStyle },
   breadcrumbs: { enabled: false, position: "none" },
   authorProfiles: { enabled: false, position: "none" },
-  popularPosts: { enabled: false, position: "none", count: 5 },
+  popularPosts: { enabled: false, position: "none", count: 3 },
   relevantPosts: { enabled: false, position: "none" },
   emailCapture: { enabled: false, position: "none", header: "Subscribe to our newsletter", buttonText: "Subscribe" },
   leadMagnet: { enabled: false, position: "none", resourceTitle: "", description: "", buttonText: "Get it free" },
@@ -734,7 +734,7 @@ function parseLevelConfig(
         search: {},
         recentPosts: {},
         popularPosts: {
-          count: Math.min(20, Math.max(1, Number((cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? (cmRaw.popularPosts as { count?: unknown }).count : undefined) ?? 5) || 5)),
+          count: Math.min(3, Math.max(1, Number((cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? (cmRaw.popularPosts as { count?: unknown }).count : undefined) ?? 3) || 3)),
         },
         emailCapture: {
           header: typeof ec.header === "string" ? ec.header : "Subscribe to our newsletter",
@@ -759,7 +759,7 @@ function parseLevelConfig(
       sort: {},
       search: {},
       recentPosts: {},
-      popularPosts: { count: 5 },
+      popularPosts: { count: 3 },
       emailCapture: { header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { resourceTitle: "", description: "", buttonText: "Get it free" },
     };
@@ -841,7 +841,7 @@ function parseLevelConfig(
         popularPosts: {
           enabled: Boolean(pop.enabled ?? false),
           position: validModulePosition(pop.position),
-          count: Math.min(20, Math.max(1, Number(pop.count) || 5)),
+          count: Math.min(3, Math.max(1, Number(pop.count) || 3)),
         },
         relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: validModulePosition(rel.position) },
         emailCapture: {
@@ -872,7 +872,7 @@ function parseLevelConfig(
       tableOfContents: { enabled: tocPos !== "none", position: tocPos, style: "numbered" as TocStyle },
       breadcrumbs: { enabled: bcPos !== "none", position: bcPos },
       authorProfiles: { enabled: apPos !== "none", position: apPos },
-      popularPosts: { enabled: popPos !== "none", position: popPos, count: 5 },
+      popularPosts: { enabled: popPos !== "none", position: popPos, count: 3 },
       relevantPosts: { enabled: relPos !== "none", position: relPos },
       emailCapture: { enabled: ecPos !== "none", position: ecPos, header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { enabled: lmPos !== "none", position: lmPos, resourceTitle: "", description: "", buttonText: "Get it free" },
@@ -1103,7 +1103,7 @@ function configToRendererConfig(config: SiteConfigForm): Record<string, unknown>
     postAuthorOverrides: copy.postAuthorOverrides,
     collectionConfig: copy.collectionConfig,
     postConfig: copy.postConfig,
-    recentPostsCount: 5,
+    recentPostsCount: 3,
   };
 }
 
@@ -2066,7 +2066,7 @@ export default function Configure() {
       else if (path === "collectionModules.leadMagnet.resourceTitle") cm.leadMagnet = { ...cm.leadMagnet, resourceTitle: value as string };
       else if (path === "collectionModules.leadMagnet.description") cm.leadMagnet = { ...cm.leadMagnet, description: value as string };
       else if (path === "collectionModules.leadMagnet.buttonText") cm.leadMagnet = { ...cm.leadMagnet, buttonText: value as string };
-      else if (path === "collectionModules.popularPosts.count") cm.popularPosts = { ...cm.popularPosts, count: Math.min(20, Math.max(1, Number(value) || 5)) };
+      else if (path === "collectionModules.popularPosts.count") cm.popularPosts = { ...cm.popularPosts, count: Math.min(3, Math.max(1, Number(value) || 3)) };
       else return cfg;
       return syncModuleOrderFromExplicit(cfg as CollectionLevelConfig, cm, undefined) as typeof cfg;
     }
@@ -2081,7 +2081,7 @@ export default function Configure() {
       else if (path === "postModules.authorProfiles.position") pm.authorProfiles = { ...pm.authorProfiles, position: value as ModulePosition };
       else if (path === "postModules.popularPosts.enabled") pm.popularPosts = { ...pm.popularPosts, enabled: value as boolean };
       else if (path === "postModules.popularPosts.position") pm.popularPosts = { ...pm.popularPosts, position: value as ModulePosition };
-      else if (path === "postModules.popularPosts.count") pm.popularPosts = { ...pm.popularPosts, count: Math.min(20, Math.max(1, Number(value) || 5)) };
+      else if (path === "postModules.popularPosts.count") pm.popularPosts = { ...pm.popularPosts, count: Math.min(3, Math.max(1, Number(value) || 3)) };
       else if (path === "postModules.relevantPosts.enabled") pm.relevantPosts = { ...pm.relevantPosts, enabled: value as boolean };
       else if (path === "postModules.relevantPosts.position") pm.relevantPosts = { ...pm.relevantPosts, position: value as ModulePosition };
       else if (path === "postModules.emailCapture.enabled") pm.emailCapture = { ...pm.emailCapture, enabled: value as boolean };
@@ -4185,15 +4185,15 @@ export default function Configure() {
                                       <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
                                       <div className="flex items-center gap-3">
                                         <Slider
-                                          value={[(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 5]}
-                                          onValueChange={([v]) => updateLevelConfigPath("collectionModules.popularPosts.count", v ?? 5)}
+                                          value={[(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 3]}
+                                          onValueChange={([v]) => updateLevelConfigPath("collectionModules.popularPosts.count", v ?? 3)}
                                           min={1}
-                                          max={20}
+                                          max={3}
                                           step={1}
                                           className="flex-1"
                                         />
                                         <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
-                                          {(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 5}
+                                          {(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 3}
                                         </span>
                                       </div>
                                     </div>
@@ -4316,15 +4316,15 @@ export default function Configure() {
                                       <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
                                       <div className="flex items-center gap-3">
                                         <Slider
-                                          value={[(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 5]}
-                                          onValueChange={([v]) => updateLevelConfigPath("postModules.popularPosts.count", v ?? 5)}
+                                          value={[(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 3]}
+                                          onValueChange={([v]) => updateLevelConfigPath("postModules.popularPosts.count", v ?? 3)}
                                           min={1}
-                                          max={20}
+                                          max={3}
                                           step={1}
                                           className="flex-1"
                                         />
                                         <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
-                                          {(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 5}
+                                          {(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 3}
                                         </span>
                                       </div>
                                     </div>

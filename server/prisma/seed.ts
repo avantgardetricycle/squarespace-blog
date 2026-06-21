@@ -278,7 +278,7 @@ async function seedTemplateConfigs () {
           sort: {},
           search: {},
           recentPosts: {},
-          popularPosts: { count: 5 },
+          popularPosts: { count: 3 },
           emailCapture: {
             header: 'Subscribe to our newsletter',
             buttonText: 'Subscribe'
@@ -424,7 +424,7 @@ async function seedTemplateConfigs () {
           tableOfContents: { enabled: true, position: 'leftSidebar', style: 'bookmark' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'rightSidebar' },
-          popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+          popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           leadMagnet: {
             enabled: true,
@@ -468,7 +468,7 @@ async function seedTemplateConfigs () {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: false, position: 'none' },
           authorProfiles: { enabled: true, position: 'footer' },
-          popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+          popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           leadMagnet: {
             enabled: false,
@@ -529,7 +529,7 @@ async function seedTemplateConfigs () {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'rightSidebar' },
-          popularPosts: { enabled: false, position: 'none', count: 5 },
+          popularPosts: { enabled: false, position: 'none', count: 3 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           leadMagnet: {
             enabled: true,
@@ -576,7 +576,7 @@ async function seedTemplateConfigs () {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'footer' },
-          popularPosts: { enabled: false, position: 'none', count: 5 },
+          popularPosts: { enabled: false, position: 'none', count: 3 },
           relevantPosts: { enabled: false, position: 'none' },
           leadMagnet: {
             enabled: true,

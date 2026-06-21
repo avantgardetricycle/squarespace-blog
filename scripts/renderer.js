@@ -7365,7 +7365,7 @@
       var isSinglePost = displayItems.length === 1 && selectedIndex >= 0 && !hasAnyFilter;
       var levelCfg = isSinglePost ? (baseCfg.postConfig && typeof baseCfg.postConfig === 'object' ? baseCfg.postConfig : baseCfg) : (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' ? baseCfg.collectionConfig : baseCfg);
       var cfg = Object.assign({}, baseCfg, levelCfg);
-      var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
+      var recentPostsCount = Math.max(1, Math.min(3, parseInt(cfg.recentPostsCount, 10) || 3));
       var leftSidebarCfg = cfg.leftSidebar && typeof cfg.leftSidebar === 'object' ? cfg.leftSidebar : null;
       var rightSidebarCfg = cfg.rightSidebar && typeof cfg.rightSidebar === 'object' ? cfg.rightSidebar : null;
       var headerContentCfg = cfg.headerContent && typeof cfg.headerContent === 'object' ? cfg.headerContent : null;
@@ -8474,7 +8474,7 @@
         var newsroomPaywallMobile = newsroomPaywallGatedCard && listRowsMobileCompact;
         if (postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard && !digestPaywallGatedCard) {
           if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
-            postCategoriesLine.style.fontSize = '0.425rem';
+            postCategoriesLine.style.fontSize = '0.85rem';
             postCategoriesLine.style.marginBottom = '3px';
             postCategoriesLine.style.lineHeight = '1.25';
           }
@@ -8632,7 +8632,7 @@
             meta.style.lineHeight = '1.25';
           }
           if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
-            meta.style.fontSize = '0.5rem';
+            meta.style.fontSize = '1rem';
             meta.style.lineHeight = '1.25';
           }
           if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && digestMobileNarrow) {
@@ -9891,7 +9891,7 @@
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
             heroCat.textContent = heroCats[0];
-            heroCat.style.fontSize = '11px';
+            heroCat.style.fontSize = mastheadHeroMobile ? '22px' : '11px';
             heroCat.style.fontWeight = '700';
             heroCat.style.letterSpacing = '1.5px';
             heroCat.style.textTransform = 'uppercase';
@@ -9941,7 +9941,7 @@
           if (heroMetaParts.length > 0) {
             var heroMeta = document.createElement('div');
             heroMeta.textContent = heroMetaParts.join(' · ');
-            heroMeta.style.fontSize = '12px';
+            heroMeta.style.fontSize = mastheadHeroMobile ? '24px' : '12px';
             heroMeta.style.color = heroMuted;
             heroContent.appendChild(heroMeta);
           }
@@ -10196,7 +10196,7 @@
         var pmPop = cfg.postModules && cfg.postModules.popularPosts && typeof cfg.postModules.popularPosts === 'object' ? cfg.postModules.popularPosts : null;
         var cmPop = cfg.collectionModules && cfg.collectionModules.popularPosts && typeof cfg.collectionModules.popularPosts === 'object' ? cfg.collectionModules.popularPosts : null;
         var popCountRaw = isSinglePost ? (pmPop && pmPop.count) : (cmPop && cmPop.count != null ? cmPop.count : (pmPop && pmPop.count));
-        var count = Math.max(1, Math.min(20, parseInt(popCountRaw, 10) || 5));
+        var count = Math.max(1, Math.min(3, parseInt(popCountRaw, 10) || 3));
         var el = document.createElement('aside');
         el.className = 'blog-overlay-popular-posts';
         el.style.flexShrink = '0';
@@ -10249,7 +10249,7 @@
         el.className = 'blog-overlay-recent-posts';
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 220) + 'px';
-        var recentItems = items.slice(0, recentPostsCount);
+        var recentItems = items.slice(0, Math.max(1, Math.min(3, recentPostsCount)));
         for (var r = 0; r < recentItems.length; r++) {
           var rpPost = recentItems[r];
           var rpIdx = self._postIndexInItems(items, rpPost, itemIndexMap);
@@ -10285,7 +10285,7 @@
         var pool = isSinglePost && selectedIndex >= 0
           ? items.filter(function(_, i) { return i !== selectedIndex; })
           : items.slice();
-        var limit = isFooter ? 3 : 5;
+        var limit = 3;
         var relevantItems = pool.slice(0, limit);
         if (relevantItems.length === 0) return null;
 

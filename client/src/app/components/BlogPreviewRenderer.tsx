@@ -45,7 +45,7 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     authorProfiles: overrides?.authorProfiles ?? {},
     collectionConfig: overrides?.collectionConfig ?? undefined,
     postConfig: overrides?.postConfig ?? undefined,
-    recentPostsCount: overrides?.recentPostsCount ?? 5,
+    recentPostsCount: overrides?.recentPostsCount ?? 3,
     ...(typeof overrides?.previewSelectedPostIndex === "number"
       ? { previewSelectedPostIndex: overrides.previewSelectedPostIndex }
       : {}),
