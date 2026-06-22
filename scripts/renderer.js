@@ -7086,6 +7086,40 @@
       }
     },
 
+    /** Grid/digest collection post container — explicit row/column gap avoids shorthand/longhand conflicts on desktop. */
+    _applyCollectionGridMainLayout: function(mainEl, opts) {
+      if (!mainEl || !mainEl.style) return;
+      var collectionMobileGridNarrow = Boolean(opts && opts.collectionMobileGridNarrow);
+      var gridMobileNarrow = Boolean(opts && opts.gridMobileNarrow);
+      var gridColsEffective = opts && opts.gridColsEffective != null ? opts.gridColsEffective : 3;
+      mainEl.style.display = 'grid';
+      mainEl.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
+      mainEl.style.width = '100%';
+      mainEl.style.maxWidth = '100%';
+      mainEl.style.minWidth = '0';
+      mainEl.style.boxSizing = 'border-box';
+      mainEl.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
+      mainEl.style.marginLeft = '';
+      mainEl.style.marginRight = '';
+      mainEl.style.gap = '';
+      if (collectionMobileGridNarrow) {
+        mainEl.style.paddingLeft = '12px';
+        mainEl.style.paddingRight = '12px';
+        if (gridMobileNarrow) {
+          mainEl.style.rowGap = '8px';
+          mainEl.style.columnGap = '16px';
+        } else {
+          mainEl.style.rowGap = '16px';
+          mainEl.style.columnGap = '16px';
+        }
+      } else {
+        mainEl.style.paddingLeft = '';
+        mainEl.style.paddingRight = '';
+        mainEl.style.rowGap = '24px';
+        mainEl.style.columnGap = '24px';
+      }
+    },
+
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
     _isNarrowCollectionViewport: function() {
       try {
@@ -7999,6 +8033,10 @@
           article.style.width = '100%';
           article.style.maxWidth = '100%';
           article.style.boxSizing = 'border-box';
+          if (!collectionMobileGridNarrow) {
+            article.style.marginBottom = '0';
+            article.style.paddingBottom = '0';
+          }
         }
         if (digestMobileNarrow && isFeaturedInLayout && collectionLayout === 'digest') {
           article.style.overflow = 'visible';
@@ -8184,6 +8222,9 @@
                 fiWrap.style.marginLeft = '0';
                 fiWrap.style.marginRight = '0';
                 fiWrap.style.width = '100%';
+                fiWrap.style.maxWidth = '100%';
+                fiWrap.style.boxSizing = 'border-box';
+                fiWrap.removeAttribute('data-digest-viewport-bleed');
               }
             } else {
               self._applyViewportFullBleed(fiWrap);
@@ -9263,28 +9304,11 @@
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
       var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
       if (collectionLayout === 'grid' || collectionLayout === 'digest') {
-        mainEl.style.display = 'grid';
-        mainEl.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
-        mainEl.style.width = '100%';
-        mainEl.style.maxWidth = '100%';
-        mainEl.style.minWidth = '0';
-        mainEl.style.boxSizing = 'border-box';
-        mainEl.style.overflow = vs.collectionMobileGridNarrow ? 'hidden' : '';
-        if (vs.collectionMobileGridNarrow) {
-          mainEl.style.paddingLeft = '12px';
-          mainEl.style.paddingRight = '12px';
-          mainEl.style.gap = vs.gridMobileNarrow ? '8px 16px' : '16px';
-          mainEl.style.rowGap = '';
-          mainEl.style.columnGap = '';
-        } else {
-          mainEl.style.gap = '24px';
-          mainEl.style.rowGap = '';
-          mainEl.style.columnGap = '';
-          mainEl.style.paddingLeft = '';
-          mainEl.style.paddingRight = '';
-        }
-        mainEl.style.marginLeft = '';
-        mainEl.style.marginRight = '';
+        this._applyCollectionGridMainLayout(mainEl, {
+          collectionMobileGridNarrow: vs.collectionMobileGridNarrow,
+          gridMobileNarrow: vs.gridMobileNarrow,
+          gridColsEffective: gridColsEffective
+        });
       } else {
         mainEl.style.display = 'flex';
         mainEl.style.flexDirection = 'column';
@@ -9642,26 +9666,11 @@
         main.style.gap = '0';
         main.style.gridTemplateColumns = '';
       } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
-        main.style.display = 'grid';
-        main.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
-        main.style.width = '100%';
-        main.style.maxWidth = '100%';
-        main.style.minWidth = '0';
-        main.style.boxSizing = 'border-box';
-        main.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
-        if (collectionMobileGridNarrow) {
-          main.style.paddingLeft = '12px';
-          main.style.paddingRight = '12px';
-          main.style.gap = gridMobileNarrow ? '8px 16px' : '16px';
-          main.style.rowGap = '';
-          main.style.columnGap = '';
-        } else {
-          main.style.gap = '24px';
-          main.style.rowGap = '';
-          main.style.columnGap = '';
-          main.style.paddingLeft = '';
-          main.style.paddingRight = '';
-        }
+        self._applyCollectionGridMainLayout(main, {
+          collectionMobileGridNarrow: collectionMobileGridNarrow,
+          gridMobileNarrow: gridMobileNarrow,
+          gridColsEffective: gridColsEffective
+        });
       } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
