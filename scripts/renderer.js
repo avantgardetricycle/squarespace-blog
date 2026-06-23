@@ -2986,8 +2986,14 @@
       card.style.textDecoration = 'none';
       card.style.color = 'inherit';
       card.style.display = 'flex';
-      card.style.flexDirection = 'column';
-      card.style.gap = variant === 'footer' ? '10px' : '8px';
+      if (variant === 'list') {
+        card.style.flexDirection = 'row';
+        card.style.alignItems = 'flex-start';
+        card.style.gap = '10px';
+      } else {
+        card.style.flexDirection = 'column';
+        card.style.gap = '10px';
+      }
       card.style.minWidth = '0';
 
       var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
@@ -2996,7 +3002,13 @@
       imgWrap.style.position = 'relative';
       imgWrap.style.borderRadius = '4px';
       imgWrap.style.overflow = 'hidden';
-      imgWrap.style.aspectRatio = '16 / 9';
+      if (variant === 'list') {
+        imgWrap.style.width = '60px';
+        imgWrap.style.height = '60px';
+        imgWrap.style.flexShrink = '0';
+      } else {
+        imgWrap.style.aspectRatio = '16 / 9';
+      }
       imgWrap.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
       if (imgUrl) {
         var im = document.createElement('img');
@@ -3011,6 +3023,19 @@
       if (gated) self._appendPaywallCardImageLock(imgWrap);
       card.appendChild(imgWrap);
 
+      var textHost = card;
+      if (variant === 'list') {
+        textHost = document.createElement('div');
+        textHost.style.display = 'flex';
+        textHost.style.flexDirection = 'column';
+        textHost.style.alignItems = 'flex-start';
+        textHost.style.textAlign = 'left';
+        textHost.style.flex = '1 1 0';
+        textHost.style.minWidth = '0';
+        textHost.style.gap = '4px';
+        card.appendChild(textHost);
+      }
+
       var cats = self._getPostCategories(post);
       if (cats.length > 0) {
         var catEl = document.createElement('div');
@@ -3021,7 +3046,7 @@
         catEl.style.textTransform = 'uppercase';
         catEl.style.color = accent;
         catEl.style.lineHeight = '1.2';
-        card.appendChild(catEl);
+        textHost.appendChild(catEl);
       }
 
       var titleEl = document.createElement('div');
@@ -3030,12 +3055,12 @@
       titleEl.style.fontWeight = '600';
       titleEl.style.lineHeight = '1.35';
       titleEl.style.color = '#1a1a1a';
-      card.appendChild(titleEl);
+      textHost.appendChild(titleEl);
 
       if (gated) {
         var mo = self._createMembersOnlyTeaserLabel(false);
         mo.style.marginTop = '0';
-        card.appendChild(mo);
+        textHost.appendChild(mo);
       } else if (variant === 'footer') {
         var deckEl = document.createElement('div');
         deckEl.textContent = (opts.deckText != null ? opts.deckText : '');
@@ -3054,14 +3079,14 @@
         deckEl.style.whiteSpace = 'nowrap';
         deckEl.style.textOverflow = 'ellipsis';
         deckEl.style.overflow = 'hidden';
-        if (deckEl.textContent) card.appendChild(deckEl);
+        if (deckEl.textContent) textHost.appendChild(deckEl);
       } else {
         var ex = document.createElement('div');
         ex.textContent = self._truncateText(post.body || post.excerpt || '', 120);
         ex.style.fontSize = '0.8rem';
         ex.style.color = '#666';
         ex.style.lineHeight = '1.4';
-        if (ex.textContent) card.appendChild(ex);
+        if (ex.textContent) textHost.appendChild(ex);
       }
       return card;
     },
