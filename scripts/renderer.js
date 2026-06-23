@@ -3543,20 +3543,28 @@
       var cardShowDate = Boolean(cardCfg && cardCfg.showDate);
       var cardShowAuthor = Boolean(cardCfg && cardCfg.showAuthor);
       var cardShowReadingTime = Boolean(cardCfg && cardCfg.showReadingTime);
-      var metaParts = [];
-      if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaParts.push(cardDateStr); }
-      if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaParts.push(cardAuthorStr); }
+      var metaLines = [];
+      if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaLines.push(cardDateStr); }
+      if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaLines.push(cardAuthorStr); }
       if (cardShowReadingTime) {
         var cardMins = this._getReadingTimeMinutes(post.body);
-        metaParts.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
+        metaLines.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
       }
-      if (metaParts.length === 0) return;
-      var metaEl = document.createElement('div');
-      metaEl.textContent = metaParts.join(' · ');
-      metaEl.style.fontSize = '0.75rem';
-      metaEl.style.color = '#666';
-      metaEl.style.lineHeight = '1.35';
-      textHost.appendChild(metaEl);
+      if (metaLines.length === 0) return;
+      var metaWrap = document.createElement('div');
+      metaWrap.style.display = 'flex';
+      metaWrap.style.flexDirection = 'column';
+      metaWrap.style.alignItems = 'flex-start';
+      metaWrap.style.gap = '2px';
+      for (var mi = 0; mi < metaLines.length; mi++) {
+        var lineEl = document.createElement('div');
+        lineEl.textContent = metaLines[mi];
+        lineEl.style.fontSize = '0.75rem';
+        lineEl.style.color = '#666';
+        lineEl.style.lineHeight = '1.35';
+        metaWrap.appendChild(lineEl);
+      }
+      textHost.appendChild(metaWrap);
     },
 
     _mergeContextBucketLevelConfig: function(prev, next, nestedKeys) {
