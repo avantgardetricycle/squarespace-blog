@@ -2440,16 +2440,61 @@
     },
 
     /**
-     * True when the post is a public preview on a paywalled blog (full teaser/body visible to logged-out JSON).
-     * Gated posts usually ship with empty or trivial body; previews include real HTML content.
+     * True when the post is explicitly marked as a public preview (always show full body to logged-out readers).
      */
-    _isPaywallPublicPreviewPost: function(post) {
+    _isExplicitPaywallPublicPreviewPost: function(post) {
       if (!post || typeof post !== 'object') return false;
       if (post.bbPaywallPublicPreview === true || post.bbIsPublicPreview === true) return true;
-      if (post.publicPreview === true) return true;
-      var body = post.body != null ? String(post.body) : '';
+      return post.publicPreview === true;
+    },
+
+    /**
+     * True when the post is a public preview on a paywalled blog (full teaser/body visible to logged-out JSON).
+     * Collection cards also treat posts with substantial body copy in JSON as previews.
+     */
+    _isPaywallPublicPreviewPost: function(post) {
+      if (this._isExplicitPaywallPublicPreviewPost(post)) return true;
+      var body = post && post.body != null ? String(post.body) : '';
       var plainBody = this._stripHtml(body).replace(/\s+/g, ' ').trim();
       return plainBody.length >= 40;
+    },
+
+    /** Logged-out single-post body gate: explicit public-preview flags only (not body-length heuristic). */
+    _shouldGateSinglePostBody: function(post) {
+      return (
+        this._isPaywalledSite() &&
+        this._resolveViewerMode() === 'loggedOut' &&
+        post &&
+        !this._isExplicitPaywallPublicPreviewPost(post)
+      );
+    },
+
+    /** Body HTML for paywalled single-post teaser when JSON body is empty (excerpt / native SQ markup). */
+    _resolvePaywallSinglePostBodyHtml: function(post) {
+      if (!post || typeof post !== 'object') return '';
+      var body = post.body != null ? String(post.body) : '';
+      if (body.trim()) return body;
+      var excerpt = post.excerpt != null ? String(post.excerpt) : '';
+      if (excerpt.trim()) return excerpt;
+      try {
+        var selectors = [
+          '.blog-item-content-wrapper .sqs-layout',
+          '.blog-item-content .sqs-layout',
+          'article .entry-content',
+          'article .sqs-block-content',
+          '.blog-item .sqs-layout'
+        ];
+        for (var si = 0; si < selectors.length; si++) {
+          var nodes = document.querySelectorAll(selectors[si]);
+          for (var ni = 0; ni < nodes.length; ni++) {
+            var node = nodes[ni];
+            if (node.closest && node.closest('#blog-overlay-list, .blog-overlay-wrapper, #blogga-blogga-root')) continue;
+            var html = node.innerHTML || '';
+            if (this._stripHtml(html).replace(/\s+/g, ' ').trim().length > 20) return html;
+          }
+        }
+      } catch (e) {}
+      return '';
     },
 
     /**
@@ -2869,9 +2914,13 @@
       return card;
     },
 
-    _applySinglePostPaywallBodyTeaser: function(bodyEl) {
+    _applySinglePostPaywallBodyTeaser: function(bodyEl, post) {
       if (!bodyEl) return;
       var self = this;
+      if (!bodyEl.innerHTML.trim() && post) {
+        var seedHtml = self._resolvePaywallSinglePostBodyHtml(post);
+        if (seedHtml.trim()) bodyEl.innerHTML = seedHtml;
+      }
       var paras = [];
       var allP = bodyEl.querySelectorAll('p');
       for (var pi = 0; pi < allP.length; pi++) {
@@ -2901,15 +2950,25 @@
           paras = [(function(t) { var el = document.createElement('p'); el.textContent = t; return el; })(chunks[0])];
         }
       }
-      if (paras.length === 0) return;
+      bodyEl.innerHTML = '';
+      bodyEl.style.position = 'relative';
+
+      if (paras.length === 0) {
+        var emptyCardWrap = document.createElement('div');
+        emptyCardWrap.style.marginTop = '24px';
+        emptyCardWrap.style.display = 'flex';
+        emptyCardWrap.style.justifyContent = 'center';
+        emptyCardWrap.appendChild(self._createPaywallInlineArticleCard());
+        bodyEl.appendChild(emptyCardWrap);
+        return;
+      }
 
       var zone = document.createElement('div');
       zone.className = 'bb-paywall-body-teaser-zone';
       zone.style.position = 'relative';
       zone.style.marginTop = '1.25em';
+      zone.style.minHeight = '220px';
 
-      bodyEl.innerHTML = '';
-      bodyEl.style.position = 'relative';
       bodyEl.appendChild(paras[0].cloneNode(true));
 
       if (paras.length < 2) {
@@ -2927,8 +2986,11 @@
       faded.style.position = 'relative';
       faded.style.maxHeight = '5.5em';
       faded.style.overflow = 'hidden';
-      faded.style.opacity = '0.42';
+      faded.style.filter = 'blur(5px)';
+      faded.style.opacity = '0.55';
       faded.style.marginTop = '1em';
+      faded.style.userSelect = 'none';
+      faded.style.pointerEvents = 'none';
       faded.style.webkitMaskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
       faded.style.maskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
       var p2 = paras[1].cloneNode(true);
@@ -2952,7 +3014,9 @@
       bodyEl.appendChild(zone);
     },
 
-    _isPaywallGatedModulePost: function(post) {
+    _isPaywallGatedModulePost: function(post, opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      if (opts.onSinglePostView) return false;
       return (
         this._isPaywalledSite() &&
         this._resolveViewerMode() === 'loggedOut' &&
@@ -2973,7 +3037,7 @@
       var itemIndexMap = opts.itemIndexMap;
       var placeholderMap = opts.placeholderMap || {};
       var cardCfg = (opts.cfg && typeof opts.cfg === 'object') ? opts.cfg : self._getActiveRenderCfg();
-      var gated = self._isPaywallGatedModulePost(post);
+      var gated = self._isPaywallGatedModulePost(post, { onSinglePostView: Boolean(opts.onSinglePostView) });
       var postIdx = typeof opts.postIndex === 'number'
         ? opts.postIndex
         : self._postIndexInItems(items, post, itemIndexMap);
@@ -7536,47 +7600,6 @@
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
-      if (paywalledLoggedOut && isSinglePost) {
-        var lsW = leftSidebarCfg && typeof leftSidebarCfg.width === 'number' ? leftSidebarCfg.width : 240;
-        var lsS = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? leftSidebarCfg.spaceAbove : 0;
-        var lsSticky = Boolean(leftSidebarCfg && leftSidebarCfg.sticky === true);
-        var rsW = rightSidebarCfg && typeof rightSidebarCfg.width === 'number' ? rightSidebarCfg.width : 240;
-        var rsS = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? rightSidebarCfg.spaceAbove : 0;
-        var rsSticky = Boolean(rightSidebarCfg && rightSidebarCfg.sticky === true);
-        var hcH = headerContentCfg && typeof headerContentCfg.height === 'number' ? headerContentCfg.height : 48;
-        var fcP = footerContentCfg && typeof footerContentCfg.topPadding === 'number' ? footerContentCfg.topPadding : 16;
-        leftSidebarCfg = { show: false, modules: [], moduleOrder: [], width: lsW, spaceAbove: lsS, sticky: lsSticky };
-        rightSidebarCfg = { show: false, modules: [], moduleOrder: [], width: rsW, spaceAbove: rsS, sticky: rsSticky };
-        headerContentCfg = { show: false, modules: [], moduleOrder: [], height: hcH };
-        footerContentCfg = { show: false, modules: [], moduleOrder: [], topPadding: fcP };
-        cfg = Object.assign({}, cfg, {
-          leftSidebar: leftSidebarCfg,
-          rightSidebar: rightSidebarCfg,
-          headerContent: headerContentCfg,
-          footerContent: footerContentCfg,
-          socialMediaLinks: { show: false, platforms: [] }
-        });
-        if (cfg.postHeader && typeof cfg.postHeader === 'object') {
-          cfg = Object.assign({}, cfg, {
-            postHeader: Object.assign({}, cfg.postHeader, {
-              showBreadcrumbs: false,
-              showTags: false,
-              showCategories: false
-            })
-          });
-        }
-        if (cfg.postModules && typeof cfg.postModules === 'object') {
-          var pmStrip = Object.assign({}, cfg.postModules);
-          for (var pmK in pmStrip) {
-            if (!Object.prototype.hasOwnProperty.call(pmStrip, pmK)) continue;
-            var pmEnt = pmStrip[pmK];
-            if (pmEnt && typeof pmEnt === 'object' && 'enabled' in pmEnt) {
-              pmStrip[pmK] = Object.assign({}, pmEnt, { enabled: false });
-            }
-          }
-          cfg = Object.assign({}, cfg, { postModules: pmStrip });
-        }
-      }
       if (self._isTocDebugEnabled()) {
         try {
           var pmToc = cfg.postModules && cfg.postModules.tableOfContents ? cfg.postModules.tableOfContents : null;
@@ -7628,7 +7651,7 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
-      if (viewerMode === 'loggedOut') showReadingTime = false;
+      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
@@ -7692,7 +7715,7 @@
           selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
           paywallFullActive: paywallFullActiveForRender,
           paywallShowFooter: paywalledLoggedOut && !isSinglePost,
-          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && !self._isPaywallPublicPreviewPost(selectedPostForLog),
+          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && self._shouldGateSinglePostBody(selectedPostForLog),
           paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
           paywallDetectionState: rawCfg.paywallDetectionState || null,
           paywallMode: rawCfg.paywallMode || null
@@ -7762,7 +7785,7 @@
         categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
         paywallFullActive: paywallFullActiveForRender,
         paywallShowFooter: paywalledLoggedOut && !isSinglePost,
-        paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && !self._isPaywallPublicPreviewPost(displayItems[0]),
+        paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && self._shouldGateSinglePostBody(displayItems[0]),
         paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
       };
     },
@@ -8988,7 +9011,9 @@
         var body = document.createElement('div');
         body.className = 'blog-overlay-body';
         if (isSinglePost) {
-          var bodyHtml = post.body || '';
+          var bodyHtml = paywallGateSinglePostBody
+            ? self._resolvePaywallSinglePostBodyHtml(post)
+            : (post.body || post.excerpt || '');
           if (bodyHtml.trim()) {
             body.innerHTML = bodyHtml;
             var firstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
@@ -8997,7 +9022,7 @@
             }
           }
           if (paywallGateSinglePostBody) {
-            self._applySinglePostPaywallBodyTeaser(body);
+            self._applySinglePostPaywallBodyTeaser(body, post);
           }
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
@@ -9840,7 +9865,7 @@
       var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
       var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
       var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || '')) ? (pb.color || cfg.progressBarColor) : '#5B4FE8';
-      if (isSinglePost && showProgressBar && this._resolveViewerMode() === 'loggedIn') {
+      if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.height = progressBarThickness + 'px';
@@ -10361,7 +10386,8 @@
             placeholderMap: placeholderMap,
             postIndex: ppIdx,
             analyticsElement: 'popularPosts',
-            cfg: cfg
+            cfg: cfg,
+            onSinglePostView: isSinglePost
           });
           if (!ppCard) continue;
           var ppEntry = document.createElement('div');
@@ -10388,7 +10414,8 @@
             placeholderMap: placeholderMap,
             postIndex: rpIdx >= 0 ? rpIdx : r,
             analyticsElement: 'recentPosts',
-            cfg: cfg
+            cfg: cfg,
+            onSinglePostView: isSinglePost
           });
           if (!rpCard) continue;
           var rpEntry = document.createElement('div');
@@ -10439,7 +10466,8 @@
               postIndex: fIdx,
               analyticsElement: 'relevantPosts',
               deckText: relevantPostFooterFirstLine(fp),
-              cfg: cfg
+              cfg: cfg,
+              onSinglePostView: isSinglePost
             });
             if (card) grid.appendChild(card);
           }
@@ -10476,7 +10504,8 @@
             placeholderMap: placeholderMap,
             postIndex: rpIdx,
             analyticsElement: 'relevantPosts',
-            cfg: cfg
+            cfg: cfg,
+            onSinglePostView: isSinglePost
           });
           if (!rpCard) continue;
           var rpEntry = document.createElement('div');
