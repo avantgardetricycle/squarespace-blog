@@ -6951,6 +6951,8 @@
         if (isFinite(parsed) && parsed >= 0) padTop = parsed;
       } catch (ePad) { /* ignore */ }
       this._applySiteContentInsetsToWrapper(wrapper, padTop);
+      var bleedWrapper = this._blogOverlayWrapperEl;
+      if (bleedWrapper) this._syncDigestMobileFeaturedImageBleed(bleedWrapper);
     },
 
     _teardownSiteContentInsetSync: function() {
@@ -7160,6 +7162,20 @@
       }
     },
 
+    _scheduleDigestMobileFeaturedImageBleed: function(vs) {
+      if (!vs || vs.collectionLayout !== 'digest' || !vs.digestMobileNarrow) return;
+      if (!vs.featuredPost || !vs.faCfg || !vs.faCfg.show || vs.faCfg.position !== 'inLayout') return;
+      var self = this;
+      var digestBleedSeq = self._renderSeq;
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          if (self._renderSeq !== digestBleedSeq) return;
+          var wrapperForBleed = document.getElementById('blog-overlay-list');
+          if (wrapperForBleed) self._syncDigestMobileFeaturedImageBleed(wrapperForBleed);
+        });
+      });
+    },
+
     /** Grid/digest collection post container — explicit row/column gap avoids shorthand/longhand conflicts on desktop. */
     _applyCollectionGridMainLayout: function(mainEl, opts) {
       if (!mainEl || !mainEl.style) return;
@@ -7172,7 +7188,15 @@
       mainEl.style.maxWidth = '100%';
       mainEl.style.minWidth = '0';
       mainEl.style.boxSizing = 'border-box';
-      mainEl.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
+      var digestMobileNarrow = Boolean(opts && opts.digestMobileNarrow);
+      if (collectionMobileGridNarrow && digestMobileNarrow) {
+        mainEl.style.overflow = 'visible';
+        mainEl.style.overflowX = 'visible';
+      } else if (collectionMobileGridNarrow) {
+        mainEl.style.overflow = 'hidden';
+      } else {
+        mainEl.style.overflow = '';
+      }
       mainEl.style.marginLeft = '';
       mainEl.style.marginRight = '';
       mainEl.style.gap = '';
@@ -8304,6 +8328,14 @@
               if (digestMobileFullBleed && isFeaturedInLayout) {
                 fiWrap.setAttribute('data-digest-viewport-bleed', '1');
                 fiWrap.style.marginTop = '0';
+                if (collectionMobileGridNarrow) {
+                  var digestMainPad = 12;
+                  fiWrap.style.width = 'calc(100% + ' + (digestMainPad * 2) + 'px)';
+                  fiWrap.style.maxWidth = 'none';
+                  fiWrap.style.marginLeft = (-digestMainPad) + 'px';
+                  fiWrap.style.marginRight = (-digestMainPad) + 'px';
+                  fiWrap.style.boxSizing = 'border-box';
+                }
               } else {
                 fiWrap.style.marginLeft = '0';
                 fiWrap.style.marginRight = '0';
@@ -9394,7 +9426,8 @@
         this._applyCollectionGridMainLayout(mainEl, {
           collectionMobileGridNarrow: vs.collectionMobileGridNarrow,
           gridMobileNarrow: vs.gridMobileNarrow,
-          gridColsEffective: gridColsEffective
+          gridColsEffective: gridColsEffective,
+          digestMobileNarrow: vs.digestMobileNarrow
         });
       } else {
         mainEl.style.display = 'flex';
@@ -9454,23 +9487,7 @@
           self._blogOverlaySidebarLayoutFn();
         });
       }
-      if (
-        collectionLayout === 'digest' &&
-        vs.digestMobileNarrow &&
-        vs.featuredPost &&
-        vs.faCfg &&
-        vs.faCfg.show &&
-        vs.faCfg.position === 'inLayout'
-      ) {
-        var wrapperForBleed = document.getElementById('blog-overlay-list');
-        var digestBleedSeq = self._renderSeq;
-        requestAnimationFrame(function() {
-          requestAnimationFrame(function() {
-            if (self._renderSeq !== digestBleedSeq || !wrapperForBleed) return;
-            self._syncDigestMobileFeaturedImageBleed(wrapperForBleed);
-          });
-        });
-      }
+      self._scheduleDigestMobileFeaturedImageBleed(vs);
       return true;
     },
 
@@ -9772,7 +9789,8 @@
         self._applyCollectionGridMainLayout(main, {
           collectionMobileGridNarrow: collectionMobileGridNarrow,
           gridMobileNarrow: gridMobileNarrow,
-          gridColsEffective: gridColsEffective
+          gridColsEffective: gridColsEffective,
+          digestMobileNarrow: digestMobileNarrow
         });
       } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
@@ -11655,6 +11673,9 @@
             if (typeof self._blogOverlayStickySidebarSyncFn === 'function') {
               self._blogOverlayStickySidebarSyncFn();
             }
+            if (collectionLayout === 'digest' && digestMobileNarrow) {
+              self._syncDigestMobileFeaturedImageBleed(wrapper);
+            }
           }
 
           if (headerContentCfg && headerContentCfg.show) {
@@ -12192,6 +12213,7 @@
           requestAnimationFrame(function() {
             applySidebarResponsiveLayout();
           });
+          self._scheduleDigestMobileFeaturedImageBleed(vs);
           if (typeof ResizeObserver !== 'undefined') {
             self._blogOverlaySidebarRO = new ResizeObserver(function() {
               applySidebarResponsiveLayout();
