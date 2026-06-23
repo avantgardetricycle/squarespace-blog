@@ -2508,18 +2508,38 @@
     _createPaywallInlineCardWrap: function() {
       var wrap = document.createElement('div');
       wrap.className = 'bb-paywall-inline-card-wrap';
-      wrap.style.position = 'absolute';
-      wrap.style.left = '50%';
-      wrap.style.top = '50%';
-      wrap.style.transform = 'translate(-50%, -50%)';
-      wrap.style.width = 'min(100%, 260px)';
-      wrap.style.maxWidth = '260px';
+      wrap.style.position = 'relative';
+      wrap.style.width = '50%';
+      wrap.style.minWidth = 'min(100%, 280px)';
+      wrap.style.maxWidth = '560px';
+      wrap.style.marginLeft = 'auto';
+      wrap.style.marginRight = 'auto';
       wrap.style.zIndex = '2';
-      wrap.style.padding = '0 8px';
       wrap.style.boxSizing = 'border-box';
       wrap.style.pointerEvents = 'auto';
       wrap.appendChild(this._createPaywallInlineArticleCard());
       return wrap;
+    },
+
+    /** Match single-post body horizontal inset to the post header column. */
+    _applySinglePostBodyMargins: function(bodyEl, cfg) {
+      if (!bodyEl || !bodyEl.style) return;
+      bodyEl.style.boxSizing = 'border-box';
+      bodyEl.style.width = '100%';
+      if (this._isStoryPostLayout(cfg) && !this._isNarrowCollectionViewport()) {
+        bodyEl.style.paddingLeft = '16vw';
+        bodyEl.style.paddingRight = '16vw';
+        return;
+      }
+      var postHeaderCfg = cfg && cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : {};
+      var imagePos = postHeaderCfg.imagePosition;
+      var hasSideImage = imagePos === 'leftOfInfo' || imagePos === 'rightOfInfo';
+      if (hasSideImage) return;
+      var sideGap = typeof postHeaderCfg.sideGap === 'number'
+        ? Math.min(150, Math.max(0, Math.round(postHeaderCfg.sideGap)))
+        : 24;
+      bodyEl.style.paddingLeft = sideGap + 'px';
+      bodyEl.style.paddingRight = sideGap + 'px';
     },
 
     /**
@@ -2836,13 +2856,13 @@
       var card = document.createElement('div');
       card.className = 'bb-paywall-inline-card';
       card.style.width = '100%';
-      card.style.maxWidth = '260px';
-      card.style.margin = '0 auto';
+      card.style.maxWidth = 'none';
+      card.style.margin = '0';
       card.style.boxSizing = 'border-box';
       card.style.background = '#fff';
       card.style.border = '1px solid rgba(0,0,0,0.1)';
       card.style.borderRadius = '8px';
-      card.style.padding = '22px 18px 18px';
+      card.style.padding = '24px 20px 20px';
       card.style.textAlign = 'center';
       card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
 
@@ -2941,7 +2961,7 @@
       return card;
     },
 
-    _applySinglePostPaywallBodyTeaser: function(bodyEl, post) {
+    _applySinglePostPaywallBodyTeaser: function(bodyEl, post, cfg) {
       if (!bodyEl) return;
       var self = this;
       var paras = [];
@@ -2976,6 +2996,8 @@
 
       bodyEl.innerHTML = '';
       bodyEl.style.position = 'relative';
+      bodyEl.style.marginTop = '1.5rem';
+      self._applySinglePostBodyMargins(bodyEl, cfg);
 
       var clearParaEl = null;
       var blurText = '';
@@ -3006,11 +3028,25 @@
       var zone = document.createElement('div');
       zone.className = 'bb-paywall-body-teaser-zone';
       zone.style.position = 'relative';
-      zone.style.marginTop = clearParaEl ? '1.25em' : '0.5em';
-      zone.style.minHeight = '200px';
+      zone.style.display = 'flex';
+      zone.style.flexDirection = 'column';
+      zone.style.alignItems = 'stretch';
+      zone.style.width = '100%';
+      zone.style.boxSizing = 'border-box';
+      zone.style.marginTop = clearParaEl ? '1.25em' : '0';
+      zone.style.paddingTop = '0.5rem';
+      zone.style.paddingBottom = '1.5rem';
 
-      zone.appendChild(self._createPaywallBlurBlock(blurText));
-      zone.appendChild(self._createPaywallInlineCardWrap());
+      var blurBlock = self._createPaywallBlurBlock(blurText);
+      blurBlock.style.width = '100%';
+      blurBlock.style.flex = '0 0 auto';
+      zone.appendChild(blurBlock);
+
+      var cardWrap = self._createPaywallInlineCardWrap();
+      cardWrap.style.flex = '0 0 auto';
+      cardWrap.style.marginTop = '-4.25rem';
+      cardWrap.style.marginBottom = '0.5rem';
+      zone.appendChild(cardWrap);
       bodyEl.appendChild(zone);
     },
 
@@ -9020,7 +9056,7 @@
                 gatedFirstHeading.remove();
               }
             }
-            self._applySinglePostPaywallBodyTeaser(body, post);
+            self._applySinglePostPaywallBodyTeaser(body, post, cfg);
           } else {
             var bodyHtml = post.body || post.excerpt || '';
             if (bodyHtml.trim()) {
@@ -9075,7 +9111,7 @@
           } else {
             article.id = 'toc-0';
           }
-          if (self._isStoryPostLayout(cfg) && !self._isNarrowCollectionViewport()) {
+          if (self._isStoryPostLayout(cfg) && !self._isNarrowCollectionViewport() && !paywallGateSinglePostBody) {
             body.style.paddingLeft = '16vw';
             body.style.paddingRight = '16vw';
             body.style.boxSizing = 'border-box';
