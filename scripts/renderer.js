@@ -2469,32 +2469,57 @@
       );
     },
 
-    /** Body HTML for paywalled single-post teaser when JSON body is empty (excerpt / native SQ markup). */
+    /** Body HTML for paywalled single-post teaser — post.body only (excerpt lives in post header). */
     _resolvePaywallSinglePostBodyHtml: function(post) {
       if (!post || typeof post !== 'object') return '';
       var body = post.body != null ? String(post.body) : '';
-      if (body.trim()) return body;
-      var excerpt = post.excerpt != null ? String(post.excerpt) : '';
-      if (excerpt.trim()) return excerpt;
-      try {
-        var selectors = [
-          '.blog-item-content-wrapper .sqs-layout',
-          '.blog-item-content .sqs-layout',
-          'article .entry-content',
-          'article .sqs-block-content',
-          '.blog-item .sqs-layout'
-        ];
-        for (var si = 0; si < selectors.length; si++) {
-          var nodes = document.querySelectorAll(selectors[si]);
-          for (var ni = 0; ni < nodes.length; ni++) {
-            var node = nodes[ni];
-            if (node.closest && node.closest('#blog-overlay-list, .blog-overlay-wrapper, #blogga-blogga-root')) continue;
-            var html = node.innerHTML || '';
-            if (this._stripHtml(html).replace(/\s+/g, ' ').trim().length > 20) return html;
-          }
-        }
-      } catch (e) {}
-      return '';
+      return body.trim() ? body : '';
+    },
+
+    /** Placeholder copy for blurred body simulation when JSON body is unavailable logged-out. */
+    _paywallSimulatedBlurText: function() {
+      return 'The work of building something meaningful rarely follows a straight line. Each step asks for attention and patience, and the details that seem small in the moment often shape the outcome more than we expect. Over time, patterns emerge—habits form, priorities shift, and what once felt uncertain becomes familiar enough to trust.';
+    },
+
+    _createPaywallBlurBlock: function(text, opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var faded = document.createElement('div');
+      faded.className = 'bb-paywall-body-teaser-fade';
+      faded.setAttribute('aria-hidden', 'true');
+      faded.style.position = 'relative';
+      faded.style.maxHeight = opts.maxHeight || '5.5em';
+      faded.style.overflow = 'hidden';
+      faded.style.filter = 'blur(7px)';
+      faded.style.opacity = '0.65';
+      faded.style.marginTop = opts.marginTop || '0';
+      faded.style.userSelect = 'none';
+      faded.style.pointerEvents = 'none';
+      faded.style.webkitMaskImage = 'linear-gradient(to bottom, #000 15%, transparent 100%)';
+      faded.style.maskImage = 'linear-gradient(to bottom, #000 15%, transparent 100%)';
+      faded.style.lineHeight = '1.65';
+      faded.style.color = '#333';
+      var p = document.createElement('p');
+      p.style.margin = '0';
+      p.textContent = text;
+      faded.appendChild(p);
+      return faded;
+    },
+
+    _createPaywallInlineCardWrap: function() {
+      var wrap = document.createElement('div');
+      wrap.className = 'bb-paywall-inline-card-wrap';
+      wrap.style.position = 'absolute';
+      wrap.style.left = '50%';
+      wrap.style.top = '50%';
+      wrap.style.transform = 'translate(-50%, -50%)';
+      wrap.style.width = 'min(100%, 260px)';
+      wrap.style.maxWidth = '260px';
+      wrap.style.zIndex = '2';
+      wrap.style.padding = '0 8px';
+      wrap.style.boxSizing = 'border-box';
+      wrap.style.pointerEvents = 'auto';
+      wrap.appendChild(this._createPaywallInlineArticleCard());
+      return wrap;
     },
 
     /**
@@ -2811,11 +2836,13 @@
       var card = document.createElement('div');
       card.className = 'bb-paywall-inline-card';
       card.style.width = '100%';
+      card.style.maxWidth = '260px';
+      card.style.margin = '0 auto';
       card.style.boxSizing = 'border-box';
       card.style.background = '#fff';
       card.style.border = '1px solid rgba(0,0,0,0.1)';
       card.style.borderRadius = '8px';
-      card.style.padding = '28px 24px 24px';
+      card.style.padding = '22px 18px 18px';
       card.style.textAlign = 'center';
       card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
 
@@ -2917,10 +2944,6 @@
     _applySinglePostPaywallBodyTeaser: function(bodyEl, post) {
       if (!bodyEl) return;
       var self = this;
-      if (!bodyEl.innerHTML.trim() && post) {
-        var seedHtml = self._resolvePaywallSinglePostBodyHtml(post);
-        if (seedHtml.trim()) bodyEl.innerHTML = seedHtml;
-      }
       var paras = [];
       var allP = bodyEl.querySelectorAll('p');
       for (var pi = 0; pi < allP.length; pi++) {
@@ -2950,67 +2973,44 @@
           paras = [(function(t) { var el = document.createElement('p'); el.textContent = t; return el; })(chunks[0])];
         }
       }
+
       bodyEl.innerHTML = '';
       bodyEl.style.position = 'relative';
 
-      if (paras.length === 0) {
-        var emptyCardWrap = document.createElement('div');
-        emptyCardWrap.style.marginTop = '24px';
-        emptyCardWrap.style.display = 'flex';
-        emptyCardWrap.style.justifyContent = 'center';
-        emptyCardWrap.appendChild(self._createPaywallInlineArticleCard());
-        bodyEl.appendChild(emptyCardWrap);
-        return;
+      var clearParaEl = null;
+      var blurText = '';
+
+      if (paras.length >= 2) {
+        clearParaEl = document.createElement('p');
+        clearParaEl.textContent = (paras[0].textContent || '').replace(/\s+/g, ' ').trim();
+        blurText = (paras[1].textContent || '').replace(/\s+/g, ' ').trim();
+      } else if (paras.length === 1) {
+        var fullText = (paras[0].textContent || '').replace(/\s+/g, ' ').trim();
+        if (fullText.length > 80) {
+          var splitMid = Math.floor(fullText.length * 0.45);
+          var splitIdx = fullText.indexOf(' ', splitMid);
+          if (splitIdx < 0) splitIdx = splitMid;
+          clearParaEl = document.createElement('p');
+          clearParaEl.textContent = fullText.slice(0, splitIdx).trim();
+          blurText = fullText.slice(splitIdx).trim();
+        }
+      }
+
+      if (clearParaEl && clearParaEl.textContent) {
+        bodyEl.appendChild(clearParaEl);
+      }
+      if (!blurText) {
+        blurText = self._paywallSimulatedBlurText();
       }
 
       var zone = document.createElement('div');
       zone.className = 'bb-paywall-body-teaser-zone';
       zone.style.position = 'relative';
-      zone.style.marginTop = '1.25em';
-      zone.style.minHeight = '220px';
+      zone.style.marginTop = clearParaEl ? '1.25em' : '0.5em';
+      zone.style.minHeight = '200px';
 
-      bodyEl.appendChild(paras[0].cloneNode(true));
-
-      if (paras.length < 2) {
-        var soloCardWrap = document.createElement('div');
-        soloCardWrap.style.marginTop = '24px';
-        soloCardWrap.style.display = 'flex';
-        soloCardWrap.style.justifyContent = 'center';
-        soloCardWrap.appendChild(self._createPaywallInlineArticleCard());
-        bodyEl.appendChild(soloCardWrap);
-        return;
-      }
-
-      var faded = document.createElement('div');
-      faded.className = 'bb-paywall-body-teaser-fade';
-      faded.style.position = 'relative';
-      faded.style.maxHeight = '5.5em';
-      faded.style.overflow = 'hidden';
-      faded.style.filter = 'blur(5px)';
-      faded.style.opacity = '0.55';
-      faded.style.marginTop = '1em';
-      faded.style.userSelect = 'none';
-      faded.style.pointerEvents = 'none';
-      faded.style.webkitMaskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
-      faded.style.maskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
-      var p2 = paras[1].cloneNode(true);
-      p2.style.margin = '0';
-      faded.appendChild(p2);
-      zone.appendChild(faded);
-
-      var cardWrap = document.createElement('div');
-      cardWrap.className = 'bb-paywall-inline-card-wrap';
-      cardWrap.style.position = 'absolute';
-      cardWrap.style.left = '50%';
-      cardWrap.style.top = '50%';
-      cardWrap.style.transform = 'translate(-50%, -42%)';
-      cardWrap.style.width = 'min(100%, 520px)';
-      cardWrap.style.zIndex = '2';
-      cardWrap.style.padding = '0 8px';
-      cardWrap.style.boxSizing = 'border-box';
-      cardWrap.style.pointerEvents = 'auto';
-      cardWrap.appendChild(self._createPaywallInlineArticleCard());
-      zone.appendChild(cardWrap);
+      zone.appendChild(self._createPaywallBlurBlock(blurText));
+      zone.appendChild(self._createPaywallInlineCardWrap());
       bodyEl.appendChild(zone);
     },
 
@@ -9011,18 +9011,25 @@
         var body = document.createElement('div');
         body.className = 'blog-overlay-body';
         if (isSinglePost) {
-          var bodyHtml = paywallGateSinglePostBody
-            ? self._resolvePaywallSinglePostBodyHtml(post)
-            : (post.body || post.excerpt || '');
-          if (bodyHtml.trim()) {
-            body.innerHTML = bodyHtml;
-            var firstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
-            if (firstHeading && /^Section\s+\d+$/i.test((firstHeading.textContent || '').trim())) {
-              firstHeading.remove();
-            }
-          }
           if (paywallGateSinglePostBody) {
+            var gatedBodyHtml = self._resolvePaywallSinglePostBodyHtml(post);
+            if (gatedBodyHtml.trim()) {
+              body.innerHTML = gatedBodyHtml;
+              var gatedFirstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
+              if (gatedFirstHeading && /^Section\s+\d+$/i.test((gatedFirstHeading.textContent || '').trim())) {
+                gatedFirstHeading.remove();
+              }
+            }
             self._applySinglePostPaywallBodyTeaser(body, post);
+          } else {
+            var bodyHtml = post.body || post.excerpt || '';
+            if (bodyHtml.trim()) {
+              body.innerHTML = bodyHtml;
+              var firstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
+              if (firstHeading && /^Section\s+\d+$/i.test((firstHeading.textContent || '').trim())) {
+                firstHeading.remove();
+              }
+            }
           }
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
