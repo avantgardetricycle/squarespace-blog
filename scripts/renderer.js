@@ -2961,8 +2961,8 @@
     },
 
     /**
-     * Sidebar/footer post card. Gated: lock on image, category, title, Members Only.
-     * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement }
+     * Sidebar/footer post card. Gated: lock on image, title, Members Only; meta still shown when toggled on.
+     * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement, cfg }
      */
     _createModulePostCard: function(post, opts) {
       var self = this;
@@ -2972,6 +2972,7 @@
       var items = opts.items || self.items || [];
       var itemIndexMap = opts.itemIndexMap;
       var placeholderMap = opts.placeholderMap || {};
+      var cardCfg = (opts.cfg && typeof opts.cfg === 'object') ? opts.cfg : self._getActiveRenderCfg();
       var gated = self._isPaywallGatedModulePost(post);
       var postIdx = typeof opts.postIndex === 'number'
         ? opts.postIndex
@@ -3057,6 +3058,10 @@
       titleEl.style.color = '#1a1a1a';
       textHost.appendChild(titleEl);
 
+      if (variant === 'list') {
+        self._appendModulePostCardListMeta(textHost, post, cardCfg);
+      }
+
       if (gated) {
         var mo = self._createMembersOnlyTeaserLabel(false);
         mo.style.marginTop = '0';
@@ -3080,27 +3085,6 @@
         deckEl.style.textOverflow = 'ellipsis';
         deckEl.style.overflow = 'hidden';
         if (deckEl.textContent) textHost.appendChild(deckEl);
-      } else if (variant === 'list') {
-        var cardCfg = self.config || {};
-        var cardShowDate = Boolean(cardCfg.showDate);
-        var cardShowAuthor = Boolean(cardCfg.showAuthor);
-        var cardShowReadingTime = Boolean(cardCfg.showReadingTime);
-        if (self._resolveViewerMode() === 'loggedOut') cardShowReadingTime = false;
-        var metaParts = [];
-        if (cardShowDate) { var cardDateStr = self._getDate(post); if (cardDateStr) metaParts.push(cardDateStr); }
-        if (cardShowAuthor) { var cardAuthorStr = self._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaParts.push(cardAuthorStr); }
-        if (cardShowReadingTime) {
-          var cardMins = self._getReadingTimeMinutes(post.body);
-          metaParts.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
-        }
-        if (metaParts.length > 0) {
-          var metaEl = document.createElement('div');
-          metaEl.textContent = metaParts.join(' · ');
-          metaEl.style.fontSize = '0.75rem';
-          metaEl.style.color = '#666';
-          metaEl.style.lineHeight = '1.35';
-          textHost.appendChild(metaEl);
-        }
       }
       return card;
     },
@@ -3530,6 +3514,49 @@
       };
       var active = viewerMode === 'loggedIn' ? normalized.loggedIn : normalized.loggedOut;
       return { normalized: normalized, active: active };
+    },
+
+    /** Active collection/post level config merged with site-level author fields. */
+    _getActiveRenderCfg: function() {
+      var rawCfg = this.config || {};
+      var items = this.items || [];
+      var viewerMode = this._resolveViewerMode();
+      var resolvedCollection = this._resolveLevelConfigForViewerMode(rawCfg.collectionConfig, viewerMode);
+      var resolvedPost = this._resolveLevelConfigForViewerMode(rawCfg.postConfig, viewerMode);
+      var baseCfg = Object.assign({}, rawCfg, {
+        collectionConfig: resolvedCollection.active || rawCfg.collectionConfig,
+        postConfig: resolvedPost.active || rawCfg.postConfig
+      });
+      var selectedIndex = this._getSelectedIndex(items);
+      var searchQuery = this._searchQuery || '';
+      var categoryFilter = Array.isArray(this._categoryFilter) ? this._categoryFilter : [];
+      var tagFilter = Array.isArray(this._tagFilter) ? this._tagFilter : [];
+      var hasAnyFilter = searchQuery.trim().length > 0 || categoryFilter.length > 0 || tagFilter.length > 0;
+      var isSinglePost = selectedIndex >= 0 && selectedIndex < items.length && !hasAnyFilter;
+      var levelCfg = isSinglePost
+        ? (baseCfg.postConfig && typeof baseCfg.postConfig === 'object' ? baseCfg.postConfig : baseCfg)
+        : (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' ? baseCfg.collectionConfig : baseCfg);
+      return Object.assign({}, baseCfg, levelCfg);
+    },
+
+    _appendModulePostCardListMeta: function(textHost, post, cardCfg) {
+      var cardShowDate = Boolean(cardCfg && cardCfg.showDate);
+      var cardShowAuthor = Boolean(cardCfg && cardCfg.showAuthor);
+      var cardShowReadingTime = Boolean(cardCfg && cardCfg.showReadingTime);
+      var metaParts = [];
+      if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaParts.push(cardDateStr); }
+      if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaParts.push(cardAuthorStr); }
+      if (cardShowReadingTime) {
+        var cardMins = this._getReadingTimeMinutes(post.body);
+        metaParts.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
+      }
+      if (metaParts.length === 0) return;
+      var metaEl = document.createElement('div');
+      metaEl.textContent = metaParts.join(' · ');
+      metaEl.style.fontSize = '0.75rem';
+      metaEl.style.color = '#666';
+      metaEl.style.lineHeight = '1.35';
+      textHost.appendChild(metaEl);
     },
 
     _mergeContextBucketLevelConfig: function(prev, next, nestedKeys) {
@@ -10310,7 +10337,8 @@
             itemIndexMap: itemIndexMap,
             placeholderMap: placeholderMap,
             postIndex: ppIdx,
-            analyticsElement: 'popularPosts'
+            analyticsElement: 'popularPosts',
+            cfg: cfg
           });
           if (!ppCard) continue;
           var ppEntry = document.createElement('div');
@@ -10336,7 +10364,8 @@
             itemIndexMap: itemIndexMap,
             placeholderMap: placeholderMap,
             postIndex: rpIdx >= 0 ? rpIdx : r,
-            analyticsElement: 'recentPosts'
+            analyticsElement: 'recentPosts',
+            cfg: cfg
           });
           if (!rpCard) continue;
           var rpEntry = document.createElement('div');
@@ -10386,7 +10415,8 @@
               placeholderMap: placeholderMap,
               postIndex: fIdx,
               analyticsElement: 'relevantPosts',
-              deckText: relevantPostFooterFirstLine(fp)
+              deckText: relevantPostFooterFirstLine(fp),
+              cfg: cfg
             });
             if (card) grid.appendChild(card);
           }
@@ -10422,7 +10452,8 @@
             itemIndexMap: itemIndexMap,
             placeholderMap: placeholderMap,
             postIndex: rpIdx,
-            analyticsElement: 'relevantPosts'
+            analyticsElement: 'relevantPosts',
+            cfg: cfg
           });
           if (!rpCard) continue;
           var rpEntry = document.createElement('div');
