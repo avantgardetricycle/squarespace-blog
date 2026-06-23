@@ -3037,10 +3037,10 @@
       }
 
       var cats = self._getPostCategories(post);
-      if (cats.length > 0) {
+      if (variant === 'footer' && cats.length > 0) {
         var catEl = document.createElement('div');
         catEl.textContent = cats[0];
-        catEl.style.fontSize = variant === 'footer' ? '10px' : '9px';
+        catEl.style.fontSize = '10px';
         catEl.style.fontWeight = '700';
         catEl.style.letterSpacing = '1.5px';
         catEl.style.textTransform = 'uppercase';
@@ -3080,13 +3080,27 @@
         deckEl.style.textOverflow = 'ellipsis';
         deckEl.style.overflow = 'hidden';
         if (deckEl.textContent) textHost.appendChild(deckEl);
-      } else {
-        var ex = document.createElement('div');
-        ex.textContent = self._truncateText(post.body || post.excerpt || '', 120);
-        ex.style.fontSize = '0.8rem';
-        ex.style.color = '#666';
-        ex.style.lineHeight = '1.4';
-        if (ex.textContent) textHost.appendChild(ex);
+      } else if (variant === 'list') {
+        var cardCfg = self.config || {};
+        var cardShowDate = Boolean(cardCfg.showDate);
+        var cardShowAuthor = Boolean(cardCfg.showAuthor);
+        var cardShowReadingTime = Boolean(cardCfg.showReadingTime);
+        if (self._resolveViewerMode() === 'loggedOut') cardShowReadingTime = false;
+        var metaParts = [];
+        if (cardShowDate) { var cardDateStr = self._getDate(post); if (cardDateStr) metaParts.push(cardDateStr); }
+        if (cardShowAuthor) { var cardAuthorStr = self._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaParts.push(cardAuthorStr); }
+        if (cardShowReadingTime) {
+          var cardMins = self._getReadingTimeMinutes(post.body);
+          metaParts.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
+        }
+        if (metaParts.length > 0) {
+          var metaEl = document.createElement('div');
+          metaEl.textContent = metaParts.join(' · ');
+          metaEl.style.fontSize = '0.75rem';
+          metaEl.style.color = '#666';
+          metaEl.style.lineHeight = '1.35';
+          textHost.appendChild(metaEl);
+        }
       }
       return card;
     },
