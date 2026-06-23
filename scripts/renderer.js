@@ -8014,8 +8014,8 @@
           listRowsMobileCompact = typeof window !== 'undefined' && window.innerWidth <= 767;
         }
       }
-      /** Digest mobile: inset images (2-col grid); featured hero no longer viewport-bleeds on narrow viewports. */
-      var digestMobileFullBleed = false;
+      /** Digest mobile: featured hero image full-bleed; 2-col grid thumbnails stay inset. */
+      var digestMobileFullBleed = digestMobileNarrow;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
       var phAlign = postHeaderCfg && (postHeaderCfg.contentAlignment === 'left' || postHeaderCfg.contentAlignment === 'center' || postHeaderCfg.contentAlignment === 'right') ? postHeaderCfg.contentAlignment : 'left';
