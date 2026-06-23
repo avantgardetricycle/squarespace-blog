@@ -2953,15 +2953,20 @@
     },
 
     _isPaywallGatedModulePost: function(post) {
-      return (
-        this._isPaywalledSite() &&
-        this._resolveViewerMode() === 'loggedOut' &&
-        !this._isPaywallPublicPreviewPost(post)
-      );
+      if (!this._isPaywalledSite() || this._resolveViewerMode() !== 'loggedOut') return false;
+      if (this._isPaywallPublicPreviewPost(post)) return false;
+      var items = this.items || [];
+      var selectedIndex = this._getSelectedIndex(items);
+      var searchQuery = this._searchQuery || '';
+      var categoryFilter = Array.isArray(this._categoryFilter) ? this._categoryFilter : [];
+      var tagFilter = Array.isArray(this._tagFilter) ? this._tagFilter : [];
+      var hasAnyFilter = searchQuery.trim().length > 0 || categoryFilter.length > 0 || tagFilter.length > 0;
+      if (selectedIndex >= 0 && selectedIndex < items.length && !hasAnyFilter) return false;
+      return true;
     },
 
     /**
-     * Sidebar/footer post card. Gated: lock on image, title, Members Only; meta still shown when toggled on.
+     * Sidebar/footer post card on collection index. Single-post templates keep normal cards when paywalled.
      * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement, cfg }
      */
     _createModulePostCard: function(post, opts) {
@@ -7536,51 +7541,6 @@
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
-      var stripPaywalledLoggedOutChrome =
-        paywalledLoggedOut;
-      if (stripPaywalledLoggedOutChrome) {
-        var lsW = leftSidebarCfg && typeof leftSidebarCfg.width === 'number' ? leftSidebarCfg.width : 240;
-        var lsS = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? leftSidebarCfg.spaceAbove : 0;
-        var lsSticky = Boolean(leftSidebarCfg && leftSidebarCfg.sticky === true);
-        var rsW = rightSidebarCfg && typeof rightSidebarCfg.width === 'number' ? rightSidebarCfg.width : 240;
-        var rsS = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? rightSidebarCfg.spaceAbove : 0;
-        var rsSticky = Boolean(rightSidebarCfg && rightSidebarCfg.sticky === true);
-        var hcH = headerContentCfg && typeof headerContentCfg.height === 'number' ? headerContentCfg.height : 48;
-        var fcP = footerContentCfg && typeof footerContentCfg.topPadding === 'number' ? footerContentCfg.topPadding : 16;
-        leftSidebarCfg = { show: false, modules: [], moduleOrder: [], width: lsW, spaceAbove: lsS, sticky: lsSticky };
-        rightSidebarCfg = { show: false, modules: [], moduleOrder: [], width: rsW, spaceAbove: rsS, sticky: rsSticky };
-        headerContentCfg = { show: false, modules: [], moduleOrder: [], height: hcH };
-        footerContentCfg = { show: false, modules: [], moduleOrder: [], topPadding: fcP };
-        cfg = Object.assign({}, cfg, {
-          leftSidebar: leftSidebarCfg,
-          rightSidebar: rightSidebarCfg,
-          headerContent: headerContentCfg,
-          footerContent: footerContentCfg
-        });
-        if (isSinglePost) {
-          cfg = Object.assign({}, cfg, { socialMediaLinks: { show: false, platforms: [] } });
-          if (cfg.postHeader && typeof cfg.postHeader === 'object') {
-            cfg = Object.assign({}, cfg, {
-              postHeader: Object.assign({}, cfg.postHeader, {
-                showBreadcrumbs: false,
-                showTags: false,
-                showCategories: false
-              })
-            });
-          }
-          if (cfg.postModules && typeof cfg.postModules === 'object') {
-            var pmStrip = Object.assign({}, cfg.postModules);
-            for (var pmK in pmStrip) {
-              if (!Object.prototype.hasOwnProperty.call(pmStrip, pmK)) continue;
-              var pmEnt = pmStrip[pmK];
-              if (pmEnt && typeof pmEnt === 'object' && 'enabled' in pmEnt) {
-                pmStrip[pmK] = Object.assign({}, pmEnt, { enabled: false });
-              }
-            }
-            cfg = Object.assign({}, cfg, { postModules: pmStrip });
-          }
-        }
-      }
       if (self._isTocDebugEnabled()) {
         try {
           var pmToc = cfg.postModules && cfg.postModules.tableOfContents ? cfg.postModules.tableOfContents : null;
@@ -7632,7 +7592,7 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
-      if (viewerMode === 'loggedOut') showReadingTime = false;
+      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
@@ -9628,6 +9588,7 @@
       var headerContentCfg = vs.headerContentCfg;
       var footerContentCfg = vs.footerContentCfg;
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
+      var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       this._emitPaywallRenderDebug(vs, { renderSeq: this._renderSeq });
       var useLevelConfig = vs.useLevelConfig;
       var showTableOfContents = vs.showTableOfContents;
@@ -9843,7 +9804,7 @@
       var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
       var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
       var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || '')) ? (pb.color || cfg.progressBarColor) : '#5B4FE8';
-      if (isSinglePost && showProgressBar && this._resolveViewerMode() === 'loggedIn') {
+      if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.height = progressBarThickness + 'px';
@@ -12256,7 +12217,7 @@
         root.insertBefore(progressTrackForPreview, root.firstChild);
       }
 
-      if (isSinglePost && showProgressBar && self._resolveViewerMode() === 'loggedIn') {
+      if (isSinglePost && showProgressBar && (self._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         requestAnimationFrame(function() {
           self._updateProgressBar();
         });
