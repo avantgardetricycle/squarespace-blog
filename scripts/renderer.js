@@ -8469,13 +8469,6 @@
             contentEl.style.alignSelf = 'center';
             contentEl.style.gap = '2px';
           }
-          if (isSinglePost) {
-            if (phImagePos === 'rightOfInfo' && phAlign === 'left') {
-              contentEl.style.marginLeft = '16px';
-            } else if (phImagePos === 'leftOfInfo' && phAlign === 'right') {
-              contentEl.style.marginRight = '16px';
-            }
-          }
         }
         var appendTo = isSideBySide ? contentEl : article;
         var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && !!imgUrl;
