@@ -2521,16 +2521,22 @@
       return wrap;
     },
 
+    /** Story desktop: wide horizontal inset shared by post body and footer. */
+    _applyStoryPostHorizontalInset: function(el, cfg) {
+      if (!el || !el.style || !cfg) return false;
+      if (!this._isStoryPostLayout(cfg) || this._isNarrowCollectionViewport()) return false;
+      el.style.boxSizing = 'border-box';
+      el.style.paddingLeft = '16vw';
+      el.style.paddingRight = '16vw';
+      return true;
+    },
+
     /** Match single-post body horizontal inset to the post header column. */
     _applySinglePostBodyMargins: function(bodyEl, cfg) {
       if (!bodyEl || !bodyEl.style) return;
       bodyEl.style.boxSizing = 'border-box';
       bodyEl.style.width = '100%';
-      if (this._isStoryPostLayout(cfg) && !this._isNarrowCollectionViewport()) {
-        bodyEl.style.paddingLeft = '16vw';
-        bodyEl.style.paddingRight = '16vw';
-        return;
-      }
+      if (this._applyStoryPostHorizontalInset(bodyEl, cfg)) return;
       var postHeaderCfg = cfg && cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : {};
       var imagePos = postHeaderCfg.imagePosition;
       var hasSideImage = imagePos === 'leftOfInfo' || imagePos === 'rightOfInfo';
@@ -9280,10 +9286,8 @@
           } else {
             article.id = 'toc-0';
           }
-          if (self._isStoryPostLayout(cfg) && !self._isNarrowCollectionViewport() && !paywallGateSinglePostBody) {
-            body.style.paddingLeft = '16vw';
-            body.style.paddingRight = '16vw';
-            body.style.boxSizing = 'border-box';
+          if (!paywallGateSinglePostBody) {
+            self._applyStoryPostHorizontalInset(body, cfg);
           }
         }
         var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
@@ -12212,6 +12216,7 @@
               footerEl.style.paddingLeft = footerLeftPad + 'px';
               footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = footerTopPad + 'px';
+              if (isSinglePost) self._applyStoryPostHorizontalInset(footerEl, cfg);
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
