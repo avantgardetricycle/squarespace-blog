@@ -8371,7 +8371,7 @@
           article.style.borderBottom = '1px solid #e8e6e3';
           article.style.marginBottom = '0';
           if (listRowsMobileCompact) {
-            article.style.paddingTop = '7px';
+            article.style.paddingTop = j === 0 ? '4px' : '7px';
             article.style.paddingBottom = '7px';
             article.style.paddingLeft = '8px';
             article.classList.add('blog-overlay-list-rows-mobile-compact');
@@ -8388,7 +8388,7 @@
         }
         if (isFeaturedInLayout) article.classList.add('blog-overlay-featured-article');
         if (isFeaturedInLayout && !isSinglePost) {
-          article.style.marginTop = '12px';
+          article.style.marginTop = (collectionLayout === 'listRows' && listRowsMobileCompact && j === 0) ? '6px' : '12px';
         }
         if (isFeaturedInLayout && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
           article.style.gridColumn = '1 / span ' + gridColsEffective;
@@ -9883,6 +9883,7 @@
       var featuredPost = vs.featuredPost;
       var displayItemsForLoop = vs.displayItemsForLoop;
       var displayPostKey = vs.displayPostKey;
+      var newsroomMobileCompact = !isSinglePost && collectionLayout === 'listRows' && self._isNarrowCollectionViewport();
       var itemIndexMap = self._buildItemIndexMap(items);
       self._itemIndexMap = itemIndexMap;
 
@@ -10036,7 +10037,7 @@
         headerZoneEl.style.maxWidth = '100%';
         headerZoneEl.style.marginLeft = '0';
         headerZoneEl.style.marginRight = '0';
-        headerZoneEl.style.padding = '16px 0';
+        headerZoneEl.style.padding = newsroomMobileCompact ? '16px 0 8px 0' : '16px 0';
         headerZoneEl.style.boxSizing = 'border-box';
         headerZoneEl.style.background = 'transparent';
         headerModulesHostEl = document.createElement('div');
@@ -11843,8 +11844,8 @@
             if (hcModules.length > 0) {
               var headerEl = document.createElement('div');
               headerEl.className = 'blog-overlay-header-content';
-              headerEl.style.marginBottom = '16px';
-              headerEl.style.paddingBottom = '12px';
+              headerEl.style.marginBottom = newsroomMobileCompact ? '8px' : '16px';
+              headerEl.style.paddingBottom = newsroomMobileCompact ? '6px' : '12px';
               headerEl.style.display = 'flex';
               var collectionHeaderRow = !isSinglePost;
               if (collectionHeaderRow) {
