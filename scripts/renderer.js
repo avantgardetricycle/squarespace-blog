@@ -8353,6 +8353,12 @@
         if (reporterPostHeaderCrop) {
           fiAspect = 'cropped';
         }
+        /** Story (leftOfInfo header): cover crop at configured aspect ratio (default 3:2). */
+        var storyPostHeaderCrop = isSinglePost && self._isStoryPostLayout(cfg) && phImagePos === 'leftOfInfo' && fiShow;
+        if (storyPostHeaderCrop) {
+          fiAspect = 'cropped';
+          fiRatio = '3:2';
+        }
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;

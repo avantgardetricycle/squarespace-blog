@@ -571,7 +571,13 @@ async function seedTemplateConfigs () {
           topPadding: 16
         },
         socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 60 },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'leftJustified',
+          imageWidthPercent: 60,
+          aspectBehavior: 'cropped',
+          aspectRatio: '3:2'
+        },
         postModules: {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: true, position: 'none' },
