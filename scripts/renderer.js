@@ -956,6 +956,7 @@
       bbDiv.style.marginTop = '32px';
       bbDiv.style.paddingTop = '24px';
       bbDiv.style.borderTop = '1px solid #eee';
+      self._applyStoryPostHorizontalInset(bbDiv, cfg);
 
       var apiUrl = baseUrl.replace(/\/+$/, '') + '/api/comments';
       function bbResolvePostPublishedAt(p) {
