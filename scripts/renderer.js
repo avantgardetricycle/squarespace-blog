@@ -4382,11 +4382,13 @@
       shell.style.boxSizing = 'border-box';
 
       function makeCaret(side) {
-        var el = document.createElement('span');
+        var el = document.createElement('button');
+        el.type = 'button';
         el.className = 'blog-overlay-header-filter-scroll-caret blog-overlay-header-filter-scroll-caret--' + side;
-        el.setAttribute('aria-hidden', 'true');
+        el.setAttribute('aria-label', side === 'left' ? 'Scroll categories left' : 'Scroll categories right');
         var glyph = document.createElement('span');
         glyph.className = 'blog-overlay-header-filter-scroll-caret-glyph';
+        glyph.setAttribute('aria-hidden', 'true');
         glyph.textContent = side === 'left' ? '‹' : '›';
         el.appendChild(glyph);
         return el;
@@ -4395,12 +4397,31 @@
       var caretLeft = makeCaret('left');
       var caretRight = makeCaret('right');
 
+      function scrollFilters(direction) {
+        var step = Math.max(120, Math.round(pillsWrap.clientWidth * 0.55));
+        pillsWrap.scrollBy({ left: direction * step, behavior: 'smooth' });
+      }
+      caretLeft.addEventListener('click', function(e) {
+        e.preventDefault();
+        scrollFilters(-1);
+      });
+      caretRight.addEventListener('click', function(e) {
+        e.preventDefault();
+        scrollFilters(1);
+      });
+
       function syncCarets() {
         var maxScroll = Math.max(0, pillsWrap.scrollWidth - pillsWrap.clientWidth);
         var sl = pillsWrap.scrollLeft;
         var hasOverflow = maxScroll > 1;
-        caretLeft.style.opacity = hasOverflow && sl > 1 ? '1' : '0';
-        caretRight.style.opacity = hasOverflow && sl < maxScroll - 1 ? '1' : '0';
+        var showLeft = hasOverflow && sl > 1;
+        var showRight = hasOverflow && sl < maxScroll - 1;
+        caretLeft.style.opacity = showLeft ? '1' : '0';
+        caretRight.style.opacity = showRight ? '1' : '0';
+        caretLeft.style.pointerEvents = showLeft ? 'auto' : 'none';
+        caretRight.style.pointerEvents = showRight ? 'auto' : 'none';
+        caretLeft.tabIndex = showLeft ? 0 : -1;
+        caretRight.tabIndex = showRight ? 0 : -1;
       }
 
       pillsWrap._bbSyncFilterScrollIndicators = syncCarets;
@@ -6957,10 +6978,10 @@
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills{scrollbar-width:none;-ms-overflow-style:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills::-webkit-scrollbar{display:none;height:0;width:0;}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:28px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s ease;box-sizing:border-box;background:color-mix(in srgb,var(--bb-surface,#fff) 75%,transparent);}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;}';
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:40px;display:flex;align-items:center;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s ease;box-sizing:border-box;border:none;padding:0;margin:0;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);pointer-events:none;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;justify-content:flex-start;padding-left:2px;background:linear-gradient(to right,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
