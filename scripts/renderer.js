@@ -7021,6 +7021,8 @@
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:8px;padding:16px 20px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-accent,#5B4FE8);}' +
+        '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills{scrollbar-width:none;-ms-overflow-style:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills::-webkit-scrollbar{display:none;height:0;width:0;}' +
@@ -8523,7 +8525,7 @@
           article.style.paddingBottom = '12px';
         }
         if (!isSinglePost && collectionLayout === 'listRows') {
-          article.style.borderBottom = '1px solid #e8e6e3';
+          article.classList.add('blog-overlay-list-rows-row');
           article.style.marginBottom = '0';
           if (listRowsMobileCompact) {
             article.style.paddingTop = j === 0 ? '4px' : '7px';
@@ -8535,7 +8537,7 @@
             article.style.paddingBottom = '12px';
           }
           if (j === displayItemsForLoop.length - 1) {
-            article.style.borderBottom = 'none';
+            article.classList.add('blog-overlay-list-rows-row--last');
           }
         }
         if (navbarOffset > 0) {
@@ -9030,16 +9032,18 @@
         var digestPaywallGatedCard = gatedCard && collectionLayout === 'digest';
         var newsroomPaywallGatedCard = gatedCard && collectionLayout === 'listRows';
         var newsroomPaywallMobile = newsroomPaywallGatedCard && listRowsMobileCompact;
-        if (postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard && !digestPaywallGatedCard) {
-          if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
-            postCategoriesLine.style.fontSize = '0.85rem';
-            postCategoriesLine.style.marginBottom = '3px';
-            postCategoriesLine.style.lineHeight = '1.25';
-          }
+        var appendCategoriesToHeadline = postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard && !digestPaywallGatedCard;
+        var useFeaturedHeadlineStack = isFeaturedInLayout && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile;
+        if (appendCategoriesToHeadline && !isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
+          postCategoriesLine.style.fontSize = '0.85rem';
+          postCategoriesLine.style.marginBottom = '3px';
+          postCategoriesLine.style.lineHeight = '1.25';
+        }
+        if (appendCategoriesToHeadline && !useFeaturedHeadlineStack) {
           headlineMount.appendChild(postCategoriesLine);
         }
         var titleBlock = null;
-        if (isFeaturedInLayout && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
+        if (useFeaturedHeadlineStack) {
           var featuredHeadlineStack = document.createElement('div');
           featuredHeadlineStack.className = 'blog-overlay-featured-headline-stack';
           featuredHeadlineStack.style.display = 'flex';
@@ -9049,6 +9053,9 @@
           featuredHeadlineStack.style.width = '100%';
           var featuredBadge = self._createFeaturedBadge();
           featuredHeadlineStack.appendChild(featuredBadge);
+          if (appendCategoriesToHeadline) {
+            featuredHeadlineStack.appendChild(postCategoriesLine);
+          }
           featuredHeadlineStack.appendChild(titleEl);
           titleBlock = featuredHeadlineStack;
         } else {
