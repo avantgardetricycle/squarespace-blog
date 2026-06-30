@@ -6958,7 +6958,7 @@
         '#blog-overlay-list .blog-overlay-header-filter-pills{scrollbar-width:none;-ms-overflow-style:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills::-webkit-scrollbar{display:none;height:0;width:0;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:28px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s ease;box-sizing:border-box;background:color-mix(in srgb,var(--bb-surface,#fff) 75%,transparent);}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:14px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;}';
       if (!style) {
