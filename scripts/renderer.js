@@ -4369,10 +4369,9 @@
     },
 
     /**
-     * Header filter pills: hide native horizontal scrollbar; show edge chevrons when more content is off-screen.
+     * Header filter pills: hide native horizontal scrollbar; show edge carets when more content is off-screen.
      */
     _wrapHeaderFilterPillsScroller: function(pillsWrap) {
-      var self = this;
       pillsWrap.className = (pillsWrap.className ? pillsWrap.className + ' ' : '') + 'blog-overlay-header-filter-pills';
 
       var shell = document.createElement('div');
@@ -4382,53 +4381,40 @@
       shell.style.minWidth = '0';
       shell.style.boxSizing = 'border-box';
 
-      function makeChevron(pointing) {
+      function makeCaret(side) {
         var el = document.createElement('span');
-        el.className = 'blog-overlay-header-filter-scroll-chevron blog-overlay-header-filter-scroll-chevron--' + pointing;
+        el.className = 'blog-overlay-header-filter-scroll-caret blog-overlay-header-filter-scroll-caret--' + side;
         el.setAttribute('aria-hidden', 'true');
-        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', '16');
-        svg.setAttribute('height', '16');
-        svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('fill', 'none');
-        svg.setAttribute('stroke', 'currentColor');
-        svg.setAttribute('stroke-width', '2');
-        svg.setAttribute('stroke-linecap', 'round');
-        svg.setAttribute('stroke-linejoin', 'round');
-        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', pointing === 'right' ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6');
-        svg.appendChild(path);
-        el.appendChild(svg);
+        el.textContent = side === 'left' ? '‹' : '›';
         return el;
       }
 
-      var chevronStart = makeChevron('right');
-      var chevronEnd = makeChevron('left');
+      var caretLeft = makeCaret('left');
+      var caretRight = makeCaret('right');
 
-      function syncChevrons() {
+      function syncCarets() {
         var maxScroll = Math.max(0, pillsWrap.scrollWidth - pillsWrap.clientWidth);
         var sl = pillsWrap.scrollLeft;
-        var canScrollRight = maxScroll > 1 && sl < maxScroll - 1;
-        var canScrollLeft = sl > 1;
-        chevronStart.style.opacity = canScrollRight ? '1' : '0';
-        chevronEnd.style.opacity = canScrollLeft ? '1' : '0';
+        var hasOverflow = maxScroll > 1;
+        caretLeft.style.opacity = hasOverflow && sl > 1 ? '1' : '0';
+        caretRight.style.opacity = hasOverflow && sl < maxScroll - 1 ? '1' : '0';
       }
 
-      pillsWrap._bbSyncFilterScrollIndicators = syncChevrons;
-      pillsWrap.addEventListener('scroll', syncChevrons, { passive: true });
+      pillsWrap._bbSyncFilterScrollIndicators = syncCarets;
+      pillsWrap.addEventListener('scroll', syncCarets, { passive: true });
       if (typeof ResizeObserver !== 'undefined') {
-        var ro = new ResizeObserver(syncChevrons);
+        var ro = new ResizeObserver(syncCarets);
         ro.observe(pillsWrap);
         pillsWrap._bbFilterScrollResizeObserver = ro;
       } else if (typeof window !== 'undefined') {
-        window.addEventListener('resize', syncChevrons, { passive: true });
+        window.addEventListener('resize', syncCarets, { passive: true });
       }
 
-      shell.appendChild(chevronStart);
+      shell.appendChild(caretLeft);
       shell.appendChild(pillsWrap);
-      shell.appendChild(chevronEnd);
-      requestAnimationFrame(syncChevrons);
-      setTimeout(syncChevrons, 0);
+      shell.appendChild(caretRight);
+      requestAnimationFrame(syncCarets);
+      setTimeout(syncCarets, 0);
       return shell;
     },
 
@@ -6964,9 +6950,9 @@
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills{scrollbar-width:none;-ms-overflow-style:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-pills::-webkit-scrollbar{display:none;height:0;width:0;}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-chevron{position:absolute;top:0;bottom:0;width:28px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;color:var(--bb-muted,#888);opacity:0;transition:opacity .15s ease;}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-chevron--right{left:0;background:linear-gradient(to right,color-mix(in srgb,var(--bb-body,#fff) 92%,transparent) 45%,transparent);}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-chevron--left{right:0;background:linear-gradient(to left,color-mix(in srgb,var(--bb-body,#fff) 92%,transparent) 45%,transparent);}';
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;color:var(--bb-muted,#888);opacity:0;transition:opacity .15s ease;font-size:1.35rem;line-height:1;font-weight:400;font-family:inherit;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
