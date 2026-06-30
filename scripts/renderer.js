@@ -6799,6 +6799,19 @@
       return '';
     },
 
+    _walkScopeForCssValue: function(scopeEl, names) {
+      if (!scopeEl || !names || !names.length) return '';
+      var el = scopeEl;
+      for (var depth = 0; depth < 24 && el; depth++) {
+        for (var i = 0; i < names.length; i++) {
+          var val = this._readCssVarFromEl(el, names[i]);
+          if (val && val.indexOf('var(') !== 0) return val;
+        }
+        el = el.parentElement;
+      }
+      return '';
+    },
+
     _readAccentFromScope: function(scopeEl) {
       var cssNames = [
         '--primaryButtonBackgroundColor', '--primary-button-background-color',
@@ -6862,6 +6875,34 @@
       return '';
     },
 
+    /** Rule B — H1 font-family and font-weight for meta rows (BB controls size only). */
+    _readHeadingTypographyFromScope: function(scopeEl) {
+      var out = {
+        fontFamily: this._walkScopeForCssValue(scopeEl, [
+          '--heading-font-font-family', '--headings-font-family', '--header-font-family', '--title-font-font-family'
+        ]),
+        fontWeight: this._walkScopeForCssValue(scopeEl, [
+          '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight', '--title-font-font-weight'
+        ])
+      };
+      if (out.fontFamily && out.fontWeight) return out;
+      try {
+        var h1 = null;
+        if (scopeEl && scopeEl.querySelector) {
+          h1 = scopeEl.querySelector('h1, .sqsrte-scaled-text-container h1, .sqs-block-content h1');
+        }
+        if (!h1 && typeof document !== 'undefined') {
+          h1 = document.querySelector('section.page-section h1, .blog-item-title h1, h1');
+        }
+        if (h1) {
+          var cs = window.getComputedStyle(h1);
+          if (!out.fontFamily && cs.fontFamily) out.fontFamily = cs.fontFamily;
+          if (!out.fontWeight && cs.fontWeight) out.fontWeight = cs.fontWeight;
+        }
+      } catch (e3a) { /* ignore */ }
+      return out;
+    },
+
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
         var prim = null;
@@ -6896,11 +6937,14 @@
       var accent = accentOverride || this._readAccentFromScope(scope) || this._getSiteAccentColor();
       var body = this._readBodyColorFromScope(scope) || '#111111';
       var heading = this._readHeadingColorFromScope(scope) || body;
+      var headingTypography = this._readHeadingTypographyFromScope(scope);
       var buttonRadius = this._readPrimaryButtonRadius(scope);
       var tokens = {
         accent: accent,
         body: body,
         heading: heading,
+        headingFontFamily: headingTypography.fontFamily || '',
+        headingFontWeight: headingTypography.fontWeight || '',
         surface: this._bbReadCssVar('--tweak-blog-site-background', null)
           || this._bbReadCssVar('--siteBackgroundColor', null)
           || '#ffffff',
@@ -6927,6 +6971,8 @@
       el.style.setProperty('--bb-accent', tokens.accent);
       el.style.setProperty('--bb-body', tokens.body);
       el.style.setProperty('--bb-heading', tokens.heading);
+      if (tokens.headingFontFamily) el.style.setProperty('--bb-heading-font-family', tokens.headingFontFamily);
+      if (tokens.headingFontWeight) el.style.setProperty('--bb-heading-font-weight', tokens.headingFontWeight);
       el.style.setProperty('--bb-surface', tokens.surface);
       el.style.setProperty('--bb-muted', tokens.muted);
       el.style.setProperty('--bb-extra-muted', tokens.extraMuted);
@@ -6954,8 +7000,8 @@
         '#blog-overlay-list .bb-title--compact{font-size:20px;}' +
         '#blog-overlay-list .bb-title--on-image{color:#fff;}' +
         '#blog-overlay-list .bb-title--on-bg{color:var(--bb-heading,var(--bb-body,#111));}' +
-        '#blog-overlay-list .bb-meta--on-bg{font-size:13px;color:var(--bb-extra-muted,#888);}' +
-        '#blog-overlay-list .bb-meta--on-image{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
+        '#blog-overlay-list .bb-meta--on-bg{font-size:13px;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-meta--on-image{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-category-label{font-size:13px;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
@@ -6971,7 +7017,7 @@
         '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.35;color:var(--bb-body,#111);}' +
-        '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;color:var(--bb-extra-muted,#888);}' +
+        '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:8px;padding:16px 20px;background:transparent;box-sizing:border-box;}' +
@@ -7032,6 +7078,9 @@
     _applyMetaStyle: function(el, opts) {
       if (!el || !opts) return;
       el.classList.add(opts.onImage ? 'bb-meta--on-image' : 'bb-meta--on-bg');
+      var tokens = this._getCollectionStyleTokens();
+      if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
+      if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
     },
 
     _applyExcerptStyle: function(el, size) {
