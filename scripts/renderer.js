@@ -6998,8 +6998,9 @@
         '#blog-overlay-list .bb-title--std{font-size:24px;}' +
         '#blog-overlay-list .bb-title--masthead{font-size:28px;}' +
         '#blog-overlay-list .bb-title--compact{font-size:20px;}' +
-        '#blog-overlay-list .bb-title--on-image{color:#fff;}' +
-        '#blog-overlay-list .bb-title--on-bg{color:var(--bb-heading,var(--bb-body,#111));}' +
+        '#blog-overlay-list .bb-title--on-image{color:#fff;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-title--on-bg{color:var(--bb-heading,var(--bb-body,#111));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .blog-overlay-title a{color:inherit;font-family:inherit;font-weight:inherit;text-decoration:none;}' +
         '#blog-overlay-list .bb-meta--on-bg{font-size:13px;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-meta--on-image{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
@@ -7075,6 +7076,9 @@
       el.classList.add(sizeClass);
       el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
+      var tokens = this._getCollectionStyleTokens();
+      if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
+      if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
     },
 
     _applyMetaStyle: function(el, opts) {
@@ -8966,7 +8970,7 @@
           : null;
 
         var listRowsDesktop = !isSinglePost && collectionLayout === 'listRows' && !listRowsMobileCompact;
-        var titleEl = document.createElement(isSinglePost ? 'h2' : (listRowsDesktop ? 'h4' : 'h3'));
+        var titleEl = document.createElement('h2');
         titleEl.className = 'blog-overlay-title';
         titleEl.style.margin = '0 0 8px 0';
         if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
@@ -9583,7 +9587,7 @@
           if (showcaseMobile) postCategoriesLineShowcase.style.marginBottom = '4px';
           bodyCol.appendChild(postCategoriesLineShowcase);
         }
-        var titleEl = document.createElement('h3');
+        var titleEl = document.createElement('h2');
         titleEl.className = 'blog-overlay-title';
         titleEl.style.margin = showcaseMobile ? '0 0 4px 0' : '0 0 8px 0';
         if (showcaseMobile) {
@@ -10394,7 +10398,8 @@
             if (mastheadHeroMobile) heroCat.style.fontSize = '22px';
             heroContent.appendChild(heroCat);
           }
-          var heroTitle = document.createElement('h3');
+          var heroTitle = document.createElement('h2');
+          heroTitle.className = 'blog-overlay-title';
           heroTitle.textContent = featuredPost.title || 'Untitled';
           self._applyTitleStyle(heroTitle, { size: 'lg', onImage: true, margin: '0 0 10px 0' });
           if (mastheadHeroMobile) {
@@ -11572,8 +11577,8 @@
             edMoImageCorner.style.marginTop = '0';
             edMoImageCorner.style.maxWidth = 'calc(100% - 24px)';
           }
-          var title = document.createElement('div');
-          title.className = 'blog-overlay-editorial-card-title';
+          var title = document.createElement('h2');
+          title.className = 'blog-overlay-title blog-overlay-editorial-card-title';
           self._applyTitleStyle(title, { size: isLarge ? 'lg' : 'std', onImage: true, margin: '0' });
           title.textContent = p.title || 'Untitled';
           if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
