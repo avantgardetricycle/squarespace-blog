@@ -497,7 +497,7 @@ async function seedTemplateConfigs () {
           contentVerticalAlignment: 'top',
           showBreadcrumbs: true,
           showTags: true,
-          showCategories: true,
+          showCategories: false,
           showByline: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },

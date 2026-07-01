@@ -9095,7 +9095,7 @@
             var bylineEl = document.createElement('p');
             bylineEl.className = 'blog-overlay-post-byline';
             bylineEl.textContent = bylineText;
-            bylineEl.style.margin = '0 0 12px 0';
+            bylineEl.style.margin = (isSinglePost && phImagePos === 'rightOfInfo') ? '0 0 18px 0' : '0 0 12px 0';
             bylineEl.style.fontSize = '1.05rem';
             bylineEl.style.lineHeight = '1.5';
             bylineEl.style.color = '#555';
@@ -9150,6 +9150,12 @@
           metaRow.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) ? '0' : (listRowsDesktop ? '2px' : '8px');
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
             metaRow.style.marginTop = '0';
+          }
+          /** Reporter (rightOfInfo): divider between title/deck and meta row. */
+          if (isSinglePost && phImagePos === 'rightOfInfo') {
+            metaRow.style.borderTop = '1px solid #ddd';
+            metaRow.style.paddingTop = '14px';
+            metaRow.style.width = '100%';
           }
           var meta = document.createElement('div');
           meta.className = 'blog-overlay-meta';

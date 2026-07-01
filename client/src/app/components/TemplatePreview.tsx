@@ -419,9 +419,13 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
           <div className="flex gap-3 shrink-0">
             <div className="flex-1 min-w-0">
               <Breadcrumbs align="left" />
-              <div className="text-[10px] text-[#6b6b6b] mt-0.5">Category</div>
               <div className="text-[11px] font-bold text-[#333] mt-0.5">Article Headline Goes Here</div>
-              <div className={cn(textMuted, "text-[9px] mt-0.5")}>By Author · Mar 7 · 8 min</div>
+              <div className={cn(textMuted, "text-[9px] mt-0.5 line-clamp-2")}>
+                A short subheading or deck that adds context to the headline.
+              </div>
+              <div className="border-t border-[#ddd] pt-1 mt-1">
+                <div className={cn(textMuted, "text-[9px]")}>By Author · Mar 7 · 8 min</div>
+              </div>
             </div>
             <div className={cn(imgPlaceholder, "w-[45%] aspect-[2/3] shrink-0 rounded")} />
           </div>

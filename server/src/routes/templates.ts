@@ -394,7 +394,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: true,
-    showCategories: true,
+    showCategories: false,
     showByline: true
   },
   leftSidebar: {
