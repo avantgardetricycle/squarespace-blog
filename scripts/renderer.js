@@ -7689,6 +7689,13 @@
       return !leftOn && !rightOn;
     },
 
+    /** The Reporter post template: split header (image right), body row with right sidebar. */
+    _isReporterPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      return !!(ph && ph.imagePosition === 'rightOfInfo');
+    },
+
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
     _isNarrowCollectionViewport: function() {
       try {
@@ -12426,7 +12433,9 @@
           }
 
           if (headerZoneEl && headerZoneEl.childNodes.length) wrapper.appendChild(headerZoneEl);
+          var reporterPostLayout = isSinglePost && self._isReporterPostLayout(cfg);
           var pinPostHeaderInMainColumn = isSinglePost &&
+            !reporterPostLayout &&
             singlePostHeaderZoneEl &&
             singlePostHeaderZoneEl.childNodes.length > 0 &&
             (leftSidebarWrapEl.childNodes.length > 0 || rightSidebarWrapEl.childNodes.length > 0);
@@ -12502,7 +12511,7 @@
             footerZoneEl.style.boxSizing = 'border-box';
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
-            if (isSinglePost) {
+            if (isSinglePost && !reporterPostLayout) {
               main.appendChild(footerZoneEl);
             } else {
               wrapper.appendChild(footerZoneEl);
