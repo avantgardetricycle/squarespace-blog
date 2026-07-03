@@ -6989,6 +6989,8 @@
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-category-label{font-size:13px;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
         '#blog-overlay-list .bb-category-label--post-header{font-size:11px;font-weight:700;font-variant:small-caps;text-transform:none;letter-spacing:0.08em;}' +
+        '#blog-overlay-list .blog-overlay-writer-excerpt{font-size:17px;font-style:italic;line-height:1.6;color:var(--bb-excerpt,#666);margin:0 0 28px 0;max-width:520px;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-writer-header-divider{display:block;flex-shrink:0;}' +
         '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
         '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
         '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
@@ -7715,6 +7717,25 @@
       var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
       var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
       return !leftOn && !rightOn;
+    },
+
+    /** Writer post header: short decorative rule between excerpt and meta. */
+    _createWriterPostHeaderDivider: function(align) {
+      var div = document.createElement('div');
+      div.className = 'blog-overlay-writer-header-divider';
+      div.setAttribute('aria-hidden', 'true');
+      div.style.width = '40px';
+      div.style.height = '2px';
+      div.style.background = 'var(--bb-border,#e8e7e4)';
+      div.style.margin = '0 0 20px 0';
+      if (align === 'center') {
+        div.style.marginLeft = 'auto';
+        div.style.marginRight = 'auto';
+      } else if (align === 'right') {
+        div.style.marginLeft = 'auto';
+        div.style.marginRight = '0';
+      }
+      return div;
     },
 
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
@@ -8483,6 +8504,7 @@
       var phShowTags = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showTags);
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
+      var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
@@ -9132,7 +9154,10 @@
           headlineMount.appendChild(moDigestLbl);
         }
 
-        if (phShowByline && postInfoWrap) {
+        var pendingWriterMetaRow = null;
+        var pendingWriterShareRow = null;
+
+        if (phShowByline && postInfoWrap && !writerPostLayout) {
           var bylineDeckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
           var bylineSentences = bylineDeckText ? bylineDeckText.match(/[^.!?]*[.!?]/g) : null;
           var bylineText = bylineSentences && bylineSentences.length > 0 ? bylineSentences[0].trim() : '';
@@ -9229,7 +9254,12 @@
             metaRow.style.width = '100%';
             meta.style.textAlign = 'left';
           }
-          headlineMount.appendChild(metaRow);
+          if (writerPostLayout) {
+            pendingWriterMetaRow = metaRow;
+            metaRow.style.marginBottom = '0';
+          } else {
+            headlineMount.appendChild(metaRow);
+          }
         }
         if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact && postCategoriesLine) {
           postCategoriesLine.style.marginBottom = '0';
@@ -9250,7 +9280,28 @@
           shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           shareRow.style.width = '100%';
           shareRow.appendChild(shareLinks);
-          headlineMount.appendChild(shareRow);
+          if (writerPostLayout) {
+            pendingWriterShareRow = shareRow;
+          } else {
+            headlineMount.appendChild(shareRow);
+          }
+        }
+
+        if (writerPostLayout && postInfoWrap) {
+          var writerExcerptSource = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
+          var writerExcerptSentences = writerExcerptSource ? writerExcerptSource.match(/[^.!?]*[.!?]/g) : null;
+          var writerExcerptText = writerExcerptSentences && writerExcerptSentences.length > 0 ? writerExcerptSentences[0].trim() : '';
+          if (!writerExcerptText) writerExcerptText = self._truncateText(post.excerpt || post.body || '', 200);
+          if (writerExcerptText) writerExcerptText = self._stripLeadingSquarespaceSectionMarkers(writerExcerptText);
+          if (writerExcerptText) {
+            var writerExcerptEl = document.createElement('p');
+            writerExcerptEl.className = 'blog-overlay-deck blog-overlay-writer-excerpt';
+            writerExcerptEl.textContent = writerExcerptText;
+            postInfoWrap.appendChild(writerExcerptEl);
+          }
+          postInfoWrap.appendChild(self._createWriterPostHeaderDivider(phAlign));
+          if (pendingWriterMetaRow) postInfoWrap.appendChild(pendingWriterMetaRow);
+          if (pendingWriterShareRow) postInfoWrap.appendChild(pendingWriterShareRow);
         }
 
         if (mastheadPaywallGatedCard) {
@@ -9274,7 +9325,7 @@
           var deck = deckSentences && deckSentences.length > 0 ? deckSentences[0].trim() : '';
           if (!deck) deck = self._truncateText(post.excerpt || post.body || '', 200);
           if (deck) deck = self._stripLeadingSquarespaceSectionMarkers(deck);
-          if (deck && !singlePostFullBleedStacked && !phShowByline) {
+          if (deck && !singlePostFullBleedStacked && !phShowByline && !writerPostLayout) {
             var deckEl = document.createElement('p');
             deckEl.className = 'blog-overlay-deck';
             deckEl.textContent = deck;
