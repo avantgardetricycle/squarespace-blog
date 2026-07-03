@@ -6988,6 +6988,7 @@
         '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-category-label{font-size:13px;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
+        '#blog-overlay-list .bb-category-label--post-header{font-size:11px;font-weight:700;font-variant:small-caps;text-transform:none;letter-spacing:0.08em;}' +
         '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
         '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
         '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
@@ -7694,6 +7695,26 @@
       if (!cfg || typeof cfg !== 'object') return false;
       var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       return !!(ph && ph.imagePosition === 'rightOfInfo');
+    },
+
+    /** The Feature post template: centered stacked full-bleed header with dual sidebars. */
+    _isFeaturePostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || ph.imagePosition !== 'fullBleed' || ph.contentAlignment !== 'center') return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return leftOn && rightOn;
+    },
+
+    /** The Writer post template: centered minimal header, no sidebars, image below info. */
+    _isWriterPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || ph.imagePosition !== 'belowInfo') return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return !leftOn && !rightOn;
     },
 
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
@@ -8910,7 +8931,26 @@
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
         }
 
-        if (isSinglePost && (phShowTags || phShowCategories)) {
+        var postHeaderCategoryLayout = isSinglePost && phShowCategories &&
+          (self._isFeaturePostLayout(cfg) || self._isWriterPostLayout(cfg));
+        if (postHeaderCategoryLayout) {
+          var postHeaderCatsLine = self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, false, {
+            onDark: singlePostFullBleedHero
+          });
+          if (postHeaderCatsLine) {
+            postHeaderCatsLine.classList.add('blog-overlay-post-header-categories');
+            postHeaderCatsLine.style.marginBottom = '12px';
+            postHeaderCatsLine.style.justifyContent = phAlign === 'center' ? 'center' : phAlign === 'right' ? 'flex-end' : 'flex-start';
+            postHeaderCatsLine.style.width = '100%';
+            var postHeaderCatLabels = postHeaderCatsLine.querySelectorAll('.bb-category-label');
+            for (var pli = 0; pli < postHeaderCatLabels.length; pli++) {
+              postHeaderCatLabels[pli].classList.add('bb-category-label--post-header');
+            }
+            headlineMount.appendChild(postHeaderCatsLine);
+          }
+        }
+
+        if (isSinglePost && (phShowTags || (phShowCategories && !postHeaderCategoryLayout))) {
           var tagsCatsWrap = document.createElement('div');
           tagsCatsWrap.className = 'blog-overlay-tags-categories';
           tagsCatsWrap.style.setProperty('display', 'flex', 'important');
@@ -8938,7 +8978,7 @@
             if (onClick) span.onclick = function(e) { e.preventDefault(); onClick(); };
             return span;
           };
-          if (phShowCategories) {
+          if (phShowCategories && !postHeaderCategoryLayout) {
             var postCatsForTags = self._getPostCategories(post);
             for (var cti = 0; cti < postCatsForTags.length; cti++) {
               var cat = postCatsForTags[cti];
