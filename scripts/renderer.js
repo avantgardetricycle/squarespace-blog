@@ -9311,13 +9311,8 @@
             stackedHeaderBlock.style.paddingTop = '8px';
             stackedHeaderBlock.style.marginBottom = '8px';
             var stackedInfoWrap = document.createElement('div');
-            var stackInset = self._siteContentInsets || { left: 0, right: 0 };
-            var stackPadL = stackInset.left || 0;
-            var stackPadR = stackInset.right || 0;
-            stackedInfoWrap.style.maxWidth = (860 + stackPadL + stackPadR) + 'px';
-            stackedInfoWrap.style.margin = '0 auto';
-            stackedInfoWrap.style.padding = '0 ' + stackPadR + 'px 0 ' + stackPadL + 'px';
             stackedInfoWrap.style.boxSizing = 'border-box';
+            stackedInfoWrap.style.width = '100%';
             stackedInfoWrap.appendChild(postInfoWrap);
             stackedHeaderBlock.appendChild(stackedInfoWrap);
             if (stackedFullBleedWrap) stackedHeaderBlock.appendChild(stackedFullBleedWrap);
