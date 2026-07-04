@@ -951,11 +951,9 @@
       var existing = document.getElementById('bb-comments');
       if (existing) existing.remove();
 
-      var bbDiv = document.createElement('div');
+      var bbDiv = document.createElement('section');
       bbDiv.id = 'bb-comments';
-      bbDiv.style.marginTop = '32px';
-      bbDiv.style.paddingTop = '24px';
-      bbDiv.style.borderTop = '1px solid #eee';
+      bbDiv.className = 'bb-comments-section';
       self._applyStoryPostHorizontalInset(bbDiv, cfg);
 
       var apiUrl = baseUrl.replace(/\/+$/, '') + '/api/comments';
@@ -1076,7 +1074,8 @@
         var ok = document.createElement('button');
         ok.type = 'button';
         ok.textContent = 'Continue';
-        ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;background:#5B4FE8;color:#fff;cursor:pointer';
+        ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer';
+        ok.style.background = 'var(--bb-accent, #5B4FE8)';
         function close(ret) {
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
@@ -1121,7 +1120,7 @@
           avatar.textContent = initials;
           avatar.style.cssText =
             'display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:' +
-            (isDeletedStub ? '#9ca3af' : '#5B4FE8') +
+            (isDeletedStub ? '#9ca3af' : 'var(--bb-accent, #5B4FE8)') +
             ';color:#fff;font-size:12px;font-weight:600;margin-right:10px;vertical-align:middle';
           var meta = document.createElement('span');
           meta.style.fontSize = '0.9rem';
@@ -1135,7 +1134,7 @@
             meta.appendChild(nameSpanEl);
             if (c.verified_subscriber) {
               var verSpan = document.createElement('span');
-              verSpan.style.color = '#5B4FE8';
+              verSpan.style.color = 'var(--bb-accent, #5B4FE8)';
               verSpan.style.fontSize = '11px';
               verSpan.textContent = ' \u2713';
               meta.appendChild(verSpan);
@@ -1218,10 +1217,10 @@
             var replyBtn = document.createElement('button');
             replyBtn.type = 'button';
             replyBtn.textContent = 'Reply';
-            replyBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#5B4FE8;margin-left:12px;font-size:inherit;font-family:inherit;padding:0';
+            replyBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--bb-accent, #5B4FE8);margin-left:12px;font-size:inherit;font-family:inherit;padding:0';
             var replyFormShell = document.createElement('div');
             replyFormShell.className = 'bb-comment-inline-reply';
-            replyFormShell.style.cssText = 'display:none;margin-top:14px;margin-left:28px;padding:14px 16px 16px 18px;border-left:3px solid #d4cef7;border-radius:0 8px 8px 0;background:transparent;box-sizing:border-box;width:calc(100% - 28px);max-width:520px';
+            replyFormShell.style.cssText = 'display:none;margin-top:14px;margin-left:28px;padding:14px 16px 16px 18px;border-left:3px solid var(--bb-accent-15, #d4cef7);border-radius:0 8px 8px 0;background:transparent;box-sizing:border-box;width:calc(100% - 28px)';
             var replyFormTitle = document.createElement('div');
             replyFormTitle.textContent = 'Write a reply';
             replyFormTitle.style.cssText = 'font-size:0.9rem;font-weight:600;color:#1a1a1a;margin-bottom:10px';
@@ -1230,30 +1229,36 @@
             rName.type = 'text';
             rName.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
             rName.setAttribute('maxlength', String(NAME_MAX));
-            rName.style.cssText = 'display:block;width:100%;max-width:400px;padding:9px 11px;margin-bottom:8px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+            rName.className = 'bb-form-input';
+            rName.style.marginBottom = '8px';
             replyFormShell.appendChild(rName);
             var rEmail = document.createElement('input');
             rEmail.type = 'email';
             rEmail.placeholder = 'Email (optional)';
             rEmail.setAttribute('maxlength', String(EMAIL_MAX));
             rEmail.autocomplete = 'email';
-            rEmail.style.cssText = 'display:block;width:100%;max-width:500px;padding:9px 11px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+            rEmail.className = 'bb-form-input';
+            rEmail.style.marginBottom = '10px';
             replyFormShell.appendChild(rEmail);
             var rBody = document.createElement('textarea');
             rBody.placeholder = 'Reply (required)';
             rBody.setAttribute('maxlength', String(BODY_MAX));
             rBody.rows = 3;
-            rBody.style.cssText = 'display:block;width:100%;max-width:500px;padding:9px 11px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+            rBody.className = 'bb-form-input';
+            rBody.style.marginBottom = '4px';
+            rBody.style.resize = 'vertical';
             replyFormShell.appendChild(rBody);
             var rBodyCount = document.createElement('div');
-            rBodyCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:500px;text-align:right';
+            rBodyCount.className = 'bb-comment-char-counter';
+            rBodyCount.style.marginBottom = '10px';
             replyFormShell.appendChild(rBodyCount);
             var rRow = document.createElement('div');
             rRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:center';
             var rSubmit = document.createElement('button');
             rSubmit.type = 'button';
             rSubmit.textContent = 'Post reply';
-            rSubmit.style.cssText = 'padding:8px 20px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:not-allowed;opacity:0.55';
+            rSubmit.className = 'sqs-button-element--primary';
+            rSubmit.style.cssText = 'margin-top:4px;cursor:not-allowed;opacity:0.55';
             rSubmit.disabled = true;
             function rReplySync() {
               var modeNow = currentCommentViewerMode().mode;
@@ -1414,10 +1419,9 @@
       formWrap.className = 'bb-comment-form-wrap';
       formWrap.style.marginTop = '16px';
 
-      var heading = document.createElement('h3');
+      var heading = document.createElement('h2');
+      heading.className = 'bb-below-main-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
-      heading.style.fontSize = '1.1rem';
-      heading.style.margin = '0 0 12px 0';
       formWrap.appendChild(heading);
       var guestOnlyNote = document.createElement('p');
       guestOnlyNote.style.cssText =
@@ -1435,14 +1439,15 @@
         return;
       }
       var loggedInIdentityLine = document.createElement('div');
-      loggedInIdentityLine.style.cssText = 'display:none;max-width:500px;margin:0 0 10px 0;font-size:0.9rem;color:#444';
+      loggedInIdentityLine.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;font-size:0.9rem;color:#444';
       formWrap.appendChild(loggedInIdentityLine);
 
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
       nameInput.setAttribute('maxlength', String(NAME_MAX));
-      nameInput.style.cssText = 'display:block;width:100%;max-width:400px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+      nameInput.className = 'bb-form-input';
+      nameInput.style.marginBottom = '10px';
       formWrap.appendChild(nameInput);
 
       var emailInput = document.createElement('input');
@@ -1450,27 +1455,32 @@
       emailInput.placeholder = 'Email (optional)';
       emailInput.setAttribute('maxlength', String(EMAIL_MAX));
       emailInput.autocomplete = 'email';
-      emailInput.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+      emailInput.className = 'bb-form-input';
+      emailInput.style.marginBottom = '10px';
       formWrap.appendChild(emailInput);
 
       var identityNote = document.createElement('div');
-      identityNote.style.cssText = 'display:none;max-width:500px;margin:0 0 10px 0;padding:8px 10px;border:1px solid #dbeafe;background:transparent;color:#1f4c8c;border-radius:6px;font-size:0.85rem;line-height:1.35';
+      identityNote.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;padding:8px 10px;border:1px solid #dbeafe;background:transparent;color:#1f4c8c;border-radius:6px;font-size:0.85rem;line-height:1.35';
       formWrap.appendChild(identityNote);
 
       var bodyArea = document.createElement('textarea');
       bodyArea.placeholder = 'Comment (required)';
       bodyArea.setAttribute('maxlength', String(BODY_MAX));
       bodyArea.rows = 4;
-      bodyArea.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+      bodyArea.className = 'bb-form-input';
+      bodyArea.style.marginBottom = '4px';
+      bodyArea.style.resize = 'vertical';
       formWrap.appendChild(bodyArea);
       var mainBodyCount = document.createElement('div');
-      mainBodyCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:500px;text-align:right';
+      mainBodyCount.className = 'bb-comment-char-counter';
+      mainBodyCount.style.marginBottom = '10px';
       formWrap.appendChild(mainBodyCount);
 
       var submitBtn = document.createElement('button');
       submitBtn.type = 'button';
       submitBtn.textContent = 'Post Comment';
-      submitBtn.style.cssText = 'padding:10px 24px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:not-allowed;opacity:0.55';
+      submitBtn.className = 'sqs-button-element--primary';
+      submitBtn.style.cssText = 'margin-top:4px;cursor:not-allowed;opacity:0.55';
       submitBtn.disabled = true;
       function mainFormSync() {
         var modeNow = currentCommentViewerMode().mode;
@@ -4559,7 +4569,7 @@
             opt.style.background = 'none';
             opt.style.cursor = 'pointer';
             opt.style.textAlign = 'left';
-            opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+            opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
             opt.onmouseout = function() { opt.style.background = 'none'; };
             opt.onclick = function() {
               selected.push(cat);
@@ -4607,8 +4617,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = selected[c];
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -4779,7 +4789,7 @@
             opt.style.background = 'none';
             opt.style.cursor = 'pointer';
             opt.style.textAlign = 'left';
-            opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+            opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
             opt.onmouseout = function() { opt.style.background = 'none'; };
             opt.onclick = function() {
               selected.push(tag);
@@ -4827,8 +4837,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = selected[c];
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -5026,7 +5036,7 @@
             opt.style.background = 'none';
             opt.style.cursor = 'pointer';
             opt.style.textAlign = 'left';
-            opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+            opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
             opt.onmouseout = function() { opt.style.background = 'none'; };
             opt.onclick = function() {
               if (item.type === 'category') {
@@ -5082,8 +5092,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = name;
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -5351,7 +5361,7 @@
               opt.style.background = 'none';
               opt.style.cursor = 'pointer';
               opt.style.textAlign = 'left';
-              opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+              opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
               opt.onmouseout = function() { opt.style.background = 'none'; };
               opt.onclick = function() {
                 catSelected.push(c);
@@ -5390,7 +5400,7 @@
               opt.style.background = 'none';
               opt.style.cursor = 'pointer';
               opt.style.textAlign = 'left';
-              opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+              opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
               opt.onmouseout = function() { opt.style.background = 'none'; };
               opt.onclick = function() {
                 tagSelected.push(t);
@@ -5441,8 +5451,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = item.name;
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -5735,6 +5745,10 @@
         };
         return svgs[platform] || '';
       }
+      var avatarPx = useLongBio ? 64 : 48;
+      var nameFontPx = useLongBio ? 18 : 15;
+      var bioFontPx = useLongBio ? 15 : 14;
+      var iconPx = useLongBio ? 18 : 16;
       var platforms = ['instagram', 'facebook', 'linkedin', 'x', 'email', 'website'];
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
@@ -5745,32 +5759,23 @@
         var email = (p && p.email) || null;
         var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
         var card = document.createElement('div');
-        card.style.marginBottom = i < authorIds.length - 1 ? '20px' : '0';
+        if (useLongBio) card.className = 'blog-overlay-author-card';
+        card.style.marginBottom = useLongBio ? 0 : (i < authorIds.length - 1 ? '20px' : '0');
         var topRow = document.createElement('div');
         topRow.style.display = 'flex';
         topRow.style.gap = '12px';
         topRow.style.alignItems = 'flex-start';
-        topRow.style.marginBottom = '8px';
+        topRow.style.marginBottom = useLongBio ? '0' : '8px';
+        if (useLongBio) topRow.style.width = '100%';
         var avatarWrap = document.createElement('div');
-        avatarWrap.style.width = '48px';
-        avatarWrap.style.height = '48px';
-        avatarWrap.style.borderRadius = '50%';
-        avatarWrap.style.overflow = 'hidden';
-        avatarWrap.style.flexShrink = '0';
-        avatarWrap.style.background = 'rgba(91,79,232,0.15)';
-        avatarWrap.style.display = 'flex';
-        avatarWrap.style.alignItems = 'center';
-        avatarWrap.style.justifyContent = 'center';
-        avatarWrap.style.fontSize = '1rem';
-        avatarWrap.style.fontWeight = '600';
-        avatarWrap.style.color = '#5B4FE8';
+        avatarWrap.className = 'blog-overlay-author-card-avatar';
+        avatarWrap.style.width = avatarPx + 'px';
+        avatarWrap.style.height = avatarPx + 'px';
+        avatarWrap.style.fontSize = (useLongBio ? 20 : 16) + 'px';
         if (imageUrl) {
           var img = document.createElement('img');
           img.src = imageUrl;
           img.alt = name;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
           avatarWrap.appendChild(img);
         } else {
           avatarWrap.textContent = getInitials(name);
@@ -5783,13 +5788,12 @@
         rightCol.style.flexDirection = 'column';
         rightCol.style.gap = '6px';
         var nameEl = document.createElement('div');
+        nameEl.className = 'blog-overlay-author-card-name';
         nameEl.textContent = name;
-        nameEl.style.fontWeight = '600';
-        nameEl.style.fontSize = '0.95rem';
-        nameEl.style.color = '#1a1a1a';
-        nameEl.style.lineHeight = 1.3;
+        nameEl.style.fontSize = nameFontPx + 'px';
         rightCol.appendChild(nameEl);
         var linksWrap = document.createElement('div');
+        linksWrap.className = 'blog-overlay-author-card-social';
         linksWrap.style.display = 'flex';
         linksWrap.style.flexWrap = 'wrap';
         linksWrap.style.gap = '8px';
@@ -5802,30 +5806,27 @@
             a.href = url;
             a.target = platform === 'email' ? '_self' : '_blank';
             a.rel = platform === 'email' ? '' : 'noopener noreferrer';
-            a.innerHTML = socialIconSvg(platform);
-            a.style.display = 'inline-flex';
-            a.style.color = '#5B4FE8';
-            a.style.textDecoration = 'none';
+            a.innerHTML = socialIconSvg(platform).replace(/width="18"/, 'width="' + iconPx + '"').replace(/height="18"/, 'height="' + iconPx + '"');
             a.setAttribute('aria-label', platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1));
             linksWrap.appendChild(a);
           }
         }
         if (linksWrap.childNodes.length > 0) {
           rightCol.appendChild(linksWrap);
-        } else {
-          rightCol.style.minHeight = '48px';
+        } else if (!bio) {
+          rightCol.style.minHeight = avatarPx + 'px';
           rightCol.style.justifyContent = 'center';
+        }
+        if (bio) {
+          var bioEl = document.createElement('div');
+          bioEl.className = 'blog-overlay-author-card-bio';
+          bioEl.textContent = bio;
+          bioEl.style.fontSize = bioFontPx + 'px';
+          bioEl.style.marginTop = '6px';
+          rightCol.appendChild(bioEl);
         }
         topRow.appendChild(rightCol);
         card.appendChild(topRow);
-        if (bio) {
-          var bioEl = document.createElement('div');
-          bioEl.textContent = bio;
-          bioEl.style.fontSize = '0.8rem';
-          bioEl.style.color = '#6b6b6b';
-          bioEl.style.lineHeight = 1.4;
-          card.appendChild(bioEl);
-        }
         content.appendChild(card);
       }
       return { header: headerText, content: content };
@@ -6409,7 +6410,6 @@
       var tocEl = document.querySelector('.blog-overlay-toc');
       if (!tocEl) return;
       var tocStyle = tocEl.getAttribute('data-toc-style') || 'numbered';
-      var themeColor = '#5B4FE8';
       var tocLinks = tocEl.querySelectorAll('a');
       if (!tocLinks.length) return;
 
@@ -6434,15 +6434,18 @@
           var idx = parseInt(link.getAttribute('data-heading-index'), 10);
           var isActive = idx === activeIdx;
           link.classList.toggle('blog-overlay-toc-active', isActive);
-          link.style.fontWeight = isActive ? '600' : '';
-          link.style.color = isActive ? '#333' : '';
+          link.classList.toggle('is-active', isActive);
+          if (tocStyle !== 'numbered') {
+            link.style.fontWeight = isActive ? '600' : '';
+            link.style.color = isActive ? '#333' : '';
+          }
           if (tocStyle === 'bookmark') {
-            link.style.backgroundColor = isActive ? (themeColor + '20') : '';
-            link.style.borderLeft = isActive ? ('3px solid ' + themeColor) : '3px solid transparent';
+            link.style.backgroundColor = isActive ? 'var(--bb-accent-10, rgba(91,79,232,0.1))' : '';
+            link.style.borderLeft = isActive ? '3px solid var(--bb-accent, #5B4FE8)' : '3px solid transparent';
           }
           if (tocStyle === 'connectedDots') {
             var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
-            if (dot) dot.style.background = (idx <= activeIdx) ? themeColor : '#e5e4e0';
+            if (dot) dot.style.background = (idx <= activeIdx) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
           }
         }
         if (tocStyle === 'connectedDots') {
@@ -6487,15 +6490,18 @@
         var idx = parseInt(link.getAttribute('data-post-index'), 10);
         var isActive = idx === activeIndex;
         link.classList.toggle('blog-overlay-toc-active', isActive);
-        link.style.fontWeight = isActive ? '600' : '';
-        link.style.color = isActive ? '#333' : '';
+        link.classList.toggle('is-active', isActive);
+        if (tocStyle !== 'numbered') {
+          link.style.fontWeight = isActive ? '600' : '';
+          link.style.color = isActive ? '#333' : '';
+        }
         if (tocStyle === 'bookmark') {
-          link.style.backgroundColor = isActive ? (themeColor + '20') : '';
-          link.style.borderLeft = isActive ? ('3px solid ' + themeColor) : '3px solid transparent';
+          link.style.backgroundColor = isActive ? 'var(--bb-accent-10, rgba(91,79,232,0.1))' : '';
+          link.style.borderLeft = isActive ? '3px solid var(--bb-accent, #5B4FE8)' : '3px solid transparent';
         }
         if (tocStyle === 'connectedDots') {
           var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
-          if (dot) dot.style.background = (idx <= activeIndex) ? themeColor : '#e5e4e0';
+          if (dot) dot.style.background = (idx <= activeIndex) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
         }
       }
       if (tocStyle === 'connectedDots') {
@@ -6902,6 +6908,27 @@
       return '0px';
     },
 
+    /** Squarespace form-field shape (comment/lead-magnet inputs inherit this). */
+    _readFormFieldRadiusFromScope: function(scopeEl) {
+      try {
+        var input = null;
+        var selector = '.sqs-block-form input[type="text"], .sqs-block-form input[type="email"], .sqs-block-form textarea, form.sqs-block-form-field input, form.sqs-block-form-field textarea';
+        if (scopeEl && scopeEl.querySelector) input = scopeEl.querySelector(selector);
+        if (!input) input = document.querySelector(selector);
+        if (input) {
+          var br = window.getComputedStyle(input).borderRadius;
+          if (br) return br;
+        }
+      } catch (e4a) { /* ignore */ }
+      return '6px';
+    },
+
+    /** First numeric px value in a (possibly shorthand) CSS length string. */
+    _firstPxValue: function(cssLength, fallbackPx) {
+      var m = typeof cssLength === 'string' ? cssLength.match(/-?[\d.]+/) : null;
+      return m ? parseFloat(m[0]) : fallbackPx;
+    },
+
     _getConfigAccentOverride: function() {
       var cc = this.config && this.config.collectionConfig;
       if (!cc || typeof cc !== 'object') return '';
@@ -6921,6 +6948,9 @@
       var heading = this._readHeadingColorFromScope(scope) || body;
       var headingTypography = this._readHeadingTypographyFromScope(scope);
       var buttonRadius = this._readPrimaryButtonRadius(scope);
+      var formRadius = this._readFormFieldRadiusFromScope(scope);
+      var buttonRadiusPx = this._firstPxValue(buttonRadius, 0);
+      var cardRadius = Math.max(0, Math.min(buttonRadiusPx, 20)) + 'px';
       var tokens = {
         accent: accent,
         body: body,
@@ -6931,13 +6961,19 @@
           || this._bbReadCssVar('--siteBackgroundColor', null)
           || '#ffffff',
         buttonRadius: buttonRadius,
+        formRadius: formRadius,
+        cardRadius: cardRadius,
         textOnAccent: this._contrastTextOnAccent(accent),
         muted: this._withAlpha(body, 0.6),
         extraMuted: this._withAlpha(body, 0.4),
         border: this._withAlpha(body, 0.15),
         placeholder: this._withAlpha(body, 0.05),
         excerpt: this._withAlpha(body, 0.8),
+        accent15: this._withAlpha(accent, 0.15),
+        accent10: this._withAlpha(accent, 0.10),
         metaOnImage: 'rgba(255,255,255,0.78)',
+        onDarkTitle: '#fff',
+        onDarkDeck: 'rgba(255,255,255,0.85)',
         imageGradient: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)'
       };
       this._collectionStyleTokens = tokens;
@@ -6962,8 +6998,14 @@
       el.style.setProperty('--bb-placeholder', tokens.placeholder);
       el.style.setProperty('--bb-excerpt', tokens.excerpt);
       el.style.setProperty('--bb-btn-radius', tokens.buttonRadius);
+      el.style.setProperty('--bb-form-radius', tokens.formRadius);
+      el.style.setProperty('--bb-card-radius', tokens.cardRadius);
+      el.style.setProperty('--bb-accent-15', tokens.accent15);
+      el.style.setProperty('--bb-accent-10', tokens.accent10);
       el.style.setProperty('--bb-text-on-accent', tokens.textOnAccent);
       el.style.setProperty('--bb-meta-on-image', tokens.metaOnImage);
+      el.style.setProperty('--bb-on-dark-title', tokens.onDarkTitle);
+      el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
     },
 
     _ensureCollectionStylesheet: function() {
@@ -6988,10 +7030,48 @@
         '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-category-label{font-size:13px;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
-        '#blog-overlay-list .bb-category-label--post-header{font-size:11px;font-weight:700;font-variant:small-caps;text-transform:none;letter-spacing:0.08em;}' +
-        '#blog-overlay-list .blog-overlay-writer-excerpt{font-size:17px;font-style:italic;line-height:1.6;color:var(--bb-excerpt,#666);margin:0 0 28px 0;max-width:520px;width:100%;}' +
-        '#blog-overlay-list .blog-overlay-writer-header-divider{display:block;flex-shrink:0;}' +
+        '#blog-overlay-list .blog-overlay-post-category--writer{text-align:center;margin-bottom:-8px;}' +
+        '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:8px;}' +
+        '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
+        '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-feature-header-stack{max-width:800px;margin-left:auto;margin-right:auto;}' +
+        '#blog-overlay-list .bb-title--post{font-size:40px;}' +
+        '#blog-overlay-list .blog-overlay-post-deck{font-size:20px;line-height:1.4;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--writer{font-style:italic;text-align:center;max-width:600px;margin-left:auto;margin-right:auto;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--feature{text-align:center;max-width:700px;margin-left:auto;margin-right:auto;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-post-meta--on-bg{font-size:16px;color:var(--bb-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-post-meta--on-image{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs{font-size:14px;line-height:1.4;color:var(--bb-muted,#888);}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
+        '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:0 0 10px 0;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel{background:#15130f;padding:32px;border-radius:var(--bb-card-radius,12px);box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-reporter-meta-divider{border-top:1px solid var(--bb-border,#e8e7e4);margin-top:16px;padding-top:12px;width:100%;}' +
+        '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .bb-comments-section{border-top:1px solid var(--bb-border,#e8e7e4);padding-top:24px;margin-top:32px;}' +
+        '#blog-overlay-list .bb-form-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:transparent;padding:8px 12px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);}' +
+        '#blog-overlay-list .bb-form-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
+        '#blog-overlay-list .bb-comment-char-counter{width:100%;text-align:right;font-size:11px;color:var(--bb-muted,#888);margin:4px 0 0 0;}' +
+        '#blog-overlay-list .blog-overlay-author-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;margin:32px 0;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-author-card-avatar{width:64px;height:64px;flex-shrink:0;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bb-accent-15,rgba(91,79,232,0.15));color:var(--bb-accent,#5B4FE8);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,700);font-size:20px;}' +
+        '#blog-overlay-list .blog-overlay-author-card-avatar img{width:100%;height:100%;object-fit:cover;}' +
+        '#blog-overlay-list .blog-overlay-author-card-name{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;}' +
+        '#blog-overlay-list .blog-overlay-author-card-social a{display:inline-flex;color:var(--bb-accent,#5B4FE8);text-decoration:none;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio{font-size:15px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
+        '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
+        '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .blog-overlay-prev-next{display:flex;flex-direction:row;width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);margin-top:32px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col{flex:1 1 50%;min-width:0;padding:20px 24px;box-sizing:border-box;text-decoration:none;color:inherit;display:flex;flex-direction:column;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col--next{border-left:1px solid var(--bb-border,#e5e4e0);align-items:flex-end;text-align:right;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-extra-muted,#888);margin-bottom:8px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-category{margin-bottom:4px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-title{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+        '#blog-overlay-list .bb-toc-item{display:block;font-size:16px;color:var(--bb-muted,#888);border-left:2px solid transparent;padding:8px 12px;text-decoration:none;}' +
+        '#blog-overlay-list .bb-toc-item.is-active{color:var(--bb-accent,#5B4FE8);border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));font-weight:600;}' +
         '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
         '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
         '#blog-overlay-list .bb-pagination-btn{padding:6px 12px;font-size:14px;min-width:36px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-chrome-radius,6px);background:transparent;color:var(--bb-body,#333);cursor:pointer;font-family:inherit;}' +
@@ -6999,10 +7079,10 @@
         '#blog-overlay-list .bb-load-more{padding:10px 24px;font-size:14px;font-weight:inherit;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
         '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
         '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-bottom:8px;}' +
-        '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);margin-bottom:12px;width:100%;}' +
+        '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
-        '#blog-overlay-list .bb-sidebar-post-thumb{width:65px;height:65px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
-        '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:65px;max-height:65px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
+        '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-weight:inherit;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
         '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
@@ -7060,6 +7140,7 @@
       var sizeClass = opts.size === 'lg' ? 'bb-title--lg'
         : opts.size === 'masthead' ? 'bb-title--masthead'
         : opts.size === 'compact' ? 'bb-title--compact'
+        : opts.size === 'post' ? 'bb-title--post'
         : 'bb-title--std';
       el.classList.add(sizeClass);
       el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
@@ -7071,7 +7152,8 @@
 
     _applyMetaStyle: function(el, opts) {
       if (!el || !opts) return;
-      el.classList.add(opts.onImage ? 'bb-meta--on-image' : 'bb-meta--on-bg');
+      var base = opts.variant === 'post' ? 'bb-post-meta' : 'bb-meta';
+      el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
       if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
@@ -7087,6 +7169,7 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       el.classList.add('bb-category-label');
       if (opts.onImage) el.classList.add('bb-category-label--on-image');
+      if (opts.modifier) el.classList.add(opts.modifier);
     },
 
     _isSiteMarginDebugEnabled: function() {
@@ -7709,6 +7792,16 @@
       return leftOn && rightOn;
     },
 
+    /** The Publisher post template: full-bleed header (left aligned), single right sidebar. */
+    _isPublisherPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || ph.imagePosition !== 'fullBleed' || ph.contentAlignment !== 'left') return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return !leftOn && rightOn;
+    },
+
     /** The Writer post template: centered minimal header, no sidebars, image below info. */
     _isWriterPostLayout: function(cfg) {
       if (!cfg || typeof cfg !== 'object') return false;
@@ -7719,23 +7812,25 @@
       return !leftOn && !rightOn;
     },
 
-    /** Writer post header: short decorative rule between excerpt and meta. */
+    /** Writer post header: short decorative rule between deck and meta. */
     _createWriterPostHeaderDivider: function(align) {
-      var div = document.createElement('div');
-      div.className = 'blog-overlay-writer-header-divider';
-      div.setAttribute('aria-hidden', 'true');
-      div.style.width = '40px';
-      div.style.height = '2px';
-      div.style.background = 'var(--bb-border,#e8e7e4)';
-      div.style.margin = '0 0 20px 0';
-      if (align === 'center') {
-        div.style.marginLeft = 'auto';
-        div.style.marginRight = 'auto';
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-writer-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      if (align === 'left') {
+        hr.style.marginLeft = '0';
       } else if (align === 'right') {
-        div.style.marginLeft = 'auto';
-        div.style.marginRight = '0';
+        hr.style.marginRight = '0';
       }
-      return div;
+      return hr;
+    },
+
+    /** Story post header (on-dark): full-width decorative rule between deck and meta. */
+    _createStoryPostHeaderDivider: function() {
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-story-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      return hr;
     },
 
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
@@ -8027,22 +8122,23 @@
       var tableOfContentsPosition = (cfg.tableOfContentsPosition === 'right') ? 'right' : 'left';
       var showRecentPostsSidebar = Boolean(cfg.showRecentPostsSidebar);
       var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
+      var autoSidebarWidth = isSinglePost ? 300 : 220;
       if (!useLevelConfig) {
         if (!leftSidebarCfg && cfg.showTableOfContents) {
-          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!rightSidebarCfg && cfg.showTableOfContents) {
-          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : leftSidebarCfg;
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : leftSidebarCfg;
         }
         if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : rightSidebarCfg;
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : rightSidebarCfg;
         }
       } else {
-        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
-        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
@@ -8883,6 +8979,12 @@
           postInfoWrap.style.textAlign = textAlignStyle || 'left';
           postInfoWrap.style.gap = '8px';
           postInfoWrap.style.width = '100%';
+          if (self._isFeaturePostLayout(cfg)) {
+            postInfoWrap.classList.add('blog-overlay-feature-header-stack');
+          }
+          if (storyPostLayout) {
+            postInfoWrap.classList.add('blog-overlay-story-info-panel');
+          }
         }
         var headlineMount = postInfoWrap || digestFeaturedIntro || appendTo;
         var postBreadcrumbNav = null;
@@ -8890,8 +8992,7 @@
           postBreadcrumbNav = document.createElement('nav');
           postBreadcrumbNav.setAttribute('aria-label', 'Breadcrumb');
           var bcNav = postBreadcrumbNav;
-          bcNav.style.fontSize = '0.85rem';
-          bcNav.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.9)' : '#666';
+          bcNav.className = 'blog-overlay-post-breadcrumbs' + ((singlePostFullBleedHero || storyPostLayout) ? ' blog-overlay-post-breadcrumbs--on-dark' : '');
           bcNav.style.setProperty('display', 'flex', 'important');
           bcNav.style.setProperty('flex-direction', 'row', 'important');
           bcNav.style.flexWrap = 'wrap';
@@ -8954,11 +9055,17 @@
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
         }
 
+        var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
+        var featurePostLayoutForCat = isSinglePost && self._isFeaturePostLayout(cfg);
         var postHeaderCategoryLayout = isSinglePost && phShowCategories &&
-          (self._isFeaturePostLayout(cfg) || self._isWriterPostLayout(cfg));
+          (featurePostLayoutForCat || writerPostLayout || storyPostLayout || publisherPostLayout);
         if (postHeaderCategoryLayout) {
+          var postHeaderCatModifier = publisherPostLayout ? 'blog-overlay-post-category--ribbon'
+            : writerPostLayout ? 'blog-overlay-post-category--writer'
+            : storyPostLayout ? 'blog-overlay-post-category--story'
+            : 'blog-overlay-post-category--feature';
           var postHeaderCatsLine = self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, false, {
-            onDark: singlePostFullBleedHero
+            onDark: singlePostFullBleedHero || storyPostLayout
           });
           if (postHeaderCatsLine) {
             postHeaderCatsLine.classList.add('blog-overlay-post-header-categories');
@@ -8967,7 +9074,7 @@
             postHeaderCatsLine.style.width = '100%';
             var postHeaderCatLabels = postHeaderCatsLine.querySelectorAll('.bb-category-label');
             for (var pli = 0; pli < postHeaderCatLabels.length; pli++) {
-              postHeaderCatLabels[pli].classList.add('bb-category-label--post-header');
+              postHeaderCatLabels[pli].classList.add(postHeaderCatModifier);
             }
             headlineMount.appendChild(postHeaderCatsLine);
           }
@@ -8980,10 +9087,13 @@
           : null;
 
         var listRowsDesktop = !isSinglePost && collectionLayout === 'listRows' && !listRowsMobileCompact;
-        var titleEl = document.createElement('h2');
+        var titleEl = document.createElement(isSinglePost ? 'h1' : 'h2');
         titleEl.className = 'blog-overlay-title';
         titleEl.style.margin = '0 0 8px 0';
-        if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
+        if (isSinglePost) {
+          titleEl.classList.add('blog-overlay-post-title');
+          self._applyTitleStyle(titleEl, { size: 'post', onImage: singlePostFullBleedHero || storyPostLayout });
+        } else if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
           titleEl.style.fontSize = '1.05rem';
           titleEl.style.lineHeight = '1.2';
           titleEl.style.margin = '0 0 2px 0';
@@ -9113,7 +9223,7 @@
         var pendingWriterMetaRow = null;
         var pendingWriterShareRow = null;
 
-        if (phShowByline && postInfoWrap && !writerPostLayout) {
+        if (phShowByline && postInfoWrap && !postHeaderAccentDividerLayout) {
           var bylineDeckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
           var bylineSentences = bylineDeckText ? bylineDeckText.match(/[^.!?]*[.!?]/g) : null;
           var bylineText = bylineSentences && bylineSentences.length > 0 ? bylineSentences[0].trim() : '';
@@ -9121,12 +9231,8 @@
           if (bylineText) bylineText = self._stripLeadingSquarespaceSectionMarkers(bylineText);
           if (bylineText) {
             var bylineEl = document.createElement('p');
-            bylineEl.className = 'blog-overlay-post-byline';
+            bylineEl.className = 'blog-overlay-post-deck';
             bylineEl.textContent = bylineText;
-            bylineEl.style.margin = (isSinglePost && phImagePos === 'rightOfInfo') ? '0 0 18px 0' : '0 0 12px 0';
-            bylineEl.style.fontSize = '1.05rem';
-            bylineEl.style.lineHeight = '1.5';
-            bylineEl.style.color = '#555';
             postInfoWrap.appendChild(bylineEl);
           }
         }
@@ -9181,19 +9287,17 @@
           }
           /** Reporter (rightOfInfo): divider between title/deck and meta row. */
           if (isSinglePost && phImagePos === 'rightOfInfo') {
-            metaRow.style.borderTop = '1px solid #ddd';
-            metaRow.style.paddingTop = '14px';
-            metaRow.style.width = '100%';
+            metaRow.classList.add('blog-overlay-reporter-meta-divider');
           }
           var meta = document.createElement('div');
           meta.className = 'blog-overlay-meta';
           meta.textContent = metaParts.join(' · ');
-          if (singlePostFullBleedHero) {
-            self._applyMetaStyle(meta, { onImage: true });
-            meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+          if (singlePostFullBleedHero || storyPostLayout) {
+            self._applyMetaStyle(meta, { onImage: true, variant: isSinglePost ? 'post' : null });
+            if (singlePostFullBleedHero) meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
             metaRow.style.color = 'var(--bb-meta-on-image,rgba(255,255,255,0.78))';
-          } else if (!isSinglePost) {
-            self._applyMetaStyle(meta, { onImage: false });
+          } else {
+            self._applyMetaStyle(meta, { onImage: false, variant: isSinglePost ? 'post' : null });
           }
           metaRow.appendChild(meta);
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
@@ -9244,20 +9348,18 @@
         }
 
         if (postHeaderAccentDividerLayout && postInfoWrap) {
-          if (writerPostLayout) {
-            var writerExcerptSource = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
-            var writerExcerptSentences = writerExcerptSource ? writerExcerptSource.match(/[^.!?]*[.!?]/g) : null;
-            var writerExcerptText = writerExcerptSentences && writerExcerptSentences.length > 0 ? writerExcerptSentences[0].trim() : '';
-            if (!writerExcerptText) writerExcerptText = self._truncateText(post.excerpt || post.body || '', 200);
-            if (writerExcerptText) writerExcerptText = self._stripLeadingSquarespaceSectionMarkers(writerExcerptText);
-            if (writerExcerptText) {
-              var writerExcerptEl = document.createElement('p');
-              writerExcerptEl.className = 'blog-overlay-deck blog-overlay-writer-excerpt';
-              writerExcerptEl.textContent = writerExcerptText;
-              postInfoWrap.appendChild(writerExcerptEl);
-            }
+          var accentExcerptSource = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
+          var accentExcerptSentences = accentExcerptSource ? accentExcerptSource.match(/[^.!?]*[.!?]/g) : null;
+          var accentExcerptText = accentExcerptSentences && accentExcerptSentences.length > 0 ? accentExcerptSentences[0].trim() : '';
+          if (!accentExcerptText) accentExcerptText = self._truncateText(post.excerpt || post.body || '', 200);
+          if (accentExcerptText) accentExcerptText = self._stripLeadingSquarespaceSectionMarkers(accentExcerptText);
+          if (accentExcerptText) {
+            var accentExcerptEl = document.createElement('p');
+            accentExcerptEl.className = 'blog-overlay-post-deck' + (writerPostLayout ? ' blog-overlay-post-deck--writer' : ' blog-overlay-post-deck--on-dark');
+            accentExcerptEl.textContent = accentExcerptText;
+            postInfoWrap.appendChild(accentExcerptEl);
           }
-          postInfoWrap.appendChild(self._createWriterPostHeaderDivider(phAlign));
+          postInfoWrap.appendChild(storyPostLayout ? self._createStoryPostHeaderDivider() : self._createWriterPostHeaderDivider(phAlign));
           if (pendingWriterMetaRow) postInfoWrap.appendChild(pendingWriterMetaRow);
           if (pendingWriterShareRow) postInfoWrap.appendChild(pendingWriterShareRow);
         }
@@ -9283,14 +9385,11 @@
           var deck = deckSentences && deckSentences.length > 0 ? deckSentences[0].trim() : '';
           if (!deck) deck = self._truncateText(post.excerpt || post.body || '', 200);
           if (deck) deck = self._stripLeadingSquarespaceSectionMarkers(deck);
-          if (deck && !singlePostFullBleedStacked && !phShowByline && !writerPostLayout) {
+          if (deck && (!singlePostFullBleedStacked || featurePostLayoutForCat) && !phShowByline && !postHeaderAccentDividerLayout) {
             var deckEl = document.createElement('p');
-            deckEl.className = 'blog-overlay-deck';
+            var deckModifier = featurePostLayoutForCat ? ' blog-overlay-post-deck--feature' : (singlePostFullBleedHero ? ' blog-overlay-post-deck--on-dark' : '');
+            deckEl.className = 'blog-overlay-post-deck' + deckModifier;
             deckEl.textContent = deck;
-            deckEl.style.margin = '0 0 16px 0';
-            deckEl.style.fontSize = '1.05rem';
-            deckEl.style.lineHeight = '1.5';
-            deckEl.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.95)' : '#555';
             postInfoWrap.appendChild(deckEl);
           }
           var useDedicatedSinglePostHeaderZone = isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked;
@@ -9373,7 +9472,6 @@
         }
 
         if (isSinglePost && postBreadcrumbNav) {
-          postBreadcrumbNav.className = 'blog-overlay-post-breadcrumbs';
           postBreadcrumbNav.style.marginBottom = '8px';
           postBreadcrumbNav.style.flexShrink = '0';
           postBreadcrumbNav.style.width = '100%';
@@ -9404,6 +9502,10 @@
             } else {
               fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
             }
+          } else if (storyPostLayout && postInfoWrap) {
+            postBreadcrumbNav.style.justifyContent = bcJustify;
+            postBreadcrumbNav.style.marginBottom = '8px';
+            postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
           } else if (
             isSideBySide &&
             isSinglePost &&
@@ -10049,28 +10151,40 @@
       var footerContentCfg = vs.footerContentCfg;
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
+      var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
+      var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
+      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
+      var featureBelowRowAuthorEl = null;
+      var featureBelowRowMoreToReadEl = null;
+      var featureBelowRowLeadMagnetEl = null;
+      var featureBelowRowHost = null;
+      var featureCommentsSectionEl = null;
+      var featureFooterLeftPad = 0;
+      var featureFooterRightPad = 0;
+      var featureFooterTopPad = 16;
       this._emitPaywallRenderDebug(vs, { renderSeq: this._renderSeq });
       var useLevelConfig = vs.useLevelConfig;
       var showTableOfContents = vs.showTableOfContents;
       var tableOfContentsPosition = vs.tableOfContentsPosition;
       var showRecentPostsSidebar = vs.showRecentPostsSidebar;
       var sidebarPosition = vs.sidebarPosition;
+      var autoSidebarWidth = isSinglePost ? 300 : 220;
       if (!useLevelConfig) {
         if (!leftSidebarCfg && cfg.showTableOfContents) {
-          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!rightSidebarCfg && cfg.showTableOfContents) {
-          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : leftSidebarCfg;
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : leftSidebarCfg;
         }
         if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : rightSidebarCfg;
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : rightSidebarCfg;
         }
       } else {
-        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
-        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
       }
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
@@ -10101,6 +10215,11 @@
       var navbarOffset = this._getNavbarOffset();
       var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
       self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
+      /** Writer: narrower centered reading column needs extra side buffer beyond the site's own margins. */
+      if (isSinglePost && self._isWriterPostLayout(cfg)) {
+        wrapper.style.paddingLeft = 'calc(' + (wrapper.style.paddingLeft || '0px') + ' + 6vw)';
+        wrapper.style.paddingRight = 'calc(' + (wrapper.style.paddingRight || '0px') + ' + 6vw)';
+      }
       if (collectionMobileGridNarrow) {
         wrapper.style.maxWidth = '100%';
         if (collectionLayout === 'digest') {
@@ -10265,7 +10384,9 @@
       var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
       var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
       var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
-      var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || '')) ? (pb.color || cfg.progressBarColor) : '#5B4FE8';
+      var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || ''))
+        ? (pb.color || cfg.progressBarColor)
+        : ((this._getCollectionStyleTokens() && this._getCollectionStyleTokens().accent) || '#5B4FE8');
       if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
@@ -10315,6 +10436,10 @@
         this._progressScrollTarget = scrollTarget;
         if (scrollTarget) {
           scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
+        }
+        /** Fixed top-positioned bar overlays the wrapper; reserve its height so content doesn't sit under it. */
+        if (progressBarPosition === 'top' && !this._previewMode) {
+          self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop + progressBarThickness);
         }
       }
 
@@ -10501,19 +10626,15 @@
           }
       }
 
-      function createSidebarSection(headerText, content, styled) {
+      function createSidebarSection(headerText, content) {
         var section = document.createElement('div');
         section.className = 'blog-overlay-sidebar-section';
         section.style.marginBottom = '20px';
-        var header = document.createElement('div');
+        var header = document.createElement('h3');
         header.className = 'bb-sidebar-header';
         header.textContent = headerText;
-        if (styled) {
-          header.style.fontVariant = 'small-caps';
-          header.style.textTransform = 'none';
-        }
         section.appendChild(header);
-        var bar = document.createElement('div');
+        var bar = document.createElement('hr');
         bar.className = 'bb-sidebar-divider';
         section.appendChild(bar);
         section.appendChild(content);
@@ -10533,7 +10654,6 @@
           return null;
         }
         var tocStyle = (cfg.postModules && cfg.postModules.tableOfContents && cfg.postModules.tableOfContents.style) || 'numbered';
-        var themeColor = '#5B4FE8';
         var el = document.createElement('nav');
         el.className = 'blog-overlay-toc';
         el.setAttribute('data-toc-style', tocStyle);
@@ -10559,7 +10679,7 @@
           lineFill.style.left = '3px';
           lineFill.style.top = '10px';
           lineFill.style.width = '2px';
-          lineFill.style.background = '#5B4FE8';
+          lineFill.style.background = 'var(--bb-accent, #5B4FE8)';
           lineFill.style.borderRadius = '1px';
           lineFill.style.pointerEvents = 'none';
           lineFill.style.transition = 'height 0.15s ease';
@@ -10601,22 +10721,23 @@
                   var other = tocLinks[li];
                   var active = other === link;
                   other.classList.toggle('blog-overlay-toc-active', active);
-                  other.style.fontWeight = active ? '700' : '';
+                  other.classList.toggle('is-active', active);
+                  if (tocStyle !== 'numbered') other.style.fontWeight = active ? '700' : '';
                 }
               } catch (e2) {}
               smoothScrollToTocTarget(href.slice(1));
             };
           }
           link.style.display = 'block';
-          link.style.padding = '4px 0';
-          link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
           link.style.textDecoration = 'none';
-          link.style.lineHeight = '1.3';
-          link.style.color = '#333';
           if (tocStyle === 'numbered') {
-            link.style.paddingLeft = ((level - 1) * 8) + 'px';
+            link.classList.add('bb-toc-item');
+            link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
             if (prefix) link.textContent = prefix + ' ' + (link.textContent || '');
           } else if (tocStyle === 'connectedDots') {
+            link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
+            link.style.lineHeight = '1.3';
+            link.style.color = '#333';
             var row = document.createElement('div');
             row.style.display = 'flex';
             row.style.alignItems = 'center';
@@ -10639,6 +10760,9 @@
             el.appendChild(row);
             return;
           } else if (tocStyle === 'bookmark') {
+            link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
+            link.style.lineHeight = '1.3';
+            link.style.color = '#333';
             link.style.paddingLeft = ((level - 1) * 8) + 'px';
             link.style.paddingRight = '8px';
             link.style.paddingTop = '6px';
@@ -10852,18 +10976,13 @@
           }
           var footSection = document.createElement('div');
           footSection.className = 'blog-overlay-sidebar-section blog-overlay-more-to-read';
-          var footHead = document.createElement('div');
+          footSection.style.borderTop = '1px solid var(--bb-border, #e5e4e0)';
+          footSection.style.marginTop = '48px';
+          footSection.style.paddingTop = '24px';
+          var footHead = document.createElement('h2');
+          footHead.className = 'bb-below-main-heading';
           footHead.textContent = 'More to Read';
-          footHead.style.fontSize = '1.05rem';
-          footHead.style.fontWeight = '600';
-          footHead.style.color = '#1a1a1a';
-          footHead.style.marginBottom = '4px';
           footSection.appendChild(footHead);
-          var footRule = document.createElement('div');
-          footRule.style.height = '1px';
-          footRule.style.background = '#e5e4e0';
-          footRule.style.marginBottom = '16px';
-          footSection.appendChild(footRule);
           footSection.appendChild(grid);
           return footSection;
         }
@@ -10909,74 +11028,40 @@
         var next = activeIdx < items.length - 1 ? items[activeIdx + 1] : null;
         if (!prev && !next) return null;
 
-        var pink = '#db2777';
-        var serif = 'Georgia, "Times New Roman", ui-serif, serif';
-
         function halfCell(postObj, side) {
-          var cell = document.createElement('div');
-          cell.style.flex = '1 1 50%';
-          cell.style.minWidth = '0';
-          cell.style.padding = '16px 20px';
-          cell.style.boxSizing = 'border-box';
-          cell.style.textAlign = side === 'prev' ? 'left' : 'right';
-          if (side === 'prev') {
-            cell.style.borderRight = '1px solid #e5e5e5';
-          }
+          var cell = document.createElement(postObj ? 'a' : 'div');
+          cell.className = 'blog-overlay-prev-next-col' + (side === 'next' ? ' blog-overlay-prev-next-col--next' : '');
           if (!postObj) {
             cell.setAttribute('aria-hidden', 'true');
             return cell;
           }
+          var idx = self._postIndexInItems(items, postObj, itemIndexMap);
+          cell.href = self._getPostUrl(postObj) || '#post-' + idx;
+          cell.setAttribute('data-analytics-element', side === 'prev' ? 'previousArticle' : 'nextArticle');
+
           var navEl = document.createElement('div');
-          navEl.textContent = side === 'prev' ? '← PREVIOUS' : 'NEXT →';
-          navEl.style.fontSize = '0.72rem';
-          navEl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-          navEl.style.textTransform = 'uppercase';
-          navEl.style.letterSpacing = '0.08em';
-          navEl.style.color = '#9ca3af';
-          navEl.style.marginBottom = '6px';
+          navEl.className = 'blog-overlay-prev-next-label';
+          navEl.textContent = side === 'prev' ? 'Previous' : 'Next';
           cell.appendChild(navEl);
 
           var cats = self._getPostCategories(postObj);
           if (cats.length > 0) {
             var catEl = document.createElement('div');
-            catEl.textContent = String(cats[0]).toUpperCase();
-            catEl.style.fontSize = '0.72rem';
-            catEl.style.fontWeight = '700';
-            catEl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-            catEl.style.textTransform = 'uppercase';
-            catEl.style.letterSpacing = '0.06em';
-            catEl.style.color = pink;
-            catEl.style.marginBottom = '6px';
+            catEl.className = 'bb-category-label blog-overlay-prev-next-category';
+            catEl.textContent = cats[0];
             cell.appendChild(catEl);
           }
 
-          var idx = self._postIndexInItems(items, postObj, itemIndexMap);
-          var titleLink = document.createElement('a');
-          titleLink.href = self._getPostUrl(postObj) || '#post-' + idx;
-          titleLink.setAttribute('data-analytics-element', side === 'prev' ? 'previousArticle' : 'nextArticle');
-          titleLink.textContent = postObj.title || 'Untitled';
-          titleLink.style.display = 'block';
-          titleLink.style.fontFamily = serif;
-          titleLink.style.fontSize = '1.05rem';
-          titleLink.style.fontWeight = '700';
-          titleLink.style.color = '#111';
-          titleLink.style.textDecoration = 'none';
-          titleLink.style.lineHeight = '1.35';
-          titleLink.style.wordBreak = 'break-word';
-          cell.appendChild(titleLink);
+          var titleEl = document.createElement('div');
+          titleEl.className = 'blog-overlay-prev-next-title';
+          titleEl.textContent = postObj.title || 'Untitled';
+          cell.appendChild(titleEl);
           return cell;
         }
 
-        var el = document.createElement('div');
-        el.className = 'blog-overlay-prev-next-article';
-        el.style.display = 'flex';
-        el.style.flexDirection = 'row';
-        el.style.width = '100%';
-        el.style.maxWidth = '720px';
-        el.style.boxSizing = 'border-box';
-        el.style.border = '1px solid #e5e5e5';
-        el.style.borderRadius = '2px';
-        el.style.background = '#fff';
+        var el = document.createElement('nav');
+        el.className = 'blog-overlay-prev-next';
+        el.setAttribute('aria-label', 'Previous and next articles');
         el.appendChild(halfCell(prev, 'prev'));
         el.appendChild(halfCell(next, 'next'));
         return el;
@@ -11266,95 +11351,50 @@
         var description = (lmCfg.description && lmCfg.description.trim()) ? lmCfg.description.trim() : '';
 
         var card = document.createElement('div');
-        card.className = 'blog-overlay-lead-magnet-footer';
+        card.className = 'blog-overlay-lead-magnet-footer bb-lead-magnet-card';
         card.style.width = '100%';
         card.style.maxWidth = '100%';
-        card.style.boxSizing = 'border-box';
-        card.style.border = '1px solid #e5e4e0';
-        card.style.borderRadius = '10px';
-        card.style.padding = '16px 20px';
-        card.style.background = 'transparent';
-        card.style.display = 'flex';
-        card.style.gap = '16px';
-        card.style.alignItems = 'center';
-        card.style.justifyContent = 'space-between';
-        card.style.flexWrap = 'wrap';
 
-        var left = document.createElement('div');
-        left.style.flex = '1 1 200px';
-        left.style.minWidth = '0';
-        var title = document.createElement('div');
+        var title = document.createElement('h3');
+        title.className = 'bb-lead-magnet-header';
         title.textContent = resourceTitle;
-        title.style.fontSize = '0.95rem';
-        title.style.fontWeight = '600';
-        title.style.color = '#1a1a1a';
-        title.style.marginBottom = description ? '6px' : '0';
-        left.appendChild(title);
+        card.appendChild(title);
         if (description) {
-          var desc = document.createElement('div');
+          var desc = document.createElement('p');
+          desc.className = 'bb-lead-magnet-subtitle';
           desc.textContent = description;
-          desc.style.fontSize = '0.88rem';
-          desc.style.color = '#666';
-          desc.style.lineHeight = '1.45';
-          left.appendChild(desc);
+          card.appendChild(desc);
         }
-        card.appendChild(left);
-
-        var right = document.createElement('div');
-        right.style.flex = '1 1 260px';
-        right.style.minWidth = '0';
-        right.style.display = 'flex';
-        right.style.flexDirection = 'column';
-        right.style.gap = '8px';
 
         var formRow = document.createElement('div');
         formRow.style.display = 'flex';
-        formRow.style.gap = '8px';
+        formRow.style.gap = '12px';
         formRow.style.alignItems = 'center';
-        formRow.style.justifyContent = 'flex-end';
         formRow.style.flexWrap = 'wrap';
         formRow.style.width = '100%';
         var emailInput = document.createElement('input');
         emailInput.type = 'email';
         emailInput.name = 'bb-lead-magnet-footer-email';
         emailInput.id = 'bb-lead-magnet-footer-email';
+        emailInput.className = 'bb-form-input';
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.flex = '1 1 160px';
-        emailInput.style.minWidth = '140px';
-        emailInput.style.maxWidth = '320px';
-        emailInput.style.padding = '8px 12px';
-        emailInput.style.fontSize = '0.9rem';
-        emailInput.style.border = '1px solid #ddd';
-        emailInput.style.borderRadius = '6px';
-        emailInput.style.outline = 'none';
-        emailInput.style.boxSizing = 'border-box';
-        emailInput.style.background = 'transparent';
+        emailInput.style.flex = '1 1 240px';
+        emailInput.style.minWidth = '0';
         formRow.appendChild(emailInput);
 
         var btn = document.createElement('button');
+        btn.className = 'sqs-button-element--primary';
         btn.textContent = buttonText;
         btn.type = 'button';
-        btn.style.padding = '8px 16px';
-        btn.style.fontSize = '0.9rem';
-        btn.style.fontWeight = '500';
-        btn.style.background = siteAccentUi;
-        btn.style.color = 'white';
-        btn.style.border = 'none';
-        btn.style.borderRadius = '6px';
-        btn.style.cursor = 'pointer';
         btn.style.flexShrink = '0';
-        btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
-        btn.onmouseout = function() { btn.style.filter = ''; };
         formRow.appendChild(btn);
-        right.appendChild(formRow);
+        card.appendChild(formRow);
 
         var msgEl = document.createElement('div');
         msgEl.style.fontSize = '0.85rem';
-        msgEl.style.textAlign = 'right';
         msgEl.style.width = '100%';
-        right.appendChild(msgEl);
-        card.appendChild(right);
+        card.appendChild(msgEl);
 
         btn.onclick = function() {
           var email = (emailInput.value || '').trim().toLowerCase();
@@ -11458,7 +11498,7 @@
           return [];
         }
         self._warnDuplicateValues('sidebar', moduleIds);
-        var width = Math.min(400, Math.max(160, sidebarCfg.width || 240));
+        var width = Math.min(400, Math.max(160, sidebarCfg.width || (isSinglePost ? 300 : 240)));
         var mods = [];
         var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
         for (var m = 0; m < moduleIds.length; m++) {
@@ -11854,8 +11894,9 @@
           collectionPaginationEl = this._buildCollectionPaginationNav(vs);
 
 
-          var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : 240;
-          var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : 240;
+          var sidebarWidthDefault = isSinglePost ? 300 : 240;
+          var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : sidebarWidthDefault;
+          var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : sidebarWidthDefault;
           var leftSpaceAbove = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, leftSidebarCfg.spaceAbove)) : 0;
           var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
@@ -12408,18 +12449,21 @@
             self._warnDuplicateValues('footer', fcModules);
             if (fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
-              var footerLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
-              var footerRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              featureFooterLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              featureFooterRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
               var footerTopPadRaw = footerContentCfg.topPadding;
               var footerTopPadParsed = typeof footerTopPadRaw === 'number' ? footerTopPadRaw : parseInt(footerTopPadRaw, 10);
-              var footerTopPad = Math.min(120, Math.max(0, isFinite(footerTopPadParsed) ? footerTopPadParsed : 16));
+              featureFooterTopPad = Math.min(120, Math.max(0, isFinite(footerTopPadParsed) ? footerTopPadParsed : 16));
+              var footerLeftPad = featureFooterLeftPad;
+              var footerRightPad = featureFooterRightPad;
+              var footerTopPad = featureFooterTopPad;
               var footerEl = document.createElement('div');
               footerEl.className = 'blog-overlay-footer-content';
               footerEl.style.marginTop = '24px';
               footerEl.style.paddingLeft = footerLeftPad + 'px';
               footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = footerTopPad + 'px';
-              if (isSinglePost) self._applyStoryPostHorizontalInset(footerEl, cfg);
+              if (isSinglePost && !featurePostLayout) self._applyStoryPostHorizontalInset(footerEl, cfg);
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
@@ -12430,6 +12474,18 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
+                /** Writer/Story: no "More to Read" grid (spec module order). */
+                if (fmod === 'relevantPosts' && (writerPostLayoutForFooter || storyPostLayoutForFooter)) {
+                  continue;
+                }
+                /** Writer: lead magnet is skipped entirely; prev/next replaces it instead. */
+                if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
+                  continue;
+                }
+                /** Prev/next navigation is Writer-only. */
+                if (fmod === 'prevNextArticle' && !writerPostLayoutForFooter) {
+                  continue;
+                }
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
@@ -12467,12 +12523,22 @@
                     fmodEl.style.minWidth = '0';
                   }
                 }
-                if (fmodEl) footerEl.appendChild(fmodEl);
+                if (fmodEl) {
+                  if (featurePostLayout && fmod === 'authorProfiles') {
+                    featureBelowRowAuthorEl = fmodEl;
+                  } else if (featurePostLayout && fmod === 'relevantPosts') {
+                    featureBelowRowMoreToReadEl = fmodEl;
+                  } else if (featurePostLayout && fmod === 'leadMagnet') {
+                    featureBelowRowLeadMagnetEl = fmodEl;
+                  } else {
+                    footerEl.appendChild(fmodEl);
+                  }
+                }
               }
-              if (footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
+              if (!featurePostLayout && footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
             }
           }
-          if (paywallShowFooter) {
+          if (paywallShowFooter && !featurePostLayout) {
             self._appendPaywallFooter(footerZoneEl);
           }
 
@@ -12536,6 +12602,53 @@
             commentPostForGate &&
             !self._isPaywallPublicPreviewPost(commentPostForGate);
           self._setAllCommentUiHidden(!!commentsTurnedOff || hideCommentsForLoggedOutPost);
+          var featureCommentsWillMount =
+            featurePostLayout &&
+            isSinglePost &&
+            selectedIndex >= 0 &&
+            items[selectedIndex] &&
+            cfg &&
+            commentCfg &&
+            commentCfg.commentsEnabled &&
+            (viewerLoggedIn || !hideCommentsForLoggedOutPost);
+          if (featurePostLayout) {
+            featureBelowRowHost = document.createElement('div');
+            featureBelowRowHost.className = 'blog-overlay-feature-below-row';
+            featureBelowRowHost.style.width = '100%';
+            featureBelowRowHost.style.maxWidth = '100%';
+            featureBelowRowHost.style.boxSizing = 'border-box';
+            featureBelowRowHost.style.marginTop = '24px';
+            featureBelowRowHost.style.paddingTop = featureFooterTopPad + 'px';
+            featureBelowRowHost.style.display = 'flex';
+            featureBelowRowHost.style.flexDirection = 'column';
+            featureBelowRowHost.style.gap = '24px';
+            featureBelowRowHost.style.alignItems = 'stretch';
+            var appendFeatureBelowRowSection = function(el) {
+              if (!el) return;
+              var section = document.createElement('div');
+              section.className = 'blog-overlay-feature-below-row-section';
+              section.style.width = '100%';
+              section.style.boxSizing = 'border-box';
+              section.style.paddingLeft = featureFooterLeftPad + 'px';
+              section.style.paddingRight = featureFooterRightPad + 'px';
+              section.appendChild(el);
+              featureBelowRowHost.appendChild(section);
+            };
+            appendFeatureBelowRowSection(featureBelowRowAuthorEl);
+            if (featureCommentsWillMount) {
+              featureCommentsSectionEl = document.createElement('div');
+              featureCommentsSectionEl.className = 'blog-overlay-feature-below-row-section blog-overlay-feature-comments-section';
+              featureCommentsSectionEl.style.width = '100%';
+              featureCommentsSectionEl.style.boxSizing = 'border-box';
+              featureCommentsSectionEl.style.paddingLeft = featureFooterLeftPad + 'px';
+              featureCommentsSectionEl.style.paddingRight = featureFooterRightPad + 'px';
+              featureBelowRowHost.appendChild(featureCommentsSectionEl);
+            }
+            appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
+            appendFeatureBelowRowSection(featureBelowRowLeadMagnetEl);
+            if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
+            wrapper.appendChild(featureBelowRowHost);
+          }
           if (
             isSinglePost &&
             selectedIndex >= 0 &&
@@ -12546,7 +12659,8 @@
             (viewerLoggedIn || !hideCommentsForLoggedOutPost)
           ) {
             try {
-              self._initComments(main, items[selectedIndex], cfg);
+              var commentsMountEl = featurePostLayout && featureCommentsSectionEl ? featureCommentsSectionEl : main;
+              self._initComments(commentsMountEl, items[selectedIndex], cfg);
             } catch (e) {
               console.error('[BlogOverlay] Comments init error:', e);
             }
@@ -12555,7 +12669,9 @@
             footerZoneEl.style.boxSizing = 'border-box';
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
-            if (isSinglePost && !reporterPostLayout) {
+            if (featurePostLayout) {
+              wrapper.appendChild(footerZoneEl);
+            } else if (isSinglePost && !reporterPostLayout) {
               main.appendChild(footerZoneEl);
             } else {
               wrapper.appendChild(footerZoneEl);
