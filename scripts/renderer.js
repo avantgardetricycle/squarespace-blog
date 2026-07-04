@@ -8501,7 +8501,6 @@
         ? Math.min(150, Math.max(0, Math.round(postHeaderCfg.sideGap)))
         : 0;
       var phShowBreadcrumbs = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showBreadcrumbs);
-      var phShowTags = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showTags);
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
@@ -8972,51 +8971,6 @@
             }
             headlineMount.appendChild(postHeaderCatsLine);
           }
-        }
-
-        if (isSinglePost && (phShowTags || (phShowCategories && !postHeaderCategoryLayout))) {
-          var tagsCatsWrap = document.createElement('div');
-          tagsCatsWrap.className = 'blog-overlay-tags-categories';
-          tagsCatsWrap.style.setProperty('display', 'flex', 'important');
-          tagsCatsWrap.style.setProperty('flex-direction', 'row', 'important');
-          tagsCatsWrap.style.flexWrap = 'wrap';
-          tagsCatsWrap.style.gap = '6px';
-          tagsCatsWrap.style.marginBottom = '8px';
-          tagsCatsWrap.style.width = '100%';
-          tagsCatsWrap.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
-          var makeTagEl = function(label, href, onClick) {
-            var span = document.createElement('a');
-            span.textContent = label;
-            span.href = href || '#';
-            span.style.setProperty('display', 'inline-block', 'important');
-            span.style.fontSize = '0.65rem';
-            span.style.fontWeight = '600';
-            span.style.letterSpacing = '0.05em';
-            span.style.textTransform = 'uppercase';
-            span.style.padding = '0 6px';
-            span.style.borderRadius = '3px';
-            span.style.background = singlePostFullBleedHero ? 'rgba(255,255,255,0.2)' : '#f0efec';
-            span.style.color = singlePostFullBleedHero ? '#fff' : '#555';
-            span.style.textDecoration = 'none';
-            span.style.setProperty('cursor', 'pointer', 'important');
-            if (onClick) span.onclick = function(e) { e.preventDefault(); onClick(); };
-            return span;
-          };
-          if (phShowCategories && !postHeaderCategoryLayout) {
-            var postCatsForTags = self._getPostCategories(post);
-            for (var cti = 0; cti < postCatsForTags.length; cti++) {
-              var cat = postCatsForTags[cti];
-              tagsCatsWrap.appendChild(makeTagEl(cat, '#', (function(c) { return function() { self._categoryFilter = [c]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(cat)));
-            }
-          }
-          if (phShowTags) {
-            var postTagsForTags = self._getPostTags(post);
-            for (var tti = 0; tti < postTagsForTags.length; tti++) {
-              var tag = postTagsForTags[tti];
-              tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(tag)));
-            }
-          }
-          if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
         }
 
         var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))
