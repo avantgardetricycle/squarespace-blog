@@ -8505,6 +8505,8 @@
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
+      var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
+      var postHeaderAccentDividerLayout = writerPostLayout || storyPostLayout;
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
@@ -9254,7 +9256,7 @@
             metaRow.style.width = '100%';
             meta.style.textAlign = 'left';
           }
-          if (writerPostLayout) {
+          if (postHeaderAccentDividerLayout) {
             pendingWriterMetaRow = metaRow;
             metaRow.style.marginBottom = '0';
           } else {
@@ -9280,24 +9282,26 @@
           shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           shareRow.style.width = '100%';
           shareRow.appendChild(shareLinks);
-          if (writerPostLayout) {
+          if (postHeaderAccentDividerLayout) {
             pendingWriterShareRow = shareRow;
           } else {
             headlineMount.appendChild(shareRow);
           }
         }
 
-        if (writerPostLayout && postInfoWrap) {
-          var writerExcerptSource = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
-          var writerExcerptSentences = writerExcerptSource ? writerExcerptSource.match(/[^.!?]*[.!?]/g) : null;
-          var writerExcerptText = writerExcerptSentences && writerExcerptSentences.length > 0 ? writerExcerptSentences[0].trim() : '';
-          if (!writerExcerptText) writerExcerptText = self._truncateText(post.excerpt || post.body || '', 200);
-          if (writerExcerptText) writerExcerptText = self._stripLeadingSquarespaceSectionMarkers(writerExcerptText);
-          if (writerExcerptText) {
-            var writerExcerptEl = document.createElement('p');
-            writerExcerptEl.className = 'blog-overlay-deck blog-overlay-writer-excerpt';
-            writerExcerptEl.textContent = writerExcerptText;
-            postInfoWrap.appendChild(writerExcerptEl);
+        if (postHeaderAccentDividerLayout && postInfoWrap) {
+          if (writerPostLayout) {
+            var writerExcerptSource = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
+            var writerExcerptSentences = writerExcerptSource ? writerExcerptSource.match(/[^.!?]*[.!?]/g) : null;
+            var writerExcerptText = writerExcerptSentences && writerExcerptSentences.length > 0 ? writerExcerptSentences[0].trim() : '';
+            if (!writerExcerptText) writerExcerptText = self._truncateText(post.excerpt || post.body || '', 200);
+            if (writerExcerptText) writerExcerptText = self._stripLeadingSquarespaceSectionMarkers(writerExcerptText);
+            if (writerExcerptText) {
+              var writerExcerptEl = document.createElement('p');
+              writerExcerptEl.className = 'blog-overlay-deck blog-overlay-writer-excerpt';
+              writerExcerptEl.textContent = writerExcerptText;
+              postInfoWrap.appendChild(writerExcerptEl);
+            }
           }
           postInfoWrap.appendChild(self._createWriterPostHeaderDivider(phAlign));
           if (pendingWriterMetaRow) postInfoWrap.appendChild(pendingWriterMetaRow);
