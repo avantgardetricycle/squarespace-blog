@@ -2542,6 +2542,25 @@
       return true;
     },
 
+    /** Feature / Reporter / Publisher: strip top inset on body so first paragraph aligns with sidebar headers. */
+    _normalizePostBodyTopForSidebarRow: function(bodyEl) {
+      if (!bodyEl) return;
+      bodyEl.classList.add('blog-overlay-post-body--sidebar-row');
+      bodyEl.style.marginTop = '0';
+      bodyEl.style.paddingTop = '0';
+      var blockTags = { P: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, BLOCKQUOTE: 1, UL: 1, OL: 1, FIGURE: 1, IMG: 1, TABLE: 1 };
+      var el = bodyEl.firstElementChild;
+      var depth = 0;
+      while (el && depth < 6) {
+        el.style.marginTop = '0';
+        el.style.paddingTop = '0';
+        if (blockTags[el.tagName]) break;
+        if (!el.firstElementChild) break;
+        el = el.firstElementChild;
+        depth++;
+      }
+    },
+
     /** Match single-post body horizontal inset to the post header column. */
     _applySinglePostBodyMargins: function(bodyEl, cfg) {
       if (!bodyEl || !bodyEl.style) return;
@@ -7080,10 +7099,15 @@
         '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
         '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-bottom:8px;}' +
         '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row>:first-child{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
         '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
+        '#blog-overlay-list .blog-overlay-featured-image > div{border-radius:4px;}' +
+        '#blog-overlay-list .blog-overlay-featured-hero > div{border-radius:4px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
-        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-weight:inherit;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
+        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
         '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
@@ -7301,6 +7325,40 @@
       return null;
     },
 
+    /** Spec: all featured images and thumbnails use 4px radius (avatars stay 50% circle). */
+    _applyFeaturedImageRadius: function(el) {
+      if (el && el.style) el.style.borderRadius = '4px';
+    },
+
+    /** Squarespace page-padding token for single-post wrapper calc(var(--pagePadding) + buffer). */
+    _resolvePagePaddingCssValue: function() {
+      if (typeof window === 'undefined' || !window.getComputedStyle) return '3vw';
+      var targets = [document.documentElement, document.body];
+      var root = this._root || (this.config && this.config.rootEl);
+      var section = this._findBlogPageSection(root);
+      if (section) targets.push(section);
+      var names = [
+        '--page-padding', '--page-padding-horizontal',
+        '--site-gutter', '--site-gutter-width', '--sqs-site-gutter',
+        '--outer-padding', '--inset-padding', '--content-padding-horizontal',
+        '--siteMargin', '--site-margin'
+      ];
+      for (var t = 0; t < targets.length; t++) {
+        var el = targets[t];
+        if (!el) continue;
+        try {
+          var cs = window.getComputedStyle(el);
+          for (var i = 0; i < names.length; i++) {
+            var raw = cs.getPropertyValue(names[i]);
+            if (!raw) continue;
+            raw = String(raw).trim();
+            if (raw && raw !== '0' && raw !== '0px') return raw;
+          }
+        } catch (e) { /* ignore */ }
+      }
+      return '3vw';
+    },
+
     _findHeaderContentWrapper: function() {
       try {
         return document.querySelector(
@@ -7443,18 +7501,33 @@
 
     _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
       if (!wrapper || !wrapper.style) return;
-      var ins = this._siteContentInsets || { left: 0, right: 0 };
-      var skip = this._siteContentInsetsSkipHorizontal === true;
       var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
-      var padL = skip ? 0 : Math.max(0, ins.left || 0);
-      var padR = skip ? 0 : Math.max(0, ins.right || 0);
       wrapper.style.paddingTop = padT + 'px';
-      wrapper.style.paddingRight = padR + 'px';
       wrapper.style.paddingBottom = '16px';
-      wrapper.style.paddingLeft = padL + 'px';
       wrapper.style.boxSizing = 'border-box';
       wrapper.style.marginTop = '16px';
       wrapper.style.marginBottom = '16px';
+
+      if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        var pagePad = this._resolvePagePaddingCssValue();
+        wrapper.style.setProperty('--pagePadding', pagePad);
+        var bbBuffer = wrapper.getAttribute('data-bb-writer-layout') === '1' ? '8vw' : '2vw';
+        var horizPad = 'calc(var(--pagePadding, 3vw) + ' + bbBuffer + ')';
+        wrapper.style.paddingLeft = horizPad;
+        wrapper.style.paddingRight = horizPad;
+        wrapper.style.maxWidth = '';
+        wrapper.style.width = '';
+        wrapper.style.marginLeft = '';
+        wrapper.style.marginRight = '';
+        return;
+      }
+
+      var ins = this._siteContentInsets || { left: 0, right: 0 };
+      var skip = this._siteContentInsetsSkipHorizontal === true;
+      var padL = skip ? 0 : Math.max(0, ins.left || 0);
+      var padR = skip ? 0 : Math.max(0, ins.right || 0);
+      wrapper.style.paddingRight = padR + 'px';
+      wrapper.style.paddingLeft = padL + 'px';
       var colW = this._siteContentColumnWidth;
       if (!skip && colW && colW > 80) {
         wrapper.style.maxWidth = colW + 'px';
@@ -7475,6 +7548,15 @@
       var wrapper = this._blogOverlayWrapperEl;
       var root = this._blogOverlayInsetRoot || this._root;
       if (!wrapper || !wrapper.parentNode) return;
+      var padTop = 16;
+      try {
+        var parsed = parseInt(wrapper.style.paddingTop, 10);
+        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
+      } catch (ePad) { /* ignore */ }
+      if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        this._applySiteContentInsetsToWrapper(wrapper, padTop);
+        return;
+      }
       var prevL = (this._siteContentInsets && this._siteContentInsets.left) || 0;
       var prevR = (this._siteContentInsets && this._siteContentInsets.right) || 0;
       var prevSkip = this._siteContentInsetsSkipHorizontal === true;
@@ -7492,11 +7574,6 @@
       ) {
         return;
       }
-      var padTop = 16;
-      try {
-        var parsed = parseInt(wrapper.style.paddingTop, 10);
-        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
-      } catch (ePad) { /* ignore */ }
       this._applySiteContentInsetsToWrapper(wrapper, padTop);
       var bleedWrapper = this._blogOverlayWrapperEl;
       if (bleedWrapper) this._syncDigestMobileFeaturedImageBleed(bleedWrapper);
@@ -8601,6 +8678,11 @@
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
+      var sidebarRowPostLayout = isSinglePost && (
+        self._isFeaturePostLayout(cfg) ||
+        self._isReporterPostLayout(cfg) ||
+        self._isPublisherPostLayout(cfg)
+      );
       var postHeaderAccentDividerLayout = writerPostLayout || storyPostLayout;
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
@@ -8642,7 +8724,6 @@
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
-        var fiRounded = (fiCfg.roundedCorners === 'small' ? 'small' : fiCfg.roundedCorners === 'large' ? 'large' : 'off');
         var fiShadow = Boolean(fiCfg.shadow);
         var fiCaption = Boolean(fiCfg.showCaption !== false);
         var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
@@ -8656,6 +8737,11 @@
         if (displayIdx >= 0) article.setAttribute('data-display-index', String(displayIdx));
         article.style.marginBottom = '24px';
         article.style.paddingBottom = '24px';
+        if (sidebarRowPostLayout) {
+          article.classList.add('blog-overlay-post-article--sidebar-row');
+          article.style.marginTop = '0';
+          article.style.paddingTop = '0';
+        }
         if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
           article.style.marginBottom = '12px';
           article.style.paddingBottom = '12px';
@@ -8822,8 +8908,7 @@
           var stackFiInner = document.createElement('div');
           stackFiInner.style.overflow = 'hidden';
           stackFiInner.style.position = 'relative';
-          if (fiRounded === 'small') stackFiInner.style.borderRadius = '6px';
-          else if (fiRounded === 'large') stackFiInner.style.borderRadius = '12px';
+          self._applyFeaturedImageRadius(stackFiInner);
           if (fiShadow) stackFiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
           if (fiFixedAspectCrop) {
             stackFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
@@ -8905,10 +8990,7 @@
           fiInner.style.overflow = 'hidden';
           fiInner.style.position = 'relative';
           var digestFeaturedViewportBleed = collectionLayout === 'digest' && isFeaturedInLayout && digestMobileFullBleed;
-          if (digestFeaturedViewportBleed) {
-            fiInner.style.borderRadius = '0';
-          } else if (fiRounded === 'small') fiInner.style.borderRadius = '6px';
-          else if (fiRounded === 'large') fiInner.style.borderRadius = '12px';
+          self._applyFeaturedImageRadius(fiInner);
           if (fiShadow && !digestFeaturedViewportBleed) fiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
           if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
             fiInner.style.aspectRatio = (collectionLayout === 'listRows' && listRowsMobileCompact)
@@ -9431,8 +9513,7 @@
           var belowFiInner = document.createElement('div');
           belowFiInner.style.overflow = 'hidden';
           belowFiInner.style.position = 'relative';
-          if (fiRounded === 'small') belowFiInner.style.borderRadius = '6px';
-          else if (fiRounded === 'large') belowFiInner.style.borderRadius = '12px';
+          self._applyFeaturedImageRadius(belowFiInner);
           if (fiShadow) belowFiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
           if (fiAspect === 'cropped') {
             belowFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
@@ -9592,6 +9673,7 @@
           }
           if (!paywallGateSinglePostBody) {
             self._applyStoryPostHorizontalInset(body, cfg);
+            if (sidebarRowPostLayout) self._normalizePostBodyTopForSidebarRow(body);
           }
         }
         var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
@@ -10214,12 +10296,18 @@
       self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
       var navbarOffset = this._getNavbarOffset();
       var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
-      self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
-      /** Writer: narrower centered reading column needs extra side buffer beyond the site's own margins. */
-      if (isSinglePost && self._isWriterPostLayout(cfg)) {
-        wrapper.style.paddingLeft = 'calc(' + (wrapper.style.paddingLeft || '0px') + ' + 6vw)';
-        wrapper.style.paddingRight = 'calc(' + (wrapper.style.paddingRight || '0px') + ' + 6vw)';
+      if (isSinglePost) {
+        wrapper.setAttribute('data-bb-spec-horizontal-padding', '1');
+        if (self._isWriterPostLayout(cfg)) {
+          wrapper.setAttribute('data-bb-writer-layout', '1');
+        } else {
+          wrapper.removeAttribute('data-bb-writer-layout');
+        }
+      } else {
+        wrapper.removeAttribute('data-bb-spec-horizontal-padding');
+        wrapper.removeAttribute('data-bb-writer-layout');
       }
+      self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
         wrapper.style.maxWidth = '100%';
         if (collectionLayout === 'digest') {
@@ -10488,7 +10576,7 @@
           heroInner.style.width = '100%';
           heroInner.style.aspectRatio = mastheadHeroMobile ? '4 / 3' : '21 / 9';
           heroInner.style.overflow = 'hidden';
-          heroInner.style.borderRadius = mastheadHeroMobile ? '0' : '4px';
+          self._applyFeaturedImageRadius(heroInner);
           heroInner.style.background = 'linear-gradient(160deg, #1a1a2e 0%, #2d1a3a 45%, #0f2027 100%)';
           heroInner.style.minHeight = mastheadHeroMobile ? '260px' : '200px';
 
@@ -12558,6 +12646,10 @@
             }
           }
           if (leftSidebarWrapEl.childNodes.length) mainRowEl.appendChild(leftSidebarWrapEl);
+          if (isSinglePost && (leftSidebarWrapEl.childNodes.length || rightSidebarWrapEl.childNodes.length)) {
+            var mainColPadTop = Math.max(leftPadTop, rightPadTop);
+            main.style.paddingTop = mainColPadTop > 0 ? (mainColPadTop + 'px') : '0';
+          }
           mainRowEl.appendChild(main);
           if (rightSidebarWrapEl.childNodes.length) mainRowEl.appendChild(rightSidebarWrapEl);
           wrapper.appendChild(mainRowEl);
