@@ -3114,7 +3114,6 @@
         ? opts.postIndex
         : self._postIndexInItems(items, post, itemIndexMap);
       var postUrl = self._getPostUrl(post) || (postIdx >= 0 ? '#post-' + postIdx : '#');
-      var accent = self._getSiteAccentColor();
       var analytics = opts.analyticsElement || 'relevantPosts';
 
       var card = document.createElement('a');
@@ -3167,12 +3166,7 @@
       if (variant === 'footer' && cats.length > 0) {
         var catEl = document.createElement('div');
         catEl.textContent = cats[0];
-        catEl.style.fontSize = '10px';
-        catEl.style.fontWeight = '700';
-        catEl.style.letterSpacing = '1.5px';
-        catEl.style.textTransform = 'uppercase';
-        catEl.style.color = accent;
-        catEl.style.lineHeight = '1.2';
+        self._applyCategoryLabelStyle(catEl);
         textHost.appendChild(catEl);
       }
 
@@ -3180,11 +3174,8 @@
       titleEl.textContent = post.title || 'Untitled';
       if (variant === 'list') {
         titleEl.className = 'bb-sidebar-post-title';
-      } else {
-        titleEl.style.fontSize = variant === 'footer' ? '0.95rem' : '0.9rem';
-        titleEl.style.fontWeight = '600';
-        titleEl.style.lineHeight = '1.35';
-        titleEl.style.color = '#1a1a1a';
+      } else if (variant === 'footer') {
+        titleEl.className = 'bb-more-to-read-title';
       }
       textHost.appendChild(titleEl);
 
@@ -6819,6 +6810,30 @@
       return '';
     },
 
+    /** Primary button fill from Squarespace theme (progress bar, spec default). */
+    _getPrimaryButtonBackgroundColor: function(scopeEl) {
+      var cssNames = [
+        '--primaryButtonBackgroundColor', '--primary-button-background-color'
+      ];
+      var scope = scopeEl || this._findBlogPageSection(this._root) || this._root || (typeof document !== 'undefined' ? document.body : null);
+      var fromVars = this._walkScopeForCssVar(scope, cssNames);
+      if (fromVars) return fromVars;
+      try {
+        var prim = null;
+        if (scope && scope.querySelector) prim = scope.querySelector('.sqs-button-element--primary');
+        if (!prim && scope && scope.closest) {
+          var sec = scope.closest('section.page-section, section[data-section-id]') || scope;
+          if (sec && sec.querySelector) prim = sec.querySelector('.sqs-button-element--primary');
+        }
+        if (!prim && typeof document !== 'undefined') prim = document.querySelector('.sqs-button-element--primary');
+        if (prim) {
+          var bg = window.getComputedStyle(prim).backgroundColor;
+          if (this._isValidCssColorValue(bg)) return bg;
+        }
+      } catch (e1) { /* ignore */ }
+      return '';
+    },
+
     _readAccentFromScope: function(scopeEl) {
       var cssNames = [
         '--primaryButtonBackgroundColor', '--primary-button-background-color',
@@ -6958,6 +6973,20 @@
       return '';
     },
 
+    /** Progress bar fill: custom hex if set, else Squarespace primary button (not BB brand default). */
+    _resolveProgressBarColor: function(cfg) {
+      var bbBrandPurple = '#5B4FE8';
+      var pb = cfg && cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
+      var configured = pb.color || cfg.progressBarColor || (this.config && this.config.progressBarColor);
+      if (typeof configured === 'string' && /^#[0-9A-Fa-f]{6}$/i.test(configured)) {
+        if (configured.toUpperCase() !== bbBrandPurple) return configured;
+      }
+      var scope = this._findBlogPageSection(this._root) || this._root;
+      return this._getPrimaryButtonBackgroundColor(scope)
+        || (this._getCollectionStyleTokens() && this._getCollectionStyleTokens().accent)
+        || this._getSiteAccentColor();
+    },
+
     /** Resolve collection style tokens (Rules A–E) once per render. */
     _resolveCollectionStyleTokens: function(rootEl) {
       var scope = this._findBlogPageSection(rootEl || this._root) || rootEl || this._root || (typeof document !== 'undefined' ? document.body : null);
@@ -7048,7 +7077,7 @@
         '#blog-overlay-list .bb-meta--on-image{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
-        '#blog-overlay-list .bb-category-label{font-size:13px;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
+        '#blog-overlay-list .bb-category-label{font-size:13px;font-weight:normal;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
         '#blog-overlay-list .blog-overlay-post-category--writer{text-align:center;margin-bottom:-8px;}' +
         '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:8px;}' +
         '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
@@ -7108,6 +7137,7 @@
         '#blog-overlay-list .blog-overlay-featured-hero > div{border-radius:4px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
+        '#blog-overlay-list .bb-more-to-read-title{font-size:0.95rem;line-height:1.35;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
         '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
@@ -10472,9 +10502,7 @@
       var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
       var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
       var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
-      var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || ''))
-        ? (pb.color || cfg.progressBarColor)
-        : ((this._getCollectionStyleTokens() && this._getCollectionStyleTokens().accent) || '#5B4FE8');
+      var progressBarColor = self._resolveProgressBarColor(cfg);
       if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
