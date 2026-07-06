@@ -235,7 +235,7 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     contentVerticalAlignment: 'bottom',
     showBreadcrumbs: false,
     showTags: false,
-    showCategories: false
+    showCategories: true
   },
   leftSidebar: {
     show: false,
