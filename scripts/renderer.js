@@ -7079,7 +7079,7 @@
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-category-label{font-size:13px;font-weight:normal;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
         '#blog-overlay-list .blog-overlay-post-category--writer{text-align:center;margin-bottom:-8px;}' +
-        '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:8px;}' +
+        '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
         '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
@@ -7096,8 +7096,17 @@
         '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
-        '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:0 0 10px 0;}' +
-        '#blog-overlay-list .blog-overlay-story-info-panel{background:#15130f;padding:32px;border-radius:var(--bb-card-radius,12px);box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-single-post-header-zone--story{background:#000;padding:0;}' +
+        '#blog-overlay-list .blog-overlay-story-header-row{gap:40px;align-items:stretch;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image>div{aspect-ratio:4/3;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image img{object-fit:cover;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel{background:transparent;padding:32px;border-radius:0;box-sizing:border-box;gap:0;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-header-categories{margin-bottom:18px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-title{margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-deck--on-dark{margin-bottom:14px;}' +
         '#blog-overlay-list .blog-overlay-reporter-meta-divider{border-top:1px solid var(--bb-border,#e8e7e4);margin-top:16px;padding-top:12px;width:100%;}' +
         '#blog-overlay-list .blog-overlay-reporter-header-stack{gap:0;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
@@ -8750,11 +8759,11 @@
         if (reporterPostHeaderCrop) {
           fiAspect = 'cropped';
         }
-        /** Story (leftOfInfo header): cover crop at configured aspect ratio (default 3:2). */
+        /** Story (leftOfInfo header): cover crop at 4:3 (spec). */
         var storyPostHeaderCrop = isSinglePost && self._isStoryPostLayout(cfg) && phImagePos === 'leftOfInfo' && fiShow;
         if (storyPostHeaderCrop) {
           fiAspect = 'cropped';
-          fiRatio = '3:2';
+          fiRatio = '4:3';
         }
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
@@ -8860,9 +8869,14 @@
           rowEl = document.createElement('div');
           rowEl.style.display = 'flex';
           rowEl.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
-          rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact)
-            ? '10px'
-            : (isSinglePost && phSideImageGapPx > 0 ? (phSideImageGapPx + 'px') : '20px');
+          if (storyPostLayout) {
+            rowEl.classList.add('blog-overlay-story-header-row');
+            rowEl.style.gap = '40px';
+          } else {
+            rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact)
+              ? '10px'
+              : (isSinglePost && phSideImageGapPx > 0 ? (phSideImageGapPx + 'px') : '20px');
+          }
           rowEl.style.alignItems =
             (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && phShowBreadcrumbs)
               ? 'flex-start'
@@ -9018,7 +9032,10 @@
               self._applyViewportFullBleed(fiWrap);
             }
           } else if (isSideBySide) {
-            if (collectionLayout === 'listRows' && listRowsMobileCompact) {
+            if (storyPostLayout) {
+              fiWrap.classList.add('blog-overlay-story-featured-image');
+              fiWrap.style.flex = '0 0 58%';
+            } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
               fiWrap.style.width = '80px';
               fiWrap.style.maxWidth = '80px';
@@ -9108,6 +9125,7 @@
           }
           if (storyPostLayout) {
             postInfoWrap.classList.add('blog-overlay-story-info-panel');
+            postInfoWrap.style.gap = '0';
           }
           if (reporterPostHeaderLayout) {
             postInfoWrap.classList.add('blog-overlay-reporter-header-stack');
@@ -9199,7 +9217,7 @@
           });
           if (postHeaderCatsLine) {
             postHeaderCatsLine.classList.add('blog-overlay-post-header-categories');
-            postHeaderCatsLine.style.marginBottom = '12px';
+            if (!storyPostLayout) postHeaderCatsLine.style.marginBottom = '12px';
             postHeaderCatsLine.style.justifyContent = phAlign === 'center' ? 'center' : phAlign === 'right' ? 'flex-end' : 'flex-start';
             postHeaderCatsLine.style.width = '100%';
             var postHeaderCatLabels = postHeaderCatsLine.querySelectorAll('.bb-category-label');
@@ -9219,7 +9237,7 @@
         var listRowsDesktop = !isSinglePost && collectionLayout === 'listRows' && !listRowsMobileCompact;
         var titleEl = document.createElement(isSinglePost ? 'h1' : 'h2');
         titleEl.className = 'blog-overlay-title';
-        titleEl.style.margin = '0 0 8px 0';
+        titleEl.style.margin = storyPostLayout ? '0 0 24px 0' : '0 0 8px 0';
         if (isSinglePost) {
           titleEl.classList.add('blog-overlay-post-title');
           self._applyTitleStyle(titleEl, { size: 'post', onImage: singlePostFullBleedHero || storyPostLayout });
@@ -9601,7 +9619,7 @@
         }
 
         if (isSinglePost && postBreadcrumbNav) {
-          postBreadcrumbNav.style.marginBottom = '8px';
+          if (!storyPostLayout) postBreadcrumbNav.style.marginBottom = '8px';
           postBreadcrumbNav.style.flexShrink = '0';
           postBreadcrumbNav.style.width = '100%';
           postBreadcrumbNav.style.boxSizing = 'border-box';
@@ -9633,7 +9651,6 @@
             }
           } else if (storyPostLayout && postInfoWrap) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
-            postBreadcrumbNav.style.marginBottom = '8px';
             postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
           } else if (
             isSideBySide &&
@@ -10417,21 +10434,26 @@
           singlePostHeaderZoneEl.style.boxSizing = 'border-box';
           singlePostHeaderZoneEl.style.background = 'transparent';
         }
-        singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
-        singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
-        if (self._isStoryPostLayout(cfg) && !self._isNarrowCollectionViewport()) {
-          var storyInsetBuf = self._siteContentInsetVwBufferPx();
-          if (storyInsetBuf > 0) {
-            singlePostHeaderZoneEl.style.marginLeft = (-storyInsetBuf) + 'px';
-            singlePostHeaderZoneEl.style.width = 'calc(100% + ' + storyInsetBuf + 'px)';
-            singlePostHeaderZoneEl.style.maxWidth = 'none';
+        if (self._isStoryPostLayout(cfg)) {
+          singlePostHeaderZoneEl.classList.add('blog-overlay-single-post-header-zone--story');
+          singlePostHeaderZoneEl.style.background = '#000';
+          singlePostHeaderZoneEl.style.paddingTop = '0';
+          singlePostHeaderZoneEl.style.paddingBottom = '0';
+          singlePostHeaderZoneEl.style.paddingLeft = '0';
+          singlePostHeaderZoneEl.style.paddingRight = '0';
+          if (!self._isNarrowCollectionViewport()) {
+            self._applyViewportFullBleed(singlePostHeaderZoneEl);
           } else {
             singlePostHeaderZoneEl.style.marginLeft = '';
+            singlePostHeaderZoneEl.style.marginRight = '';
             singlePostHeaderZoneEl.style.width = '100%';
             singlePostHeaderZoneEl.style.maxWidth = '100%';
           }
         } else {
+          singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
+          singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
           singlePostHeaderZoneEl.style.marginLeft = '';
+          singlePostHeaderZoneEl.style.marginRight = '';
           singlePostHeaderZoneEl.style.width = '100%';
           singlePostHeaderZoneEl.style.maxWidth = '100%';
         }
@@ -12653,7 +12675,7 @@
                   fmodEl = createPrevNextArticleModule();
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
-                    fmodEl.style.maxWidth = '720px';
+                    fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
                 }
