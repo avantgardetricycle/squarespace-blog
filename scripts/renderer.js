@@ -5569,8 +5569,7 @@
       var searchWrap = document.createElement('div');
       searchWrap.className = 'blog-overlay-header-search' + (mobile ? ' blog-overlay-header-search-mobile' : '');
 
-      var tokens = self._getCollectionStyleTokens();
-      var inputBorderColor = (tokens && tokens.border) ? tokens.border : '#e8e7e4';
+      var inputBorderColor = 'var(--bb-border, #e8e7e4)';
 
       function wireSearchInput(searchInput, inputOpts) {
         inputOpts = inputOpts && typeof inputOpts === 'object' ? inputOpts : {};
@@ -6766,11 +6765,34 @@
       return null;
     },
 
-    /** Rule D — derive rgba from Paragraph 1 body color at a given opacity. */
+    /** Rule D — derive rgba from a concrete color at a given opacity (accent tokens, etc.). */
     _withAlpha: function(color, alpha) {
       var ch = this._parseColorChannels(color);
       if (!ch) return 'rgba(17,17,17,' + alpha + ')';
       return 'rgba(' + ch.r + ',' + ch.g + ',' + ch.b + ',' + alpha + ')';
+    },
+
+    /** Rule D — CSS color-mix token derived from --bb-body at a given percentage. */
+    _bodyColorMix: function(percent) {
+      return 'color-mix(in srgb, var(--bb-body) ' + percent + '%, transparent)';
+    },
+
+    _resolveCssColorValue: function(color, contextEl) {
+      if (!color || typeof color !== 'string') return '';
+      if (this._isValidCssColorValue(color)) return color;
+      try {
+        if (typeof document !== 'undefined') {
+          var parent = (contextEl && contextEl.nodeType === 1) ? contextEl : document.documentElement;
+          var probe = document.createElement('span');
+          probe.style.color = color;
+          probe.style.display = 'none';
+          parent.appendChild(probe);
+          var computed = window.getComputedStyle(probe).color || '';
+          parent.removeChild(probe);
+          if (this._isValidCssColorValue(computed)) return computed;
+        }
+      } catch (e) { /* ignore */ }
+      return '';
     },
 
     /** Rule E — contrast-aware text on accent backgrounds. */
@@ -6861,21 +6883,41 @@
     },
 
     _readBodyColorFromScope: function(scopeEl) {
-      var fromVars = this._walkScopeForCssVar(scopeEl, [
-        '--paragraphLargeColor', '--paragraph-large-color',
+      var varNames = [
         '--paragraphMediumColor', '--paragraph-medium-color',
+        '--paragraphLargeColor', '--paragraph-large-color',
         '--tweak-text-color', '--text-color'
-      ]);
-      if (fromVars) return fromVars;
+      ];
+      var scope = scopeEl;
+      for (var depth = 0; depth < 24 && scope; depth++) {
+        for (var i = 0; i < varNames.length; i++) {
+          var raw = this._readCssVarFromEl(scope, varNames[i]);
+          if (!raw) continue;
+          if (raw.indexOf('var(') === 0) return raw;
+          if (this._isValidCssColorValue(raw)) return raw;
+          var resolved = this._resolveCssColorValue(raw, scope);
+          if (resolved) return resolved;
+        }
+        scope = scope.parentElement;
+      }
       try {
         if (scopeEl && scopeEl.querySelector) {
-          var p = scopeEl.querySelector('p, .sqsrte-large, .sqsrte-medium');
+          var p = scopeEl.querySelector('p, .sqsrte-large, .sqsrte-medium, .blog-overlay-body p');
           if (p) {
             var c = window.getComputedStyle(p).color;
             if (this._isValidCssColorValue(c)) return c;
           }
         }
       } catch (e2) { /* ignore */ }
+      if (typeof document !== 'undefined' && document.documentElement) {
+        for (var j = 0; j < varNames.length; j++) {
+          var rootRaw = this._readCssVarFromEl(document.documentElement, varNames[j]);
+          if (!rootRaw) continue;
+          if (rootRaw.indexOf('var(') === 0) return rootRaw;
+          var rootResolved = this._resolveCssColorValue(rootRaw, document.documentElement);
+          if (rootResolved) return rootResolved;
+        }
+      }
       return '';
     },
 
@@ -7012,11 +7054,11 @@
         formRadius: formRadius,
         cardRadius: cardRadius,
         textOnAccent: this._contrastTextOnAccent(accent),
-        muted: this._withAlpha(body, 0.6),
-        extraMuted: this._withAlpha(body, 0.4),
-        border: this._withAlpha(body, 0.15),
-        placeholder: this._withAlpha(body, 0.05),
-        excerpt: this._withAlpha(body, 0.8),
+        muted: this._bodyColorMix(60),
+        extraMuted: this._bodyColorMix(40),
+        border: this._bodyColorMix(15),
+        placeholder: this._bodyColorMix(5),
+        excerpt: this._bodyColorMix(80),
         accent15: this._withAlpha(accent, 0.15),
         accent10: this._withAlpha(accent, 0.10),
         metaOnImage: 'rgba(255,255,255,0.78)',
@@ -7040,6 +7082,7 @@
       if (tokens.headingFontFamily) el.style.setProperty('--bb-heading-font-family', tokens.headingFontFamily);
       if (tokens.headingFontWeight) el.style.setProperty('--bb-heading-font-weight', tokens.headingFontWeight);
       el.style.setProperty('--bb-surface', tokens.surface);
+      /* Rule D — derived neutrals resolve from --bb-body via color-mix (see #bb-collection-styles). */
       el.style.setProperty('--bb-muted', tokens.muted);
       el.style.setProperty('--bb-extra-muted', tokens.extraMuted);
       el.style.setProperty('--bb-border', tokens.border);
@@ -7060,7 +7103,14 @@
       if (typeof document === 'undefined') return;
       var style = document.getElementById('bb-collection-styles');
       var css =
-        '#blog-overlay-list{--bb-chrome-radius:6px;}' +
+        '#blog-overlay-list{' +
+          '--bb-chrome-radius:6px;' +
+          '--bb-excerpt:color-mix(in srgb, var(--bb-body) 80%, transparent);' +
+          '--bb-muted:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
+          '--bb-extra-muted:color-mix(in srgb, var(--bb-body) 40%, transparent);' +
+          '--bb-border:color-mix(in srgb, var(--bb-body) 15%, transparent);' +
+          '--bb-placeholder:color-mix(in srgb, var(--bb-body) 5%, transparent);' +
+        '}' +
         '#blog-overlay-list .bb-chrome-input{box-sizing:border-box;font-size:14px;padding:8px 12px;border:1px solid var(--bb-border,#e8e7e4);border-radius:var(--bb-chrome-radius,6px);background:#fff;color:var(--bb-body,inherit);}' +
         '#blog-overlay-list .bb-chrome-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
         '#blog-overlay-list .bb-filter-btn{padding:6px 14px;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;color:var(--bb-muted,#888);white-space:nowrap;flex-shrink:0;font-family:inherit;line-height:1.3;text-decoration:none;}' +
