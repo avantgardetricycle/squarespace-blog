@@ -396,7 +396,7 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['tableOfContents'],
           moduleOrder: ['tableOfContents'],
-          width: 240,
+          width: 300,
           spaceAbove: 0,
           sticky: true
         },
@@ -404,7 +404,7 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'popularPosts'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
-          width: 280,
+          width: 300,
           spaceAbove: 0,
           sticky: false
         },

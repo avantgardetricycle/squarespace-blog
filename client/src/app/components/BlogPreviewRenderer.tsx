@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-04-02-showcase-featured-badge-pad";
+const RENDERER_VERSION = "2026-07-08-feature-sidebars-toc";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
