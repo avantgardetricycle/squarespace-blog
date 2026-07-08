@@ -5845,7 +5845,7 @@
      * Inline SVG icons for share links (avoids CORS when renderer runs in cross-origin iframe)
      */
     _shareIconSvg: function(platform) {
-      var w = 20; var h = 20;
+      var w = 16; var h = 16;
       var svgs = {
         facebook: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
         instagram: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>',
@@ -5924,10 +5924,7 @@
       console.log('[BlogOverlay] _createShareLinks: normalized=', JSON.stringify(normalized), 'encodedShareUrl=', JSON.stringify(encodedShareUrl));
       var encTitle = encodeURIComponent(title || '');
       var wrap = document.createElement('div');
-      wrap.className = 'blog-overlay-share-links';
-      wrap.style.display = 'flex';
-      wrap.style.gap = '8px';
-      wrap.style.alignItems = 'center';
+      wrap.className = 'blog-overlay-share-links' + (lightVariant ? ' blog-overlay-share-links--on-dark' : '');
       wrap.setAttribute('aria-label', 'Share');
       for (var p = 0; p < platforms.length; p++) {
         var platform = platforms[p];
@@ -5951,11 +5948,11 @@
         a.href = href;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
+        a.className = 'blog-overlay-share-link';
         a.setAttribute('aria-label', 'Share on ' + (platform === 'x' ? 'X' : platform === 'whatsapp' ? 'WhatsApp' : platform.charAt(0).toUpperCase() + platform.slice(1)));
         a.setAttribute('data-analytics-element', 'share' + (platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1)));
         var svg = this._shareIconSvg(platform);
         if (svg) {
-          a.style.color = lightVariant ? 'rgba(255,255,255,0.9)' : '#666';
           a.innerHTML = svg;
         }
         wrap.appendChild(a);
@@ -7145,6 +7142,11 @@
         '#blog-overlay-list .blog-overlay-post-breadcrumbs{font-size:14px;line-height:1.4;color:var(--bb-muted,#888);}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-share-row{display:flex;width:100%;margin-top:-5px;margin-bottom:40px;}' +
+        '#blog-overlay-list .blog-overlay-share-links{display:flex;gap:8px;align-items:center;}' +
+        '#blog-overlay-list .blog-overlay-share-link{display:inline-flex;align-items:center;justify-content:center;line-height:0;color:var(--bb-muted,#888);text-decoration:none;}' +
+        '#blog-overlay-list .blog-overlay-share-link svg{width:16px;height:16px;display:block;}' +
+        '#blog-overlay-list .blog-overlay-share-links--on-dark .blog-overlay-share-link{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
         '#blog-overlay-list .blog-overlay-single-post-header-zone--story{background:#000;padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
@@ -9541,10 +9543,7 @@
         if (shareLinks && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var shareRow = document.createElement('div');
           shareRow.className = 'blog-overlay-share-row';
-          shareRow.style.marginBottom = '8px';
-          shareRow.style.display = 'flex';
           shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
-          shareRow.style.width = '100%';
           shareRow.appendChild(shareLinks);
           if (postHeaderAccentDividerLayout) {
             pendingWriterShareRow = shareRow;
