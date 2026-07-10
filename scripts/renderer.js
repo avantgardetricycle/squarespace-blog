@@ -7137,6 +7137,8 @@
         '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
         '#blog-overlay-list .blog-overlay-share-row{display:flex;width:100%;margin-top:-5px;margin-bottom:40px;}' +
+        '#blog-overlay-list .blog-overlay-share-row--story{margin-top:10px;}' +
+        '#blog-overlay-list .blog-overlay-share-row--feature{margin-top:0;}' +
         '#blog-overlay-list .blog-overlay-share-links{display:flex;gap:8px;align-items:center;}' +
         '#blog-overlay-list .blog-overlay-share-link{display:inline-flex;align-items:center;justify-content:center;line-height:0;color:var(--bb-muted,#888);text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-share-link svg{width:16px;height:16px;display:block;}' +
@@ -9568,10 +9570,15 @@
           shareUrl = window.location.origin + window.location.pathname + (window.location.search || '') + '#post-' + postIndex;
         }
         var shareImageUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
-        var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero) : null;
+        var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero || storyPostLayout) : null;
         if (shareLinks && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var shareRow = document.createElement('div');
           shareRow.className = 'blog-overlay-share-row';
+          if (storyPostLayout) {
+            shareRow.classList.add('blog-overlay-share-row--story');
+          } else if (featurePostLayoutForCat) {
+            shareRow.classList.add('blog-overlay-share-row--feature');
+          }
           shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           shareRow.appendChild(shareLinks);
           if (postHeaderAccentDividerLayout) {
