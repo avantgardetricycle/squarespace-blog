@@ -7145,7 +7145,7 @@
         '#blog-overlay-list .blog-overlay-share-links--on-dark .blog-overlay-share-link{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
-        '#blog-overlay-list .blog-overlay-single-post-header-zone--story{background:#000;padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-story-header-row{gap:40px;align-items:flex-start;margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;align-self:flex-start;display:flex;margin:0;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
@@ -7995,6 +7995,13 @@
         hr.style.marginRight = '0';
       }
       return hr;
+    },
+
+    /** Story template: header zone background from postHeader.backgroundColor (default black). */
+    _resolveStoryHeaderBackgroundColor: function(postHeaderCfg) {
+      var raw = postHeaderCfg && typeof postHeaderCfg.backgroundColor === 'string' ? postHeaderCfg.backgroundColor.trim() : '';
+      if (/^#[0-9a-fA-F]{3}$/.test(raw) || /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+      return '#000000';
     },
 
     /** Story post header (on-dark): full-width decorative rule between deck and meta. */
@@ -10529,7 +10536,7 @@
         }
         if (self._isStoryPostLayout(cfg)) {
           singlePostHeaderZoneEl.classList.add('blog-overlay-single-post-header-zone--story');
-          singlePostHeaderZoneEl.style.background = '#000';
+          singlePostHeaderZoneEl.style.background = self._resolveStoryHeaderBackgroundColor(postHeaderCfgForZone);
           singlePostHeaderZoneEl.style.paddingTop = '';
           singlePostHeaderZoneEl.style.paddingBottom = '';
           singlePostHeaderZoneEl.style.paddingLeft = '';

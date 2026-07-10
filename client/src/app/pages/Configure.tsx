@@ -192,6 +192,8 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
+  /** Story template: full-bleed header zone background (default #000000). */
+  backgroundColor?: string;
 }
 export type FeaturedImageAspectBehavior = "original" | "cropped";
 export type FeaturedImageAspectRatio = "16:9" | "4:3" | "3:2" | "2:3" | "1:1";
@@ -408,6 +410,27 @@ const defaultPostHeader: PostHeaderConfig = {
   showCategories: false,
   showByline: false,
 };
+
+function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
+  const ph = postConfig.postHeader ?? defaultPostHeader;
+  return ph.imagePosition === "leftOfInfo" && !postConfig.leftSidebar?.show && !postConfig.rightSidebar?.show;
+}
+
+function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
+  const tid = config.postTemplateId;
+  if (tid) {
+    const t = templateCatalogPost.find((x) => x.id === tid);
+    if (t?.templateKey === "story") return true;
+  }
+  return isStoryPostLayoutConfig(config.postConfig);
+}
+
+function validPostHeaderBackgroundColor(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const trimmed = v.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed) || /^#[0-9A-Fa-f]{3}$/.test(trimmed)) return trimmed;
+  return undefined;
+}
 
 const defaultPostConfig: PostLevelConfig = {
   ...defaultCollectionConfig,
@@ -902,6 +925,7 @@ function parseLevelConfig(
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
   const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
+  const postHeaderBackgroundColor = validPostHeaderBackgroundColor(phRaw?.backgroundColor);
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
         imagePosition: validImagePosition(phRaw.imagePosition),
@@ -917,6 +941,7 @@ function parseLevelConfig(
         showTags: Boolean(phRaw.showTags ?? false),
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
+        ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
   const collDerived = deriveCollectionModules(collectionModules, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
@@ -1172,7 +1197,8 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showBreadcrumbs ?? false) === (phB.showBreadcrumbs ?? false) &&
       (phA.showTags ?? false) === (phB.showTags ?? false) &&
       (phA.showCategories ?? false) === (phB.showCategories ?? false) &&
-      (phA.showByline ?? false) === (phB.showByline ?? false);
+      (phA.showByline ?? false) === (phB.showByline ?? false) &&
+      (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "");
     return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color && phEqual;
   }
   return base;
@@ -1602,6 +1628,10 @@ export default function Configure() {
     templateCatalogCollection,
     templateCatalogPost,
   ]);
+  const isStoryPostTemplate = useMemo(
+    () => isStoryPostTemplateActive(config, templateCatalogPost),
+    [config, templateCatalogPost]
+  );
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
   const moduleOrderPathForLocation = useCallback((loc: FeatureModuleLocation): "headerContent.moduleOrder" | "leftSidebar.moduleOrder" | "rightSidebar.moduleOrder" | "footerContent.moduleOrder" => {
@@ -2132,6 +2162,7 @@ export default function Configure() {
     if (path === "postHeader.showTags" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showTags: value as boolean } };
     if (path === "postHeader.showCategories" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showCategories: value as boolean } };
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
+    if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
     return cfg;
   }
 
@@ -3153,6 +3184,26 @@ export default function Configure() {
                       <Collapsible open={sectionExpanded.postHeader}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-4">
+                            {isStoryPostTemplate && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Background color</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Background for the full-width Story header zone</p>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={(effectiveConfig as PostLevelConfig).postHeader?.backgroundColor ?? "#000000"}
+                                    onChange={(e) => updateLevelConfigPath("postHeader.backgroundColor", e.target.value)}
+                                    className="h-9 w-14 cursor-pointer rounded border border-[#e5e4e0] bg-white p-0"
+                                  />
+                                  <Input
+                                    value={(effectiveConfig as PostLevelConfig).postHeader?.backgroundColor ?? "#000000"}
+                                    onChange={(e) => updateLevelConfigPath("postHeader.backgroundColor", e.target.value)}
+                                    className="font-mono text-sm h-9 w-24"
+                                    placeholder="#000000"
+                                  />
+                                </div>
+                              </div>
+                            )}
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Image position</Label>
                               <Select

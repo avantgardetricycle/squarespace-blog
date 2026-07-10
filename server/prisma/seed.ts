@@ -556,6 +556,7 @@ async function seedTemplateConfigs () {
           imagePosition: 'leftOfInfo',
           contentAlignment: 'left',
           contentVerticalAlignment: 'top',
+          backgroundColor: '#000000',
           showBreadcrumbs: true,
           showTags: true,
           showCategories: true,

@@ -457,6 +457,7 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     imagePosition: 'leftOfInfo',
     contentAlignment: 'left',
     contentVerticalAlignment: 'top',
+    backgroundColor: '#000000',
     showBreadcrumbs: true,
     showTags: true,
     showCategories: true,
