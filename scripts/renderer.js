@@ -2157,22 +2157,119 @@
       return mod === 'filterByCategory' || mod === 'filterByTag' || mod === 'filterByTagsAndCategories';
     },
 
+    _isCollectionFilterModuleId: function(mod) {
+      return mod === 'filterByCategory' || mod === 'filterByTag' || mod === 'filterByTagsAndCategories';
+    },
+
+    _isDualFilterMode: function(collectionModules) {
+      var filter = collectionModules && collectionModules.filter;
+      return Boolean(filter && filter.filterByTags && filter.filterByCategories);
+    },
+
+    _expandCombinedFilterInOrder: function(order) {
+      var out = [];
+      var list = Array.isArray(order) ? order : [];
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (m === 'filterByTagsAndCategories') {
+          if (out.indexOf('filterByCategory') < 0) out.push('filterByCategory');
+          if (out.indexOf('filterByTag') < 0) out.push('filterByTag');
+        } else {
+          out.push(m);
+        }
+      }
+      return out;
+    },
+
+    _normalizeCollectionFilterModuleOrder: function(order, collectionModules) {
+      var self = this;
+      var cm = collectionModules || {};
+      var filter = cm.filter || {};
+      var expanded = self._expandCombinedFilterInOrder(order);
+      return expanded.filter(function(m) {
+        if (m === 'filterByTag') return Boolean(filter.filterByTags);
+        if (m === 'filterByCategory') return Boolean(filter.filterByCategories);
+        if (m === 'filterByTagsAndCategories') return Boolean(filter.filterByTags || filter.filterByCategories);
+        return true;
+      });
+    },
+
+    _resolveCollectionZoneModuleIds: function(availModules, moduleOrder, zone, collectionModules) {
+      var self = this;
+      var cm = collectionModules || {};
+      var filter = cm.filter || {};
+      var normalized = self._normalizeCollectionFilterModuleOrder(
+        (Array.isArray(moduleOrder) && moduleOrder.length > 0) ? moduleOrder : (Array.isArray(availModules) ? availModules : []),
+        cm
+      );
+      var nonFilters = [];
+      var filterOrder = [];
+      var hasTag = false;
+      var hasCategory = false;
+      var fi;
+      for (fi = 0; fi < normalized.length; fi++) {
+        var mod = normalized[fi];
+        if (mod === 'filterByTag') {
+          hasTag = true;
+          if (filterOrder.indexOf('filterByTag') < 0) filterOrder.push('filterByTag');
+        } else if (mod === 'filterByCategory') {
+          hasCategory = true;
+          if (filterOrder.indexOf('filterByCategory') < 0) filterOrder.push('filterByCategory');
+        } else if (!self._isCollectionFilterModuleId(mod)) {
+          nonFilters.push(mod);
+        }
+      }
+      var firstFilterIdx = -1;
+      for (fi = 0; fi < normalized.length; fi++) {
+        if (self._isCollectionFilterModuleId(normalized[fi])) {
+          firstFilterIdx = fi;
+          break;
+        }
+      }
+      var insertAt = firstFilterIdx < 0
+        ? nonFilters.length
+        : normalized.slice(0, firstFilterIdx).filter(function(m) { return !self._isCollectionFilterModuleId(m); }).length;
+      var resolvedFilters = [];
+      if (self._isDualFilterMode(cm)) {
+        if (zone === 'header' && hasTag && hasCategory) {
+          resolvedFilters.push('filterByTagsAndCategories');
+        } else {
+          for (var fj = 0; fj < filterOrder.length; fj++) {
+            var fmod = filterOrder[fj];
+            if (fmod === 'filterByCategory' && filter.filterByCategories) resolvedFilters.push('filterByCategory');
+            if (fmod === 'filterByTag' && filter.filterByTags) resolvedFilters.push('filterByTag');
+          }
+        }
+      } else if (filter.filterByTags && hasTag) {
+        resolvedFilters.push('filterByTag');
+      } else if (filter.filterByCategories && hasCategory) {
+        resolvedFilters.push('filterByCategory');
+      }
+      return nonFilters.slice(0, insertAt).concat(resolvedFilters, nonFilters.slice(insertAt));
+    },
+
     /** Collection header: filter left, search then sort right (email/lead magnet not shown in header). */
     _canonicalCollectionHeaderModuleOrder: function(modules) {
       var self = this;
       var list = Array.isArray(modules) ? modules : [];
-      var filterMod = null;
+      var filterMods = [];
       var searchMod = null;
       var hasSort = false;
       for (var i = 0; i < list.length; i++) {
         var m = list[i];
         if (m === 'emailCapture' || m === 'leadMagnet') continue;
-        if (!filterMod && self._isCollectionHeaderFilterModule(m)) filterMod = m;
+        if (self._isCollectionHeaderFilterModule(m) && filterMods.indexOf(m) < 0) filterMods.push(m);
         if (!searchMod && (m === 'searchPosts' || m === 'postSearch')) searchMod = m;
         if (m === 'postSort') hasSort = true;
       }
       var out = [];
-      if (filterMod) out.push(filterMod);
+      if (filterMods.indexOf('filterByTagsAndCategories') >= 0) {
+        out.push('filterByTagsAndCategories');
+      } else if (filterMods.indexOf('filterByTag') >= 0 && filterMods.indexOf('filterByCategory') >= 0) {
+        out.push('filterByTagsAndCategories');
+      } else if (filterMods.length > 0) {
+        out.push(filterMods[0]);
+      }
       if (searchMod) out.push(searchMod);
       if (hasSort) out.push('postSort');
       return out;
@@ -11717,7 +11814,13 @@
         var mo = Array.isArray(sidebarCfg.moduleOrder) ? sidebarCfg.moduleOrder : [];
         /* Match Configure effectiveZoneModuleOrder + _orderedZoneModules: header honors moduleOrder vs modules, but
            an empty modules array with a non-empty moduleOrder must still resolve (otherwise e.g. TOC never renders). */
-        var moduleIds = (mo.length > 0 && avail.length === 0) ? mo.slice() : self._orderedZoneModules(avail, mo);
+        var moduleIds;
+        if (!isSinglePost && cfg.collectionModules) {
+          var resolvedZoneModules = self._resolveCollectionZoneModuleIds(avail, mo, 'sidebar', cfg.collectionModules);
+          moduleIds = (mo.length > 0 && avail.length === 0) ? resolvedZoneModules.slice() : self._orderedZoneModules(resolvedZoneModules, resolvedZoneModules);
+        } else {
+          moduleIds = (mo.length > 0 && avail.length === 0) ? mo.slice() : self._orderedZoneModules(avail, mo);
+        }
         var tocWanted = (Array.isArray(avail) && avail.indexOf('tableOfContents') >= 0) ||
           (Array.isArray(mo) && mo.indexOf('tableOfContents') >= 0);
         var tocInResolved = moduleIds && moduleIds.indexOf('tableOfContents') >= 0;
@@ -11801,12 +11904,14 @@
             searchWrap.appendChild(searchInput);
             el = createSidebarSection('Search Posts', searchWrap);
           } else if (mod === 'filterByCategory') {
-            el = createSidebarSection('Topics', self._createFilterByCategoryModule(items, width || 200, true, 'sidebar'));
+            el = createSidebarSection('Categories', self._createFilterByCategoryModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTag') {
             el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTagsAndCategories') {
-            var combinedEl = self._createFilterByTagsAndCategoriesModule(items, width || 200, true, 'sidebar');
-            el = combinedEl ? createSidebarSection('Topics', combinedEl) : null;
+            var legacyCatEl = self._createFilterByCategoryModule(items, width || 200, true, 'sidebar');
+            if (legacyCatEl) mods.push(createSidebarSection('Categories', legacyCatEl));
+            var legacyTagEl = self._createFilterByTagModule(items, width || 200, true, 'sidebar');
+            el = legacyTagEl ? createSidebarSection('Tags', legacyTagEl) : null;
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles') {
@@ -12335,12 +12440,22 @@
           }
 
           if (headerContentCfg && headerContentCfg.show) {
-            var hcModules = Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules.slice() : [];
-            if (hcModules.length === 0 && (headerContentCfg.tableOfContents || headerContentCfg.breadcrumbs)) {
-              if (headerContentCfg.tableOfContents) hcModules.push('tableOfContents');
-              if (headerContentCfg.breadcrumbs) hcModules.push('breadcrumbs');
+            var hcAvail = Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules.slice() : [];
+            if (hcAvail.length === 0 && (headerContentCfg.tableOfContents || headerContentCfg.breadcrumbs)) {
+              if (headerContentCfg.tableOfContents) hcAvail.push('tableOfContents');
+              if (headerContentCfg.breadcrumbs) hcAvail.push('breadcrumbs');
             }
-            hcModules = self._orderedZoneModules(hcModules, headerContentCfg.moduleOrder);
+            var hcModules;
+            if (!isSinglePost && cfg.collectionModules) {
+              hcModules = self._resolveCollectionZoneModuleIds(
+                hcAvail,
+                headerContentCfg.moduleOrder,
+                'header',
+                cfg.collectionModules
+              );
+            } else {
+              hcModules = self._orderedZoneModules(hcAvail, headerContentCfg.moduleOrder);
+            }
             self._warnDuplicateValues('header', hcModules);
             var headerHeight = Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48));
             if (hcModules.length > 0) {

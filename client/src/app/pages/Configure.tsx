@@ -257,6 +257,93 @@ export function filterConfigToModuleId(filterByTags: boolean, filterByCategories
   return "filterByCategory";
 }
 
+function isDualFilterMode(cm: CollectionModulesConfig): boolean {
+  return cm.filter.filterByTags && cm.filter.filterByCategories;
+}
+
+function isCollectionFilterModuleId(moduleId: string): boolean {
+  return COLLECTION_FILTER_IDS.includes(moduleId as (typeof COLLECTION_FILTER_IDS)[number]);
+}
+
+/** Expand legacy combined filter id to separate ids in stored module order */
+function expandCombinedFilterInOrder(order: string[]): string[] {
+  const out: string[] = [];
+  for (const m of order) {
+    if (m === "filterByTagsAndCategories") {
+      if (!out.includes("filterByCategory")) out.push("filterByCategory");
+      if (!out.includes("filterByTag")) out.push("filterByTag");
+    } else {
+      out.push(m);
+    }
+  }
+  return out;
+}
+
+function pruneDisabledFiltersFromOrder(order: string[], cm: CollectionModulesConfig): string[] {
+  return order.filter((m) => {
+    if (m === "filterByTag") return cm.filter.filterByTags;
+    if (m === "filterByCategory") return cm.filter.filterByCategories;
+    if (m === "filterByTagsAndCategories") return cm.filter.filterByTags || cm.filter.filterByCategories;
+    return true;
+  });
+}
+
+/** Normalize stored module order for collection zones (expand combined, prune disabled). */
+function normalizeCollectionFilterModuleOrder(order: string[], cm: CollectionModulesConfig): string[] {
+  return pruneDisabledFiltersFromOrder(expandCombinedFilterInOrder(order), cm);
+}
+
+function resolveCollectionZoneFilters(
+  order: string[],
+  cm: CollectionModulesConfig,
+  zone: "header" | "sidebar"
+): string[] {
+  const normalized = normalizeCollectionFilterModuleOrder(order, cm);
+  const nonFilters: string[] = [];
+  const filterOrder: Array<"filterByCategory" | "filterByTag"> = [];
+  let hasTag = false;
+  let hasCategory = false;
+
+  for (const m of normalized) {
+    if (m === "filterByTag") {
+      hasTag = true;
+      if (!filterOrder.includes("filterByTag")) filterOrder.push("filterByTag");
+    } else if (m === "filterByCategory") {
+      hasCategory = true;
+      if (!filterOrder.includes("filterByCategory")) filterOrder.push("filterByCategory");
+    } else if (!isCollectionFilterModuleId(m)) {
+      nonFilters.push(m);
+    }
+  }
+
+  const firstFilterIdx = normalized.findIndex(isCollectionFilterModuleId);
+  const insertAt = firstFilterIdx < 0
+    ? nonFilters.length
+    : normalized.slice(0, firstFilterIdx).filter((m) => !isCollectionFilterModuleId(m)).length;
+
+  const resolvedFilters: string[] = [];
+  if (isDualFilterMode(cm)) {
+    if (zone === "header" && hasTag && hasCategory) {
+      resolvedFilters.push("filterByTagsAndCategories");
+    } else {
+      for (const f of filterOrder) {
+        if (f === "filterByCategory" && cm.filter.filterByCategories) resolvedFilters.push("filterByCategory");
+        if (f === "filterByTag" && cm.filter.filterByTags) resolvedFilters.push("filterByTag");
+      }
+    }
+  } else if (cm.filter.filterByTags && hasTag) {
+    resolvedFilters.push("filterByTag");
+  } else if (cm.filter.filterByCategories && hasCategory) {
+    resolvedFilters.push("filterByCategory");
+  }
+
+  return [
+    ...nonFilters.slice(0, insertAt),
+    ...resolvedFilters,
+    ...nonFilters.slice(insertAt),
+  ];
+}
+
 export interface CollectionLevelConfig extends BaseLevelConfig {
   postSort?: PostSortOption;
   pagination?: { show: boolean; mode: PaginationMode; postsPerPage: PostsPerPageOption };
@@ -458,13 +545,13 @@ const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "prevNextArticle
 const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
 const COLLECTION_HEADER_ADDABLE_MODULES = ["searchPosts", "postSort"] as const;
 
-/** Canonical collection header order: filter (left), then search, then sort (right group). */
+/** Canonical collection header order: filter(s) (left), then search, then sort (right group). */
 function orderCollectionHeaderModules(moduleIds: string[]): string[] {
-  const filterId = moduleIds.find((m) =>
-    COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])
-  );
-  const out: string[] = [];
-  if (filterId) out.push(filterId);
+  const filterMods: string[] = [];
+  for (const m of moduleIds) {
+    if (isCollectionFilterModuleId(m) && !filterMods.includes(m)) filterMods.push(m);
+  }
+  const out: string[] = [...filterMods];
   if (moduleIds.includes("searchPosts")) out.push("searchPosts");
   if (moduleIds.includes("postSort")) out.push("postSort");
   return out;
@@ -502,23 +589,24 @@ function deriveCollectionModules(
   rightOrder: string[],
   footerOrder: string[]
 ): { header: string[]; left: string[]; right: string[]; footer: string[] } {
-  const filterId = filterConfigToModuleId(cm.filter.filterByTags, cm.filter.filterByCategories);
-  const replaceFilter = (arr: string[]): string[] => {
-    let seenFilter = false;
-    return arr
-      .filter((m) => {
-        if (COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])) {
-          if (seenFilter) return false;
-          seenFilter = true;
-          return true;
-        }
-        return true;
-      })
-      .map((m) => (COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number]) ? filterId : m));
+  const resolveZone = (arr: string[], zone: "header" | "sidebar"): string[] => {
+    const resolved = resolveCollectionZoneFilters(arr, cm, zone);
+    if (zone === "header") {
+      return resolved.filter(
+        (m): m is string =>
+          COLLECTION_HEADER_MODULES.includes(m as (typeof COLLECTION_HEADER_MODULES)[number]) ||
+          isCollectionFilterModuleId(m)
+      );
+    }
+    return resolved.filter(
+      (m): m is string =>
+        COLLECTION_SIDEBAR_MODULES.includes(m as (typeof COLLECTION_SIDEBAR_MODULES)[number]) ||
+        isCollectionFilterModuleId(m)
+    );
   };
-  const header = replaceFilter(headerOrder.filter((m): m is string => COLLECTION_HEADER_MODULES.includes(m as (typeof COLLECTION_HEADER_MODULES)[number]) || COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])));
-  const left = replaceFilter(leftOrder.filter((m): m is string => COLLECTION_SIDEBAR_MODULES.includes(m as (typeof COLLECTION_SIDEBAR_MODULES)[number]) || COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])));
-  const right = replaceFilter(rightOrder.filter((m): m is string => COLLECTION_SIDEBAR_MODULES.includes(m as (typeof COLLECTION_SIDEBAR_MODULES)[number]) || COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])));
+  const header = resolveZone(headerOrder, "header");
+  const left = resolveZone(leftOrder, "sidebar");
+  const right = resolveZone(rightOrder, "sidebar");
   const footer = footerOrder.filter((m): m is string => COLLECTION_FOOTER_MODULES.includes(m as (typeof COLLECTION_FOOTER_MODULES)[number]));
   return { header, left, right, footer };
 }
@@ -577,12 +665,10 @@ function syncModuleOrderFromExplicit(
   const removeFromOrder = (order: string[], modId: string): string[] =>
     order.filter((m) => m !== modId);
   if (cm && cc) {
-    const filterId = filterConfigToModuleId(cm.filter.filterByTags, cm.filter.filterByCategories);
-    const replaceFilter = (order: string[]): string[] =>
-      order.map((m) => (m === "filterByCategory" || m === "filterByTag" || m === "filterByTagsAndCategories") ? filterId : m);
-    const h = replaceFilter(cc.headerContent.moduleOrder ?? []);
-    const l = replaceFilter(cc.leftSidebar.moduleOrder ?? []);
-    const r = replaceFilter(cc.rightSidebar.moduleOrder ?? []);
+    const syncFilterOrder = (order: string[]) => normalizeCollectionFilterModuleOrder(order, cm);
+    const h = syncFilterOrder(cc.headerContent.moduleOrder ?? []);
+    const l = syncFilterOrder(cc.leftSidebar.moduleOrder ?? []);
+    const r = syncFilterOrder(cc.rightSidebar.moduleOrder ?? []);
     const f = cc.footerContent?.moduleOrder ?? [];
     return { ...cc, collectionModules: cm, headerContent: { ...cc.headerContent, moduleOrder: h }, leftSidebar: { ...cc.leftSidebar, moduleOrder: l }, rightSidebar: { ...cc.rightSidebar, moduleOrder: r }, footerContent: { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), moduleOrder: f } };
   }
@@ -610,20 +696,27 @@ function applyDerivedModules(config: SiteConfigForm): void {
   const pc = config.postConfig;
   const cm = cc.collectionModules ?? defaultCollectionModules;
   const pm = pc.postModules ?? defaultPostModules;
-  const coll = deriveCollectionModules(
-    cm,
+  const headerOrder = normalizeCollectionFilterModuleOrder(
     effectiveZoneModuleOrder(cc.headerContent.moduleOrder, cc.headerContent.modules),
-    effectiveZoneModuleOrder(cc.leftSidebar.moduleOrder, cc.leftSidebar.modules),
-    effectiveZoneModuleOrder(cc.rightSidebar.moduleOrder, cc.rightSidebar.modules),
-    effectiveZoneModuleOrder(cc.footerContent?.moduleOrder, cc.footerContent?.modules)
+    cm
   );
+  const leftOrder = normalizeCollectionFilterModuleOrder(
+    effectiveZoneModuleOrder(cc.leftSidebar.moduleOrder, cc.leftSidebar.modules),
+    cm
+  );
+  const rightOrder = normalizeCollectionFilterModuleOrder(
+    effectiveZoneModuleOrder(cc.rightSidebar.moduleOrder, cc.rightSidebar.modules),
+    cm
+  );
+  const footerOrder = effectiveZoneModuleOrder(cc.footerContent?.moduleOrder, cc.footerContent?.modules);
+  const coll = deriveCollectionModules(cm, headerOrder, leftOrder, rightOrder, footerOrder);
   const collHeader = orderCollectionHeaderModules(coll.header);
   cc.headerContent.modules = collHeader;
-  cc.headerContent.moduleOrder = [...collHeader];
+  cc.headerContent.moduleOrder = headerOrder;
   cc.leftSidebar.modules = coll.left;
-  cc.leftSidebar.moduleOrder = [...coll.left];
+  cc.leftSidebar.moduleOrder = leftOrder;
   cc.rightSidebar.modules = coll.right;
-  cc.rightSidebar.moduleOrder = [...coll.right];
+  cc.rightSidebar.moduleOrder = rightOrder;
   cc.footerContent = { ...(cc.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16 }), modules: coll.footer, moduleOrder: [...coll.footer], show: coll.footer.length > 0 };
   cc.headerContent.show = coll.header.length > 0;
   cc.leftSidebar.show = coll.left.length > 0;
@@ -946,6 +1039,9 @@ function parseLevelConfig(
     : undefined;
   const collDerived = deriveCollectionModules(collectionModules, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
   const collHeaderOrdered = orderCollectionHeaderModules(collDerived.header);
+  const normalizedHcOrder = normalizeCollectionFilterModuleOrder(finalHcOrder, collectionModules);
+  const normalizedLsOrder = normalizeCollectionFilterModuleOrder(finalLsOrder, collectionModules);
+  const normalizedRsOrder = normalizeCollectionFilterModuleOrder(finalRsOrder, collectionModules);
   const postDerived = derivePostModules(postModules, postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
   const base: CollectionLevelConfig = {
     showDate: Boolean(raw?.showDate ?? true),
@@ -956,9 +1052,9 @@ function parseLevelConfig(
     collectionLayout,
     gridColumns,
     collectionModules,
-    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: finalLsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: finalRsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-    headerContent: { ...headerContent, modules: collHeaderOrdered, moduleOrder: collHeaderOrdered } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
+    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: normalizedLsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: normalizedRsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+    headerContent: { ...headerContent, modules: collHeaderOrdered, moduleOrder: normalizedHcOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
     footerContent: { ...footerContent, modules: collDerived.footer, moduleOrder: finalFcOrder },
     socialMediaLinks,
     featuredImage,
@@ -1691,12 +1787,13 @@ export default function Configure() {
     moduleId: string,
     allowedLocations: FeatureModuleLocation[],
     postHeaderModuleKey?: PostHeaderModuleKey,
+    locationLabel = "Location",
   ) => {
     const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
     const availableLocations = allowedLocations.filter((loc) => !selectedLocations.includes(loc));
     return (
       <div className="space-y-2">
-        <Label className="text-xs text-[#6b6b6b]">Location</Label>
+        <Label className="text-xs text-[#6b6b6b]">{locationLabel}</Label>
         <div className="flex flex-wrap items-center gap-2">
           {selectedLocations.map((loc) => (
             <span
@@ -3652,11 +3749,11 @@ export default function Configure() {
                               {(() => {
                                 const collCfg = effectiveConfig as CollectionLevelConfig;
                                 const cm = collCfg.collectionModules ?? defaultCollectionModules;
-                                const order = effectiveConfig.headerContent.moduleOrder ?? [];
-                                const filterId = filterConfigToModuleId(
-                                  cm.filter.filterByTags,
-                                  cm.filter.filterByCategories
+                                const order = normalizeCollectionFilterModuleOrder(
+                                  effectiveConfig.headerContent.moduleOrder ?? [],
+                                  cm
                                 );
+                                const dualFilter = isDualFilterMode(cm);
                                 const activeModules = orderCollectionHeaderModules(
                                   deriveCollectionModules(
                                     cm,
@@ -3675,28 +3772,29 @@ export default function Configure() {
                                 };
                                 const handleRemoveHeader = (moduleId: string) => {
                                   const next = order.filter((m) => {
-                                    if (m === moduleId) return false;
-                                    if (
-                                      COLLECTION_FILTER_IDS.includes(moduleId as (typeof COLLECTION_FILTER_IDS)[number]) &&
-                                      COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])
-                                    ) {
-                                      return false;
+                                    if (moduleId === "filterByTagsAndCategories") {
+                                      return m !== "filterByTag" && m !== "filterByCategory" && m !== "filterByTagsAndCategories";
                                     }
-                                    return true;
+                                    return m !== moduleId;
                                   });
                                   updateLevelConfigPath("headerContent.moduleOrder", orderCollectionHeaderModules(next));
                                 };
                                 const handleAddHeader = (moduleId: string) => {
-                                  let next = order.filter(
-                                    (m) =>
-                                      !COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number]) ||
-                                      !COLLECTION_FILTER_IDS.includes(moduleId as (typeof COLLECTION_FILTER_IDS)[number])
-                                  );
-                                  if (!next.includes(moduleId)) next = [...next, moduleId];
+                                  const next = order.includes(moduleId) ? order : [...order, moduleId];
                                   updateLevelConfigPath("headerContent.moduleOrder", orderCollectionHeaderModules(next));
                                 };
                                 const headerAvailable: string[] = [];
-                                if (!order.includes(filterId)) headerAvailable.push(filterId);
+                                if (dualFilter) {
+                                  if (cm.filter.filterByCategories && !order.includes("filterByCategory")) {
+                                    headerAvailable.push("filterByCategory");
+                                  }
+                                  if (cm.filter.filterByTags && !order.includes("filterByTag")) {
+                                    headerAvailable.push("filterByTag");
+                                  }
+                                } else {
+                                  const filterId = filterConfigToModuleId(cm.filter.filterByTags, cm.filter.filterByCategories);
+                                  if (!order.includes(filterId)) headerAvailable.push(filterId);
+                                }
                                 for (const m of COLLECTION_HEADER_ADDABLE_MODULES) {
                                   if (!order.includes(m)) headerAvailable.push(m);
                                 }
@@ -4033,7 +4131,12 @@ export default function Configure() {
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
                         const orderedModules = (() => {
-                          const order = cfg.moduleOrder ?? [];
+                          const cm = selectedLevel === "collection"
+                            ? (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules
+                            : null;
+                          const order = cm
+                            ? normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm)
+                            : (cfg.moduleOrder ?? []);
                           const set = new Set(modules);
                           const fromOrder = order.filter((m) => set.has(m));
                           const remaining = modules.filter((m) => !order.includes(m));
@@ -4122,16 +4225,24 @@ export default function Configure() {
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
                                     <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
                                     {(() => {
+                                      const cm = (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules;
+                                      const order = normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm);
+                                      const dualFilter = isDualFilterMode(cm);
                                       const available = selectedLevel === "collection"
-                                        ? (() => {
-                                            const order = cfg.moduleOrder ?? [];
-                                            const filterId = filterConfigToModuleId((effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByTags ?? false, (effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByCategories ?? true);
-                                            return [...COLLECTION_SIDEBAR_MODULES].filter((m) =>
-                                              COLLECTION_FILTER_IDS.includes(m as (typeof COLLECTION_FILTER_IDS)[number])
-                                                ? m === filterId && !order.includes(filterId)
-                                                : !order.includes(m)
-                                            );
-                                          })()
+                                        ? [...COLLECTION_SIDEBAR_MODULES].filter((m) => {
+                                            if (m === "filterByTag") {
+                                              return dualFilter && cm.filter.filterByTags && !order.includes("filterByTag");
+                                            }
+                                            if (m === "filterByCategory") {
+                                              return dualFilter && cm.filter.filterByCategories && !order.includes("filterByCategory");
+                                            }
+                                            if (m === "filterByTagsAndCategories") return false;
+                                            if (isCollectionFilterModuleId(m)) {
+                                              const filterId = filterConfigToModuleId(cm.filter.filterByTags, cm.filter.filterByCategories);
+                                              return m === filterId && !order.includes(filterId);
+                                            }
+                                            return !order.includes(m);
+                                          })
                                         : [...POST_SIDEBAR_MODULES].filter((m) => !orderedModules.includes(m));
                                       return available.length > 0 ? (
                                         <div className="flex items-center gap-2 mb-2">
@@ -4197,13 +4308,35 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, filtering: !p.filtering }))}
                                 content={
                                   <div className="space-y-2">
-                                    {renderFeatureLocationControl(
-                                      filterConfigToModuleId(
-                                        (effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByTags ?? false,
-                                        (effectiveConfig as CollectionLevelConfig).collectionModules?.filter?.filterByCategories ?? true
-                                      ),
-                                      ["header", "leftSidebar", "rightSidebar"]
-                                    )}
+                                    {(() => {
+                                      const cm = (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules;
+                                      const dualFilter = isDualFilterMode(cm);
+                                      if (dualFilter) {
+                                        return (
+                                          <>
+                                            {renderFeatureLocationControl(
+                                              "filterByCategory",
+                                              ["header", "leftSidebar", "rightSidebar"],
+                                              undefined,
+                                              "Location (categories)"
+                                            )}
+                                            {renderFeatureLocationControl(
+                                              "filterByTag",
+                                              ["header", "leftSidebar", "rightSidebar"],
+                                              undefined,
+                                              "Location (tags)"
+                                            )}
+                                          </>
+                                        );
+                                      }
+                                      return renderFeatureLocationControl(
+                                        filterConfigToModuleId(
+                                          cm.filter.filterByTags,
+                                          cm.filter.filterByCategories
+                                        ),
+                                        ["header", "leftSidebar", "rightSidebar"]
+                                      );
+                                    })()}
                                     <Label className="text-xs text-[#6b6b6b]">Filter by</Label>
                                     <div className="flex flex-wrap gap-4">
                                       <label className="flex items-center gap-2 cursor-pointer">
@@ -4478,7 +4611,7 @@ export default function Configure() {
                           )}
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
-                              <span className="font-medium">Social Media Links</span>
+                              <span className="font-medium">Social Sharing</span>
                               <div className="flex items-center gap-1">
                                 <Switch
                                   checked={effectiveConfig.socialMediaLinks.show}
