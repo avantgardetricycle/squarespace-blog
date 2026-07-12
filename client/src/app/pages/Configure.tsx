@@ -789,10 +789,10 @@ function parseLevelConfig(
   );
   const hcModuleOrder = level === "collection" ? validHeaderCollection(hcOrderSource) : validHeaderPost(hcOrderSource);
   const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(ls.spaceAbove) || 0)), sticky: ls.sticky === true }
+    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: 0, sticky: ls.sticky === true }
     : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
   const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: Math.min(64, Math.max(0, Number(rs.spaceAbove) || 0)), sticky: rs.sticky === true }
+    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: 0, sticky: rs.sticky === true }
     : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
   const headerContent = hc
     ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
@@ -2156,12 +2156,10 @@ export default function Configure() {
     if (path === "leftSidebar.show") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, show: value as boolean } };
     if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
     if (path === "leftSidebar.width") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, width: value as number } };
-    if (path === "leftSidebar.spaceAbove") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, spaceAbove: value as number } };
     if (path === "leftSidebar.sticky") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, sticky: value as boolean } };
     if (path === "rightSidebar.show") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, show: value as boolean } };
     if (path === "rightSidebar.modules") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, modules: value as string[] } };
     if (path === "rightSidebar.width") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, width: value as number } };
-    if (path === "rightSidebar.spaceAbove") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, spaceAbove: value as number } };
     if (path === "rightSidebar.sticky") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, sticky: value as boolean } };
     if (path === "headerContent.show") return { ...cfg, headerContent: { ...cfg.headerContent, show: value as boolean } };
     if (path === "headerContent.modules") return { ...cfg, headerContent: { ...cfg.headerContent, modules: value as string[] } };
@@ -4119,20 +4117,6 @@ export default function Configure() {
                                         className="flex-1"
                                       />
                                       <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Space above</Label>
-                                    <div className="flex items-center gap-3">
-                                      <Slider
-                                        value={[cfg.spaceAbove ?? 0]}
-                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.spaceAbove`, v ?? 0)}
-                                        min={0}
-                                        max={64}
-                                        step={4}
-                                        className="flex-1"
-                                      />
-                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.spaceAbove ?? 0}px</span>
                                     </div>
                                   </div>
                                   <div className="flex items-center justify-between">

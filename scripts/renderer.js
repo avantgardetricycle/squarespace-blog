@@ -12246,8 +12246,8 @@
             leftSidebarWidth = 300;
             rightSidebarWidth = 300;
           }
-          var leftSpaceAbove = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, leftSidebarCfg.spaceAbove)) : 0;
-          var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
+          var leftSpaceAbove = 0;
+          var rightSpaceAbove = 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
           var stickySidebarTopPx = self._getSidebarStickyTopPx();
