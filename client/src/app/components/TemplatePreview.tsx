@@ -427,7 +427,7 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
                 <div className={cn(textMuted, "text-[9px]")}>By Author · Mar 7 · 8 min</div>
               </div>
             </div>
-            <div className={cn(imgPlaceholder, "w-[45%] aspect-[2/3] shrink-0 rounded")} />
+            <div className={cn(imgPlaceholder, "w-[60%] aspect-[3/2] shrink-0 rounded")} />
           </div>
           <div className="flex gap-3 min-h-0 mt-2">
             <div className="flex-1 min-w-0">

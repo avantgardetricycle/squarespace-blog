@@ -7101,14 +7101,8 @@
       return '';
     },
 
-    /** Progress bar fill: custom hex if set, else Squarespace primary button (not BB brand default). */
+    /** Progress bar fill: always Squarespace site accent (primary button / collection tokens). */
     _resolveProgressBarColor: function(cfg) {
-      var bbBrandPurple = '#5B4FE8';
-      var pb = cfg && cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
-      var configured = pb.color || cfg.progressBarColor || (this.config && this.config.progressBarColor);
-      if (typeof configured === 'string' && /^#[0-9A-Fa-f]{6}$/i.test(configured)) {
-        if (configured.toUpperCase() !== bbBrandPurple) return configured;
-      }
       var scope = this._findBlogPageSection(this._root) || this._root;
       return this._getPrimaryButtonBackgroundColor(scope)
         || (this._getCollectionStyleTokens() && this._getCollectionStyleTokens().accent)
@@ -8137,7 +8131,6 @@
       if (!fill || !article) return;
 
       var scrollY, viewportHeight, postTop, postHeight;
-      var position = (this.config && this.config.progressBarPosition) || 'top';
       if (this._previewMode) {
         var scrollContainer = this._getScrollContainer();
         if (!scrollContainer) return;
@@ -8149,14 +8142,9 @@
         postHeight = article.offsetHeight;
       } else {
         scrollY = window.scrollY || document.documentElement.scrollTop;
-        if (position === 'top') {
-          var navbarHeight = this._getNavbarOffset();
-          track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
-          track.style.bottom = 'auto';
-        } else {
-          track.style.top = 'auto';
-          track.style.bottom = '10px';
-        }
+        var navbarHeight = this._getNavbarOffset();
+        track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
+        track.style.bottom = 'auto';
         viewportHeight = window.innerHeight;
         var rect = article.getBoundingClientRect();
         postTop = rect.top + scrollY;
@@ -8914,6 +8902,7 @@
         var reporterPostHeaderCrop = reporterPostHeaderLayout && fiShow;
         if (reporterPostHeaderCrop) {
           fiAspect = 'cropped';
+          fiRatio = '3:2';
         }
         /** Story (leftOfInfo header): cover crop at 4:3 (spec). */
         var storyPostHeaderCrop = isSinglePost && self._isStoryPostLayout(cfg) && phImagePos === 'leftOfInfo' && fiShow;
@@ -9051,7 +9040,7 @@
               : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           }
           contentEl = document.createElement('div');
-          contentEl.style.flex = '1';
+          contentEl.style.flex = reporterPostHeaderLayout ? '1 1 0%' : '1';
           contentEl.style.minWidth = '0';
           if (!isSinglePost && collectionLayout === 'listRows') {
             contentEl.style.display = 'flex';
@@ -9208,6 +9197,8 @@
             if (storyPostLayout) {
               fiWrap.classList.add('blog-overlay-story-featured-image');
               fiWrap.style.flex = '0 0 58%';
+            } else if (reporterPostHeaderLayout) {
+              fiWrap.style.flex = '0 0 60%';
             } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
               fiWrap.style.width = '80px';
@@ -10738,8 +10729,8 @@
       var progressTrackForPreview = null;
       var pb = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
-      var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
-      var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
+      var progressBarPosition = 'top';
+      var progressBarThickness = 6;
       var progressBarColor = self._resolveProgressBarColor(cfg);
       if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         var progressTrack = document.createElement('div');
@@ -11196,8 +11187,7 @@
         if (items.length === 0) return null;
         var pmPop = cfg.postModules && cfg.postModules.popularPosts && typeof cfg.postModules.popularPosts === 'object' ? cfg.postModules.popularPosts : null;
         var cmPop = cfg.collectionModules && cfg.collectionModules.popularPosts && typeof cfg.collectionModules.popularPosts === 'object' ? cfg.collectionModules.popularPosts : null;
-        var popCountRaw = isSinglePost ? (pmPop && pmPop.count) : (cmPop && cmPop.count != null ? cmPop.count : (pmPop && pmPop.count));
-        var count = Math.max(1, Math.min(3, parseInt(popCountRaw, 10) || 3));
+        var count = 3;
         var el = document.createElement('aside');
         el.className = 'blog-overlay-popular-posts';
         el.style.flexShrink = '0';

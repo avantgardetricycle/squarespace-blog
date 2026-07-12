@@ -850,7 +850,7 @@ function parseLevelConfig(
         search: {},
         recentPosts: {},
         popularPosts: {
-          count: Math.min(3, Math.max(1, Number((cmRaw.popularPosts && typeof cmRaw.popularPosts === "object" ? (cmRaw.popularPosts as { count?: unknown }).count : undefined) ?? 3) || 3)),
+          count: 3,
         },
         emailCapture: {
           header: typeof ec.header === "string" ? ec.header : "Subscribe to our newsletter",
@@ -957,7 +957,7 @@ function parseLevelConfig(
         popularPosts: {
           enabled: Boolean(pop.enabled ?? false),
           position: validModulePosition(pop.position),
-          count: Math.min(3, Math.max(1, Number(pop.count) || 3)),
+          count: 3,
         },
         relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: validModulePosition(rel.position) },
         emailCapture: {
@@ -1087,12 +1087,12 @@ function parseLevelConfig(
       rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: [...postDerived.right] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
       headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: [...postDerived.header] } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
       footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: [...postDerived.footer] },
-      progressBar: pb ? {
-        show: Boolean(pb.show ?? false),
-        position: (pb.position === "bottom" ? "bottom" : "top") as "top" | "bottom",
-        thickness: Math.min(12, Math.max(2, Number(pb.thickness) || 6)),
-        color: (typeof pb.color === "string" && /^#[0-9A-Fa-f]{6}$/.test(pb.color)) ? pb.color : "#5B4FE8",
-      } : { show: false, position: "top" as const, thickness: 6, color: "#5B4FE8" },
+      progressBar: {
+        show: Boolean(pb?.show ?? false),
+        position: "top",
+        thickness: 6,
+        color: "#5B4FE8",
+      },
     };
   }
   return base;
@@ -1295,7 +1295,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showCategories ?? false) === (phB.showCategories ?? false) &&
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "");
-    return base && pa.show === pb.show && pa.position === pb.position && pa.thickness === pb.thickness && pa.color === pb.color && phEqual;
+    return base && pa.show === pb.show && phEqual;
   }
   return base;
 }
@@ -1384,7 +1384,6 @@ export default function Configure() {
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     authorProfiles: false,
-    progressBar: false,
     pagination: false,
     collectionLayout: false,
     featuredArticle: false,
@@ -2193,7 +2192,6 @@ export default function Configure() {
       else if (path === "collectionModules.leadMagnet.resourceTitle") cm.leadMagnet = { ...cm.leadMagnet, resourceTitle: value as string };
       else if (path === "collectionModules.leadMagnet.description") cm.leadMagnet = { ...cm.leadMagnet, description: value as string };
       else if (path === "collectionModules.leadMagnet.buttonText") cm.leadMagnet = { ...cm.leadMagnet, buttonText: value as string };
-      else if (path === "collectionModules.popularPosts.count") cm.popularPosts = { ...cm.popularPosts, count: Math.min(3, Math.max(1, Number(value) || 3)) };
       else return cfg;
       return syncModuleOrderFromExplicit(cfg as CollectionLevelConfig, cm, undefined) as typeof cfg;
     }
@@ -2208,7 +2206,6 @@ export default function Configure() {
       else if (path === "postModules.authorProfiles.position") pm.authorProfiles = { ...pm.authorProfiles, position: value as ModulePosition };
       else if (path === "postModules.popularPosts.enabled") pm.popularPosts = { ...pm.popularPosts, enabled: value as boolean };
       else if (path === "postModules.popularPosts.position") pm.popularPosts = { ...pm.popularPosts, position: value as ModulePosition };
-      else if (path === "postModules.popularPosts.count") pm.popularPosts = { ...pm.popularPosts, count: Math.min(3, Math.max(1, Number(value) || 3)) };
       else if (path === "postModules.relevantPosts.enabled") pm.relevantPosts = { ...pm.relevantPosts, enabled: value as boolean };
       else if (path === "postModules.relevantPosts.position") pm.relevantPosts = { ...pm.relevantPosts, position: value as ModulePosition };
       else if (path === "postModules.emailCapture.enabled") pm.emailCapture = { ...pm.emailCapture, enabled: value as boolean };
@@ -2242,9 +2239,6 @@ export default function Configure() {
     if (path === "featuredImage.showCaption") return { ...cfg, featuredImage: { ...cfg.featuredImage, showCaption: value as boolean } };
     if (path === "featuredImage.verticalSpacing") return { ...cfg, featuredImage: { ...cfg.featuredImage, verticalSpacing: value as FeaturedImageVerticalSpacing } };
     if (path === "progressBar.show" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, show: value as boolean } };
-    if (path === "progressBar.position" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, position: value as "top" | "bottom" } };
-    if (path === "progressBar.thickness" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, thickness: value as number } };
-    if (path === "progressBar.color" && "progressBar" in cfg) return { ...cfg, progressBar: { ...(cfg as PostLevelConfig).progressBar, color: value as string } };
     if (path === "postHeader.imagePosition" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, imagePosition: value as PostHeaderImagePosition } };
     if (path === "postHeader.contentAlignment" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, contentAlignment: value as PostHeaderContentAlignment } };
     if (path === "postHeader.contentVerticalAlignment" && "postHeader" in cfg) {
@@ -2769,84 +2763,11 @@ export default function Configure() {
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Progress Bar</span>
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={(effectiveConfig as PostLevelConfig).progressBar.show}
-                            onCheckedChange={(v) => {
-                              updateLevelConfigPath("progressBar.show", v);
-                              setSectionExpanded((p) => ({ ...p, progressBar: v }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => (effectiveConfig as PostLevelConfig).progressBar.show && setSectionExpanded((p) => ({ ...p, progressBar: !p.progressBar }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!(effectiveConfig as PostLevelConfig).progressBar.show ? "invisible pointer-events-none" : ""}`}
-                            aria-label={sectionExpanded.progressBar ? "Collapse" : "Expand"}
-                          >
-                            {sectionExpanded.progressBar ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+                        <Switch
+                          checked={(effectiveConfig as PostLevelConfig).progressBar.show}
+                          onCheckedChange={(v) => updateLevelConfigPath("progressBar.show", v)}
+                        />
                       </div>
-                      <Collapsible open={(effectiveConfig as PostLevelConfig).progressBar.show && sectionExpanded.progressBar}>
-                        <CollapsibleContent>
-                        <div className="pb-4 space-y-4">
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Position</Label>
-                            <Select
-                              value={(effectiveConfig as PostLevelConfig).progressBar.position}
-                              onValueChange={(v) => updateLevelConfigPath("progressBar.position", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="top">Top</SelectItem>
-                                <SelectItem value="bottom">Bottom</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Thickness</Label>
-                            <div className="flex items-center gap-3">
-                              <Slider
-                                value={[(effectiveConfig as PostLevelConfig).progressBar.thickness]}
-                                onValueChange={([v]) => updateLevelConfigPath("progressBar.thickness", v ?? 6)}
-                                min={2}
-                                max={12}
-                                step={1}
-                                className="flex-1"
-                              />
-                              <span className="text-xs text-[#6b6b6b] w-8 shrink-0">
-                                {(effectiveConfig as PostLevelConfig).progressBar.thickness}px
-                              </span>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Color</Label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="color"
-                                value={(effectiveConfig as PostLevelConfig).progressBar.color}
-                                onChange={(e) => updateLevelConfigPath("progressBar.color", e.target.value)}
-                                className="h-9 w-14 cursor-pointer rounded border border-[#e5e4e0] bg-white p-0"
-                              />
-                              <Input
-                                value={(effectiveConfig as PostLevelConfig).progressBar.color}
-                                onChange={(e) => updateLevelConfigPath("progressBar.color", e.target.value)}
-                                className="font-mono text-sm h-9 w-24"
-                                placeholder="#5B4FE8"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
                     </div>
                     )}
 
@@ -4365,22 +4286,6 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
-                                      <div className="flex items-center gap-3">
-                                        <Slider
-                                          value={[(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 3]}
-                                          onValueChange={([v]) => updateLevelConfigPath("collectionModules.popularPosts.count", v ?? 3)}
-                                          min={1}
-                                          max={3}
-                                          step={1}
-                                          className="flex-1"
-                                        />
-                                        <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
-                                          {(effectiveConfig as CollectionLevelConfig).collectionModules?.popularPosts?.count ?? 3}
-                                        </span>
-                                      </div>
-                                    </div>
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts.
                                     </p>
@@ -4496,22 +4401,6 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Number of posts shown</Label>
-                                      <div className="flex items-center gap-3">
-                                        <Slider
-                                          value={[(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 3]}
-                                          onValueChange={([v]) => updateLevelConfigPath("postModules.popularPosts.count", v ?? 3)}
-                                          min={1}
-                                          max={3}
-                                          step={1}
-                                          className="flex-1"
-                                        />
-                                        <span className="text-xs text-[#6b6b6b] w-8 shrink-0 tabular-nums">
-                                          {(effectiveConfig as PostLevelConfig).postModules?.popularPosts?.count ?? 3}
-                                        </span>
-                                      </div>
-                                    </div>
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts. Add the Popular Posts module to a sidebar under Left/Right Sidebar.
                                     </p>

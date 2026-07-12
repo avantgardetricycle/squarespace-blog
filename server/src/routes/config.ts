@@ -98,27 +98,15 @@ type ProgressBarPayload = { show: boolean; position: string | null; thickness: n
 function pickProgressBarFromPostConfig (postRaw: unknown, existing: ProgressBarPayload | null | undefined): ProgressBarPayload {
   const bucket = resolvePrimaryBucket(postRaw)
   const raw = bucket?.progressBar
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const p = raw as Record<string, unknown>
-    const color = typeof p.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(p.color)
-      ? p.color
-      : (existing?.color ?? '#5B4FE8')
-    return {
-      show: Boolean(p.show ?? false),
-      position: p.position === 'bottom' ? 'bottom' : 'top',
-      thickness: Math.min(12, Math.max(2, Number(p.thickness) || 6)),
-      color
-    }
+  const show = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? Boolean((raw as Record<string, unknown>).show ?? false)
+    : Boolean(existing?.show ?? false)
+  return {
+    show,
+    position: 'top',
+    thickness: 6,
+    color: '#5B4FE8'
   }
-  if (existing) {
-    return {
-      show: Boolean(existing.show ?? false),
-      position: existing.position === 'bottom' ? 'bottom' : 'top',
-      thickness: Math.min(12, Math.max(2, Number(existing.thickness) || 6)),
-      color: (typeof existing.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(existing.color)) ? existing.color : '#5B4FE8'
-    }
-  }
-  return { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
 }
 
 /** Extract legacy sidebar/header/social/featuredImage columns from the primary bucket of collectionConfig. */
@@ -163,9 +151,9 @@ function buildDefaultPostConfig (
     },
     progressBar: {
       show: progressBar.show ?? false,
-      position: progressBar.position === 'bottom' ? 'bottom' : 'top',
-      thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
-      color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
+      position: 'top',
+      thickness: 6,
+      color: '#5B4FE8'
     },
     postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' }
   }
