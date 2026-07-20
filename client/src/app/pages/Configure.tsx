@@ -512,6 +512,258 @@ function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: 
   return isStoryPostLayoutConfig(config.postConfig);
 }
 
+/** Post-level controls that a template may lock (disabled + forced to template value). */
+export type PostTemplateLockKey =
+  | "leftSidebar"
+  | "rightSidebar"
+  | "imagePosition"
+  | "fullBleedControls"
+  | "showFeaturedImage"
+  | "imageWidth"
+  | "sidePadding"
+  | "aspectBehavior"
+  | "aspectRatio"
+  | "roundedCorners"
+  | "photoShadow"
+  | "contentVerticalAlignment"
+  | "showTagsAndCategories"
+  | "showByline"
+  | "verticalSpacing";
+
+const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
+  reporter: new Set([
+    "leftSidebar",
+    "aspectRatio",
+    "imageWidth",
+    "sidePadding",
+    "aspectBehavior",
+    "roundedCorners",
+    "photoShadow",
+    "showTagsAndCategories",
+  ]),
+  publisher: new Set([
+    "showFeaturedImage",
+    "imagePosition",
+    "contentVerticalAlignment",
+    "leftSidebar",
+    "showByline",
+    "showTagsAndCategories",
+  ]),
+  writer: new Set([
+    "leftSidebar",
+    "rightSidebar",
+    "showTagsAndCategories",
+    "showFeaturedImage",
+    "verticalSpacing",
+  ]),
+  feature: new Set([
+    "imagePosition",
+    "fullBleedControls",
+    "aspectRatio",
+    "imageWidth",
+    "sidePadding",
+    "aspectBehavior",
+    "roundedCorners",
+    "photoShadow",
+    "showTagsAndCategories",
+  ]),
+  story: new Set([
+    "imagePosition",
+    "fullBleedControls",
+    "showFeaturedImage",
+    "aspectRatio",
+    "imageWidth",
+    "sidePadding",
+    "aspectBehavior",
+    "roundedCorners",
+    "photoShadow",
+    "showTagsAndCategories",
+    "leftSidebar",
+    "rightSidebar",
+  ]),
+};
+
+/** When set, image-position Select is limited to these options (control stays enabled). */
+const POST_TEMPLATE_IMAGE_POSITION_OPTIONS: Record<string, readonly PostHeaderImagePosition[]> = {
+  reporter: ["leftOfInfo", "rightOfInfo"],
+};
+
+function getActivePostTemplateKey(
+  config: SiteConfigForm,
+  templateCatalogPost: Template[]
+): string | null {
+  const tid = config.postTemplateId;
+  if (!tid) return null;
+  return templateCatalogPost.find((x) => x.id === tid)?.templateKey ?? null;
+}
+
+function getPostTemplateLocks(templateKey: string | null | undefined): ReadonlySet<PostTemplateLockKey> {
+  if (!templateKey) return new Set();
+  return POST_TEMPLATE_LOCKS[templateKey] ?? new Set();
+}
+
+function isPostTemplatePathLocked(path: string, locks: ReadonlySet<PostTemplateLockKey>): boolean {
+  if (path.startsWith("leftSidebar.")) return locks.has("leftSidebar");
+  if (path.startsWith("rightSidebar.")) return locks.has("rightSidebar");
+  if (path === "postHeader.imagePosition") return locks.has("imagePosition");
+  if (path === "postHeader.fullBleedLayout") return locks.has("fullBleedControls");
+  if (path === "postHeader.contentVerticalAlignment") {
+    return locks.has("contentVerticalAlignment") || locks.has("fullBleedControls");
+  }
+  if (path === "postHeader.sideGap") return locks.has("sidePadding");
+  if (path === "postHeader.showTags" || path === "postHeader.showCategories") {
+    return locks.has("showTagsAndCategories");
+  }
+  if (path === "postHeader.showByline") return locks.has("showByline");
+  if (path === "featuredImage.show") return locks.has("showFeaturedImage");
+  if (path === "featuredImage.imageWidthPercent") return locks.has("imageWidth");
+  if (path === "featuredImage.aspectBehavior") return locks.has("aspectBehavior");
+  if (path === "featuredImage.aspectRatio") return locks.has("aspectRatio");
+  if (path === "featuredImage.roundedCorners") return locks.has("roundedCorners");
+  if (path === "featuredImage.shadow") return locks.has("photoShadow");
+  if (path === "featuredImage.verticalSpacing") return locks.has("verticalSpacing");
+  return false;
+}
+
+/** Copy locked fields from the applied template so they cannot drift. */
+function enforcePostTemplateLockedValues(
+  postConfig: PostLevelConfig,
+  templatePostConfig: PostLevelConfig,
+  locks: ReadonlySet<PostTemplateLockKey>
+): PostLevelConfig {
+  if (locks.size === 0) return postConfig;
+  let next = postConfig;
+  const tplPh = templatePostConfig.postHeader ?? defaultPostHeader;
+  const curPh = next.postHeader ?? defaultPostHeader;
+  let ph = { ...curPh };
+  let phChanged = false;
+  if (locks.has("imagePosition") && ph.imagePosition !== tplPh.imagePosition) {
+    ph = { ...ph, imagePosition: tplPh.imagePosition };
+    phChanged = true;
+  }
+  if (locks.has("fullBleedControls")) {
+    if (ph.fullBleedLayout !== tplPh.fullBleedLayout) {
+      ph = { ...ph, fullBleedLayout: tplPh.fullBleedLayout };
+      phChanged = true;
+    }
+    if (ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
+      ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
+      phChanged = true;
+    }
+  }
+  if (locks.has("contentVerticalAlignment") && ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
+    ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
+    phChanged = true;
+  }
+  if (locks.has("sidePadding") && ph.sideGap !== tplPh.sideGap) {
+    ph = { ...ph, sideGap: tplPh.sideGap };
+    phChanged = true;
+  }
+  if (locks.has("showTagsAndCategories")) {
+    if (ph.showTags !== tplPh.showTags) {
+      ph = { ...ph, showTags: tplPh.showTags };
+      phChanged = true;
+    }
+    if (ph.showCategories !== tplPh.showCategories) {
+      ph = { ...ph, showCategories: tplPh.showCategories };
+      phChanged = true;
+    }
+  }
+  if (locks.has("showByline") && ph.showByline !== tplPh.showByline) {
+    ph = { ...ph, showByline: tplPh.showByline };
+    phChanged = true;
+  }
+  if (phChanged) next = { ...next, postHeader: ph };
+
+  const tplFi = templatePostConfig.featuredImage ?? defaultFeaturedImage;
+  const curFi = next.featuredImage ?? defaultFeaturedImage;
+  let fi = { ...curFi };
+  let fiChanged = false;
+  if (locks.has("showFeaturedImage") && fi.show !== tplFi.show) {
+    fi = { ...fi, show: tplFi.show };
+    fiChanged = true;
+  }
+  if (locks.has("imageWidth") && fi.imageWidthPercent !== tplFi.imageWidthPercent) {
+    fi = { ...fi, imageWidthPercent: tplFi.imageWidthPercent };
+    fiChanged = true;
+  }
+  if (locks.has("aspectBehavior") && fi.aspectBehavior !== tplFi.aspectBehavior) {
+    fi = { ...fi, aspectBehavior: tplFi.aspectBehavior };
+    fiChanged = true;
+  }
+  if (locks.has("aspectRatio") && fi.aspectRatio !== tplFi.aspectRatio) {
+    fi = { ...fi, aspectRatio: tplFi.aspectRatio };
+    fiChanged = true;
+  }
+  if (locks.has("roundedCorners") && fi.roundedCorners !== tplFi.roundedCorners) {
+    fi = { ...fi, roundedCorners: tplFi.roundedCorners };
+    fiChanged = true;
+  }
+  if (locks.has("photoShadow") && fi.shadow !== tplFi.shadow) {
+    fi = { ...fi, shadow: tplFi.shadow };
+    fiChanged = true;
+  }
+  if (locks.has("verticalSpacing") && fi.verticalSpacing !== tplFi.verticalSpacing) {
+    fi = { ...fi, verticalSpacing: tplFi.verticalSpacing };
+    fiChanged = true;
+  }
+  if (fiChanged) next = { ...next, featuredImage: fi };
+
+  if (locks.has("leftSidebar")) {
+    const tpl = templatePostConfig.leftSidebar;
+    const cur = next.leftSidebar;
+    if (
+      cur.show !== tpl.show ||
+      cur.width !== tpl.width ||
+      cur.spaceAbove !== tpl.spaceAbove ||
+      cur.sticky !== tpl.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tpl.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tpl.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        leftSidebar: {
+          ...tpl,
+          modules: [...(tpl.modules ?? [])],
+          moduleOrder: [...(tpl.moduleOrder ?? [])],
+        },
+      };
+    }
+  }
+  if (locks.has("rightSidebar")) {
+    const tpl = templatePostConfig.rightSidebar;
+    const cur = next.rightSidebar;
+    if (
+      cur.show !== tpl.show ||
+      cur.width !== tpl.width ||
+      cur.spaceAbove !== tpl.spaceAbove ||
+      cur.sticky !== tpl.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tpl.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tpl.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        rightSidebar: {
+          ...tpl,
+          modules: [...(tpl.modules ?? [])],
+          moduleOrder: [...(tpl.moduleOrder ?? [])],
+        },
+      };
+    }
+  }
+  return next;
+}
+
+function resolvePostTemplateConfig(
+  templateId: string | null | undefined,
+  templateCatalogPost: Template[]
+): PostLevelConfig | null {
+  if (!templateId) return null;
+  const t = templateCatalogPost.find((x) => x.id === templateId);
+  if (!t?.postConfig || typeof t.postConfig !== "object") return null;
+  return parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+}
+
 function validPostHeaderBackgroundColor(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const trimmed = v.trim();
@@ -1727,8 +1979,62 @@ export default function Configure() {
     () => isStoryPostTemplateActive(config, templateCatalogPost),
     [config, templateCatalogPost]
   );
+  const activePostTemplateKey = useMemo(
+    () => (selectedLevel === "post" ? getActivePostTemplateKey(config, templateCatalogPost) : null),
+    [selectedLevel, config, templateCatalogPost]
+  );
+  const postTemplateLocks = useMemo(
+    () => getPostTemplateLocks(activePostTemplateKey),
+    [activePostTemplateKey]
+  );
+  const isPostControlLocked = useCallback(
+    (key: PostTemplateLockKey) => selectedLevel === "post" && postTemplateLocks.has(key),
+    [selectedLevel, postTemplateLocks]
+  );
+  const postTemplateImagePositionOptions = useMemo(() => {
+    if (!activePostTemplateKey) return null;
+    return POST_TEMPLATE_IMAGE_POSITION_OPTIONS[activePostTemplateKey] ?? null;
+  }, [activePostTemplateKey]);
+  const appliedPostTemplateConfig = useMemo(
+    () => resolvePostTemplateConfig(config.postTemplateId, templateCatalogPost),
+    [config.postTemplateId, templateCatalogPost]
+  );
+  // Keep locked post-template fields pinned to the template when a template is active.
+  useEffect(() => {
+    if (!config.postTemplateId || !appliedPostTemplateConfig || postTemplateLocks.size === 0) return;
+    const enforced = enforcePostTemplateLockedValues(
+      config.postConfig,
+      appliedPostTemplateConfig,
+      postTemplateLocks
+    );
+    if (enforced === config.postConfig) return;
+    if (levelConfigsEqual(enforced, config.postConfig)) return;
+    setConfig((prev) => {
+      if (prev.postTemplateId !== config.postTemplateId) return prev;
+      const nextEnforced = enforcePostTemplateLockedValues(
+        prev.postConfig,
+        appliedPostTemplateConfig,
+        postTemplateLocks
+      );
+      if (levelConfigsEqual(nextEnforced, prev.postConfig)) return prev;
+      return { ...prev, postConfig: nextEnforced };
+    });
+  }, [
+    config.postTemplateId,
+    config.postConfig,
+    appliedPostTemplateConfig,
+    postTemplateLocks,
+  ]);
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
-  const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
+  const updateLevelConfigPath = (subPath: string, value: unknown) => {
+    if (
+      selectedLevel === "post" &&
+      isPostTemplatePathLocked(subPath, postTemplateLocks)
+    ) {
+      return;
+    }
+    updateConfig(`${pathPrefix}.${subPath}`, value);
+  };
   const moduleOrderPathForLocation = useCallback((loc: FeatureModuleLocation): "headerContent.moduleOrder" | "leftSidebar.moduleOrder" | "rightSidebar.moduleOrder" | "footerContent.moduleOrder" => {
     if (loc === "header") return "headerContent.moduleOrder";
     if (loc === "leftSidebar") return "leftSidebar.moduleOrder";
@@ -1754,6 +2060,10 @@ export default function Configure() {
   );
   const addFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
+      if (selectedLevel === "post") {
+        if (loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")) return;
+      }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.enabled`, true);
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "header");
@@ -1768,10 +2078,14 @@ export default function Configure() {
       if (order.includes(moduleId)) return;
       updateLevelConfigPath(zonePath, [moduleId, ...order.filter((m) => m !== moduleId)]);
     },
-    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel]
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks]
   );
   const removeFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
+      if (selectedLevel === "post") {
+        if (loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")) return;
+      }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "none");
         return;
@@ -1780,7 +2094,7 @@ export default function Configure() {
       const order = moduleOrderForLocation(effectiveConfig, loc);
       updateLevelConfigPath(zonePath, order.filter((m) => m !== moduleId));
     },
-    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel]
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks]
   );
   const renderFeatureLocationControl = useCallback((
     moduleId: string,
@@ -1788,28 +2102,39 @@ export default function Configure() {
     postHeaderModuleKey?: PostHeaderModuleKey,
     locationLabel = "Location",
   ) => {
+    const isLocLocked = (loc: FeatureModuleLocation) =>
+      selectedLevel === "post" &&
+      ((loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) ||
+        (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")));
     const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
-    const availableLocations = allowedLocations.filter((loc) => !selectedLocations.includes(loc));
+    const availableLocations = allowedLocations.filter(
+      (loc) => !selectedLocations.includes(loc) && !isLocLocked(loc)
+    );
     return (
       <div className="space-y-2">
         <Label className="text-xs text-[#6b6b6b]">{locationLabel}</Label>
         <div className="flex flex-wrap items-center gap-2">
-          {selectedLocations.map((loc) => (
-            <span
-              key={loc}
-              className="inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]"
-            >
-              {FEATURE_LOCATION_LABELS[loc]}
-              <button
-                type="button"
-                onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
-                className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
-                aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
+          {selectedLocations.map((loc) => {
+            const locked = isLocLocked(loc);
+            return (
+              <span
+                key={loc}
+                className={`inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a] ${locked ? "opacity-60" : ""}`}
               >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
+                {FEATURE_LOCATION_LABELS[loc]}
+                {!locked && (
+                  <button
+                    type="button"
+                    onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
+                    className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
+                    aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
+            );
+          })}
           {availableLocations.length > 0 && (
             <Select value="" onValueChange={(v) => v && addFeatureLocation(moduleId, v as FeatureModuleLocation, postHeaderModuleKey)}>
               <SelectTrigger className="h-8 w-[170px] text-xs">
@@ -1825,7 +2150,7 @@ export default function Configure() {
         </div>
       </div>
     );
-  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation]);
+  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation, selectedLevel, postTemplateLocks]);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
@@ -2141,7 +2466,16 @@ export default function Configure() {
         const [head, ...subParts] = rest.split(".");
         const sub =
           head === "loggedOut" || head === "loggedIn" ? subParts.join(".") : rest;
-        next.postConfig = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
+        const locks = getPostTemplateLocks(getActivePostTemplateKey(prev, templateCatalogPost));
+        if (isPostTemplatePathLocked(sub, locks)) {
+          return prev;
+        }
+        let updatedPost = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
+        const tplCfg = resolvePostTemplateConfig(prev.postTemplateId, templateCatalogPost);
+        if (tplCfg && locks.size > 0) {
+          updatedPost = enforcePostTemplateLockedValues(updatedPost, tplCfg, locks);
+        }
+        next.postConfig = updatedPost;
       } else if (path === "collectionTemplateId") next.collectionTemplateId = value as string | null;
       else if (path === "postTemplateId") next.postTemplateId = value as string | null;
       return next;
@@ -3225,15 +3559,26 @@ export default function Configure() {
                               <Select
                                 value={(effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed"}
                                 onValueChange={(v) => updateLevelConfigPath("postHeader.imagePosition", v)}
+                                disabled={isPostControlLocked("imagePosition")}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="fullBleed">Full bleed</SelectItem>
-                                  <SelectItem value="leftOfInfo">Left of post info</SelectItem>
-                                  <SelectItem value="rightOfInfo">Right of post info</SelectItem>
-                                  <SelectItem value="belowInfo">Below post info</SelectItem>
+                                  {(postTemplateImagePositionOptions
+                                    ? postTemplateImagePositionOptions
+                                    : (["fullBleed", "leftOfInfo", "rightOfInfo", "belowInfo"] as const)
+                                  ).map((opt) => (
+                                    <SelectItem key={opt} value={opt}>
+                                      {opt === "fullBleed"
+                                        ? "Full bleed"
+                                        : opt === "leftOfInfo"
+                                          ? "Left of post info"
+                                          : opt === "rightOfInfo"
+                                            ? "Right of post info"
+                                            : "Below post info"}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -3244,6 +3589,7 @@ export default function Configure() {
                                 <Select
                                   value={(effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay"}
                                   onValueChange={(v) => updateLevelConfigPath("postHeader.fullBleedLayout", v as PostHeaderFullBleedLayout)}
+                                  disabled={isPostControlLocked("fullBleedControls")}
                                 >
                                   <SelectTrigger>
                                     <SelectValue />
@@ -3260,6 +3606,10 @@ export default function Configure() {
                                     }
                                     onValueChange={(v) =>
                                       updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                    }
+                                    disabled={
+                                      isPostControlLocked("fullBleedControls") ||
+                                      isPostControlLocked("contentVerticalAlignment")
                                     }
                                   >
                                     <SelectTrigger>
@@ -3282,6 +3632,7 @@ export default function Configure() {
                               <Switch
                                 checked={effectiveConfig.featuredImage.show}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
+                                disabled={isPostControlLocked("showFeaturedImage")}
                               />
                             </div>
                             {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
@@ -3298,6 +3649,7 @@ export default function Configure() {
                                           max={60}
                                           step={5}
                                           className="flex-1"
+                                          disabled={isPostControlLocked("imageWidth")}
                                         />
                                         <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
                                           {effectiveConfig.featuredImage.imageWidthPercent}%
@@ -3314,6 +3666,7 @@ export default function Configure() {
                                           max={150}
                                           step={2}
                                           className="flex-1"
+                                          disabled={isPostControlLocked("sidePadding")}
                                         />
                                         <span className="text-xs text-[#6b6b6b] w-12 shrink-0">
                                           {((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)}px
@@ -3342,6 +3695,7 @@ export default function Configure() {
                                         onValueChange={(v) =>
                                           updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
                                         }
+                                        disabled={isPostControlLocked("contentVerticalAlignment")}
                                       >
                                         <SelectTrigger>
                                           <SelectValue />
@@ -3360,6 +3714,7 @@ export default function Configure() {
                                   <Select
                                     value={effectiveConfig.featuredImage.aspectBehavior}
                                     onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
+                                    disabled={isPostControlLocked("aspectBehavior")}
                                   >
                                     <SelectTrigger>
                                       <SelectValue />
@@ -3373,6 +3728,7 @@ export default function Configure() {
                                     <Select
                                       value={effectiveConfig.featuredImage.aspectRatio}
                                       onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
+                                      disabled={isPostControlLocked("aspectRatio")}
                                     >
                                       <SelectTrigger className="mt-1">
                                         <SelectValue />
@@ -3392,6 +3748,7 @@ export default function Configure() {
                                   <Select
                                     value={effectiveConfig.featuredImage.roundedCorners}
                                     onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
+                                    disabled={isPostControlLocked("roundedCorners")}
                                   >
                                     <SelectTrigger>
                                       <SelectValue />
@@ -3408,6 +3765,7 @@ export default function Configure() {
                                   <Switch
                                     checked={effectiveConfig.featuredImage.shadow}
                                     onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
+                                    disabled={isPostControlLocked("photoShadow")}
                                   />
                                 </div>
                                 <div className="flex items-center justify-between">
@@ -3417,23 +3775,26 @@ export default function Configure() {
                                     onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
                                   />
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
-                                  <Select
-                                    value={effectiveConfig.featuredImage.verticalSpacing}
-                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="tight">Tight</SelectItem>
-                                      <SelectItem value="normal">Normal</SelectItem>
-                                      <SelectItem value="spacious">Spacious</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
                               </>
+                            )}
+                            {isPostControlLocked("verticalSpacing") && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
+                                <Select
+                                  value={effectiveConfig.featuredImage.verticalSpacing}
+                                  onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
+                                  disabled
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="tight">Tight</SelectItem>
+                                    <SelectItem value="normal">Normal</SelectItem>
+                                    <SelectItem value="spacious">Spacious</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             )}
                             <div className="flex items-center justify-between">
                               <div>
@@ -3448,18 +3809,20 @@ export default function Configure() {
                               <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Show Tags & Categories</Label>
                               <p className="text-[10px] text-[#6b6b6b]">Display tags and categories after breadcrumbs, before the title</p>
-                              <div className="flex items-center gap-6">
-                                <label className="flex items-center gap-2 cursor-pointer">
+                              <div className="flex flex-wrap gap-6">
+                                <label className={`flex items-center gap-2 ${isPostControlLocked("showTagsAndCategories") ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
                                   <Checkbox
                                     checked={(effectiveConfig as PostLevelConfig).postHeader?.showTags ?? false}
                                     onCheckedChange={(v) => updateLevelConfigPath("postHeader.showTags", Boolean(v))}
+                                    disabled={isPostControlLocked("showTagsAndCategories")}
                                   />
                                   <span className="text-xs text-[#6b6b6b]">Tags</span>
                                 </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className={`flex items-center gap-2 ${isPostControlLocked("showTagsAndCategories") ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
                                   <Checkbox
                                     checked={(effectiveConfig as PostLevelConfig).postHeader?.showCategories ?? false}
                                     onCheckedChange={(v) => updateLevelConfigPath("postHeader.showCategories", Boolean(v))}
+                                    disabled={isPostControlLocked("showTagsAndCategories")}
                                   />
                                   <span className="text-xs text-[#6b6b6b]">Categories</span>
                                 </label>
@@ -3473,6 +3836,7 @@ export default function Configure() {
                               <Switch
                                 checked={(effectiveConfig as PostLevelConfig).postHeader?.showByline ?? false}
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showByline", v)}
+                                disabled={isPostControlLocked("showByline")}
                               />
                             </div>
                           </div>
@@ -4049,6 +4413,7 @@ export default function Configure() {
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
+                        const sidebarLocked = isPostControlLocked(side === "left" ? "leftSidebar" : "rightSidebar");
                         const orderedModules = (() => {
                           const cm = selectedLevel === "collection"
                             ? (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules
@@ -4062,29 +4427,38 @@ export default function Configure() {
                           return [...fromOrder, ...remaining];
                         })();
                         const moveModule = (fromIdx: number, toIdx: number) => {
+                          if (sidebarLocked) return;
                           const list = orderedModules.slice();
                           const [removed] = list.splice(fromIdx, 1);
                           list.splice(toIdx, 0, removed);
                           updateLevelConfigPath(`${subPath}.moduleOrder`, list);
                         };
                         const handleDragOver = (e: React.DragEvent) => {
+                          if (sidebarLocked) return;
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
                         };
                         const handleDrop = (e: React.DragEvent, toIdx: number) => {
                           e.preventDefault();
+                          if (sidebarLocked) return;
                           const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                           if (fromIdx !== toIdx && fromIdx >= 0) moveModule(fromIdx, toIdx);
                         };
                         const handleDragStart = (e: React.DragEvent, idx: number) => {
+                          if (sidebarLocked) {
+                            e.preventDefault();
+                            return;
+                          }
                           e.dataTransfer.setData("text/plain", String(idx));
                           e.dataTransfer.effectAllowed = "move";
                         };
                         const handleRemove = (moduleId: string) => {
+                          if (sidebarLocked) return;
                           const order = [...(cfg.moduleOrder ?? [])];
                           updateLevelConfigPath(`${subPath}.moduleOrder`, order.filter((m) => m !== moduleId));
                         };
                         const handleAddSidebar = (moduleId: string) => {
+                          if (sidebarLocked) return;
                           const order = cfg.moduleOrder ?? [];
                           if (order.includes(moduleId)) return;
                           updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
@@ -4104,19 +4478,36 @@ export default function Configure() {
                             </div>
                             <Collapsible open={expanded}>
                               <CollapsibleContent>
-                                <div className="pb-4 space-y-3">
+                                <div className={`pb-4 space-y-3 ${sidebarLocked ? "opacity-60" : ""}`}>
+                                  {selectedLevel === "collection" && (
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[cfg.width]}
+                                          onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
+                                          min={160}
+                                          max={400}
+                                          step={20}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
+                                      </div>
+                                    </div>
+                                  )}
                                   <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                    <Label className="text-xs text-[#6b6b6b]">Space above</Label>
                                     <div className="flex items-center gap-3">
                                       <Slider
-                                        value={[cfg.width]}
-                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
-                                        min={160}
-                                        max={400}
-                                        step={20}
+                                        value={[cfg.spaceAbove ?? 0]}
+                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.spaceAbove`, v ?? 0)}
+                                        min={0}
+                                        max={64}
+                                        step={4}
                                         className="flex-1"
+                                        disabled={sidebarLocked}
                                       />
-                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.spaceAbove ?? 0}px</span>
                                     </div>
                                   </div>
                                   <div className="flex items-center justify-between">
@@ -4124,12 +4515,18 @@ export default function Configure() {
                                     <Switch
                                       checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
+                                      disabled={sidebarLocked}
                                     />
                                   </div>
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
-                                    <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      {sidebarLocked
+                                        ? "Defined by the selected template and cannot be changed."
+                                        : "Drag to reorder. Remove a module to disable that feature."}
+                                    </p>
                                     {(() => {
+                                      if (sidebarLocked) return null;
                                       const cm = (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules;
                                       const order = normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm);
                                       const dualFilter = isDualFilterMode(cm);
@@ -4164,28 +4561,30 @@ export default function Configure() {
                                     })()}
                                     <div className="space-y-1.5">
                                       {orderedModules.length === 0 ? (
-                                        <p className="text-xs text-[#6b6b6b] py-2">No modules in this sidebar. Add modules above.</p>
+                                        <p className="text-xs text-[#6b6b6b] py-2">No modules in this sidebar{sidebarLocked ? "." : ". Add modules above."}</p>
                                       ) : (
                                         orderedModules.map((m, idx) => (
                                           <div
                                             key={`${m}-${idx}`}
-                                            draggable
+                                            draggable={!sidebarLocked}
                                             onDragStart={(e) => handleDragStart(e, idx)}
                                             onDragOver={handleDragOver}
                                             onDrop={(e) => handleDrop(e, idx)}
                                             onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                            className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm ${sidebarLocked ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
                                           >
                                             <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
                                             <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m] ?? m}</span>
-                                            <button
-                                              type="button"
-                                              onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
-                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
-                                              aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </button>
+                                            {!sidebarLocked && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
+                                                className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
+                                                aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
+                                              >
+                                                <X className="h-4 w-4" />
+                                              </button>
+                                            )}
                                           </div>
                                         ))
                                       )}
