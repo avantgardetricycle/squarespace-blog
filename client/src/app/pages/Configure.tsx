@@ -4032,20 +4032,22 @@ export default function Configure() {
                             <Collapsible open={expanded}>
                               <CollapsibleContent>
                                 <div className="pb-4 space-y-3">
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Width</Label>
-                                    <div className="flex items-center gap-3">
-                                      <Slider
-                                        value={[cfg.width]}
-                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
-                                        min={160}
-                                        max={400}
-                                        step={20}
-                                        className="flex-1"
-                                      />
-                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
+                                  {selectedLevel === "collection" && (
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Slider
+                                          value={[cfg.width]}
+                                          onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
+                                          min={160}
+                                          max={400}
+                                          step={20}
+                                          className="flex-1"
+                                        />
+                                        <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Space above</Label>
                                     <div className="flex items-center gap-3">
