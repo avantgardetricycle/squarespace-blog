@@ -7,6 +7,7 @@ import {
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 
@@ -691,6 +692,20 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     }
 
     const siteConfigTyped = siteConfig as { collectionTemplateId?: string | null; postTemplateId?: string | null }
+    let postTemplateId: string | null =
+      typeof siteConfigTyped.postTemplateId === 'string' ? siteConfigTyped.postTemplateId : null
+    let resolvedPostConfig: Record<string, unknown> = pc as Record<string, unknown>
+    // Post configs are always tied to a template; default missing assignments to Reporter.
+    if (!postTemplateId) {
+      const defaultPostTemplate = await resolveDefaultPostTemplate()
+      if (defaultPostTemplate) {
+        postTemplateId = defaultPostTemplate.id
+        // Only replace synthesized empty defaults — keep existing customized post configs.
+        if (!(primaryPost && isRecord(primaryPost))) {
+          resolvedPostConfig = defaultPostTemplate.postConfig
+        }
+      }
+    }
     const cs = site.blogCommentSettings
     const commentsTurnedOff = cs != null && cs.commentsEnabled === false
     const sortOrder =
@@ -728,14 +743,14 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       authorMap,
       authorProfiles,
       collectionConfig: cc,
-      postConfig: pc,
+      postConfig: resolvedPostConfig,
       paywallMode: site.paywallMode,
       paywallDetectionState: site.paywallDetectionState,
       paywallDetectionSource: site.paywallDetectionSource ?? null,
       paywallSettings,
       ...(viewerMode ? { viewerMode } : {}),
       collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
-      postTemplateId: siteConfigTyped.postTemplateId ?? null,
+      postTemplateId,
       recentPostsCount: 3,
       baseUrl,
       commentSettings,

@@ -413,7 +413,8 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'fullScreen'
         },
         socialMediaLinks: {
           show: true,
@@ -461,7 +462,8 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts'],
           moduleOrder: ['authorProfiles', 'relevantPosts'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'postBody'
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
         postModules: {
@@ -514,7 +516,8 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'postBody'
         },
         socialMediaLinks: { show: false, platforms: [] },
         featuredImage: {
@@ -569,7 +572,8 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'leadMagnet'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'postBody'
         },
         socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
         featuredImage: {
@@ -620,7 +624,8 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'prevNextArticle'],
           moduleOrder: ['authorProfiles', 'prevNextArticle'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'fullScreen'
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, show: false },
         postModules: {

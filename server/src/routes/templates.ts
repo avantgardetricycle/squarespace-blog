@@ -257,7 +257,8 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts'],
     moduleOrder: ['authorProfiles', 'relevantPosts'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'postBody'
   },
   postModules: {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
@@ -309,7 +310,8 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'fullScreen'
   },
   socialMediaLinks: {
     show: true,
@@ -374,7 +376,8 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'prevNextArticle'],
     moduleOrder: ['authorProfiles', 'prevNextArticle'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'fullScreen'
   },
   featuredImage: {
     show: false
@@ -418,7 +421,8 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'postBody'
   },
   socialMediaLinks: { show: false, platforms: [] as string[] },
   featuredImage: {
@@ -484,7 +488,8 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'leadMagnet'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'postBody'
   },
   socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
   featuredImage: {
@@ -627,6 +632,46 @@ function normalizeTemplateForResponse (
     }
   }
   return template
+}
+
+/** Default post template for new sites / configs with no template assigned. */
+export const DEFAULT_POST_TEMPLATE_KEY = 'reporter'
+
+/** Resolve the Reporter post template (canonical config + DB id) for new-site defaults. */
+export async function resolveDefaultPostTemplate (): Promise<{
+  id: string
+  templateKey: string
+  name: string
+  postConfig: Record<string, unknown>
+} | null> {
+  try {
+    const template = await prisma.templateConfig.findUnique({
+      where: { templateKey_level: { templateKey: DEFAULT_POST_TEMPLATE_KEY, level: 'post' } },
+      select: {
+        id: true,
+        templateKey: true,
+        name: true,
+        description: true,
+        collectionConfig: true,
+        postConfig: true,
+        previewLayout: true,
+      },
+    })
+    if (!template) return null
+    const normalized = normalizeTemplateForResponse(template, 'post')
+    const postConfig =
+      normalized.postConfig && typeof normalized.postConfig === 'object'
+        ? (normalized.postConfig as Record<string, unknown>)
+        : ({ ...CANONICAL_REPORTER_POST_TEMPLATE } as Record<string, unknown>)
+    return {
+      id: normalized.id,
+      templateKey: normalized.templateKey,
+      name: normalized.name,
+      postConfig,
+    }
+  } catch {
+    return null
+  }
 }
 
 // GET /api/templates?level=collection|post - List templates for a level (no auth required)

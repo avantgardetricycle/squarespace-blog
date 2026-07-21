@@ -1963,28 +1963,23 @@ export default function Configure() {
     };
   }, [me]);
 
-  const unmodifiedTemplateInUse = useMemo((): { name: string; kind: "collection" | "post" } | null => {
+  /** Template assigned to the current level (post configs always have one; collection may not). */
+  const templateInUse = useMemo((): { name: string; kind: "collection" | "post" } | null => {
     if (selectedLevel === "collection") {
       const tid = config.collectionTemplateId;
       if (!tid) return null;
       const t = templateCatalogCollection.find((x) => x.id === tid);
-      if (!t?.collectionConfig || typeof t.collectionConfig !== "object") return null;
-      const parsed = parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection");
-      if (!levelConfigsEqual(config.collectionConfig, parsed)) return null;
+      if (!t) return null;
       return { name: t.name, kind: "collection" };
     }
     const tid = config.postTemplateId;
     if (!tid) return null;
     const t = templateCatalogPost.find((x) => x.id === tid);
-    if (!t?.postConfig || typeof t.postConfig !== "object") return null;
-    const parsed = parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
-    if (!levelConfigsEqual(config.postConfig, parsed)) return null;
+    if (!t) return null;
     return { name: t.name, kind: "post" };
   }, [
     selectedLevel,
-    config.collectionConfig,
     config.collectionTemplateId,
-    config.postConfig,
     config.postTemplateId,
     templateCatalogCollection,
     templateCatalogPost,
@@ -2403,8 +2398,14 @@ export default function Configure() {
         next.collectionTemplateId = null;
       }
       if (clearSettingsPost) {
-        next.postConfig = JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig;
-        next.postTemplateId = null;
+        const reporter = templateCatalogPost.find((t) => t.templateKey === "reporter");
+        if (reporter?.postConfig && typeof reporter.postConfig === "object") {
+          next.postConfig = parseLevelConfig(reporter.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+          next.postTemplateId = reporter.id;
+        } else {
+          next.postConfig = JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig;
+          next.postTemplateId = null;
+        }
       }
       const copy = JSON.parse(JSON.stringify(next)) as SiteConfigForm;
       applyDerivedModules(copy);
@@ -2413,8 +2414,12 @@ export default function Configure() {
     setClearSettingsModalOpen(false);
     setClearSettingsCollection(false);
     setClearSettingsPost(false);
-    toast.success("Selected layout settings were reset to defaults. Save to publish on your blog.");
-  }, [clearSettingsCollection, clearSettingsPost]);
+    toast.success(
+      clearSettingsPost && !clearSettingsCollection
+        ? "Post layout was reset to The Reporter template. Save to publish on your blog."
+        : "Selected layout settings were reset to defaults. Save to publish on your blog."
+    );
+  }, [clearSettingsCollection, clearSettingsPost, templateCatalogPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
@@ -2698,7 +2703,7 @@ export default function Configure() {
               className="w-full"
               onClick={() => setTemplateModalOpen(true)}
             >
-              Use a template
+              Change Template
             </Button>
             <Button
               variant="outline"
@@ -2774,10 +2779,10 @@ export default function Configure() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {unmodifiedTemplateInUse && (
+            {templateInUse && (
               <p className="text-xs text-[#6b6b6b] leading-snug">
-                {unmodifiedTemplateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
-                <span className="font-medium text-[#0a0a0a]">{unmodifiedTemplateInUse.name}</span>
+                {templateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
+                <span className="font-medium text-[#0a0a0a]">{templateInUse.name}</span>
               </p>
             )}
           </div>

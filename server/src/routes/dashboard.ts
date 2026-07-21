@@ -14,6 +14,7 @@ import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { randomBytes } from 'crypto'
+import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
@@ -517,6 +518,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
+    const defaultPostTemplate = await resolveDefaultPostTemplate()
     await prisma.siteConfig.create({
       data: {
         siteId: updatedSite.id,
@@ -531,6 +533,12 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         rightSidebar: { show: false, modules: [], width: 240 },
         headerContent: { show: false, modules: [], height: 48 },
         socialMediaLinks: { show: false, platforms: [] },
+        ...(defaultPostTemplate
+          ? {
+              postConfig: defaultPostTemplate.postConfig as object,
+              postTemplateId: defaultPostTemplate.id,
+            }
+          : {}),
         isActive: true
       }
     })

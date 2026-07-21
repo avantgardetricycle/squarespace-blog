@@ -89,7 +89,7 @@ export function TemplateModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-7xl w-[98vw] max-h-[95vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Use a template</DialogTitle>
+          <DialogTitle>Change Template</DialogTitle>
         </DialogHeader>
         <Tabs
           value={activeTab}
