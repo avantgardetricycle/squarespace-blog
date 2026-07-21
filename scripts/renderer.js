@@ -2675,6 +2675,42 @@
       bodyEl.style.paddingRight = sideGap + 'px';
     },
 
+    _getPostFooterSideMarginsMode: function(footerContentCfg) {
+      return footerContentCfg && footerContentCfg.sideMargins === 'fullScreen' ? 'fullScreen' : 'postBody';
+    },
+
+    /** Post footer horizontal inset: postBody matches post text; fullScreen uses site margins only. */
+    _applyPostFooterSideMargins: function(el, cfg, footerContentCfg) {
+      if (!el || !el.style || !cfg) return;
+      el.style.boxSizing = 'border-box';
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'postBody') {
+        this._applySinglePostBodyMargins(el, cfg);
+        return;
+      }
+      el.style.paddingLeft = '0';
+      el.style.paddingRight = '0';
+    },
+
+    /** Expand footer zone to main column width when post body uses extra horizontal inset. */
+    _bleedPostFooterZoneToMainWidth: function(footerZoneEl, mainEl) {
+      if (!footerZoneEl || !footerZoneEl.style || !mainEl || !mainEl.querySelector) return;
+      var bodyEl = mainEl.querySelector('.blog-overlay-body');
+      if (!bodyEl || !window.getComputedStyle) return;
+      var pl = 0;
+      var pr = 0;
+      try {
+        var cs = window.getComputedStyle(bodyEl);
+        pl = parseFloat(cs.paddingLeft) || 0;
+        pr = parseFloat(cs.paddingRight) || 0;
+      } catch (ePad) { return; }
+      if (pl <= 0 && pr <= 0) return;
+      footerZoneEl.style.boxSizing = 'border-box';
+      footerZoneEl.style.width = 'calc(100% + ' + (pl + pr) + 'px)';
+      footerZoneEl.style.maxWidth = 'none';
+      footerZoneEl.style.marginLeft = (-pl) + 'px';
+      footerZoneEl.style.marginRight = (-pr) + 'px';
+    },
+
     /**
      * @param {boolean|{ subscribeButton?: boolean, imageOverlay?: boolean }} opts - pass false to omit subscribe pill; or { imageOverlay: true } for editorial cards on dark imagery
      */
@@ -12810,8 +12846,13 @@
             self._warnDuplicateValues('footer', fcModules);
             if (fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
-              featureFooterLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
-              featureFooterRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              if (isSinglePost) {
+                featureFooterLeftPad = 0;
+                featureFooterRightPad = 0;
+              } else {
+                featureFooterLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+                featureFooterRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              }
               var footerTopPadRaw = footerContentCfg.topPadding;
               var footerTopPadParsed = typeof footerTopPadRaw === 'number' ? footerTopPadRaw : parseInt(footerTopPadRaw, 10);
               featureFooterTopPad = Math.min(120, Math.max(0, isFinite(footerTopPadParsed) ? footerTopPadParsed : 16));
@@ -12824,7 +12865,7 @@
               footerEl.style.paddingLeft = footerLeftPad + 'px';
               footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = footerTopPad + 'px';
-              if (isSinglePost && !featurePostLayout) self._applyStoryPostHorizontalInset(footerEl, cfg);
+              if (isSinglePost) self._applyPostFooterSideMargins(footerEl, cfg, footerContentCfg);
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
@@ -12994,8 +13035,12 @@
               section.className = 'blog-overlay-feature-below-row-section';
               section.style.width = '100%';
               section.style.boxSizing = 'border-box';
-              section.style.paddingLeft = featureFooterLeftPad + 'px';
-              section.style.paddingRight = featureFooterRightPad + 'px';
+              if (isSinglePost) {
+                self._applyPostFooterSideMargins(section, cfg, footerContentCfg);
+              } else {
+                section.style.paddingLeft = featureFooterLeftPad + 'px';
+                section.style.paddingRight = featureFooterRightPad + 'px';
+              }
               section.appendChild(el);
               featureBelowRowHost.appendChild(section);
             };
@@ -13005,8 +13050,12 @@
               featureCommentsSectionEl.className = 'blog-overlay-feature-below-row-section blog-overlay-feature-comments-section';
               featureCommentsSectionEl.style.width = '100%';
               featureCommentsSectionEl.style.boxSizing = 'border-box';
-              featureCommentsSectionEl.style.paddingLeft = featureFooterLeftPad + 'px';
-              featureCommentsSectionEl.style.paddingRight = featureFooterRightPad + 'px';
+              if (isSinglePost) {
+                self._applyPostFooterSideMargins(featureCommentsSectionEl, cfg, footerContentCfg);
+              } else {
+                featureCommentsSectionEl.style.paddingLeft = featureFooterLeftPad + 'px';
+                featureCommentsSectionEl.style.paddingRight = featureFooterRightPad + 'px';
+              }
               featureBelowRowHost.appendChild(featureCommentsSectionEl);
             }
             appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
@@ -13038,6 +13087,9 @@
               wrapper.appendChild(footerZoneEl);
             } else if (isSinglePost && !reporterPostLayout) {
               main.appendChild(footerZoneEl);
+              if (self._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+                self._bleedPostFooterZoneToMainWidth(footerZoneEl, main);
+              }
             } else {
               wrapper.appendChild(footerZoneEl);
             }

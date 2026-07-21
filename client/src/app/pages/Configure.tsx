@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/app/components/ui/select";
 import { Collapsible, CollapsibleContent } from "@/app/components/ui/collapsible";
+import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -214,6 +215,16 @@ export interface FeaturedImageConfig {
 
 export type ConfigLevel = "collection" | "post";
 
+export type FooterSideMarginsMode = "postBody" | "fullScreen";
+
+export interface FooterContentConfig {
+  show: boolean;
+  modules: string[];
+  moduleOrder: string[];
+  topPadding: number;
+  sideMargins?: FooterSideMarginsMode;
+}
+
 export interface BaseLevelConfig {
   showDate: boolean;
   showAuthor: boolean;
@@ -221,7 +232,7 @@ export interface BaseLevelConfig {
   leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
-  footerContent: { show: boolean; modules: string[]; moduleOrder: string[]; topPadding: number };
+  footerContent: FooterContentConfig;
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
 }
@@ -482,7 +493,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
+  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   socialMediaLinks: { show: false, platforms: [] },
   featuredImage: defaultFeaturedImage,
 };
@@ -778,7 +789,7 @@ const defaultPostConfig: PostLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
+  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
 };
 
@@ -1016,7 +1027,7 @@ function parseLevelConfig(
   const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
-  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number } : null;
+  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number; sideMargins?: string } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is SidebarCollectionModuleType => SIDEBAR_COLLECTION_MODULES.includes(m as SidebarCollectionModuleType)) : [];
   const validSidebarPost = (arr: unknown): SidebarPostModuleType[] =>
@@ -1061,14 +1072,16 @@ function parseLevelConfig(
       ? Math.min(120, Math.max(0, Number(fc.topPadding) || 0))
       : Math.min(120, Math.max(0, Number(fc.height) || 16)))
     : 16;
+  const sideMargins: FooterSideMarginsMode = fc?.sideMargins === "fullScreen" ? "fullScreen" : "postBody";
   const footerContent = fc
     ? {
         show: Boolean(fc.show ?? false),
         modules: fcModuleOrder,
         moduleOrder: fcModuleOrder,
         topPadding,
+        sideMargins,
       }
-    : { show: false, modules: [] as string[], moduleOrder: [] as string[], topPadding: 16 };
+    : { show: false, modules: [] as string[], moduleOrder: [] as string[], topPadding: 16, sideMargins: "postBody" as FooterSideMarginsMode };
   const postSort = (raw?.postSort === "az" || raw?.postSort === "popularity") ? raw.postSort as PostSortOption : "date";
   const pagRaw = raw?.pagination && typeof raw.pagination === "object" ? raw.pagination as { show?: boolean; mode?: string; postsPerPage?: number } : null;
   const validPostsPerPage = (v: unknown): PostsPerPageOption => (v === 5 || v === 10 || v === 20) ? v : 10;
@@ -1499,6 +1512,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     a.headerContent.modules.every((m, i) => m === b.headerContent.modules[i]);
   const fcEqual = (a.footerContent?.show ?? false) === (b.footerContent?.show ?? false) &&
     (a.footerContent?.topPadding ?? 16) === (b.footerContent?.topPadding ?? 16) &&
+    (a.footerContent?.sideMargins ?? "postBody") === (b.footerContent?.sideMargins ?? "postBody") &&
     (a.footerContent?.modules?.length ?? 0) === (b.footerContent?.modules?.length ?? 0) &&
     (a.footerContent?.modules ?? []).every((m, i) => m === (b.footerContent?.modules ?? [])[i]);
   const smEqual = a.socialMediaLinks.show === b.socialMediaLinks.show &&
@@ -2557,6 +2571,7 @@ export default function Configure() {
     if (path === "rightSidebar.moduleOrder") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, moduleOrder: value as string[] } };
     if (path === "headerContent.moduleOrder") return { ...cfg, headerContent: { ...cfg.headerContent, moduleOrder: value as string[] } };
     if (path === "footerContent.topPadding") return { ...cfg, footerContent: { ...cfg.footerContent, topPadding: value as number } };
+    if (path === "footerContent.sideMargins") return { ...cfg, footerContent: { ...cfg.footerContent, sideMargins: value as FooterSideMarginsMode } };
     if (path === "footerContent.moduleOrder") return { ...cfg, footerContent: { ...cfg.footerContent, moduleOrder: value as string[] } };
     if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
     if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
@@ -4257,6 +4272,28 @@ export default function Configure() {
                                 <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.topPadding ?? 16}px</span>
                               </div>
                             </div>
+                            {selectedLevel === "post" && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Side margins</Label>
+                                <RadioGroup
+                                  value={effectiveConfig.footerContent?.sideMargins ?? "postBody"}
+                                  onValueChange={(v) => updateLevelConfigPath("footerContent.sideMargins", v as FooterSideMarginsMode)}
+                                  className="grid gap-2"
+                                >
+                                  <label htmlFor="footer-side-margins-post-body" className="flex items-center gap-2 cursor-pointer">
+                                    <RadioGroupItem value="postBody" id="footer-side-margins-post-body" />
+                                    <span className="text-xs text-[#6b6b6b]">Post Body</span>
+                                  </label>
+                                  <label htmlFor="footer-side-margins-full-screen" className="flex items-center gap-2 cursor-pointer">
+                                    <RadioGroupItem value="fullScreen" id="footer-side-margins-full-screen" />
+                                    <span className="text-xs text-[#6b6b6b]">Full Screen</span>
+                                  </label>
+                                </RadioGroup>
+                                <p className="text-[10px] text-[#6b6b6b]">
+                                  Post Body aligns footer content with the post text column. Full Screen uses the site&apos;s default content margins.
+                                </p>
+                              </div>
+                            )}
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Module order</Label>
                               <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
