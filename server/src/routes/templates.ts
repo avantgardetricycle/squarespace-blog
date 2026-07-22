@@ -235,7 +235,8 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     contentVerticalAlignment: 'bottom',
     showBreadcrumbs: false,
     showTags: false,
-    showCategories: true
+    showCategories: true,
+    showDecorativeAccentLine: false
   },
   leftSidebar: {
     show: false,
@@ -287,7 +288,8 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     fullBleedLayout: 'stacked',
     showBreadcrumbs: true,
     showTags: true,
-    showCategories: true
+    showCategories: true,
+    showDecorativeAccentLine: false
   },
   leftSidebar: {
     show: true,
@@ -354,7 +356,8 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: false,
-    showCategories: true
+    showCategories: true,
+    showDecorativeAccentLine: true
   },
   leftSidebar: {
     show: false,
@@ -398,7 +401,8 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     showBreadcrumbs: true,
     showTags: true,
     showCategories: false,
-    showByline: true
+    showByline: true,
+    showDecorativeAccentLine: true
   },
   leftSidebar: {
     show: false,
@@ -465,7 +469,8 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     showBreadcrumbs: true,
     showTags: true,
     showCategories: true,
-    showByline: true
+    showByline: true,
+    showDecorativeAccentLine: true
   },
   leftSidebar: {
     show: false,

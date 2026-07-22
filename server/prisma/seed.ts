@@ -390,7 +390,8 @@ async function seedTemplateConfigs () {
           fullBleedLayout: 'stacked',
           showBreadcrumbs: true,
           showTags: true,
-          showCategories: true
+          showCategories: true,
+          showDecorativeAccentLine: false
         },
         leftSidebar: {
           show: true,
@@ -448,7 +449,7 @@ async function seedTemplateConfigs () {
         showDate: true,
         showAuthor: true,
         showReadingTime: true,
-        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' },
+        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom', showDecorativeAccentLine: false },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
@@ -500,7 +501,8 @@ async function seedTemplateConfigs () {
           showBreadcrumbs: true,
           showTags: true,
           showCategories: false,
-          showByline: true
+          showByline: true,
+          showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
@@ -563,7 +565,8 @@ async function seedTemplateConfigs () {
           showBreadcrumbs: true,
           showTags: true,
           showCategories: true,
-          showByline: true
+          showByline: true,
+          showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
@@ -616,7 +619,8 @@ async function seedTemplateConfigs () {
           contentVerticalAlignment: 'top',
           showBreadcrumbs: true,
           showTags: false,
-          showCategories: true
+          showCategories: true,
+          showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },

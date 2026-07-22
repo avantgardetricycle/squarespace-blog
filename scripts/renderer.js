@@ -7283,7 +7283,7 @@
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-categories-line{margin-bottom:18px;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-title{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-deck--on-dark{margin-bottom:14px;}' +
-        '#blog-overlay-list .blog-overlay-reporter-meta-divider{border-top:1px solid var(--bb-border,#e8e7e4);margin-top:16px;padding-top:12px;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-reporter-accent-rule{width:100%;height:1px;background:var(--bb-border,#e8e7e4);border:none;margin:16px 0 12px 0;}' +
         '#blog-overlay-list .blog-overlay-reporter-header-stack{gap:0;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;}' +
@@ -8131,6 +8131,14 @@
       return '#000000';
     },
 
+    /** Reporter post header: full-width decorative rule above meta row. */
+    _createReporterPostHeaderDivider: function() {
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-reporter-accent-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      return hr;
+    },
+
     /** Story post header (on-dark): full-width decorative rule between deck and meta. */
     _createStoryPostHeaderDivider: function() {
       var hr = document.createElement('hr');
@@ -8899,6 +8907,7 @@
       var phShowBreadcrumbs = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showBreadcrumbs);
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
+      var phShowDecorativeAccentLine = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showDecorativeAccentLine);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
       var sidebarRowPostLayout = isSinglePost && (
@@ -8906,7 +8915,7 @@
         self._isReporterPostLayout(cfg) ||
         self._isPublisherPostLayout(cfg)
       );
-      var postHeaderAccentDividerLayout = writerPostLayout || storyPostLayout;
+      var postHeaderAccentDividerLayout = phShowDecorativeAccentLine && (writerPostLayout || storyPostLayout);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
@@ -9658,9 +9667,6 @@
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
             metaRow.style.marginTop = '0';
           }
-          if (isSinglePost && phImagePos === 'rightOfInfo') {
-            metaRow.classList.add('blog-overlay-reporter-meta-divider');
-          }
           var meta = document.createElement('div');
           meta.className = 'blog-overlay-meta';
           meta.textContent = metaParts.join(' · ');
@@ -9689,6 +9695,9 @@
           if (postHeaderAccentDividerLayout) {
             pendingWriterMetaRow = metaRow;
             metaRow.style.marginBottom = '0';
+          } else if (isSinglePost && reporterPostHeaderLayout && phShowDecorativeAccentLine) {
+            headlineMount.appendChild(self._createReporterPostHeaderDivider());
+            headlineMount.appendChild(metaRow);
           } else {
             headlineMount.appendChild(metaRow);
           }

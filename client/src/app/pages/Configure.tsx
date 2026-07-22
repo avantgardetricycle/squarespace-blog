@@ -198,6 +198,8 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
+  /** Decorative accent rule above/between header elements (template-specific styling). */
+  showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
   backgroundColor?: string;
 }
@@ -512,6 +514,7 @@ const defaultPostHeader: PostHeaderConfig = {
   showTags: false,
   showCategories: false,
   showByline: false,
+  showDecorativeAccentLine: false,
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
@@ -544,6 +547,7 @@ export type PostTemplateLockKey =
   | "contentVerticalAlignment"
   | "showTagsAndCategories"
   | "showByline"
+  | "showDecorativeAccentLine"
   | "verticalSpacing";
 
 const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
@@ -556,6 +560,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "roundedCorners",
     "photoShadow",
     "showTagsAndCategories",
+    "showDecorativeAccentLine",
   ]),
   publisher: new Set([
     "showFeaturedImage",
@@ -564,6 +569,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "leftSidebar",
     "showByline",
     "showTagsAndCategories",
+    "showDecorativeAccentLine",
   ]),
   writer: new Set([
     "leftSidebar",
@@ -571,6 +577,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showTagsAndCategories",
     "showFeaturedImage",
     "verticalSpacing",
+    "showDecorativeAccentLine",
   ]),
   feature: new Set([
     "imagePosition",
@@ -582,6 +589,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "roundedCorners",
     "photoShadow",
     "showTagsAndCategories",
+    "showDecorativeAccentLine",
   ]),
   story: new Set([
     "imagePosition",
@@ -596,6 +604,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showTagsAndCategories",
     "leftSidebar",
     "rightSidebar",
+    "showDecorativeAccentLine",
   ]),
 };
 
@@ -631,6 +640,7 @@ function isPostTemplatePathLocked(path: string, locks: ReadonlySet<PostTemplateL
     return locks.has("showTagsAndCategories");
   }
   if (path === "postHeader.showByline") return locks.has("showByline");
+  if (path === "postHeader.showDecorativeAccentLine") return locks.has("showDecorativeAccentLine");
   if (path === "featuredImage.show") return locks.has("showFeaturedImage");
   if (path === "featuredImage.imageWidthPercent") return locks.has("imageWidth");
   if (path === "featuredImage.aspectBehavior") return locks.has("aspectBehavior");
@@ -687,6 +697,10 @@ function enforcePostTemplateLockedValues(
   }
   if (locks.has("showByline") && ph.showByline !== tplPh.showByline) {
     ph = { ...ph, showByline: tplPh.showByline };
+    phChanged = true;
+  }
+  if (locks.has("showDecorativeAccentLine") && ph.showDecorativeAccentLine !== tplPh.showDecorativeAccentLine) {
+    ph = { ...ph, showDecorativeAccentLine: tplPh.showDecorativeAccentLine };
     phChanged = true;
   }
   if (phChanged) next = { ...next, postHeader: ph };
@@ -1329,6 +1343,7 @@ function parseLevelConfig(
         showTags: Boolean(phRaw.showTags ?? false),
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
+        showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -1590,6 +1605,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showTags ?? false) === (phB.showTags ?? false) &&
       (phA.showCategories ?? false) === (phB.showCategories ?? false) &&
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
+      (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "");
     return base && pa.show === pb.show && phEqual;
   }
@@ -2643,6 +2659,7 @@ export default function Configure() {
     if (path === "postHeader.showTags" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showTags: value as boolean } };
     if (path === "postHeader.showCategories" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showCategories: value as boolean } };
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
+    if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
     return cfg;
   }
@@ -3940,6 +3957,23 @@ export default function Configure() {
                                   checked={(effectiveConfig as PostLevelConfig).postHeader?.showByline ?? false}
                                   onCheckedChange={(v) => updateLevelConfigPath("postHeader.showByline", v)}
                                   disabled={isPostControlLocked("showByline")}
+                                />
+                              </LockedControlTooltip>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <Label className="text-xs text-[#6b6b6b]">Show decorative accent line</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Horizontal divider in the post header (placement varies by template)</p>
+                              </div>
+                              <LockedControlTooltip
+                                locked={isPostControlLocked("showDecorativeAccentLine")}
+                                templateName={postTemplateLockName}
+                                className="shrink-0"
+                              >
+                                <Switch
+                                  checked={(effectiveConfig as PostLevelConfig).postHeader?.showDecorativeAccentLine ?? false}
+                                  onCheckedChange={(v) => updateLevelConfigPath("postHeader.showDecorativeAccentLine", v)}
+                                  disabled={isPostControlLocked("showDecorativeAccentLine")}
                                 />
                               </LockedControlTooltip>
                             </div>
