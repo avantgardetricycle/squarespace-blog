@@ -560,7 +560,6 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "roundedCorners",
     "photoShadow",
     "showTagsAndCategories",
-    "showDecorativeAccentLine",
   ]),
   publisher: new Set([
     "showFeaturedImage",
@@ -577,7 +576,6 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showTagsAndCategories",
     "showFeaturedImage",
     "verticalSpacing",
-    "showDecorativeAccentLine",
   ]),
   feature: new Set([
     "imagePosition",
@@ -604,7 +602,6 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showTagsAndCategories",
     "leftSidebar",
     "rightSidebar",
-    "showDecorativeAccentLine",
   ]),
 };
 
