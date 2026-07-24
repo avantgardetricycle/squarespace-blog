@@ -3656,56 +3656,39 @@ export default function Configure() {
                                 </Select>
                               </LockedControlTooltip>
                             </div>
-                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") && (
+                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") &&
+                              ((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
                               <div className="space-y-2">
-                                <Label className="text-xs text-[#6b6b6b]">Full bleed layout</Label>
-                                <p className="text-[10px] text-[#6b6b6b]">Hero places the title on the image; stacked places it above a full-width image</p>
-                                <LockedControlTooltip locked={isPostControlLocked("fullBleedControls")} templateName={postTemplateLockName}>
+                                <Label className="text-xs text-[#6b6b6b]">Vertical text placement</Label>
+                                <LockedControlTooltip
+                                  locked={
+                                    isPostControlLocked("fullBleedControls") ||
+                                    isPostControlLocked("contentVerticalAlignment")
+                                  }
+                                  templateName={postTemplateLockName}
+                                >
                                   <Select
-                                    value={(effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay"}
-                                    onValueChange={(v) => updateLevelConfigPath("postHeader.fullBleedLayout", v as PostHeaderFullBleedLayout)}
-                                    disabled={isPostControlLocked("fullBleedControls")}
+                                    value={
+                                      (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "bottom"
+                                    }
+                                    onValueChange={(v) =>
+                                      updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                    }
+                                    disabled={
+                                      isPostControlLocked("fullBleedControls") ||
+                                      isPostControlLocked("contentVerticalAlignment")
+                                    }
                                   >
                                     <SelectTrigger>
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="overlay">Hero (text on image)</SelectItem>
-                                      <SelectItem value="stacked">Stacked (text above image)</SelectItem>
+                                      <SelectItem value="top">Top</SelectItem>
+                                      <SelectItem value="center">Center</SelectItem>
+                                      <SelectItem value="bottom">Bottom</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </LockedControlTooltip>
-                                {((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
-                                  <LockedControlTooltip
-                                    locked={
-                                      isPostControlLocked("fullBleedControls") ||
-                                      isPostControlLocked("contentVerticalAlignment")
-                                    }
-                                    templateName={postTemplateLockName}
-                                  >
-                                    <Select
-                                      value={
-                                        (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "bottom"
-                                      }
-                                      onValueChange={(v) =>
-                                        updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                      }
-                                      disabled={
-                                        isPostControlLocked("fullBleedControls") ||
-                                        isPostControlLocked("contentVerticalAlignment")
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="top">Top</SelectItem>
-                                        <SelectItem value="center">Center</SelectItem>
-                                        <SelectItem value="bottom">Bottom</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </LockedControlTooltip>
-                                )}
                               </div>
                             )}
                             <div className="flex items-center justify-between gap-3">
@@ -3728,154 +3711,43 @@ export default function Configure() {
                             {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
                               <>
                                 {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" || (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
-                                  <>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Image width</Label>
-                                      <LockedControlTooltip locked={isPostControlLocked("imageWidth")} templateName={postTemplateLockName}>
-                                        <div className="flex items-center gap-3">
-                                          <Slider
-                                            value={[effectiveConfig.featuredImage.imageWidthPercent]}
-                                            onValueChange={([v]) => updateLevelConfigPath("featuredImage.imageWidthPercent", v ?? 40)}
-                                            min={25}
-                                            max={60}
-                                            step={5}
-                                            className="flex-1"
-                                            disabled={isPostControlLocked("imageWidth")}
-                                          />
-                                          <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
-                                            {effectiveConfig.featuredImage.imageWidthPercent}%
-                                          </span>
-                                        </div>
-                                      </LockedControlTooltip>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Image side padding</Label>
-                                      <LockedControlTooltip locked={isPostControlLocked("sidePadding")} templateName={postTemplateLockName}>
-                                        <div className="flex items-center gap-3">
-                                          <Slider
-                                            value={[((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)]}
-                                            onValueChange={([v]) => updateLevelConfigPath("postHeader.sideGap", v ?? 24)}
-                                            min={0}
-                                            max={150}
-                                            step={2}
-                                            className="flex-1"
-                                            disabled={isPostControlLocked("sidePadding")}
-                                          />
-                                          <span className="text-xs text-[#6b6b6b] w-12 shrink-0">
-                                            {((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)}px
-                                          </span>
-                                        </div>
-                                      </LockedControlTooltip>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
+                                    <Select
+                                      value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
+                                      onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="left">Left</SelectItem>
+                                        <SelectItem value="center">Center</SelectItem>
+                                        <SelectItem value="right">Right</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <LockedControlTooltip locked={isPostControlLocked("contentVerticalAlignment")} templateName={postTemplateLockName}>
                                       <Select
-                                        value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
-                                        onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                                        value={
+                                          (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                        }
+                                        onValueChange={(v) =>
+                                          updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                        }
+                                        disabled={isPostControlLocked("contentVerticalAlignment")}
                                       >
                                         <SelectTrigger>
                                           <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          <SelectItem value="left">Left</SelectItem>
+                                          <SelectItem value="top">Top</SelectItem>
                                           <SelectItem value="center">Center</SelectItem>
-                                          <SelectItem value="right">Right</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <LockedControlTooltip locked={isPostControlLocked("contentVerticalAlignment")} templateName={postTemplateLockName}>
-                                        <Select
-                                          value={
-                                            (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
-                                          }
-                                          onValueChange={(v) =>
-                                            updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                          }
-                                          disabled={isPostControlLocked("contentVerticalAlignment")}
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="top">Top</SelectItem>
-                                            <SelectItem value="center">Center</SelectItem>
-                                            <SelectItem value="bottom">Bottom</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </LockedControlTooltip>
-                                    </div>
-                                  </>
-                                )}
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
-                                  <LockedControlTooltip locked={isPostControlLocked("aspectBehavior")} templateName={postTemplateLockName}>
-                                    <Select
-                                      value={effectiveConfig.featuredImage.aspectBehavior}
-                                      onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
-                                      disabled={isPostControlLocked("aspectBehavior")}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="original">Original ratio</SelectItem>
-                                        <SelectItem value="cropped">Cropped</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </LockedControlTooltip>
-                                  {effectiveConfig.featuredImage.aspectBehavior === "cropped" && (
-                                    <LockedControlTooltip locked={isPostControlLocked("aspectRatio")} templateName={postTemplateLockName}>
-                                      <Select
-                                        value={effectiveConfig.featuredImage.aspectRatio}
-                                        onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
-                                        disabled={isPostControlLocked("aspectRatio")}
-                                      >
-                                        <SelectTrigger className="mt-1">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="16:9">16:9</SelectItem>
-                                          <SelectItem value="4:3">4:3</SelectItem>
-                                          <SelectItem value="3:2">3:2</SelectItem>
-                                          <SelectItem value="2:3">2:3</SelectItem>
-                                          <SelectItem value="1:1">1:1</SelectItem>
+                                          <SelectItem value="bottom">Bottom</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </LockedControlTooltip>
-                                  )}
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
-                                  <LockedControlTooltip locked={isPostControlLocked("roundedCorners")} templateName={postTemplateLockName}>
-                                    <Select
-                                      value={effectiveConfig.featuredImage.roundedCorners}
-                                      onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
-                                      disabled={isPostControlLocked("roundedCorners")}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="off">Off</SelectItem>
-                                        <SelectItem value="small">Small</SelectItem>
-                                        <SelectItem value="large">Large</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </LockedControlTooltip>
-                                </div>
-                                <div className="flex items-center justify-between gap-3">
-                                  <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
-                                  <LockedControlTooltip
-                                    locked={isPostControlLocked("photoShadow")}
-                                    templateName={postTemplateLockName}
-                                    className="shrink-0"
-                                  >
-                                    <Switch
-                                      checked={effectiveConfig.featuredImage.shadow}
-                                      onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
-                                      disabled={isPostControlLocked("photoShadow")}
-                                    />
-                                  </LockedControlTooltip>
-                                </div>
+                                  </div>
+                                )}
                                 <div className="flex items-center justify-between">
                                   <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
                                   <Switch
@@ -4378,6 +4250,7 @@ export default function Configure() {
                       <Collapsible open={sectionExpanded.footerContent}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-3">
+                            {selectedLevel === "collection" && (
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Top padding</Label>
                               <div className="flex items-center gap-3">
@@ -4392,6 +4265,7 @@ export default function Configure() {
                                 <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.topPadding ?? 16}px</span>
                               </div>
                             </div>
+                            )}
                             {selectedLevel === "post" && (
                               <div className="space-y-2">
                                 <Label className="text-xs text-[#6b6b6b]">Side margins</Label>
@@ -4651,38 +4525,37 @@ export default function Configure() {
                               <CollapsibleContent>
                                 <div className={`pb-4 space-y-3 ${sidebarLocked ? "opacity-60" : ""}`}>
                                   {selectedLevel === "collection" && (
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Width</Label>
-                                      <div className="flex items-center gap-3">
-                                        <Slider
-                                          value={[cfg.width]}
-                                          onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
-                                          min={160}
-                                          max={400}
-                                          step={20}
-                                          className="flex-1"
-                                        />
-                                        <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
-                                      </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                    <div className="flex items-center gap-3">
+                                      <Slider
+                                        value={[cfg.width]}
+                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.width`, v ?? 240)}
+                                        min={160}
+                                        max={400}
+                                        step={20}
+                                        className="flex-1"
+                                      />
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
                                     </div>
+                                  </div>
                                   )}
+                                  {selectedLevel === "collection" && (
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Space above</Label>
-                                    <LockedControlTooltip locked={sidebarLocked} templateName={postTemplateLockName}>
-                                      <div className="flex items-center gap-3">
-                                        <Slider
-                                          value={[cfg.spaceAbove ?? 0]}
-                                          onValueChange={([v]) => updateLevelConfigPath(`${subPath}.spaceAbove`, v ?? 0)}
-                                          min={0}
-                                          max={64}
-                                          step={4}
-                                          className="flex-1"
-                                          disabled={sidebarLocked}
-                                        />
-                                        <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.spaceAbove ?? 0}px</span>
-                                      </div>
-                                    </LockedControlTooltip>
+                                    <div className="flex items-center gap-3">
+                                      <Slider
+                                        value={[cfg.spaceAbove ?? 0]}
+                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.spaceAbove`, v ?? 0)}
+                                        min={0}
+                                        max={64}
+                                        step={4}
+                                        className="flex-1"
+                                      />
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.spaceAbove ?? 0}px</span>
+                                    </div>
                                   </div>
+                                  )}
                                   <div className="flex items-center justify-between gap-3">
                                     <Label className="text-xs text-[#6b6b6b]">Sticky (move with scroll)</Label>
                                     <LockedControlTooltip locked={sidebarLocked} templateName={postTemplateLockName} className="shrink-0">
