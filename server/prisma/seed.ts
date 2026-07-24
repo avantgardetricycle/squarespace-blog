@@ -391,6 +391,7 @@ async function seedTemplateConfigs () {
           showBreadcrumbs: true,
           showTags: true,
           showCategories: true,
+          showByline: true,
           showDecorativeAccentLine: false
         },
         leftSidebar: {
@@ -526,7 +527,7 @@ async function seedTemplateConfigs () {
           ...baseCollectionConfig.featuredImage,
           layoutMode: 'rightJustified',
           imageWidthPercent: 60,
-          aspectBehavior: 'cropped',
+          aspectBehavior: 'original',
           aspectRatio: '3:2'
         },
         progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' },

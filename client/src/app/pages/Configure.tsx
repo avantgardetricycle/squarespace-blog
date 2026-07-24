@@ -519,7 +519,9 @@ const defaultPostHeader: PostHeaderConfig = {
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
   const ph = postConfig.postHeader ?? defaultPostHeader;
-  return ph.imagePosition === "leftOfInfo" && !postConfig.leftSidebar?.show && !postConfig.rightSidebar?.show;
+  const pos = ph.imagePosition;
+  if (pos !== "leftOfInfo" && pos !== "rightOfInfo") return false;
+  return !postConfig.leftSidebar?.show && !postConfig.rightSidebar?.show;
 }
 
 function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
@@ -590,7 +592,6 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showDecorativeAccentLine",
   ]),
   story: new Set([
-    "imagePosition",
     "fullBleedControls",
     "showFeaturedImage",
     "aspectRatio",
@@ -608,6 +609,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
 /** When set, image-position Select is limited to these options (control stays enabled). */
 const POST_TEMPLATE_IMAGE_POSITION_OPTIONS: Record<string, readonly PostHeaderImagePosition[]> = {
   reporter: ["leftOfInfo", "rightOfInfo"],
+  story: ["leftOfInfo", "rightOfInfo"],
 };
 
 function getActivePostTemplateKey(

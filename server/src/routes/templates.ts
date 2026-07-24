@@ -289,6 +289,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     showBreadcrumbs: true,
     showTags: true,
     showCategories: true,
+    showByline: true,
     showDecorativeAccentLine: false
   },
   leftSidebar: {
@@ -434,7 +435,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     show: true,
     layoutMode: 'rightJustified',
     imageWidthPercent: 60,
-    aspectBehavior: 'cropped',
+    aspectBehavior: 'original',
     aspectRatio: '3:2',
     roundedCorners: 'off',
     shadow: false,
