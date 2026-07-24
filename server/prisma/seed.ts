@@ -620,6 +620,7 @@ async function seedTemplateConfigs () {
           showBreadcrumbs: true,
           showTags: false,
           showCategories: true,
+          showByline: true,
           showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },

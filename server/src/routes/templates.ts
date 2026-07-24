@@ -357,6 +357,7 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     showBreadcrumbs: true,
     showTags: false,
     showCategories: true,
+    showByline: true,
     showDecorativeAccentLine: true
   },
   leftSidebar: {

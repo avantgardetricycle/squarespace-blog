@@ -3711,6 +3711,19 @@ export default function Configure() {
                                 </div>
                               </div>
                             )}
+                            <LockedControlRow
+                              locked={isPostControlLocked("showFeaturedImage")}
+                              templateName={postTemplateLockName}
+                              label="Show featured image"
+                              description="Display the post's featured image in the header"
+                            >
+                              <Switch
+                                checked={effectiveConfig.featuredImage.show}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
+                                disabled={isPostControlLocked("showFeaturedImage")}
+                              />
+                            </LockedControlRow>
+                            {effectiveConfig.featuredImage.show && (
                             <LockedControlField
                               locked={isPostControlLocked("imagePosition")}
                               templateName={postTemplateLockName}
@@ -3742,6 +3755,7 @@ export default function Configure() {
                                 </SelectContent>
                               </Select>
                             </LockedControlField>
+                            )}
                             {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") &&
                               ((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
                               <LockedControlField
@@ -3775,18 +3789,6 @@ export default function Configure() {
                                 </Select>
                               </LockedControlField>
                             )}
-                            <LockedControlRow
-                              locked={isPostControlLocked("showFeaturedImage")}
-                              templateName={postTemplateLockName}
-                              label="Show featured image"
-                              description="Display the post's featured image in the header"
-                            >
-                              <Switch
-                                checked={effectiveConfig.featuredImage.show}
-                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
-                                disabled={isPostControlLocked("showFeaturedImage")}
-                              />
-                            </LockedControlRow>
                             {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
                               <>
                                 {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" || (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
