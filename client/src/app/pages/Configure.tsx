@@ -33,11 +33,6 @@ import {
 import { Collapsible, CollapsibleContent } from "@/app/components/ui/collapsible";
 import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/app/components/ui/tooltip";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -794,112 +789,73 @@ function resolvePostTemplateConfig(
 }
 
 /** Wrap a locked control so hover explains which template disabled it. */
-function LockedControlTooltip({
-  locked,
-  templateName,
-  children,
-  className,
-}: {
-  locked: boolean;
-  templateName?: string | null;
-  children: ReactNode;
-  className?: string;
-}) {
-  if (!locked || !templateName) return <>{children}</>;
-  const mergedClassName = [className ?? "w-full", "cursor-not-allowed"].filter(Boolean).join(" ");
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className={mergedClassName}>{children}</div>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        {`This control is disabled on ${templateName}`}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** Horizontal label + control row; greys out descriptive text when locked. */
+/** Horizontal label + control row; hidden when locked on a post template. */
 function LockedControlRow({
   locked,
-  templateName,
   label,
   description,
   children,
 }: {
   locked: boolean;
-  templateName?: string | null;
   label: ReactNode;
   description?: ReactNode;
   children: ReactNode;
 }) {
-  const labelBlock = (
-    <div className={locked ? "opacity-60 select-none" : undefined}>
-      {typeof label === "string" ? (
-        <Label className="text-xs text-[#6b6b6b]">{label}</Label>
-      ) : (
-        label
-      )}
-      {description != null && description !== "" ? (
-        typeof description === "string" ? (
-          <p className="text-[10px] text-[#6b6b6b]">{description}</p>
-        ) : (
-          description
-        )
-      ) : null}
-    </div>
-  );
-
+  if (locked) return null;
   return (
-    <LockedControlTooltip locked={locked} templateName={templateName}>
-      <div className={`flex items-center justify-between gap-3 ${locked ? "cursor-not-allowed" : ""}`}>
-        {labelBlock}
-        <div className="shrink-0">{children}</div>
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        {typeof label === "string" ? (
+          <Label className="text-xs text-[#6b6b6b]">{label}</Label>
+        ) : (
+          label
+        )}
+        {description != null && description !== "" ? (
+          typeof description === "string" ? (
+            <p className="text-[10px] text-[#6b6b6b]">{description}</p>
+          ) : (
+            description
+          )
+        ) : null}
       </div>
-    </LockedControlTooltip>
+      <div className="shrink-0">{children}</div>
+    </div>
   );
 }
 
-/** Stacked label + control; greys out descriptive text when locked. */
+/** Stacked label + control; hidden when locked on a post template. */
 function LockedControlField({
   locked,
-  templateName,
   label,
   description,
   children,
   className = "space-y-2",
 }: {
   locked: boolean;
-  templateName?: string | null;
   label: ReactNode;
   description?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
-  const labelBlock = (
-    <div className={locked ? "opacity-60 select-none" : undefined}>
-      {typeof label === "string" ? (
-        <Label className="text-xs text-[#6b6b6b]">{label}</Label>
-      ) : (
-        label
-      )}
-      {description != null && description !== "" ? (
-        typeof description === "string" ? (
-          <p className="text-[10px] text-[#6b6b6b]">{description}</p>
-        ) : (
-          description
-        )
-      ) : null}
-    </div>
-  );
-
+  if (locked) return null;
   return (
-    <LockedControlTooltip locked={locked} templateName={templateName}>
-      <div className={`${className} ${locked ? "cursor-not-allowed" : ""}`}>
-        {labelBlock}
-        {children}
+    <div className={className}>
+      <div>
+        {typeof label === "string" ? (
+          <Label className="text-xs text-[#6b6b6b]">{label}</Label>
+        ) : (
+          label
+        )}
+        {description != null && description !== "" ? (
+          typeof description === "string" ? (
+            <p className="text-[10px] text-[#6b6b6b]">{description}</p>
+          ) : (
+            description
+          )
+        ) : null}
       </div>
-    </LockedControlTooltip>
+      {children}
+    </div>
   );
 }
 
@@ -2130,8 +2086,6 @@ export default function Configure() {
     (key: PostTemplateLockKey) => selectedLevel === "post" && postTemplateLocks.has(key),
     [selectedLevel, postTemplateLocks]
   );
-  const postTemplateLockName =
-    selectedLevel === "post" && templateInUse?.kind === "post" ? templateInUse.name : null;
   const postTemplateImagePositionOptions = useMemo(() => {
     if (!activePostTemplateKey) return null;
     return POST_TEMPLATE_IMAGE_POSITION_OPTIONS[activePostTemplateKey] ?? null;
@@ -2248,40 +2202,31 @@ export default function Configure() {
       ((loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) ||
         (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")));
     const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
+    const visibleSelectedLocations = selectedLocations.filter((loc) => !isLocLocked(loc));
     const availableLocations = allowedLocations.filter(
       (loc) => !selectedLocations.includes(loc) && !isLocLocked(loc)
     );
+    if (visibleSelectedLocations.length === 0 && availableLocations.length === 0) return null;
     return (
       <div className="space-y-2">
         <Label className="text-xs text-[#6b6b6b]">{locationLabel}</Label>
         <div className="flex flex-wrap items-center gap-2">
-          {selectedLocations.map((loc) => {
-            const locked = isLocLocked(loc);
-            return (
-              <LockedControlTooltip
+          {visibleSelectedLocations.map((loc) => (
+              <span
                 key={loc}
-                locked={locked}
-                templateName={postTemplateLockName}
-                className="inline-flex"
+                className="inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]"
               >
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a] ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
+                {FEATURE_LOCATION_LABELS[loc]}
+                <button
+                  type="button"
+                  onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
+                  className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
+                  aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
                 >
-                  {FEATURE_LOCATION_LABELS[loc]}
-                  {!locked && (
-                    <button
-                      type="button"
-                      onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
-                      className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
-                      aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </span>
-              </LockedControlTooltip>
-            );
-          })}
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+          ))}
           {availableLocations.length > 0 && (
             <Select value="" onValueChange={(v) => v && addFeatureLocation(moduleId, v as FeatureModuleLocation, postHeaderModuleKey)}>
               <SelectTrigger className="h-8 w-[170px] text-xs">
@@ -2297,7 +2242,7 @@ export default function Configure() {
         </div>
       </div>
     );
-  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation, selectedLevel, postTemplateLocks, postTemplateLockName]);
+  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation, selectedLevel, postTemplateLocks]);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
@@ -3715,26 +3660,22 @@ export default function Configure() {
                             )}
                             <LockedControlRow
                               locked={isPostControlLocked("showFeaturedImage")}
-                              templateName={postTemplateLockName}
                               label="Show featured image"
                               description="Display the post's featured image in the header"
                             >
                               <Switch
                                 checked={effectiveConfig.featuredImage.show}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
-                                disabled={isPostControlLocked("showFeaturedImage")}
                               />
                             </LockedControlRow>
                             {effectiveConfig.featuredImage.show && (
                             <LockedControlField
                               locked={isPostControlLocked("imagePosition")}
-                              templateName={postTemplateLockName}
                               label="Image position"
                             >
                               <Select
                                 value={(effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed"}
                                 onValueChange={(v) => updateLevelConfigPath("postHeader.imagePosition", v)}
-                                disabled={isPostControlLocked("imagePosition")}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
@@ -3765,7 +3706,6 @@ export default function Configure() {
                                   isPostControlLocked("fullBleedControls") ||
                                   isPostControlLocked("contentVerticalAlignment")
                                 }
-                                templateName={postTemplateLockName}
                                 label="Vertical text placement"
                               >
                                 <Select
@@ -3774,10 +3714,6 @@ export default function Configure() {
                                   }
                                   onValueChange={(v) =>
                                     updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                  }
-                                  disabled={
-                                    isPostControlLocked("fullBleedControls") ||
-                                    isPostControlLocked("contentVerticalAlignment")
                                   }
                                 >
                                   <SelectTrigger>
@@ -3809,28 +3745,25 @@ export default function Configure() {
                                         <SelectItem value="right">Right</SelectItem>
                                       </SelectContent>
                                     </Select>
-                                    <LockedControlTooltip locked={isPostControlLocked("contentVerticalAlignment")} templateName={postTemplateLockName}>
-                                      <div className={isPostControlLocked("contentVerticalAlignment") ? "opacity-60 cursor-not-allowed select-none" : undefined}>
-                                        <Select
-                                          value={
-                                            (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
-                                          }
-                                          onValueChange={(v) =>
-                                            updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                          }
-                                          disabled={isPostControlLocked("contentVerticalAlignment")}
-                                        >
-                                          <SelectTrigger>
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="top">Top</SelectItem>
-                                            <SelectItem value="center">Center</SelectItem>
-                                            <SelectItem value="bottom">Bottom</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                    </LockedControlTooltip>
+                                    {!isPostControlLocked("contentVerticalAlignment") && (
+                                    <Select
+                                      value={
+                                        (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                      }
+                                      onValueChange={(v) =>
+                                        updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="top">Top</SelectItem>
+                                        <SelectItem value="center">Center</SelectItem>
+                                        <SelectItem value="bottom">Bottom</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    )}
                                   </div>
                                 )}
                                 <div className="flex items-center justify-between">
@@ -3841,24 +3774,6 @@ export default function Configure() {
                                   />
                                 </div>
                               </>
-                            )}
-                            {isPostControlLocked("verticalSpacing") && (
-                              <LockedControlField locked templateName={postTemplateLockName} label="Vertical spacing">
-                                <Select
-                                  value={effectiveConfig.featuredImage.verticalSpacing}
-                                  onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
-                                  disabled
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="tight">Tight</SelectItem>
-                                    <SelectItem value="normal">Normal</SelectItem>
-                                    <SelectItem value="spacious">Spacious</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </LockedControlField>
                             )}
                             <div className="flex items-center justify-between">
                               <div>
@@ -3872,24 +3787,21 @@ export default function Configure() {
                             </div>
                               <LockedControlField
                                 locked={isPostControlLocked("showTagsAndCategories")}
-                                templateName={postTemplateLockName}
                                 label="Show Tags & Categories"
                                 description="Display tags and categories after breadcrumbs, before the title"
                               >
                                 <div className="flex flex-wrap gap-6">
-                                  <label className={`flex items-center gap-2 ${isPostControlLocked("showTagsAndCategories") ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+                                  <label className="flex items-center gap-2 cursor-pointer">
                                     <Checkbox
                                       checked={(effectiveConfig as PostLevelConfig).postHeader?.showTags ?? false}
                                       onCheckedChange={(v) => updateLevelConfigPath("postHeader.showTags", Boolean(v))}
-                                      disabled={isPostControlLocked("showTagsAndCategories")}
                                     />
                                     <span className="text-xs text-[#6b6b6b]">Tags</span>
                                   </label>
-                                  <label className={`flex items-center gap-2 ${isPostControlLocked("showTagsAndCategories") ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+                                  <label className="flex items-center gap-2 cursor-pointer">
                                     <Checkbox
                                       checked={(effectiveConfig as PostLevelConfig).postHeader?.showCategories ?? false}
                                       onCheckedChange={(v) => updateLevelConfigPath("postHeader.showCategories", Boolean(v))}
-                                      disabled={isPostControlLocked("showTagsAndCategories")}
                                     />
                                     <span className="text-xs text-[#6b6b6b]">Categories</span>
                                   </label>
@@ -3897,26 +3809,22 @@ export default function Configure() {
                               </LockedControlField>
                             <LockedControlRow
                               locked={isPostControlLocked("showByline")}
-                              templateName={postTemplateLockName}
                               label="Show post byline"
                               description="Lead line from the excerpt after the title, before author and date"
                             >
                               <Switch
                                 checked={(effectiveConfig as PostLevelConfig).postHeader?.showByline ?? false}
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showByline", v)}
-                                disabled={isPostControlLocked("showByline")}
                               />
                             </LockedControlRow>
                             <LockedControlRow
                               locked={isPostControlLocked("showDecorativeAccentLine")}
-                              templateName={postTemplateLockName}
                               label="Show decorative accent line"
                               description="Horizontal divider in the post header (placement varies by template)"
                             >
                               <Switch
                                 checked={(effectiveConfig as PostLevelConfig).postHeader?.showDecorativeAccentLine ?? false}
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showDecorativeAccentLine", v)}
-                                disabled={isPostControlLocked("showDecorativeAccentLine")}
                               />
                             </LockedControlRow>
                           </div>
@@ -4518,6 +4426,7 @@ export default function Configure() {
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
                         const sidebarLocked = isPostControlLocked(side === "left" ? "leftSidebar" : "rightSidebar");
+                        if (sidebarLocked) return null;
                         const orderedModules = (() => {
                           const cm = selectedLevel === "collection"
                             ? (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules
@@ -4531,72 +4440,51 @@ export default function Configure() {
                           return [...fromOrder, ...remaining];
                         })();
                         const moveModule = (fromIdx: number, toIdx: number) => {
-                          if (sidebarLocked) return;
                           const list = orderedModules.slice();
                           const [removed] = list.splice(fromIdx, 1);
                           list.splice(toIdx, 0, removed);
                           updateLevelConfigPath(`${subPath}.moduleOrder`, list);
                         };
                         const handleDragOver = (e: React.DragEvent) => {
-                          if (sidebarLocked) return;
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
                         };
                         const handleDrop = (e: React.DragEvent, toIdx: number) => {
                           e.preventDefault();
-                          if (sidebarLocked) return;
                           const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                           if (fromIdx !== toIdx && fromIdx >= 0) moveModule(fromIdx, toIdx);
                         };
                         const handleDragStart = (e: React.DragEvent, idx: number) => {
-                          if (sidebarLocked) {
-                            e.preventDefault();
-                            return;
-                          }
                           e.dataTransfer.setData("text/plain", String(idx));
                           e.dataTransfer.effectAllowed = "move";
                         };
                         const handleRemove = (moduleId: string) => {
-                          if (sidebarLocked) return;
                           const order = [...(cfg.moduleOrder ?? [])];
                           updateLevelConfigPath(`${subPath}.moduleOrder`, order.filter((m) => m !== moduleId));
                         };
                         const handleAddSidebar = (moduleId: string) => {
-                          if (sidebarLocked) return;
                           const order = cfg.moduleOrder ?? [];
                           if (order.includes(moduleId)) return;
                           updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
                         };
                         return (
                           <div key={`${side}-sidebar-section`} className="border-b border-[#e5e4e0]">
-                            <LockedControlTooltip locked={sidebarLocked} templateName={postTemplateLockName}>
-                              <div
-                                className={`flex items-center justify-between py-3 ${
-                                  sidebarLocked ? "opacity-50 cursor-not-allowed" : ""
-                                }`}
+                            <div className="flex items-center justify-between py-3">
+                              <span className="font-medium">
+                                {side === "left" ? "Left Sidebar" : "Right Sidebar"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setExpanded(!expanded)}
+                                className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                                aria-label={expanded ? "Collapse" : "Expand"}
                               >
-                                <span className={`font-medium ${sidebarLocked ? "text-[#6b6b6b]" : ""}`}>
-                                  {side === "left" ? "Left Sidebar" : "Right Sidebar"}
-                                </span>
-                                {sidebarLocked ? (
-                                  <span className="p-1 text-[#6b6b6b] shrink-0" aria-hidden>
-                                    <ChevronRight className="h-4 w-4" />
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setExpanded(!expanded)}
-                                    className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                                    aria-label={expanded ? "Collapse" : "Expand"}
-                                  >
-                                    {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                  </button>
-                                )}
-                              </div>
-                            </LockedControlTooltip>
-                            <Collapsible open={!sidebarLocked && expanded}>
+                                {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
+                            </div>
+                            <Collapsible open={expanded}>
                               <CollapsibleContent>
-                                <div className={`pb-4 space-y-3 ${sidebarLocked ? "opacity-60" : ""}`}>
+                                <div className="pb-4 space-y-3">
                                   {selectedLevel === "collection" && (
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Width</Label>
@@ -4629,26 +4517,19 @@ export default function Configure() {
                                     </div>
                                   </div>
                                   )}
-                                  <LockedControlRow
-                                    locked={sidebarLocked}
-                                    templateName={postTemplateLockName}
-                                    label="Sticky (move with scroll)"
-                                  >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <Label className="text-xs text-[#6b6b6b]">Sticky (move with scroll)</Label>
                                     <Switch
                                       checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
-                                      disabled={sidebarLocked}
                                     />
-                                  </LockedControlRow>
+                                  </div>
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      {sidebarLocked
-                                        ? "Defined by the selected template and cannot be changed."
-                                        : "Drag to reorder. Remove a module to disable that feature."}
+                                      Drag to reorder. Remove a module to disable that feature.
                                     </p>
                                     {(() => {
-                                      if (sidebarLocked) return null;
                                       const cm = (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules;
                                       const order = normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm);
                                       const dualFilter = isDualFilterMode(cm);
@@ -4683,30 +4564,28 @@ export default function Configure() {
                                     })()}
                                     <div className="space-y-1.5">
                                       {orderedModules.length === 0 ? (
-                                        <p className="text-xs text-[#6b6b6b] py-2">No modules in this sidebar{sidebarLocked ? "." : ". Add modules above."}</p>
+                                        <p className="text-xs text-[#6b6b6b] py-2">No modules in this sidebar. Add modules above.</p>
                                       ) : (
                                         orderedModules.map((m, idx) => (
                                           <div
                                             key={`${m}-${idx}`}
-                                            draggable={!sidebarLocked}
+                                            draggable
                                             onDragStart={(e) => handleDragStart(e, idx)}
                                             onDragOver={handleDragOver}
                                             onDrop={(e) => handleDrop(e, idx)}
                                             onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                            className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm ${sidebarLocked ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
                                           >
                                             <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
                                             <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m] ?? m}</span>
-                                            {!sidebarLocked && (
-                                              <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
-                                                className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
-                                                aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
-                                              >
-                                                <X className="h-4 w-4" />
-                                              </button>
-                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
+                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
+                                              aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </button>
                                           </div>
                                         ))
                                       )}
