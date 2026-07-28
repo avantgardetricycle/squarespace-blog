@@ -1043,10 +1043,9 @@ function deriveCollectionModules(
 
 /**
  * Derive modules arrays for each zone from explicit postModules config + moduleOrder.
- * For post level: left/right/footer use zone moduleOrder directly (zone-driven). Header still uses postModules + postHeader.
+ * For post level: left/right/footer use zone moduleOrder directly (zone-driven). Header still uses postHeader.
  */
 function derivePostModules(
-  pm: PostModulesConfig,
   pc: { postHeader?: PostHeaderConfig } | undefined,
   headerOrder: string[],
   leftOrder: string[],
@@ -1142,7 +1141,6 @@ function applyDerivedModules(config: SiteConfigForm): void {
   cc.leftSidebar.show = coll.left.length > 0;
   cc.rightSidebar.show = coll.right.length > 0;
   const post = derivePostModules(
-    pm,
     pc,
     effectiveZoneModuleOrder(pc.headerContent.moduleOrder, pc.headerContent.modules),
     effectiveZoneModuleOrder(pc.leftSidebar.moduleOrder, pc.leftSidebar.modules),
@@ -1465,7 +1463,7 @@ function parseLevelConfig(
   const normalizedHcOrder = normalizeCollectionFilterModuleOrder(finalHcOrder, collectionModules);
   const normalizedLsOrder = normalizeCollectionFilterModuleOrder(finalLsOrder, collectionModules);
   const normalizedRsOrder = normalizeCollectionFilterModuleOrder(finalRsOrder, collectionModules);
-  const postDerived = derivePostModules(postModules, postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
+  const postDerived = derivePostModules(postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
   const base: CollectionLevelConfig = {
     showDate: Boolean(raw?.showDate ?? true),
     showAuthor: Boolean(raw?.showAuthor ?? false),
@@ -4426,7 +4424,6 @@ export default function Configure() {
                                       effectiveConfig.footerContent?.moduleOrder ?? []
                                     ).footer
                                   : derivePostModules(
-                                      (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
                                       effectiveConfig as PostLevelConfig,
                                       effectiveConfig.headerContent.moduleOrder ?? [],
                                       effectiveConfig.leftSidebar.moduleOrder ?? [],
@@ -4555,7 +4552,6 @@ export default function Configure() {
                               effectiveConfig.footerContent?.moduleOrder ?? []
                             )
                           : derivePostModules(
-                              (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
                               effectiveConfig as PostLevelConfig,
                               effectiveConfig.headerContent.moduleOrder ?? [],
                               effectiveConfig.leftSidebar.moduleOrder ?? [],
