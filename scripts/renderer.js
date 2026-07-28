@@ -2683,26 +2683,53 @@
     _applyPostFooterSideMargins: function(el, cfg, footerContentCfg) {
       if (!el || !el.style || !cfg) return;
       el.style.boxSizing = 'border-box';
-      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'postBody') {
-        this._applySinglePostBodyMargins(el, cfg);
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+        el.style.paddingLeft = '0';
+        el.style.paddingRight = '0';
         return;
       }
-      el.style.paddingLeft = '0';
-      el.style.paddingRight = '0';
+      if (this._applyStoryPostHorizontalInset(el, cfg)) return;
+      if (
+        this._isReporterPostLayout(cfg) ||
+        this._isPublisherPostLayout(cfg) ||
+        this._isFeaturePostLayout(cfg)
+      ) {
+        el.style.paddingLeft = '0';
+        el.style.paddingRight = '0';
+        return;
+      }
+      this._applySinglePostBodyMargins(el, cfg);
+    },
+
+    _clearPostFooterZoneBleed: function(footerZoneEl) {
+      if (!footerZoneEl || !footerZoneEl.style) return;
+      footerZoneEl.style.width = '';
+      footerZoneEl.style.maxWidth = '';
+      footerZoneEl.style.marginLeft = '';
+      footerZoneEl.style.marginRight = '';
     },
 
     /** Expand footer zone to main column width when post body uses extra horizontal inset. */
-    _bleedPostFooterZoneToMainWidth: function(footerZoneEl, mainEl) {
+    _bleedPostFooterZoneToMainWidth: function(footerZoneEl, mainEl, footerContentEl) {
       if (!footerZoneEl || !footerZoneEl.style || !mainEl || !mainEl.querySelector) return;
       var bodyEl = mainEl.querySelector('.blog-overlay-body');
-      if (!bodyEl || !window.getComputedStyle) return;
+      if (!window.getComputedStyle) return;
       var pl = 0;
       var pr = 0;
-      try {
-        var cs = window.getComputedStyle(bodyEl);
-        pl = parseFloat(cs.paddingLeft) || 0;
-        pr = parseFloat(cs.paddingRight) || 0;
-      } catch (ePad) { return; }
+      if (bodyEl) {
+        try {
+          var cs = window.getComputedStyle(bodyEl);
+          pl = parseFloat(cs.paddingLeft) || 0;
+          pr = parseFloat(cs.paddingRight) || 0;
+        } catch (ePad) { /* ignore */ }
+      }
+      if (pl <= 0 && pr <= 0 && footerContentEl) {
+        try {
+          var fcs = window.getComputedStyle(footerContentEl);
+          pl = parseFloat(fcs.paddingLeft) || 0;
+          pr = parseFloat(fcs.paddingRight) || 0;
+        } catch (eFooterPad) { /* ignore */ }
+      }
       if (pl <= 0 && pr <= 0) return;
       footerZoneEl.style.boxSizing = 'border-box';
       footerZoneEl.style.width = 'calc(100% + ' + (pl + pr) + 'px)';
@@ -8107,11 +8134,11 @@
       return leftOn && rightOn;
     },
 
-    /** The Publisher post template: full-bleed header (left aligned), single right sidebar. */
+    /** The Publisher post template: full-bleed header, single right sidebar. */
     _isPublisherPostLayout: function(cfg) {
       if (!cfg || typeof cfg !== 'object') return false;
       var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
-      if (!ph || ph.imagePosition !== 'fullBleed' || ph.contentAlignment !== 'left') return false;
+      if (!ph || ph.imagePosition !== 'fullBleed') return false;
       var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
       var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
       return !leftOn && rightOn;
@@ -11911,6 +11938,7 @@
         for (var m = 0; m < moduleIds.length; m++) {
           var mod = moduleIds[m];
           if (hideRecentPostsInBbPreview && mod === 'recentPosts') continue;
+          if (mod === 'tableOfContents' && isSinglePost && self._isStoryPostLayout(cfg)) continue;
           var el = null;
           if (mod === 'tableOfContents') {
             el = createTocModule(width);
@@ -13087,7 +13115,12 @@
             appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
             appendFeatureBelowRowSection(featureBelowRowLeadMagnetEl);
             if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
-            wrapper.appendChild(featureBelowRowHost);
+            var featureFooterSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
+            if (featureFooterSideMarginsMode === 'postBody') {
+              main.appendChild(featureBelowRowHost);
+            } else {
+              wrapper.appendChild(featureBelowRowHost);
+            }
           }
           if (
             isSinglePost &&
@@ -13109,13 +13142,24 @@
             footerZoneEl.style.boxSizing = 'border-box';
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
+            self._clearPostFooterZoneBleed(footerZoneEl);
+            var footerSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
+            var publisherPostLayoutForFooter = isSinglePost && self._isPublisherPostLayout(cfg);
+            var sidebarSpanFooterLayout = reporterPostLayout || publisherPostLayoutForFooter;
+            var postBodyFooterInMainColumn =
+              isSinglePost &&
+              footerSideMarginsMode === 'postBody' &&
+              sidebarSpanFooterLayout;
             if (featurePostLayout) {
               wrapper.appendChild(footerZoneEl);
-            } else if (isSinglePost && !reporterPostLayout) {
+            } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
               main.appendChild(footerZoneEl);
-              if (self._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
-                self._bleedPostFooterZoneToMainWidth(footerZoneEl, main);
+              if (footerSideMarginsMode === 'fullScreen' && storyPostLayoutForFooter) {
+                var footerContentEl = footerZoneEl.querySelector('.blog-overlay-footer-content');
+                self._bleedPostFooterZoneToMainWidth(footerZoneEl, main, footerContentEl);
               }
+            } else if (isSinglePost) {
+              wrapper.appendChild(footerZoneEl);
             } else {
               wrapper.appendChild(footerZoneEl);
             }

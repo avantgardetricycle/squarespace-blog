@@ -135,7 +135,7 @@ export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
 export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
 export type HeaderCollectionModuleType = (typeof HEADER_COLLECTION_MODULES)[number];
-export const HEADER_POST_MODULES = ["breadcrumbs", "tableOfContents", "authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+export const HEADER_POST_MODULES = ["breadcrumbs"] as const;
 export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
 
 /** Position for a discovery/navigation module */
@@ -528,6 +528,32 @@ function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: 
   return isStoryPostLayoutConfig(config.postConfig);
 }
 
+function isFeaturePostLayoutConfig(postConfig: PostLevelConfig): boolean {
+  const ph = postConfig.postHeader ?? defaultPostHeader;
+  if (ph.imagePosition !== "fullBleed" || ph.contentAlignment !== "center") return false;
+  if ((ph.fullBleedLayout ?? "overlay") !== "stacked") return false;
+  return Boolean(postConfig.leftSidebar?.show) && Boolean(postConfig.rightSidebar?.show);
+}
+
+function isFeaturePostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
+  const tid = config.postTemplateId;
+  if (tid) {
+    const t = templateCatalogPost.find((x) => x.id === tid);
+    if (t?.templateKey === "feature") return true;
+  }
+  return isFeaturePostLayoutConfig(config.postConfig);
+}
+
+function isWriterPostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
+  const tid = config.postTemplateId;
+  if (tid) {
+    const t = templateCatalogPost.find((x) => x.id === tid);
+    if (t?.templateKey === "writer") return true;
+  }
+  const ph = config.postConfig.postHeader ?? defaultPostHeader;
+  return ph.imagePosition === "belowInfo" && !config.postConfig.leftSidebar?.show && !config.postConfig.rightSidebar?.show;
+}
+
 /** Post-level controls that a template may lock (disabled + forced to template value). */
 export type PostTemplateLockKey =
   | "leftSidebar"
@@ -545,7 +571,8 @@ export type PostTemplateLockKey =
   | "showTagsAndCategories"
   | "showByline"
   | "showDecorativeAccentLine"
-  | "verticalSpacing";
+  | "verticalSpacing"
+  | "tableOfContents";
 
 const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
   reporter: new Set([
@@ -598,6 +625,7 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showTagsAndCategories",
     "leftSidebar",
     "rightSidebar",
+    "tableOfContents",
   ]),
 };
 
@@ -642,6 +670,7 @@ function isPostTemplatePathLocked(path: string, locks: ReadonlySet<PostTemplateL
   if (path === "featuredImage.roundedCorners") return locks.has("roundedCorners");
   if (path === "featuredImage.shadow") return locks.has("photoShadow");
   if (path === "featuredImage.verticalSpacing") return locks.has("verticalSpacing");
+  if (path.startsWith("postModules.tableOfContents")) return locks.has("tableOfContents");
   return false;
 }
 
@@ -732,6 +761,42 @@ function enforcePostTemplateLockedValues(
     fiChanged = true;
   }
   if (fiChanged) next = { ...next, featuredImage: fi };
+
+  if (locks.has("tableOfContents")) {
+    const tplPm = templatePostConfig.postModules ?? defaultPostModules;
+    const curPm = next.postModules ?? defaultPostModules;
+    const tplToc = tplPm.tableOfContents;
+    const curToc = curPm.tableOfContents;
+    if (
+      curToc.enabled !== tplToc.enabled ||
+      curToc.position !== tplToc.position ||
+      curToc.style !== tplToc.style
+    ) {
+      next = {
+        ...next,
+        postModules: {
+          ...curPm,
+          tableOfContents: { ...tplToc },
+        },
+      };
+    }
+    const stripToc = (order: string[]) => order.filter((m) => m !== "tableOfContents");
+    const lsOrder = stripToc(next.leftSidebar.moduleOrder ?? []);
+    const rsOrder = stripToc(next.rightSidebar.moduleOrder ?? []);
+    const hcOrder = stripToc(next.headerContent.moduleOrder ?? []);
+    if (
+      JSON.stringify(next.leftSidebar.moduleOrder ?? []) !== JSON.stringify(lsOrder) ||
+      JSON.stringify(next.rightSidebar.moduleOrder ?? []) !== JSON.stringify(rsOrder) ||
+      JSON.stringify(next.headerContent.moduleOrder ?? []) !== JSON.stringify(hcOrder)
+    ) {
+      next = {
+        ...next,
+        leftSidebar: { ...next.leftSidebar, moduleOrder: lsOrder, modules: stripToc(next.leftSidebar.modules ?? []) },
+        rightSidebar: { ...next.rightSidebar, moduleOrder: rsOrder, modules: stripToc(next.rightSidebar.modules ?? []) },
+        headerContent: { ...next.headerContent, moduleOrder: hcOrder, modules: stripToc(next.headerContent.modules ?? []) },
+      };
+    }
+  }
 
   if (locks.has("leftSidebar")) {
     const tpl = templatePostConfig.leftSidebar;
@@ -914,6 +979,24 @@ const FEATURE_LOCATION_LABELS: Record<FeatureModuleLocation, string> = {
   rightSidebar: "Right Sidebar",
   footer: "Footer",
 };
+const POST_FEATURE_SIDEBAR_LOCATIONS: FeatureModuleLocation[] = ["leftSidebar", "rightSidebar"];
+const POST_FEATURE_SIDEBAR_FOOTER_LOCATIONS: FeatureModuleLocation[] = ["leftSidebar", "rightSidebar", "footer"];
+
+function filterFeatureLocationsByLocks(
+  locations: FeatureModuleLocation[],
+  locks: ReadonlySet<PostTemplateLockKey>
+): FeatureModuleLocation[] {
+  return locations.filter((loc) => {
+    if (loc === "leftSidebar" && locks.has("leftSidebar")) return false;
+    if (loc === "rightSidebar" && locks.has("rightSidebar")) return false;
+    return true;
+  });
+}
+
+/** Post modules that cannot be placed in the header zone. */
+function normalizePostModulePosition(position: ModulePosition): ModulePosition {
+  return position === "header" ? "none" : position;
+}
 
 /**
  * Zone list for derive: prefer non-empty moduleOrder. If moduleOrder is [] or missing, use modules.
@@ -973,11 +1056,6 @@ function derivePostModules(
   const header: string[] = [];
   const ph = pc?.postHeader;
   if (ph && ph.showBreadcrumbs) header.push("breadcrumbs");
-  if (pm.tableOfContents.enabled && pm.tableOfContents.position !== "none" && pm.tableOfContents.position === "header") header.push("tableOfContents");
-  if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none" && pm.authorProfiles.position === "header") header.push("authorProfiles");
-  if (pm.relevantPosts.enabled && pm.relevantPosts.position !== "none" && pm.relevantPosts.position === "header") header.push("relevantPosts");
-  if (pm.emailCapture.enabled && pm.emailCapture.position !== "none" && pm.emailCapture.position === "header") header.push("emailCapture");
-  if (pm.leadMagnet.enabled && pm.leadMagnet.position !== "none" && pm.leadMagnet.position === "header") header.push("leadMagnet");
   const orderModules = (order: string[], available: string[]): string[] => {
     const set = new Set(available);
     const fromOrder = order.filter((m) => set.has(m));
@@ -1024,12 +1102,7 @@ function syncModuleOrderFromExplicit(
     let h = pc.headerContent.moduleOrder ?? [];
     h = removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(h, "tableOfContents"), "breadcrumbs"), "authorProfiles"), "emailCapture"), "leadMagnet");
     h = removeFromOrder(h, "relevantPosts");
-    if (pm.tableOfContents.enabled && pm.tableOfContents.position === "header") h = addToOrder(h, "tableOfContents");
     if (pc.postHeader?.showBreadcrumbs) h = addToOrder(h, "breadcrumbs");
-    if (pm.authorProfiles.enabled && pm.authorProfiles.position === "header") h = addToOrder(h, "authorProfiles");
-    if (pm.relevantPosts.enabled && pm.relevantPosts.position === "header") h = addToOrder(h, "relevantPosts");
-    if (pm.emailCapture.enabled && pm.emailCapture.position === "header") h = addToOrder(h, "emailCapture");
-    if (pm.leadMagnet.enabled && pm.leadMagnet.position === "header") h = addToOrder(h, "leadMagnet");
     return { ...pc, postModules: pm, headerContent: { ...pc.headerContent, moduleOrder: h } };
   }
   return cfg;
@@ -1300,25 +1373,25 @@ function parseLevelConfig(
       const lm = pmRaw.leadMagnet && typeof pmRaw.leadMagnet === "object" ? pmRaw.leadMagnet as Record<string, unknown> : {};
       const validTocStyle = (v: unknown): TocStyle => (v === "numbered" || v === "connectedDots" || v === "bookmark") ? v : "numbered";
       return {
-        tableOfContents: { enabled: Boolean(toc.enabled ?? false), position: validModulePosition(toc.position), style: validTocStyle(toc.style) },
+        tableOfContents: { enabled: Boolean(toc.enabled ?? false), position: normalizePostModulePosition(validModulePosition(toc.position)), style: validTocStyle(toc.style) },
         breadcrumbs: { enabled: Boolean(bc.enabled ?? false), position: validModulePosition(bc.position) },
-        authorProfiles: { enabled: Boolean(ap.enabled ?? false), position: validModulePosition(ap.position) },
+        authorProfiles: { enabled: Boolean(ap.enabled ?? false), position: normalizePostModulePosition(validModulePosition(ap.position)) },
         popularPosts: {
           enabled: Boolean(pop.enabled ?? false),
-          position: validModulePosition(pop.position),
+          position: normalizePostModulePosition(validModulePosition(pop.position)),
           count: 3,
         },
-        relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: validModulePosition(rel.position) },
+        relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: normalizePostModulePosition(validModulePosition(rel.position)) },
         emailCapture: {
           enabled: Boolean(ec.enabled ?? false),
-          position: validModulePosition(ec.position),
+          position: normalizePostModulePosition(validModulePosition(ec.position)),
           header: typeof ec.header === "string" ? ec.header : "Subscribe to our newsletter",
           byline: typeof ec.byline === "string" ? ec.byline : undefined,
           buttonText: typeof ec.buttonText === "string" ? ec.buttonText : "Subscribe",
         },
         leadMagnet: {
           enabled: Boolean(lm.enabled ?? false),
-          position: validModulePosition(lm.position),
+          position: normalizePostModulePosition(validModulePosition(lm.position)),
           resourceTitle: typeof lm.resourceTitle === "string" ? lm.resourceTitle : "",
           description: typeof lm.description === "string" ? lm.description : "",
           buttonText: typeof lm.buttonText === "string" ? lm.buttonText : "Get it free",
@@ -1326,13 +1399,13 @@ function parseLevelConfig(
       };
     }
     const modsPost: string[] = [...(hcModuleOrder as string[]), ...(lsModuleOrder as string[]), ...(rsModuleOrder as string[]), ...(fcModuleOrder as string[])];
-    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((hcModuleOrder as string[]).includes("tableOfContents") ? "header" : (lsModuleOrder as string[]).includes("tableOfContents") ? "leftSidebar" : "rightSidebar") : "none";
+    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((lsModuleOrder as string[]).includes("tableOfContents") ? "leftSidebar" : (rsModuleOrder as string[]).includes("tableOfContents") ? "rightSidebar" : "none") : "none";
     const bcPos: ModulePosition = modsPost.includes("breadcrumbs") ? ((hcModuleOrder as string[]).includes("breadcrumbs") ? "header" : (lsModuleOrder as string[]).includes("breadcrumbs") ? "leftSidebar" : "rightSidebar") : "none";
-    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((hcModuleOrder as string[]).includes("authorProfiles") ? "header" : (lsModuleOrder as string[]).includes("authorProfiles") ? "leftSidebar" : (rsModuleOrder as string[]).includes("authorProfiles") ? "rightSidebar" : (fcModuleOrder as string[]).includes("authorProfiles") ? "footer" : "none") : "none";
-    const popPos: ModulePosition = modsPost.includes("popularPosts") ? ((hcModuleOrder as string[]).includes("popularPosts") ? "header" : (lsModuleOrder as string[]).includes("popularPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("popularPosts") ? "rightSidebar" : "none") : "none";
-    const relPos: ModulePosition = modsPost.includes("relevantPosts") ? ((hcModuleOrder as string[]).includes("relevantPosts") ? "header" : (lsModuleOrder as string[]).includes("relevantPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("relevantPosts") ? "rightSidebar" : (fcModuleOrder as string[]).includes("relevantPosts") ? "footer" : "none") : "none";
-    const ecPos: ModulePosition = modsPost.includes("emailCapture") ? ((hcModuleOrder as string[]).includes("emailCapture") ? "header" : (lsModuleOrder as string[]).includes("emailCapture") ? "leftSidebar" : (rsModuleOrder as string[]).includes("emailCapture") ? "rightSidebar" : (fcModuleOrder as string[]).includes("emailCapture") ? "footer" : "none") : "none";
-    const lmPos: ModulePosition = modsPost.includes("leadMagnet") ? ((hcModuleOrder as string[]).includes("leadMagnet") ? "header" : (lsModuleOrder as string[]).includes("leadMagnet") ? "leftSidebar" : (rsModuleOrder as string[]).includes("leadMagnet") ? "rightSidebar" : (fcModuleOrder as string[]).includes("leadMagnet") ? "footer" : "none") : "none";
+    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((lsModuleOrder as string[]).includes("authorProfiles") ? "leftSidebar" : (rsModuleOrder as string[]).includes("authorProfiles") ? "rightSidebar" : (fcModuleOrder as string[]).includes("authorProfiles") ? "footer" : "none") : "none";
+    const popPos: ModulePosition = modsPost.includes("popularPosts") ? ((lsModuleOrder as string[]).includes("popularPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("popularPosts") ? "rightSidebar" : "none") : "none";
+    const relPos: ModulePosition = modsPost.includes("relevantPosts") ? ((lsModuleOrder as string[]).includes("relevantPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("relevantPosts") ? "rightSidebar" : (fcModuleOrder as string[]).includes("relevantPosts") ? "footer" : "none") : "none";
+    const ecPos: ModulePosition = modsPost.includes("emailCapture") ? ((lsModuleOrder as string[]).includes("emailCapture") ? "leftSidebar" : (rsModuleOrder as string[]).includes("emailCapture") ? "rightSidebar" : (fcModuleOrder as string[]).includes("emailCapture") ? "footer" : "none") : "none";
+    const lmPos: ModulePosition = modsPost.includes("leadMagnet") ? ((lsModuleOrder as string[]).includes("leadMagnet") ? "leftSidebar" : (rsModuleOrder as string[]).includes("leadMagnet") ? "rightSidebar" : (fcModuleOrder as string[]).includes("leadMagnet") ? "footer" : "none") : "none";
     return {
       tableOfContents: { enabled: tocPos !== "none", position: tocPos, style: "numbered" as TocStyle },
       breadcrumbs: { enabled: bcPos !== "none", position: bcPos },
@@ -2074,6 +2147,14 @@ export default function Configure() {
     () => isStoryPostTemplateActive(config, templateCatalogPost),
     [config, templateCatalogPost]
   );
+  const isFeaturePostTemplate = useMemo(
+    () => isFeaturePostTemplateActive(config, templateCatalogPost),
+    [config, templateCatalogPost]
+  );
+  const isWriterPostTemplate = useMemo(
+    () => isWriterPostTemplateActive(config, templateCatalogPost),
+    [config, templateCatalogPost]
+  );
   const activePostTemplateKey = useMemo(
     () => (selectedLevel === "post" ? getActivePostTemplateKey(config, templateCatalogPost) : null),
     [selectedLevel, config, templateCatalogPost]
@@ -2082,6 +2163,22 @@ export default function Configure() {
     () => getPostTemplateLocks(activePostTemplateKey),
     [activePostTemplateKey]
   );
+  const postFeatureSidebarLocations = useMemo(
+    () => filterFeatureLocationsByLocks(POST_FEATURE_SIDEBAR_LOCATIONS, postTemplateLocks),
+    [postTemplateLocks]
+  );
+  const postFeatureSidebarFooterLocations = useMemo(
+    () => filterFeatureLocationsByLocks(POST_FEATURE_SIDEBAR_FOOTER_LOCATIONS, postTemplateLocks),
+    [postTemplateLocks]
+  );
+  const showPostTableOfContentsControls =
+    postFeatureSidebarLocations.length > 0 && !isStoryPostTemplate && !postTemplateLocks.has("tableOfContents");
+  const showPostCaptionInHeader = useMemo(() => {
+    if (selectedLevel !== "post") return false;
+    if (isWriterPostTemplate) return false;
+    if (isFeaturePostTemplate) return true;
+    return effectiveConfig.featuredImage.show;
+  }, [selectedLevel, isWriterPostTemplate, isFeaturePostTemplate, effectiveConfig.featuredImage.show]);
   const isPostControlLocked = useCallback(
     (key: PostTemplateLockKey) => selectedLevel === "post" && postTemplateLocks.has(key),
     [selectedLevel, postTemplateLocks]
@@ -3668,6 +3765,15 @@ export default function Configure() {
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
                               />
                             </LockedControlRow>
+                            {showPostCaptionInHeader && (
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
+                              <Switch
+                                checked={effectiveConfig.featuredImage.showCaption}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
+                              />
+                            </div>
+                            )}
                             {effectiveConfig.featuredImage.show && (
                             <LockedControlField
                               locked={isPostControlLocked("imagePosition")}
@@ -3727,53 +3833,46 @@ export default function Configure() {
                                 </Select>
                               </LockedControlField>
                             )}
-                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
-                              <>
-                                {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" || (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
-                                    <Select
-                                      value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
-                                      onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="left">Left</SelectItem>
-                                        <SelectItem value="center">Center</SelectItem>
-                                        <SelectItem value="right">Right</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    {!isPostControlLocked("contentVerticalAlignment") && (
-                                    <Select
-                                      value={
-                                        (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
-                                      }
-                                      onValueChange={(v) =>
-                                        updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="top">Top</SelectItem>
-                                        <SelectItem value="center">Center</SelectItem>
-                                        <SelectItem value="bottom">Bottom</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    )}
-                                  </div>
+                            {(((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") ||
+                              ((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo") ||
+                              ((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo")) && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
+                                <Select
+                                  value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
+                                  onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="left">Left</SelectItem>
+                                    <SelectItem value="center">Center</SelectItem>
+                                    <SelectItem value="right">Right</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" ||
+                                  (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") &&
+                                  !isPostControlLocked("contentVerticalAlignment") && (
+                                  <Select
+                                    value={
+                                      (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                    }
+                                    onValueChange={(v) =>
+                                      updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="top">Top</SelectItem>
+                                      <SelectItem value="center">Center</SelectItem>
+                                      <SelectItem value="bottom">Bottom</SelectItem>
+                                    </SelectContent>
+                                  </Select>
                                 )}
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
-                                  <Switch
-                                    checked={effectiveConfig.featuredImage.showCaption}
-                                    onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
-                                  />
-                                </div>
-                              </>
+                              </div>
                             )}
                             <div className="flex items-center justify-between">
                               <div>
@@ -3827,6 +3926,51 @@ export default function Configure() {
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showDecorativeAccentLine", v)}
                               />
                             </LockedControlRow>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-xs text-[#6b6b6b]">Social sharing links</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Show share buttons in the post header</p>
+                              </div>
+                              <Switch
+                                checked={effectiveConfig.socialMediaLinks.show}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("socialMediaLinks", {
+                                    show: v,
+                                    platforms: v ? [...SOCIAL_PLATFORMS] : effectiveConfig.socialMediaLinks.platforms,
+                                  });
+                                }}
+                              />
+                            </div>
+                            {effectiveConfig.socialMediaLinks.show && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Platforms</Label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={effectiveConfig.socialMediaLinks.platforms.length === SOCIAL_PLATFORMS.length}
+                                    onCheckedChange={(v) => {
+                                      updateLevelConfigPath("socialMediaLinks.platforms", v ? [...SOCIAL_PLATFORMS] : []);
+                                    }}
+                                  />
+                                  <span className="text-sm">All</span>
+                                </label>
+                                {SOCIAL_PLATFORMS.map((p) => (
+                                  <label key={p} className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={effectiveConfig.socialMediaLinks.platforms.includes(p)}
+                                      onCheckedChange={(v) => {
+                                        const next = v
+                                          ? [...effectiveConfig.socialMediaLinks.platforms, p]
+                                          : effectiveConfig.socialMediaLinks.platforms.filter((x) => x !== p);
+                                        updateLevelConfigPath("socialMediaLinks.platforms", next);
+                                      }}
+                                    />
+                                    <span className="text-sm">
+                                      {p === "x" ? "X" : p === "whatsapp" ? "WhatsApp" : p.charAt(0).toUpperCase() + p.slice(1)}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -4247,7 +4391,7 @@ export default function Configure() {
                               </div>
                             </div>
                             )}
-                            {selectedLevel === "post" && (
+                            {selectedLevel === "post" && !isWriterPostTemplate && (
                               <div className="space-y-2">
                                 <Label className="text-xs text-[#6b6b6b]">Side margins</Label>
                                 <RadioGroup
@@ -4548,7 +4692,9 @@ export default function Configure() {
                                             }
                                             return !order.includes(m);
                                           })
-                                        : [...POST_SIDEBAR_MODULES].filter((m) => !orderedModules.includes(m));
+                                        : [...POST_SIDEBAR_MODULES].filter(
+                                            (m) => !orderedModules.includes(m) && !(m === "tableOfContents" && isStoryPostTemplate)
+                                          );
                                       return available.length > 0 ? (
                                         <div className="flex items-center gap-2 mb-2">
                                           <Select value="" onValueChange={(v) => { if (v) handleAddSidebar(v); }}>
@@ -4749,13 +4895,14 @@ export default function Configure() {
                           )}
                           {selectedLevel === "post" && (
                             <>
+                              {showPostTableOfContentsControls && (
                               <ModuleSettingSectionCollapseOnly
                                 title="Table of Contents"
                                 expanded={sectionExpanded.tableOfContents}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, tableOfContents: !p.tableOfContents }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("tableOfContents", ["header", "leftSidebar", "rightSidebar"], "tableOfContents")}
+                                    {renderFeatureLocationControl("tableOfContents", postFeatureSidebarLocations, "tableOfContents")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Style</Label>
                                       <Select
@@ -4778,13 +4925,14 @@ export default function Configure() {
                                   </div>
                                 }
                               />
+                              )}
                               <ModuleSettingSectionCollapseOnly
                                 title="Popular Posts"
                                 expanded={sectionExpanded.popularPosts}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
+                                    {renderFeatureLocationControl("popularPosts", postFeatureSidebarLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts. Add the Popular Posts module to a sidebar under Left/Right Sidebar.
                                     </p>
@@ -4797,7 +4945,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, authorProfiles: !p.authorProfiles }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("authorProfiles", ["header", "leftSidebar", "rightSidebar", "footer"], "authorProfiles")}
+                                    {renderFeatureLocationControl("authorProfiles", postFeatureSidebarFooterLocations, "authorProfiles")}
                                   </div>
                                 }
                               />
@@ -4807,7 +4955,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, relevantPosts: !p.relevantPosts }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("relevantPosts", ["header", "leftSidebar", "rightSidebar", "footer"], "relevantPosts")}
+                                    {renderFeatureLocationControl("relevantPosts", postFeatureSidebarFooterLocations, "relevantPosts")}
                                   </div>
                                 }
                               />
@@ -4817,7 +4965,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("emailCapture", ["header", "leftSidebar", "rightSidebar", "footer"], "emailCapture")}
+                                    {renderFeatureLocationControl("emailCapture", postFeatureSidebarFooterLocations, "emailCapture")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -4851,7 +4999,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("leadMagnet", ["header", "leftSidebar", "rightSidebar", "footer"], "leadMagnet")}
+                                    {renderFeatureLocationControl("leadMagnet", postFeatureSidebarFooterLocations, "leadMagnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -4882,6 +5030,7 @@ export default function Configure() {
                               />
                             </>
                           )}
+                          {selectedLevel === "collection" && (
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">Social Sharing</span>
@@ -4941,6 +5090,7 @@ export default function Configure() {
                               </CollapsibleContent>
                             </Collapsible>
                           </div>
+                          )}
                         </>
                       );
                     })()}

@@ -422,7 +422,12 @@ async function seedTemplateConfigs () {
           show: true,
           platforms: ['facebook', 'x', 'linkedin', 'email']
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          show: true,
+          showCaption: true,
+        },
         postModules: {
           tableOfContents: { enabled: true, position: 'leftSidebar', style: 'bookmark' },
           breadcrumbs: { enabled: true, position: 'none' },
@@ -467,7 +472,7 @@ async function seedTemplateConfigs () {
           topPadding: 16,
           sideMargins: 'postBody'
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', showCaption: true },
         postModules: {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: false, position: 'none' },
@@ -588,7 +593,6 @@ async function seedTemplateConfigs () {
           aspectRatio: '3:2'
         },
         postModules: {
-          tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'footer' },
           popularPosts: { enabled: false, position: 'none', count: 3 },

@@ -261,6 +261,11 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     topPadding: 16,
     sideMargins: 'postBody'
   },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed',
+    showCaption: true
+  },
   postModules: {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: false, position: 'none' },
@@ -511,7 +516,6 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     verticalSpacing: 'normal'
   },
   postModules: {
-    tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'footer' },
     popularPosts: { enabled: false, position: 'none', count: 3 },
