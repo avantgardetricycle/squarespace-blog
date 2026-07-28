@@ -8435,9 +8435,10 @@
         });
       }
       var paginationCfg = cfgForSort && cfgForSort.pagination && typeof cfgForSort.pagination === 'object' ? cfgForSort.pagination : null;
-      var usePagination = !isSinglePostForCfg && paginationCfg && paginationCfg.show === true;
-      var paginationMode = usePagination && (paginationCfg.mode === 'infiniteScroll') ? 'infiniteScroll' : 'pages';
-      var postsPerPage = usePagination ? Math.max(1, parseInt(paginationCfg.postsPerPage, 10) || 10) : 0;
+      /** Collection pages always paginate so long lists remain navigable. */
+      var usePagination = !isSinglePostForCfg;
+      var paginationMode = usePagination && paginationCfg && paginationCfg.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages';
+      var postsPerPage = usePagination ? Math.max(1, parseInt(paginationCfg && paginationCfg.postsPerPage, 10) || 10) : 0;
       var totalFiltered = sortedItems.length;
       var totalPages = usePagination && postsPerPage > 0 && paginationMode === 'pages' ? Math.max(1, Math.ceil(totalFiltered / postsPerPage)) : 1;
       var currentPage = Math.min(Math.max(1, this._currentPage || 1), totalPages);
@@ -9761,7 +9762,8 @@
           postCategoriesLine.style.marginBottom = '0';
         }
         var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
-        var showShare = smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
+        /** Social sharing is post-only; collection pages never render share links. */
+        var showShare = isSinglePost && smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
         var shareUrl = self._getPostUrl(post);
         if (!shareUrl && typeof window !== 'undefined') {
           shareUrl = window.location.origin + window.location.pathname + (window.location.search || '') + '#post-' + postIndex;
@@ -9979,15 +9981,18 @@
           }
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
-        } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
-          if (collectionLayout === 'digest' && isFeaturedInLayout && !gatedCard) {
+        } else if (collectionLayout === 'digest') {
+          /** Digest: excerpt only on the featured article; grid cards stay title/meta/image only. */
+          if (isFeaturedInLayout) {
             var digestFeaturedExcerpt = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (digestFeaturedExcerpt) {
               body.textContent = digestFeaturedExcerpt;
               self._applyExcerptStyle(body, 'lg');
               if (digestMobileNarrow) body.style.textAlign = 'left';
             }
-          } else if (collectionLayout === 'listRows' && !listRowsMobileCompact) {
+          }
+        } else if (collectionLayout === 'listRows') {
+          if (!listRowsMobileCompact) {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 120);
             if (excerptText) {
               body.textContent = excerptText;
@@ -9995,13 +10000,20 @@
               body.style.marginTop = '0';
             }
           }
-          // digest, non-featured cards: no excerpt (body left empty; omitted below)
-        } else {
-          // grid layout — short teaser on desktop; hidden on narrow viewports (Masthead mobile)
+        } else if (collectionLayout === 'grid') {
+          // Masthead grid — short teaser on desktop; hidden on narrow viewports
           if (!gridMobileNarrow) {
             var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (gridExcerptText) {
               body.textContent = gridExcerptText;
+              self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
+            }
+          }
+        } else if (collectionLayout === 'editorial') {
+          if (!gridMobileNarrow) {
+            var editorialExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+            if (editorialExcerptText) {
+              body.textContent = editorialExcerptText;
               self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
             }
           }

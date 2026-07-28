@@ -138,7 +138,7 @@ const configResponse = {
     showAuthor: false,
     showReadingTime: false,
     postSort: "date",
-    pagination: { show: false, mode: "pages", postsPerPage: 10 },
+    pagination: { show: true, mode: "pages", postsPerPage: 10 },
     collectionLayout: "grid",
     gridColumns: 3,
     collectionModules: {
@@ -172,7 +172,7 @@ const configResponse = {
     showAuthor: false,
     showReadingTime: false,
     postSort: "date",
-    pagination: { show: false, mode: "pages", postsPerPage: 10 },
+    pagination: { show: true, mode: "pages", postsPerPage: 10 },
     collectionLayout: "grid",
     gridColumns: 3,
     postModules: {

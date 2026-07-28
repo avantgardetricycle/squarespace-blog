@@ -275,14 +275,17 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
               <div>
                 <div className="text-[9px] text-[#6b6b6b]">Featured</div>
                 <div className="text-[11px] font-bold text-[#333] line-clamp-1">The Complete Guide to Headlines</div>
+                <div className={cn(textMuted, "text-[9px] line-clamp-2")}>
+                  A short excerpt on the featured article only.
+                </div>
                 <div className={cn(textMuted, "text-[9px]")}>By Author · Mar 7 · 12 min</div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-1.5 min-h-0">
-              <PostCardMini title="Article One" excerpt="Short excerpt." compact />
-              <PostCardMini title="Article Two" excerpt="Short excerpt." compact />
-              <PostCardMini title="Article Three" excerpt="Short excerpt." compact />
-              <PostCardMini title="Article Four" excerpt="Short excerpt." compact />
+              <PostCardMini title="Article One" excerpt="" compact />
+              <PostCardMini title="Article Two" excerpt="" compact />
+              <PostCardMini title="Article Three" excerpt="" compact />
+              <PostCardMini title="Article Four" excerpt="" compact />
             </div>
             <Pagination />
           </div>

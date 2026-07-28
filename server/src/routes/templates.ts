@@ -54,6 +54,18 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     moduleOrder: ['emailCapture'],
     topPadding: 16
   },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 40,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   featuredArticle: { show: true, position: 'header' as const }
 }
 
@@ -65,12 +77,46 @@ const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   showReadingTime: true,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   featuredArticle: { show: true, position: 'inLayout' as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
+  rightSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
   headerContent: {
     show: true,
     modules: ['filterByCategory', 'searchPosts', 'postSort'],
     moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
     height: 48
   },
+  footerContent: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    topPadding: 16
+  },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 40,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
     sort: {},
@@ -95,12 +141,46 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
   showAuthor: true,
   showReadingTime: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
+  rightSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
   headerContent: {
     show: true,
     modules: ['filterByCategory', 'postSort', 'searchPosts'],
     moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
     height: 48
   },
+  footerContent: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    topPadding: 16
+  },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 50,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
     sort: {},
@@ -155,6 +235,18 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     topPadding: 16
   },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 40,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
     sort: {},

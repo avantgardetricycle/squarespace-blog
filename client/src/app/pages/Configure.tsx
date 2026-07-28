@@ -487,7 +487,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   showAuthor: false,
   showReadingTime: false,
   postSort: "date",
-  pagination: { show: false, mode: "pages" as PaginationMode, postsPerPage: 10 },
+  pagination: { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 },
   collectionLayout: "grid",
   gridColumns: 3,
   collectionModules: defaultCollectionModules,
@@ -853,8 +853,394 @@ function resolvePostTemplateConfig(
   return parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
 }
 
-/** Wrap a locked control so hover explains which template disabled it. */
-/** Horizontal label + control row; hidden when locked on a post template. */
+/** Collection-level controls that a template may lock (hidden + forced to template value). */
+export type CollectionTemplateLockKey =
+  | "imageWidth"
+  | "aspectBehavior"
+  | "aspectRatio"
+  | "roundedCorners"
+  | "photoShadow"
+  | "verticalSpacing"
+  | "footerTopPadding"
+  | "leftSidebarSpaceAbove"
+  | "rightSidebarSpaceAbove"
+  | "socialSharing"
+  | "featuredImage"
+  | "headerHeight"
+  | "leftSidebar"
+  | "rightSidebar"
+  | "rightSidebarWidth"
+  | "featuredArticlePosition"
+  | "paginationMode"
+  | "showCaption"
+  | "popularPosts";
+
+/** Locked on every collection template for now; per-template sets can diverge later. */
+const COLLECTION_TEMPLATE_UNIVERSAL_LOCKS: ReadonlySet<CollectionTemplateLockKey> = new Set([
+  "imageWidth",
+  "aspectBehavior",
+  "aspectRatio",
+  "roundedCorners",
+  "photoShadow",
+  "verticalSpacing",
+  "footerTopPadding",
+  "leftSidebarSpaceAbove",
+  "rightSidebarSpaceAbove",
+  "socialSharing",
+]);
+
+function withCollectionLocks(
+  base: ReadonlySet<CollectionTemplateLockKey>,
+  ...extra: CollectionTemplateLockKey[]
+): ReadonlySet<CollectionTemplateLockKey> {
+  return new Set([...base, ...extra]);
+}
+
+const COLLECTION_TEMPLATE_LOCKS: Record<string, ReadonlySet<CollectionTemplateLockKey>> = {
+  masthead: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebar",
+    "featuredArticlePosition",
+    "popularPosts",
+    "paginationMode"
+  ),
+  newsroom: COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+  digest: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebarWidth",
+    "featuredArticlePosition"
+  ),
+  showcase: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebar",
+    "showCaption",
+    "popularPosts"
+  ),
+  editorial: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebar",
+    "showCaption",
+    "popularPosts"
+  ),
+};
+
+function getActiveCollectionTemplateKey(
+  config: SiteConfigForm,
+  templateCatalogCollection: Template[]
+): string | null {
+  const tid = config.collectionTemplateId;
+  if (!tid) return null;
+  return templateCatalogCollection.find((x) => x.id === tid)?.templateKey ?? null;
+}
+
+function getCollectionTemplateLocks(templateKey: string | null | undefined): ReadonlySet<CollectionTemplateLockKey> {
+  if (!templateKey) return COLLECTION_TEMPLATE_UNIVERSAL_LOCKS;
+  return COLLECTION_TEMPLATE_LOCKS[templateKey] ?? COLLECTION_TEMPLATE_UNIVERSAL_LOCKS;
+}
+
+function isCollectionTemplatePathLocked(path: string, locks: ReadonlySet<CollectionTemplateLockKey>): boolean {
+  if (locks.has("featuredImage") && path.startsWith("featuredImage.")) return true;
+  if (path === "featuredImage.imageWidthPercent") return locks.has("imageWidth");
+  if (path === "featuredImage.aspectBehavior") return locks.has("aspectBehavior");
+  if (path === "featuredImage.aspectRatio") return locks.has("aspectRatio") || locks.has("aspectBehavior");
+  if (path === "featuredImage.roundedCorners") return locks.has("roundedCorners");
+  if (path === "featuredImage.shadow") return locks.has("photoShadow");
+  if (path === "featuredImage.verticalSpacing") return locks.has("verticalSpacing");
+  if (path === "featuredImage.showCaption") return locks.has("showCaption");
+  if (path === "headerContent.height") return locks.has("headerHeight");
+  if (path === "footerContent.topPadding") return locks.has("footerTopPadding");
+  if (path === "featuredArticle.position") return locks.has("featuredArticlePosition");
+  if (path === "pagination.mode") return locks.has("paginationMode");
+  if (path.startsWith("leftSidebar.")) {
+    return locks.has("leftSidebar") || (path === "leftSidebar.spaceAbove" && locks.has("leftSidebarSpaceAbove"));
+  }
+  if (path.startsWith("rightSidebar.")) {
+    if (locks.has("rightSidebar")) return true;
+    if (path === "rightSidebar.spaceAbove" && locks.has("rightSidebarSpaceAbove")) return true;
+    if (path === "rightSidebar.width" && locks.has("rightSidebarWidth")) return true;
+    return false;
+  }
+  if (path === "socialMediaLinks" || path.startsWith("socialMediaLinks.")) return locks.has("socialSharing");
+  return false;
+}
+
+/** Copy locked fields from the applied collection template so they cannot drift. */
+function enforceCollectionTemplateLockedValues(
+  collectionConfig: CollectionLevelConfig,
+  templateCollectionConfig: CollectionLevelConfig | null,
+  locks: ReadonlySet<CollectionTemplateLockKey>
+): CollectionLevelConfig {
+  if (locks.size === 0) return collectionConfig;
+  const tpl = templateCollectionConfig ?? defaultCollectionConfig;
+  let next = collectionConfig;
+
+  const tplFi = tpl.featuredImage ?? defaultFeaturedImage;
+  const curFi = next.featuredImage ?? defaultFeaturedImage;
+  let fi = { ...curFi };
+  let fiChanged = false;
+  if (locks.has("featuredImage")) {
+    if (JSON.stringify(fi) !== JSON.stringify(tplFi)) {
+      fi = { ...tplFi };
+      fiChanged = true;
+    }
+  } else {
+    if (locks.has("imageWidth") && fi.imageWidthPercent !== tplFi.imageWidthPercent) {
+      fi = { ...fi, imageWidthPercent: tplFi.imageWidthPercent };
+      fiChanged = true;
+    }
+    if (locks.has("aspectBehavior") && fi.aspectBehavior !== tplFi.aspectBehavior) {
+      fi = { ...fi, aspectBehavior: tplFi.aspectBehavior };
+      fiChanged = true;
+    }
+    if ((locks.has("aspectRatio") || locks.has("aspectBehavior")) && fi.aspectRatio !== tplFi.aspectRatio) {
+      fi = { ...fi, aspectRatio: tplFi.aspectRatio };
+      fiChanged = true;
+    }
+    if (locks.has("roundedCorners") && fi.roundedCorners !== tplFi.roundedCorners) {
+      fi = { ...fi, roundedCorners: tplFi.roundedCorners };
+      fiChanged = true;
+    }
+    if (locks.has("photoShadow") && fi.shadow !== tplFi.shadow) {
+      fi = { ...fi, shadow: tplFi.shadow };
+      fiChanged = true;
+    }
+    if (locks.has("verticalSpacing") && fi.verticalSpacing !== tplFi.verticalSpacing) {
+      fi = { ...fi, verticalSpacing: tplFi.verticalSpacing };
+      fiChanged = true;
+    }
+    if (locks.has("showCaption") && fi.showCaption !== tplFi.showCaption) {
+      fi = { ...fi, showCaption: tplFi.showCaption };
+      fiChanged = true;
+    }
+  }
+  if (fiChanged) next = { ...next, featuredImage: fi };
+
+  if (locks.has("headerHeight")) {
+    const tplHeight = tpl.headerContent?.height ?? 48;
+    if ((next.headerContent?.height ?? 48) !== tplHeight) {
+      next = { ...next, headerContent: { ...next.headerContent, height: tplHeight } };
+    }
+  }
+
+  if (locks.has("featuredArticlePosition") && "featuredArticle" in next) {
+    const tplFa = tpl.featuredArticle ?? defaultFeaturedArticle;
+    const curFa = next.featuredArticle ?? defaultFeaturedArticle;
+    if (curFa.position !== tplFa.position) {
+      next = {
+        ...next,
+        featuredArticle: { ...curFa, position: tplFa.position },
+      };
+    }
+  }
+
+  if (locks.has("paginationMode") && "pagination" in next) {
+    const tplPag = tpl.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    const curPag = next.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    if (curPag.mode !== tplPag.mode) {
+      next = {
+        ...next,
+        pagination: { ...curPag, mode: tplPag.mode },
+      };
+    }
+  }
+
+  // Pagination is always enabled on collection pages.
+  if ("pagination" in next) {
+    const curPag = next.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    if (curPag.show !== true) {
+      next = { ...next, pagination: { ...curPag, show: true } };
+    }
+  }
+
+  if (locks.has("footerTopPadding")) {
+    const tplPad = tpl.footerContent?.topPadding ?? 16;
+    const curPad = next.footerContent?.topPadding ?? 16;
+    if (curPad !== tplPad) {
+      next = {
+        ...next,
+        footerContent: {
+          ...(next.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" }),
+          topPadding: tplPad,
+        },
+      };
+    }
+  }
+
+  // Before clearing locked sidebars, relocate modules that still have a valid home.
+  if (locks.has("leftSidebar") || locks.has("rightSidebar")) {
+    const FILTER_IDS = new Set(["filterByCategory", "filterByTag", "filterByTagsAndCategories"]);
+    const FOOTER_ONLY = new Set(["emailCapture", "leadMagnet"]);
+    const collectIds = (order: string[], ids: Set<string>) => order.filter((m) => ids.has(m));
+    const sidebarFilters = [
+      ...(locks.has("leftSidebar") ? collectIds(next.leftSidebar.moduleOrder ?? [], FILTER_IDS) : []),
+      ...(locks.has("rightSidebar") ? collectIds(next.rightSidebar.moduleOrder ?? [], FILTER_IDS) : []),
+    ];
+    const sidebarFooterMods = [
+      ...(locks.has("leftSidebar") ? collectIds(next.leftSidebar.moduleOrder ?? [], FOOTER_ONLY) : []),
+      ...(locks.has("rightSidebar") ? collectIds(next.rightSidebar.moduleOrder ?? [], FOOTER_ONLY) : []),
+    ];
+    if (sidebarFilters.length > 0) {
+      let hcOrder = [...(next.headerContent.moduleOrder ?? [])];
+      for (const f of sidebarFilters) {
+        if (!hcOrder.includes(f)) hcOrder = [...hcOrder, f];
+      }
+      next = {
+        ...next,
+        headerContent: { ...next.headerContent, moduleOrder: hcOrder, modules: [...hcOrder] },
+      };
+    }
+    if (sidebarFooterMods.length > 0) {
+      let fcOrder = [...(next.footerContent?.moduleOrder ?? [])];
+      for (const m of sidebarFooterMods) {
+        if (!fcOrder.includes(m)) fcOrder = [...fcOrder, m];
+      }
+      next = {
+        ...next,
+        footerContent: {
+          ...(next.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" }),
+          moduleOrder: fcOrder,
+          modules: [...fcOrder],
+          show: fcOrder.length > 0,
+        },
+      };
+    }
+  }
+
+  if (locks.has("leftSidebar")) {
+    const tplSb = tpl.leftSidebar;
+    const cur = next.leftSidebar;
+    if (
+      cur.show !== tplSb.show ||
+      cur.width !== tplSb.width ||
+      cur.spaceAbove !== tplSb.spaceAbove ||
+      cur.sticky !== tplSb.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tplSb.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tplSb.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        leftSidebar: {
+          ...tplSb,
+          modules: [...(tplSb.modules ?? [])],
+          moduleOrder: [...(tplSb.moduleOrder ?? [])],
+        },
+      };
+    }
+  } else if (locks.has("leftSidebarSpaceAbove")) {
+    const tplSpace = tpl.leftSidebar?.spaceAbove ?? 0;
+    if ((next.leftSidebar?.spaceAbove ?? 0) !== tplSpace) {
+      next = { ...next, leftSidebar: { ...next.leftSidebar, spaceAbove: tplSpace } };
+    }
+  }
+
+  if (locks.has("rightSidebar")) {
+    const tplSb = tpl.rightSidebar;
+    const cur = next.rightSidebar;
+    if (
+      cur.show !== tplSb.show ||
+      cur.width !== tplSb.width ||
+      cur.spaceAbove !== tplSb.spaceAbove ||
+      cur.sticky !== tplSb.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tplSb.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tplSb.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        rightSidebar: {
+          ...tplSb,
+          modules: [...(tplSb.modules ?? [])],
+          moduleOrder: [...(tplSb.moduleOrder ?? [])],
+        },
+      };
+    }
+  } else {
+    if (locks.has("rightSidebarSpaceAbove")) {
+      const tplSpace = tpl.rightSidebar?.spaceAbove ?? 0;
+      if ((next.rightSidebar?.spaceAbove ?? 0) !== tplSpace) {
+        next = { ...next, rightSidebar: { ...next.rightSidebar, spaceAbove: tplSpace } };
+      }
+    }
+    if (locks.has("rightSidebarWidth")) {
+      const tplWidth = tpl.rightSidebar?.width ?? 280;
+      if ((next.rightSidebar?.width ?? 240) !== tplWidth) {
+        next = { ...next, rightSidebar: { ...next.rightSidebar, width: tplWidth } };
+      }
+    }
+  }
+
+  if (locks.has("popularPosts")) {
+    const stripPopular = (order: string[]) => order.filter((m) => m !== "popularPosts");
+    const lsOrder = stripPopular(next.leftSidebar.moduleOrder ?? []);
+    const rsOrder = stripPopular(next.rightSidebar.moduleOrder ?? []);
+    const hcOrder = stripPopular(next.headerContent.moduleOrder ?? []);
+    const fcOrder = stripPopular(next.footerContent?.moduleOrder ?? []);
+    if (
+      JSON.stringify(next.leftSidebar.moduleOrder ?? []) !== JSON.stringify(lsOrder) ||
+      JSON.stringify(next.rightSidebar.moduleOrder ?? []) !== JSON.stringify(rsOrder) ||
+      JSON.stringify(next.headerContent.moduleOrder ?? []) !== JSON.stringify(hcOrder) ||
+      JSON.stringify(next.footerContent?.moduleOrder ?? []) !== JSON.stringify(fcOrder)
+    ) {
+      next = {
+        ...next,
+        leftSidebar: { ...next.leftSidebar, moduleOrder: lsOrder, modules: stripPopular(next.leftSidebar.modules ?? []) },
+        rightSidebar: { ...next.rightSidebar, moduleOrder: rsOrder, modules: stripPopular(next.rightSidebar.modules ?? []) },
+        headerContent: { ...next.headerContent, moduleOrder: hcOrder, modules: stripPopular(next.headerContent.modules ?? []) },
+        footerContent: {
+          ...(next.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" }),
+          moduleOrder: fcOrder,
+          modules: stripPopular(next.footerContent?.modules ?? []),
+          show: fcOrder.length > 0,
+        },
+      };
+    }
+  }
+
+  if (locks.has("socialSharing")) {
+    const tplSm = tpl.socialMediaLinks ?? { show: false, platforms: [] as SocialPlatform[] };
+    const curSm = next.socialMediaLinks ?? { show: false, platforms: [] as SocialPlatform[] };
+    const tplPlatforms = tplSm.platforms ?? [];
+    const curPlatforms = curSm.platforms ?? [];
+    if (
+      curSm.show !== tplSm.show ||
+      curPlatforms.length !== tplPlatforms.length ||
+      curPlatforms.some((p, i) => p !== tplPlatforms[i])
+    ) {
+      next = {
+        ...next,
+        socialMediaLinks: {
+          show: tplSm.show,
+          platforms: [...tplPlatforms],
+        },
+      };
+    }
+  }
+
+  return next;
+}
+
+function resolveCollectionTemplateConfig(
+  templateId: string | null | undefined,
+  templateCatalogCollection: Template[]
+): CollectionLevelConfig | null {
+  if (!templateId) return null;
+  const t = templateCatalogCollection.find((x) => x.id === templateId);
+  if (!t?.collectionConfig || typeof t.collectionConfig !== "object") return null;
+  return parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
+}
+
+/** Horizontal label + control row; hidden when locked on a template. */
 function LockedControlRow({
   locked,
   label,
@@ -991,6 +1377,38 @@ function filterFeatureLocationsByLocks(
     if (loc === "rightSidebar" && locks.has("rightSidebar")) return false;
     return true;
   });
+}
+
+function filterCollectionFeatureLocationsByLocks(
+  locations: FeatureModuleLocation[],
+  locks: ReadonlySet<CollectionTemplateLockKey>
+): FeatureModuleLocation[] {
+  return locations.filter((loc) => {
+    if (loc === "leftSidebar" && locks.has("leftSidebar")) return false;
+    if (loc === "rightSidebar" && locks.has("rightSidebar")) return false;
+    return true;
+  });
+}
+
+/** Per-template allowed locations for collection Nav & Discovery modules. */
+function getCollectionModuleAllowedLocations(
+  templateKey: string | null | undefined,
+  module: "filter" | "popularPosts" | "emailCapture" | "leadMagnet",
+  locks: ReadonlySet<CollectionTemplateLockKey>
+): FeatureModuleLocation[] {
+  let locations: FeatureModuleLocation[];
+  if (templateKey === "editorial" || templateKey === "masthead" || templateKey === "showcase") {
+    if (module === "filter") locations = ["header"];
+    else if (module === "popularPosts") locations = [];
+    else locations = ["footer"];
+  } else if (module === "filter") {
+    locations = ["header", "leftSidebar", "rightSidebar"];
+  } else if (module === "popularPosts") {
+    locations = ["leftSidebar", "rightSidebar"];
+  } else {
+    locations = ["leftSidebar", "rightSidebar", "footer"];
+  }
+  return filterCollectionFeatureLocationsByLocks(locations, locks);
 }
 
 /** Post modules that cannot be placed in the header zone. */
@@ -1241,8 +1659,8 @@ function parseLevelConfig(
   const validPostsPerPage = (v: unknown): PostsPerPageOption => (v === 5 || v === 10 || v === 20) ? v : 10;
   const validPaginationMode = (v: unknown): PaginationMode => (v === "infiniteScroll") ? "infiniteScroll" : "pages";
   const pagination = pagRaw
-    ? { show: Boolean(pagRaw.show ?? false), mode: validPaginationMode(pagRaw.mode), postsPerPage: validPostsPerPage(pagRaw.postsPerPage) }
-    : { show: false, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    ? { show: true, mode: validPaginationMode(pagRaw.mode), postsPerPage: validPostsPerPage(pagRaw.postsPerPage) }
+    : { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
   const validCollectionLayout = (v: unknown): CollectionLayoutMode =>
     (v === "grid" || v === "listRows" || v === "editorial" || v === "showcase" || v === "digest") ? v : "grid";
   const validGridColumns = (v: unknown): GridColumnsOption =>
@@ -2156,9 +2574,33 @@ export default function Configure() {
     () => (selectedLevel === "post" ? getActivePostTemplateKey(config, templateCatalogPost) : null),
     [selectedLevel, config, templateCatalogPost]
   );
+  const activeCollectionTemplateKey = useMemo(
+    () => getActiveCollectionTemplateKey(config, templateCatalogCollection),
+    [config, templateCatalogCollection]
+  );
   const postTemplateLocks = useMemo(
     () => getPostTemplateLocks(activePostTemplateKey),
     [activePostTemplateKey]
+  );
+  const collectionTemplateLocks = useMemo(
+    () => getCollectionTemplateLocks(activeCollectionTemplateKey),
+    [activeCollectionTemplateKey]
+  );
+  const collectionFilterLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "filter", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const collectionPopularPostsLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "popularPosts", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const collectionEmailCaptureLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "emailCapture", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const collectionLeadMagnetLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "leadMagnet", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
   );
   const postFeatureSidebarLocations = useMemo(
     () => filterFeatureLocationsByLocks(POST_FEATURE_SIDEBAR_LOCATIONS, postTemplateLocks),
@@ -2180,6 +2622,10 @@ export default function Configure() {
     (key: PostTemplateLockKey) => selectedLevel === "post" && postTemplateLocks.has(key),
     [selectedLevel, postTemplateLocks]
   );
+  const isCollectionControlLocked = useCallback(
+    (key: CollectionTemplateLockKey) => selectedLevel === "collection" && collectionTemplateLocks.has(key),
+    [selectedLevel, collectionTemplateLocks]
+  );
   const postTemplateImagePositionOptions = useMemo(() => {
     if (!activePostTemplateKey) return null;
     return POST_TEMPLATE_IMAGE_POSITION_OPTIONS[activePostTemplateKey] ?? null;
@@ -2187,6 +2633,10 @@ export default function Configure() {
   const appliedPostTemplateConfig = useMemo(
     () => resolvePostTemplateConfig(config.postTemplateId, templateCatalogPost),
     [config.postTemplateId, templateCatalogPost]
+  );
+  const appliedCollectionTemplateConfig = useMemo(
+    () => resolveCollectionTemplateConfig(config.collectionTemplateId, templateCatalogCollection),
+    [config.collectionTemplateId, templateCatalogCollection]
   );
   // Keep locked post-template fields pinned to the template when a template is active.
   useEffect(() => {
@@ -2214,11 +2664,46 @@ export default function Configure() {
     appliedPostTemplateConfig,
     postTemplateLocks,
   ]);
+  // Keep locked collection-template fields pinned (universal locks apply even without a template id).
+  useEffect(() => {
+    if (collectionTemplateLocks.size === 0) return;
+    const locks = getCollectionTemplateLocks(getActiveCollectionTemplateKey(config, templateCatalogCollection));
+    if (locks.size === 0) return;
+    const enforced = enforceCollectionTemplateLockedValues(
+      config.collectionConfig,
+      appliedCollectionTemplateConfig,
+      locks
+    );
+    if (enforced === config.collectionConfig) return;
+    if (levelConfigsEqual(enforced, config.collectionConfig)) return;
+    setConfig((prev) => {
+      const nextLocks = getCollectionTemplateLocks(getActiveCollectionTemplateKey(prev, templateCatalogCollection));
+      const nextEnforced = enforceCollectionTemplateLockedValues(
+        prev.collectionConfig,
+        resolveCollectionTemplateConfig(prev.collectionTemplateId, templateCatalogCollection),
+        nextLocks
+      );
+      if (levelConfigsEqual(nextEnforced, prev.collectionConfig)) return prev;
+      return { ...prev, collectionConfig: nextEnforced };
+    });
+  }, [
+    config.collectionTemplateId,
+    config.collectionConfig,
+    appliedCollectionTemplateConfig,
+    collectionTemplateLocks,
+    templateCatalogCollection,
+  ]);
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => {
     if (
       selectedLevel === "post" &&
       isPostTemplatePathLocked(subPath, postTemplateLocks)
+    ) {
+      return;
+    }
+    if (
+      selectedLevel === "collection" &&
+      isCollectionTemplatePathLocked(subPath, collectionTemplateLocks)
     ) {
       return;
     }
@@ -2253,6 +2738,10 @@ export default function Configure() {
         if (loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) return;
         if (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")) return;
       }
+      if (selectedLevel === "collection") {
+        if (loc === "leftSidebar" && collectionTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && collectionTemplateLocks.has("rightSidebar")) return;
+      }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.enabled`, true);
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "header");
@@ -2267,13 +2756,17 @@ export default function Configure() {
       if (order.includes(moduleId)) return;
       updateLevelConfigPath(zonePath, [moduleId, ...order.filter((m) => m !== moduleId)]);
     },
-    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks]
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks, collectionTemplateLocks]
   );
   const removeFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
       if (selectedLevel === "post") {
         if (loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) return;
         if (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")) return;
+      }
+      if (selectedLevel === "collection") {
+        if (loc === "leftSidebar" && collectionTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && collectionTemplateLocks.has("rightSidebar")) return;
       }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "none");
@@ -2283,7 +2776,7 @@ export default function Configure() {
       const order = moduleOrderForLocation(effectiveConfig, loc);
       updateLevelConfigPath(zonePath, order.filter((m) => m !== moduleId));
     },
-    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks]
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks, collectionTemplateLocks]
   );
   const renderFeatureLocationControl = useCallback((
     moduleId: string,
@@ -2292,9 +2785,12 @@ export default function Configure() {
     locationLabel = "Location",
   ) => {
     const isLocLocked = (loc: FeatureModuleLocation) =>
-      selectedLevel === "post" &&
-      ((loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) ||
-        (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")));
+      (selectedLevel === "post" &&
+        ((loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) ||
+          (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")))) ||
+      (selectedLevel === "collection" &&
+        ((loc === "leftSidebar" && collectionTemplateLocks.has("leftSidebar")) ||
+          (loc === "rightSidebar" && collectionTemplateLocks.has("rightSidebar"))));
     const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
     const visibleSelectedLocations = selectedLocations.filter((loc) => !isLocLocked(loc));
     const availableLocations = allowedLocations.filter(
@@ -2336,7 +2832,7 @@ export default function Configure() {
         </div>
       </div>
     );
-  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation, selectedLevel, postTemplateLocks]);
+  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation, selectedLevel, postTemplateLocks, collectionTemplateLocks]);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
@@ -2602,19 +3098,21 @@ export default function Configure() {
     (template: Template, level: "collection" | "post") => {
       if (level === "collection" && template.collectionConfig && typeof template.collectionConfig === "object") {
         const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
+        const locks = getCollectionTemplateLocks(template.templateKey);
+        const enforcedCollection = enforceCollectionTemplateLockedValues(parsedCollection, parsedCollection, locks);
         setConfig((prev) => ({
           ...prev,
-          collectionConfig: parsedCollection,
+          collectionConfig: enforcedCollection,
           collectionTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
           console.log("[Configure] Applied collection template", {
             templateId: template.id,
             templateName: template.name,
-            leftSidebar: parsedCollection.leftSidebar,
-            rightSidebar: parsedCollection.rightSidebar,
-            headerContent: parsedCollection.headerContent,
-            footerContent: parsedCollection.footerContent,
+            leftSidebar: enforcedCollection.leftSidebar,
+            rightSidebar: enforcedCollection.rightSidebar,
+            headerContent: enforcedCollection.headerContent,
+            footerContent: enforcedCollection.footerContent,
           });
         }
         toast.success(`Applied "${template.name}" collection template.`);
@@ -2656,7 +3154,16 @@ export default function Configure() {
         const [head, ...subParts] = rest.split(".");
         const sub =
           head === "loggedOut" || head === "loggedIn" ? subParts.join(".") : rest;
-        next.collectionConfig = updateLevelConfig(prev.collectionConfig, sub, value) as CollectionLevelConfig;
+        const collLocks = getCollectionTemplateLocks(getActiveCollectionTemplateKey(prev, templateCatalogCollection));
+        if (isCollectionTemplatePathLocked(sub, collLocks)) {
+          return prev;
+        }
+        let updatedCollection = updateLevelConfig(prev.collectionConfig, sub, value) as CollectionLevelConfig;
+        const tplCollCfg = resolveCollectionTemplateConfig(prev.collectionTemplateId, templateCatalogCollection);
+        if (collLocks.size > 0) {
+          updatedCollection = enforceCollectionTemplateLockedValues(updatedCollection, tplCollCfg, collLocks);
+        }
+        next.collectionConfig = updatedCollection;
       } else if (path.startsWith("postConfig.")) {
         const rest = path.slice("postConfig.".length);
         const [head, ...subParts] = rest.split(".");
@@ -2695,9 +3202,9 @@ export default function Configure() {
     if (path === "headerContent.modules") return { ...cfg, headerContent: { ...cfg.headerContent, modules: value as string[] } };
     if (path === "headerContent.height") return { ...cfg, headerContent: { ...cfg.headerContent, height: value as number } };
     if (path === "postSort" && "postSort" in cfg) return { ...cfg, postSort: value as PostSortOption };
-    if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, mode: "pages", postsPerPage: 10 }), show: value as boolean } };
-    if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
-    if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
+    if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), show: true } };
+    if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
+    if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
     if (path === "collectionLayout" && "collectionLayout" in cfg) return { ...cfg, collectionLayout: value as CollectionLayoutMode };
     if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
     if (path === "featuredArticle.show" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), show: value as boolean } };
@@ -3141,40 +3648,35 @@ export default function Configure() {
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Pagination</span>
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={(effectiveConfig as CollectionLevelConfig).pagination?.show ?? false}
-                            onCheckedChange={(v) => {
-                              updateLevelConfigPath("pagination.show", v);
-                              setSectionExpanded((p) => ({ ...p, pagination: v }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => (effectiveConfig as CollectionLevelConfig).pagination?.show && setSectionExpanded((p) => ({ ...p, pagination: !p.pagination }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!(effectiveConfig as CollectionLevelConfig).pagination?.show ? "invisible pointer-events-none" : ""}`}
-                            aria-label={sectionExpanded.pagination ? "Collapse" : "Expand"}
-                          >
-                            {sectionExpanded.pagination ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSectionExpanded((p) => ({ ...p, pagination: !p.pagination }))}
+                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                          aria-label={sectionExpanded.pagination ? "Collapse" : "Expand"}
+                        >
+                          {sectionExpanded.pagination ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
                       </div>
-                      <Collapsible open={(effectiveConfig as CollectionLevelConfig).pagination?.show && sectionExpanded.pagination}>
+                      <Collapsible open={sectionExpanded.pagination}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Mode</Label>
-                            <Select
-                              value={(effectiveConfig as CollectionLevelConfig).pagination?.mode ?? "pages"}
-                              onValueChange={(v) => updateLevelConfigPath("pagination.mode", v as PaginationMode)}
+                            <LockedControlField
+                              locked={isCollectionControlLocked("paginationMode")}
+                              label="Mode"
                             >
-                              <SelectTrigger className="mt-2 w-[180px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pages">Numbered pages</SelectItem>
-                                <SelectItem value="infiniteScroll">Infinite scroll</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              <Select
+                                value={(effectiveConfig as CollectionLevelConfig).pagination?.mode ?? "pages"}
+                                onValueChange={(v) => updateLevelConfigPath("pagination.mode", v as PaginationMode)}
+                              >
+                                <SelectTrigger className="mt-2 w-[180px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pages">Numbered pages</SelectItem>
+                                  <SelectItem value="infiniteScroll">Load more</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </LockedControlField>
                             <Label className="text-xs text-[#6b6b6b]">Posts per page</Label>
                             <Select
                               value={String((effectiveConfig as CollectionLevelConfig).pagination?.postsPerPage ?? 10)}
@@ -3268,8 +3770,11 @@ export default function Configure() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="min-w-0 space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("featuredArticlePosition")}
+                              label="Position"
+                              className="min-w-0 space-y-2"
+                            >
                               <Select
                                 value={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).position}
                                 onValueChange={(v) => updateLevelConfigPath("featuredArticle.position", v as FeaturedArticlePosition)}
@@ -3282,7 +3787,7 @@ export default function Configure() {
                                   <SelectItem value="inLayout">In-layout (at top with indicator)</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
+                            </LockedControlField>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -3973,7 +4478,7 @@ export default function Configure() {
                       </Collapsible>
                     </div>
                     )}
-                    {selectedLevel === "collection" && (
+                    {selectedLevel === "collection" && !isCollectionControlLocked("featuredImage") && (
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Featured Image</span>
@@ -4021,8 +4526,10 @@ export default function Configure() {
                               </Select>
                             </div>
                             {(effectiveConfig.featuredImage.layoutMode === "leftJustified" || effectiveConfig.featuredImage.layoutMode === "rightJustified") && (
-                              <div className="space-y-2">
-                                <Label className="text-xs text-[#6b6b6b]">Image width</Label>
+                              <LockedControlField
+                                locked={isCollectionControlLocked("imageWidth")}
+                                label="Image width"
+                              >
                                 <div className="flex items-center gap-3">
                                   <Slider
                                     value={[effectiveConfig.featuredImage.imageWidthPercent]}
@@ -4036,12 +4543,14 @@ export default function Configure() {
                                     {effectiveConfig.featuredImage.imageWidthPercent}%
                                   </span>
                                 </div>
-                              </div>
+                              </LockedControlField>
                             )}
                             </>
                             )}
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("aspectBehavior")}
+                              label="Aspect behavior"
+                            >
                               <Select
                                 value={effectiveConfig.featuredImage.aspectBehavior}
                                 onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
@@ -4054,7 +4563,7 @@ export default function Configure() {
                                   <SelectItem value="cropped">Cropped</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {effectiveConfig.featuredImage.aspectBehavior === "cropped" && (
+                              {effectiveConfig.featuredImage.aspectBehavior === "cropped" && !isCollectionControlLocked("aspectRatio") && (
                                 <Select
                                   value={effectiveConfig.featuredImage.aspectRatio}
                                   onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
@@ -4071,9 +4580,11 @@ export default function Configure() {
                                   </SelectContent>
                                 </Select>
                               )}
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
+                            </LockedControlField>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("roundedCorners")}
+                              label="Rounded corners"
+                            >
                               <Select
                                 value={effectiveConfig.featuredImage.roundedCorners}
                                 onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
@@ -4087,23 +4598,29 @@ export default function Configure() {
                                   <SelectItem value="large">Large</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
+                            </LockedControlField>
+                            <LockedControlRow
+                              locked={isCollectionControlLocked("photoShadow")}
+                              label="Shadow"
+                            >
                               <Switch
                                 checked={effectiveConfig.featuredImage.shadow}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
                               />
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
+                            </LockedControlRow>
+                            <LockedControlRow
+                              locked={isCollectionControlLocked("showCaption")}
+                              label="Caption (if exists)"
+                            >
                               <Switch
                                 checked={effectiveConfig.featuredImage.showCaption}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
                               />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
+                            </LockedControlRow>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("verticalSpacing")}
+                              label="Vertical spacing"
+                            >
                               <Select
                                 value={effectiveConfig.featuredImage.verticalSpacing}
                                 onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
@@ -4117,7 +4634,7 @@ export default function Configure() {
                                   <SelectItem value="spacious">Spacious</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
+                            </LockedControlField>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -4139,8 +4656,10 @@ export default function Configure() {
                       <Collapsible open={sectionExpanded.headerContent}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-3">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Height</Label>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("headerHeight")}
+                              label="Height"
+                            >
                               <div className="flex items-center gap-3">
                                 <Slider
                                   value={[effectiveConfig.headerContent.height]}
@@ -4152,7 +4671,7 @@ export default function Configure() {
                                 />
                                 <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.headerContent.height}px</span>
                               </div>
-                            </div>
+                            </LockedControlField>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Modules</Label>
                               <p className="text-[10px] text-[#6b6b6b]">
@@ -4373,8 +4892,10 @@ export default function Configure() {
                         <CollapsibleContent>
                           <div className="pb-4 space-y-3">
                             {selectedLevel === "collection" && (
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Top padding</Label>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("footerTopPadding")}
+                              label="Top padding"
+                            >
                               <div className="flex items-center gap-3">
                                 <Slider
                                   value={[effectiveConfig.footerContent?.topPadding ?? 16]}
@@ -4386,7 +4907,7 @@ export default function Configure() {
                                 />
                                 <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.topPadding ?? 16}px</span>
                               </div>
-                            </div>
+                            </LockedControlField>
                             )}
                             {selectedLevel === "post" && !isWriterPostTemplate && (
                               <div className="space-y-2">
@@ -4564,7 +5085,10 @@ export default function Configure() {
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
-                        const sidebarLocked = isPostControlLocked(side === "left" ? "leftSidebar" : "rightSidebar");
+                        const sidebarLocked =
+                          selectedLevel === "post"
+                            ? isPostControlLocked(side === "left" ? "leftSidebar" : "rightSidebar")
+                            : isCollectionControlLocked(side === "left" ? "leftSidebar" : "rightSidebar");
                         if (sidebarLocked) return null;
                         const orderedModules = (() => {
                           const cm = selectedLevel === "collection"
@@ -4625,8 +5149,10 @@ export default function Configure() {
                               <CollapsibleContent>
                                 <div className="pb-4 space-y-3">
                                   {selectedLevel === "collection" && (
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                  <LockedControlField
+                                    locked={side === "right" && isCollectionControlLocked("rightSidebarWidth")}
+                                    label="Width"
+                                  >
                                     <div className="flex items-center gap-3">
                                       <Slider
                                         value={[cfg.width]}
@@ -4638,11 +5164,13 @@ export default function Configure() {
                                       />
                                       <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
                                     </div>
-                                  </div>
+                                  </LockedControlField>
                                   )}
                                   {selectedLevel === "collection" && (
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Space above</Label>
+                                  <LockedControlField
+                                    locked={isCollectionControlLocked(side === "left" ? "leftSidebarSpaceAbove" : "rightSidebarSpaceAbove")}
+                                    label="Space above"
+                                  >
                                     <div className="flex items-center gap-3">
                                       <Slider
                                         value={[cfg.spaceAbove ?? 0]}
@@ -4654,7 +5182,7 @@ export default function Configure() {
                                       />
                                       <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.spaceAbove ?? 0}px</span>
                                     </div>
-                                  </div>
+                                  </LockedControlField>
                                   )}
                                   <div className="flex items-center justify-between gap-3">
                                     <Label className="text-xs text-[#6b6b6b]">Sticky (move with scroll)</Label>
@@ -4762,13 +5290,13 @@ export default function Configure() {
                                           <>
                                             {renderFeatureLocationControl(
                                               "filterByCategory",
-                                              ["header", "leftSidebar", "rightSidebar"],
+                                              collectionFilterLocations,
                                               undefined,
                                               "Location (categories)"
                                             )}
                                             {renderFeatureLocationControl(
                                               "filterByTag",
-                                              ["header", "leftSidebar", "rightSidebar"],
+                                              collectionFilterLocations,
                                               undefined,
                                               "Location (tags)"
                                             )}
@@ -4780,7 +5308,7 @@ export default function Configure() {
                                           cm.filter.filterByTags,
                                           cm.filter.filterByCategories
                                         ),
-                                        ["header", "leftSidebar", "rightSidebar"]
+                                        collectionFilterLocations
                                       );
                                     })()}
                                     <Label className="text-xs text-[#6b6b6b]">Filter by</Label>
@@ -4804,26 +5332,28 @@ export default function Configure() {
                                   </div>
                                 }
                               />
+                              {!isCollectionControlLocked("popularPosts") && collectionPopularPostsLocations.length > 0 && (
                               <ModuleSettingSectionCollapseOnly
                                 title="Popular Posts"
                                 expanded={sectionExpanded.popularPosts}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
+                                    {renderFeatureLocationControl("popularPosts", collectionPopularPostsLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts.
                                     </p>
                                   </div>
                                 }
                               />
+                              )}
                               <ModuleSettingSectionCollapseOnly
                                 title="Email Capture"
                                 expanded={sectionExpanded.emailCapture}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("emailCapture", ["leftSidebar", "rightSidebar", "footer"])}
+                                    {renderFeatureLocationControl("emailCapture", collectionEmailCaptureLocations)}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -4857,7 +5387,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("leadMagnet", ["leftSidebar", "rightSidebar", "footer"])}
+                                    {renderFeatureLocationControl("leadMagnet", collectionLeadMagnetLocations)}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -5025,7 +5555,7 @@ export default function Configure() {
                               />
                             </>
                           )}
-                          {selectedLevel === "collection" && (
+                          {selectedLevel === "collection" && !isCollectionControlLocked("socialSharing") && (
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">Social Sharing</span>

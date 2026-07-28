@@ -660,11 +660,11 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         ...ccLevelRaw,
         pagination: ccPagination && typeof ccPagination === 'object'
           ? {
-              show: ccPagination.show ?? false,
+              show: true,
               mode: ccPagination.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages',
               postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10
             }
-          : { show: false, mode: 'pages', postsPerPage: 10 }
+          : { show: true, mode: 'pages', postsPerPage: 10 }
       }
     }
     const primaryCollection = resolvePrimaryBucket(collectionConfig) ?? legacyCollectionFallback

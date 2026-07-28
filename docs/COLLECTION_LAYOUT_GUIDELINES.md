@@ -52,6 +52,12 @@
 - Always after the main row and pagination zone
 - Never position: fixed or absolute
 - z-index: 10
+- **Per-template availability** (collection Configure):
+  - **Masthead** — Footer Content is user-toggleable; default **ON** (Email Capture)
+  - **Editorial** — Footer Content is user-toggleable; default **OFF** (empty until the user adds modules)
+  - **Showcase** — Footer Content is user-toggleable; default **OFF** (empty until the user adds modules such as Email Capture or Lead Magnet)
+  - Footer is **not** Masthead-only; Editorial and Showcase intentionally expose the same opt-in footer zone
+  - Templates without sidebars (Masthead, Editorial, Showcase) place Email Capture / Lead Magnet in Footer only; Filtering stays Header-only; Popular Posts is unavailable
 
 ## What must never happen
 - Sidebars must not use top: 0 when sticky — offset must equal header height

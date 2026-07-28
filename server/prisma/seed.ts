@@ -144,7 +144,7 @@ async function seedTemplateConfigs () {
     showAuthor: false,
     showReadingTime: false,
     postSort: 'date' as const,
-    pagination: { show: false, postsPerPage: 10 },
+    pagination: { show: true, postsPerPage: 10 },
     leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
     rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [] as string[], height: 48 },
@@ -211,7 +211,12 @@ async function seedTemplateConfigs () {
           moduleOrder: ['emailCapture'],
           topPadding: 16
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'header' }
       },
       previewLayout: 'masthead'
@@ -297,7 +302,13 @@ async function seedTemplateConfigs () {
           moduleOrder: [],
           topPadding: 16
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          imageWidthPercent: 40,
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'digest'
@@ -314,6 +325,8 @@ async function seedTemplateConfigs () {
         collectionLayout: 'showcase',
         gridColumns: 2,
         pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
           sort: {},
@@ -331,7 +344,19 @@ async function seedTemplateConfigs () {
           moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
           height: 48
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 },
+        footerContent: {
+          show: false,
+          modules: [],
+          moduleOrder: [],
+          topPadding: 16
+        },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          imageWidthPercent: 50,
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'showcase'
@@ -348,11 +373,19 @@ async function seedTemplateConfigs () {
         showReadingTime: true,
         pagination: { show: true, mode: 'pages', postsPerPage: 10 },
         gridColumns: 3,
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         headerContent: {
           show: true,
           modules: ['filterByCategory', 'searchPosts', 'postSort'],
           moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
           height: 48
+        },
+        footerContent: {
+          show: false,
+          modules: [],
+          moduleOrder: [],
+          topPadding: 16
         },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
@@ -365,7 +398,12 @@ async function seedTemplateConfigs () {
           },
           leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'editorial'
