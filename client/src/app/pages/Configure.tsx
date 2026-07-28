@@ -364,6 +364,8 @@ export interface CollectionLevelConfig extends BaseLevelConfig {
   gridColumns?: GridColumnsOption;
   collectionModules?: CollectionModulesConfig;
   featuredArticle?: FeaturedArticleConfig;
+  /** Collection cards/rows: show post excerpt/teaser. Absent on Editorial/Digest (layout-driven). */
+  showPostExcerpt?: boolean;
 }
 
 function blogPreviewItemTimestampMs(item: {
@@ -486,6 +488,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   showDate: true,
   showAuthor: false,
   showReadingTime: false,
+  showPostExcerpt: true,
   postSort: "date",
   pagination: { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 },
   collectionLayout: "grid",
@@ -873,7 +876,8 @@ export type CollectionTemplateLockKey =
   | "featuredArticlePosition"
   | "paginationMode"
   | "showCaption"
-  | "popularPosts";
+  | "popularPosts"
+  | "showPostExcerpt";
 
 /** Locked on every collection template for now; per-template sets can diverge later. */
 const COLLECTION_TEMPLATE_UNIVERSAL_LOCKS: ReadonlySet<CollectionTemplateLockKey> = new Set([
@@ -914,7 +918,8 @@ const COLLECTION_TEMPLATE_LOCKS: Record<string, ReadonlySet<CollectionTemplateLo
     "headerHeight",
     "leftSidebar",
     "rightSidebarWidth",
-    "featuredArticlePosition"
+    "featuredArticlePosition",
+    "showPostExcerpt"
   ),
   showcase: withCollectionLocks(
     COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
@@ -932,7 +937,8 @@ const COLLECTION_TEMPLATE_LOCKS: Record<string, ReadonlySet<CollectionTemplateLo
     "leftSidebar",
     "rightSidebar",
     "showCaption",
-    "popularPosts"
+    "popularPosts",
+    "showPostExcerpt"
   ),
 };
 
@@ -963,6 +969,7 @@ function isCollectionTemplatePathLocked(path: string, locks: ReadonlySet<Collect
   if (path === "footerContent.topPadding") return locks.has("footerTopPadding");
   if (path === "featuredArticle.position") return locks.has("featuredArticlePosition");
   if (path === "pagination.mode") return locks.has("paginationMode");
+  if (path === "showPostExcerpt") return locks.has("showPostExcerpt");
   if (path.startsWith("leftSidebar.")) {
     return locks.has("leftSidebar") || (path === "leftSidebar.spaceAbove" && locks.has("leftSidebarSpaceAbove"));
   }
@@ -1061,6 +1068,13 @@ function enforceCollectionTemplateLockedValues(
     const curPag = next.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
     if (curPag.show !== true) {
       next = { ...next, pagination: { ...curPag, show: true } };
+    }
+  }
+
+  if (locks.has("showPostExcerpt")) {
+    const tplExcerpt = tpl.showPostExcerpt ?? false;
+    if ((next.showPostExcerpt ?? true) !== tplExcerpt) {
+      next = { ...next, showPostExcerpt: tplExcerpt };
     }
   }
 
@@ -1898,6 +1912,7 @@ function parseLevelConfig(
     featuredImage,
   };
   if (level === "collection") {
+    base.showPostExcerpt = Boolean(raw?.showPostExcerpt ?? true);
     const faRaw = raw?.featuredArticle && typeof raw.featuredArticle === "object" ? raw.featuredArticle as Record<string, unknown> : null;
     if (faRaw) {
       const fa: FeaturedArticleConfig = {
@@ -2119,6 +2134,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     (a.headerContent.moduleOrder ?? []).every((m, i) => m === (b.headerContent.moduleOrder ?? [])[i]) &&
     (a.footerContent?.moduleOrder ?? []).every((m, i) => m === (b.footerContent?.moduleOrder ?? [])[i]);
   const base = a.showDate === b.showDate && a.showAuthor === b.showAuthor && a.showReadingTime === b.showReadingTime &&
+    (a as CollectionLevelConfig).showPostExcerpt === (b as CollectionLevelConfig).showPostExcerpt &&
     postSortEqual && pagEqual && collLayoutEqual && gridColsEqual && faEqual && cmEqual && pmEqual && moduleOrderEqual && fcEqual && lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
   if ("progressBar" in a && "progressBar" in b) {
     const pa = (a as PostLevelConfig).progressBar;
@@ -3190,6 +3206,7 @@ export default function Configure() {
     if (path === "showDate") return { ...cfg, showDate: value as boolean };
     if (path === "showAuthor") return { ...cfg, showAuthor: value as boolean };
     if (path === "showReadingTime") return { ...cfg, showReadingTime: value as boolean };
+    if (path === "showPostExcerpt" && "showPostExcerpt" in cfg) return { ...cfg, showPostExcerpt: value as boolean };
     if (path === "leftSidebar.show") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, show: value as boolean } };
     if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
     if (path === "leftSidebar.width") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, width: value as number } };
@@ -3576,6 +3593,20 @@ export default function Configure() {
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
                     </div>
+
+                    {selectedLevel === "collection" && !isCollectionControlLocked("showPostExcerpt") && (
+                    <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
+                      <span className="font-medium">Show Post Excerpt</span>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          id="show-post-excerpt"
+                          checked={(effectiveConfig as CollectionLevelConfig).showPostExcerpt ?? true}
+                          onCheckedChange={(v) => updateLevelConfigPath("showPostExcerpt", v)}
+                        />
+                        <span className="w-6 h-6 shrink-0" aria-hidden />
+                      </div>
+                    </div>
+                    )}
 
                     {selectedLevel === "post" && (
                     <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">

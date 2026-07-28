@@ -8545,6 +8545,8 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
+      /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
+      var showPostExcerpt = cfg.showPostExcerpt !== false;
       if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
@@ -8664,6 +8666,7 @@
         showDate: showDate,
         showAuthor: showAuthor,
         showReadingTime: showReadingTime,
+        showPostExcerpt: showPostExcerpt,
         fiCfg: fiCfg,
         faCfg: faCfg,
         collectionLayout: collectionLayout,
@@ -8919,6 +8922,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var showPostExcerpt = vs.showPostExcerpt !== false;
       var hasAnyFilter = vs.hasAnyFilter;
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
       var siteAccentForPostCats = self._getSiteAccentColor();
@@ -9991,7 +9995,7 @@
               if (digestMobileNarrow) body.style.textAlign = 'left';
             }
           }
-        } else if (collectionLayout === 'listRows') {
+        } else if (showPostExcerpt && collectionLayout === 'listRows') {
           if (!listRowsMobileCompact) {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 120);
             if (excerptText) {
@@ -10000,7 +10004,7 @@
               body.style.marginTop = '0';
             }
           }
-        } else if (collectionLayout === 'grid') {
+        } else if (showPostExcerpt && collectionLayout === 'grid') {
           // Masthead grid — short teaser on desktop; hidden on narrow viewports
           if (!gridMobileNarrow) {
             var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
@@ -10009,7 +10013,7 @@
               self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
             }
           }
-        } else if (collectionLayout === 'editorial') {
+        } else if (showPostExcerpt && collectionLayout === 'editorial') {
           if (!gridMobileNarrow) {
             var editorialExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (editorialExcerptText) {
@@ -10083,6 +10087,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var showPostExcerpt = vs.showPostExcerpt !== false;
       var hasAnyFilter = vs.hasAnyFilter;
       var hasSearchQuery = vs.hasSearchQuery;
       var searchQuery = vs.searchQuery;
@@ -10188,7 +10193,7 @@
         setShowcasePostAnalytics(titleLink);
         wireShowcaseNavLink(titleLink);
         titleEl.appendChild(titleLink);
-        var excerptText = showcaseMobile ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+        var excerptText = (!showPostExcerpt || showcaseMobile) ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
         var bodyEl = null;
         if (!showcaseMobile) {
           bodyEl = document.createElement('div');
@@ -10989,7 +10994,6 @@
           }
 
           var heroMuted = 'rgba(255,255,255,0.78)';
-          var heroBody = 'rgba(255,255,255,0.9)';
 
           var heroBadge = self._createFeaturedBadge({
             text: 'Featured',
@@ -11021,22 +11025,7 @@
             heroTitle.style.fontSize = 'clamp(1.5rem, 4vw, 2.25rem)';
           }
           heroContent.appendChild(heroTitle);
-          var heroSrc = featuredPost.excerpt || featuredPost.body || '';
-          var heroDeck = self._extractFirstNSentences(heroSrc, 2);
-          if (!heroDeck.trim()) {
-            heroDeck = self._truncateText(heroSrc, 200);
-          } else if (heroDeck.length > 400) {
-            heroDeck = self._truncateText(heroSrc, 280);
-          }
-          if (heroDeck && !mastheadHeroMobile) {
-            var heroDeckEl = document.createElement('div');
-            heroDeckEl.textContent = heroDeck;
-            self._applyExcerptStyle(heroDeckEl, 'lg');
-            heroDeckEl.style.color = heroBody;
-            heroDeckEl.style.marginBottom = '14px';
-            heroDeckEl.style.maxWidth = '560px';
-            heroContent.appendChild(heroDeckEl);
-          }
+          /* Masthead hero has no excerpt per collection template spec. */
           var heroMetaParts = [];
           if (showDate) {
             var heroDateStr = self._getDate(featuredPost);

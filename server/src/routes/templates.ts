@@ -10,6 +10,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: true,
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
@@ -75,6 +76,7 @@ const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: false,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   featuredArticle: { show: true, position: 'inLayout' as const },
   leftSidebar: {
@@ -140,6 +142,7 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
   leftSidebar: {
     show: false,
@@ -205,6 +208,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: false,
   featuredArticle: { show: true, position: 'inLayout' as const },
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
@@ -271,6 +275,7 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: true,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
