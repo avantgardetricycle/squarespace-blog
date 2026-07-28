@@ -1114,7 +1114,6 @@ function applyDerivedModules(config: SiteConfigForm): void {
   const cc = config.collectionConfig;
   const pc = config.postConfig;
   const cm = cc.collectionModules ?? defaultCollectionModules;
-  const pm = pc.postModules ?? defaultPostModules;
   const headerOrder = normalizeCollectionFilterModuleOrder(
     effectiveZoneModuleOrder(cc.headerContent.moduleOrder, cc.headerContent.modules),
     cm
