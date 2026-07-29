@@ -252,6 +252,15 @@ export type GridColumnsOption = 2 | 3;
 
 export type FeaturedArticlePosition = "header" | "inLayout";
 
+/** Masthead (grid) and Digest own featured placement — position control is not user-facing. */
+function featuredArticlePositionForLayout(
+  layout: CollectionLayoutMode | undefined
+): FeaturedArticlePosition | null {
+  if (layout === "grid") return "header";
+  if (layout === "digest") return "inLayout";
+  return null;
+}
+
 export interface FeaturedArticleConfig {
   show: boolean;
   position: FeaturedArticlePosition;
@@ -1041,13 +1050,18 @@ function enforceCollectionTemplateLockedValues(
     }
   }
 
-  if (locks.has("featuredArticlePosition") && "featuredArticle" in next) {
+  // Masthead/Digest layouts pin featured position (header hero vs in-layout).
+  if ("featuredArticle" in next) {
+    const layoutForced = featuredArticlePositionForLayout(next.collectionLayout);
     const tplFa = tpl.featuredArticle ?? defaultFeaturedArticle;
     const curFa = next.featuredArticle ?? defaultFeaturedArticle;
-    if (curFa.position !== tplFa.position) {
+    const forcedPosition =
+      layoutForced ??
+      (locks.has("featuredArticlePosition") ? tplFa.position : null);
+    if (forcedPosition && curFa.position !== forcedPosition) {
       next = {
         ...next,
-        featuredArticle: { ...curFa, position: tplFa.position },
+        featuredArticle: { ...curFa, position: forcedPosition },
       };
     }
   }
@@ -3222,7 +3236,18 @@ export default function Configure() {
     if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), show: true } };
     if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
     if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
-    if (path === "collectionLayout" && "collectionLayout" in cfg) return { ...cfg, collectionLayout: value as CollectionLayoutMode };
+    if (path === "collectionLayout" && "collectionLayout" in cfg) {
+      const layout = value as CollectionLayoutMode;
+      const forcedPosition = featuredArticlePositionForLayout(layout);
+      const curFa = (cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle;
+      return {
+        ...cfg,
+        collectionLayout: layout,
+        ...(forcedPosition
+          ? { featuredArticle: { ...curFa, position: forcedPosition } }
+          : {}),
+      };
+    }
     if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
     if (path === "featuredArticle.show" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), show: value as boolean } };
     if (path === "featuredArticle.position" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), position: value as FeaturedArticlePosition } };
@@ -3802,7 +3827,12 @@ export default function Configure() {
                               </Select>
                             </div>
                             <LockedControlField
-                              locked={isCollectionControlLocked("featuredArticlePosition")}
+                              locked={
+                                isCollectionControlLocked("featuredArticlePosition") ||
+                                featuredArticlePositionForLayout(
+                                  (effectiveConfig as CollectionLevelConfig).collectionLayout
+                                ) != null
+                              }
                               label="Position"
                               className="min-w-0 space-y-2"
                             >
