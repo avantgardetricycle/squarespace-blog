@@ -3581,6 +3581,8 @@ export default function Configure() {
             onOpenChange={setTemplateModalOpen}
             onSelectTemplate={handleSelectTemplate}
             initialLevel={selectedLevel}
+            collectionTemplateId={config.collectionTemplateId}
+            postTemplateId={config.postTemplateId}
           />
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>

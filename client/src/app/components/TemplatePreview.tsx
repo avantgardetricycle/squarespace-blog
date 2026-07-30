@@ -532,18 +532,18 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
     case "story":
       return (
         <div className={cn("flex flex-col gap-2 p-3 min-h-0", className)}>
-          <div className="flex gap-3 shrink-0">
-            <div className={cn(imgPlaceholder, "w-[40%] aspect-[3/2] shrink-0 rounded")} />
-            <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-bold text-[#333]">Article Headline Goes Here</div>
-              <div className={cn(textMuted, "text-[9px] mt-0.5")}>By Author · Mar 7 · 8 min</div>
-              <Breadcrumbs align="left" />
+          <div className="flex gap-3 shrink-0 rounded-md bg-[#1a1a1a] p-2.5">
+            <div className={cn(imgPlaceholder, "w-[42%] aspect-[3/2] shrink-0 rounded")} />
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+              <Breadcrumbs align="left" light />
+              <div className="text-[11px] font-bold text-white mt-1">Article Headline Goes Here</div>
+              <div className="text-[9px] text-white/70 mt-0.5">By Author · Mar 7 · 8 min</div>
             </div>
           </div>
-          <div className="min-h-0 mt-2">
+          <div className="min-h-0 mt-2 max-w-[70%] mx-auto w-full">
             <BodyParas />
           </div>
-          <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0">
+          <div className="border-t border-[#e5e4e0] pt-2 pl-3 flex flex-col gap-2 shrink-0 max-w-[70%] mx-auto w-full">
             <AuthorProfile />
             <LeadMagnet />
           </div>
