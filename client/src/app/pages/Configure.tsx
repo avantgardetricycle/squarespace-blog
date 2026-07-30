@@ -966,6 +966,7 @@ function getCollectionTemplateLocks(templateKey: string | null | undefined): Rea
 }
 
 function isCollectionTemplatePathLocked(path: string, locks: ReadonlySet<CollectionTemplateLockKey>): boolean {
+  if (path === "collectionLayout") return true;
   if (locks.has("featuredImage") && path.startsWith("featuredImage.")) return true;
   if (path === "featuredImage.imageWidthPercent") return locks.has("imageWidth");
   if (path === "featuredImage.aspectBehavior") return locks.has("aspectBehavior");
@@ -998,9 +999,15 @@ function enforceCollectionTemplateLockedValues(
   templateCollectionConfig: CollectionLevelConfig | null,
   locks: ReadonlySet<CollectionTemplateLockKey>
 ): CollectionLevelConfig {
-  if (locks.size === 0) return collectionConfig;
   const tpl = templateCollectionConfig ?? defaultCollectionConfig;
   let next = collectionConfig;
+
+  const tplLayout = tpl.collectionLayout ?? "grid";
+  if ((next.collectionLayout ?? "grid") !== tplLayout) {
+    next = { ...next, collectionLayout: tplLayout };
+  }
+
+  if (locks.size === 0) return next;
 
   const tplFi = tpl.featuredImage ?? defaultFeaturedImage;
   const curFi = next.featuredImage ?? defaultFeaturedImage;
@@ -2255,7 +2262,6 @@ export default function Configure() {
     showAuthor: false,
     authorProfiles: false,
     pagination: false,
-    collectionLayout: false,
     featuredArticle: false,
     featuredImage: false,
     filtering: false,
@@ -3236,18 +3242,6 @@ export default function Configure() {
     if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), show: true } };
     if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
     if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
-    if (path === "collectionLayout" && "collectionLayout" in cfg) {
-      const layout = value as CollectionLayoutMode;
-      const forcedPosition = featuredArticlePositionForLayout(layout);
-      const curFa = (cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle;
-      return {
-        ...cfg,
-        collectionLayout: layout,
-        ...(forcedPosition
-          ? { featuredArticle: { ...curFa, position: forcedPosition } }
-          : {}),
-      };
-    }
     if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
     if (path === "featuredArticle.show" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), show: value as boolean } };
     if (path === "featuredArticle.position" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), position: value as FeaturedArticlePosition } };
@@ -3646,59 +3640,6 @@ export default function Configure() {
                         />
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
-                    </div>
-                    )}
-
-                    {selectedLevel === "collection" && (
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium">Collection Layout</span>
-                          <span className="text-xs text-[#6b6b6b] truncate">
-                            {(() => {
-                              const layout = (effectiveConfig as CollectionLevelConfig).collectionLayout ?? "grid";
-                              if (layout === "grid") return "Masthead";
-                              if (layout === "listRows") return "Newsroom";
-                              if (layout === "editorial") return "Editorial";
-                              if (layout === "showcase") return "Showcase";
-                              if (layout === "digest") return "Digest";
-                              return "Masthead";
-                            })()}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSectionExpanded((p) => ({ ...p, collectionLayout: !p.collectionLayout }))}
-                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                          aria-label={sectionExpanded.collectionLayout ? "Collapse" : "Expand"}
-                        >
-                          {sectionExpanded.collectionLayout ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <Collapsible open={sectionExpanded.collectionLayout}>
-                        <CollapsibleContent>
-                          <div className="pb-4 space-y-3">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Layout</Label>
-                              <Select
-                                value={(effectiveConfig as CollectionLevelConfig).collectionLayout ?? "grid"}
-                                onValueChange={(v) => updateLevelConfigPath("collectionLayout", v as CollectionLayoutMode)}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="grid">Masthead</SelectItem>
-                                  <SelectItem value="listRows">Newsroom</SelectItem>
-                                  <SelectItem value="editorial">Editorial</SelectItem>
-                                  <SelectItem value="showcase">Showcase</SelectItem>
-                                  <SelectItem value="digest">Digest</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
                     </div>
                     )}
 
