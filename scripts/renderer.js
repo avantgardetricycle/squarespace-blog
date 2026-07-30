@@ -2658,6 +2658,23 @@
       }
     },
 
+    /** Feature / Reporter / Publisher: remove default heading top margin so sidebar labels align with post body. */
+    _normalizeSidebarTopForSidebarRow: function(sidebarRailEl) {
+      if (!sidebarRailEl || !sidebarRailEl.querySelector) return;
+      sidebarRailEl.classList.add('blog-overlay-sidebar-rail--sidebar-row');
+      sidebarRailEl.style.marginTop = '0';
+      sidebarRailEl.style.paddingTop = '0';
+      var section = sidebarRailEl.querySelector('.blog-overlay-sidebar-section');
+      if (!section) return;
+      section.style.marginTop = '0';
+      section.style.paddingTop = '0';
+      var header = section.querySelector('.bb-sidebar-header');
+      if (header && header.style) {
+        header.style.marginTop = '0';
+        header.style.paddingTop = '0';
+      }
+    },
+
     /** Match single-post body horizontal inset to the post header column. */
     _applySinglePostBodyMargins: function(bodyEl, cfg) {
       if (!bodyEl || !bodyEl.style) return;
@@ -7347,11 +7364,14 @@
         '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
         '#blog-overlay-list .bb-load-more{padding:10px 24px;font-size:14px;font-weight:inherit;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
         '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
-        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-bottom:8px;}' +
+        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
         '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row>:first-child{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child .bb-sidebar-header{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
         '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
         '#blog-overlay-list .blog-overlay-featured-image > div{border-radius:4px;}' +
@@ -11069,6 +11089,9 @@
         section.style.marginBottom = '20px';
         var header = document.createElement('h3');
         header.className = 'bb-sidebar-header';
+        header.style.marginTop = '0';
+        header.style.paddingTop = '0';
+        header.style.marginBottom = '8px';
         header.textContent = headerText;
         section.appendChild(header);
         var bar = document.createElement('hr');
@@ -13018,6 +13041,15 @@
           if (isSinglePost && (leftSidebarWrapEl.childNodes.length || rightSidebarWrapEl.childNodes.length)) {
             var mainColPadTop = Math.max(leftPadTop, rightPadTop);
             main.style.paddingTop = mainColPadTop > 0 ? (mainColPadTop + 'px') : '0';
+          }
+          var sidebarRowPostLayoutActive = isSinglePost && (
+            self._isFeaturePostLayout(cfg) ||
+            self._isReporterPostLayout(cfg) ||
+            self._isPublisherPostLayout(cfg)
+          );
+          if (sidebarRowPostLayoutActive) {
+            if (leftSidebarEl.childNodes.length) self._normalizeSidebarTopForSidebarRow(leftSidebarEl);
+            if (rightSidebarEl.childNodes.length) self._normalizeSidebarTopForSidebarRow(rightSidebarEl);
           }
           mainRowEl.appendChild(main);
           if (rightSidebarWrapEl.childNodes.length) mainRowEl.appendChild(rightSidebarWrapEl);
