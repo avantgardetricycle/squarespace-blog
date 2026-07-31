@@ -46,7 +46,9 @@ function debugLog(
 
 function getMeasurementId(): string | undefined {
   const id = import.meta.env.VITE_GA_MEASUREMENT_ID;
-  return typeof id === 'string' && id.length > 0 ? id : undefined;
+  if (typeof id !== 'string') return undefined;
+  const trimmed = id.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function isAnalyticsEnabled(): boolean {
@@ -58,6 +60,14 @@ export function isAnalyticsEnabled(): boolean {
 function gtag(...args: unknown[]): void {
   window.gtag?.(...args);
 }
+
+// #region agent log
+function countGaCollectHits(): number {
+  return performance
+    .getEntriesByType('resource')
+    .filter((entry) => entry.name.includes('google-analytics.com')).length;
+}
+// #endregion
 
 export function initAnalytics(): void {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -80,11 +90,18 @@ export function initAnalytics(): void {
   if (!measurementId) return;
 
   window.dataLayer = window.dataLayer ?? [];
-  window.gtag = function gtagShim(...args: unknown[]) {
-    window.dataLayer?.push(args);
+  // Match Google's official snippet: push `arguments`, not a rest-params array.
+  window.gtag = function gtag() {
+    window.dataLayer?.push(arguments);
   };
+
+  gtag('consent', 'default', {
+    analytics_storage: 'granted',
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+  });
   gtag('js', new Date());
-  gtag('config', measurementId, { send_page_view: true });
 
   const script = document.createElement('script');
   script.async = true;
@@ -92,14 +109,24 @@ export function initAnalytics(): void {
 
   // #region agent log
   script.addEventListener('load', () => {
+    gtag('config', measurementId, { send_page_view: true });
+
     const gtagSource = window.gtag?.toString() ?? '';
     const isStillShim = gtagSource.includes('dataLayer?.push') || gtagSource.includes('dataLayer.push');
-    debugLog('A', 'analytics.ts:script:onload', 'gtag.js script load event fired', {
+    debugLog('F', 'analytics.ts:script:onload', 'gtag.js loaded; config sent on load', {
       scriptSrc: script.src,
       dataLayerLength: window.dataLayer?.length ?? 0,
       gtagIsStillLocalShim: isStillShim,
-      gtagSourcePreview: gtagSource.slice(0, 120),
+      collectHitsImmediate: countGaCollectHits(),
     });
+
+    window.setTimeout(() => {
+      debugLog('F', 'analytics.ts:script:post-config', 'collect hit check after config', {
+        collectHitsAfter2s: countGaCollectHits(),
+        dataLayerLength: window.dataLayer?.length ?? 0,
+        icsActive: (window as Window & { google_tag_data?: { ics?: { active?: boolean } } }).google_tag_data?.ics?.active,
+      });
+    }, 2000);
   });
   script.addEventListener('error', () => {
     debugLog('A', 'analytics.ts:script:onerror', 'gtag.js script failed to load', {
@@ -116,6 +143,7 @@ export function initAnalytics(): void {
       scriptSrc: scriptEl?.getAttribute('src') ?? null,
       dataLayerLength: window.dataLayer?.length ?? 0,
       gtagIsStillLocalShim: isStillShim,
+      collectHitsAfter3s: countGaCollectHits(),
     });
   }, 3000);
   // #endregion
@@ -142,6 +170,7 @@ export function initAnalytics(): void {
           scriptSrc: scriptEl?.getAttribute('src') ?? null,
           dataLayerLength: window.dataLayer?.length ?? 0,
           dataLayer: window.dataLayer,
+          collectHits: countGaCollectHits(),
           gtagIsStillLocalShim:
             gtagSource.includes('dataLayer?.push') || gtagSource.includes('dataLayer.push'),
         };
