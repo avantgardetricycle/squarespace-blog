@@ -84,12 +84,12 @@
   .article-header { background: #fff; padding: 40px 32px 0; }
 
   .header-text-block {
-    max-width: 720px; margin: 0 auto;
+    max-width: 800px; margin: 0 auto;
     text-align: center; padding-bottom: 32px;
   }
   .breadcrumbs {
     display: flex; align-items: center; justify-content: center; gap: 6px;
-    font-size: 12px; margin-bottom: 16px;
+    font-size: 12px; margin-bottom: 24px;
   }
   .breadcrumbs a { color: #bbb; text-decoration: none; }
   .breadcrumbs a:hover { color: #333; }
@@ -128,7 +128,10 @@
 
   /* Full-width banner image below text */
   .header-img {
-    width: 100%; aspect-ratio: 21/8;
+    width: 100%; max-height: 600px;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 4px;
     background: linear-gradient(160deg, #c8c8c0 0%, #d8d5cc 100%);
     display: flex; align-items: center; justify-content: center;
     color: #aaa; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase;
@@ -143,7 +146,7 @@
     margin: 0 auto;
     padding: 0 32px;
     display: grid;
-    grid-template-columns: 200px 1fr 280px;
+    grid-template-columns: 300px 1fr 300px;
     gap: 40px;
     align-items: start;
   }
@@ -164,16 +167,16 @@
   }
   .sw-toc-list { list-style: none; }
   .sw-toc-item {
-    padding: 6px 0 6px 12px;
-    border-left: 2px solid #eee;
-    font-size: 12px; color: #888;
+    padding: 8px 12px;
+    border-left: 2px solid transparent;
+    font-size: 16px; color: #888;
     cursor: pointer; line-height: 1.4;
     transition: all 0.15s;
     text-decoration: none; display: block;
   }
-  .sw-toc-item:hover { color: #111; border-left-color: #111; }
-  .sw-toc-item.active { color: #111; border-left-color: var(--accent); font-weight: 600; }
-  .sw-toc-item.passed { color: #ccc; border-left-color: #eee; }
+  .sw-toc-item:hover { color: #111; }
+  .sw-toc-item.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; background: rgba(233, 0, 127, 0.1); }
+  .sw-toc-item.passed { color: #ccc; border-left-color: transparent; }
 
   /* =============================================
      ARTICLE BODY (placeholder blocks)
@@ -206,6 +209,7 @@
     display: flex; flex-direction: column; gap: 28px;
   }
   .sidebar-widget { border-top: 2px solid #111; padding-top: 16px; }
+  .sidebar > .sidebar-widget:first-child { border-top: none; padding-top: 0; }
   .widget-title {
     font-size: 10px; font-weight: 600;
     letter-spacing: 2px; text-transform: uppercase;
@@ -484,7 +488,7 @@
     </div>
   </div>
   <!-- Full-width banner image sits below text block -->
-  <div class="header-img">Hero Image · 21:8 · Full page width</div>
+  <div class="header-img">Hero Image · 16:9 · Full page width · max 600px</div>
 </div>
 
 <!-- ==================== BODY ZONE ==================== -->
@@ -696,7 +700,7 @@
   <div class="spec-row"><span class="spec-k">Name</span><span class="spec-v">The Feature</span></div>
   <div class="spec-row"><span class="spec-k">ID</span><span class="spec-v"><code>layout-04</code></span></div>
   <div class="spec-row"><span class="spec-k">Page width</span><span class="spec-v"><code>1280px</code> max</span></div>
-  <div class="spec-row"><span class="spec-k">Body grid</span><span class="spec-v"><code>200px · 1fr · 280px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Body grid</span><span class="spec-v"><code>300px · 1fr · 300px</code></span></div>
   <div class="spec-row"><span class="spec-k">Gap</span><span class="spec-v"><code>40px</code></span></div>
   <div class="spec-row"><span class="spec-k">Sidebars</span><span class="spec-v">Left TOC + Right rail</span></div>
 
@@ -714,13 +718,13 @@
   </div>
 
   <div class="spec-h">Header (P4)</div>
-  <div class="spec-row"><span class="spec-k">Text block</span><span class="spec-v">Centered, <code>720px</code> max</span></div>
-  <div class="spec-row"><span class="spec-k">Image</span><span class="spec-v">Full-width, <code>21:8</code></span></div>
+  <div class="spec-row"><span class="spec-k">Text block</span><span class="spec-v">Centered, <code>800px</code> max</span></div>
+  <div class="spec-row"><span class="spec-k">Image</span><span class="spec-v">Full-width, <code>16:9</code>, <code>600px</code> max height, <code>4px</code> radius</span></div>
   <div class="spec-row"><span class="spec-k">Order</span><span class="spec-v">Text above → image below</span></div>
   <div class="spec-row"><span class="spec-k">Breadcrumbs</span><span class="spec-v">Centered, muted</span></div>
 
   <div class="spec-h">TOC (Left Rail)</div>
-  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>200px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>300px</code></span></div>
   <div class="spec-row"><span class="spec-k">Behavior</span><span class="spec-v">Sticky, top <code>54px</code></span></div>
   <div class="spec-row"><span class="spec-k">Active state</span><span class="spec-v">Pink left border</span></div>
   <div class="spec-row"><span class="spec-k">Passed state</span><span class="spec-v">Greyed out</span></div>
@@ -728,7 +732,7 @@
   <div class="spec-row"><span class="spec-k">Auto-build</span><span class="spec-v">From H2 elements in body</span></div>
 
   <div class="spec-h">Right Sidebar</div>
-  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>280px</code></span></div>
+  <div class="spec-row"><span class="spec-k">Width</span><span class="spec-v"><code>300px</code></span></div>
   <div class="spec-row"><span class="spec-k">Behavior</span><span class="spec-v">Sticky scroll</span></div>
   <div class="spec-row"><span class="spec-k">Widget gap</span><span class="spec-v"><code>28px</code></span></div>
 

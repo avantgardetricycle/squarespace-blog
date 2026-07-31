@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Logo } from "@/app/components/Logo";
@@ -17,6 +17,12 @@ import {
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
 import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
+import {
+  billingPeriod,
+  INTEREST_MODAL_SOURCES,
+  trackEvent,
+  type InterestModalSource,
+} from "@/lib/analytics";
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true);
@@ -24,7 +30,52 @@ export default function LandingPage() {
   /** Use build-time flag immediately; avoid "not live" UI while /api/health is pending. */
   const [isLive, setIsLive] = useState<boolean>(BUILD_TIME_IS_LIVE);
   const [interestModalOpen, setInterestModalOpen] = useState(false);
+  const [interestModalSource, setInterestModalSource] = useState<InterestModalSource | null>(null);
   const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
+  const pricingSectionRef = useRef<HTMLElement>(null);
+  const pricingViewTrackedRef = useRef(false);
+
+  const openInterestModal = useCallback((source: InterestModalSource) => {
+    trackEvent("interest_modal_open", { trigger_source: source });
+    setInterestModalSource(source);
+    setInterestModalOpen(true);
+  }, []);
+
+  const handleInterestModalOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setInterestModalSource(null);
+    }
+    setInterestModalOpen(open);
+  }, []);
+
+  const trackNavClick = useCallback((link: "features" | "how_it_works" | "pricing") => {
+    if (link === "pricing") {
+      trackEvent("pricing_nav_click");
+    }
+    trackEvent("nav_click", { link });
+  }, []);
+
+  const trackCtaClick = useCallback((cta: string, destination: string) => {
+    trackEvent("cta_click", { cta, destination });
+  }, []);
+
+  const trackPricingTierCta = useCallback(
+    (tier: string) => {
+      trackEvent("pricing_tier_cta_click", {
+        tier,
+        billing_period: billingPeriod(isAnnual),
+        is_live: isLive,
+      });
+    },
+    [isAnnual, isLive]
+  );
+
+  const trackStudioCta = useCallback(() => {
+    trackEvent("pricing_studio_cta_click", {
+      billing_period: billingPeriod(isAnnual),
+      is_live: isLive,
+    });
+  }, [isAnnual, isLive]);
 
   useEffect(() => {
     getDashboardMe().then((me) => setIsAuthenticated(!!me));
@@ -50,6 +101,23 @@ export default function LandingPage() {
       .then(setStripePrices)
       .catch(() => setStripePrices(null));
   }, []);
+
+  useEffect(() => {
+    const section = pricingSectionRef.current;
+    if (!section) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting || pricingViewTrackedRef.current) return;
+        pricingViewTrackedRef.current = true;
+        trackEvent("pricing_section_view", { billing_period: billingPeriod(isAnnual) });
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [isAnnual]);
 
   const priceCurrency = stripePrices?.currency ?? "usd";
 
@@ -151,6 +219,12 @@ export default function LandingPage() {
     ]
   };
 
+  const tierModalSources: Record<(typeof pricingTiers)[number]["planKey"], InterestModalSource> = {
+    essentials: INTEREST_MODAL_SOURCES.pricingTierEssentials,
+    professional: INTEREST_MODAL_SOURCES.pricingTierProfessional,
+    publication: INTEREST_MODAL_SOURCES.pricingTierPublication,
+  };
+
   return (
     <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-purple-100 selection:text-purple-900">
       {/* Header */}
@@ -158,9 +232,9 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Logo />
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Features</a>
-            <a href="#how-it-works" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">How it Works</a>
-            <a href="#pricing" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Pricing</a>
+            <a href="#features" onClick={() => trackNavClick("features")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Features</a>
+            <a href="#how-it-works" onClick={() => trackNavClick("how_it_works")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">How it Works</a>
+            <a href="#pricing" onClick={() => trackNavClick("pricing")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Pricing</a>
           </div>
           <div className="flex items-center gap-4">
             {isAuthenticated ? (
@@ -170,16 +244,30 @@ export default function LandingPage() {
             ) : (
               <>
                 {isLive === true ? (
-                  <Link to="/login" className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block">
+                  <Link
+                    to="/login"
+                    onClick={() => trackCtaClick("header_login", "/login")}
+                    className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block"
+                  >
                     Log in
                   </Link>
                 ) : null}
                 {isLive === true ? (
                   <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
-                    <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started</Link>
+                    <Link
+                      to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}
+                      onClick={() =>
+                        trackCtaClick(
+                          "header_get_started",
+                          `/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`
+                        )
+                      }
+                    >
+                      Get Started
+                    </Link>
                   </Button>
                 ) : (
-                  <Button onClick={() => setInterestModalOpen(true)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
+                  <Button onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.headerGetStarted)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
                     Get Started
                   </Button>
                 )}
@@ -221,15 +309,25 @@ export default function LandingPage() {
                 </Button>
               ) : isLive === true ? (
                 <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
-                  <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Start Free Trial</Link>
+                  <Link
+                    to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}
+                    onClick={() =>
+                      trackCtaClick(
+                        "hero_start_trial",
+                        `/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`
+                      )
+                    }
+                  >
+                    Start Free Trial
+                  </Link>
                 </Button>
               ) : (
-                <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto">
+                <Button size="lg" onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.heroStartTrial)} className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto">
                   Start Free Trial
                 </Button>
               )}
               <Button size="lg" variant="outline" className="h-12 px-8 text-base border-neutral-200 hover:bg-neutral-50 rounded-full w-full sm:w-auto" asChild>
-                <a href="#how-it-works">See How It Works</a>
+                <a href="#how-it-works" onClick={() => trackCtaClick("hero_see_how_it_works", "#how-it-works")}>See How It Works</a>
               </Button>
             </motion.div>
           </motion.div>
@@ -287,7 +385,7 @@ export default function LandingPage() {
       <HowItWorks />
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-12 md:py-20 bg-[#f7f6f3]">
+      <section id="pricing" ref={pricingSectionRef} className="py-12 md:py-20 bg-[#f7f6f3]">
         <div className="container mx-auto px-4 max-w-[1080px]">
           {/* Header */}
           <div className="text-center mb-8 md:mb-12">
@@ -306,7 +404,10 @@ export default function LandingPage() {
             {/* Billing Toggle */}
             <div className="inline-flex items-center bg-white border border-neutral-200 rounded-full p-1 gap-1 shadow-sm">
               <button
-                onClick={() => setIsAnnual(false)}
+                onClick={() => {
+                  setIsAnnual(false);
+                  trackEvent("pricing_billing_toggle", { billing_period: "monthly" });
+                }}
                 className={cn(
                   "font-medium text-[13px] px-5 py-2 rounded-full cursor-pointer border-none transition-all flex items-center gap-2",
                   !isAnnual 
@@ -317,7 +418,10 @@ export default function LandingPage() {
                 Monthly
               </button>
               <button
-                onClick={() => setIsAnnual(true)}
+                onClick={() => {
+                  setIsAnnual(true);
+                  trackEvent("pricing_billing_toggle", { billing_period: "annual" });
+                }}
                 className={cn(
                   "font-medium text-[13px] px-5 py-2 rounded-full cursor-pointer border-none transition-all flex items-center gap-2",
                   isAnnual 
@@ -454,13 +558,19 @@ export default function LandingPage() {
                         : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
                     )}
                   >
-                    <Link to={isAuthenticated ? "/dashboard" : `/checkout?plan=${tier.planKey}&billing=${isAnnual ? "annual" : "monthly"}`}>
+                    <Link
+                      to={isAuthenticated ? "/dashboard" : `/checkout?plan=${tier.planKey}&billing=${isAnnual ? "annual" : "monthly"}`}
+                      onClick={() => trackPricingTierCta(tier.planKey)}
+                    >
                       Start free trial
                     </Link>
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => setInterestModalOpen(true)}
+                    onClick={() => {
+                      trackPricingTierCta(tier.planKey);
+                      openInterestModal(tierModalSources[tier.planKey]);
+                    }}
                     className={cn(
                       "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
                       tier.highlight
@@ -544,13 +654,22 @@ export default function LandingPage() {
                   asChild
                   className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
                 >
-                  <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+                  <Link
+                    to={isAuthenticated ? "/dashboard" : "/login"}
+                    onClick={() => {
+                      trackStudioCta();
+                      trackCtaClick("pricing_studio_contact", isAuthenticated ? "/dashboard" : "/login");
+                    }}
+                  >
                     Contact us
                   </Link>
                 </Button>
               ) : (
                 <Button
-                  onClick={() => setInterestModalOpen(true)}
+                  onClick={() => {
+                    trackStudioCta();
+                    openInterestModal(INTEREST_MODAL_SOURCES.pricingStudioContact);
+                  }}
                   className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
                 >
                   Contact us
@@ -581,10 +700,20 @@ export default function LandingPage() {
           </h2>
           {isLive === true ? (
             <Button size="lg" className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10" asChild>
-              <Link to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}>Get Started for Free</Link>
+              <Link
+                to={`/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`}
+                onClick={() =>
+                  trackCtaClick(
+                    "bottom_get_started",
+                    `/checkout?plan=professional&billing=${isAnnual ? "annual" : "monthly"}`
+                  )
+                }
+              >
+                Get Started for Free
+              </Link>
             </Button>
           ) : (
-            <Button size="lg" onClick={() => setInterestModalOpen(true)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">
+            <Button size="lg" onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.bottomGetStarted)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">
               Get Started for Free
             </Button>
           )}
@@ -604,7 +733,11 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      <InterestModal open={interestModalOpen} onOpenChange={setInterestModalOpen} />
+      <InterestModal
+        open={interestModalOpen}
+        onOpenChange={handleInterestModalOpenChange}
+        triggerSource={interestModalSource}
+      />
     </div>
   );
 }

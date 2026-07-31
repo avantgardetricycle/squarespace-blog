@@ -10,6 +10,7 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: true,
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
@@ -54,6 +55,18 @@ const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
     moduleOrder: ['emailCapture'],
     topPadding: 16
   },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 40,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   featuredArticle: { show: true, position: 'header' as const }
 }
 
@@ -63,14 +76,49 @@ const CANONICAL_EDITORIAL_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: false,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   featuredArticle: { show: true, position: 'inLayout' as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
+  rightSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
   headerContent: {
     show: true,
     modules: ['filterByCategory', 'searchPosts', 'postSort'],
     moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
     height: 48
   },
+  footerContent: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    topPadding: 16
+  },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 40,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
     sort: {},
@@ -94,13 +142,48 @@ const CANONICAL_SHOWCASE_COLLECTION_TEMPLATE = {
   pagination: { show: true, mode: 'infiniteScroll' as const, postsPerPage: 10 as const },
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: true,
   featuredArticle: { show: true, position: 'inLayout' as const },
+  leftSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
+  rightSidebar: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    width: 240,
+    spaceAbove: 0,
+    sticky: false
+  },
   headerContent: {
     show: true,
     modules: ['filterByCategory', 'postSort', 'searchPosts'],
     moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
     height: 48
   },
+  footerContent: {
+    show: false,
+    modules: [] as string[],
+    moduleOrder: [] as string[],
+    topPadding: 16
+  },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 50,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
     sort: {},
@@ -125,6 +208,7 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: false,
   featuredArticle: { show: true, position: 'inLayout' as const },
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
@@ -155,12 +239,24 @@ const CANONICAL_DIGEST_COLLECTION_TEMPLATE = {
     moduleOrder: [] as string[],
     topPadding: 16
   },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed' as const,
+    imageWidthPercent: 40,
+    aspectBehavior: 'original' as const,
+    aspectRatio: '16:9' as const,
+    roundedCorners: 'off' as const,
+    shadow: false,
+    showCaption: false,
+    verticalSpacing: 'normal' as const
+  },
+  socialMediaLinks: { show: false, platforms: [] as string[] },
   collectionModules: {
     filter: { filterByTags: false, filterByCategories: true },
     sort: {},
     search: {},
     recentPosts: {},
-    popularPosts: { count: 5 },
+    popularPosts: { count: 3 },
     emailCapture: {
       header: 'Subscribe to our newsletter',
       buttonText: 'Subscribe'
@@ -179,6 +275,7 @@ const CANONICAL_NEWSROOM_COLLECTION_TEMPLATE = {
   showDate: true,
   showAuthor: true,
   showReadingTime: true,
+  showPostExcerpt: true,
   pagination: { show: true, mode: 'pages' as const, postsPerPage: 10 as const },
   leftSidebar: {
     show: false,
@@ -235,7 +332,8 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     contentVerticalAlignment: 'bottom',
     showBreadcrumbs: false,
     showTags: false,
-    showCategories: false
+    showCategories: true,
+    showDecorativeAccentLine: false
   },
   leftSidebar: {
     show: false,
@@ -257,13 +355,19 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts'],
     moduleOrder: ['authorProfiles', 'relevantPosts'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'postBody'
+  },
+  featuredImage: {
+    show: true,
+    layoutMode: 'fullBleed',
+    showCaption: true
   },
   postModules: {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: false, position: 'none' },
     authorProfiles: { enabled: true, position: 'footer' },
-    popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+    popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     leadMagnet: {
       enabled: false,
@@ -286,7 +390,9 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     fullBleedLayout: 'stacked',
     showBreadcrumbs: true,
     showTags: true,
-    showCategories: true
+    showCategories: true,
+    showByline: true,
+    showDecorativeAccentLine: false
   },
   leftSidebar: {
     show: true,
@@ -309,7 +415,8 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'fullScreen'
   },
   socialMediaLinks: {
     show: true,
@@ -330,7 +437,7 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     tableOfContents: { enabled: true, position: 'leftSidebar', style: 'bookmark' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'rightSidebar' },
-    popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+    popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     leadMagnet: {
       enabled: true,
@@ -352,7 +459,9 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: false,
-    showCategories: true
+    showCategories: true,
+    showByline: true,
+    showDecorativeAccentLine: true
   },
   leftSidebar: {
     show: false,
@@ -374,7 +483,8 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'prevNextArticle'],
     moduleOrder: ['authorProfiles', 'prevNextArticle'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'fullScreen'
   },
   featuredImage: {
     show: false
@@ -394,8 +504,9 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     contentVerticalAlignment: 'top',
     showBreadcrumbs: true,
     showTags: true,
-    showCategories: true,
-    showByline: true
+    showCategories: false,
+    showByline: true,
+    showDecorativeAccentLine: true
   },
   leftSidebar: {
     show: false,
@@ -418,14 +529,15 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'postBody'
   },
   socialMediaLinks: { show: false, platforms: [] as string[] },
   featuredImage: {
     show: true,
     layoutMode: 'rightJustified',
-    imageWidthPercent: 38,
-    aspectBehavior: 'cropped',
+    imageWidthPercent: 60,
+    aspectBehavior: 'original',
     aspectRatio: '3:2',
     roundedCorners: 'off',
     shadow: false,
@@ -437,7 +549,7 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'rightSidebar' },
-    popularPosts: { enabled: false, position: 'none', count: 5 },
+    popularPosts: { enabled: false, position: 'none', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
     leadMagnet: {
       enabled: true,
@@ -457,10 +569,12 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     imagePosition: 'leftOfInfo',
     contentAlignment: 'left',
     contentVerticalAlignment: 'top',
+    backgroundColor: '#000000',
     showBreadcrumbs: true,
     showTags: true,
     showCategories: true,
-    showByline: true
+    showByline: true,
+    showDecorativeAccentLine: true
   },
   leftSidebar: {
     show: false,
@@ -483,25 +597,25 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     show: true,
     modules: ['authorProfiles', 'leadMagnet'],
     moduleOrder: ['authorProfiles', 'leadMagnet'],
-    topPadding: 16
+    topPadding: 16,
+    sideMargins: 'postBody'
   },
   socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
   featuredImage: {
     show: true,
     layoutMode: 'leftJustified',
     imageWidthPercent: 60,
-    aspectBehavior: 'original',
-    aspectRatio: '16:9',
+    aspectBehavior: 'cropped',
+    aspectRatio: '3:2',
     roundedCorners: 'off',
     shadow: false,
     showCaption: true,
     verticalSpacing: 'normal'
   },
   postModules: {
-    tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
     breadcrumbs: { enabled: true, position: 'none' },
     authorProfiles: { enabled: true, position: 'footer' },
-    popularPosts: { enabled: false, position: 'none', count: 5 },
+    popularPosts: { enabled: false, position: 'none', count: 3 },
     relevantPosts: { enabled: false, position: 'none' },
     leadMagnet: {
       enabled: true,
@@ -626,6 +740,46 @@ function normalizeTemplateForResponse (
     }
   }
   return template
+}
+
+/** Default post template for new sites / configs with no template assigned. */
+export const DEFAULT_POST_TEMPLATE_KEY = 'reporter'
+
+/** Resolve the Reporter post template (canonical config + DB id) for new-site defaults. */
+export async function resolveDefaultPostTemplate (): Promise<{
+  id: string
+  templateKey: string
+  name: string
+  postConfig: Record<string, unknown>
+} | null> {
+  try {
+    const template = await prisma.templateConfig.findUnique({
+      where: { templateKey_level: { templateKey: DEFAULT_POST_TEMPLATE_KEY, level: 'post' } },
+      select: {
+        id: true,
+        templateKey: true,
+        name: true,
+        description: true,
+        collectionConfig: true,
+        postConfig: true,
+        previewLayout: true,
+      },
+    })
+    if (!template) return null
+    const normalized = normalizeTemplateForResponse(template, 'post')
+    const postConfig =
+      normalized.postConfig && typeof normalized.postConfig === 'object'
+        ? (normalized.postConfig as Record<string, unknown>)
+        : ({ ...CANONICAL_REPORTER_POST_TEMPLATE } as Record<string, unknown>)
+    return {
+      id: normalized.id,
+      templateKey: normalized.templateKey,
+      name: normalized.name,
+      postConfig,
+    }
+  } catch {
+    return null
+  }
 }
 
 // GET /api/templates?level=collection|post - List templates for a level (no auth required)

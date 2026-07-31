@@ -7,6 +7,7 @@ import {
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 
@@ -98,27 +99,15 @@ type ProgressBarPayload = { show: boolean; position: string | null; thickness: n
 function pickProgressBarFromPostConfig (postRaw: unknown, existing: ProgressBarPayload | null | undefined): ProgressBarPayload {
   const bucket = resolvePrimaryBucket(postRaw)
   const raw = bucket?.progressBar
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const p = raw as Record<string, unknown>
-    const color = typeof p.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(p.color)
-      ? p.color
-      : (existing?.color ?? '#5B4FE8')
-    return {
-      show: Boolean(p.show ?? false),
-      position: p.position === 'bottom' ? 'bottom' : 'top',
-      thickness: Math.min(12, Math.max(2, Number(p.thickness) || 6)),
-      color
-    }
+  const show = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? Boolean((raw as Record<string, unknown>).show ?? false)
+    : Boolean(existing?.show ?? false)
+  return {
+    show,
+    position: 'top',
+    thickness: 6,
+    color: '#5B4FE8'
   }
-  if (existing) {
-    return {
-      show: Boolean(existing.show ?? false),
-      position: existing.position === 'bottom' ? 'bottom' : 'top',
-      thickness: Math.min(12, Math.max(2, Number(existing.thickness) || 6)),
-      color: (typeof existing.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(existing.color)) ? existing.color : '#5B4FE8'
-    }
-  }
-  return { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
 }
 
 /** Extract legacy sidebar/header/social/featuredImage columns from the primary bucket of collectionConfig. */
@@ -163,9 +152,9 @@ function buildDefaultPostConfig (
     },
     progressBar: {
       show: progressBar.show ?? false,
-      position: progressBar.position === 'bottom' ? 'bottom' : 'top',
-      thickness: Math.min(12, Math.max(2, progressBar.thickness ?? 6)),
-      color: (typeof progressBar.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(progressBar.color)) ? progressBar.color : '#5B4FE8'
+      position: 'top',
+      thickness: 6,
+      color: '#5B4FE8'
     },
     postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' }
   }
@@ -603,12 +592,12 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const rendererUrl = `${baseUrl}/renderer.js`
 
     const ls = leftSidebar && typeof leftSidebar === 'object'
-      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((leftSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (leftSidebar as { sticky?: boolean }).sticky === true }
+      ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)), spaceAbove: 0, sticky: (leftSidebar as { sticky?: boolean }).sticky === true }
       : (tableOfContents.show && tableOfContents.position === 'left') || (recentPostsSidebar.show && recentPostsSidebar.position === 'left')
         ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'left' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'left' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: false }
         : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false }
     const rs = rightSidebar && typeof rightSidebar === 'object'
-      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)), spaceAbove: Math.min(64, Math.max(0, Number((rightSidebar as { spaceAbove?: number }).spaceAbove) || 0)), sticky: (rightSidebar as { sticky?: boolean }).sticky === true }
+      ? { show: rightSidebar.show ?? false, modules: Array.isArray(rightSidebar.modules) ? rightSidebar.modules : [], width: Math.min(400, Math.max(160, rightSidebar.width ?? 240)), spaceAbove: 0, sticky: (rightSidebar as { sticky?: boolean }).sticky === true }
       : (tableOfContents.show && tableOfContents.position === 'right') || (recentPostsSidebar.show && recentPostsSidebar.position === 'right')
         ? { show: true, modules: [...(tableOfContents.show && tableOfContents.position === 'right' ? ['tableOfContents'] : []), ...(recentPostsSidebar.show && recentPostsSidebar.position === 'right' ? ['recentPosts'] : [])], width: 240, spaceAbove: 0, sticky: false }
         : { show: false, modules: [], width: 240, spaceAbove: 0, sticky: false }
@@ -671,11 +660,11 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         ...ccLevelRaw,
         pagination: ccPagination && typeof ccPagination === 'object'
           ? {
-              show: ccPagination.show ?? false,
+              show: true,
               mode: ccPagination.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages',
               postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10
             }
-          : { show: false, mode: 'pages', postsPerPage: 10 }
+          : { show: true, mode: 'pages', postsPerPage: 10 }
       }
     }
     const primaryCollection = resolvePrimaryBucket(collectionConfig) ?? legacyCollectionFallback
@@ -703,6 +692,20 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     }
 
     const siteConfigTyped = siteConfig as { collectionTemplateId?: string | null; postTemplateId?: string | null }
+    let postTemplateId: string | null =
+      typeof siteConfigTyped.postTemplateId === 'string' ? siteConfigTyped.postTemplateId : null
+    let resolvedPostConfig: Record<string, unknown> = pc as Record<string, unknown>
+    // Post configs are always tied to a template; default missing assignments to Reporter.
+    if (!postTemplateId) {
+      const defaultPostTemplate = await resolveDefaultPostTemplate()
+      if (defaultPostTemplate) {
+        postTemplateId = defaultPostTemplate.id
+        // Only replace synthesized empty defaults — keep existing customized post configs.
+        if (!(primaryPost && isRecord(primaryPost))) {
+          resolvedPostConfig = defaultPostTemplate.postConfig
+        }
+      }
+    }
     const cs = site.blogCommentSettings
     const commentsTurnedOff = cs != null && cs.commentsEnabled === false
     const sortOrder =
@@ -740,15 +743,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       authorMap,
       authorProfiles,
       collectionConfig: cc,
-      postConfig: pc,
+      postConfig: resolvedPostConfig,
       paywallMode: site.paywallMode,
       paywallDetectionState: site.paywallDetectionState,
       paywallDetectionSource: site.paywallDetectionSource ?? null,
       paywallSettings,
       ...(viewerMode ? { viewerMode } : {}),
       collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
-      postTemplateId: siteConfigTyped.postTemplateId ?? null,
-      recentPostsCount: 5,
+      postTemplateId,
+      recentPostsCount: 3,
       baseUrl,
       commentSettings,
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})

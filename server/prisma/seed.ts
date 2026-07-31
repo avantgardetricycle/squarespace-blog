@@ -143,8 +143,9 @@ async function seedTemplateConfigs () {
     showDate: true,
     showAuthor: false,
     showReadingTime: false,
+    showPostExcerpt: true,
     postSort: 'date' as const,
-    pagination: { show: false, postsPerPage: 10 },
+    pagination: { show: true, postsPerPage: 10 },
     leftSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
     rightSidebar: { show: false, modules: [] as string[], width: 240, spaceAbove: 0, sticky: false },
     headerContent: { show: false, modules: [] as string[], height: 48 },
@@ -185,6 +186,7 @@ async function seedTemplateConfigs () {
         showDate: true,
         showAuthor: true,
         showReadingTime: true,
+        showPostExcerpt: true,
         pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
@@ -211,7 +213,12 @@ async function seedTemplateConfigs () {
           moduleOrder: ['emailCapture'],
           topPadding: 16
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'header' }
       },
       previewLayout: 'masthead'
@@ -263,6 +270,7 @@ async function seedTemplateConfigs () {
         showDate: true,
         showAuthor: true,
         showReadingTime: true,
+        showPostExcerpt: false,
         pagination: { show: true, mode: 'pages', postsPerPage: 10 },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
@@ -278,7 +286,7 @@ async function seedTemplateConfigs () {
           sort: {},
           search: {},
           recentPosts: {},
-          popularPosts: { count: 5 },
+          popularPosts: { count: 3 },
           emailCapture: {
             header: 'Subscribe to our newsletter',
             buttonText: 'Subscribe'
@@ -297,7 +305,13 @@ async function seedTemplateConfigs () {
           moduleOrder: [],
           topPadding: 16
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', imageWidthPercent: 40 },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          imageWidthPercent: 40,
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'digest'
@@ -314,6 +328,8 @@ async function seedTemplateConfigs () {
         collectionLayout: 'showcase',
         gridColumns: 2,
         pagination: { show: true, mode: 'infiniteScroll', postsPerPage: 10 },
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
           sort: {},
@@ -331,7 +347,19 @@ async function seedTemplateConfigs () {
           moduleOrder: ['filterByCategory', 'postSort', 'searchPosts'],
           height: 48
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 50 },
+        footerContent: {
+          show: false,
+          modules: [],
+          moduleOrder: [],
+          topPadding: 16
+        },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          imageWidthPercent: 50,
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'showcase'
@@ -346,13 +374,22 @@ async function seedTemplateConfigs () {
         collectionLayout: 'editorial',
         showAuthor: true,
         showReadingTime: true,
+        showPostExcerpt: false,
         pagination: { show: true, mode: 'pages', postsPerPage: 10 },
         gridColumns: 3,
+        leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+        rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         headerContent: {
           show: true,
           modules: ['filterByCategory', 'searchPosts', 'postSort'],
           moduleOrder: ['filterByCategory', 'searchPosts', 'postSort'],
           height: 48
+        },
+        footerContent: {
+          show: false,
+          modules: [],
+          moduleOrder: [],
+          topPadding: 16
         },
         collectionModules: {
           filter: { filterByTags: false, filterByCategories: true },
@@ -365,7 +402,12 @@ async function seedTemplateConfigs () {
           },
           leadMagnet: { resourceTitle: '', description: '', buttonText: 'Get it free' }
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          showCaption: false
+        },
+        socialMediaLinks: { show: false, platforms: [] },
         featuredArticle: { show: true, position: 'inLayout' }
       },
       previewLayout: 'editorial'
@@ -390,13 +432,15 @@ async function seedTemplateConfigs () {
           fullBleedLayout: 'stacked',
           showBreadcrumbs: true,
           showTags: true,
-          showCategories: true
+          showCategories: true,
+          showByline: true,
+          showDecorativeAccentLine: false
         },
         leftSidebar: {
           show: true,
           modules: ['tableOfContents'],
           moduleOrder: ['tableOfContents'],
-          width: 240,
+          width: 300,
           spaceAbove: 0,
           sticky: true
         },
@@ -404,7 +448,7 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'popularPosts'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'popularPosts'],
-          width: 280,
+          width: 300,
           spaceAbove: 0,
           sticky: false
         },
@@ -413,18 +457,24 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'fullScreen'
         },
         socialMediaLinks: {
           show: true,
           platforms: ['facebook', 'x', 'linkedin', 'email']
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'fullBleed',
+          show: true,
+          showCaption: true,
+        },
         postModules: {
           tableOfContents: { enabled: true, position: 'leftSidebar', style: 'bookmark' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'rightSidebar' },
-          popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+          popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           leadMagnet: {
             enabled: true,
@@ -447,7 +497,7 @@ async function seedTemplateConfigs () {
         showDate: true,
         showAuthor: true,
         showReadingTime: true,
-        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom' },
+        postHeader: { imagePosition: 'fullBleed', contentAlignment: 'left', contentVerticalAlignment: 'bottom', showDecorativeAccentLine: false },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
         rightSidebar: {
           show: true,
@@ -461,14 +511,15 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts'],
           moduleOrder: ['authorProfiles', 'relevantPosts'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'postBody'
         },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed' },
+        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'fullBleed', showCaption: true },
         postModules: {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: false, position: 'none' },
           authorProfiles: { enabled: true, position: 'footer' },
-          popularPosts: { enabled: true, position: 'rightSidebar', count: 5 },
+          popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           leadMagnet: {
             enabled: false,
@@ -497,8 +548,9 @@ async function seedTemplateConfigs () {
           contentVerticalAlignment: 'top',
           showBreadcrumbs: true,
           showTags: true,
-          showCategories: true,
-          showByline: true
+          showCategories: false,
+          showByline: true,
+          showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: {
@@ -514,22 +566,23 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'postBody'
         },
         socialMediaLinks: { show: false, platforms: [] },
         featuredImage: {
           ...baseCollectionConfig.featuredImage,
           layoutMode: 'rightJustified',
-          imageWidthPercent: 38,
-          aspectBehavior: 'cropped',
-          aspectRatio: '2:3'
+          imageWidthPercent: 60,
+          aspectBehavior: 'original',
+          aspectRatio: '3:2'
         },
         progressBar: { show: true, position: 'top', thickness: 6, color: '#5B4FE8' },
         postModules: {
           tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'rightSidebar' },
-          popularPosts: { enabled: false, position: 'none', count: 5 },
+          popularPosts: { enabled: false, position: 'none', count: 3 },
           relevantPosts: { enabled: true, position: 'rightSidebar' },
           leadMagnet: {
             enabled: true,
@@ -556,10 +609,12 @@ async function seedTemplateConfigs () {
           imagePosition: 'leftOfInfo',
           contentAlignment: 'left',
           contentVerticalAlignment: 'top',
+          backgroundColor: '#000000',
           showBreadcrumbs: true,
           showTags: true,
           showCategories: true,
-          showByline: true
+          showByline: true,
+          showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
@@ -568,15 +623,21 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'leadMagnet'],
           moduleOrder: ['authorProfiles', 'leadMagnet'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'postBody'
         },
         socialMediaLinks: { show: true, platforms: ['facebook', 'x', 'linkedin', 'email'] },
-        featuredImage: { ...baseCollectionConfig.featuredImage, layoutMode: 'leftJustified', imageWidthPercent: 60 },
+        featuredImage: {
+          ...baseCollectionConfig.featuredImage,
+          layoutMode: 'leftJustified',
+          imageWidthPercent: 60,
+          aspectBehavior: 'cropped',
+          aspectRatio: '3:2'
+        },
         postModules: {
-          tableOfContents: { enabled: false, position: 'none', style: 'numbered' },
           breadcrumbs: { enabled: true, position: 'none' },
           authorProfiles: { enabled: true, position: 'footer' },
-          popularPosts: { enabled: false, position: 'none', count: 5 },
+          popularPosts: { enabled: false, position: 'none', count: 3 },
           relevantPosts: { enabled: false, position: 'none' },
           leadMagnet: {
             enabled: true,
@@ -605,7 +666,9 @@ async function seedTemplateConfigs () {
           contentVerticalAlignment: 'top',
           showBreadcrumbs: true,
           showTags: false,
-          showCategories: true
+          showCategories: true,
+          showByline: true,
+          showDecorativeAccentLine: true
         },
         leftSidebar: { show: false, modules: [], moduleOrder: [], width: 200, spaceAbove: 0, sticky: false },
         rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
@@ -613,7 +676,8 @@ async function seedTemplateConfigs () {
           show: true,
           modules: ['authorProfiles', 'prevNextArticle'],
           moduleOrder: ['authorProfiles', 'prevNextArticle'],
-          topPadding: 16
+          topPadding: 16,
+          sideMargins: 'fullScreen'
         },
         featuredImage: { ...baseCollectionConfig.featuredImage, show: false },
         postModules: {

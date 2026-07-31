@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-04-02-showcase-featured-badge-pad";
+const RENDERER_VERSION = "2026-07-30-sidebar-body-align";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -45,7 +45,7 @@ function buildRendererConfig(overrides: RendererConfigOverrides | null | undefin
     authorProfiles: overrides?.authorProfiles ?? {},
     collectionConfig: overrides?.collectionConfig ?? undefined,
     postConfig: overrides?.postConfig ?? undefined,
-    recentPostsCount: overrides?.recentPostsCount ?? 5,
+    recentPostsCount: overrides?.recentPostsCount ?? 3,
     ...(typeof overrides?.previewSelectedPostIndex === "number"
       ? { previewSelectedPostIndex: overrides.previewSelectedPostIndex }
       : {}),

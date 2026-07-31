@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/app/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { Button } from "@/app/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { TemplatePreview } from "@/app/components/TemplatePreview";
+import { cn } from "@/app/components/ui/utils";
 
 export interface Template {
   id: string;
@@ -20,12 +19,43 @@ export interface Template {
   previewLayout: string;
 }
 
+/** Display order matching the template picker mockups. */
+const COLLECTION_ORDER = ["showcase", "newsroom", "masthead", "editorial", "digest"];
+const POST_ORDER = ["reporter", "feature", "writer", "story", "publisher"];
+
+/** Short blurbs shown under each card (mockup copy). */
+const SHORT_DESCRIPTIONS: Record<string, string> = {
+  showcase: "Large alternating images",
+  newsroom: "Compact list with search",
+  masthead: "Hero plus image grid",
+  editorial: "Alternating mosaic, text on images",
+  digest: "Main column with sidebar",
+  reporter: "Title beside image, right sidebar",
+  feature: "Centered header, full-bleed hero",
+  writer: "Centered header, no image",
+  story: "Dark split hero, narrow column",
+  publisher: "Hero overlay, right sidebar",
+};
+
 interface TemplateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectTemplate: (template: Template, level: "collection" | "post") => void;
   /** Tab to show when the modal opens (matches Collection / Post in Configure). */
   initialLevel?: "collection" | "post";
+  /** Currently applied collection template id (for selection highlight). */
+  collectionTemplateId?: string | null;
+  /** Currently applied post template id (for selection highlight). */
+  postTemplateId?: string | null;
+}
+
+function sortTemplates(templates: Template[], order: string[]): Template[] {
+  const rank = new Map(order.map((key, i) => [key, i]));
+  return [...templates].sort((a, b) => {
+    const ai = rank.get(a.templateKey) ?? Number.MAX_SAFE_INTEGER;
+    const bi = rank.get(b.templateKey) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
 }
 
 export function TemplateModal({
@@ -33,20 +63,24 @@ export function TemplateModal({
   onOpenChange,
   onSelectTemplate,
   initialLevel = "collection",
+  collectionTemplateId = null,
+  postTemplateId = null,
 }: TemplateModalProps) {
   const [collectionTemplates, setCollectionTemplates] = useState<Template[]>([]);
   const [postTemplates, setPostTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"collection" | "post">("collection");
-  const [index, setIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const templates = activeTab === "collection" ? collectionTemplates : postTemplates;
-  const currentTemplate = templates[index] ?? null;
+  const templates = useMemo(() => {
+    const list = activeTab === "collection" ? collectionTemplates : postTemplates;
+    const order = activeTab === "collection" ? COLLECTION_ORDER : POST_ORDER;
+    return sortTemplates(list, order);
+  }, [activeTab, collectionTemplates, postTemplates]);
 
   useEffect(() => {
     if (!open) return;
     setActiveTab(initialLevel);
-    setIndex(0);
     setLoading(true);
     Promise.all([
       fetch("/api/templates?level=collection", { credentials: "include" }).then(
@@ -68,152 +102,120 @@ export function TemplateModal({
   }, [open, initialLevel]);
 
   useEffect(() => {
-    setIndex(0);
-  }, [activeTab]);
+    setSelectedId(activeTab === "collection" ? collectionTemplateId : postTemplateId);
+  }, [activeTab, collectionTemplateId, postTemplateId, open]);
 
-  useEffect(() => {
-    setIndex((i) => Math.min(i, Math.max(0, templates.length - 1)));
-  }, [templates.length]);
-
-  const handlePrev = () => setIndex((i) => Math.max(0, i - 1));
-  const handleNext = () => setIndex((i) => Math.min(templates.length - 1, i + 1));
-
-  const handleSelect = () => {
-    if (currentTemplate) {
-      onSelectTemplate(currentTemplate, activeTab);
-      onOpenChange(false);
-    }
+  const handleSelect = (template: Template) => {
+    setSelectedId(template.id);
+    onSelectTemplate(template, activeTab);
+    onOpenChange(false);
   };
+
+  const title =
+    activeTab === "collection" ? "Choose a collection template" : "Choose a post template";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-7xl w-[98vw] max-h-[95vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Use a template</DialogTitle>
-        </DialogHeader>
-        <Tabs
-          value={activeTab}
-          onValueChange={(v) => setActiveTab(v as "collection" | "post")}
-          className="flex-1 min-h-0 flex flex-col"
-        >
-          <TabsList>
-            <TabsTrigger value="collection">Collection</TabsTrigger>
-            <TabsTrigger value="post">Post</TabsTrigger>
-          </TabsList>
-          <TabsContent value="collection" className="flex-1 min-h-0 flex flex-col mt-2 data-[state=inactive]:hidden">
-            {loading ? (
-              <div className="text-sm text-muted-foreground py-8">Loading templates…</div>
-            ) : templates.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-8">No templates available.</div>
-            ) : (
-              <TemplateCarousel
-                template={currentTemplate}
-                index={index}
-                total={templates.length}
-                onPrev={handlePrev}
-                onNext={handleNext}
-                onIndexChange={setIndex}
-                onSelect={handleSelect}
-              />
-            )}
-          </TabsContent>
-          <TabsContent value="post" className="flex-1 min-h-0 flex flex-col mt-2 data-[state=inactive]:hidden">
-            {loading ? (
-              <div className="text-sm text-muted-foreground py-8">Loading templates…</div>
-            ) : templates.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-8">No templates available.</div>
-            ) : (
-              <TemplateCarousel
-                template={currentTemplate}
-                index={index}
-                total={templates.length}
-                onPrev={handlePrev}
-                onNext={handleNext}
-                onIndexChange={setIndex}
-                onSelect={handleSelect}
-              />
-            )}
-          </TabsContent>
-        </Tabs>
+      <DialogContent className="sm:max-w-5xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+        <div className="px-6 pt-6 pb-3 shrink-0">
+          <DialogHeader className="mb-3">
+            <DialogTitle className="text-xl font-semibold tracking-tight">{title}</DialogTitle>
+          </DialogHeader>
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as "collection" | "post")}
+          >
+            <TabsList className="rounded-full h-9 p-1 bg-muted/80">
+              <TabsTrigger value="collection" className="rounded-full px-4">
+                Collection
+              </TabsTrigger>
+              <TabsTrigger value="post" className="rounded-full px-4">
+                Post
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="px-6 pb-6 flex-1 min-h-0 overflow-y-auto">
+          {loading ? (
+            <div className="text-sm text-muted-foreground py-12 text-center">
+              Loading templates…
+            </div>
+          ) : templates.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-12 text-center">
+              No templates available.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-7 pt-2">
+              {templates.map((template) => (
+                <TemplateGridCard
+                  key={template.id}
+                  template={template}
+                  selected={template.id === selectedId}
+                  onSelect={handleSelect}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function TemplateCarousel({
+function TemplateGridCard({
   template,
-  index,
-  total,
-  onPrev,
-  onNext,
-  onIndexChange,
+  selected,
   onSelect,
 }: {
-  template: Template | null;
-  index: number;
-  total: number;
-  onPrev: () => void;
-  onNext: () => void;
-  onIndexChange: (i: number) => void;
-  onSelect: () => void;
+  template: Template;
+  selected: boolean;
+  onSelect: (template: Template) => void;
 }) {
-  if (!template) return null;
+  const blurb =
+    SHORT_DESCRIPTIONS[template.templateKey] ?? template.description ?? "";
 
   return (
-    <div className="flex flex-col gap-2 flex-1 min-h-0">
-      <div className="flex items-center justify-between gap-2 shrink-0">
-        <h3 className="font-semibold text-base truncate">{template.name}</h3>
-        <span className="text-xs text-muted-foreground shrink-0">
-          {index + 1} of {total}
-        </span>
-      </div>
-      {template.description && (
-        <p className="text-sm text-muted-foreground line-clamp-1 shrink-0">{template.description}</p>
+    <button
+      type="button"
+      onClick={() => onSelect(template)}
+      className={cn(
+        "group flex flex-col text-left rounded-none",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4FE8]/50 focus-visible:ring-offset-2"
       )}
-      <div className="flex items-center gap-3 flex-1 min-h-[50vh]">
-        <Button
-          variant="outline"
-          size="icon"
-          className="shrink-0 h-9 w-9"
-          onClick={onPrev}
-          disabled={index <= 0}
-          aria-label="Previous template"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0 min-h-[50vh] max-h-[50vh] border rounded-lg bg-[#f7f6f3] overflow-auto">
-          <TemplatePreview
-            previewLayout={template.previewLayout}
-            className="min-w-full"
-          />
+      aria-pressed={selected}
+      aria-label={`Select ${template.name}`}
+    >
+      <div
+        className={cn(
+          "rounded-xl border bg-white overflow-hidden transition-[border-color,box-shadow]",
+          selected
+            ? "border-[#5B4FE8] shadow-[0_0_0_1px_#5B4FE8]"
+            : "border-[#e5e4e0] group-hover:border-[#c8c7c3]"
+        )}
+      >
+        <div className="relative aspect-[5/4] overflow-hidden bg-[#faf9f7]">
+          <div
+            className="absolute top-0 left-0 w-[220%] origin-top-left scale-[0.455] pointer-events-none select-none"
+            aria-hidden
+          >
+            <TemplatePreview
+              previewLayout={template.previewLayout}
+              className="min-w-full"
+            />
+          </div>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          className="shrink-0 h-9 w-9"
-          onClick={onNext}
-          disabled={index >= total - 1}
-          aria-label="Next template"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
       </div>
-      <div className="flex justify-center gap-1.5">
-        {Array.from({ length: total }).map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onIndexChange(i)}
-            className={`h-1.5 rounded-full transition-colors ${
-              i === index ? "w-4 bg-primary" : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-            }`}
-            aria-label={`Go to template ${i + 1}`}
-          />
-        ))}
+      <div className="mt-2.5 px-0.5">
+        <div className="font-semibold text-[15px] text-[#111] leading-tight">
+          {template.name}
+        </div>
+        {blurb && (
+          <div className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
+            {blurb}
+          </div>
+        )}
       </div>
-      <Button className="w-full" onClick={onSelect}>
-        Use this template
-      </Button>
-    </div>
+    </button>
   );
 }

@@ -951,11 +951,10 @@
       var existing = document.getElementById('bb-comments');
       if (existing) existing.remove();
 
-      var bbDiv = document.createElement('div');
+      var bbDiv = document.createElement('section');
       bbDiv.id = 'bb-comments';
-      bbDiv.style.marginTop = '32px';
-      bbDiv.style.paddingTop = '24px';
-      bbDiv.style.borderTop = '1px solid #eee';
+      bbDiv.className = 'bb-comments-section';
+      self._applyStoryPostHorizontalInset(bbDiv, cfg);
 
       var apiUrl = baseUrl.replace(/\/+$/, '') + '/api/comments';
       function bbResolvePostPublishedAt(p) {
@@ -1075,7 +1074,8 @@
         var ok = document.createElement('button');
         ok.type = 'button';
         ok.textContent = 'Continue';
-        ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;background:#5B4FE8;color:#fff;cursor:pointer';
+        ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer';
+        ok.style.background = 'var(--bb-accent, #5B4FE8)';
         function close(ret) {
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
@@ -1120,7 +1120,7 @@
           avatar.textContent = initials;
           avatar.style.cssText =
             'display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:' +
-            (isDeletedStub ? '#9ca3af' : '#5B4FE8') +
+            (isDeletedStub ? '#9ca3af' : 'var(--bb-accent, #5B4FE8)') +
             ';color:#fff;font-size:12px;font-weight:600;margin-right:10px;vertical-align:middle';
           var meta = document.createElement('span');
           meta.style.fontSize = '0.9rem';
@@ -1134,7 +1134,7 @@
             meta.appendChild(nameSpanEl);
             if (c.verified_subscriber) {
               var verSpan = document.createElement('span');
-              verSpan.style.color = '#5B4FE8';
+              verSpan.style.color = 'var(--bb-accent, #5B4FE8)';
               verSpan.style.fontSize = '11px';
               verSpan.textContent = ' \u2713';
               meta.appendChild(verSpan);
@@ -1217,10 +1217,10 @@
             var replyBtn = document.createElement('button');
             replyBtn.type = 'button';
             replyBtn.textContent = 'Reply';
-            replyBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#5B4FE8;margin-left:12px;font-size:inherit;font-family:inherit;padding:0';
+            replyBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--bb-accent, #5B4FE8);margin-left:12px;font-size:inherit;font-family:inherit;padding:0';
             var replyFormShell = document.createElement('div');
             replyFormShell.className = 'bb-comment-inline-reply';
-            replyFormShell.style.cssText = 'display:none;margin-top:14px;margin-left:28px;padding:14px 16px 16px 18px;border-left:3px solid #d4cef7;border-radius:0 8px 8px 0;background:transparent;box-sizing:border-box;width:calc(100% - 28px);max-width:520px';
+            replyFormShell.style.cssText = 'display:none;margin-top:14px;margin-left:28px;padding:14px 16px 16px 18px;border-left:3px solid var(--bb-accent-15, #d4cef7);border-radius:0 8px 8px 0;background:transparent;box-sizing:border-box;width:calc(100% - 28px)';
             var replyFormTitle = document.createElement('div');
             replyFormTitle.textContent = 'Write a reply';
             replyFormTitle.style.cssText = 'font-size:0.9rem;font-weight:600;color:#1a1a1a;margin-bottom:10px';
@@ -1229,30 +1229,36 @@
             rName.type = 'text';
             rName.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
             rName.setAttribute('maxlength', String(NAME_MAX));
-            rName.style.cssText = 'display:block;width:100%;max-width:400px;padding:9px 11px;margin-bottom:8px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+            rName.className = 'bb-form-input';
+            rName.style.marginBottom = '8px';
             replyFormShell.appendChild(rName);
             var rEmail = document.createElement('input');
             rEmail.type = 'email';
             rEmail.placeholder = 'Email (optional)';
             rEmail.setAttribute('maxlength', String(EMAIL_MAX));
             rEmail.autocomplete = 'email';
-            rEmail.style.cssText = 'display:block;width:100%;max-width:500px;padding:9px 11px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+            rEmail.className = 'bb-form-input';
+            rEmail.style.marginBottom = '10px';
             replyFormShell.appendChild(rEmail);
             var rBody = document.createElement('textarea');
             rBody.placeholder = 'Reply (required)';
             rBody.setAttribute('maxlength', String(BODY_MAX));
             rBody.rows = 3;
-            rBody.style.cssText = 'display:block;width:100%;max-width:500px;padding:9px 11px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+            rBody.className = 'bb-form-input';
+            rBody.style.marginBottom = '4px';
+            rBody.style.resize = 'vertical';
             replyFormShell.appendChild(rBody);
             var rBodyCount = document.createElement('div');
-            rBodyCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:500px;text-align:right';
+            rBodyCount.className = 'bb-comment-char-counter';
+            rBodyCount.style.marginBottom = '10px';
             replyFormShell.appendChild(rBodyCount);
             var rRow = document.createElement('div');
             rRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:center';
             var rSubmit = document.createElement('button');
             rSubmit.type = 'button';
             rSubmit.textContent = 'Post reply';
-            rSubmit.style.cssText = 'padding:8px 20px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:not-allowed;opacity:0.55';
+            rSubmit.className = 'sqs-button-element--primary';
+            rSubmit.style.cssText = 'margin-top:4px;cursor:not-allowed;opacity:0.55';
             rSubmit.disabled = true;
             function rReplySync() {
               var modeNow = currentCommentViewerMode().mode;
@@ -1413,10 +1419,9 @@
       formWrap.className = 'bb-comment-form-wrap';
       formWrap.style.marginTop = '16px';
 
-      var heading = document.createElement('h3');
+      var heading = document.createElement('h2');
+      heading.className = 'bb-below-main-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
-      heading.style.fontSize = '1.1rem';
-      heading.style.margin = '0 0 12px 0';
       formWrap.appendChild(heading);
       var guestOnlyNote = document.createElement('p');
       guestOnlyNote.style.cssText =
@@ -1434,14 +1439,15 @@
         return;
       }
       var loggedInIdentityLine = document.createElement('div');
-      loggedInIdentityLine.style.cssText = 'display:none;max-width:500px;margin:0 0 10px 0;font-size:0.9rem;color:#444';
+      loggedInIdentityLine.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;font-size:0.9rem;color:#444';
       formWrap.appendChild(loggedInIdentityLine);
 
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
       nameInput.setAttribute('maxlength', String(NAME_MAX));
-      nameInput.style.cssText = 'display:block;width:100%;max-width:400px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+      nameInput.className = 'bb-form-input';
+      nameInput.style.marginBottom = '10px';
       formWrap.appendChild(nameInput);
 
       var emailInput = document.createElement('input');
@@ -1449,27 +1455,32 @@
       emailInput.placeholder = 'Email (optional)';
       emailInput.setAttribute('maxlength', String(EMAIL_MAX));
       emailInput.autocomplete = 'email';
-      emailInput.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:10px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box';
+      emailInput.className = 'bb-form-input';
+      emailInput.style.marginBottom = '10px';
       formWrap.appendChild(emailInput);
 
       var identityNote = document.createElement('div');
-      identityNote.style.cssText = 'display:none;max-width:500px;margin:0 0 10px 0;padding:8px 10px;border:1px solid #dbeafe;background:transparent;color:#1f4c8c;border-radius:6px;font-size:0.85rem;line-height:1.35';
+      identityNote.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;padding:8px 10px;border:1px solid #dbeafe;background:transparent;color:#1f4c8c;border-radius:6px;font-size:0.85rem;line-height:1.35';
       formWrap.appendChild(identityNote);
 
       var bodyArea = document.createElement('textarea');
       bodyArea.placeholder = 'Comment (required)';
       bodyArea.setAttribute('maxlength', String(BODY_MAX));
       bodyArea.rows = 4;
-      bodyArea.style.cssText = 'display:block;width:100%;max-width:500px;padding:10px 12px;margin-bottom:4px;font-size:0.95rem;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;resize:vertical';
+      bodyArea.className = 'bb-form-input';
+      bodyArea.style.marginBottom = '4px';
+      bodyArea.style.resize = 'vertical';
       formWrap.appendChild(bodyArea);
       var mainBodyCount = document.createElement('div');
-      mainBodyCount.style.cssText = 'font-size:0.75rem;color:#888;margin:0 0 10px 0;max-width:500px;text-align:right';
+      mainBodyCount.className = 'bb-comment-char-counter';
+      mainBodyCount.style.marginBottom = '10px';
       formWrap.appendChild(mainBodyCount);
 
       var submitBtn = document.createElement('button');
       submitBtn.type = 'button';
       submitBtn.textContent = 'Post Comment';
-      submitBtn.style.cssText = 'padding:10px 24px;font-size:0.95rem;background:#5B4FE8;color:#fff;border:none;border-radius:6px;cursor:not-allowed;opacity:0.55';
+      submitBtn.className = 'sqs-button-element--primary';
+      submitBtn.style.cssText = 'margin-top:4px;cursor:not-allowed;opacity:0.55';
       submitBtn.disabled = true;
       function mainFormSync() {
         var modeNow = currentCommentViewerMode().mode;
@@ -2146,22 +2157,119 @@
       return mod === 'filterByCategory' || mod === 'filterByTag' || mod === 'filterByTagsAndCategories';
     },
 
+    _isCollectionFilterModuleId: function(mod) {
+      return mod === 'filterByCategory' || mod === 'filterByTag' || mod === 'filterByTagsAndCategories';
+    },
+
+    _isDualFilterMode: function(collectionModules) {
+      var filter = collectionModules && collectionModules.filter;
+      return Boolean(filter && filter.filterByTags && filter.filterByCategories);
+    },
+
+    _expandCombinedFilterInOrder: function(order) {
+      var out = [];
+      var list = Array.isArray(order) ? order : [];
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (m === 'filterByTagsAndCategories') {
+          if (out.indexOf('filterByCategory') < 0) out.push('filterByCategory');
+          if (out.indexOf('filterByTag') < 0) out.push('filterByTag');
+        } else {
+          out.push(m);
+        }
+      }
+      return out;
+    },
+
+    _normalizeCollectionFilterModuleOrder: function(order, collectionModules) {
+      var self = this;
+      var cm = collectionModules || {};
+      var filter = cm.filter || {};
+      var expanded = self._expandCombinedFilterInOrder(order);
+      return expanded.filter(function(m) {
+        if (m === 'filterByTag') return Boolean(filter.filterByTags);
+        if (m === 'filterByCategory') return Boolean(filter.filterByCategories);
+        if (m === 'filterByTagsAndCategories') return Boolean(filter.filterByTags || filter.filterByCategories);
+        return true;
+      });
+    },
+
+    _resolveCollectionZoneModuleIds: function(availModules, moduleOrder, zone, collectionModules) {
+      var self = this;
+      var cm = collectionModules || {};
+      var filter = cm.filter || {};
+      var normalized = self._normalizeCollectionFilterModuleOrder(
+        (Array.isArray(moduleOrder) && moduleOrder.length > 0) ? moduleOrder : (Array.isArray(availModules) ? availModules : []),
+        cm
+      );
+      var nonFilters = [];
+      var filterOrder = [];
+      var hasTag = false;
+      var hasCategory = false;
+      var fi;
+      for (fi = 0; fi < normalized.length; fi++) {
+        var mod = normalized[fi];
+        if (mod === 'filterByTag') {
+          hasTag = true;
+          if (filterOrder.indexOf('filterByTag') < 0) filterOrder.push('filterByTag');
+        } else if (mod === 'filterByCategory') {
+          hasCategory = true;
+          if (filterOrder.indexOf('filterByCategory') < 0) filterOrder.push('filterByCategory');
+        } else if (!self._isCollectionFilterModuleId(mod)) {
+          nonFilters.push(mod);
+        }
+      }
+      var firstFilterIdx = -1;
+      for (fi = 0; fi < normalized.length; fi++) {
+        if (self._isCollectionFilterModuleId(normalized[fi])) {
+          firstFilterIdx = fi;
+          break;
+        }
+      }
+      var insertAt = firstFilterIdx < 0
+        ? nonFilters.length
+        : normalized.slice(0, firstFilterIdx).filter(function(m) { return !self._isCollectionFilterModuleId(m); }).length;
+      var resolvedFilters = [];
+      if (self._isDualFilterMode(cm)) {
+        if (zone === 'header' && hasTag && hasCategory) {
+          resolvedFilters.push('filterByTagsAndCategories');
+        } else {
+          for (var fj = 0; fj < filterOrder.length; fj++) {
+            var fmod = filterOrder[fj];
+            if (fmod === 'filterByCategory' && filter.filterByCategories) resolvedFilters.push('filterByCategory');
+            if (fmod === 'filterByTag' && filter.filterByTags) resolvedFilters.push('filterByTag');
+          }
+        }
+      } else if (filter.filterByTags && hasTag) {
+        resolvedFilters.push('filterByTag');
+      } else if (filter.filterByCategories && hasCategory) {
+        resolvedFilters.push('filterByCategory');
+      }
+      return nonFilters.slice(0, insertAt).concat(resolvedFilters, nonFilters.slice(insertAt));
+    },
+
     /** Collection header: filter left, search then sort right (email/lead magnet not shown in header). */
     _canonicalCollectionHeaderModuleOrder: function(modules) {
       var self = this;
       var list = Array.isArray(modules) ? modules : [];
-      var filterMod = null;
+      var filterMods = [];
       var searchMod = null;
       var hasSort = false;
       for (var i = 0; i < list.length; i++) {
         var m = list[i];
         if (m === 'emailCapture' || m === 'leadMagnet') continue;
-        if (!filterMod && self._isCollectionHeaderFilterModule(m)) filterMod = m;
+        if (self._isCollectionHeaderFilterModule(m) && filterMods.indexOf(m) < 0) filterMods.push(m);
         if (!searchMod && (m === 'searchPosts' || m === 'postSearch')) searchMod = m;
         if (m === 'postSort') hasSort = true;
       }
       var out = [];
-      if (filterMod) out.push(filterMod);
+      if (filterMods.indexOf('filterByTagsAndCategories') >= 0) {
+        out.push('filterByTagsAndCategories');
+      } else if (filterMods.indexOf('filterByTag') >= 0 && filterMods.indexOf('filterByCategory') >= 0) {
+        out.push('filterByTagsAndCategories');
+      } else if (filterMods.length > 0) {
+        out.push(filterMods[0]);
+      }
       if (searchMod) out.push(searchMod);
       if (hasSort) out.push('postSort');
       return out;
@@ -2440,16 +2548,211 @@
     },
 
     /**
-     * True when the post is a public preview on a paywalled blog (full teaser/body visible to logged-out JSON).
-     * Gated posts usually ship with empty or trivial body; previews include real HTML content.
+     * True when the post is explicitly marked as a public preview (always show full body to logged-out readers).
      */
-    _isPaywallPublicPreviewPost: function(post) {
+    _isExplicitPaywallPublicPreviewPost: function(post) {
       if (!post || typeof post !== 'object') return false;
       if (post.bbPaywallPublicPreview === true || post.bbIsPublicPreview === true) return true;
-      if (post.publicPreview === true) return true;
-      var body = post.body != null ? String(post.body) : '';
+      return post.publicPreview === true;
+    },
+
+    /**
+     * True when the post is a public preview on a paywalled blog (full teaser/body visible to logged-out JSON).
+     * Collection cards also treat posts with substantial body copy in JSON as previews.
+     */
+    _isPaywallPublicPreviewPost: function(post) {
+      if (this._isExplicitPaywallPublicPreviewPost(post)) return true;
+      var body = post && post.body != null ? String(post.body) : '';
       var plainBody = this._stripHtml(body).replace(/\s+/g, ' ').trim();
       return plainBody.length >= 40;
+    },
+
+    /** Logged-out single-post body gate: explicit public-preview flags only (not body-length heuristic). */
+    _shouldGateSinglePostBody: function(post) {
+      return (
+        this._isPaywalledSite() &&
+        this._resolveViewerMode() === 'loggedOut' &&
+        post &&
+        !this._isExplicitPaywallPublicPreviewPost(post)
+      );
+    },
+
+    /** Body HTML for paywalled single-post teaser — post.body only (excerpt lives in post header). */
+    _resolvePaywallSinglePostBodyHtml: function(post) {
+      if (!post || typeof post !== 'object') return '';
+      var body = post.body != null ? String(post.body) : '';
+      return body.trim() ? body : '';
+    },
+
+    /** Placeholder copy for blurred body simulation when JSON body is unavailable logged-out. */
+    _paywallSimulatedBlurText: function() {
+      return 'The work of building something meaningful rarely follows a straight line. Each step asks for attention and patience, and the details that seem small in the moment often shape the outcome more than we expect. Over time, patterns emerge—habits form, priorities shift, and what once felt uncertain becomes familiar enough to trust.';
+    },
+
+    _createPaywallBlurBlock: function(text, opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var faded = document.createElement('div');
+      faded.className = 'bb-paywall-body-teaser-fade';
+      faded.setAttribute('aria-hidden', 'true');
+      faded.style.position = 'relative';
+      faded.style.maxHeight = opts.maxHeight || '5.5em';
+      faded.style.overflow = 'hidden';
+      faded.style.filter = 'blur(7px)';
+      faded.style.opacity = '0.65';
+      faded.style.marginTop = opts.marginTop || '0';
+      faded.style.userSelect = 'none';
+      faded.style.pointerEvents = 'none';
+      faded.style.webkitMaskImage = 'linear-gradient(to bottom, #000 15%, transparent 100%)';
+      faded.style.maskImage = 'linear-gradient(to bottom, #000 15%, transparent 100%)';
+      faded.style.lineHeight = '1.65';
+      faded.style.color = '#333';
+      var p = document.createElement('p');
+      p.style.margin = '0';
+      p.textContent = text;
+      faded.appendChild(p);
+      return faded;
+    },
+
+    _createPaywallInlineCardWrap: function() {
+      var wrap = document.createElement('div');
+      wrap.className = 'bb-paywall-inline-card-wrap';
+      wrap.style.position = 'relative';
+      wrap.style.width = '50%';
+      wrap.style.minWidth = 'min(100%, 280px)';
+      wrap.style.maxWidth = '560px';
+      wrap.style.marginLeft = 'auto';
+      wrap.style.marginRight = 'auto';
+      wrap.style.zIndex = '2';
+      wrap.style.boxSizing = 'border-box';
+      wrap.style.pointerEvents = 'auto';
+      wrap.appendChild(this._createPaywallInlineArticleCard());
+      return wrap;
+    },
+
+    /** Story desktop: wide horizontal inset shared by post body and footer. */
+    _applyStoryPostHorizontalInset: function(el, cfg) {
+      if (!el || !el.style || !cfg) return false;
+      if (!this._isStoryPostLayout(cfg) || this._isNarrowCollectionViewport()) return false;
+      el.style.boxSizing = 'border-box';
+      el.style.paddingLeft = '16vw';
+      el.style.paddingRight = '16vw';
+      return true;
+    },
+
+    /** Feature / Reporter / Publisher: strip top inset on body so first paragraph aligns with sidebar headers. */
+    _normalizePostBodyTopForSidebarRow: function(bodyEl) {
+      if (!bodyEl) return;
+      bodyEl.classList.add('blog-overlay-post-body--sidebar-row');
+      bodyEl.style.marginTop = '0';
+      bodyEl.style.paddingTop = '0';
+      var blockTags = { P: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, BLOCKQUOTE: 1, UL: 1, OL: 1, FIGURE: 1, IMG: 1, TABLE: 1 };
+      var el = bodyEl.firstElementChild;
+      var depth = 0;
+      while (el && depth < 6) {
+        el.style.marginTop = '0';
+        el.style.paddingTop = '0';
+        if (blockTags[el.tagName]) break;
+        if (!el.firstElementChild) break;
+        el = el.firstElementChild;
+        depth++;
+      }
+    },
+
+    /** Feature / Reporter / Publisher: remove default heading top margin so sidebar labels align with post body. */
+    _normalizeSidebarTopForSidebarRow: function(sidebarRailEl) {
+      if (!sidebarRailEl || !sidebarRailEl.querySelector) return;
+      sidebarRailEl.classList.add('blog-overlay-sidebar-rail--sidebar-row');
+      sidebarRailEl.style.marginTop = '0';
+      sidebarRailEl.style.paddingTop = '0';
+      var section = sidebarRailEl.querySelector('.blog-overlay-sidebar-section');
+      if (!section) return;
+      section.style.marginTop = '0';
+      section.style.paddingTop = '0';
+      var header = section.querySelector('.bb-sidebar-header');
+      if (header && header.style) {
+        header.style.marginTop = '0';
+        header.style.paddingTop = '0';
+      }
+    },
+
+    /** Match single-post body horizontal inset to the post header column. */
+    _applySinglePostBodyMargins: function(bodyEl, cfg) {
+      if (!bodyEl || !bodyEl.style) return;
+      bodyEl.style.boxSizing = 'border-box';
+      bodyEl.style.width = '100%';
+      if (this._applyStoryPostHorizontalInset(bodyEl, cfg)) return;
+      var postHeaderCfg = cfg && cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : {};
+      var imagePos = postHeaderCfg.imagePosition;
+      var hasSideImage = imagePos === 'leftOfInfo' || imagePos === 'rightOfInfo';
+      if (hasSideImage) return;
+      var sideGap = typeof postHeaderCfg.sideGap === 'number'
+        ? Math.min(150, Math.max(0, Math.round(postHeaderCfg.sideGap)))
+        : 24;
+      bodyEl.style.paddingLeft = sideGap + 'px';
+      bodyEl.style.paddingRight = sideGap + 'px';
+    },
+
+    _getPostFooterSideMarginsMode: function(footerContentCfg) {
+      return footerContentCfg && footerContentCfg.sideMargins === 'fullScreen' ? 'fullScreen' : 'postBody';
+    },
+
+    /** Post footer horizontal inset: postBody matches post text; fullScreen uses site margins only. */
+    _applyPostFooterSideMargins: function(el, cfg, footerContentCfg) {
+      if (!el || !el.style || !cfg) return;
+      el.style.boxSizing = 'border-box';
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+        el.style.paddingLeft = '0';
+        el.style.paddingRight = '0';
+        return;
+      }
+      if (this._applyStoryPostHorizontalInset(el, cfg)) return;
+      if (
+        this._isReporterPostLayout(cfg) ||
+        this._isPublisherPostLayout(cfg) ||
+        this._isFeaturePostLayout(cfg)
+      ) {
+        el.style.paddingLeft = '0';
+        el.style.paddingRight = '0';
+        return;
+      }
+      this._applySinglePostBodyMargins(el, cfg);
+    },
+
+    _clearPostFooterZoneBleed: function(footerZoneEl) {
+      if (!footerZoneEl || !footerZoneEl.style) return;
+      footerZoneEl.style.width = '';
+      footerZoneEl.style.maxWidth = '';
+      footerZoneEl.style.marginLeft = '';
+      footerZoneEl.style.marginRight = '';
+    },
+
+    /** Expand footer zone to main column width when post body uses extra horizontal inset. */
+    _bleedPostFooterZoneToMainWidth: function(footerZoneEl, mainEl, footerContentEl) {
+      if (!footerZoneEl || !footerZoneEl.style || !mainEl || !mainEl.querySelector) return;
+      var bodyEl = mainEl.querySelector('.blog-overlay-body');
+      if (!window.getComputedStyle) return;
+      var pl = 0;
+      var pr = 0;
+      if (bodyEl) {
+        try {
+          var cs = window.getComputedStyle(bodyEl);
+          pl = parseFloat(cs.paddingLeft) || 0;
+          pr = parseFloat(cs.paddingRight) || 0;
+        } catch (ePad) { /* ignore */ }
+      }
+      if (pl <= 0 && pr <= 0 && footerContentEl) {
+        try {
+          var fcs = window.getComputedStyle(footerContentEl);
+          pl = parseFloat(fcs.paddingLeft) || 0;
+          pr = parseFloat(fcs.paddingRight) || 0;
+        } catch (eFooterPad) { /* ignore */ }
+      }
+      if (pl <= 0 && pr <= 0) return;
+      footerZoneEl.style.boxSizing = 'border-box';
+      footerZoneEl.style.width = 'calc(100% + ' + (pl + pr) + 'px)';
+      footerZoneEl.style.maxWidth = 'none';
+      footerZoneEl.style.marginLeft = (-pl) + 'px';
+      footerZoneEl.style.marginRight = (-pr) + 'px';
     },
 
     /**
@@ -2766,11 +3069,13 @@
       var card = document.createElement('div');
       card.className = 'bb-paywall-inline-card';
       card.style.width = '100%';
+      card.style.maxWidth = 'none';
+      card.style.margin = '0';
       card.style.boxSizing = 'border-box';
       card.style.background = '#fff';
       card.style.border = '1px solid rgba(0,0,0,0.1)';
       card.style.borderRadius = '8px';
-      card.style.padding = '28px 24px 24px';
+      card.style.padding = '24px 20px 20px';
       card.style.textAlign = 'center';
       card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
 
@@ -2869,7 +3174,7 @@
       return card;
     },
 
-    _applySinglePostPaywallBodyTeaser: function(bodyEl) {
+    _applySinglePostPaywallBodyTeaser: function(bodyEl, post, cfg) {
       if (!bodyEl) return;
       var self = this;
       var paras = [];
@@ -2901,58 +3206,66 @@
           paras = [(function(t) { var el = document.createElement('p'); el.textContent = t; return el; })(chunks[0])];
         }
       }
-      if (paras.length === 0) return;
+
+      bodyEl.innerHTML = '';
+      bodyEl.style.position = 'relative';
+      bodyEl.style.marginTop = '1.5rem';
+      self._applySinglePostBodyMargins(bodyEl, cfg);
+
+      var clearParaEl = null;
+      var blurText = '';
+
+      if (paras.length >= 2) {
+        clearParaEl = document.createElement('p');
+        clearParaEl.textContent = (paras[0].textContent || '').replace(/\s+/g, ' ').trim();
+        blurText = (paras[1].textContent || '').replace(/\s+/g, ' ').trim();
+      } else if (paras.length === 1) {
+        var fullText = (paras[0].textContent || '').replace(/\s+/g, ' ').trim();
+        if (fullText.length > 80) {
+          var splitMid = Math.floor(fullText.length * 0.45);
+          var splitIdx = fullText.indexOf(' ', splitMid);
+          if (splitIdx < 0) splitIdx = splitMid;
+          clearParaEl = document.createElement('p');
+          clearParaEl.textContent = fullText.slice(0, splitIdx).trim();
+          blurText = fullText.slice(splitIdx).trim();
+        }
+      }
+
+      if (clearParaEl && clearParaEl.textContent) {
+        bodyEl.appendChild(clearParaEl);
+      }
+      if (!blurText) {
+        blurText = self._paywallSimulatedBlurText();
+      }
 
       var zone = document.createElement('div');
       zone.className = 'bb-paywall-body-teaser-zone';
       zone.style.position = 'relative';
-      zone.style.marginTop = '1.25em';
+      zone.style.display = 'flex';
+      zone.style.flexDirection = 'column';
+      zone.style.alignItems = 'stretch';
+      zone.style.width = '100%';
+      zone.style.boxSizing = 'border-box';
+      zone.style.marginTop = clearParaEl ? '1.25em' : '0';
+      zone.style.paddingTop = '0.5rem';
+      zone.style.paddingBottom = '1.5rem';
 
-      bodyEl.innerHTML = '';
-      bodyEl.style.position = 'relative';
-      bodyEl.appendChild(paras[0].cloneNode(true));
+      var blurBlock = self._createPaywallBlurBlock(blurText);
+      blurBlock.style.width = '100%';
+      blurBlock.style.flex = '0 0 auto';
+      zone.appendChild(blurBlock);
 
-      if (paras.length < 2) {
-        var soloCardWrap = document.createElement('div');
-        soloCardWrap.style.marginTop = '24px';
-        soloCardWrap.style.display = 'flex';
-        soloCardWrap.style.justifyContent = 'center';
-        soloCardWrap.appendChild(self._createPaywallInlineArticleCard());
-        bodyEl.appendChild(soloCardWrap);
-        return;
-      }
-
-      var faded = document.createElement('div');
-      faded.className = 'bb-paywall-body-teaser-fade';
-      faded.style.position = 'relative';
-      faded.style.maxHeight = '5.5em';
-      faded.style.overflow = 'hidden';
-      faded.style.opacity = '0.42';
-      faded.style.marginTop = '1em';
-      faded.style.webkitMaskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
-      faded.style.maskImage = 'linear-gradient(to bottom, #000 0%, transparent 100%)';
-      var p2 = paras[1].cloneNode(true);
-      p2.style.margin = '0';
-      faded.appendChild(p2);
-      zone.appendChild(faded);
-
-      var cardWrap = document.createElement('div');
-      cardWrap.className = 'bb-paywall-inline-card-wrap';
-      cardWrap.style.position = 'absolute';
-      cardWrap.style.left = '50%';
-      cardWrap.style.top = '50%';
-      cardWrap.style.transform = 'translate(-50%, -42%)';
-      cardWrap.style.width = 'min(100%, 520px)';
-      cardWrap.style.zIndex = '2';
-      cardWrap.style.padding = '0 8px';
-      cardWrap.style.boxSizing = 'border-box';
-      cardWrap.style.pointerEvents = 'auto';
-      cardWrap.appendChild(self._createPaywallInlineArticleCard());
+      var cardWrap = self._createPaywallInlineCardWrap();
+      cardWrap.style.flex = '0 0 auto';
+      cardWrap.style.marginTop = '-4.25rem';
+      cardWrap.style.marginBottom = '0.5rem';
       zone.appendChild(cardWrap);
       bodyEl.appendChild(zone);
     },
 
-    _isPaywallGatedModulePost: function(post) {
+    _isPaywallGatedModulePost: function(post, opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      if (opts.onSinglePostView) return false;
       return (
         this._isPaywalledSite() &&
         this._resolveViewerMode() === 'loggedOut' &&
@@ -2961,8 +3274,8 @@
     },
 
     /**
-     * Sidebar/footer post card. Gated: lock on image, category, title, Members Only.
-     * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement }
+     * Sidebar/footer post card. Gated: lock on image, title, Members Only; meta still shown when toggled on.
+     * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement, cfg }
      */
     _createModulePostCard: function(post, opts) {
       var self = this;
@@ -2972,12 +3285,12 @@
       var items = opts.items || self.items || [];
       var itemIndexMap = opts.itemIndexMap;
       var placeholderMap = opts.placeholderMap || {};
-      var gated = self._isPaywallGatedModulePost(post);
+      var cardCfg = (opts.cfg && typeof opts.cfg === 'object') ? opts.cfg : self._getActiveRenderCfg();
+      var gated = self._isPaywallGatedModulePost(post, { onSinglePostView: Boolean(opts.onSinglePostView) });
       var postIdx = typeof opts.postIndex === 'number'
         ? opts.postIndex
         : self._postIndexInItems(items, post, itemIndexMap);
       var postUrl = self._getPostUrl(post) || (postIdx >= 0 ? '#post-' + postIdx : '#');
-      var accent = self._getSiteAccentColor();
       var analytics = opts.analyticsElement || 'relevantPosts';
 
       var card = document.createElement('a');
@@ -2986,8 +3299,12 @@
       card.style.textDecoration = 'none';
       card.style.color = 'inherit';
       card.style.display = 'flex';
-      card.style.flexDirection = 'column';
-      card.style.gap = variant === 'footer' ? '10px' : '8px';
+      if (variant === 'list') {
+        card.classList.add('bb-sidebar-post-card');
+      } else {
+        card.style.flexDirection = 'column';
+        card.style.gap = '10px';
+      }
       card.style.minWidth = '0';
 
       var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
@@ -2996,7 +3313,11 @@
       imgWrap.style.position = 'relative';
       imgWrap.style.borderRadius = '4px';
       imgWrap.style.overflow = 'hidden';
-      imgWrap.style.aspectRatio = '16 / 9';
+      if (variant === 'list') {
+        imgWrap.className = 'bb-sidebar-post-thumb';
+      } else {
+        imgWrap.style.aspectRatio = '16 / 9';
+      }
       imgWrap.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
       if (imgUrl) {
         var im = document.createElement('img');
@@ -3011,31 +3332,38 @@
       if (gated) self._appendPaywallCardImageLock(imgWrap);
       card.appendChild(imgWrap);
 
+      var textHost = card;
+      if (variant === 'list') {
+        textHost = document.createElement('div');
+        textHost.className = 'bb-sidebar-post-text';
+        card.appendChild(textHost);
+      }
+
       var cats = self._getPostCategories(post);
-      if (cats.length > 0) {
+      if (variant === 'footer' && cats.length > 0) {
         var catEl = document.createElement('div');
         catEl.textContent = cats[0];
-        catEl.style.fontSize = variant === 'footer' ? '10px' : '9px';
-        catEl.style.fontWeight = '700';
-        catEl.style.letterSpacing = '1.5px';
-        catEl.style.textTransform = 'uppercase';
-        catEl.style.color = accent;
-        catEl.style.lineHeight = '1.2';
-        card.appendChild(catEl);
+        self._applyCategoryLabelStyle(catEl);
+        textHost.appendChild(catEl);
       }
 
       var titleEl = document.createElement('div');
       titleEl.textContent = post.title || 'Untitled';
-      titleEl.style.fontSize = variant === 'footer' ? '0.95rem' : '0.9rem';
-      titleEl.style.fontWeight = '600';
-      titleEl.style.lineHeight = '1.35';
-      titleEl.style.color = '#1a1a1a';
-      card.appendChild(titleEl);
+      if (variant === 'list') {
+        titleEl.className = 'bb-sidebar-post-title';
+      } else if (variant === 'footer') {
+        titleEl.className = 'bb-more-to-read-title';
+      }
+      textHost.appendChild(titleEl);
+
+      if (variant === 'list') {
+        self._appendModulePostCardListMeta(textHost, post, cardCfg);
+      }
 
       if (gated) {
         var mo = self._createMembersOnlyTeaserLabel(false);
         mo.style.marginTop = '0';
-        card.appendChild(mo);
+        textHost.appendChild(mo);
       } else if (variant === 'footer') {
         var deckEl = document.createElement('div');
         deckEl.textContent = (opts.deckText != null ? opts.deckText : '');
@@ -3054,14 +3382,7 @@
         deckEl.style.whiteSpace = 'nowrap';
         deckEl.style.textOverflow = 'ellipsis';
         deckEl.style.overflow = 'hidden';
-        if (deckEl.textContent) card.appendChild(deckEl);
-      } else {
-        var ex = document.createElement('div');
-        ex.textContent = self._truncateText(post.body || post.excerpt || '', 120);
-        ex.style.fontSize = '0.8rem';
-        ex.style.color = '#666';
-        ex.style.lineHeight = '1.4';
-        if (ex.textContent) card.appendChild(ex);
+        if (deckEl.textContent) textHost.appendChild(deckEl);
       }
       return card;
     },
@@ -3493,6 +3814,47 @@
       return { normalized: normalized, active: active };
     },
 
+    /** Active collection/post level config merged with site-level author fields. */
+    _getActiveRenderCfg: function() {
+      var rawCfg = this.config || {};
+      var items = this.items || [];
+      var viewerMode = this._resolveViewerMode();
+      var resolvedCollection = this._resolveLevelConfigForViewerMode(rawCfg.collectionConfig, viewerMode);
+      var resolvedPost = this._resolveLevelConfigForViewerMode(rawCfg.postConfig, viewerMode);
+      var baseCfg = Object.assign({}, rawCfg, {
+        collectionConfig: resolvedCollection.active || rawCfg.collectionConfig,
+        postConfig: resolvedPost.active || rawCfg.postConfig
+      });
+      var selectedIndex = this._getSelectedIndex(items);
+      var searchQuery = this._searchQuery || '';
+      var categoryFilter = Array.isArray(this._categoryFilter) ? this._categoryFilter : [];
+      var tagFilter = Array.isArray(this._tagFilter) ? this._tagFilter : [];
+      var hasAnyFilter = searchQuery.trim().length > 0 || categoryFilter.length > 0 || tagFilter.length > 0;
+      var isSinglePost = selectedIndex >= 0 && selectedIndex < items.length && !hasAnyFilter;
+      var levelCfg = isSinglePost
+        ? (baseCfg.postConfig && typeof baseCfg.postConfig === 'object' ? baseCfg.postConfig : baseCfg)
+        : (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' ? baseCfg.collectionConfig : baseCfg);
+      return Object.assign({}, baseCfg, levelCfg);
+    },
+
+    _appendModulePostCardListMeta: function(textHost, post, cardCfg) {
+      var cardShowDate = Boolean(cardCfg && cardCfg.showDate);
+      var cardShowAuthor = Boolean(cardCfg && cardCfg.showAuthor);
+      var cardShowReadingTime = Boolean(cardCfg && cardCfg.showReadingTime);
+      var metaLines = [];
+      if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaLines.push(cardDateStr); }
+      if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaLines.push(cardAuthorStr); }
+      if (cardShowReadingTime) {
+        var cardMins = this._getReadingTimeMinutes(post.body);
+        metaLines.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
+      }
+      if (metaLines.length === 0) return;
+      var metaWrap = document.createElement('div');
+      metaWrap.className = 'bb-sidebar-post-meta';
+      metaWrap.textContent = metaLines.join(' · ');
+      textHost.appendChild(metaWrap);
+    },
+
     _mergeContextBucketLevelConfig: function(prev, next, nestedKeys) {
       var prevFlat = this._isContextBucket(prev)
         ? (this._resolveLevelConfigForViewerMode(prev, this._resolveViewerMode()).active || {})
@@ -3806,7 +4168,8 @@
         if (ix >= 0) idx = ix;
       }
       var g = this._editorialImagePlaceholderGradients;
-      return g[idx % g.length];
+      var tokens = this._getCollectionStyleTokens();
+      return (tokens && tokens.placeholder) ? tokens.placeholder : g[idx % g.length];
     },
 
     /**
@@ -3947,114 +4310,71 @@
       var self = this;
       opts = opts && typeof opts === 'object' ? opts : {};
       var onDark = opts.onDark === true;
+      var onDarkSolid = opts.onDarkSolid === true;
       var compact = opts.compact === true;
       var cats = self._getPostCategories(post);
       if (cats.length === 0) return null;
-      var accent = siteAccent || '#5B4FE8';
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-post-categories-line';
       wrap.style.marginBottom = compact ? '0' : '6px';
       wrap.style.lineHeight = compact ? '1.25' : '1.35';
-
-      function applyEditorialCategoryBadgeStyle(el) {
-        el.style.display = 'inline-block';
-        el.style.background = accent;
-        el.style.color = '#fff';
-        el.style.fontFamily = 'inherit';
-        el.style.fontSize = compact ? '8px' : '9px';
-        el.style.fontWeight = '700';
-        el.style.letterSpacing = '1.5px';
-        el.style.textTransform = 'uppercase';
-        el.style.fontVariant = 'normal';
-        el.style.padding = compact ? '2px 6px' : '3px 8px';
-        el.style.borderRadius = '2px';
-        el.style.border = 'none';
-        el.style.margin = '0';
-        el.style.lineHeight = '1.2';
-        el.style.textShadow = 'none';
-        el.style.textDecoration = 'none';
-        el.style.boxSizing = 'border-box';
-        el.style.verticalAlign = 'baseline';
-      }
-
-      if (onDark) {
-        wrap.style.display = 'flex';
-        wrap.style.flexWrap = 'wrap';
-        wrap.style.gap = compact ? '5px' : '6px';
-        wrap.style.alignItems = 'center';
-        for (var di = 0; di < cats.length; di++) {
-          var catDark = cats[di];
-          var darkEl = categoryFilterUiEnabled ? document.createElement('button') : document.createElement('span');
-          if (categoryFilterUiEnabled) {
-            darkEl.type = 'button';
-            darkEl.style.cursor = 'pointer';
-            darkEl.setAttribute('aria-label', 'Show posts in category: ' + catDark);
-            (function(catName) {
-              darkEl.onclick = function(e) {
-                e.preventDefault();
-                self._categoryFilter = [catName];
-                self._currentPage = 1;
-                if (typeof window !== 'undefined') {
-                  try { window.history.replaceState(null, '', window.location.pathname + (window.location.search || '')); } catch (err) {}
-                  window.location.hash = '';
-                }
-                self._renderContent(self.items);
-              };
-            })(catDark);
-          }
-          darkEl.textContent = catDark;
-          applyEditorialCategoryBadgeStyle(darkEl);
-          wrap.appendChild(darkEl);
-        }
-        return wrap;
-      }
-
-      wrap.style.fontVariant = 'small-caps';
-      wrap.style.fontSize = compact ? '0.75rem' : '0.85rem';
-      wrap.style.letterSpacing = '0.04em';
-      wrap.style.color = accent;
-      if (!categoryFilterUiEnabled) {
-        wrap.textContent = cats.join(', ');
-        return wrap;
-      }
       wrap.style.display = 'flex';
       wrap.style.flexWrap = 'wrap';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = compact ? '5px' : '6px';
+
+      function appendCategoryEl(catName) {
+        var el = categoryFilterUiEnabled ? document.createElement('button') : document.createElement('span');
+        if (categoryFilterUiEnabled) {
+          el.type = 'button';
+          el.style.cursor = 'pointer';
+          el.setAttribute('aria-label', 'Show posts in category: ' + catName);
+          (function(cn) {
+            el.onclick = function(e) {
+              e.preventDefault();
+              self._categoryFilter = [cn];
+              self._currentPage = 1;
+              if (typeof window !== 'undefined') {
+                try { window.history.replaceState(null, '', window.location.pathname + (window.location.search || '')); } catch (err) {}
+                window.location.hash = '';
+              }
+              self._renderContent(self.items);
+            };
+          })(catName);
+        }
+        el.textContent = catName;
+        self._applyCategoryLabelStyle(el, { onImage: onDark && !onDarkSolid, onDarkSolid: onDarkSolid });
+        if (categoryFilterUiEnabled) {
+          el.style.background = 'none';
+          el.style.border = 'none';
+          el.style.padding = '0';
+        }
+        wrap.appendChild(el);
+      }
+
+      if (onDark || onDarkSolid) {
+        for (var di = 0; di < cats.length; di++) appendCategoryEl(cats[di]);
+        return wrap;
+      }
+
+      if (!categoryFilterUiEnabled) {
+        var labelOnly = document.createElement('span');
+        self._applyCategoryLabelStyle(labelOnly, { onImage: false });
+        labelOnly.textContent = cats.join(', ');
+        wrap.appendChild(labelOnly);
+        return wrap;
+      }
+
       wrap.style.alignItems = 'baseline';
       for (var i = 0; i < cats.length; i++) {
         if (i > 0) {
           var commaSp = document.createElement('span');
           commaSp.textContent = ', ';
           commaSp.setAttribute('aria-hidden', 'true');
+          commaSp.style.color = 'var(--bb-accent,#5B4FE8)';
           wrap.appendChild(commaSp);
         }
-        var catBtn = document.createElement('button');
-        catBtn.type = 'button';
-        catBtn.textContent = cats[i];
-        catBtn.style.font = 'inherit';
-        catBtn.style.fontFamily = 'inherit';
-        catBtn.style.fontVariant = 'small-caps';
-        catBtn.style.letterSpacing = 'inherit';
-        catBtn.style.color = 'inherit';
-        catBtn.style.background = 'none';
-        catBtn.style.border = 'none';
-        catBtn.style.padding = '0';
-        catBtn.style.margin = '0';
-        catBtn.style.cursor = 'pointer';
-        catBtn.style.textDecoration = 'none';
-        catBtn.setAttribute('aria-label', 'Show posts in category: ' + cats[i]);
-        (function(catName) {
-          catBtn.onclick = function(e) {
-            e.preventDefault();
-            self._categoryFilter = [catName];
-            self._currentPage = 1;
-            if (typeof window !== 'undefined') {
-              try { window.history.replaceState(null, '', window.location.pathname + (window.location.search || '')); } catch (err) {}
-              window.location.hash = '';
-            }
-            self._renderContent(self.items);
-          };
-        })(cats[i]);
-        wrap.appendChild(catBtn);
+        appendCategoryEl(cats[i]);
       }
       return wrap;
     },
@@ -4212,17 +4532,7 @@
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.textContent = val;
-          btn.style.padding = '8px 14px';
-          btn.style.fontSize = '0.8125rem';
-          btn.style.fontWeight = '700';
-          btn.style.lineHeight = '1.2';
-          btn.style.borderRadius = '3px';
-          btn.style.cursor = 'pointer';
-          btn.style.fontFamily = 'inherit';
-          btn.style.border = '1px solid ' + (isActive ? accent : '#d0d0d0');
-          btn.style.background = isActive ? accent : '#fff';
-          btn.style.color = isActive ? '#fff' : '#1a1a1a';
-          btn.style.transition = 'background 0.12s ease, color 0.12s ease, border-color 0.12s ease';
+          btn.className = 'bb-topic-badge' + (isActive ? ' bb-topic-badge--active' : '');
           btn.onclick = function() {
             var current = Array.isArray(self[filterProp]) ? self[filterProp].slice() : [];
             var activeNow = current.length === 1 && current[0] === val;
@@ -4236,6 +4546,80 @@
       }
       wrap.appendChild(badgesWrap);
       return wrap;
+    },
+
+    /**
+     * Header filter pills: hide native horizontal scrollbar; show edge carets when more content is off-screen.
+     */
+    _wrapHeaderFilterPillsScroller: function(pillsWrap) {
+      pillsWrap.className = (pillsWrap.className ? pillsWrap.className + ' ' : '') + 'blog-overlay-header-filter-pills';
+
+      var shell = document.createElement('div');
+      shell.className = 'blog-overlay-header-filter-scroller';
+      shell.style.position = 'relative';
+      shell.style.width = '100%';
+      shell.style.minWidth = '0';
+      shell.style.boxSizing = 'border-box';
+
+      function makeCaret(side) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'blog-overlay-header-filter-scroll-caret blog-overlay-header-filter-scroll-caret--' + side;
+        el.setAttribute('aria-label', side === 'left' ? 'Scroll categories left' : 'Scroll categories right');
+        var glyph = document.createElement('span');
+        glyph.className = 'blog-overlay-header-filter-scroll-caret-glyph';
+        glyph.setAttribute('aria-hidden', 'true');
+        glyph.textContent = side === 'left' ? '‹' : '›';
+        el.appendChild(glyph);
+        return el;
+      }
+
+      var caretLeft = makeCaret('left');
+      var caretRight = makeCaret('right');
+
+      function scrollFilters(direction) {
+        var step = Math.max(120, Math.round(pillsWrap.clientWidth * 0.55));
+        pillsWrap.scrollBy({ left: direction * step, behavior: 'smooth' });
+      }
+      caretLeft.addEventListener('click', function(e) {
+        e.preventDefault();
+        scrollFilters(-1);
+      });
+      caretRight.addEventListener('click', function(e) {
+        e.preventDefault();
+        scrollFilters(1);
+      });
+
+      function syncCarets() {
+        var maxScroll = Math.max(0, pillsWrap.scrollWidth - pillsWrap.clientWidth);
+        var sl = pillsWrap.scrollLeft;
+        var hasOverflow = maxScroll > 1;
+        var showLeft = hasOverflow && sl > 1;
+        var showRight = hasOverflow && sl < maxScroll - 1;
+        caretLeft.style.opacity = showLeft ? '1' : '0';
+        caretRight.style.opacity = showRight ? '1' : '0';
+        caretLeft.style.pointerEvents = showLeft ? 'auto' : 'none';
+        caretRight.style.pointerEvents = showRight ? 'auto' : 'none';
+        caretLeft.tabIndex = showLeft ? 0 : -1;
+        caretRight.tabIndex = showRight ? 0 : -1;
+      }
+
+      pillsWrap._bbSyncFilterScrollIndicators = syncCarets;
+      pillsWrap.addEventListener('scroll', syncCarets, { passive: true });
+      if (typeof ResizeObserver !== 'undefined') {
+        var ro = new ResizeObserver(syncCarets);
+        ro.observe(pillsWrap);
+        pillsWrap._bbFilterScrollResizeObserver = ro;
+      } else if (typeof window !== 'undefined') {
+        window.addEventListener('resize', syncCarets, { passive: true });
+      }
+
+      shell.appendChild(caretLeft);
+      shell.appendChild(pillsWrap);
+      shell.appendChild(caretRight);
+      requestAnimationFrame(syncCarets);
+      setTimeout(syncCarets, 0);
+      return shell;
     },
 
     /**
@@ -4273,11 +4657,7 @@
           var allBtn = document.createElement('button');
           allBtn.type = 'button';
           allBtn.textContent = 'All' + (totalCount > 0 ? ' ' + totalCount : '');
-          allBtn.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;flex-shrink:0;';
-          if (!activeVal) {
-            allBtn.style.color = '#111';
-            allBtn.style.borderBottomColor = '#111';
-          }
+          self._applyFilterButtonStyle(allBtn, !activeVal);
           allBtn.onclick = function() {
             self._categoryFilter = [];
             self._currentPage = 1;
@@ -4290,11 +4670,7 @@
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.textContent = cat + (cnt > 0 ? ' ' + cnt : '');
-            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;flex-shrink:0;';
-            if (activeVal === cat) {
-              pill.style.color = '#111';
-              pill.style.borderBottomColor = '#111';
-            }
+            self._applyFilterButtonStyle(pill, activeVal === cat);
             (function(c) {
               pill.onclick = function() {
                 self._categoryFilter = [c];
@@ -4304,9 +4680,11 @@
             })(cat);
             pillsWrap.appendChild(pill);
           }
+          if (pillsWrap._bbSyncFilterScrollIndicators) pillsWrap._bbSyncFilterScrollIndicators();
         }
+        var categoryPillsScroller = self._wrapHeaderFilterPillsScroller(pillsWrap);
         renderPills();
-        return pillsWrap;
+        return categoryPillsScroller;
       }
 
       var wrap = document.createElement('div');
@@ -4379,7 +4757,7 @@
             opt.style.background = 'none';
             opt.style.cursor = 'pointer';
             opt.style.textAlign = 'left';
-            opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+            opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
             opt.onmouseout = function() { opt.style.background = 'none'; };
             opt.onclick = function() {
               selected.push(cat);
@@ -4427,8 +4805,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = selected[c];
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -4499,11 +4877,7 @@
           var allBtn = document.createElement('button');
           allBtn.type = 'button';
           allBtn.textContent = 'All' + (totalCount > 0 ? ' ' + totalCount : '');
-          allBtn.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;';
-          if (!activeVal) {
-            allBtn.style.color = '#111';
-            allBtn.style.borderBottomColor = '#111';
-          }
+          self._applyFilterButtonStyle(allBtn, !activeVal);
           allBtn.onclick = function() {
             self._tagFilter = [];
             self._currentPage = 1;
@@ -4516,11 +4890,7 @@
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.textContent = tag + (cnt > 0 ? ' ' + cnt : '');
-            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;';
-            if (activeVal === tag) {
-              pill.style.color = '#111';
-              pill.style.borderBottomColor = '#111';
-            }
+            self._applyFilterButtonStyle(pill, activeVal === tag);
             (function(t) {
               pill.onclick = function() {
                 self._tagFilter = [t];
@@ -4530,9 +4900,11 @@
             })(tag);
             pillsWrap.appendChild(pill);
           }
+          if (pillsWrap._bbSyncFilterScrollIndicators) pillsWrap._bbSyncFilterScrollIndicators();
         }
+        var tagPillsScroller = self._wrapHeaderFilterPillsScroller(pillsWrap);
         renderPills();
-        return pillsWrap;
+        return tagPillsScroller;
       }
 
       var wrap = document.createElement('div');
@@ -4605,7 +4977,7 @@
             opt.style.background = 'none';
             opt.style.cursor = 'pointer';
             opt.style.textAlign = 'left';
-            opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+            opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
             opt.onmouseout = function() { opt.style.background = 'none'; };
             opt.onclick = function() {
               selected.push(tag);
@@ -4653,8 +5025,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = selected[c];
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -4728,11 +5100,7 @@
           var allBtn = document.createElement('button');
           allBtn.type = 'button';
           allBtn.textContent = 'All' + (totalCount > 0 ? ' ' + totalCount : '');
-          allBtn.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;flex-shrink:0;';
-          if (!activeVal) {
-            allBtn.style.color = '#111';
-            allBtn.style.borderBottomColor = '#111';
-          }
+          self._applyFilterButtonStyle(allBtn, !activeVal);
           allBtn.onclick = function() {
             self._categoryFilter = [];
             self._tagFilter = [];
@@ -4746,11 +5114,7 @@
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.textContent = cat + (cnt > 0 ? ' ' + cnt : '');
-            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;flex-shrink:0;';
-            if (activeVal === 'cat:' + cat) {
-              pill.style.color = '#111';
-              pill.style.borderBottomColor = '#111';
-            }
+            self._applyFilterButtonStyle(pill, activeVal === 'cat:' + cat);
             (function(c) {
               pill.onclick = function() {
                 self._categoryFilter = [c];
@@ -4767,11 +5131,7 @@
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.textContent = tag + (cnt > 0 ? ' ' + cnt : '');
-            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;flex-shrink:0;';
-            if (activeVal === 'tag:' + tag) {
-              pill.style.color = '#111';
-              pill.style.borderBottomColor = '#111';
-            }
+            self._applyFilterButtonStyle(pill, activeVal === 'tag:' + tag);
             (function(t) {
               pill.onclick = function() {
                 self._categoryFilter = [];
@@ -4782,9 +5142,11 @@
             })(tag);
             pillsWrap.appendChild(pill);
           }
+          if (pillsWrap._bbSyncFilterScrollIndicators) pillsWrap._bbSyncFilterScrollIndicators();
         }
+        var combinedPillsScroller = self._wrapHeaderFilterPillsScroller(pillsWrap);
         renderPills();
-        return pillsWrap;
+        return combinedPillsScroller;
       }
 
       var wrap = document.createElement('div');
@@ -4862,7 +5224,7 @@
             opt.style.background = 'none';
             opt.style.cursor = 'pointer';
             opt.style.textAlign = 'left';
-            opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+            opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
             opt.onmouseout = function() { opt.style.background = 'none'; };
             opt.onclick = function() {
               if (item.type === 'category') {
@@ -4918,8 +5280,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = name;
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -5052,11 +5414,7 @@
           var allBtn = document.createElement('button');
           allBtn.type = 'button';
           allBtn.textContent = 'All' + (totalCount > 0 ? ' ' + totalCount : '');
-          allBtn.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;';
-          if (!activeVal) {
-            allBtn.style.color = '#111';
-            allBtn.style.borderBottomColor = '#111';
-          }
+          self._applyFilterButtonStyle(allBtn, !activeVal);
           allBtn.onclick = function() {
             self._categoryFilter = [];
             self._tagFilter = [];
@@ -5070,11 +5428,7 @@
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.textContent = cat + (cnt > 0 ? ' ' + cnt : '');
-            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;';
-            if (activeVal && activeVal.type === 'category' && activeVal.name === cat) {
-              pill.style.color = '#111';
-              pill.style.borderBottomColor = '#111';
-            }
+            self._applyFilterButtonStyle(pill, activeVal && activeVal.type === 'category' && activeVal.name === cat);
             (function(c) {
               pill.onclick = function() {
                 self._categoryFilter = [c];
@@ -5091,11 +5445,7 @@
             var pill = document.createElement('button');
             pill.type = 'button';
             pill.textContent = tag + (cnt > 0 ? ' ' + cnt : '');
-            pill.style.cssText = 'padding:6px 14px;font-size:0.85rem;font-weight:600;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;color:#888;transition:color 0.12s,border-color 0.12s;white-space:nowrap;';
-            if (activeVal && activeVal.type === 'tag' && activeVal.name === tag) {
-              pill.style.color = '#111';
-              pill.style.borderBottomColor = '#111';
-            }
+            self._applyFilterButtonStyle(pill, activeVal && activeVal.type === 'tag' && activeVal.name === tag);
             (function(t) {
               pill.onclick = function() {
                 self._categoryFilter = [];
@@ -5106,9 +5456,11 @@
             })(tag);
             pillsWrap.appendChild(pill);
           }
+          if (pillsWrap._bbSyncFilterScrollIndicators) pillsWrap._bbSyncFilterScrollIndicators();
         }
+        var combinedPillsScroller = self._wrapHeaderFilterPillsScroller(pillsWrap);
         renderPills();
-        return pillsWrap;
+        return combinedPillsScroller;
       }
 
       var wrap = document.createElement('div');
@@ -5197,7 +5549,7 @@
               opt.style.background = 'none';
               opt.style.cursor = 'pointer';
               opt.style.textAlign = 'left';
-              opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+              opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
               opt.onmouseout = function() { opt.style.background = 'none'; };
               opt.onclick = function() {
                 catSelected.push(c);
@@ -5236,7 +5588,7 @@
               opt.style.background = 'none';
               opt.style.cursor = 'pointer';
               opt.style.textAlign = 'left';
-              opt.onmouseover = function() { opt.style.background = 'rgba(91,79,232,0.08)'; };
+              opt.onmouseover = function() { opt.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.08))'; };
               opt.onmouseout = function() { opt.style.background = 'none'; };
               opt.onclick = function() {
                 tagSelected.push(t);
@@ -5287,8 +5639,8 @@
           chip.style.padding = '4px 8px';
           chip.style.fontSize = '0.85rem';
           chip.style.borderRadius = '6px';
-          chip.style.background = 'rgba(91,79,232,0.1)';
-          chip.style.color = '#5B4FE8';
+          chip.style.background = 'var(--bb-accent-10, rgba(91,79,232,0.1))';
+          chip.style.color = 'var(--bb-accent, #5B4FE8)';
           chip.textContent = item.name;
           var btn = document.createElement('button');
           btn.type = 'button';
@@ -5346,12 +5698,8 @@
         wrap.appendChild(label);
       }
       var select = document.createElement('select');
+      select.className = 'bb-chrome-input';
       select.style.width = '100%';
-      select.style.padding = '8px 12px';
-      select.style.fontSize = '0.9rem';
-      select.style.border = '1px solid #ddd';
-      select.style.borderRadius = '6px';
-      select.style.background = 'white';
       select.style.cursor = 'pointer';
       var opts = [
         { value: 'date', text: 'By Date' },
@@ -5399,7 +5747,7 @@
       var searchWrap = document.createElement('div');
       searchWrap.className = 'blog-overlay-header-search' + (mobile ? ' blog-overlay-header-search-mobile' : '');
 
-      var inputBorderColor = '#e8e7e4';
+      var inputBorderColor = 'var(--bb-border, #e8e7e4)';
 
       function wireSearchInput(searchInput, inputOpts) {
         inputOpts = inputOpts && typeof inputOpts === 'object' ? inputOpts : {};
@@ -5408,14 +5756,19 @@
         searchInput.placeholder = 'Search posts…';
         searchInput.setAttribute('aria-label', 'Search posts');
         searchInput.value = self._searchQuery || '';
-        searchInput.style.padding = embeddedInField ? '8px 12px 8px 0' : '8px 12px';
-        searchInput.style.fontSize = '0.9rem';
-        searchInput.style.border = embeddedInField ? 'none' : ('1px solid ' + inputBorderColor);
-        searchInput.style.borderRadius = embeddedInField ? '0' : '6px';
+        searchInput.className = 'blog-overlay-search-input' + (embeddedInField ? '' : ' bb-chrome-input');
         searchInput.style.outline = 'none';
         searchInput.style.boxSizing = 'border-box';
-        searchInput.style.background = embeddedInField ? 'transparent' : '#fff';
         searchInput.style.color = 'inherit';
+        if (embeddedInField) {
+          searchInput.style.padding = '8px 12px 8px 0';
+          searchInput.style.fontSize = '14px';
+          searchInput.style.border = 'none';
+          searchInput.style.borderRadius = '0';
+          searchInput.style.background = 'transparent';
+        } else {
+          self._applyChromeInputStyle(searchInput);
+        }
         searchInput.onfocus = function() {
           if (embeddedInField && inputOpts.fieldEl) {
             inputOpts.fieldEl.style.borderColor = accent;
@@ -5449,7 +5802,6 @@
             searchInput.blur();
           }
         };
-        searchInput.className = 'blog-overlay-search-input';
       }
 
       if (mobile) {
@@ -5580,6 +5932,10 @@
         };
         return svgs[platform] || '';
       }
+      var avatarPx = useLongBio ? 64 : 48;
+      var nameFontPx = useLongBio ? 18 : 15;
+      var bioFontPx = useLongBio ? 15 : 14;
+      var iconPx = useLongBio ? 18 : 16;
       var platforms = ['instagram', 'facebook', 'linkedin', 'x', 'email', 'website'];
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
@@ -5590,32 +5946,23 @@
         var email = (p && p.email) || null;
         var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
         var card = document.createElement('div');
-        card.style.marginBottom = i < authorIds.length - 1 ? '20px' : '0';
+        if (useLongBio) card.className = 'blog-overlay-author-card';
+        card.style.marginBottom = useLongBio ? 0 : (i < authorIds.length - 1 ? '20px' : '0');
         var topRow = document.createElement('div');
         topRow.style.display = 'flex';
         topRow.style.gap = '12px';
         topRow.style.alignItems = 'flex-start';
-        topRow.style.marginBottom = '8px';
+        topRow.style.marginBottom = useLongBio ? '0' : '8px';
+        if (useLongBio) topRow.style.width = '100%';
         var avatarWrap = document.createElement('div');
-        avatarWrap.style.width = '48px';
-        avatarWrap.style.height = '48px';
-        avatarWrap.style.borderRadius = '50%';
-        avatarWrap.style.overflow = 'hidden';
-        avatarWrap.style.flexShrink = '0';
-        avatarWrap.style.background = 'rgba(91,79,232,0.15)';
-        avatarWrap.style.display = 'flex';
-        avatarWrap.style.alignItems = 'center';
-        avatarWrap.style.justifyContent = 'center';
-        avatarWrap.style.fontSize = '1rem';
-        avatarWrap.style.fontWeight = '600';
-        avatarWrap.style.color = '#5B4FE8';
+        avatarWrap.className = 'blog-overlay-author-card-avatar';
+        avatarWrap.style.width = avatarPx + 'px';
+        avatarWrap.style.height = avatarPx + 'px';
+        avatarWrap.style.fontSize = (useLongBio ? 20 : 16) + 'px';
         if (imageUrl) {
           var img = document.createElement('img');
           img.src = imageUrl;
           img.alt = name;
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'cover';
           avatarWrap.appendChild(img);
         } else {
           avatarWrap.textContent = getInitials(name);
@@ -5628,13 +5975,12 @@
         rightCol.style.flexDirection = 'column';
         rightCol.style.gap = '6px';
         var nameEl = document.createElement('div');
+        nameEl.className = 'blog-overlay-author-card-name';
         nameEl.textContent = name;
-        nameEl.style.fontWeight = '600';
-        nameEl.style.fontSize = '0.95rem';
-        nameEl.style.color = '#1a1a1a';
-        nameEl.style.lineHeight = 1.3;
+        nameEl.style.fontSize = nameFontPx + 'px';
         rightCol.appendChild(nameEl);
         var linksWrap = document.createElement('div');
+        linksWrap.className = 'blog-overlay-author-card-social';
         linksWrap.style.display = 'flex';
         linksWrap.style.flexWrap = 'wrap';
         linksWrap.style.gap = '8px';
@@ -5647,30 +5993,27 @@
             a.href = url;
             a.target = platform === 'email' ? '_self' : '_blank';
             a.rel = platform === 'email' ? '' : 'noopener noreferrer';
-            a.innerHTML = socialIconSvg(platform);
-            a.style.display = 'inline-flex';
-            a.style.color = '#5B4FE8';
-            a.style.textDecoration = 'none';
+            a.innerHTML = socialIconSvg(platform).replace(/width="18"/, 'width="' + iconPx + '"').replace(/height="18"/, 'height="' + iconPx + '"');
             a.setAttribute('aria-label', platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1));
             linksWrap.appendChild(a);
           }
         }
         if (linksWrap.childNodes.length > 0) {
           rightCol.appendChild(linksWrap);
-        } else {
-          rightCol.style.minHeight = '48px';
+        } else if (!bio) {
+          rightCol.style.minHeight = avatarPx + 'px';
           rightCol.style.justifyContent = 'center';
+        }
+        if (bio) {
+          var bioEl = document.createElement('div');
+          bioEl.className = 'blog-overlay-author-card-bio';
+          bioEl.textContent = bio;
+          bioEl.style.fontSize = bioFontPx + 'px';
+          bioEl.style.marginTop = '6px';
+          rightCol.appendChild(bioEl);
         }
         topRow.appendChild(rightCol);
         card.appendChild(topRow);
-        if (bio) {
-          var bioEl = document.createElement('div');
-          bioEl.textContent = bio;
-          bioEl.style.fontSize = '0.8rem';
-          bioEl.style.color = '#6b6b6b';
-          bioEl.style.lineHeight = 1.4;
-          card.appendChild(bioEl);
-        }
         content.appendChild(card);
       }
       return { header: headerText, content: content };
@@ -5680,7 +6023,7 @@
      * Inline SVG icons for share links (avoids CORS when renderer runs in cross-origin iframe)
      */
     _shareIconSvg: function(platform) {
-      var w = 20; var h = 20;
+      var w = 16; var h = 16;
       var svgs = {
         facebook: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
         instagram: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>',
@@ -5759,10 +6102,7 @@
       console.log('[BlogOverlay] _createShareLinks: normalized=', JSON.stringify(normalized), 'encodedShareUrl=', JSON.stringify(encodedShareUrl));
       var encTitle = encodeURIComponent(title || '');
       var wrap = document.createElement('div');
-      wrap.className = 'blog-overlay-share-links';
-      wrap.style.display = 'flex';
-      wrap.style.gap = '8px';
-      wrap.style.alignItems = 'center';
+      wrap.className = 'blog-overlay-share-links' + (lightVariant ? ' blog-overlay-share-links--on-dark' : '');
       wrap.setAttribute('aria-label', 'Share');
       for (var p = 0; p < platforms.length; p++) {
         var platform = platforms[p];
@@ -5786,11 +6126,11 @@
         a.href = href;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
+        a.className = 'blog-overlay-share-link';
         a.setAttribute('aria-label', 'Share on ' + (platform === 'x' ? 'X' : platform === 'whatsapp' ? 'WhatsApp' : platform.charAt(0).toUpperCase() + platform.slice(1)));
         a.setAttribute('data-analytics-element', 'share' + (platform === 'x' ? 'X' : platform.charAt(0).toUpperCase() + platform.slice(1)));
         var svg = this._shareIconSvg(platform);
         if (svg) {
-          a.style.color = lightVariant ? 'rgba(255,255,255,0.9)' : '#666';
           a.innerHTML = svg;
         }
         wrap.appendChild(a);
@@ -6254,7 +6594,6 @@
       var tocEl = document.querySelector('.blog-overlay-toc');
       if (!tocEl) return;
       var tocStyle = tocEl.getAttribute('data-toc-style') || 'numbered';
-      var themeColor = '#5B4FE8';
       var tocLinks = tocEl.querySelectorAll('a');
       if (!tocLinks.length) return;
 
@@ -6279,15 +6618,14 @@
           var idx = parseInt(link.getAttribute('data-heading-index'), 10);
           var isActive = idx === activeIdx;
           link.classList.toggle('blog-overlay-toc-active', isActive);
-          link.style.fontWeight = isActive ? '600' : '';
-          link.style.color = isActive ? '#333' : '';
-          if (tocStyle === 'bookmark') {
-            link.style.backgroundColor = isActive ? (themeColor + '20') : '';
-            link.style.borderLeft = isActive ? ('3px solid ' + themeColor) : '3px solid transparent';
+          link.classList.toggle('is-active', isActive);
+          if (tocStyle === 'connectedDots') {
+            link.style.fontWeight = isActive ? '600' : '';
+            link.style.color = isActive ? '#333' : '';
           }
           if (tocStyle === 'connectedDots') {
             var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
-            if (dot) dot.style.background = (idx <= activeIdx) ? themeColor : '#e5e4e0';
+            if (dot) dot.style.background = (idx <= activeIdx) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
           }
         }
         if (tocStyle === 'connectedDots') {
@@ -6332,15 +6670,14 @@
         var idx = parseInt(link.getAttribute('data-post-index'), 10);
         var isActive = idx === activeIndex;
         link.classList.toggle('blog-overlay-toc-active', isActive);
-        link.style.fontWeight = isActive ? '600' : '';
-        link.style.color = isActive ? '#333' : '';
-        if (tocStyle === 'bookmark') {
-          link.style.backgroundColor = isActive ? (themeColor + '20') : '';
-          link.style.borderLeft = isActive ? ('3px solid ' + themeColor) : '3px solid transparent';
+        link.classList.toggle('is-active', isActive);
+        if (tocStyle === 'connectedDots') {
+          link.style.fontWeight = isActive ? '600' : '';
+          link.style.color = isActive ? '#333' : '';
         }
         if (tocStyle === 'connectedDots') {
           var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
-          if (dot) dot.style.background = (idx <= activeIndex) ? themeColor : '#e5e4e0';
+          if (dot) dot.style.background = (idx <= activeIndex) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
         }
       }
       if (tocStyle === 'connectedDots') {
@@ -6551,6 +6888,598 @@
       return fb;
     },
 
+    _readCssVarFromEl: function(el, name) {
+      try {
+        if (!el || !name) return '';
+        var v = window.getComputedStyle(el).getPropertyValue(name);
+        return v && typeof v === 'string' ? v.replace(/^\s+|\s+$/g, '') : '';
+      } catch (e) { return ''; }
+    },
+
+    _isValidCssColorValue: function(val) {
+      return !!(val && val.indexOf('var(') !== 0 && val !== 'rgba(0, 0, 0, 0)' && val !== 'transparent');
+    },
+
+    _parseColorChannels: function(color) {
+      if (!color || typeof color !== 'string') return null;
+      try {
+        if (typeof document !== 'undefined' && document.documentElement) {
+          var probe = document.createElement('span');
+          probe.style.color = color;
+          probe.style.display = 'none';
+          document.documentElement.appendChild(probe);
+          var computed = window.getComputedStyle(probe).color || '';
+          document.documentElement.removeChild(probe);
+          var m = computed.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          if (m) return { r: +m[1], g: +m[2], b: +m[3] };
+        }
+      } catch (e1) { /* ignore */ }
+      var hex = color.replace(/^\s+|\s+$/g, '');
+      if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+        return {
+          r: parseInt(hex.charAt(1) + hex.charAt(1), 16),
+          g: parseInt(hex.charAt(2) + hex.charAt(2), 16),
+          b: parseInt(hex.charAt(3) + hex.charAt(3), 16)
+        };
+      }
+      if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+        return {
+          r: parseInt(hex.slice(1, 3), 16),
+          g: parseInt(hex.slice(3, 5), 16),
+          b: parseInt(hex.slice(5, 7), 16)
+        };
+      }
+      return null;
+    },
+
+    /** Rule D — derive rgba from a concrete color at a given opacity (accent tokens, etc.). */
+    _withAlpha: function(color, alpha) {
+      var ch = this._parseColorChannels(color);
+      if (!ch) return 'rgba(17,17,17,' + alpha + ')';
+      return 'rgba(' + ch.r + ',' + ch.g + ',' + ch.b + ',' + alpha + ')';
+    },
+
+    /** Rule D — CSS color-mix token derived from --bb-body at a given percentage. */
+    _bodyColorMix: function(percent) {
+      return 'color-mix(in srgb, var(--bb-body) ' + percent + '%, transparent)';
+    },
+
+    _resolveCssColorValue: function(color, contextEl) {
+      if (!color || typeof color !== 'string') return '';
+      if (this._isValidCssColorValue(color)) return color;
+      try {
+        if (typeof document !== 'undefined') {
+          var parent = (contextEl && contextEl.nodeType === 1) ? contextEl : document.documentElement;
+          var probe = document.createElement('span');
+          probe.style.color = color;
+          probe.style.display = 'none';
+          parent.appendChild(probe);
+          var computed = window.getComputedStyle(probe).color || '';
+          parent.removeChild(probe);
+          if (this._isValidCssColorValue(computed)) return computed;
+        }
+      } catch (e) { /* ignore */ }
+      return '';
+    },
+
+    /** Rule E — contrast-aware text on accent backgrounds. */
+    _contrastTextOnAccent: function(color) {
+      var ch = this._parseColorChannels(color);
+      if (!ch) return '#fff';
+      var r = ch.r / 255;
+      var g = ch.g / 255;
+      var b = ch.b / 255;
+      var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      return lum > 0.5 ? '#000' : '#fff';
+    },
+
+    _walkScopeForCssVar: function(scopeEl, names) {
+      if (!scopeEl || !names || !names.length) return '';
+      var el = scopeEl;
+      for (var depth = 0; depth < 24 && el; depth++) {
+        for (var i = 0; i < names.length; i++) {
+          var val = this._readCssVarFromEl(el, names[i]);
+          if (this._isValidCssColorValue(val)) return val;
+        }
+        el = el.parentElement;
+      }
+      return '';
+    },
+
+    _walkScopeForCssValue: function(scopeEl, names) {
+      if (!scopeEl || !names || !names.length) return '';
+      var el = scopeEl;
+      for (var depth = 0; depth < 24 && el; depth++) {
+        for (var i = 0; i < names.length; i++) {
+          var val = this._readCssVarFromEl(el, names[i]);
+          if (val && val.indexOf('var(') !== 0) return val;
+        }
+        el = el.parentElement;
+      }
+      return '';
+    },
+
+    /** Primary button fill from Squarespace theme (progress bar, spec default). */
+    _getPrimaryButtonBackgroundColor: function(scopeEl) {
+      var cssNames = [
+        '--primaryButtonBackgroundColor', '--primary-button-background-color'
+      ];
+      var scope = scopeEl || this._findBlogPageSection(this._root) || this._root || (typeof document !== 'undefined' ? document.body : null);
+      var fromVars = this._walkScopeForCssVar(scope, cssNames);
+      if (fromVars) return fromVars;
+      try {
+        var prim = null;
+        if (scope && scope.querySelector) prim = scope.querySelector('.sqs-button-element--primary');
+        if (!prim && scope && scope.closest) {
+          var sec = scope.closest('section.page-section, section[data-section-id]') || scope;
+          if (sec && sec.querySelector) prim = sec.querySelector('.sqs-button-element--primary');
+        }
+        if (!prim && typeof document !== 'undefined') prim = document.querySelector('.sqs-button-element--primary');
+        if (prim) {
+          var bg = window.getComputedStyle(prim).backgroundColor;
+          if (this._isValidCssColorValue(bg)) return bg;
+        }
+      } catch (e1) { /* ignore */ }
+      return '';
+    },
+
+    _readAccentFromScope: function(scopeEl) {
+      var cssNames = [
+        '--primaryButtonBackgroundColor', '--primary-button-background-color',
+        '--paragraphLinkColor', '--paragraph-link-color',
+        '--navigationLinkColor', '--navigation-link-color',
+        '--headingLinkColor', '--heading-link-color',
+        '--tweak-accent-color', '--siteAccentColor'
+      ];
+      var fromVars = this._walkScopeForCssVar(scopeEl, cssNames);
+      if (fromVars) return fromVars;
+      try {
+        var prim = null;
+        if (scopeEl && scopeEl.querySelector) prim = scopeEl.querySelector('.sqs-button-element--primary');
+        if (!prim && scopeEl && scopeEl.closest) {
+          var sec = scopeEl.closest('section.page-section, section[data-section-id]') || scopeEl;
+          if (sec && sec.querySelector) prim = sec.querySelector('.sqs-button-element--primary');
+        }
+        if (!prim) prim = document.querySelector('.sqs-button-element--primary');
+        if (prim) {
+          var bg = window.getComputedStyle(prim).backgroundColor;
+          if (this._isValidCssColorValue(bg)) return bg;
+        }
+      } catch (e1) { /* ignore */ }
+      return '';
+    },
+
+    _readBodyColorFromScope: function(scopeEl) {
+      var varNames = [
+        '--paragraphMediumColor', '--paragraph-medium-color',
+        '--paragraphLargeColor', '--paragraph-large-color',
+        '--tweak-text-color', '--text-color'
+      ];
+      var scope = scopeEl;
+      for (var depth = 0; depth < 24 && scope; depth++) {
+        for (var i = 0; i < varNames.length; i++) {
+          var raw = this._readCssVarFromEl(scope, varNames[i]);
+          if (!raw) continue;
+          if (raw.indexOf('var(') === 0) return raw;
+          if (this._isValidCssColorValue(raw)) return raw;
+          var resolved = this._resolveCssColorValue(raw, scope);
+          if (resolved) return resolved;
+        }
+        scope = scope.parentElement;
+      }
+      try {
+        if (scopeEl && scopeEl.querySelector) {
+          var p = scopeEl.querySelector('p, .sqsrte-large, .sqsrte-medium, .blog-overlay-body p');
+          if (p) {
+            var c = window.getComputedStyle(p).color;
+            if (this._isValidCssColorValue(c)) return c;
+          }
+        }
+      } catch (e2) { /* ignore */ }
+      if (typeof document !== 'undefined' && document.documentElement) {
+        for (var j = 0; j < varNames.length; j++) {
+          var rootRaw = this._readCssVarFromEl(document.documentElement, varNames[j]);
+          if (!rootRaw) continue;
+          if (rootRaw.indexOf('var(') === 0) return rootRaw;
+          var rootResolved = this._resolveCssColorValue(rootRaw, document.documentElement);
+          if (rootResolved) return rootResolved;
+        }
+      }
+      return '';
+    },
+
+    _readHeadingColorFromScope: function(scopeEl) {
+      var fromVars = this._walkScopeForCssVar(scopeEl, [
+        '--headingExtraLargeColor', '--headings-extra-large-color',
+        '--headings-color', '--heading-color', '--title-color'
+      ]);
+      if (fromVars) return fromVars;
+      try {
+        if (scopeEl && scopeEl.querySelector) {
+          var h1 = scopeEl.querySelector('h1, .sqsrte-scaled-text-container h1');
+          if (h1) {
+            var c = window.getComputedStyle(h1).color;
+            if (this._isValidCssColorValue(c)) return c;
+          }
+        }
+      } catch (e3) { /* ignore */ }
+      return '';
+    },
+
+    /** Rule B — H1 font-family and font-weight for meta rows (BB controls size only). */
+    _readHeadingTypographyFromScope: function(scopeEl) {
+      var out = {
+        fontFamily: this._walkScopeForCssValue(scopeEl, [
+          '--heading-font-font-family', '--headings-font-family', '--header-font-family', '--title-font-font-family'
+        ]),
+        fontWeight: this._walkScopeForCssValue(scopeEl, [
+          '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight', '--title-font-font-weight'
+        ])
+      };
+      if (out.fontFamily && out.fontWeight) return out;
+      try {
+        var h1 = null;
+        if (scopeEl && scopeEl.querySelector) {
+          h1 = scopeEl.querySelector('h1, .sqsrte-scaled-text-container h1, .sqs-block-content h1');
+        }
+        if (!h1 && typeof document !== 'undefined') {
+          h1 = document.querySelector('section.page-section h1, .blog-item-title h1, h1');
+        }
+        if (h1) {
+          var cs = window.getComputedStyle(h1);
+          if (!out.fontFamily && cs.fontFamily) out.fontFamily = cs.fontFamily;
+          if (!out.fontWeight && cs.fontWeight) out.fontWeight = cs.fontWeight;
+        }
+      } catch (e3a) { /* ignore */ }
+      return out;
+    },
+
+    _readPrimaryButtonRadius: function(scopeEl) {
+      try {
+        var prim = null;
+        if (scopeEl && scopeEl.querySelector) prim = scopeEl.querySelector('.sqs-button-element--primary');
+        if (!prim && scopeEl && scopeEl.closest) {
+          var sec = scopeEl.closest('section.page-section, section[data-section-id]');
+          if (sec && sec.querySelector) prim = sec.querySelector('.sqs-button-element--primary');
+        }
+        if (!prim) prim = document.querySelector('.sqs-button-element--primary');
+        if (prim) {
+          var br = window.getComputedStyle(prim).borderRadius;
+          if (br) return br;
+        }
+      } catch (e4) { /* ignore */ }
+      return '0px';
+    },
+
+    /** Squarespace form-field shape (comment/lead-magnet inputs inherit this). */
+    _readFormFieldRadiusFromScope: function(scopeEl) {
+      try {
+        var input = null;
+        var selector = '.sqs-block-form input[type="text"], .sqs-block-form input[type="email"], .sqs-block-form textarea, form.sqs-block-form-field input, form.sqs-block-form-field textarea';
+        if (scopeEl && scopeEl.querySelector) input = scopeEl.querySelector(selector);
+        if (!input) input = document.querySelector(selector);
+        if (input) {
+          var br = window.getComputedStyle(input).borderRadius;
+          if (br) return br;
+        }
+      } catch (e4a) { /* ignore */ }
+      return '6px';
+    },
+
+    /** First numeric px value in a (possibly shorthand) CSS length string. */
+    _firstPxValue: function(cssLength, fallbackPx) {
+      var m = typeof cssLength === 'string' ? cssLength.match(/-?[\d.]+/) : null;
+      return m ? parseFloat(m[0]) : fallbackPx;
+    },
+
+    _getConfigAccentOverride: function() {
+      var cc = this.config && this.config.collectionConfig;
+      if (!cc || typeof cc !== 'object') return '';
+      if (typeof cc.accentColor === 'string' && cc.accentColor.trim()) return cc.accentColor.trim();
+      if (cc.primary && typeof cc.primary === 'object' && typeof cc.primary.accentColor === 'string' && cc.primary.accentColor.trim()) {
+        return cc.primary.accentColor.trim();
+      }
+      return '';
+    },
+
+    /** Progress bar fill: always Squarespace site accent (primary button / collection tokens). */
+    _resolveProgressBarColor: function(cfg) {
+      var scope = this._findBlogPageSection(this._root) || this._root;
+      return this._getPrimaryButtonBackgroundColor(scope)
+        || (this._getCollectionStyleTokens() && this._getCollectionStyleTokens().accent)
+        || this._getSiteAccentColor();
+    },
+
+    /** Resolve collection style tokens (Rules A–E) once per render. */
+    _resolveCollectionStyleTokens: function(rootEl) {
+      var scope = this._findBlogPageSection(rootEl || this._root) || rootEl || this._root || (typeof document !== 'undefined' ? document.body : null);
+      var accentOverride = this._getConfigAccentOverride();
+      var accent = accentOverride || this._readAccentFromScope(scope) || this._getSiteAccentColor();
+      var body = this._readBodyColorFromScope(scope) || '#111111';
+      var heading = this._readHeadingColorFromScope(scope) || body;
+      var headingTypography = this._readHeadingTypographyFromScope(scope);
+      var buttonRadius = this._readPrimaryButtonRadius(scope);
+      var formRadius = this._readFormFieldRadiusFromScope(scope);
+      var buttonRadiusPx = this._firstPxValue(buttonRadius, 0);
+      var cardRadius = Math.max(0, Math.min(buttonRadiusPx, 20)) + 'px';
+      var tokens = {
+        accent: accent,
+        body: body,
+        heading: heading,
+        headingFontFamily: headingTypography.fontFamily || '',
+        headingFontWeight: headingTypography.fontWeight || '',
+        surface: this._bbReadCssVar('--tweak-blog-site-background', null)
+          || this._bbReadCssVar('--siteBackgroundColor', null)
+          || '#ffffff',
+        buttonRadius: buttonRadius,
+        formRadius: formRadius,
+        cardRadius: cardRadius,
+        textOnAccent: this._contrastTextOnAccent(accent),
+        muted: this._bodyColorMix(60),
+        extraMuted: this._bodyColorMix(40),
+        border: this._bodyColorMix(15),
+        placeholder: this._bodyColorMix(5),
+        excerpt: this._bodyColorMix(80),
+        accent15: this._withAlpha(accent, 0.15),
+        accent10: this._withAlpha(accent, 0.10),
+        metaOnImage: 'rgba(255,255,255,0.78)',
+        onDarkTitle: '#fff',
+        onDarkDeck: 'rgba(255,255,255,0.85)',
+        imageGradient: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)'
+      };
+      this._collectionStyleTokens = tokens;
+      return tokens;
+    },
+
+    _getCollectionStyleTokens: function() {
+      return this._collectionStyleTokens || this._resolveCollectionStyleTokens(this._root);
+    },
+
+    _applyCollectionTokensToElement: function(el, tokens) {
+      if (!el || !tokens) return;
+      el.style.setProperty('--bb-accent', tokens.accent);
+      el.style.setProperty('--bb-body', tokens.body);
+      el.style.setProperty('--bb-heading', tokens.heading);
+      if (tokens.headingFontFamily) el.style.setProperty('--bb-heading-font-family', tokens.headingFontFamily);
+      if (tokens.headingFontWeight) el.style.setProperty('--bb-heading-font-weight', tokens.headingFontWeight);
+      el.style.setProperty('--bb-surface', tokens.surface);
+      /* Rule D — derived neutrals resolve from --bb-body via color-mix (see #bb-collection-styles). */
+      el.style.setProperty('--bb-muted', tokens.muted);
+      el.style.setProperty('--bb-extra-muted', tokens.extraMuted);
+      el.style.setProperty('--bb-border', tokens.border);
+      el.style.setProperty('--bb-placeholder', tokens.placeholder);
+      el.style.setProperty('--bb-excerpt', tokens.excerpt);
+      el.style.setProperty('--bb-btn-radius', tokens.buttonRadius);
+      el.style.setProperty('--bb-form-radius', tokens.formRadius);
+      el.style.setProperty('--bb-card-radius', tokens.cardRadius);
+      el.style.setProperty('--bb-accent-15', tokens.accent15);
+      el.style.setProperty('--bb-accent-10', tokens.accent10);
+      el.style.setProperty('--bb-text-on-accent', tokens.textOnAccent);
+      el.style.setProperty('--bb-meta-on-image', tokens.metaOnImage);
+      el.style.setProperty('--bb-on-dark-title', tokens.onDarkTitle);
+      el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
+    },
+
+    _ensureCollectionStylesheet: function() {
+      if (typeof document === 'undefined') return;
+      var style = document.getElementById('bb-collection-styles');
+      var css =
+        '#blog-overlay-list{' +
+          '--bb-chrome-radius:6px;' +
+          '--bb-excerpt:color-mix(in srgb, var(--bb-body) 80%, transparent);' +
+          '--bb-muted:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
+          '--bb-extra-muted:color-mix(in srgb, var(--bb-body) 40%, transparent);' +
+          '--bb-border:color-mix(in srgb, var(--bb-body) 15%, transparent);' +
+          '--bb-placeholder:color-mix(in srgb, var(--bb-body) 5%, transparent);' +
+        '}' +
+        '#blog-overlay-list .bb-chrome-input{box-sizing:border-box;font-size:14px;padding:8px 12px;border:1px solid var(--bb-border,#e8e7e4);border-radius:var(--bb-chrome-radius,6px);background:#fff;color:var(--bb-body,inherit);}' +
+        '#blog-overlay-list .bb-chrome-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
+        '#blog-overlay-list .bb-filter-btn{padding:6px 14px;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;color:var(--bb-muted,#888);white-space:nowrap;flex-shrink:0;font-family:inherit;line-height:1.3;text-decoration:none;}' +
+        '#blog-overlay-list .bb-filter-btn--active{font-weight:700;color:var(--bb-body,#111);}' +
+        '#blog-overlay-list .bb-featured-badge{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);}' +
+        '#blog-overlay-list .bb-title--lg{font-size:36px;}' +
+        '#blog-overlay-list .bb-title--std{font-size:24px;}' +
+        '#blog-overlay-list .bb-title--masthead{font-size:28px;}' +
+        '#blog-overlay-list .bb-title--compact{font-size:20px;}' +
+        '#blog-overlay-list .bb-title--on-image{color:#fff;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-title--on-dark{color:var(--bb-on-dark-title,#fff);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-title--on-bg{color:var(--bb-heading,var(--bb-body,#111));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .blog-overlay-title a{color:inherit;font-family:inherit;font-weight:inherit;text-decoration:none;}' +
+        '#blog-overlay-list .bb-meta--on-bg{font-size:13px;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-meta--on-image{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-meta--on-dark{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
+        '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
+        '#blog-overlay-list .bb-category-label{font-size:13px;font-weight:normal;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
+        '#blog-overlay-list .blog-overlay-post-category--writer{text-align:center;margin-bottom:-8px;}' +
+        '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
+        '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-feature-header-stack{max-width:800px;margin-left:auto;margin-right:auto;box-sizing:border-box;gap:0;}' +
+        '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
+        '#blog-overlay-list .bb-title--post{font-size:40px;}' +
+        '#blog-overlay-list .blog-overlay-post-deck{font-size:20px;line-height:1.4;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--reporter{margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--writer{font-style:italic;text-align:center;max-width:600px;margin-left:auto;margin-right:auto;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--feature{text-align:center;max-width:700px;margin-left:auto;margin-right:auto;}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark-solid{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));}' +
+        '#blog-overlay-list .bb-post-meta--on-bg{font-size:16px;color:var(--bb-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-post-meta--on-image{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-post-meta--on-dark{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs{font-size:14px;line-height:1.4;color:var(--bb-muted,#888);}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark-solid{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
+        '#blog-overlay-list .blog-overlay-share-row{display:flex;width:100%;margin-top:-5px;margin-bottom:40px;}' +
+        '#blog-overlay-list .blog-overlay-share-row--story{margin-top:10px;}' +
+        '#blog-overlay-list .blog-overlay-share-row--feature{margin-top:0;}' +
+        '#blog-overlay-list .blog-overlay-share-links{display:flex;gap:8px;align-items:center;}' +
+        '#blog-overlay-list .blog-overlay-share-link{display:inline-flex;align-items:center;justify-content:center;line-height:0;color:var(--bb-muted,#888);text-decoration:none;}' +
+        '#blog-overlay-list .blog-overlay-share-link svg{width:16px;height:16px;display:block;}' +
+        '#blog-overlay-list .blog-overlay-share-links--on-dark .blog-overlay-share-link{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
+        '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
+        '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
+        '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-story-header-row{gap:40px;align-items:flex-start;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;align-self:flex-start;display:flex;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image img{width:100%;height:100%;object-fit:cover;display:block;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel{background:transparent;padding:0;border-radius:0;box-sizing:border-box;gap:0;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-header-categories,' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-categories-line{margin-bottom:18px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-title{margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-deck--on-dark{margin-bottom:14px;}' +
+        '#blog-overlay-list .blog-overlay-reporter-accent-rule{width:100%;height:1px;background:var(--bb-border,#e8e7e4);border:none;margin:16px 0 12px 0;}' +
+        '#blog-overlay-list .blog-overlay-reporter-header-stack{gap:0;}' +
+        '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;}' +
+        '#blog-overlay-list .bb-comments-section{border-top:1px solid var(--bb-border,#e8e7e4);padding-top:24px;margin-top:32px;}' +
+        '#blog-overlay-list .bb-form-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:transparent;padding:8px 12px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);}' +
+        '#blog-overlay-list .bb-form-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
+        '#blog-overlay-list .bb-comment-char-counter{width:100%;text-align:right;font-size:11px;color:var(--bb-muted,#888);margin:4px 0 0 0;}' +
+        '#blog-overlay-list .blog-overlay-author-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;margin:32px 0;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-author-card-avatar{width:64px;height:64px;flex-shrink:0;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bb-accent-15,rgba(91,79,232,0.15));color:var(--bb-accent,#5B4FE8);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,700);font-size:20px;}' +
+        '#blog-overlay-list .blog-overlay-author-card-avatar img{width:100%;height:100%;object-fit:cover;}' +
+        '#blog-overlay-list .blog-overlay-author-card-name{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;}' +
+        '#blog-overlay-list .blog-overlay-author-card-social a{display:inline-flex;color:var(--bb-accent,#5B4FE8);text-decoration:none;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio{font-size:15px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
+        '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
+        '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .blog-overlay-prev-next{display:flex;flex-direction:row;width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);margin-top:32px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col{flex:1 1 50%;min-width:0;padding:20px 24px;box-sizing:border-box;text-decoration:none;color:inherit;display:flex;flex-direction:column;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col--next{border-left:1px solid var(--bb-border,#e5e4e0);align-items:flex-end;text-align:right;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-extra-muted,#888);margin-bottom:8px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-category{margin-bottom:4px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-title{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+        '#blog-overlay-list .bb-toc-item{display:block;font-size:16px;line-height:1.4;color:var(--bb-muted,#888);border-left:2px solid transparent;padding:8px 12px;text-decoration:none;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-toc-item.is-active,#blog-overlay-list .bb-toc-item.blog-overlay-toc-active{color:var(--bb-accent,#5B4FE8);border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));font-weight:600;}' +
+        '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
+        '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
+        '#blog-overlay-list .bb-pagination-btn{padding:6px 12px;font-size:14px;min-width:36px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-chrome-radius,6px);background:transparent;color:var(--bb-body,#333);cursor:pointer;font-family:inherit;}' +
+        '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
+        '#blog-overlay-list .bb-load-more{padding:10px 24px;font-size:14px;font-weight:inherit;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
+        '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
+        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
+        '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row>:first-child{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child .bb-sidebar-header{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
+        '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
+        '#blog-overlay-list .blog-overlay-featured-image > div{border-radius:4px;}' +
+        '#blog-overlay-list .blog-overlay-featured-hero > div{border-radius:4px;}' +
+        '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div{width:100%;max-height:600px;aspect-ratio:16/9;overflow:hidden;border-radius:4px;}' +
+        '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div img,' +
+        '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div [role="img"]{width:100%;height:100%;object-fit:cover;display:block;}' +
+        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
+        '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
+        '#blog-overlay-list .bb-more-to-read-title{font-size:0.95rem;line-height:1.35;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
+        '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
+        '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
+        '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
+        '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
+        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:8px;padding:16px 20px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-border,#e8e7e4);}' +
+        '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-pills{scrollbar-width:none;-ms-overflow-style:none;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-pills::-webkit-scrollbar{display:none;height:0;width:0;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:40px;display:flex;align-items:center;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s ease;box-sizing:border-box;border:none;padding:0;margin:0;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);pointer-events:none;}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;justify-content:flex-start;padding-left:2px;background:linear-gradient(to right,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}';
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'bb-collection-styles';
+        style.textContent = css;
+        document.head.appendChild(style);
+      } else if (style.textContent !== css) {
+        style.textContent = css;
+      }
+    },
+
+    _createFeaturedBadge: function(opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var badge = document.createElement(opts.tagName || 'span');
+      badge.className = 'blog-overlay-featured-badge bb-featured-badge';
+      badge.textContent = opts.text || 'FEATURED';
+      if (opts.absolute) {
+        badge.style.position = 'absolute';
+        badge.style.top = opts.top || '14px';
+        badge.style.left = opts.left || '14px';
+        badge.style.zIndex = opts.zIndex || '4';
+      }
+      if (opts.marginBottom) badge.style.marginBottom = opts.marginBottom;
+      return badge;
+    },
+
+    _applyChromeInputStyle: function(el) {
+      if (!el) return;
+      el.classList.add('bb-chrome-input');
+    },
+
+    _applyFilterButtonStyle: function(btn, active) {
+      if (!btn) return;
+      btn.className = 'bb-filter-btn' + (active ? ' bb-filter-btn--active' : '');
+    },
+
+    _applyTitleStyle: function(el, opts) {
+      if (!el || !opts) return;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var sizeClass = opts.size === 'lg' ? 'bb-title--lg'
+        : opts.size === 'masthead' ? 'bb-title--masthead'
+        : opts.size === 'compact' ? 'bb-title--compact'
+        : opts.size === 'post' ? 'bb-title--post'
+        : 'bb-title--std';
+      el.classList.add(sizeClass);
+      if (opts.onDarkSolid) {
+        el.classList.add('bb-title--on-dark');
+      } else {
+        el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
+      }
+      el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
+      var tokens = this._getCollectionStyleTokens();
+      if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
+      if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
+    },
+
+    _applyMetaStyle: function(el, opts) {
+      if (!el || !opts) return;
+      var base = opts.variant === 'post' ? 'bb-post-meta' : 'bb-meta';
+      if (opts.onDarkSolid) {
+        el.classList.add(base + '--on-dark');
+      } else {
+        el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
+      }
+      var tokens = this._getCollectionStyleTokens();
+      if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
+      if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
+    },
+
+    _applyExcerptStyle: function(el, size) {
+      if (!el) return;
+      el.classList.add(size === 'lg' ? 'bb-excerpt--lg' : 'bb-excerpt--std');
+    },
+
+    _applyCategoryLabelStyle: function(el, opts) {
+      if (!el) return;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      el.classList.add('bb-category-label');
+      if (opts.onDarkSolid) el.classList.add('bb-category-label--on-dark');
+      else if (opts.onImage) el.classList.add('bb-category-label--on-image');
+      if (opts.modifier) el.classList.add(opts.modifier);
+    },
+
     _isSiteMarginDebugEnabled: function() {
       try {
         var params = new URLSearchParams(window.location.search || '');
@@ -6678,6 +7607,40 @@
         } catch (e) { /* ignore */ }
       }
       return null;
+    },
+
+    /** Spec: all featured images and thumbnails use 4px radius (avatars stay 50% circle). */
+    _applyFeaturedImageRadius: function(el) {
+      if (el && el.style) el.style.borderRadius = '4px';
+    },
+
+    /** Squarespace page-padding token for single-post wrapper calc(var(--pagePadding) + buffer). */
+    _resolvePagePaddingCssValue: function() {
+      if (typeof window === 'undefined' || !window.getComputedStyle) return '3vw';
+      var targets = [document.documentElement, document.body];
+      var root = this._root || (this.config && this.config.rootEl);
+      var section = this._findBlogPageSection(root);
+      if (section) targets.push(section);
+      var names = [
+        '--page-padding', '--page-padding-horizontal',
+        '--site-gutter', '--site-gutter-width', '--sqs-site-gutter',
+        '--outer-padding', '--inset-padding', '--content-padding-horizontal',
+        '--siteMargin', '--site-margin'
+      ];
+      for (var t = 0; t < targets.length; t++) {
+        var el = targets[t];
+        if (!el) continue;
+        try {
+          var cs = window.getComputedStyle(el);
+          for (var i = 0; i < names.length; i++) {
+            var raw = cs.getPropertyValue(names[i]);
+            if (!raw) continue;
+            raw = String(raw).trim();
+            if (raw && raw !== '0' && raw !== '0px') return raw;
+          }
+        } catch (e) { /* ignore */ }
+      }
+      return '3vw';
     },
 
     _findHeaderContentWrapper: function() {
@@ -6822,18 +7785,33 @@
 
     _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
       if (!wrapper || !wrapper.style) return;
-      var ins = this._siteContentInsets || { left: 0, right: 0 };
-      var skip = this._siteContentInsetsSkipHorizontal === true;
       var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
-      var padL = skip ? 0 : Math.max(0, ins.left || 0);
-      var padR = skip ? 0 : Math.max(0, ins.right || 0);
       wrapper.style.paddingTop = padT + 'px';
-      wrapper.style.paddingRight = padR + 'px';
       wrapper.style.paddingBottom = '16px';
-      wrapper.style.paddingLeft = padL + 'px';
       wrapper.style.boxSizing = 'border-box';
       wrapper.style.marginTop = '16px';
       wrapper.style.marginBottom = '16px';
+
+      if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        var pagePad = this._resolvePagePaddingCssValue();
+        wrapper.style.setProperty('--pagePadding', pagePad);
+        var bbBuffer = wrapper.getAttribute('data-bb-writer-layout') === '1' ? '8vw' : '2vw';
+        var horizPad = 'calc(var(--pagePadding, 3vw) + ' + bbBuffer + ')';
+        wrapper.style.paddingLeft = horizPad;
+        wrapper.style.paddingRight = horizPad;
+        wrapper.style.maxWidth = '';
+        wrapper.style.width = '';
+        wrapper.style.marginLeft = '';
+        wrapper.style.marginRight = '';
+        return;
+      }
+
+      var ins = this._siteContentInsets || { left: 0, right: 0 };
+      var skip = this._siteContentInsetsSkipHorizontal === true;
+      var padL = skip ? 0 : Math.max(0, ins.left || 0);
+      var padR = skip ? 0 : Math.max(0, ins.right || 0);
+      wrapper.style.paddingRight = padR + 'px';
+      wrapper.style.paddingLeft = padL + 'px';
       var colW = this._siteContentColumnWidth;
       if (!skip && colW && colW > 80) {
         wrapper.style.maxWidth = colW + 'px';
@@ -6854,6 +7832,15 @@
       var wrapper = this._blogOverlayWrapperEl;
       var root = this._blogOverlayInsetRoot || this._root;
       if (!wrapper || !wrapper.parentNode) return;
+      var padTop = 16;
+      try {
+        var parsed = parseInt(wrapper.style.paddingTop, 10);
+        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
+      } catch (ePad) { /* ignore */ }
+      if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        this._applySiteContentInsetsToWrapper(wrapper, padTop);
+        return;
+      }
       var prevL = (this._siteContentInsets && this._siteContentInsets.left) || 0;
       var prevR = (this._siteContentInsets && this._siteContentInsets.right) || 0;
       var prevSkip = this._siteContentInsetsSkipHorizontal === true;
@@ -6871,12 +7858,9 @@
       ) {
         return;
       }
-      var padTop = 16;
-      try {
-        var parsed = parseInt(wrapper.style.paddingTop, 10);
-        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
-      } catch (ePad) { /* ignore */ }
       this._applySiteContentInsetsToWrapper(wrapper, padTop);
+      var bleedWrapper = this._blogOverlayWrapperEl;
+      if (bleedWrapper) this._syncDigestMobileFeaturedImageBleed(bleedWrapper);
     },
 
     _teardownSiteContentInsetSync: function() {
@@ -7086,6 +8070,146 @@
       }
     },
 
+    _scheduleDigestMobileFeaturedImageBleed: function(vs) {
+      if (!vs || vs.collectionLayout !== 'digest' || !vs.digestMobileNarrow) return;
+      if (!vs.featuredPost || !vs.faCfg || !vs.faCfg.show || vs.faCfg.position !== 'inLayout') return;
+      var self = this;
+      var digestBleedSeq = self._renderSeq;
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          if (self._renderSeq !== digestBleedSeq) return;
+          var wrapperForBleed = document.getElementById('blog-overlay-list');
+          if (wrapperForBleed) self._syncDigestMobileFeaturedImageBleed(wrapperForBleed);
+        });
+      });
+    },
+
+    /** Grid/digest collection post container — explicit row/column gap avoids shorthand/longhand conflicts on desktop. */
+    _applyCollectionGridMainLayout: function(mainEl, opts) {
+      if (!mainEl || !mainEl.style) return;
+      var collectionMobileGridNarrow = Boolean(opts && opts.collectionMobileGridNarrow);
+      var gridMobileNarrow = Boolean(opts && opts.gridMobileNarrow);
+      var gridColsEffective = opts && opts.gridColsEffective != null ? opts.gridColsEffective : 3;
+      mainEl.style.display = 'grid';
+      mainEl.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
+      mainEl.style.width = '100%';
+      mainEl.style.maxWidth = '100%';
+      mainEl.style.minWidth = '0';
+      mainEl.style.boxSizing = 'border-box';
+      var digestMobileNarrow = Boolean(opts && opts.digestMobileNarrow);
+      if (collectionMobileGridNarrow && digestMobileNarrow) {
+        mainEl.style.overflow = 'visible';
+        mainEl.style.overflowX = 'visible';
+      } else if (collectionMobileGridNarrow) {
+        mainEl.style.overflow = 'hidden';
+      } else {
+        mainEl.style.overflow = '';
+      }
+      mainEl.style.marginLeft = '';
+      mainEl.style.marginRight = '';
+      mainEl.style.gap = '';
+      if (collectionMobileGridNarrow) {
+        mainEl.style.paddingLeft = '12px';
+        mainEl.style.paddingRight = '12px';
+        if (gridMobileNarrow) {
+          mainEl.style.rowGap = '8px';
+          mainEl.style.columnGap = '16px';
+        } else {
+          mainEl.style.rowGap = '16px';
+          mainEl.style.columnGap = '16px';
+        }
+      } else {
+        mainEl.style.paddingLeft = '';
+        mainEl.style.paddingRight = '';
+        mainEl.style.rowGap = '24px';
+        mainEl.style.columnGap = '24px';
+      }
+    },
+
+    /** The Story post template: split header (image left or right), no sidebars. */
+    _isStoryPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || (ph.imagePosition !== 'leftOfInfo' && ph.imagePosition !== 'rightOfInfo')) return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return !leftOn && !rightOn;
+    },
+
+    /** The Reporter post template: split header (image left or right), body row with right sidebar. */
+    _isReporterPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || (ph.imagePosition !== 'leftOfInfo' && ph.imagePosition !== 'rightOfInfo')) return false;
+      return !!(cfg.rightSidebar && cfg.rightSidebar.show === true);
+    },
+
+    /** The Feature post template: centered stacked full-bleed header with dual sidebars. */
+    _isFeaturePostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || ph.imagePosition !== 'fullBleed' || ph.contentAlignment !== 'center') return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return leftOn && rightOn;
+    },
+
+    /** The Publisher post template: full-bleed header, single right sidebar. */
+    _isPublisherPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || ph.imagePosition !== 'fullBleed') return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return !leftOn && rightOn;
+    },
+
+    /** The Writer post template: centered minimal header, no sidebars, image below info. */
+    _isWriterPostLayout: function(cfg) {
+      if (!cfg || typeof cfg !== 'object') return false;
+      var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
+      if (!ph || ph.imagePosition !== 'belowInfo') return false;
+      var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
+      var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
+      return !leftOn && !rightOn;
+    },
+
+    /** Writer post header: short decorative rule between deck and meta. */
+    _createWriterPostHeaderDivider: function(align) {
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-writer-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      if (align === 'left') {
+        hr.style.marginLeft = '0';
+      } else if (align === 'right') {
+        hr.style.marginRight = '0';
+      }
+      return hr;
+    },
+
+    /** Story template: header zone background from postHeader.backgroundColor (default black). */
+    _resolveStoryHeaderBackgroundColor: function(postHeaderCfg) {
+      var raw = postHeaderCfg && typeof postHeaderCfg.backgroundColor === 'string' ? postHeaderCfg.backgroundColor.trim() : '';
+      if (/^#[0-9a-fA-F]{3}$/.test(raw) || /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+      return '#000000';
+    },
+
+    /** Reporter post header: full-width decorative rule above meta row. */
+    _createReporterPostHeaderDivider: function() {
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-reporter-accent-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      return hr;
+    },
+
+    /** Story post header (on-dark): full-width decorative rule between deck and meta. */
+    _createStoryPostHeaderDivider: function() {
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-story-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      return hr;
+    },
+
     /** Phones, narrow overlay roots, and Configure mobile preview (matches 768px md breakpoint). */
     _isNarrowCollectionViewport: function() {
       try {
@@ -7114,7 +8238,6 @@
       if (!fill || !article) return;
 
       var scrollY, viewportHeight, postTop, postHeight;
-      var position = (this.config && this.config.progressBarPosition) || 'top';
       if (this._previewMode) {
         var scrollContainer = this._getScrollContainer();
         if (!scrollContainer) return;
@@ -7126,14 +8249,9 @@
         postHeight = article.offsetHeight;
       } else {
         scrollY = window.scrollY || document.documentElement.scrollTop;
-        if (position === 'top') {
-          var navbarHeight = this._getNavbarOffset();
-          track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
-          track.style.bottom = 'auto';
-        } else {
-          track.style.top = 'auto';
-          track.style.bottom = '10px';
-        }
+        var navbarHeight = this._getNavbarOffset();
+        track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
+        track.style.bottom = 'auto';
         viewportHeight = window.innerHeight;
         var rect = article.getBoundingClientRect();
         postTop = rect.top + scrollY;
@@ -7337,9 +8455,10 @@
         });
       }
       var paginationCfg = cfgForSort && cfgForSort.pagination && typeof cfgForSort.pagination === 'object' ? cfgForSort.pagination : null;
-      var usePagination = !isSinglePostForCfg && paginationCfg && paginationCfg.show === true;
-      var paginationMode = usePagination && (paginationCfg.mode === 'infiniteScroll') ? 'infiniteScroll' : 'pages';
-      var postsPerPage = usePagination ? Math.max(1, parseInt(paginationCfg.postsPerPage, 10) || 10) : 0;
+      /** Collection pages always paginate so long lists remain navigable. */
+      var usePagination = !isSinglePostForCfg;
+      var paginationMode = usePagination && paginationCfg && paginationCfg.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages';
+      var postsPerPage = usePagination ? Math.max(1, parseInt(paginationCfg && paginationCfg.postsPerPage, 10) || 10) : 0;
       var totalFiltered = sortedItems.length;
       var totalPages = usePagination && postsPerPage > 0 && paginationMode === 'pages' ? Math.max(1, Math.ceil(totalFiltered / postsPerPage)) : 1;
       var currentPage = Math.min(Math.max(1, this._currentPage || 1), totalPages);
@@ -7365,7 +8484,7 @@
       var isSinglePost = displayItems.length === 1 && selectedIndex >= 0 && !hasAnyFilter;
       var levelCfg = isSinglePost ? (baseCfg.postConfig && typeof baseCfg.postConfig === 'object' ? baseCfg.postConfig : baseCfg) : (baseCfg.collectionConfig && typeof baseCfg.collectionConfig === 'object' ? baseCfg.collectionConfig : baseCfg);
       var cfg = Object.assign({}, baseCfg, levelCfg);
-      var recentPostsCount = Math.max(1, Math.min(50, parseInt(cfg.recentPostsCount, 10) || 5));
+      var recentPostsCount = Math.max(1, Math.min(3, parseInt(cfg.recentPostsCount, 10) || 3));
       var leftSidebarCfg = cfg.leftSidebar && typeof cfg.leftSidebar === 'object' ? cfg.leftSidebar : null;
       var rightSidebarCfg = cfg.rightSidebar && typeof cfg.rightSidebar === 'object' ? cfg.rightSidebar : null;
       var headerContentCfg = cfg.headerContent && typeof cfg.headerContent === 'object' ? cfg.headerContent : null;
@@ -7375,70 +8494,26 @@
       var tableOfContentsPosition = (cfg.tableOfContentsPosition === 'right') ? 'right' : 'left';
       var showRecentPostsSidebar = Boolean(cfg.showRecentPostsSidebar);
       var sidebarPosition = (cfg.sidebarPosition === 'right') ? 'right' : 'left';
+      var autoSidebarWidth = isSinglePost ? 300 : 220;
       if (!useLevelConfig) {
         if (!leftSidebarCfg && cfg.showTableOfContents) {
-          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!rightSidebarCfg && cfg.showTableOfContents) {
-          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : leftSidebarCfg;
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : leftSidebarCfg;
         }
         if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : rightSidebarCfg;
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : rightSidebarCfg;
         }
       } else {
-        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
-        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
-      var stripPaywalledLoggedOutChrome =
-        paywalledLoggedOut;
-      if (stripPaywalledLoggedOutChrome) {
-        var lsW = leftSidebarCfg && typeof leftSidebarCfg.width === 'number' ? leftSidebarCfg.width : 240;
-        var lsS = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? leftSidebarCfg.spaceAbove : 0;
-        var lsSticky = Boolean(leftSidebarCfg && leftSidebarCfg.sticky === true);
-        var rsW = rightSidebarCfg && typeof rightSidebarCfg.width === 'number' ? rightSidebarCfg.width : 240;
-        var rsS = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? rightSidebarCfg.spaceAbove : 0;
-        var rsSticky = Boolean(rightSidebarCfg && rightSidebarCfg.sticky === true);
-        var hcH = headerContentCfg && typeof headerContentCfg.height === 'number' ? headerContentCfg.height : 48;
-        var fcP = footerContentCfg && typeof footerContentCfg.topPadding === 'number' ? footerContentCfg.topPadding : 16;
-        leftSidebarCfg = { show: false, modules: [], moduleOrder: [], width: lsW, spaceAbove: lsS, sticky: lsSticky };
-        rightSidebarCfg = { show: false, modules: [], moduleOrder: [], width: rsW, spaceAbove: rsS, sticky: rsSticky };
-        headerContentCfg = { show: false, modules: [], moduleOrder: [], height: hcH };
-        footerContentCfg = { show: false, modules: [], moduleOrder: [], topPadding: fcP };
-        cfg = Object.assign({}, cfg, {
-          leftSidebar: leftSidebarCfg,
-          rightSidebar: rightSidebarCfg,
-          headerContent: headerContentCfg,
-          footerContent: footerContentCfg
-        });
-        if (isSinglePost) {
-          cfg = Object.assign({}, cfg, { socialMediaLinks: { show: false, platforms: [] } });
-          if (cfg.postHeader && typeof cfg.postHeader === 'object') {
-            cfg = Object.assign({}, cfg, {
-              postHeader: Object.assign({}, cfg.postHeader, {
-                showBreadcrumbs: false,
-                showTags: false,
-                showCategories: false
-              })
-            });
-          }
-          if (cfg.postModules && typeof cfg.postModules === 'object') {
-            var pmStrip = Object.assign({}, cfg.postModules);
-            for (var pmK in pmStrip) {
-              if (!Object.prototype.hasOwnProperty.call(pmStrip, pmK)) continue;
-              var pmEnt = pmStrip[pmK];
-              if (pmEnt && typeof pmEnt === 'object' && 'enabled' in pmEnt) {
-                pmStrip[pmK] = Object.assign({}, pmEnt, { enabled: false });
-              }
-            }
-            cfg = Object.assign({}, cfg, { postModules: pmStrip });
-          }
-        }
-      }
       if (self._isTocDebugEnabled()) {
         try {
           var pmToc = cfg.postModules && cfg.postModules.tableOfContents ? cfg.postModules.tableOfContents : null;
@@ -7490,7 +8565,9 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
-      if (viewerMode === 'loggedOut') showReadingTime = false;
+      /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
+      var showPostExcerpt = cfg.showPostExcerpt !== false;
+      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
@@ -7554,7 +8631,7 @@
           selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
           paywallFullActive: paywallFullActiveForRender,
           paywallShowFooter: paywalledLoggedOut && !isSinglePost,
-          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && !self._isPaywallPublicPreviewPost(selectedPostForLog),
+          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && self._shouldGateSinglePostBody(selectedPostForLog),
           paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
           paywallDetectionState: rawCfg.paywallDetectionState || null,
           paywallMode: rawCfg.paywallMode || null
@@ -7609,6 +8686,7 @@
         showDate: showDate,
         showAuthor: showAuthor,
         showReadingTime: showReadingTime,
+        showPostExcerpt: showPostExcerpt,
         fiCfg: fiCfg,
         faCfg: faCfg,
         collectionLayout: collectionLayout,
@@ -7624,7 +8702,7 @@
         categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
         paywallFullActive: paywallFullActiveForRender,
         paywallShowFooter: paywalledLoggedOut && !isSinglePost,
-        paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && !self._isPaywallPublicPreviewPost(displayItems[0]),
+        paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && self._shouldGateSinglePostBody(displayItems[0]),
         paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
       };
     },
@@ -7736,7 +8814,6 @@
 
     _buildCollectionPaginationNav: function(vs) {
       var self = this;
-      var accentPag = self._getSiteAccentColor();
       var usePagination = vs.usePagination;
       var paginationMode = vs.paginationMode;
       var totalFiltered = vs.totalFiltered;
@@ -7763,15 +8840,8 @@
           if (self._infiniteScrollLoaded < totalFiltered) {
             var loadMoreBtn = document.createElement('button');
             loadMoreBtn.type = 'button';
+            loadMoreBtn.className = 'bb-load-more';
             loadMoreBtn.textContent = 'Load more';
-            loadMoreBtn.style.padding = '8px 24px';
-            loadMoreBtn.style.fontSize = '0.9rem';
-            loadMoreBtn.style.fontWeight = '500';
-            loadMoreBtn.style.border = '1px solid #ddd';
-            loadMoreBtn.style.borderRadius = '6px';
-            loadMoreBtn.style.background = accentPag;
-            loadMoreBtn.style.color = 'white';
-            loadMoreBtn.style.cursor = 'pointer';
             loadMoreBtn.onmouseover = function() { loadMoreBtn.style.filter = 'brightness(0.92)'; };
             loadMoreBtn.onmouseout = function() { loadMoreBtn.style.filter = ''; };
             loadMoreBtn.onclick = function() {
@@ -7784,12 +8854,8 @@
           }
           var shownCount = Math.min(self._infiniteScrollLoaded, totalFiltered);
           var statusLine = document.createElement('p');
-          statusLine.className = 'blog-overlay-pagination-infinite-status';
+          statusLine.className = 'blog-overlay-pagination-infinite-status bb-pagination-status';
           statusLine.textContent = 'Showing ' + shownCount + ' ' + (shownCount === 1 ? 'post' : 'posts') + ' of ' + totalFiltered;
-          statusLine.style.margin = '0';
-          statusLine.style.fontSize = '0.85rem';
-          statusLine.style.color = '#666';
-          statusLine.style.textAlign = 'center';
           statusLine.setAttribute('aria-live', 'polite');
           paginationEl.appendChild(statusLine);
         } else {
@@ -7802,17 +8868,10 @@
           var makePageBtn = function(pageNum, isCurrent) {
             var btn = document.createElement('button');
             btn.type = 'button';
+            btn.className = 'bb-pagination-btn' + (isCurrent ? ' bb-pagination-btn--active' : '');
             btn.textContent = String(pageNum);
             btn.setAttribute('aria-label', 'Page ' + pageNum);
             btn.setAttribute('aria-current', isCurrent ? 'page' : 'false');
-            btn.style.padding = '6px 12px';
-            btn.style.fontSize = '0.9rem';
-            btn.style.minWidth = '36px';
-            btn.style.border = '1px solid ' + (isCurrent ? accentPag : '#ddd');
-            btn.style.borderRadius = '6px';
-            btn.style.background = isCurrent ? accentPag : 'white';
-            btn.style.cursor = isCurrent ? 'default' : 'pointer';
-            btn.style.color = isCurrent ? 'white' : '#333';
             if (!isCurrent) {
               btn.onclick = function() {
                 self._currentPage = pageNum;
@@ -7825,8 +8884,8 @@
             var span = document.createElement('span');
             span.textContent = '…';
             span.style.padding = '0 4px';
-            span.style.fontSize = '0.9rem';
-            span.style.color = '#999';
+            span.style.fontSize = '14px';
+            span.style.color = 'var(--bb-muted,#999)';
             pagBtns.appendChild(span);
           };
           var pageSet = {};
@@ -7883,6 +8942,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var showPostExcerpt = vs.showPostExcerpt !== false;
       var hasAnyFilter = vs.hasAnyFilter;
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
       var siteAccentForPostCats = self._getSiteAccentColor();
@@ -7904,8 +8964,8 @@
           listRowsMobileCompact = typeof window !== 'undefined' && window.innerWidth <= 767;
         }
       }
-      /** Digest mobile: inset images (2-col grid); featured hero no longer viewport-bleeds on narrow viewports. */
-      var digestMobileFullBleed = false;
+      /** Digest mobile: featured hero image full-bleed; 2-col grid thumbnails stay inset. */
+      var digestMobileFullBleed = digestMobileNarrow;
       var postHeaderCfg = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
       var phImagePos = postHeaderCfg && (postHeaderCfg.imagePosition === 'fullBleed' || postHeaderCfg.imagePosition === 'leftOfInfo' || postHeaderCfg.imagePosition === 'rightOfInfo' || postHeaderCfg.imagePosition === 'belowInfo') ? postHeaderCfg.imagePosition : 'fullBleed';
       var phAlign = postHeaderCfg && (postHeaderCfg.contentAlignment === 'left' || postHeaderCfg.contentAlignment === 'center' || postHeaderCfg.contentAlignment === 'right') ? postHeaderCfg.contentAlignment : 'left';
@@ -7913,9 +8973,17 @@
         ? Math.min(150, Math.max(0, Math.round(postHeaderCfg.sideGap)))
         : 0;
       var phShowBreadcrumbs = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showBreadcrumbs);
-      var phShowTags = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showTags);
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
+      var phShowDecorativeAccentLine = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showDecorativeAccentLine);
+      var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
+      var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
+      var sidebarRowPostLayout = isSinglePost && (
+        self._isFeaturePostLayout(cfg) ||
+        self._isReporterPostLayout(cfg) ||
+        self._isPublisherPostLayout(cfg)
+      );
+      var postHeaderAccentDividerLayout = phShowDecorativeAccentLine && (writerPostLayout || storyPostLayout);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
@@ -7942,15 +9010,27 @@
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
         var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : fiCfg.aspectRatio === '21:8' ? '21:8' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
-        /** Reporter (rightOfInfo header): always cover crop regardless of saved aspectBehavior. */
-        var reporterPostHeaderCrop = isSinglePost && phImagePos === 'rightOfInfo' && fiShow;
-        if (reporterPostHeaderCrop) {
+        /** Reporter (split header): 3:2 contained image regardless of saved aspectBehavior. */
+        var reporterPostHeaderLayout = isSinglePost && self._isReporterPostLayout(cfg);
+        var reporterPostHeaderImage = reporterPostHeaderLayout && fiShow;
+        if (reporterPostHeaderImage) {
+          fiRatio = '3:2';
+        }
+        /** Story (split header): cover crop at 4:3 (spec). */
+        var storyPostHeaderCrop = isSinglePost && storyPostLayout && fiShow;
+        if (storyPostHeaderCrop) {
           fiAspect = 'cropped';
+          fiRatio = '4:3';
+        }
+        /** Feature (stacked fullBleed header): cover crop at 16:9 (spec). */
+        var featureStackedHeaderCrop = isSinglePost && self._isFeaturePostLayout(cfg) && phImagePos === 'fullBleed' && postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked' && fiShow;
+        if (featureStackedHeaderCrop) {
+          fiAspect = 'cropped';
+          fiRatio = '16:9';
         }
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
-        var fiRounded = (fiCfg.roundedCorners === 'small' ? 'small' : fiCfg.roundedCorners === 'large' ? 'large' : 'off');
         var fiShadow = Boolean(fiCfg.shadow);
         var fiCaption = Boolean(fiCfg.showCaption !== false);
         var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
@@ -7964,15 +9044,20 @@
         if (displayIdx >= 0) article.setAttribute('data-display-index', String(displayIdx));
         article.style.marginBottom = '24px';
         article.style.paddingBottom = '24px';
+        if (sidebarRowPostLayout) {
+          article.classList.add('blog-overlay-post-article--sidebar-row');
+          article.style.marginTop = '0';
+          article.style.paddingTop = '0';
+        }
         if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
           article.style.marginBottom = '12px';
           article.style.paddingBottom = '12px';
         }
         if (!isSinglePost && collectionLayout === 'listRows') {
-          article.style.borderBottom = '1px solid #e8e6e3';
+          article.classList.add('blog-overlay-list-rows-row');
           article.style.marginBottom = '0';
           if (listRowsMobileCompact) {
-            article.style.paddingTop = '7px';
+            article.style.paddingTop = j === 0 ? '4px' : '7px';
             article.style.paddingBottom = '7px';
             article.style.paddingLeft = '8px';
             article.classList.add('blog-overlay-list-rows-mobile-compact');
@@ -7981,7 +9066,7 @@
             article.style.paddingBottom = '12px';
           }
           if (j === displayItemsForLoop.length - 1) {
-            article.style.borderBottom = 'none';
+            article.classList.add('blog-overlay-list-rows-row--last');
           }
         }
         if (navbarOffset > 0) {
@@ -7989,7 +9074,7 @@
         }
         if (isFeaturedInLayout) article.classList.add('blog-overlay-featured-article');
         if (isFeaturedInLayout && !isSinglePost) {
-          article.style.marginTop = '12px';
+          article.style.marginTop = (collectionLayout === 'listRows' && listRowsMobileCompact && j === 0) ? '6px' : '12px';
         }
         if (isFeaturedInLayout && (collectionLayout === 'grid' || collectionLayout === 'digest')) {
           article.style.gridColumn = '1 / span ' + gridColsEffective;
@@ -7999,6 +9084,10 @@
           article.style.width = '100%';
           article.style.maxWidth = '100%';
           article.style.boxSizing = 'border-box';
+          if (!collectionMobileGridNarrow) {
+            article.style.marginBottom = '0';
+            article.style.paddingBottom = '0';
+          }
         }
         if (digestMobileNarrow && isFeaturedInLayout && collectionLayout === 'digest') {
           article.style.overflow = 'visible';
@@ -8043,18 +9132,27 @@
           rowEl = document.createElement('div');
           rowEl.style.display = 'flex';
           rowEl.style.flexDirection = (isSinglePost ? phImagePos === 'rightOfInfo' : fiLayout === 'rightJustified') ? 'row-reverse' : 'row';
-          rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '10px' : '20px';
-          rowEl.style.alignItems =
-            (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && phShowBreadcrumbs)
-              ? 'flex-start'
-              : ((!isSinglePost && collectionLayout === 'listRows')
-                  ? 'center'
-                  : (isSinglePost ? phVerticalAlignItems : 'flex-start'));
-          rowEl.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows')
-            ? '0'
-            : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
+          if (storyPostLayout) {
+            rowEl.classList.add('blog-overlay-story-header-row');
+            rowEl.style.gap = '40px';
+            rowEl.style.alignItems = 'flex-start';
+            rowEl.style.marginBottom = '0';
+          } else {
+            rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact)
+              ? '10px'
+              : (isSinglePost && phSideImageGapPx > 0 ? (phSideImageGapPx + 'px') : '20px');
+            rowEl.style.alignItems =
+              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && phShowBreadcrumbs)
+                ? 'flex-start'
+                : ((!isSinglePost && collectionLayout === 'listRows')
+                    ? 'center'
+                    : (isSinglePost ? phVerticalAlignItems : 'flex-start'));
+            rowEl.style.marginBottom = (!isSinglePost && collectionLayout === 'listRows')
+              ? '0'
+              : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
+          }
           contentEl = document.createElement('div');
-          contentEl.style.flex = '1';
+          contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
           contentEl.style.minWidth = '0';
           if (!isSinglePost && collectionLayout === 'listRows') {
             contentEl.style.display = 'flex';
@@ -8063,13 +9161,6 @@
             contentEl.style.alignItems = 'flex-start';
             contentEl.style.alignSelf = 'center';
             contentEl.style.gap = '2px';
-          }
-          if (isSinglePost) {
-            if (phImagePos === 'rightOfInfo' && phAlign === 'left') {
-              contentEl.style.marginLeft = '16px';
-            } else if (phImagePos === 'leftOfInfo' && phAlign === 'right') {
-              contentEl.style.marginRight = '16px';
-            }
           }
         }
         var appendTo = isSideBySide ? contentEl : article;
@@ -8082,17 +9173,26 @@
         var stackedFullBleedWrap = null;
         var stackedHeaderBlock = null;
         if (singlePostFullBleedHero) {
+          var publisherFullBleedHero = isSinglePost && self._isPublisherPostLayout(cfg);
           fullBleedHeaderBlock = document.createElement('div');
           fullBleedHeaderBlock.className = 'blog-overlay-post-header-fullbleed';
           fullBleedHeaderBlock.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
-          fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
+          if (publisherFullBleedHero) {
+            fullBleedHeaderBlock.classList.add('blog-overlay-post-header-fullbleed--publisher');
+            fullBleedHeaderBlock.style.height = '500px';
+            fullBleedHeaderBlock.style.boxSizing = 'border-box';
+          } else {
+            fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
+          }
           /* Full-bleed post hero: viewport width (exception to site side margins). */
           self._applyViewportFullBleed(fullBleedHeaderBlock);
           fullBleedHeaderBlock.style.position = 'relative';
           fullBleedHeaderBlock.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           fullBleedHeaderBlock.style.display = 'flex';
           fullBleedHeaderBlock.style.alignItems = phVerticalAlignItems;
-          fullBleedHeaderBlock.style.padding = '48px 24px 32px';
+          if (!publisherFullBleedHero) {
+            fullBleedHeaderBlock.style.padding = '48px 24px 32px';
+          }
           fullBleedHeaderBlock.style.position = 'relative';
           var overlay = document.createElement('div');
           overlay.style.position = 'absolute';
@@ -8124,19 +9224,23 @@
           }
         }
         if (singlePostFullBleedStacked) {
+          var featureStackedHero = isSinglePost && self._isFeaturePostLayout(cfg);
           stackedFullBleedWrap = document.createElement('div');
           stackedFullBleedWrap.className = 'blog-overlay-featured-image blog-overlay-featured-image-stacked-fullbleed';
+          if (featureStackedHero) {
+            stackedFullBleedWrap.classList.add('blog-overlay-featured-image-stacked-fullbleed--feature');
+          }
           stackedFullBleedWrap.style.marginBottom = (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           self._applyViewportFullBleed(stackedFullBleedWrap);
           var stackFiInner = document.createElement('div');
           stackFiInner.style.overflow = 'hidden';
           stackFiInner.style.position = 'relative';
-          if (fiRounded === 'small') stackFiInner.style.borderRadius = '6px';
-          else if (fiRounded === 'large') stackFiInner.style.borderRadius = '12px';
+          self._applyFeaturedImageRadius(stackFiInner);
           if (fiShadow) stackFiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-          if (fiFixedAspectCrop) {
-            stackFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
+          if (fiFixedAspectCrop || featureStackedHero) {
+            stackFiInner.style.aspectRatio = featureStackedHero ? '16 / 9' : fiRatio.replace(':', ' / ');
             stackFiInner.style.width = '100%';
+            if (featureStackedHero) stackFiInner.style.maxHeight = '600px';
           }
           if (imgUrl) {
             var stackImg = document.createElement('img');
@@ -8145,7 +9249,7 @@
             stackImg.style.width = '100%';
             stackImg.style.height = '100%';
             stackImg.style.display = 'block';
-            stackImg.style.objectFit = fiFixedAspectCrop ? 'cover' : 'contain';
+            stackImg.style.objectFit = (fiFixedAspectCrop || featureStackedHero) ? 'cover' : 'contain';
             stackImg.style.objectPosition = 'center';
             stackImg.onerror = function() { if (stackedFullBleedWrap) stackedFullBleedWrap.style.display = 'none'; };
             stackFiInner.appendChild(stackImg);
@@ -8155,8 +9259,12 @@
             stackPh.setAttribute('aria-label', post.title || 'Post');
             stackPh.style.width = '100%';
             stackPh.style.height = '100%';
-            stackPh.style.minHeight = '120px';
+            stackPh.style.minHeight = featureStackedHero ? '0' : '120px';
             stackPh.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
+            if (featureStackedHero) {
+              stackPh.style.backgroundSize = 'cover';
+              stackPh.style.backgroundPosition = 'center';
+            }
             stackFiInner.appendChild(stackPh);
           }
           stackedFullBleedWrap.appendChild(stackFiInner);
@@ -8180,16 +9288,32 @@
               if (digestMobileFullBleed && isFeaturedInLayout) {
                 fiWrap.setAttribute('data-digest-viewport-bleed', '1');
                 fiWrap.style.marginTop = '0';
+                if (collectionMobileGridNarrow) {
+                  var digestMainPad = 12;
+                  fiWrap.style.width = 'calc(100% + ' + (digestMainPad * 2) + 'px)';
+                  fiWrap.style.maxWidth = 'none';
+                  fiWrap.style.marginLeft = (-digestMainPad) + 'px';
+                  fiWrap.style.marginRight = (-digestMainPad) + 'px';
+                  fiWrap.style.boxSizing = 'border-box';
+                }
               } else {
                 fiWrap.style.marginLeft = '0';
                 fiWrap.style.marginRight = '0';
                 fiWrap.style.width = '100%';
+                fiWrap.style.maxWidth = '100%';
+                fiWrap.style.boxSizing = 'border-box';
+                fiWrap.removeAttribute('data-digest-viewport-bleed');
               }
             } else {
               self._applyViewportFullBleed(fiWrap);
             }
           } else if (isSideBySide) {
-            if (collectionLayout === 'listRows' && listRowsMobileCompact) {
+            if (storyPostLayout) {
+              fiWrap.classList.add('blog-overlay-story-featured-image');
+              fiWrap.style.flex = '0 0 58%';
+            } else if (reporterPostHeaderLayout) {
+              fiWrap.style.flex = '0 0 60%';
+            } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
               fiWrap.style.width = '80px';
               fiWrap.style.maxWidth = '80px';
@@ -8197,22 +9321,20 @@
               fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             }
             fiWrap.style.minWidth = '0';
-            fiWrap.style.alignSelf = (!isSinglePost && collectionLayout === 'listRows') ? 'center' : 'flex-start';
-            if (isSinglePost && phSideImageGapPx > 0) {
-              if (phImagePos === 'rightOfInfo') fiWrap.style.marginRight = phSideImageGapPx + 'px';
-              else if (phImagePos === 'leftOfInfo') fiWrap.style.marginLeft = phSideImageGapPx + 'px';
-            }
+            fiWrap.style.alignSelf = storyPostLayout
+              ? 'flex-start'
+              : ((!isSinglePost && collectionLayout === 'listRows') ? 'center' : 'flex-start');
           }
           var fiInner = document.createElement('div');
           fiInner.style.overflow = 'hidden';
           fiInner.style.position = 'relative';
           var digestFeaturedViewportBleed = collectionLayout === 'digest' && isFeaturedInLayout && digestMobileFullBleed;
-          if (digestFeaturedViewportBleed) {
-            fiInner.style.borderRadius = '0';
-          } else if (fiRounded === 'small') fiInner.style.borderRadius = '6px';
-          else if (fiRounded === 'large') fiInner.style.borderRadius = '12px';
+          self._applyFeaturedImageRadius(fiInner);
           if (fiShadow && !digestFeaturedViewportBleed) fiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-          if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
+          if (reporterPostHeaderImage) {
+            fiInner.style.aspectRatio = '3 / 2';
+            fiInner.style.width = '100%';
+          } else if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
             fiInner.style.aspectRatio = (collectionLayout === 'listRows' && listRowsMobileCompact)
               ? '4 / 3'
               : fiRatio.replace(':', ' / ');
@@ -8228,7 +9350,7 @@
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.display = 'block';
-            img.style.objectFit = (fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
+            img.style.objectFit = reporterPostHeaderImage ? 'contain' : ((fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain');
             img.style.objectPosition = 'center';
             img.onerror = function() { fiWrap.style.display = 'none'; };
             fiInner.appendChild(img);
@@ -8281,6 +9403,17 @@
           postInfoWrap.style.textAlign = textAlignStyle || 'left';
           postInfoWrap.style.gap = '8px';
           postInfoWrap.style.width = '100%';
+          if (self._isFeaturePostLayout(cfg)) {
+            postInfoWrap.classList.add('blog-overlay-feature-header-stack');
+            postInfoWrap.style.gap = '0';
+          }
+          if (storyPostLayout) {
+            postInfoWrap.classList.add('blog-overlay-story-info-panel');
+            postInfoWrap.style.gap = '0';
+          }
+          if (reporterPostHeaderLayout) {
+            postInfoWrap.classList.add('blog-overlay-reporter-header-stack');
+          }
         }
         var headlineMount = postInfoWrap || digestFeaturedIntro || appendTo;
         var postBreadcrumbNav = null;
@@ -8288,8 +9421,10 @@
           postBreadcrumbNav = document.createElement('nav');
           postBreadcrumbNav.setAttribute('aria-label', 'Breadcrumb');
           var bcNav = postBreadcrumbNav;
-          bcNav.style.fontSize = '0.85rem';
-          bcNav.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.9)' : '#666';
+          bcNav.className = 'blog-overlay-post-breadcrumbs' + (
+            storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
+              : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
+          );
           bcNav.style.setProperty('display', 'flex', 'important');
           bcNav.style.setProperty('flex-direction', 'row', 'important');
           bcNav.style.flexWrap = 'wrap';
@@ -8352,49 +9487,37 @@
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
         }
 
-        if (isSinglePost && (phShowTags || phShowCategories)) {
-          var tagsCatsWrap = document.createElement('div');
-          tagsCatsWrap.className = 'blog-overlay-tags-categories';
-          tagsCatsWrap.style.setProperty('display', 'flex', 'important');
-          tagsCatsWrap.style.setProperty('flex-direction', 'row', 'important');
-          tagsCatsWrap.style.flexWrap = 'wrap';
-          tagsCatsWrap.style.gap = '6px';
-          tagsCatsWrap.style.marginBottom = '8px';
-          tagsCatsWrap.style.width = '100%';
-          tagsCatsWrap.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
-          var makeTagEl = function(label, href, onClick) {
-            var span = document.createElement('a');
-            span.textContent = label;
-            span.href = href || '#';
-            span.style.setProperty('display', 'inline-block', 'important');
-            span.style.fontSize = '0.65rem';
-            span.style.fontWeight = '600';
-            span.style.letterSpacing = '0.05em';
-            span.style.textTransform = 'uppercase';
-            span.style.padding = '0 6px';
-            span.style.borderRadius = '3px';
-            span.style.background = singlePostFullBleedHero ? 'rgba(255,255,255,0.2)' : '#f0efec';
-            span.style.color = singlePostFullBleedHero ? '#fff' : '#555';
-            span.style.textDecoration = 'none';
-            span.style.setProperty('cursor', 'pointer', 'important');
-            if (onClick) span.onclick = function(e) { e.preventDefault(); onClick(); };
-            return span;
-          };
-          if (phShowCategories) {
-            var postCatsForTags = self._getPostCategories(post);
-            for (var cti = 0; cti < postCatsForTags.length; cti++) {
-              var cat = postCatsForTags[cti];
-              tagsCatsWrap.appendChild(makeTagEl(cat, '#', (function(c) { return function() { self._categoryFilter = [c]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(cat)));
+        var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
+        var featurePostLayoutForCat = isSinglePost && self._isFeaturePostLayout(cfg);
+        /** Publisher ribbon is template-locked; other templates respect postHeader.showCategories. */
+        var postHeaderCategoryLayout = isSinglePost && (
+          publisherPostLayout ||
+          (phShowCategories && (featurePostLayoutForCat || writerPostLayout || storyPostLayout))
+        );
+        if (postHeaderCategoryLayout) {
+          var postHeaderCatModifier = publisherPostLayout ? 'blog-overlay-post-category--ribbon'
+            : writerPostLayout ? 'blog-overlay-post-category--writer'
+            : storyPostLayout ? 'blog-overlay-post-category--story'
+            : 'blog-overlay-post-category--feature';
+          var postHeaderCatsLine = self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, false, {
+            onDark: singlePostFullBleedHero,
+            onDarkSolid: storyPostLayout
+          });
+          if (postHeaderCatsLine) {
+            postHeaderCatsLine.classList.add('blog-overlay-post-header-categories');
+            if (storyPostLayout) {
+              postHeaderCatsLine.style.marginBottom = '18px';
+            } else {
+              postHeaderCatsLine.style.marginBottom = '12px';
             }
-          }
-          if (phShowTags) {
-            var postTagsForTags = self._getPostTags(post);
-            for (var tti = 0; tti < postTagsForTags.length; tti++) {
-              var tag = postTagsForTags[tti];
-              tagsCatsWrap.appendChild(makeTagEl(tag, '#', (function(t) { return function() { self._tagFilter = [t]; self._currentPage = 1; window.location.hash = ''; self._renderContent(self.items); }; })(tag)));
+            postHeaderCatsLine.style.justifyContent = phAlign === 'center' ? 'center' : phAlign === 'right' ? 'flex-end' : 'flex-start';
+            postHeaderCatsLine.style.width = '100%';
+            var postHeaderCatLabels = postHeaderCatsLine.querySelectorAll('.bb-category-label');
+            for (var pli = 0; pli < postHeaderCatLabels.length; pli++) {
+              postHeaderCatLabels[pli].classList.add(postHeaderCatModifier);
             }
+            headlineMount.appendChild(postHeaderCatsLine);
           }
-          if (tagsCatsWrap.childNodes.length > 0) headlineMount.appendChild(tagsCatsWrap);
         }
 
         var postCategoriesLine = (!isSinglePost && (collectionLayout === 'listRows' || collectionLayout === 'grid' || collectionLayout === 'digest'))
@@ -8404,27 +9527,32 @@
           : null;
 
         var listRowsDesktop = !isSinglePost && collectionLayout === 'listRows' && !listRowsMobileCompact;
-        var titleEl = document.createElement(isSinglePost ? 'h2' : (listRowsDesktop ? 'h4' : 'h3'));
+        var titleEl = document.createElement(isSinglePost ? 'h1' : 'h2');
         titleEl.className = 'blog-overlay-title';
-        titleEl.style.margin = '0 0 8px 0';
-        if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
+        titleEl.style.margin = storyPostLayout ? '0 0 24px 0' : '0 0 8px 0';
+        if (isSinglePost) {
+          titleEl.classList.add('blog-overlay-post-title');
+          self._applyTitleStyle(titleEl, {
+            size: 'post',
+            onImage: singlePostFullBleedHero,
+            onDarkSolid: storyPostLayout
+          });
+        } else if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
           titleEl.style.fontSize = '1.05rem';
           titleEl.style.lineHeight = '1.2';
-          titleEl.style.fontWeight = '700';
           titleEl.style.margin = '0 0 2px 0';
-        }
-        if (listRowsDesktop) {
-          titleEl.style.fontSize = '1.05rem';
-          titleEl.style.lineHeight = '1.2';
-          titleEl.style.fontWeight = '700';
-          titleEl.style.margin = '0 0 2px 0';
-        }
-        if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow && !isFeaturedInLayout) {
+          titleEl.classList.add('bb-title--on-bg');
+        } else if (listRowsDesktop || (!isSinglePost && collectionLayout === 'listRows')) {
+          self._applyTitleStyle(titleEl, { size: 'compact', onImage: false, margin: '0 0 2px 0' });
+        } else if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow && !isFeaturedInLayout) {
           titleEl.style.fontSize = 'clamp(1.5rem, 4vw, 2.25rem)';
-          titleEl.style.fontWeight = '900';
           titleEl.style.lineHeight = '1.08';
-          titleEl.style.letterSpacing = '-0.02em';
           titleEl.style.margin = '0 0 6px 0';
+          titleEl.classList.add('bb-title--on-bg');
+        } else if (!isSinglePost && collectionLayout === 'grid') {
+          self._applyTitleStyle(titleEl, { size: isFeaturedInLayout ? 'lg' : 'masthead', onImage: false });
+        } else if (!isSinglePost && collectionLayout === 'digest') {
+          self._applyTitleStyle(titleEl, { size: isFeaturedInLayout ? 'lg' : 'masthead', onImage: false });
         }
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && digestMobileNarrow) {
           titleEl.style.textAlign = 'left';
@@ -8472,16 +9600,18 @@
         var digestPaywallGatedCard = gatedCard && collectionLayout === 'digest';
         var newsroomPaywallGatedCard = gatedCard && collectionLayout === 'listRows';
         var newsroomPaywallMobile = newsroomPaywallGatedCard && listRowsMobileCompact;
-        if (postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard && !digestPaywallGatedCard) {
-          if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
-            postCategoriesLine.style.fontSize = '0.425rem';
-            postCategoriesLine.style.marginBottom = '3px';
-            postCategoriesLine.style.lineHeight = '1.25';
-          }
+        var appendCategoriesToHeadline = postCategoriesLine && !listRowsMobileCatsAboveRow && !mastheadPaywallGatedCard && !digestPaywallGatedCard;
+        var useFeaturedHeadlineStack = isFeaturedInLayout && collectionLayout !== 'listRows' && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile;
+        if (appendCategoriesToHeadline && !isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
+          postCategoriesLine.style.fontSize = '0.85rem';
+          postCategoriesLine.style.marginBottom = '3px';
+          postCategoriesLine.style.lineHeight = '1.25';
+        }
+        if (appendCategoriesToHeadline && !useFeaturedHeadlineStack) {
           headlineMount.appendChild(postCategoriesLine);
         }
         var titleBlock = null;
-        if (isFeaturedInLayout && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
+        if (useFeaturedHeadlineStack) {
           var featuredHeadlineStack = document.createElement('div');
           featuredHeadlineStack.className = 'blog-overlay-featured-headline-stack';
           featuredHeadlineStack.style.display = 'flex';
@@ -8489,24 +9619,11 @@
           featuredHeadlineStack.style.alignItems = 'flex-start';
           featuredHeadlineStack.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact) ? '4px' : (collectionLayout === 'listRows' ? '2px' : '6px');
           featuredHeadlineStack.style.width = '100%';
-          var featuredBadge = document.createElement('span');
-          featuredBadge.className = 'blog-overlay-featured-badge';
-          featuredBadge.textContent = 'FEATURED';
-          featuredBadge.style.display = 'inline-flex';
-          featuredBadge.style.alignItems = 'center';
-          featuredBadge.style.alignSelf = 'flex-start';
-          featuredBadge.style.width = 'fit-content';
-          featuredBadge.style.maxWidth = '100%';
-          featuredBadge.style.background = siteAccentForPostCats;
-          featuredBadge.style.color = '#fff';
-          featuredBadge.style.fontSize = '9px';
-          featuredBadge.style.fontWeight = '700';
-          featuredBadge.style.letterSpacing = '1.5px';
-          featuredBadge.style.textTransform = 'uppercase';
-          featuredBadge.style.padding = '2px 6px';
-          featuredBadge.style.lineHeight = '1';
-          featuredBadge.style.borderRadius = '2px';
+          var featuredBadge = self._createFeaturedBadge();
           featuredHeadlineStack.appendChild(featuredBadge);
+          if (appendCategoriesToHeadline) {
+            featuredHeadlineStack.appendChild(postCategoriesLine);
+          }
           featuredHeadlineStack.appendChild(titleEl);
           titleBlock = featuredHeadlineStack;
         } else {
@@ -8547,7 +9664,26 @@
           headlineMount.appendChild(moDigestLbl);
         }
 
-        if (phShowByline && postInfoWrap) {
+        var singlePostDeckText = null;
+        if (isSinglePost && postInfoWrap && !phShowByline && !publisherPostLayout) {
+          var deckSourceText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
+          var deckSourceSentences = deckSourceText ? deckSourceText.match(/[^.!?]*[.!?]/g) : null;
+          singlePostDeckText = deckSourceSentences && deckSourceSentences.length > 0 ? deckSourceSentences[0].trim() : '';
+          if (!singlePostDeckText) singlePostDeckText = self._truncateText(post.excerpt || post.body || '', 200);
+          if (singlePostDeckText) singlePostDeckText = self._stripLeadingSquarespaceSectionMarkers(singlePostDeckText);
+          if (!singlePostDeckText) singlePostDeckText = null;
+        }
+        if (featurePostLayoutForCat && singlePostDeckText && postInfoWrap) {
+          var featureDeckEl = document.createElement('p');
+          featureDeckEl.className = 'blog-overlay-post-deck blog-overlay-post-deck--feature';
+          featureDeckEl.textContent = singlePostDeckText;
+          postInfoWrap.appendChild(featureDeckEl);
+        }
+
+        var pendingWriterMetaRow = null;
+        var pendingWriterShareRow = null;
+
+        if (phShowByline && postInfoWrap && !publisherPostLayout) {
           var bylineDeckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
           var bylineSentences = bylineDeckText ? bylineDeckText.match(/[^.!?]*[.!?]/g) : null;
           var bylineText = bylineSentences && bylineSentences.length > 0 ? bylineSentences[0].trim() : '';
@@ -8555,12 +9691,8 @@
           if (bylineText) bylineText = self._stripLeadingSquarespaceSectionMarkers(bylineText);
           if (bylineText) {
             var bylineEl = document.createElement('p');
-            bylineEl.className = 'blog-overlay-post-byline';
+            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : storyPostLayout ? ' blog-overlay-post-deck--on-dark-solid' : '');
             bylineEl.textContent = bylineText;
-            bylineEl.style.margin = '0 0 12px 0';
-            bylineEl.style.fontSize = '1.05rem';
-            bylineEl.style.lineHeight = '1.5';
-            bylineEl.style.color = '#555';
             postInfoWrap.appendChild(bylineEl);
           }
         }
@@ -8617,9 +9749,13 @@
           meta.className = 'blog-overlay-meta';
           meta.textContent = metaParts.join(' · ');
           if (singlePostFullBleedHero) {
-            meta.style.color = 'rgba(255,255,255,0.92)';
+            self._applyMetaStyle(meta, { onImage: true, variant: isSinglePost ? 'post' : null });
             meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
-            metaRow.style.color = 'rgba(255,255,255,0.92)';
+            metaRow.style.color = 'var(--bb-meta-on-image,rgba(255,255,255,0.78))';
+          } else if (storyPostLayout) {
+            self._applyMetaStyle(meta, { onDarkSolid: true, variant: isSinglePost ? 'post' : null });
+          } else {
+            self._applyMetaStyle(meta, { onImage: false, variant: isSinglePost ? 'post' : null });
           }
           metaRow.appendChild(meta);
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
@@ -8627,12 +9763,8 @@
             meta.style.lineHeight = '1.2';
             meta.style.margin = '0';
           }
-          if (listRowsDesktop) {
-            meta.style.fontSize = '0.8125rem';
-            meta.style.lineHeight = '1.25';
-          }
           if (!isSinglePost && collectionLayout === 'grid' && gridMobileNarrow) {
-            meta.style.fontSize = '0.5rem';
+            meta.style.fontSize = '1rem';
             meta.style.lineHeight = '1.25';
           }
           if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && digestMobileNarrow) {
@@ -8640,28 +9772,49 @@
             metaRow.style.width = '100%';
             meta.style.textAlign = 'left';
           }
-          headlineMount.appendChild(metaRow);
+          if (postHeaderAccentDividerLayout) {
+            pendingWriterMetaRow = metaRow;
+            metaRow.style.marginBottom = '0';
+          } else if (isSinglePost && reporterPostHeaderLayout && phShowDecorativeAccentLine) {
+            headlineMount.appendChild(self._createReporterPostHeaderDivider());
+            headlineMount.appendChild(metaRow);
+          } else {
+            headlineMount.appendChild(metaRow);
+          }
         }
         if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact && postCategoriesLine) {
           postCategoriesLine.style.marginBottom = '0';
         }
         var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
-        var showShare = smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
+        /** Social sharing is post-only; collection pages never render share links. */
+        var showShare = isSinglePost && smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
         var shareUrl = self._getPostUrl(post);
         if (!shareUrl && typeof window !== 'undefined') {
           shareUrl = window.location.origin + window.location.pathname + (window.location.search || '') + '#post-' + postIndex;
         }
         var shareImageUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
-        var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero) : null;
+        var shareLinks = showShare ? self._createShareLinks(shareUrl, post.title || 'Untitled', smCfg.platforms, cfg.baseUrl, shareImageUrl, singlePostFullBleedHero || storyPostLayout) : null;
         if (shareLinks && !mastheadPaywallGatedCard && !digestPaywallGatedCard && !newsroomPaywallMobile) {
           var shareRow = document.createElement('div');
           shareRow.className = 'blog-overlay-share-row';
-          shareRow.style.marginBottom = '8px';
-          shareRow.style.display = 'flex';
+          if (storyPostLayout) {
+            shareRow.classList.add('blog-overlay-share-row--story');
+          } else if (featurePostLayoutForCat) {
+            shareRow.classList.add('blog-overlay-share-row--feature');
+          }
           shareRow.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
-          shareRow.style.width = '100%';
           shareRow.appendChild(shareLinks);
-          headlineMount.appendChild(shareRow);
+          if (postHeaderAccentDividerLayout) {
+            pendingWriterShareRow = shareRow;
+          } else {
+            headlineMount.appendChild(shareRow);
+          }
+        }
+
+        if (postHeaderAccentDividerLayout && postInfoWrap) {
+          postInfoWrap.appendChild(storyPostLayout ? self._createStoryPostHeaderDivider() : self._createWriterPostHeaderDivider(phAlign));
+          if (pendingWriterMetaRow) postInfoWrap.appendChild(pendingWriterMetaRow);
+          if (pendingWriterShareRow) postInfoWrap.appendChild(pendingWriterShareRow);
         }
 
         if (mastheadPaywallGatedCard) {
@@ -8680,19 +9833,12 @@
         }
 
         if (isSinglePost && postInfoWrap) {
-          var deckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
-          var deckSentences = deckText ? deckText.match(/[^.!?]*[.!?]/g) : null;
-          var deck = deckSentences && deckSentences.length > 0 ? deckSentences[0].trim() : '';
-          if (!deck) deck = self._truncateText(post.excerpt || post.body || '', 200);
-          if (deck) deck = self._stripLeadingSquarespaceSectionMarkers(deck);
-          if (deck && !singlePostFullBleedStacked && !phShowByline) {
+          if (singlePostDeckText && !featurePostLayoutForCat && !singlePostFullBleedStacked && !phShowByline && !publisherPostLayout) {
             var deckEl = document.createElement('p');
-            deckEl.className = 'blog-overlay-deck';
-            deckEl.textContent = deck;
-            deckEl.style.margin = '0 0 16px 0';
-            deckEl.style.fontSize = '1.05rem';
-            deckEl.style.lineHeight = '1.5';
-            deckEl.style.color = singlePostFullBleedHero ? 'rgba(255,255,255,0.95)' : '#555';
+            var deckModifier = singlePostFullBleedHero ? ' blog-overlay-post-deck--on-dark' : '';
+            if (reporterPostHeaderLayout) deckModifier += ' blog-overlay-post-deck--reporter';
+            deckEl.className = 'blog-overlay-post-deck' + deckModifier;
+            deckEl.textContent = singlePostDeckText;
             postInfoWrap.appendChild(deckEl);
           }
           var useDedicatedSinglePostHeaderZone = isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked;
@@ -8713,13 +9859,8 @@
             stackedHeaderBlock.style.paddingTop = '8px';
             stackedHeaderBlock.style.marginBottom = '8px';
             var stackedInfoWrap = document.createElement('div');
-            var stackInset = self._siteContentInsets || { left: 0, right: 0 };
-            var stackPadL = stackInset.left || 0;
-            var stackPadR = stackInset.right || 0;
-            stackedInfoWrap.style.maxWidth = (860 + stackPadL + stackPadR) + 'px';
-            stackedInfoWrap.style.margin = '0 auto';
-            stackedInfoWrap.style.padding = '0 ' + stackPadR + 'px 0 ' + stackPadL + 'px';
             stackedInfoWrap.style.boxSizing = 'border-box';
+            stackedInfoWrap.style.width = '100%';
             stackedInfoWrap.appendChild(postInfoWrap);
             stackedHeaderBlock.appendChild(stackedInfoWrap);
             if (stackedFullBleedWrap) stackedHeaderBlock.appendChild(stackedFullBleedWrap);
@@ -8739,8 +9880,7 @@
           var belowFiInner = document.createElement('div');
           belowFiInner.style.overflow = 'hidden';
           belowFiInner.style.position = 'relative';
-          if (fiRounded === 'small') belowFiInner.style.borderRadius = '6px';
-          else if (fiRounded === 'large') belowFiInner.style.borderRadius = '12px';
+          self._applyFeaturedImageRadius(belowFiInner);
           if (fiShadow) belowFiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
           if (fiAspect === 'cropped') {
             belowFiInner.style.aspectRatio = fiRatio.replace(':', ' / ');
@@ -8780,22 +9920,25 @@
         }
 
         if (isSinglePost && postBreadcrumbNav) {
-          postBreadcrumbNav.className = 'blog-overlay-post-breadcrumbs';
-          postBreadcrumbNav.style.marginBottom = '8px';
+          if (!storyPostLayout && !featurePostLayoutForCat) postBreadcrumbNav.style.marginBottom = '8px';
           postBreadcrumbNav.style.flexShrink = '0';
           postBreadcrumbNav.style.width = '100%';
           postBreadcrumbNav.style.boxSizing = 'border-box';
           var bcJustify = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           if (singlePostFullBleedStacked && stackedHeaderBlock && postInfoWrap) {
-            var stackedInfoWrap = stackedHeaderBlock.firstElementChild;
-            if (stackedInfoWrap) {
-              postBreadcrumbNav.style.justifyContent = bcJustify;
-              postBreadcrumbNav.style.position = '';
-              postBreadcrumbNav.style.top = '';
-              postBreadcrumbNav.style.left = '';
-              postBreadcrumbNav.style.right = '';
-              postBreadcrumbNav.style.zIndex = '';
-              stackedInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap);
+            postBreadcrumbNav.style.justifyContent = bcJustify;
+            postBreadcrumbNav.style.position = '';
+            postBreadcrumbNav.style.top = '';
+            postBreadcrumbNav.style.left = '';
+            postBreadcrumbNav.style.right = '';
+            postBreadcrumbNav.style.zIndex = '';
+            if (featurePostLayoutForCat) {
+              postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
+            } else {
+              var stackedInfoWrap = stackedHeaderBlock.firstElementChild;
+              if (stackedInfoWrap) {
+                stackedInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap);
+              }
             }
           } else if (singlePostFullBleedHero && fullBleedHeaderBlock) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
@@ -8811,6 +9954,9 @@
             } else {
               fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
             }
+          } else if (storyPostLayout && postInfoWrap) {
+            postBreadcrumbNav.style.justifyContent = bcJustify;
+            postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
           } else if (
             isSideBySide &&
             isSinglePost &&
@@ -8837,49 +9983,62 @@
         var body = document.createElement('div');
         body.className = 'blog-overlay-body';
         if (isSinglePost) {
-          var bodyHtml = post.body || '';
-          if (bodyHtml.trim()) {
-            body.innerHTML = bodyHtml;
-            var firstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
-            if (firstHeading && /^Section\s+\d+$/i.test((firstHeading.textContent || '').trim())) {
-              firstHeading.remove();
-            }
-          }
           if (paywallGateSinglePostBody) {
-            self._applySinglePostPaywallBodyTeaser(body);
+            var gatedBodyHtml = self._resolvePaywallSinglePostBodyHtml(post);
+            if (gatedBodyHtml.trim()) {
+              body.innerHTML = gatedBodyHtml;
+              var gatedFirstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
+              if (gatedFirstHeading && /^Section\s+\d+$/i.test((gatedFirstHeading.textContent || '').trim())) {
+                gatedFirstHeading.remove();
+              }
+            }
+            self._applySinglePostPaywallBodyTeaser(body, post, cfg);
+          } else {
+            var bodyHtml = post.body || post.excerpt || '';
+            if (bodyHtml.trim()) {
+              body.innerHTML = bodyHtml;
+              var firstHeading = body.querySelector('h1, h2, h3, h4, h5, h6');
+              if (firstHeading && /^Section\s+\d+$/i.test((firstHeading.textContent || '').trim())) {
+                firstHeading.remove();
+              }
+            }
           }
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
-        } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
-          if (collectionLayout === 'digest' && isFeaturedInLayout && !gatedCard) {
+        } else if (collectionLayout === 'digest') {
+          /** Digest: excerpt only on the featured article; grid cards stay title/meta/image only. */
+          if (isFeaturedInLayout) {
             var digestFeaturedExcerpt = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (digestFeaturedExcerpt) {
               body.textContent = digestFeaturedExcerpt;
-              body.style.fontSize = '0.9rem';
-              body.style.color = '#666';
-              body.style.lineHeight = '1.5';
+              self._applyExcerptStyle(body, 'lg');
               if (digestMobileNarrow) body.style.textAlign = 'left';
             }
-          } else if (collectionLayout === 'listRows' && !listRowsMobileCompact) {
+          }
+        } else if (showPostExcerpt && collectionLayout === 'listRows') {
+          if (!listRowsMobileCompact) {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 120);
             if (excerptText) {
               body.textContent = excerptText;
-              body.style.fontSize = '0.875rem';
-              body.style.color = '#666';
-              body.style.lineHeight = '1.35';
+              self._applyExcerptStyle(body, 'std');
               body.style.marginTop = '0';
             }
           }
-          // digest, non-featured cards: no excerpt (body left empty; omitted below)
-        } else {
-          // grid layout — short teaser on desktop; hidden on narrow viewports (Masthead mobile)
+        } else if (showPostExcerpt && collectionLayout === 'grid') {
+          // Masthead grid — short teaser on desktop; hidden on narrow viewports
           if (!gridMobileNarrow) {
             var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (gridExcerptText) {
               body.textContent = gridExcerptText;
-              body.style.fontSize = '0.9rem';
-              body.style.color = '#666';
-              body.style.lineHeight = '1.5';
+              self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
+            }
+          }
+        } else if (showPostExcerpt && collectionLayout === 'editorial') {
+          if (!gridMobileNarrow) {
+            var editorialExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+            if (editorialExcerptText) {
+              body.textContent = editorialExcerptText;
+              self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
             }
           }
         }
@@ -8891,6 +10050,10 @@
             }
           } else {
             article.id = 'toc-0';
+          }
+          if (!paywallGateSinglePostBody) {
+            self._applyStoryPostHorizontalInset(body, cfg);
+            if (sidebarRowPostLayout) self._normalizePostBodyTopForSidebarRow(body);
           }
         }
         var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
@@ -8944,6 +10107,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var showPostExcerpt = vs.showPostExcerpt !== false;
       var hasAnyFilter = vs.hasAnyFilter;
       var hasSearchQuery = vs.hasSearchQuery;
       var searchQuery = vs.searchQuery;
@@ -9013,24 +10177,7 @@
           var shFpK = displayPostKey(featuredPost);
           var shPk = displayPostKey(post);
           if (post === featuredPost || (shFpK && shPk === shFpK)) {
-            var shBadge = document.createElement('span');
-            shBadge.className = 'blog-overlay-featured-badge';
-            shBadge.textContent = 'FEATURED';
-            shBadge.style.display = 'inline-flex';
-            shBadge.style.alignItems = 'center';
-            shBadge.style.alignSelf = 'flex-start';
-            shBadge.style.width = 'fit-content';
-            shBadge.style.maxWidth = '100%';
-            shBadge.style.background = siteAccent;
-            shBadge.style.color = '#fff';
-            shBadge.style.fontSize = '9px';
-            shBadge.style.fontWeight = '700';
-            shBadge.style.letterSpacing = '1.5px';
-            shBadge.style.textTransform = 'uppercase';
-            shBadge.style.lineHeight = '1';
-            shBadge.style.padding = '2px 6px';
-            shBadge.style.borderRadius = '2px';
-            shBadge.style.marginBottom = showcaseMobile ? '4px' : '6px';
+            var shBadge = self._createFeaturedBadge({ marginBottom: showcaseMobile ? '4px' : '6px' });
             shBadge.style.boxSizing = 'border-box';
             bodyCol.appendChild(shBadge);
           }
@@ -9047,13 +10194,15 @@
           if (showcaseMobile) postCategoriesLineShowcase.style.marginBottom = '4px';
           bodyCol.appendChild(postCategoriesLineShowcase);
         }
-        var titleEl = document.createElement('h3');
+        var titleEl = document.createElement('h2');
         titleEl.className = 'blog-overlay-title';
         titleEl.style.margin = showcaseMobile ? '0 0 4px 0' : '0 0 8px 0';
         if (showcaseMobile) {
           titleEl.style.fontSize = '1.05rem';
           titleEl.style.lineHeight = '1.25';
-          titleEl.style.fontWeight = '700';
+          titleEl.classList.add('bb-title--on-bg');
+        } else {
+          self._applyTitleStyle(titleEl, { size: 'lg', onImage: false, margin: '0 0 8px 0' });
         }
         var titleLink = document.createElement('a');
         titleLink.href = postUrl;
@@ -9064,7 +10213,7 @@
         setShowcasePostAnalytics(titleLink);
         wireShowcaseNavLink(titleLink);
         titleEl.appendChild(titleLink);
-        var excerptText = showcaseMobile ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+        var excerptText = (!showPostExcerpt || showcaseMobile) ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
         var bodyEl = null;
         if (!showcaseMobile) {
           bodyEl = document.createElement('div');
@@ -9073,9 +10222,7 @@
             /* Teaser replaced by masthead row above */
           } else if (excerptText) {
             bodyEl.textContent = excerptText;
-            bodyEl.style.fontSize = '0.9rem';
-            bodyEl.style.color = '#666';
-            bodyEl.style.lineHeight = '1.5';
+            self._applyExcerptStyle(bodyEl, 'lg');
           }
         }
         var metaParts = [];
@@ -9092,29 +10239,25 @@
         metaEl.style.marginBottom = '0';
         metaEl.style.gap = showcaseMobile ? '6px' : '12px';
         metaEl.style.flexWrap = 'wrap';
-        metaEl.style.fontSize = showcaseMobile ? '0.75rem' : '0.85rem';
-        metaEl.style.lineHeight = showcaseMobile ? '1.35' : '';
-        metaEl.style.color = '#666';
+        if (showcaseMobile) {
+          metaEl.style.fontSize = '0.75rem';
+          metaEl.style.lineHeight = '1.35';
+        }
+        self._applyMetaStyle(metaEl, { onImage: false });
         metaEl.textContent = metaParts.join(' · ');
         var readLink = document.createElement('a');
         readLink.href = postUrl;
-        readLink.className = 'blog-overlay-showcase-read-link';
-        readLink.style.display = 'inline-flex';
-        readLink.style.alignItems = 'center';
-        readLink.style.gap = showcaseMobile ? '4px' : '6px';
-        readLink.style.marginTop = showcaseMobile ? '6px' : '12px';
-        readLink.style.fontSize = showcaseMobile ? '0.8rem' : '0.9rem';
-        readLink.style.fontWeight = '600';
-        readLink.style.color = siteAccent;
-        readLink.style.textDecoration = 'none';
-        readLink.style.cursor = 'pointer';
+        readLink.className = 'blog-overlay-showcase-read-link bb-read-link';
+        if (showcaseMobile) {
+          readLink.style.gap = '4px';
+          readLink.style.marginTop = '6px';
+          readLink.style.fontSize = '0.8rem';
+        }
         readLink.setAttribute('aria-label', 'Read article: ' + (post.title || 'Untitled'));
         setShowcasePostAnalytics(readLink);
         wireShowcaseNavLink(readLink);
         var readLabel = document.createElement('span');
         readLabel.textContent = 'Read article';
-        readLabel.style.textDecoration = 'underline';
-        readLabel.style.textUnderlineOffset = '2px';
         readLink.appendChild(readLabel);
         var arrowNs = 'http://www.w3.org/2000/svg';
         var arrowSvg = document.createElementNS(arrowNs, 'svg');
@@ -9263,28 +10406,12 @@
       var gridColsDigestOrGrid = vs.gridColsDigestOrGrid;
       var gridColsEffective = vs.gridColsEffective != null ? vs.gridColsEffective : gridColsDigestOrGrid;
       if (collectionLayout === 'grid' || collectionLayout === 'digest') {
-        mainEl.style.display = 'grid';
-        mainEl.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
-        mainEl.style.width = '100%';
-        mainEl.style.maxWidth = '100%';
-        mainEl.style.minWidth = '0';
-        mainEl.style.boxSizing = 'border-box';
-        mainEl.style.overflow = vs.collectionMobileGridNarrow ? 'hidden' : '';
-        if (vs.collectionMobileGridNarrow) {
-          mainEl.style.paddingLeft = '12px';
-          mainEl.style.paddingRight = '12px';
-          mainEl.style.gap = vs.gridMobileNarrow ? '8px 16px' : '16px';
-          mainEl.style.rowGap = '';
-          mainEl.style.columnGap = '';
-        } else {
-          mainEl.style.gap = '24px';
-          mainEl.style.rowGap = '';
-          mainEl.style.columnGap = '';
-          mainEl.style.paddingLeft = '';
-          mainEl.style.paddingRight = '';
-        }
-        mainEl.style.marginLeft = '';
-        mainEl.style.marginRight = '';
+        this._applyCollectionGridMainLayout(mainEl, {
+          collectionMobileGridNarrow: vs.collectionMobileGridNarrow,
+          gridMobileNarrow: vs.gridMobileNarrow,
+          gridColsEffective: gridColsEffective,
+          digestMobileNarrow: vs.digestMobileNarrow
+        });
       } else {
         mainEl.style.display = 'flex';
         mainEl.style.flexDirection = 'column';
@@ -9343,23 +10470,7 @@
           self._blogOverlaySidebarLayoutFn();
         });
       }
-      if (
-        collectionLayout === 'digest' &&
-        vs.digestMobileNarrow &&
-        vs.featuredPost &&
-        vs.faCfg &&
-        vs.faCfg.show &&
-        vs.faCfg.position === 'inLayout'
-      ) {
-        var wrapperForBleed = document.getElementById('blog-overlay-list');
-        var digestBleedSeq = self._renderSeq;
-        requestAnimationFrame(function() {
-          requestAnimationFrame(function() {
-            if (self._renderSeq !== digestBleedSeq || !wrapperForBleed) return;
-            self._syncDigestMobileFeaturedImageBleed(wrapperForBleed);
-          });
-        });
-      }
+      self._scheduleDigestMobileFeaturedImageBleed(vs);
       return true;
     },
 
@@ -9406,6 +10517,8 @@
       if (!root) return;
       this._root = root;
       this._renderContentInProgress = true;
+      self._ensureCollectionStylesheet();
+      var collectionStyleTokens = self._resolveCollectionStyleTokens(root);
       this._siteContentInsets = this._getSquarespaceSiteContentInsets();
       if (this._progressScrollHandler) {
         var scrollTarget = this._progressScrollTarget || window;
@@ -9500,28 +10613,41 @@
       var headerContentCfg = vs.headerContentCfg;
       var footerContentCfg = vs.footerContentCfg;
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
+      var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
+      var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
+      var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
+      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
+      var featureBelowRowAuthorEl = null;
+      var featureBelowRowMoreToReadEl = null;
+      var featureBelowRowLeadMagnetEl = null;
+      var featureBelowRowHost = null;
+      var featureCommentsSectionEl = null;
+      var featureFooterLeftPad = 0;
+      var featureFooterRightPad = 0;
+      var featureFooterTopPad = 16;
       this._emitPaywallRenderDebug(vs, { renderSeq: this._renderSeq });
       var useLevelConfig = vs.useLevelConfig;
       var showTableOfContents = vs.showTableOfContents;
       var tableOfContentsPosition = vs.tableOfContentsPosition;
       var showRecentPostsSidebar = vs.showRecentPostsSidebar;
       var sidebarPosition = vs.sidebarPosition;
+      var autoSidebarWidth = isSinglePost ? 300 : 220;
       if (!useLevelConfig) {
         if (!leftSidebarCfg && cfg.showTableOfContents) {
-          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          leftSidebarCfg = cfg.tableOfContentsPosition === 'left' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!rightSidebarCfg && cfg.showTableOfContents) {
-          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 200, sticky: false } : null;
+          rightSidebarCfg = cfg.tableOfContentsPosition === 'right' ? { show: true, modules: ['tableOfContents'], width: 300, sticky: false } : null;
         }
         if (!leftSidebarCfg && cfg.showRecentPostsSidebar) {
-          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : leftSidebarCfg;
+          leftSidebarCfg = cfg.sidebarPosition === 'left' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : leftSidebarCfg;
         }
         if (!rightSidebarCfg && cfg.showRecentPostsSidebar) {
-          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: 220, sticky: false } : rightSidebarCfg;
+          rightSidebarCfg = cfg.sidebarPosition === 'right' ? { show: true, modules: ['recentPosts'], width: autoSidebarWidth, sticky: false } : rightSidebarCfg;
         }
       } else {
-        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
-        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: 240, sticky: false };
+        if (!leftSidebarCfg) leftSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
+        if (!rightSidebarCfg) rightSidebarCfg = { show: false, modules: [], width: autoSidebarWidth, sticky: false };
       }
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
@@ -9540,6 +10666,7 @@
       var featuredPost = vs.featuredPost;
       var displayItemsForLoop = vs.displayItemsForLoop;
       var displayPostKey = vs.displayPostKey;
+      var newsroomMobileCompact = !isSinglePost && collectionLayout === 'listRows' && self._isNarrowCollectionViewport();
       var itemIndexMap = self._buildItemIndexMap(items);
       self._itemIndexMap = itemIndexMap;
 
@@ -9547,8 +10674,20 @@
       wrapper.id = 'blog-overlay-list';
       wrapper.className = 'blog-overlay-wrapper';
       wrapper.style.display = 'block';
+      self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
       var navbarOffset = this._getNavbarOffset();
       var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
+      if (isSinglePost) {
+        wrapper.setAttribute('data-bb-spec-horizontal-padding', '1');
+        if (self._isWriterPostLayout(cfg)) {
+          wrapper.setAttribute('data-bb-writer-layout', '1');
+        } else {
+          wrapper.removeAttribute('data-bb-writer-layout');
+        }
+      } else {
+        wrapper.removeAttribute('data-bb-spec-horizontal-padding');
+        wrapper.removeAttribute('data-bb-writer-layout');
+      }
       self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
         wrapper.style.maxWidth = '100%';
@@ -9611,8 +10750,30 @@
           singlePostHeaderZoneEl.style.boxSizing = 'border-box';
           singlePostHeaderZoneEl.style.background = 'transparent';
         }
-        singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
-        singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
+        if (self._isStoryPostLayout(cfg)) {
+          singlePostHeaderZoneEl.classList.add('blog-overlay-single-post-header-zone--story');
+          singlePostHeaderZoneEl.style.background = self._resolveStoryHeaderBackgroundColor(postHeaderCfgForZone);
+          singlePostHeaderZoneEl.style.paddingTop = '';
+          singlePostHeaderZoneEl.style.paddingBottom = '';
+          singlePostHeaderZoneEl.style.paddingLeft = '';
+          singlePostHeaderZoneEl.style.paddingRight = '';
+          singlePostHeaderZoneEl.style.marginBottom = '';
+          if (!self._isNarrowCollectionViewport()) {
+            self._applyViewportFullBleed(singlePostHeaderZoneEl);
+          } else {
+            singlePostHeaderZoneEl.style.marginLeft = '';
+            singlePostHeaderZoneEl.style.marginRight = '';
+            singlePostHeaderZoneEl.style.width = '100%';
+            singlePostHeaderZoneEl.style.maxWidth = '100%';
+          }
+        } else {
+          singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
+          singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
+          singlePostHeaderZoneEl.style.marginLeft = '';
+          singlePostHeaderZoneEl.style.marginRight = '';
+          singlePostHeaderZoneEl.style.width = '100%';
+          singlePostHeaderZoneEl.style.maxWidth = '100%';
+        }
         if (!singlePostHeaderInnerEl) {
           singlePostHeaderInnerEl = document.createElement('div');
           singlePostHeaderInnerEl.className = 'blog-overlay-single-post-header-inner';
@@ -9622,7 +10783,7 @@
           singlePostHeaderInnerEl.style.boxSizing = 'border-box';
           singlePostHeaderInnerEl.style.display = 'flex';
           singlePostHeaderInnerEl.style.flexDirection = 'column';
-          singlePostHeaderInnerEl.style.gap = '16px';
+          singlePostHeaderInnerEl.style.gap = self._isStoryPostLayout(cfg) ? '0' : '16px';
           singlePostHeaderZoneEl.appendChild(singlePostHeaderInnerEl);
         }
         return singlePostHeaderInnerEl;
@@ -9642,26 +10803,12 @@
         main.style.gap = '0';
         main.style.gridTemplateColumns = '';
       } else if (collectionLayout === 'grid' || collectionLayout === 'digest') {
-        main.style.display = 'grid';
-        main.style.gridTemplateColumns = 'repeat(' + gridColsEffective + ', minmax(0, 1fr))';
-        main.style.width = '100%';
-        main.style.maxWidth = '100%';
-        main.style.minWidth = '0';
-        main.style.boxSizing = 'border-box';
-        main.style.overflow = collectionMobileGridNarrow ? 'hidden' : '';
-        if (collectionMobileGridNarrow) {
-          main.style.paddingLeft = '12px';
-          main.style.paddingRight = '12px';
-          main.style.gap = gridMobileNarrow ? '8px 16px' : '16px';
-          main.style.rowGap = '';
-          main.style.columnGap = '';
-        } else {
-          main.style.gap = '24px';
-          main.style.rowGap = '';
-          main.style.columnGap = '';
-          main.style.paddingLeft = '';
-          main.style.paddingRight = '';
-        }
+        self._applyCollectionGridMainLayout(main, {
+          collectionMobileGridNarrow: collectionMobileGridNarrow,
+          gridMobileNarrow: gridMobileNarrow,
+          gridColsEffective: gridColsEffective,
+          digestMobileNarrow: digestMobileNarrow
+        });
       } else if (collectionLayout === 'showcase') {
         main.style.display = 'flex';
         main.style.flexDirection = 'column';
@@ -9690,7 +10837,7 @@
         headerZoneEl.style.maxWidth = '100%';
         headerZoneEl.style.marginLeft = '0';
         headerZoneEl.style.marginRight = '0';
-        headerZoneEl.style.padding = '16px 0';
+        headerZoneEl.style.padding = newsroomMobileCompact ? '16px 0 8px 0' : '16px 0';
         headerZoneEl.style.boxSizing = 'border-box';
         headerZoneEl.style.background = 'transparent';
         headerModulesHostEl = document.createElement('div');
@@ -9710,10 +10857,10 @@
       var progressTrackForPreview = null;
       var pb = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
-      var progressBarPosition = (pb.position === 'bottom' || cfg.progressBarPosition === 'bottom') ? 'bottom' : 'top';
-      var progressBarThickness = Math.min(12, Math.max(2, parseInt(pb.thickness || cfg.progressBarThickness, 10) || 6));
-      var progressBarColor = (typeof (pb.color || cfg.progressBarColor) === 'string' && /^#[0-9A-Fa-f]{6}$/.test(pb.color || cfg.progressBarColor || '')) ? (pb.color || cfg.progressBarColor) : '#5B4FE8';
-      if (isSinglePost && showProgressBar && this._resolveViewerMode() === 'loggedIn') {
+      var progressBarPosition = 'top';
+      var progressBarThickness = 6;
+      var progressBarColor = self._resolveProgressBarColor(cfg);
+      if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.height = progressBarThickness + 'px';
@@ -9763,6 +10910,10 @@
         if (scrollTarget) {
           scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
         }
+        /** Fixed top-positioned bar overlays the wrapper; reserve its height so content doesn't sit under it. */
+        if (progressBarPosition === 'top' && !this._previewMode) {
+          self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop + progressBarThickness);
+        }
       }
 
       var featuredPost = null;
@@ -9810,7 +10961,7 @@
           heroInner.style.width = '100%';
           heroInner.style.aspectRatio = mastheadHeroMobile ? '4 / 3' : '21 / 9';
           heroInner.style.overflow = 'hidden';
-          heroInner.style.borderRadius = mastheadHeroMobile ? '0' : '4px';
+          self._applyFeaturedImageRadius(heroInner);
           heroInner.style.background = 'linear-gradient(160deg, #1a1a2e 0%, #2d1a3a 45%, #0f2027 100%)';
           heroInner.style.minHeight = mastheadHeroMobile ? '260px' : '200px';
 
@@ -9863,68 +11014,38 @@
           }
 
           var heroMuted = 'rgba(255,255,255,0.78)';
-          var heroBody = 'rgba(255,255,255,0.9)';
 
-          var heroBadge = document.createElement('span');
-          heroBadge.textContent = 'Featured';
-          heroBadge.style.display = 'inline-block';
-          heroBadge.style.background = self._getSiteAccentColor();
-          heroBadge.style.color = '#fff';
-          heroBadge.style.fontSize = '10px';
-          heroBadge.style.fontWeight = '700';
-          heroBadge.style.letterSpacing = '1.5px';
-          heroBadge.style.textTransform = 'uppercase';
-          heroBadge.style.padding = '2px 8px';
-          heroBadge.style.borderRadius = '2px';
+          var heroBadge = self._createFeaturedBadge({
+            text: 'Featured',
+            absolute: mastheadHeroMobile,
+            top: '16px',
+            left: '16px',
+            zIndex: '3',
+            marginBottom: mastheadHeroMobile ? '0' : '16px'
+          });
           if (mastheadHeroMobile) {
-            heroBadge.style.position = 'absolute';
-            heroBadge.style.top = '16px';
-            heroBadge.style.left = '16px';
-            heroBadge.style.zIndex = '3';
-            heroBadge.style.marginBottom = '0';
             heroInner.appendChild(heroBadge);
           } else {
-            heroBadge.style.marginBottom = '16px';
             heroContent.appendChild(heroBadge);
           }
           var heroCats = self._getPostCategories(featuredPost);
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
             heroCat.textContent = heroCats[0];
-            heroCat.style.fontSize = '11px';
-            heroCat.style.fontWeight = '700';
-            heroCat.style.letterSpacing = '1.5px';
-            heroCat.style.textTransform = 'uppercase';
-            heroCat.style.color = heroMuted;
+            self._applyCategoryLabelStyle(heroCat, { onImage: true });
             heroCat.style.marginBottom = '8px';
+            if (mastheadHeroMobile) heroCat.style.fontSize = '22px';
             heroContent.appendChild(heroCat);
           }
-          var heroTitle = document.createElement('h3');
+          var heroTitle = document.createElement('h2');
+          heroTitle.className = 'blog-overlay-title';
           heroTitle.textContent = featuredPost.title || 'Untitled';
-          heroTitle.style.fontSize = 'clamp(1.5rem, 4vw, 2.25rem)';
-          heroTitle.style.fontWeight = '900';
-          heroTitle.style.lineHeight = '1.08';
-          heroTitle.style.letterSpacing = '-0.02em';
-          heroTitle.style.color = '#fff';
-          heroTitle.style.margin = '0 0 10px 0';
+          self._applyTitleStyle(heroTitle, { size: 'lg', onImage: true, margin: '0 0 10px 0' });
+          if (mastheadHeroMobile) {
+            heroTitle.style.fontSize = 'clamp(1.5rem, 4vw, 2.25rem)';
+          }
           heroContent.appendChild(heroTitle);
-          var heroSrc = featuredPost.excerpt || featuredPost.body || '';
-          var heroDeck = self._extractFirstNSentences(heroSrc, 2);
-          if (!heroDeck.trim()) {
-            heroDeck = self._truncateText(heroSrc, 200);
-          } else if (heroDeck.length > 400) {
-            heroDeck = self._truncateText(heroSrc, 280);
-          }
-          if (heroDeck && !mastheadHeroMobile) {
-            var heroDeckEl = document.createElement('div');
-            heroDeckEl.textContent = heroDeck;
-            heroDeckEl.style.fontSize = '15px';
-            heroDeckEl.style.color = heroBody;
-            heroDeckEl.style.lineHeight = '1.6';
-            heroDeckEl.style.marginBottom = '14px';
-            heroDeckEl.style.maxWidth = '560px';
-            heroContent.appendChild(heroDeckEl);
-          }
+          /* Masthead hero has no excerpt per collection template spec. */
           var heroMetaParts = [];
           if (showDate) {
             var heroDateStr = self._getDate(featuredPost);
@@ -9941,8 +11062,8 @@
           if (heroMetaParts.length > 0) {
             var heroMeta = document.createElement('div');
             heroMeta.textContent = heroMetaParts.join(' · ');
-            heroMeta.style.fontSize = '12px';
-            heroMeta.style.color = heroMuted;
+            self._applyMetaStyle(heroMeta, { onImage: true });
+            if (mastheadHeroMobile) heroMeta.style.fontSize = '24px';
             heroContent.appendChild(heroMeta);
           }
 
@@ -9962,28 +11083,19 @@
           }
       }
 
-      function createSidebarSection(headerText, content, styled) {
+      function createSidebarSection(headerText, content) {
         var section = document.createElement('div');
         section.className = 'blog-overlay-sidebar-section';
         section.style.marginBottom = '20px';
-        var header = document.createElement('div');
-        header.textContent = headerText;
-        header.style.fontSize = '0.7rem';
-        header.style.fontWeight = '700';
-        header.style.letterSpacing = '0.08em';
-        header.style.color = '#111';
-        if (styled) {
-          header.style.fontVariant = 'small-caps';
-          header.style.textTransform = 'none';
-        } else {
-          header.style.textTransform = 'uppercase';
-        }
+        var header = document.createElement('h3');
+        header.className = 'bb-sidebar-header';
+        header.style.marginTop = '0';
+        header.style.paddingTop = '0';
         header.style.marginBottom = '8px';
+        header.textContent = headerText;
         section.appendChild(header);
-        var bar = document.createElement('div');
-        bar.style.height = '2px';
-        bar.style.background = '#111';
-        bar.style.marginBottom = '12px';
+        var bar = document.createElement('hr');
+        bar.className = 'bb-sidebar-divider';
         section.appendChild(bar);
         section.appendChild(content);
         return section;
@@ -10002,7 +11114,6 @@
           return null;
         }
         var tocStyle = (cfg.postModules && cfg.postModules.tableOfContents && cfg.postModules.tableOfContents.style) || 'numbered';
-        var themeColor = '#5B4FE8';
         var el = document.createElement('nav');
         el.className = 'blog-overlay-toc';
         el.setAttribute('data-toc-style', tocStyle);
@@ -10028,7 +11139,7 @@
           lineFill.style.left = '3px';
           lineFill.style.top = '10px';
           lineFill.style.width = '2px';
-          lineFill.style.background = '#5B4FE8';
+          lineFill.style.background = 'var(--bb-accent, #5B4FE8)';
           lineFill.style.borderRadius = '1px';
           lineFill.style.pointerEvents = 'none';
           lineFill.style.transition = 'height 0.15s ease';
@@ -10070,22 +11181,23 @@
                   var other = tocLinks[li];
                   var active = other === link;
                   other.classList.toggle('blog-overlay-toc-active', active);
-                  other.style.fontWeight = active ? '700' : '';
+                  other.classList.toggle('is-active', active);
+                  if (tocStyle === 'connectedDots') other.style.fontWeight = active ? '700' : '';
                 }
               } catch (e2) {}
               smoothScrollToTocTarget(href.slice(1));
             };
           }
           link.style.display = 'block';
-          link.style.padding = '4px 0';
-          link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
           link.style.textDecoration = 'none';
-          link.style.lineHeight = '1.3';
-          link.style.color = '#333';
           if (tocStyle === 'numbered') {
-            link.style.paddingLeft = ((level - 1) * 8) + 'px';
+            link.classList.add('bb-toc-item');
+            link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
             if (prefix) link.textContent = prefix + ' ' + (link.textContent || '');
           } else if (tocStyle === 'connectedDots') {
+            link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
+            link.style.lineHeight = '1.3';
+            link.style.color = '#333';
             var row = document.createElement('div');
             row.style.display = 'flex';
             row.style.alignItems = 'center';
@@ -10108,13 +11220,8 @@
             el.appendChild(row);
             return;
           } else if (tocStyle === 'bookmark') {
-            link.style.paddingLeft = ((level - 1) * 8) + 'px';
-            link.style.paddingRight = '8px';
-            link.style.paddingTop = '6px';
-            link.style.paddingBottom = '6px';
-            link.style.marginLeft = '0';
-            link.style.marginRight = '0';
-            link.style.borderRadius = '4px';
+            link.classList.add('bb-toc-item');
+            if (level > 1) link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
           }
           el.appendChild(link);
         }
@@ -10195,8 +11302,7 @@
         if (items.length === 0) return null;
         var pmPop = cfg.postModules && cfg.postModules.popularPosts && typeof cfg.postModules.popularPosts === 'object' ? cfg.postModules.popularPosts : null;
         var cmPop = cfg.collectionModules && cfg.collectionModules.popularPosts && typeof cfg.collectionModules.popularPosts === 'object' ? cfg.collectionModules.popularPosts : null;
-        var popCountRaw = isSinglePost ? (pmPop && pmPop.count) : (cmPop && cmPop.count != null ? cmPop.count : (pmPop && pmPop.count));
-        var count = Math.max(1, Math.min(20, parseInt(popCountRaw, 10) || 5));
+        var count = 3;
         var el = document.createElement('aside');
         el.className = 'blog-overlay-popular-posts';
         el.style.flexShrink = '0';
@@ -10233,7 +11339,9 @@
             itemIndexMap: itemIndexMap,
             placeholderMap: placeholderMap,
             postIndex: ppIdx,
-            analyticsElement: 'popularPosts'
+            analyticsElement: 'popularPosts',
+            cfg: cfg,
+            onSinglePostView: isSinglePost
           });
           if (!ppCard) continue;
           var ppEntry = document.createElement('div');
@@ -10249,7 +11357,7 @@
         el.className = 'blog-overlay-recent-posts';
         el.style.flexShrink = '0';
         el.style.width = (sidebarWidth || 220) + 'px';
-        var recentItems = items.slice(0, recentPostsCount);
+        var recentItems = items.slice(0, Math.max(1, Math.min(3, recentPostsCount)));
         for (var r = 0; r < recentItems.length; r++) {
           var rpPost = recentItems[r];
           var rpIdx = self._postIndexInItems(items, rpPost, itemIndexMap);
@@ -10259,7 +11367,9 @@
             itemIndexMap: itemIndexMap,
             placeholderMap: placeholderMap,
             postIndex: rpIdx >= 0 ? rpIdx : r,
-            analyticsElement: 'recentPosts'
+            analyticsElement: 'recentPosts',
+            cfg: cfg,
+            onSinglePostView: isSinglePost
           });
           if (!rpCard) continue;
           var rpEntry = document.createElement('div');
@@ -10285,7 +11395,7 @@
         var pool = isSinglePost && selectedIndex >= 0
           ? items.filter(function(_, i) { return i !== selectedIndex; })
           : items.slice();
-        var limit = isFooter ? 3 : 5;
+        var limit = 3;
         var relevantItems = pool.slice(0, limit);
         if (relevantItems.length === 0) return null;
 
@@ -10309,24 +11419,21 @@
               placeholderMap: placeholderMap,
               postIndex: fIdx,
               analyticsElement: 'relevantPosts',
-              deckText: relevantPostFooterFirstLine(fp)
+              deckText: relevantPostFooterFirstLine(fp),
+              cfg: cfg,
+              onSinglePostView: isSinglePost
             });
             if (card) grid.appendChild(card);
           }
           var footSection = document.createElement('div');
           footSection.className = 'blog-overlay-sidebar-section blog-overlay-more-to-read';
-          var footHead = document.createElement('div');
+          footSection.style.borderTop = '1px solid var(--bb-border, #e5e4e0)';
+          footSection.style.marginTop = '48px';
+          footSection.style.paddingTop = '24px';
+          var footHead = document.createElement('h2');
+          footHead.className = 'bb-below-main-heading';
           footHead.textContent = 'More to Read';
-          footHead.style.fontSize = '1.05rem';
-          footHead.style.fontWeight = '600';
-          footHead.style.color = '#1a1a1a';
-          footHead.style.marginBottom = '4px';
           footSection.appendChild(footHead);
-          var footRule = document.createElement('div');
-          footRule.style.height = '1px';
-          footRule.style.background = '#e5e4e0';
-          footRule.style.marginBottom = '16px';
-          footSection.appendChild(footRule);
           footSection.appendChild(grid);
           return footSection;
         }
@@ -10345,7 +11452,9 @@
             itemIndexMap: itemIndexMap,
             placeholderMap: placeholderMap,
             postIndex: rpIdx,
-            analyticsElement: 'relevantPosts'
+            analyticsElement: 'relevantPosts',
+            cfg: cfg,
+            onSinglePostView: isSinglePost
           });
           if (!rpCard) continue;
           var rpEntry = document.createElement('div');
@@ -10370,74 +11479,40 @@
         var next = activeIdx < items.length - 1 ? items[activeIdx + 1] : null;
         if (!prev && !next) return null;
 
-        var pink = '#db2777';
-        var serif = 'Georgia, "Times New Roman", ui-serif, serif';
-
         function halfCell(postObj, side) {
-          var cell = document.createElement('div');
-          cell.style.flex = '1 1 50%';
-          cell.style.minWidth = '0';
-          cell.style.padding = '16px 20px';
-          cell.style.boxSizing = 'border-box';
-          cell.style.textAlign = side === 'prev' ? 'left' : 'right';
-          if (side === 'prev') {
-            cell.style.borderRight = '1px solid #e5e5e5';
-          }
+          var cell = document.createElement(postObj ? 'a' : 'div');
+          cell.className = 'blog-overlay-prev-next-col' + (side === 'next' ? ' blog-overlay-prev-next-col--next' : '');
           if (!postObj) {
             cell.setAttribute('aria-hidden', 'true');
             return cell;
           }
+          var idx = self._postIndexInItems(items, postObj, itemIndexMap);
+          cell.href = self._getPostUrl(postObj) || '#post-' + idx;
+          cell.setAttribute('data-analytics-element', side === 'prev' ? 'previousArticle' : 'nextArticle');
+
           var navEl = document.createElement('div');
-          navEl.textContent = side === 'prev' ? '← PREVIOUS' : 'NEXT →';
-          navEl.style.fontSize = '0.72rem';
-          navEl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-          navEl.style.textTransform = 'uppercase';
-          navEl.style.letterSpacing = '0.08em';
-          navEl.style.color = '#9ca3af';
-          navEl.style.marginBottom = '6px';
+          navEl.className = 'blog-overlay-prev-next-label';
+          navEl.textContent = side === 'prev' ? 'Previous' : 'Next';
           cell.appendChild(navEl);
 
           var cats = self._getPostCategories(postObj);
           if (cats.length > 0) {
             var catEl = document.createElement('div');
-            catEl.textContent = String(cats[0]).toUpperCase();
-            catEl.style.fontSize = '0.72rem';
-            catEl.style.fontWeight = '700';
-            catEl.style.fontFamily = 'system-ui, -apple-system, sans-serif';
-            catEl.style.textTransform = 'uppercase';
-            catEl.style.letterSpacing = '0.06em';
-            catEl.style.color = pink;
-            catEl.style.marginBottom = '6px';
+            catEl.className = 'bb-category-label blog-overlay-prev-next-category';
+            catEl.textContent = cats[0];
             cell.appendChild(catEl);
           }
 
-          var idx = self._postIndexInItems(items, postObj, itemIndexMap);
-          var titleLink = document.createElement('a');
-          titleLink.href = self._getPostUrl(postObj) || '#post-' + idx;
-          titleLink.setAttribute('data-analytics-element', side === 'prev' ? 'previousArticle' : 'nextArticle');
-          titleLink.textContent = postObj.title || 'Untitled';
-          titleLink.style.display = 'block';
-          titleLink.style.fontFamily = serif;
-          titleLink.style.fontSize = '1.05rem';
-          titleLink.style.fontWeight = '700';
-          titleLink.style.color = '#111';
-          titleLink.style.textDecoration = 'none';
-          titleLink.style.lineHeight = '1.35';
-          titleLink.style.wordBreak = 'break-word';
-          cell.appendChild(titleLink);
+          var titleEl = document.createElement('div');
+          titleEl.className = 'blog-overlay-prev-next-title';
+          titleEl.textContent = postObj.title || 'Untitled';
+          cell.appendChild(titleEl);
           return cell;
         }
 
-        var el = document.createElement('div');
-        el.className = 'blog-overlay-prev-next-article';
-        el.style.display = 'flex';
-        el.style.flexDirection = 'row';
-        el.style.width = '100%';
-        el.style.maxWidth = '720px';
-        el.style.boxSizing = 'border-box';
-        el.style.border = '1px solid #e5e5e5';
-        el.style.borderRadius = '2px';
-        el.style.background = '#fff';
+        var el = document.createElement('nav');
+        el.className = 'blog-overlay-prev-next';
+        el.setAttribute('aria-label', 'Previous and next articles');
         el.appendChild(halfCell(prev, 'prev'));
         el.appendChild(halfCell(next, 'next'));
         return el;
@@ -10492,15 +11567,10 @@
         if (placement === 'footer') {
           var headerText = ecCfg.header || 'Subscribe to our newsletter';
           var outer = document.createElement('div');
-          outer.className = 'blog-overlay-email-capture blog-overlay-email-capture-footer';
+          outer.className = 'blog-overlay-email-capture blog-overlay-email-capture-footer bb-footer-card';
           outer.style.width = '100%';
           var footerWidth = typeof width === 'number' ? width : parseInt(width, 10);
           outer.style.maxWidth = (footerWidth && footerWidth > 0) ? footerWidth + 'px' : '100%';
-          outer.style.boxSizing = 'border-box';
-          outer.style.border = '1px solid #e5e4e0';
-          outer.style.borderRadius = '10px';
-          outer.style.padding = '16px 20px';
-          outer.style.background = 'transparent';
           outer.style.display = 'flex';
           outer.style.flexDirection = 'column';
           outer.style.gap = '10px';
@@ -10517,10 +11587,8 @@
           leftCol.style.flex = '1 1 200px';
           leftCol.style.minWidth = '0';
           var titleFooter = document.createElement('div');
+          titleFooter.className = 'bb-newsletter-heading';
           titleFooter.textContent = headerText;
-          titleFooter.style.fontSize = '0.95rem';
-          titleFooter.style.fontWeight = '600';
-          titleFooter.style.color = '#1a1a1a';
           titleFooter.style.lineHeight = '1.3';
           leftCol.appendChild(titleFooter);
           if (ecCfg.byline && ecCfg.byline.trim()) {
@@ -10551,27 +11619,14 @@
           emailInputF.setAttribute('autocomplete', 'section-newsletter email');
           emailInputF.placeholder = 'you@example.com';
           emailInputF.setAttribute('aria-label', 'Email address');
-          emailInputF.style.padding = '8px 12px';
-          emailInputF.style.fontSize = '0.9rem';
-          emailInputF.style.border = '1px solid #ddd';
-          emailInputF.style.borderRadius = '6px';
-          emailInputF.style.outline = 'none';
-          emailInputF.style.boxSizing = 'border-box';
-          emailInputF.style.background = 'transparent';
+          self._applyChromeInputStyle(emailInputF);
           emailInputF.style.flex = '1 1 160px';
           emailInputF.style.minWidth = '140px';
           emailInputF.style.maxWidth = '320px';
           var btnF = document.createElement('button');
           btnF.textContent = ecCfg.buttonText || 'Subscribe';
           btnF.type = 'button';
-          btnF.style.padding = '8px 16px';
-          btnF.style.fontSize = '0.9rem';
-          btnF.style.fontWeight = '500';
-          btnF.style.background = siteAccentUi;
-          btnF.style.color = 'white';
-          btnF.style.border = 'none';
-          btnF.style.borderRadius = '6px';
-          btnF.style.cursor = 'pointer';
+          btnF.className = 'bb-newsletter-btn';
           btnF.style.flexShrink = '0';
           btnF.onmouseover = function() { btnF.style.filter = 'brightness(0.92)'; };
           btnF.onmouseout = function() { btnF.style.filter = ''; };
@@ -10597,9 +11652,8 @@
         wrap.style.maxWidth = (width || 280) + 'px';
         if (!hideHeader) {
           var headerEl = document.createElement('div');
+          headerEl.className = 'bb-newsletter-heading';
           headerEl.textContent = ecCfg.header || 'Subscribe to our newsletter';
-          headerEl.style.fontSize = '0.95rem';
-          headerEl.style.fontWeight = '600';
           headerEl.style.marginBottom = '8px';
           wrap.appendChild(headerEl);
         }
@@ -10607,7 +11661,7 @@
           var bylineEl = document.createElement('div');
           bylineEl.textContent = ecCfg.byline;
           bylineEl.style.fontSize = '0.85rem';
-          bylineEl.style.color = '#666';
+          bylineEl.style.color = 'var(--bb-muted,#666)';
           bylineEl.style.marginBottom = '12px';
           wrap.appendChild(bylineEl);
         }
@@ -10622,24 +11676,12 @@
         emailInput.setAttribute('autocomplete', 'section-newsletter email');
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.padding = '8px 12px';
-        emailInput.style.fontSize = '0.9rem';
-        emailInput.style.border = '1px solid #ddd';
-        emailInput.style.borderRadius = '6px';
-        emailInput.style.outline = 'none';
-        emailInput.style.boxSizing = 'border-box';
+        self._applyChromeInputStyle(emailInput);
         form.appendChild(emailInput);
         var btn = document.createElement('button');
         btn.textContent = ecCfg.buttonText || 'Subscribe';
         btn.type = 'button';
-        btn.style.padding = '8px 16px';
-        btn.style.fontSize = '0.9rem';
-        btn.style.fontWeight = '500';
-        btn.style.background = siteAccentUi;
-        btn.style.color = 'white';
-        btn.style.border = 'none';
-        btn.style.borderRadius = '6px';
-        btn.style.cursor = 'pointer';
+        btn.className = 'bb-newsletter-btn';
         btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
         btn.onmouseout = function() { btn.style.filter = ''; };
         var msgEl = document.createElement('div');
@@ -10760,95 +11802,50 @@
         var description = (lmCfg.description && lmCfg.description.trim()) ? lmCfg.description.trim() : '';
 
         var card = document.createElement('div');
-        card.className = 'blog-overlay-lead-magnet-footer';
+        card.className = 'blog-overlay-lead-magnet-footer bb-lead-magnet-card';
         card.style.width = '100%';
         card.style.maxWidth = '100%';
-        card.style.boxSizing = 'border-box';
-        card.style.border = '1px solid #e5e4e0';
-        card.style.borderRadius = '10px';
-        card.style.padding = '16px 20px';
-        card.style.background = 'transparent';
-        card.style.display = 'flex';
-        card.style.gap = '16px';
-        card.style.alignItems = 'center';
-        card.style.justifyContent = 'space-between';
-        card.style.flexWrap = 'wrap';
 
-        var left = document.createElement('div');
-        left.style.flex = '1 1 200px';
-        left.style.minWidth = '0';
-        var title = document.createElement('div');
+        var title = document.createElement('h3');
+        title.className = 'bb-lead-magnet-header';
         title.textContent = resourceTitle;
-        title.style.fontSize = '0.95rem';
-        title.style.fontWeight = '600';
-        title.style.color = '#1a1a1a';
-        title.style.marginBottom = description ? '6px' : '0';
-        left.appendChild(title);
+        card.appendChild(title);
         if (description) {
-          var desc = document.createElement('div');
+          var desc = document.createElement('p');
+          desc.className = 'bb-lead-magnet-subtitle';
           desc.textContent = description;
-          desc.style.fontSize = '0.88rem';
-          desc.style.color = '#666';
-          desc.style.lineHeight = '1.45';
-          left.appendChild(desc);
+          card.appendChild(desc);
         }
-        card.appendChild(left);
-
-        var right = document.createElement('div');
-        right.style.flex = '1 1 260px';
-        right.style.minWidth = '0';
-        right.style.display = 'flex';
-        right.style.flexDirection = 'column';
-        right.style.gap = '8px';
 
         var formRow = document.createElement('div');
         formRow.style.display = 'flex';
-        formRow.style.gap = '8px';
+        formRow.style.gap = '12px';
         formRow.style.alignItems = 'center';
-        formRow.style.justifyContent = 'flex-end';
         formRow.style.flexWrap = 'wrap';
         formRow.style.width = '100%';
         var emailInput = document.createElement('input');
         emailInput.type = 'email';
         emailInput.name = 'bb-lead-magnet-footer-email';
         emailInput.id = 'bb-lead-magnet-footer-email';
+        emailInput.className = 'bb-form-input';
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.flex = '1 1 160px';
-        emailInput.style.minWidth = '140px';
-        emailInput.style.maxWidth = '320px';
-        emailInput.style.padding = '8px 12px';
-        emailInput.style.fontSize = '0.9rem';
-        emailInput.style.border = '1px solid #ddd';
-        emailInput.style.borderRadius = '6px';
-        emailInput.style.outline = 'none';
-        emailInput.style.boxSizing = 'border-box';
-        emailInput.style.background = 'transparent';
+        emailInput.style.flex = '1 1 240px';
+        emailInput.style.minWidth = '0';
         formRow.appendChild(emailInput);
 
         var btn = document.createElement('button');
+        btn.className = 'sqs-button-element--primary';
         btn.textContent = buttonText;
         btn.type = 'button';
-        btn.style.padding = '8px 16px';
-        btn.style.fontSize = '0.9rem';
-        btn.style.fontWeight = '500';
-        btn.style.background = siteAccentUi;
-        btn.style.color = 'white';
-        btn.style.border = 'none';
-        btn.style.borderRadius = '6px';
-        btn.style.cursor = 'pointer';
         btn.style.flexShrink = '0';
-        btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
-        btn.onmouseout = function() { btn.style.filter = ''; };
         formRow.appendChild(btn);
-        right.appendChild(formRow);
+        card.appendChild(formRow);
 
         var msgEl = document.createElement('div');
         msgEl.style.fontSize = '0.85rem';
-        msgEl.style.textAlign = 'right';
         msgEl.style.width = '100%';
-        right.appendChild(msgEl);
-        card.appendChild(right);
+        card.appendChild(msgEl);
 
         btn.onclick = function() {
           var email = (emailInput.value || '').trim().toLowerCase();
@@ -10922,7 +11919,13 @@
         var mo = Array.isArray(sidebarCfg.moduleOrder) ? sidebarCfg.moduleOrder : [];
         /* Match Configure effectiveZoneModuleOrder + _orderedZoneModules: header honors moduleOrder vs modules, but
            an empty modules array with a non-empty moduleOrder must still resolve (otherwise e.g. TOC never renders). */
-        var moduleIds = (mo.length > 0 && avail.length === 0) ? mo.slice() : self._orderedZoneModules(avail, mo);
+        var moduleIds;
+        if (!isSinglePost && cfg.collectionModules) {
+          var resolvedZoneModules = self._resolveCollectionZoneModuleIds(avail, mo, 'sidebar', cfg.collectionModules);
+          moduleIds = (mo.length > 0 && avail.length === 0) ? resolvedZoneModules.slice() : self._orderedZoneModules(resolvedZoneModules, resolvedZoneModules);
+        } else {
+          moduleIds = (mo.length > 0 && avail.length === 0) ? mo.slice() : self._orderedZoneModules(avail, mo);
+        }
         var tocWanted = (Array.isArray(avail) && avail.indexOf('tableOfContents') >= 0) ||
           (Array.isArray(mo) && mo.indexOf('tableOfContents') >= 0);
         var tocInResolved = moduleIds && moduleIds.indexOf('tableOfContents') >= 0;
@@ -10952,12 +11955,14 @@
           return [];
         }
         self._warnDuplicateValues('sidebar', moduleIds);
-        var width = Math.min(400, Math.max(160, sidebarCfg.width || 240));
+        var width = Math.min(400, Math.max(160, sidebarCfg.width || (isSinglePost ? 300 : 240)));
+        if (featurePostLayout) width = 300;
         var mods = [];
         var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
         for (var m = 0; m < moduleIds.length; m++) {
           var mod = moduleIds[m];
           if (hideRecentPostsInBbPreview && mod === 'recentPosts') continue;
+          if (mod === 'tableOfContents' && isSinglePost && self._isStoryPostLayout(cfg)) continue;
           var el = null;
           if (mod === 'tableOfContents') {
             el = createTocModule(width);
@@ -11005,12 +12010,14 @@
             searchWrap.appendChild(searchInput);
             el = createSidebarSection('Search Posts', searchWrap);
           } else if (mod === 'filterByCategory') {
-            el = createSidebarSection('Topics', self._createFilterByCategoryModule(items, width || 200, true, 'sidebar'));
+            el = createSidebarSection('Categories', self._createFilterByCategoryModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTag') {
             el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTagsAndCategories') {
-            var combinedEl = self._createFilterByTagsAndCategoriesModule(items, width || 200, true, 'sidebar');
-            el = combinedEl ? createSidebarSection('Topics', combinedEl) : null;
+            var legacyCatEl = self._createFilterByCategoryModule(items, width || 200, true, 'sidebar');
+            if (legacyCatEl) mods.push(createSidebarSection('Categories', legacyCatEl));
+            var legacyTagEl = self._createFilterByTagModule(items, width || 200, true, 'sidebar');
+            el = legacyTagEl ? createSidebarSection('Tags', legacyTagEl) : null;
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles') {
@@ -11098,7 +12105,7 @@
           var overlay = document.createElement('div');
           overlay.style.position = 'absolute';
           overlay.style.inset = '0';
-          overlay.style.background = 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 55%, transparent 100%)';
+          overlay.style.background = self._getCollectionStyleTokens().imageGradient;
           overlay.style.zIndex = '1';
           overlay.style.pointerEvents = 'none';
           var edMoImageCorner = null;
@@ -11113,31 +12120,21 @@
             edMoImageCorner.style.marginTop = '0';
             edMoImageCorner.style.maxWidth = 'calc(100% - 24px)';
           }
-          var title = document.createElement('div');
-          title.className = 'blog-overlay-editorial-card-title';
-          title.style.fontSize = isLarge ? '22px' : '14px';
-          title.style.fontWeight = isLarge ? '800' : '700';
-          title.style.lineHeight = '1.2';
-          title.style.color = '#fff';
+          var title = document.createElement('h2');
+          title.className = 'blog-overlay-title blog-overlay-editorial-card-title';
+          self._applyTitleStyle(title, { size: isLarge ? 'lg' : 'std', onImage: true, margin: '0' });
           title.textContent = p.title || 'Untitled';
           if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
             var edFpK = displayPostKey(featuredPost);
             var edPk = displayPostKey(p);
             if (p === featuredPost || (edFpK && edPk === edFpK)) {
-              var edBadge = document.createElement('div');
-              edBadge.textContent = 'FEATURED';
-              edBadge.style.position = 'absolute';
-              edBadge.style.top = '14px';
-              edBadge.style.left = '14px';
-              edBadge.style.zIndex = '4';
-              edBadge.style.background = self._getSiteAccentColor();
-              edBadge.style.color = '#fff';
-              edBadge.style.fontSize = '9px';
-              edBadge.style.fontWeight = '700';
-              edBadge.style.letterSpacing = '1.5px';
-              edBadge.style.textTransform = 'uppercase';
-              edBadge.style.padding = '3px 8px';
-              edBadge.style.borderRadius = '2px';
+              var edBadge = self._createFeaturedBadge({
+                tagName: 'div',
+                absolute: true,
+                top: '14px',
+                left: '14px',
+                zIndex: '4'
+              });
               link.appendChild(edBadge);
             }
           }
@@ -11150,8 +12147,7 @@
           }
           var meta = document.createElement('div');
           meta.className = 'blog-overlay-editorial-card-meta';
-          meta.style.fontSize = isLarge ? '11px' : '10px';
-          meta.style.color = 'rgba(255,255,255,0.5)';
+          self._applyMetaStyle(meta, { onImage: true });
           meta.textContent = metaParts.join(' · ');
           var edCategoriesLine = self._createCollectionPostCategoriesLine(
             p,
@@ -11359,10 +12355,15 @@
           collectionPaginationEl = this._buildCollectionPaginationNav(vs);
 
 
-          var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : 240;
-          var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : 240;
-          var leftSpaceAbove = leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, leftSidebarCfg.spaceAbove)) : 0;
-          var rightSpaceAbove = rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.min(64, Math.max(0, rightSidebarCfg.spaceAbove)) : 0;
+          var sidebarWidthDefault = isSinglePost ? 300 : 240;
+          var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : sidebarWidthDefault;
+          var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : sidebarWidthDefault;
+          if (featurePostLayout) {
+            leftSidebarWidth = 300;
+            rightSidebarWidth = 300;
+          }
+          var leftSpaceAbove = 0;
+          var rightSpaceAbove = 0;
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
           var stickySidebarTopPx = self._getSidebarStickyTopPx();
@@ -11539,22 +12540,35 @@
             if (typeof self._blogOverlayStickySidebarSyncFn === 'function') {
               self._blogOverlayStickySidebarSyncFn();
             }
+            if (collectionLayout === 'digest' && digestMobileNarrow) {
+              self._syncDigestMobileFeaturedImageBleed(wrapper);
+            }
           }
 
           if (headerContentCfg && headerContentCfg.show) {
-            var hcModules = Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules.slice() : [];
-            if (hcModules.length === 0 && (headerContentCfg.tableOfContents || headerContentCfg.breadcrumbs)) {
-              if (headerContentCfg.tableOfContents) hcModules.push('tableOfContents');
-              if (headerContentCfg.breadcrumbs) hcModules.push('breadcrumbs');
+            var hcAvail = Array.isArray(headerContentCfg.modules) ? headerContentCfg.modules.slice() : [];
+            if (hcAvail.length === 0 && (headerContentCfg.tableOfContents || headerContentCfg.breadcrumbs)) {
+              if (headerContentCfg.tableOfContents) hcAvail.push('tableOfContents');
+              if (headerContentCfg.breadcrumbs) hcAvail.push('breadcrumbs');
             }
-            hcModules = self._orderedZoneModules(hcModules, headerContentCfg.moduleOrder);
+            var hcModules;
+            if (!isSinglePost && cfg.collectionModules) {
+              hcModules = self._resolveCollectionZoneModuleIds(
+                hcAvail,
+                headerContentCfg.moduleOrder,
+                'header',
+                cfg.collectionModules
+              );
+            } else {
+              hcModules = self._orderedZoneModules(hcAvail, headerContentCfg.moduleOrder);
+            }
             self._warnDuplicateValues('header', hcModules);
             var headerHeight = Math.min(120, Math.max(32, parseInt(headerContentCfg.height, 10) || 48));
             if (hcModules.length > 0) {
               var headerEl = document.createElement('div');
               headerEl.className = 'blog-overlay-header-content';
-              headerEl.style.marginBottom = '16px';
-              headerEl.style.paddingBottom = '12px';
+              headerEl.style.marginBottom = newsroomMobileCompact ? '8px' : '16px';
+              headerEl.style.paddingBottom = newsroomMobileCompact ? '6px' : '12px';
               headerEl.style.display = 'flex';
               var collectionHeaderRow = !isSinglePost;
               if (collectionHeaderRow) {
@@ -11910,17 +12924,26 @@
             self._warnDuplicateValues('footer', fcModules);
             if (fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
-              var footerLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
-              var footerRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              if (isSinglePost) {
+                featureFooterLeftPad = 0;
+                featureFooterRightPad = 0;
+              } else {
+                featureFooterLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+                featureFooterRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              }
               var footerTopPadRaw = footerContentCfg.topPadding;
               var footerTopPadParsed = typeof footerTopPadRaw === 'number' ? footerTopPadRaw : parseInt(footerTopPadRaw, 10);
-              var footerTopPad = Math.min(120, Math.max(0, isFinite(footerTopPadParsed) ? footerTopPadParsed : 16));
+              featureFooterTopPad = Math.min(120, Math.max(0, isFinite(footerTopPadParsed) ? footerTopPadParsed : 16));
+              var footerLeftPad = featureFooterLeftPad;
+              var footerRightPad = featureFooterRightPad;
+              var footerTopPad = featureFooterTopPad;
               var footerEl = document.createElement('div');
               footerEl.className = 'blog-overlay-footer-content';
               footerEl.style.marginTop = '24px';
               footerEl.style.paddingLeft = footerLeftPad + 'px';
               footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = footerTopPad + 'px';
+              if (isSinglePost) self._applyPostFooterSideMargins(footerEl, cfg, footerContentCfg);
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
@@ -11931,6 +12954,18 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
+                /** Writer/Story: no "More to Read" grid (spec module order). */
+                if (fmod === 'relevantPosts' && (writerPostLayoutForFooter || storyPostLayoutForFooter)) {
+                  continue;
+                }
+                /** Writer: lead magnet is skipped entirely; prev/next replaces it instead. */
+                if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
+                  continue;
+                }
+                /** Prev/next navigation is Writer-only. */
+                if (fmod === 'prevNextArticle' && !writerPostLayoutForFooter) {
+                  continue;
+                }
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
@@ -11964,21 +12999,33 @@
                   fmodEl = createPrevNextArticleModule();
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
-                    fmodEl.style.maxWidth = '720px';
+                    fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
                 }
-                if (fmodEl) footerEl.appendChild(fmodEl);
+                if (fmodEl) {
+                  if (featurePostLayout && fmod === 'authorProfiles') {
+                    featureBelowRowAuthorEl = fmodEl;
+                  } else if (featurePostLayout && fmod === 'relevantPosts') {
+                    featureBelowRowMoreToReadEl = fmodEl;
+                  } else if (featurePostLayout && fmod === 'leadMagnet') {
+                    featureBelowRowLeadMagnetEl = fmodEl;
+                  } else {
+                    footerEl.appendChild(fmodEl);
+                  }
+                }
               }
-              if (footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
+              if (!featurePostLayout && footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
             }
           }
-          if (paywallShowFooter) {
+          if (paywallShowFooter && !featurePostLayout) {
             self._appendPaywallFooter(footerZoneEl);
           }
 
           if (headerZoneEl && headerZoneEl.childNodes.length) wrapper.appendChild(headerZoneEl);
+          var reporterPostLayout = isSinglePost && self._isReporterPostLayout(cfg);
           var pinPostHeaderInMainColumn = isSinglePost &&
+            !reporterPostLayout &&
             singlePostHeaderZoneEl &&
             singlePostHeaderZoneEl.childNodes.length > 0 &&
             (leftSidebarWrapEl.childNodes.length > 0 || rightSidebarWrapEl.childNodes.length > 0);
@@ -11991,6 +13038,19 @@
             }
           }
           if (leftSidebarWrapEl.childNodes.length) mainRowEl.appendChild(leftSidebarWrapEl);
+          if (isSinglePost && (leftSidebarWrapEl.childNodes.length || rightSidebarWrapEl.childNodes.length)) {
+            var mainColPadTop = Math.max(leftPadTop, rightPadTop);
+            main.style.paddingTop = mainColPadTop > 0 ? (mainColPadTop + 'px') : '0';
+          }
+          var sidebarRowPostLayoutActive = isSinglePost && (
+            self._isFeaturePostLayout(cfg) ||
+            self._isReporterPostLayout(cfg) ||
+            self._isPublisherPostLayout(cfg)
+          );
+          if (sidebarRowPostLayoutActive) {
+            if (leftSidebarEl.childNodes.length) self._normalizeSidebarTopForSidebarRow(leftSidebarEl);
+            if (rightSidebarEl.childNodes.length) self._normalizeSidebarTopForSidebarRow(rightSidebarEl);
+          }
           mainRowEl.appendChild(main);
           if (rightSidebarWrapEl.childNodes.length) mainRowEl.appendChild(rightSidebarWrapEl);
           wrapper.appendChild(mainRowEl);
@@ -12035,6 +13095,66 @@
             commentPostForGate &&
             !self._isPaywallPublicPreviewPost(commentPostForGate);
           self._setAllCommentUiHidden(!!commentsTurnedOff || hideCommentsForLoggedOutPost);
+          var featureCommentsWillMount =
+            featurePostLayout &&
+            isSinglePost &&
+            selectedIndex >= 0 &&
+            items[selectedIndex] &&
+            cfg &&
+            commentCfg &&
+            commentCfg.commentsEnabled &&
+            (viewerLoggedIn || !hideCommentsForLoggedOutPost);
+          if (featurePostLayout) {
+            featureBelowRowHost = document.createElement('div');
+            featureBelowRowHost.className = 'blog-overlay-feature-below-row';
+            featureBelowRowHost.style.width = '100%';
+            featureBelowRowHost.style.maxWidth = '100%';
+            featureBelowRowHost.style.boxSizing = 'border-box';
+            featureBelowRowHost.style.marginTop = '24px';
+            featureBelowRowHost.style.paddingTop = featureFooterTopPad + 'px';
+            featureBelowRowHost.style.display = 'flex';
+            featureBelowRowHost.style.flexDirection = 'column';
+            featureBelowRowHost.style.gap = '24px';
+            featureBelowRowHost.style.alignItems = 'stretch';
+            var appendFeatureBelowRowSection = function(el) {
+              if (!el) return;
+              var section = document.createElement('div');
+              section.className = 'blog-overlay-feature-below-row-section';
+              section.style.width = '100%';
+              section.style.boxSizing = 'border-box';
+              if (isSinglePost) {
+                self._applyPostFooterSideMargins(section, cfg, footerContentCfg);
+              } else {
+                section.style.paddingLeft = featureFooterLeftPad + 'px';
+                section.style.paddingRight = featureFooterRightPad + 'px';
+              }
+              section.appendChild(el);
+              featureBelowRowHost.appendChild(section);
+            };
+            appendFeatureBelowRowSection(featureBelowRowAuthorEl);
+            if (featureCommentsWillMount) {
+              featureCommentsSectionEl = document.createElement('div');
+              featureCommentsSectionEl.className = 'blog-overlay-feature-below-row-section blog-overlay-feature-comments-section';
+              featureCommentsSectionEl.style.width = '100%';
+              featureCommentsSectionEl.style.boxSizing = 'border-box';
+              if (isSinglePost) {
+                self._applyPostFooterSideMargins(featureCommentsSectionEl, cfg, footerContentCfg);
+              } else {
+                featureCommentsSectionEl.style.paddingLeft = featureFooterLeftPad + 'px';
+                featureCommentsSectionEl.style.paddingRight = featureFooterRightPad + 'px';
+              }
+              featureBelowRowHost.appendChild(featureCommentsSectionEl);
+            }
+            appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
+            appendFeatureBelowRowSection(featureBelowRowLeadMagnetEl);
+            if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
+            var featureFooterSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
+            if (featureFooterSideMarginsMode === 'postBody') {
+              main.appendChild(featureBelowRowHost);
+            } else {
+              wrapper.appendChild(featureBelowRowHost);
+            }
+          }
           if (
             isSinglePost &&
             selectedIndex >= 0 &&
@@ -12045,7 +13165,8 @@
             (viewerLoggedIn || !hideCommentsForLoggedOutPost)
           ) {
             try {
-              self._initComments(main, items[selectedIndex], cfg);
+              var commentsMountEl = featurePostLayout && featureCommentsSectionEl ? featureCommentsSectionEl : main;
+              self._initComments(commentsMountEl, items[selectedIndex], cfg);
             } catch (e) {
               console.error('[BlogOverlay] Comments init error:', e);
             }
@@ -12054,8 +13175,24 @@
             footerZoneEl.style.boxSizing = 'border-box';
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
-            if (isSinglePost) {
+            self._clearPostFooterZoneBleed(footerZoneEl);
+            var footerSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
+            var publisherPostLayoutForFooter = isSinglePost && self._isPublisherPostLayout(cfg);
+            var sidebarSpanFooterLayout = reporterPostLayout || publisherPostLayoutForFooter;
+            var postBodyFooterInMainColumn =
+              isSinglePost &&
+              footerSideMarginsMode === 'postBody' &&
+              sidebarSpanFooterLayout;
+            if (featurePostLayout) {
+              wrapper.appendChild(footerZoneEl);
+            } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
               main.appendChild(footerZoneEl);
+              if (footerSideMarginsMode === 'fullScreen' && storyPostLayoutForFooter) {
+                var footerContentEl = footerZoneEl.querySelector('.blog-overlay-footer-content');
+                self._bleedPostFooterZoneToMainWidth(footerZoneEl, main, footerContentEl);
+              }
+            } else if (isSinglePost) {
+              wrapper.appendChild(footerZoneEl);
             } else {
               wrapper.appendChild(footerZoneEl);
             }
@@ -12076,6 +13213,7 @@
           requestAnimationFrame(function() {
             applySidebarResponsiveLayout();
           });
+          self._scheduleDigestMobileFeaturedImageBleed(vs);
           if (typeof ResizeObserver !== 'undefined') {
             self._blogOverlaySidebarRO = new ResizeObserver(function() {
               applySidebarResponsiveLayout();
