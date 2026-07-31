@@ -44,6 +44,7 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
 | `HCAPTCHA_*` | hCaptcha keys |
 | `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA (checkout + Log in). Set per environment (e.g. `true` on Preview / staging, `false` on Production). Baked into the client at build time; `/api/health` overrides when reachable. |
+| `VITE_GA_MEASUREMENT_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`) for the marketing landing page. **Production only** — leave unset on Preview/staging. Analytics only loads on `betterblog.xyz` and `www.betterblog.xyz`. |
 
 6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
    Events: `checkout.session.completed`, `customer.subscription.updated`.
@@ -65,6 +66,38 @@ If **Vercel Authentication** (Deployment Protection) is enabled for Preview, bro
 After changing `IS_BETTER_BLOG_LIVE`, **redeploy** the branch (env vars are applied at build time for the fallback).
 
 Optional: disable Deployment Protection for Preview, or add `staging.betterblog.xyz` to the protection allowlist, if you want runtime `/api/health` to drive the UI.
+
+### Google Analytics (marketing landing page)
+
+GA4 tracks pricing engagement and the coming-soon email modal on the public landing page (`/`). It does **not** use the customer-blog server-side GA integration in `server/src/routes/analytics.ts`.
+
+**Setup (one-time):**
+
+1. In [Google Analytics](https://analytics.google.com/), create a GA4 property (e.g. "BetterBlog Marketing").
+2. Add a **Web** data stream for `https://betterblog.xyz`.
+3. Enable **Enhanced measurement** (scrolls, outbound clicks, etc.).
+4. Copy the **Measurement ID** (`G-XXXXXXXXXX`).
+5. In Vercel → **Production** environment only, set `VITE_GA_MEASUREMENT_ID` to that ID. Redeploy production after adding it.
+
+Analytics is gated in code: gtag loads only when the hostname is `betterblog.xyz` or `www.betterblog.xyz` **and** the env var is set. Staging (`staging.betterblog.xyz`), Preview, and localhost never send events.
+
+**Post-deploy GA4 admin (recommended):**
+
+1. **Realtime** — confirm events on `betterblog.xyz`; confirm zero hits from staging.
+2. **Admin → Custom definitions → Create custom dimensions** (Event scope): `trigger_source`, `tier`, `billing_period`.
+3. **Admin → Events** — mark `interest_modal_success` as a **Key event** (conversion).
+4. **Explore → Funnel exploration** — steps: `interest_modal_open` → `interest_modal_submit` → `interest_modal_success`, broken down by `trigger_source`.
+
+**Key custom events:**
+
+| Event | Purpose |
+| ----- | ------- |
+| `pricing_section_view` | User scrolled to pricing (≥50% visible) |
+| `pricing_tier_cta_click` | Tier card CTA clicked |
+| `interest_modal_open` | Coming-soon modal opened (param: `trigger_source`) |
+| `interest_modal_submit` | Email form submitted |
+| `interest_modal_success` | Email captured successfully |
+| `interest_modal_dismiss` | Modal closed without completing (param: `had_input`) |
 
 ### Database seed (CI)
 
