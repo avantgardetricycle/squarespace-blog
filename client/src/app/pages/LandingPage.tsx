@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link } from "react-router";
 import { motion } from "motion/react";
+import { ExternalLink } from "lucide-react";
 import { Logo } from "@/app/components/Logo";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/app/components/ui/utils";
@@ -48,7 +49,7 @@ export default function LandingPage() {
     setInterestModalOpen(open);
   }, []);
 
-  const trackNavClick = useCallback((link: "features" | "how_it_works" | "pricing") => {
+  const trackNavClick = useCallback((link: "features" | "how_it_works" | "pricing" | "support") => {
     if (link === "pricing") {
       trackEvent("pricing_nav_click");
     }
@@ -235,6 +236,17 @@ export default function LandingPage() {
             <a href="#features" onClick={() => trackNavClick("features")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Features</a>
             <a href="#how-it-works" onClick={() => trackNavClick("how_it_works")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">How it Works</a>
             <a href="#pricing" onClick={() => trackNavClick("pricing")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Pricing</a>
+            <a
+              href="/support"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackNavClick("support")}
+              className="inline-flex items-center gap-1 text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors"
+            >
+              Support
+              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="sr-only">(opens in new tab)</span>
+            </a>
           </div>
           <div className="flex items-center gap-4">
             {isAuthenticated ? (

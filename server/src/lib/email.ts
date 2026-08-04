@@ -1,7 +1,7 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
 import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
-import { getAppUrl } from './url.js'
+import { getAppUrl, getSupportPortalUrl } from './url.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -14,7 +14,8 @@ const transporter = nodemailer.createTransport({
 })
 
 const appName = process.env.APP_NAME ?? 'BetterBlog'
-const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <no-reply@betterblog.xyz>'
+const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <support@betterblog.xyz>'
+const inviteEmailSubject = 'Your BetterBlog access link'
 
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
 export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
@@ -26,7 +27,7 @@ export async function sendInviteEmail(to: string, magicLink: string): Promise<vo
   await transporter.sendMail({
     from: mailFrom,
     to,
-    subject: `You're invited to ${appName}`,
+    subject: inviteEmailSubject,
     html: `
       <h1>Welcome to ${appName}</h1>
       <p>Click the link below to activate your account and get started:</p>
@@ -48,7 +49,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
 
   sgMail.setApiKey(apiKey)
 
-  const html = await renderInviteEmail(magicLink)
+  const html = await renderInviteEmail(magicLink, getSupportPortalUrl())
 
   const logoAttachment = {
     content: getLogoBase64(),
@@ -61,7 +62,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
   const msg = {
     to,
     from: mailFrom,
-    subject: `You're invited to ${appName}`,
+    subject: inviteEmailSubject,
     html,
     attachments: [logoAttachment],
     trackingSettings: { clickTracking: { enable: false } },
@@ -92,7 +93,7 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
 
   sgMail.setApiKey(apiKey)
 
-  const html = await renderMagicLinkEmail(magicLink)
+  const html = await renderMagicLinkEmail(magicLink, getSupportPortalUrl())
 
   const logoAttachment = {
     content: getLogoBase64(),
@@ -263,5 +264,81 @@ export async function sendCommentNotificationEmail(
     })
   } catch (err) {
     console.error('[Comment] SendGrid error sending comment notification:', err)
+  }
+}
+
+export interface SupportRequestPayload {
+  name: string
+  email: string
+  mode: 'question' | 'problem'
+  subject: string
+  message: string
+  pageUrl?: string
+  screenshot?: {
+    filename: string
+    contentType: string
+    data: string
+  }
+}
+
+/** Forward a support portal form submission to the support inbox */
+export async function sendSupportRequestEmail(payload: SupportRequestPayload): Promise<void> {
+  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.xyz'
+  const modeLabel = payload.mode === 'problem' ? 'Problem report' : 'Question'
+  const subjectLine = `[BetterBlog Support] ${modeLabel}: ${payload.subject}`
+
+  const fields = [
+    ['From', `${payload.name} <${payload.email}>`],
+    ['Type', modeLabel],
+    ['Topic', payload.subject],
+    ...(payload.pageUrl ? [['Page URL', payload.pageUrl] as const] : []),
+    ['Message', payload.message],
+  ]
+
+  const html = `
+    <h2>New support request</h2>
+    ${fields
+      .map(
+        ([label, value]) =>
+          `<p><strong>${label}:</strong><br/>${value.replace(/\n/g, '<br/>')}</p>`
+      )
+      .join('\n')}
+  `
+
+  const text = fields.map(([label, value]) => `${label}: ${value}`).join('\n\n')
+
+  const attachments = payload.screenshot
+    ? [
+        {
+          content: payload.screenshot.data,
+          filename: payload.screenshot.filename,
+          type: payload.screenshot.contentType,
+          disposition: 'attachment' as const,
+        },
+      ]
+    : undefined
+
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[Support] SENDGRID_API_KEY not set. New ${modeLabel.toLowerCase()} from ${payload.email}:\n${text}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  try {
+    await sgMail.send({
+      to: supportTo,
+      from: mailFrom,
+      replyTo: payload.email,
+      subject: subjectLine,
+      text,
+      html,
+      attachments,
+      trackingSettings: { clickTracking: { enable: false } },
+    })
+  } catch (err) {
+    console.error('[Support] SendGrid error:', err)
+    throw err
   }
 }

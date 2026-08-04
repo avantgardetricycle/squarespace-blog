@@ -12,6 +12,7 @@ import stripeWebhookRoutes from './routes/stripe-webhook.js'
 import blogAuthorsRoutes from './routes/blog-authors.js'
 import templatesRoutes from './routes/templates.js'
 import leadsRoutes from './routes/leads.js'
+import supportRoutes from './routes/support.js'
 import analyticsRoutes from './routes/analytics.js'
 import captureRoutes from './routes/capture.js'
 import commentsRoutes from './routes/comments.js'
@@ -73,6 +74,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use('/api/templates', templatesRoutes)
   app.use('/api/checkout', checkoutRoutes)
   app.use('/api/leads', leadsRoutes)
+  app.use('/api/support', supportRoutes)
 
   app.get('/api/health', (_req, res) => {
     const isBetterBlogLiveEnv = process.env.IS_BETTER_BLOG_LIVE

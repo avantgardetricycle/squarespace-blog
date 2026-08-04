@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link, useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, ExternalLink } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 
@@ -51,6 +51,17 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
+          <a
+            href="/support"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-[#6b6b6b] hover:bg-[#f7f6f3] hover:text-[#0a0a0a] transition-colors"
+          >
+            <LifeBuoy className="w-4 h-4" />
+            <span className="flex-1">Support</span>
+            <ExternalLink className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
+            <span className="sr-only">(opens in new tab)</span>
+          </a>
         </nav>
 
         <div className="p-4 border-t border-[#e5e4e0]">

@@ -9,6 +9,7 @@ import Comments from "./pages/Comments";
 import Checkout from "./pages/Checkout";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Analytics from "./pages/Analytics";
+import SupportPortal from "./pages/SupportPortal";
 import { getDashboardMe } from "@/api/auth";
 
 const protectedLoader = async ({ request }: LoaderFunctionArgs) => {
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
   {
     path: "/checkout/success",
     Component: CheckoutSuccess,
+  },
+  {
+    path: "/support",
+    Component: SupportPortal,
   },
   {
     path: "/dashboard",

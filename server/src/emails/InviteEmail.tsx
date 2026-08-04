@@ -3,9 +3,10 @@ import * as React from 'react'
 
 interface InviteEmailProps {
   magicLink?: string
+  supportUrl?: string
 }
 
-export function InviteEmail({ magicLink = '#' }: InviteEmailProps) {
+export function InviteEmail({ magicLink = '#', supportUrl = '#' }: InviteEmailProps) {
   return (
     <Html>
       <Head>
@@ -80,7 +81,11 @@ export function InviteEmail({ magicLink = '#' }: InviteEmailProps) {
           <Hr style={{ borderColor: '#e5e4e0' }} />
           <Section style={{ backgroundColor: '#f7f6f3', padding: '24px 40px', borderTop: '1px solid #e5e4e0' }}>
             <Text style={{ color: '#6b6b6b', fontSize: 13, lineHeight: 1.6, margin: '0 0 8px', textAlign: 'center' as const }}>
-              Need help? Reply to this email or visit our support center.
+              Need help? Reply to this email or{' '}
+              <Link href={supportUrl} style={{ color: '#5B4FE8', textDecoration: 'underline' }}>
+                visit our support center
+              </Link>
+              .
             </Text>
             <Text style={{ color: '#6b6b6b', fontSize: 12, margin: 0, textAlign: 'center' as const }}>
               © {new Date().getFullYear()} BetterBlog. All rights reserved.
