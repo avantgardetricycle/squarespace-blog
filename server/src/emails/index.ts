@@ -14,12 +14,12 @@ export function getLogoBase64(): string {
   return readFileSync(logoPath).toString('base64')
 }
 
-export async function renderInviteEmail(magicLink: string): Promise<string> {
-  return render(InviteEmail({ magicLink }))
+export async function renderInviteEmail(magicLink: string, supportUrl?: string): Promise<string> {
+  return render(InviteEmail({ magicLink, supportUrl }))
 }
 
-export async function renderMagicLinkEmail(magicLink: string): Promise<string> {
-  return render(MagicLinkEmail({ magicLink }))
+export async function renderMagicLinkEmail(magicLink: string, supportUrl?: string): Promise<string> {
+  return render(MagicLinkEmail({ magicLink, supportUrl }))
 }
 
 export async function renderCommentNotificationEmail(props: {
