@@ -14,7 +14,8 @@ const transporter = nodemailer.createTransport({
 })
 
 const appName = process.env.APP_NAME ?? 'BetterBlog'
-const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <no-reply@betterblog.xyz>'
+const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <support@betterblog.xyz>'
+const inviteEmailSubject = 'Your BetterBlog access link'
 
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
 export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
@@ -26,7 +27,7 @@ export async function sendInviteEmail(to: string, magicLink: string): Promise<vo
   await transporter.sendMail({
     from: mailFrom,
     to,
-    subject: `You're invited to ${appName}`,
+    subject: inviteEmailSubject,
     html: `
       <h1>Welcome to ${appName}</h1>
       <p>Click the link below to activate your account and get started:</p>
@@ -61,7 +62,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
   const msg = {
     to,
     from: mailFrom,
-    subject: `You're invited to ${appName}`,
+    subject: inviteEmailSubject,
     html,
     attachments: [logoAttachment],
     trackingSettings: { clickTracking: { enable: false } },
