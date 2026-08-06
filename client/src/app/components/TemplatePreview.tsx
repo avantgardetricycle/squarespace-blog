@@ -163,18 +163,67 @@ function CollectionHeader({ withSearch = true }: { withSearch?: boolean } = {}) 
 function MosaicTile({
   shade,
   className,
+  featured,
 }: {
   shade: "light" | "mid" | "dark";
   className?: string;
+  featured?: boolean;
 }) {
   const bg = shade === "dark" ? IMG_DARK : shade === "mid" ? IMG_MID : IMG;
   return (
     <div className={cn(bg, "rounded relative overflow-hidden min-h-0", className)}>
+      {featured && (
+        <div className="absolute top-2 left-2 h-2 w-5 rounded-full bg-[#5B4FE8]/90" />
+      )}
       <div className="absolute bottom-2 left-2 right-2 space-y-1">
         <div className="h-1 w-7 rounded-sm bg-[#c4b9f5]/90" />
         <div className="h-1.5 w-4/5 rounded-sm bg-white/90" />
         <div className="h-1 w-1/2 rounded-sm bg-white/70" />
       </div>
+    </div>
+  );
+}
+
+/** Editorial mosaic row: large tile (2 cols) beside two stacked landscape tiles. */
+function EditorialMosaicRow({
+  largeShade,
+  smallShades,
+  largeOnRight = false,
+  featured,
+}: {
+  largeShade: "light" | "mid" | "dark";
+  smallShades: ["light" | "mid" | "dark", "light" | "mid" | "dark"];
+  largeOnRight?: boolean;
+  featured?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-1.5",
+        largeOnRight ? "grid-cols-[1fr_2fr]" : "grid-cols-[2fr_1fr]"
+      )}
+    >
+      {largeOnRight ? (
+        <>
+          <MosaicTile shade={smallShades[0]} className="aspect-[2/1] w-full col-start-1 row-start-1" />
+          <MosaicTile shade={smallShades[1]} className="aspect-[2/1] w-full col-start-1 row-start-2" />
+          <MosaicTile
+            shade={largeShade}
+            featured={featured}
+            className="row-span-2 col-start-2 row-start-1 h-full min-h-0"
+          />
+        </>
+      ) : (
+        <>
+          <MosaicTile
+            shade={largeShade}
+            featured={featured}
+            className="row-span-2 col-start-1 row-start-1 h-full min-h-0"
+          />
+          <MosaicTile shade={smallShades[0]} className="aspect-[2/1] w-full col-start-2 row-start-1" />
+          <MosaicTile shade={smallShades[1]} className="aspect-[2/1] w-full col-start-2 row-start-2" />
+        </>
+      )}
     </div>
   );
 }
@@ -265,23 +314,20 @@ export function TemplatePreview({ previewLayout, className }: TemplatePreviewPro
         <div className={cn("flex flex-col gap-3 p-4 min-h-0", className)}>
           <CollectionHeader />
           <div className="flex flex-col gap-2 min-h-0">
-            {/* Taller mosaic rows — landscape tiles with real height */}
-            <div
-              className="grid gap-2 h-[120px]"
-              style={{ gridTemplateColumns: "1.4fr 1fr", gridTemplateRows: "1fr 1fr" }}
-            >
-              <MosaicTile shade="mid" className="row-span-2" />
-              <MosaicTile shade="dark" />
-              <MosaicTile shade="light" />
-            </div>
-            <div
-              className="grid gap-2 h-[120px]"
-              style={{ gridTemplateColumns: "1fr 1.4fr", gridTemplateRows: "1fr 1fr" }}
-            >
-              <MosaicTile shade="dark" />
-              <MosaicTile shade="mid" className="row-span-2" />
-              <MosaicTile shade="light" />
-            </div>
+            <EditorialMosaicRow
+              largeShade="mid"
+              smallShades={["dark", "light"]}
+              featured
+            />
+            <EditorialMosaicRow
+              largeShade="dark"
+              smallShades={["mid", "light"]}
+              largeOnRight
+            />
+            <EditorialMosaicRow
+              largeShade="light"
+              smallShades={["dark", "mid"]}
+            />
           </div>
         </div>
       );

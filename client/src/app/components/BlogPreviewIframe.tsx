@@ -1,7 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-// #region agent log
-import { bbDebugLog } from "@/lib/bbDebugLog";
-// #endregion
 
 export interface RendererConfig {
   showDate?: boolean;
@@ -105,51 +102,6 @@ export default function BlogPreviewIframe({
   /** Set when we receive READY; iframe may redirect www↔non-www so we use its actual origin for postMessage */
   const resolvedTargetOriginRef = useRef<string | null>(null);
 
-  // #region agent log
-  const dbgReadyRef = useRef(false);
-  useEffect(() => {
-    dbgReadyRef.current = false;
-    bbDebugLog("A", "BlogPreviewIframe.tsx:mount", "iframe mounting with src", {
-      blogUrl,
-      iframeHost: (() => { try { return new URL(blogUrl).hostname; } catch { return "unparseable"; } })(),
-      parentOrigin: window.location.origin,
-      sandbox: "allow-scripts allow-same-origin allow-forms",
-    });
-
-    const onCspViolation = (e: SecurityPolicyViolationEvent) => {
-      bbDebugLog("D", "BlogPreviewIframe.tsx:csp", "parent page CSP violation fired", {
-        violatedDirective: e.violatedDirective,
-        blockedURI: e.blockedURI,
-        originalPolicy: String(e.originalPolicy || "").slice(0, 300),
-      });
-    };
-    document.addEventListener("securitypolicyviolation", onCspViolation);
-
-    // Opaque probe: succeeds if the host is reachable from this browser even when framing is blocked.
-    const probeStart = Date.now();
-    fetch(blogUrl, { mode: "no-cors", credentials: "omit" }).then(
-      (r) => bbDebugLog("E", "BlogPreviewIframe.tsx:probe", "no-cors probe resolved (host reachable)", {
-        type: r.type, ms: Date.now() - probeStart,
-      }),
-      (err) => bbDebugLog("E", "BlogPreviewIframe.tsx:probe", "no-cors probe REJECTED (host unreachable/blocked)", {
-        error: String(err), ms: Date.now() - probeStart,
-      })
-    );
-
-    const readyTimer = window.setTimeout(() => {
-      bbDebugLog("C", "BlogPreviewIframe.tsx:readyTimeout", "6s after mount: READY status", {
-        readyReceived: dbgReadyRef.current,
-        resolvedTargetOrigin: resolvedTargetOriginRef.current,
-      });
-    }, 6000);
-
-    return () => {
-      document.removeEventListener("securitypolicyviolation", onCspViolation);
-      window.clearTimeout(readyTimer);
-    };
-  }, [blogUrl]);
-  // #endregion
-
   const getTargetOrigin = () => {
     try {
       return new URL(blogUrl).origin;
@@ -203,13 +155,6 @@ export default function BlogPreviewIframe({
   useLayoutEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type !== MESSAGE_TYPE_READY) return;
-      // #region agent log
-      dbgReadyRef.current = true;
-      bbDebugLog("C", "BlogPreviewIframe.tsx:ready", "READY received from iframe", {
-        eventOrigin: event.origin,
-        expectedOrigin: getTargetOrigin(),
-      });
-      // #endregion
       const expectedOrigin = getTargetOrigin();
       if (expectedOrigin !== "*" && !originsMatch(event.origin, expectedOrigin)) return;
 
@@ -324,44 +269,9 @@ export default function BlogPreviewIframe({
   // Send config when iframe loads (renderer may not be ready yet, so READY will trigger another send)
   const handleIframeLoad = () => {
     if (DEBUG) console.log("[BlogPreviewIframe] iframe onLoad, sending config");
-    // #region agent log
-    // A cross-origin frame that really loaded throws SecurityError on location access.
-    // A frame blocked by X-Frame-Options / CSP frame-ancestors stays on the same-origin
-    // initial about:blank document, so these reads succeed.
-    (() => {
-      const iframe = iframeRef.current;
-      let locationRead: string | null = null;
-      let locationError: string | null = null;
-      let bodyChildren: number | null = null;
-      try {
-        locationRead = iframe?.contentWindow?.location?.href ?? null;
-      } catch (e) {
-        locationError = String(e);
-      }
-      try {
-        bodyChildren = iframe?.contentDocument?.body?.childElementCount ?? null;
-      } catch {
-        bodyChildren = -1;
-      }
-      bbDebugLog("B", "BlogPreviewIframe.tsx:onLoad", "iframe load event fired", {
-        blogUrl,
-        locationRead,
-        locationError,
-        bodyChildren,
-        subframeCount: (() => { try { return iframe?.contentWindow?.length ?? null; } catch { return -1; } })(),
-        likelyBlocked: locationError === null && locationRead === "about:blank",
-      });
-    })();
-    // #endregion
     sendConfig();
     sendSelectPostIndex();
   };
-
-  // #region agent log
-  const handleIframeError = () => {
-    bbDebugLog("B", "BlogPreviewIframe.tsx:onError", "iframe error event fired", { blogUrl });
-  };
-  // #endregion
 
   return (
     <iframe
@@ -371,7 +281,6 @@ export default function BlogPreviewIframe({
       className={`w-full h-full border-0 ${className}`}
       sandbox="allow-scripts allow-same-origin allow-forms"
       onLoad={handleIframeLoad}
-      onError={handleIframeError}
     />
   );
 }

@@ -53,9 +53,6 @@ import BlogPreviewIframe, {
   buildBlogPreviewUrl,
   isSquarespaceUrl,
 } from "@/app/components/BlogPreviewIframe";
-// #region agent log
-import { bbDebugLog } from "@/lib/bbDebugLog";
-// #endregion
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
@@ -2364,14 +2361,6 @@ export default function Configure() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled) return;
-        // #region agent log
-        bbDebugLog("B", "Configure.tsx:embeddableProbe", "server embeddability probe result", {
-          siteKey: effectiveSiteKey,
-          embeddable: data?.embeddable ?? null,
-          blockedBy: data?.blockedBy ?? null,
-          status: data?.status ?? null,
-        });
-        // #endregion
         setPreviewBlockedBy(data?.blockedBy ?? null);
       })
       .catch(() => {
@@ -2382,24 +2371,6 @@ export default function Configure() {
     };
   }, [effectiveSiteKey]);
 
-  // #region agent log
-  useEffect(() => {
-    if (!effectiveSite) {
-      bbDebugLog("A", "Configure.tsx:previewBranch", "no effectiveSite yet", { siteKey });
-      return;
-    }
-    const url = buildBlogPreviewUrl(effectiveSite, undefined, false);
-    bbDebugLog("A", "Configure.tsx:previewBranch", "preview branch decision", {
-      siteKey: effectiveSite.siteKey,
-      storedUrl: effectiveSite.url,
-      storedBlogPath: effectiveSite.blogPath,
-      builtPreviewUrl: url,
-      isSquarespaceSubdomain: url ? isSquarespaceUrl(url) : null,
-      branch: !url ? "no-url-message" : isSquarespaceUrl(url) ? "BlogPreviewRenderer" : "BlogPreviewIframe",
-      verificationStatus: (effectiveSite as { verificationStatus?: string }).verificationStatus ?? null,
-    });
-  }, [effectiveSite?.siteKey, effectiveSite?.url, effectiveSite?.blogPath]);
-  // #endregion
   const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
   const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
 
