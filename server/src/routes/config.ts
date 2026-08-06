@@ -368,6 +368,71 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   }
 })
 
+/**
+ * Detects headers that stop a browser from framing the site. Squarespace exposes this as
+ * Settings > Developer Tools > Website Protection > Clickjack protection, which sends
+ * X-Frame-Options: SAMEORIGIN and breaks the Configure live-preview iframe.
+ */
+function frameBlockReason (headers: Headers, ownOrigin: string): 'x-frame-options' | 'frame-ancestors' | null {
+  const xfo = headers.get('x-frame-options')
+  if (xfo && /deny|sameorigin/i.test(xfo)) return 'x-frame-options'
+
+  const csp = headers.get('content-security-policy')
+  if (csp) {
+    const directive = csp
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => /^frame-ancestors\b/i.test(part))
+    if (directive) {
+      const sources = directive.split(/\s+/).slice(1)
+      const allowsUs = sources.some((src) => src === '*' || (ownOrigin !== '' && src.includes(new URL(ownOrigin).hostname)))
+      if (!allowsUs) return 'frame-ancestors'
+    }
+  }
+  return null
+}
+
+// GET /api/config/preview-embeddable/:siteKey - Can the blog page be shown in the preview iframe?
+router.get('/preview-embeddable/:siteKey', async (req: Request, res: Response) => {
+  const siteKey = req.params.siteKey as string
+
+  const site = await getSiteBySiteKey(siteKey)
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  if (!site.url) {
+    res.status(400).json({ error: 'Site has no URL configured' })
+    return
+  }
+
+  let pageUrl: string
+  try {
+    const parsed = new URL(site.url)
+    const hasPath = parsed.pathname && parsed.pathname !== '/'
+    pageUrl = hasPath ? site.url.replace(/\/$/, '') : parsed.origin + (site.blogPath || '/blog')
+  } catch {
+    res.status(400).json({ error: 'Site URL is invalid' })
+    return
+  }
+
+  const ownOrigin = `${req.protocol}://${req.get('host') ?? ''}`
+
+  try {
+    const probe = await fetch(appendPasswordToUrl(pageUrl, site.blogPassword), {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000)
+    })
+    const blockedBy = frameBlockReason(probe.headers, ownOrigin)
+    res.json({ embeddable: blockedBy === null, blockedBy, status: probe.status })
+  } catch (err) {
+    console.error('Preview embeddability probe error:', err)
+    // Unknown means "let the iframe try" — never downgrade a working preview because a probe failed.
+    res.json({ embeddable: true, blockedBy: null, status: null })
+  }
+})
+
 // GET /api/config/share/:siteKey/:postIndex - Share redirect with OG meta for link previews
 router.get('/share/:siteKey/:postIndex', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
