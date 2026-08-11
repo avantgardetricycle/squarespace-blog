@@ -291,6 +291,47 @@ router.post('/subscription/cancel', requireSession, async (req: Request, res: Re
   }
 })
 
+// POST /api/dashboard/subscription/resume - Undo scheduled cancellation
+router.post('/subscription/resume', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        userId: user.id,
+        status: { in: ['trialing', 'active'] },
+        cancelAtPeriodEnd: true
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    if (!subscription?.stripeSubscriptionId) {
+      res.status(404).json({ error: 'No scheduled cancellation found' })
+      return
+    }
+
+    const stripe = getStripe()
+    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      cancel_at_period_end: false
+    })
+
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { cancelAtPeriodEnd: false }
+    })
+
+    res.json({
+      success: true,
+      message: 'Your subscription will renew on your next billing date',
+      currentPeriodEnd: subscription.currentPeriodEnd
+    })
+  } catch (err) {
+    console.error('Subscription resume error:', err)
+    const message = err instanceof Error ? err.message : 'Failed to restore subscription'
+    res.status(500).json({ error: message })
+  }
+})
+
 // POST /api/dashboard/subscription/portal - Create Stripe Customer Portal session
 router.post('/subscription/portal', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }

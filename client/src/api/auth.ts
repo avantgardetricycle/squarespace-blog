@@ -199,6 +199,18 @@ export async function cancelSubscription(): Promise<{ success: boolean; error?: 
   return { success: true, currentPeriodEnd: data.currentPeriodEnd }
 }
 
+export async function resumeSubscription(): Promise<{ success: boolean; error?: string; currentPeriodEnd?: string }> {
+  const res = await fetch(`${API}/dashboard/subscription/resume`, {
+    method: 'POST',
+    credentials: 'include'
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: data?.error ?? 'Failed to restore subscription' }
+  }
+  return { success: true, currentPeriodEnd: data.currentPeriodEnd }
+}
+
 /** Response body from PATCH /dashboard/sites/by-key/:siteKey */
 export type SitePatchResponse = {
   id: string
