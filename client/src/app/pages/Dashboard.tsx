@@ -410,6 +410,18 @@ export default function Dashboard() {
     return null;
   }
 
+  const justCreatedSnippetPreview = justCreatedSite
+    ? `${buildBetterBlogSquarespaceHeaderHtml({
+        loaderUrl: getBetterBlogLoaderUrl(),
+        siteKey: justCreatedSite.siteKey,
+        blogPath: justCreatedSite.blogPath,
+        apiBase: getBetterBlogApiBase(),
+      })
+        .split("\n")
+        .slice(0, 4)
+        .join("\n")}\n…`
+    : null;
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       <div className="flex flex-col gap-2">
@@ -492,15 +504,8 @@ export default function Dashboard() {
                         )}
                       </Button>
                     </div>
-                    <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
-                      <code>
-                        {buildBetterBlogSquarespaceHeaderHtml({
-                          loaderUrl: getBetterBlogLoaderUrl(),
-                          siteKey: justCreatedSite.siteKey,
-                          blogPath: justCreatedSite.blogPath,
-                          apiBase: getBetterBlogApiBase(),
-                        })}
-                      </code>
+                    <pre className="overflow-hidden rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
+                      <code>{justCreatedSnippetPreview}</code>
                     </pre>
                   </div>
                 </div>
