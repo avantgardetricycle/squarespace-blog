@@ -410,16 +410,13 @@ export default function Dashboard() {
     return null;
   }
 
-  const justCreatedSnippetPreview = justCreatedSite
-    ? `${buildBetterBlogSquarespaceHeaderHtml({
+  const justCreatedSnippetHtml = justCreatedSite
+    ? buildBetterBlogSquarespaceHeaderHtml({
         loaderUrl: getBetterBlogLoaderUrl(),
         siteKey: justCreatedSite.siteKey,
         blogPath: justCreatedSite.blogPath,
         apiBase: getBetterBlogApiBase(),
       })
-        .split("\n")
-        .slice(0, 4)
-        .join("\n")}\n…`
     : null;
 
   return (
@@ -504,8 +501,8 @@ export default function Dashboard() {
                         )}
                       </Button>
                     </div>
-                    <pre className="overflow-hidden rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
-                      <code>{justCreatedSnippetPreview}</code>
+                    <pre className="max-h-[9.5rem] overflow-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm leading-5 text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
+                      <code>{justCreatedSnippetHtml}</code>
                     </pre>
                   </div>
                 </div>
