@@ -446,6 +446,17 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
 
+    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
+    const verified = await verifyBlogUrl(blogJsonUrl)
+    if (!verified) {
+      res.status(400).json({
+        error: 'blog_url_unreachable',
+        message:
+          "We couldn't reach your blog at the URL you provided. Make sure you entered the full URL (e.g. https://yoursite.squarespace.com/blog) and try again."
+      })
+      return
+    }
+
     const purgeDeletedSiteIdRaw =
       req.body &&
       typeof req.body === 'object' &&
@@ -540,9 +551,6 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
 
-    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
-    const verified = await verifyBlogUrl(blogJsonUrl)
-
     const updatedSite = await prisma.site.create({
       data: {
         userId: user.id,
@@ -551,7 +559,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         url: siteUrl,
         blogPath,
         status: 'active',
-        verificationStatus: verified ? 'verified' : 'needs_attention',
+        verificationStatus: 'verified',
         paywallMode: 'auto',
         paywallDetectionState: userPaywallState,
         paywallDetectionSource: userPaywallState !== 'unknown' ? 'manual' : null,

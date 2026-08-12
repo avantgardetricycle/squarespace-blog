@@ -248,15 +248,7 @@ export default function Account() {
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
             {me.subscription?.cancelAtPeriodEnd ? (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <p className="text-sm text-amber-600">Cancellation scheduled for end of period</p>
-                <Button
-                  onClick={() => void handleRestoreSubscription()}
-                  disabled={restoring || portalLoading}
-                >
-                  {restoring ? "Restoring…" : "Restore Subscription"}
-                </Button>
-              </div>
+              <p className="text-sm text-amber-600">Cancellation scheduled for end of period</p>
             ) : (
               <>
                 <Button
@@ -293,13 +285,22 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            <Button
-              variant="outline"
-              onClick={handleOpenPortal("updatePayment")}
-              disabled={portalLoading || restoring || !me.subscription}
-            >
-              {portalLoadingButton === "updatePayment" ? "Opening…" : "Update Payment Method"}
-            </Button>
+            {me.subscription?.cancelAtPeriodEnd ? (
+              <Button
+                onClick={() => void handleRestoreSubscription()}
+                disabled={restoring || portalLoading}
+              >
+                {restoring ? "Restoring…" : "Restore Subscription"}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={handleOpenPortal("updatePayment")}
+                disabled={portalLoading || restoring || !me.subscription}
+              >
+                {portalLoadingButton === "updatePayment" ? "Opening…" : "Update Payment Method"}
+              </Button>
+            )}
           </CardFooter>
         </Card>
       </div>
