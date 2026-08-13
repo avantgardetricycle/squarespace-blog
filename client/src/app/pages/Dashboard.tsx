@@ -78,6 +78,7 @@ export default function Dashboard() {
   const [showAddBlogModal, setShowAddBlogModal] = useState(false);
   const [newBlogName, setNewBlogName] = useState("");
   const [newBlogUrl, setNewBlogUrl] = useState("");
+  const [blogUrlError, setBlogUrlError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [justCreatedSite, setJustCreatedSite] = useState<CreatedSite | null>(null);
   const [newBlogPaywalled, setNewBlogPaywalled] = useState<"yes" | "no">("no");
@@ -149,6 +150,7 @@ export default function Dashboard() {
       }
     }
     setCreating(true);
+    setBlogUrlError(null);
     try {
       const paywallDetectionState =
         newBlogPaywalled === "yes" ? "detected_paywalled" : "detected_unpaywalled";
@@ -188,12 +190,18 @@ export default function Dashboard() {
         });
         setNewBlogName("");
         setNewBlogUrl("");
+        setBlogUrlError(null);
         setNewBlogPaywalled("no");
         setNewBlogSubscribeUrl("");
         setJustCreatedSite(site);
         setExpandedSiteId(site.id);
       } else {
-        toast.error(result.error ?? "Failed to create site");
+        const errorMessage = result.error ?? "Failed to create site";
+        if ("code" in result && result.code === "blog_url_unreachable") {
+          setBlogUrlError(errorMessage);
+        } else {
+          toast.error(errorMessage);
+        }
       }
     } finally {
       setCreating(false);
@@ -410,6 +418,15 @@ export default function Dashboard() {
     return null;
   }
 
+  const justCreatedSnippetHtml = justCreatedSite
+    ? buildBetterBlogSquarespaceHeaderHtml({
+        loaderUrl: getBetterBlogLoaderUrl(),
+        siteKey: justCreatedSite.siteKey,
+        blogPath: justCreatedSite.blogPath,
+        apiBase: getBetterBlogApiBase(),
+      })
+    : null;
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       <div className="flex flex-col gap-2">
@@ -431,6 +448,7 @@ export default function Dashboard() {
           setShowAddBlogModal(open);
           if (!open) {
             setJustCreatedSite(null);
+            setBlogUrlError(null);
             setNewBlogPaywalled("no");
             setNewBlogSubscribeUrl("");
           }
@@ -452,14 +470,6 @@ export default function Dashboard() {
                     <strong>{justCreatedSite.name || "Your blog"}</strong> has been added. Copy the code below and add it to your site.
                   </span>
                 </div>
-                {justCreatedSite.verificationStatus === "needs_attention" && (
-                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-800 text-sm min-w-0">
-                    <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
-                    <span className="min-w-0 break-words">
-                      We couldn&apos;t reach your blog at the URL you provided. Make sure you entered the full URL (e.g. <code className="bg-amber-100 px-1 rounded">https://yoursite.squarespace.com/blog</code>). You can update the URL later in settings.
-                    </span>
-                  </div>
-                )}
                 <div className="space-y-2 min-w-0">
                   <p className="text-sm text-[#6b6b6b] break-words">
                     Paste this into your Squarespace site&apos;s{" "}
@@ -492,15 +502,8 @@ export default function Dashboard() {
                         )}
                       </Button>
                     </div>
-                    <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
-                      <code>
-                        {buildBetterBlogSquarespaceHeaderHtml({
-                          loaderUrl: getBetterBlogLoaderUrl(),
-                          siteKey: justCreatedSite.siteKey,
-                          blogPath: justCreatedSite.blogPath,
-                          apiBase: getBetterBlogApiBase(),
-                        })}
-                      </code>
+                    <pre className="max-h-[9.5rem] overflow-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm leading-5 text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
+                      <code>{justCreatedSnippetHtml}</code>
                     </pre>
                   </div>
                 </div>
@@ -556,7 +559,10 @@ export default function Dashboard() {
                       id="blog-url"
                       placeholder="yoursite.squarespace.com/blog"
                       value={newBlogUrl}
-                      onChange={(e) => setNewBlogUrl(e.target.value)}
+                      onChange={(e) => {
+                        setNewBlogUrl(e.target.value);
+                        if (blogUrlError) setBlogUrlError(null);
+                      }}
                       className="pl-9"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -566,13 +572,20 @@ export default function Dashboard() {
                       }}
                     />
                   </div>
-                  <p className="text-xs text-[#6b6b6b]">
-                    The full URL path to your blog page (e.g.,{" "}
-                    <span className="font-mono">
-                      https://yoursite.squarespace.com/blog
-                    </span>
-                    )
-                  </p>
+                  {blogUrlError ? (
+                    <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-amber-800 text-sm">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                      <span className="min-w-0 break-words">{blogUrlError}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#6b6b6b]">
+                      The full URL path to your blog page (e.g.,{" "}
+                      <span className="font-mono">
+                        https://yoursite.squarespace.com/blog
+                      </span>
+                      )
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Does this blog require a membership to view posts?</Label>

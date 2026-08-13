@@ -8,6 +8,8 @@
 (function() {
   'use strict';
 
+  var BB_POST_CONTENT_TOP_PADDING = 25;
+
   function getVisitorId() {
     try {
       var key = 'bb_visitor';
@@ -2639,12 +2641,11 @@
       return true;
     },
 
-    /** Feature / Reporter / Publisher: strip top inset on body so first paragraph aligns with sidebar headers. */
+    /** Feature / Reporter / Publisher: zero first-block top margin so body text aligns with sidebar headers. */
     _normalizePostBodyTopForSidebarRow: function(bodyEl) {
       if (!bodyEl) return;
       bodyEl.classList.add('blog-overlay-post-body--sidebar-row');
       bodyEl.style.marginTop = '0';
-      bodyEl.style.paddingTop = '0';
       var blockTags = { P: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, BLOCKQUOTE: 1, UL: 1, OL: 1, FIGURE: 1, IMG: 1, TABLE: 1 };
       var el = bodyEl.firstElementChild;
       var depth = 0;
@@ -2663,11 +2664,9 @@
       if (!sidebarRailEl || !sidebarRailEl.querySelector) return;
       sidebarRailEl.classList.add('blog-overlay-sidebar-rail--sidebar-row');
       sidebarRailEl.style.marginTop = '0';
-      sidebarRailEl.style.paddingTop = '0';
       var section = sidebarRailEl.querySelector('.blog-overlay-sidebar-section');
       if (!section) return;
       section.style.marginTop = '0';
-      section.style.paddingTop = '0';
       var header = section.querySelector('.bb-sidebar-header');
       if (header && header.style) {
         header.style.marginTop = '0';
@@ -7367,10 +7366,10 @@
         '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
         '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
-        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row>:first-child{margin-top:0;padding-top:0;}' +
-        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row{margin-top:0;padding-top:0;}' +
-        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row{margin-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child{margin-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child .bb-sidebar-header{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
         '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
@@ -10055,6 +10054,7 @@
             self._applyStoryPostHorizontalInset(body, cfg);
             if (sidebarRowPostLayout) self._normalizePostBodyTopForSidebarRow(body);
           }
+          body.style.paddingTop = BB_POST_CONTENT_TOP_PADDING + 'px';
         }
         var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
         if (isSideBySide) {
@@ -12362,8 +12362,12 @@
             leftSidebarWidth = 300;
             rightSidebarWidth = 300;
           }
-          var leftSpaceAbove = 0;
-          var rightSpaceAbove = 0;
+          var leftSpaceAbove = isSinglePost
+            ? BB_POST_CONTENT_TOP_PADDING
+            : (leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.max(0, leftSidebarCfg.spaceAbove) : 0);
+          var rightSpaceAbove = isSinglePost
+            ? BB_POST_CONTENT_TOP_PADDING
+            : (rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.max(0, rightSidebarCfg.spaceAbove) : 0);
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
           var stickySidebarTopPx = self._getSidebarStickyTopPx();
@@ -12381,7 +12385,7 @@
           if (leftSticky) {
             leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
             leftSidebarEl.style.position = 'relative';
-            leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+            leftSidebarEl.style.paddingTop = (stickySidebarPadTop + leftPadTop) + 'px';
           } else {
             leftSidebarEl.style.position = 'static';
             if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
@@ -12406,7 +12410,7 @@
           if (rightSticky) {
             rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
             rightSidebarEl.style.position = 'relative';
-            rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+            rightSidebarEl.style.paddingTop = (stickySidebarPadTop + rightPadTop) + 'px';
           } else {
             rightSidebarEl.style.position = 'static';
             if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
@@ -13038,10 +13042,6 @@
             }
           }
           if (leftSidebarWrapEl.childNodes.length) mainRowEl.appendChild(leftSidebarWrapEl);
-          if (isSinglePost && (leftSidebarWrapEl.childNodes.length || rightSidebarWrapEl.childNodes.length)) {
-            var mainColPadTop = Math.max(leftPadTop, rightPadTop);
-            main.style.paddingTop = mainColPadTop > 0 ? (mainColPadTop + 'px') : '0';
-          }
           var sidebarRowPostLayoutActive = isSinglePost && (
             self._isFeaturePostLayout(cfg) ||
             self._isReporterPostLayout(cfg) ||

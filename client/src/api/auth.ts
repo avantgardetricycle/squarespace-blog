@@ -75,7 +75,7 @@ export interface CreatedSite {
 
 export type CreateSiteResult =
   | { site: CreatedSite }
-  | { site: null; error: string }
+  | { site: null; error: string; code?: 'blog_url_unreachable' }
   | {
       site: null
       conflict: 'active_duplicate'
@@ -145,6 +145,16 @@ export async function createSite(
   }
 
   if (!res.ok) {
+    if (data.error === 'blog_url_unreachable') {
+      return {
+        site: null,
+        error:
+          typeof data.message === 'string'
+            ? data.message
+            : "We couldn't reach your blog at the URL you provided. Make sure you entered the full URL and try again.",
+        code: 'blog_url_unreachable'
+      }
+    }
     return { site: null, error: typeof data.error === 'string' ? data.error : 'Failed to create site' }
   }
   return { site: data as CreatedSite }
@@ -195,6 +205,18 @@ export async function cancelSubscription(): Promise<{ success: boolean; error?: 
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     return { success: false, error: data?.error ?? 'Failed to cancel subscription' }
+  }
+  return { success: true, currentPeriodEnd: data.currentPeriodEnd }
+}
+
+export async function resumeSubscription(): Promise<{ success: boolean; error?: string; currentPeriodEnd?: string }> {
+  const res = await fetch(`${API}/dashboard/subscription/resume`, {
+    method: 'POST',
+    credentials: 'include'
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: data?.error ?? 'Failed to restore subscription' }
   }
   return { success: true, currentPeriodEnd: data.currentPeriodEnd }
 }

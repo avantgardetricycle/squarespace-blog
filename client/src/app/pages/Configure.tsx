@@ -2345,6 +2345,32 @@ export default function Configure() {
       ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
+
+  // Sites can block framing (Squarespace's Clickjack protection sends X-Frame-Options: SAMEORIGIN),
+  // which renders the iframe as a browser error page. Only the server can read that header.
+  const [previewBlockedBy, setPreviewBlockedBy] = useState<
+    "x-frame-options" | "frame-ancestors" | null | "pending"
+  >("pending");
+  useEffect(() => {
+    if (!effectiveSiteKey) return;
+    let cancelled = false;
+    setPreviewBlockedBy("pending");
+    fetch(`/api/config/preview-embeddable/${encodeURIComponent(effectiveSiteKey)}`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setPreviewBlockedBy(data?.blockedBy ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewBlockedBy(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveSiteKey]);
+
   const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
   const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
 
@@ -6078,11 +6104,26 @@ export default function Configure() {
                     </div>
                   );
                 }
-                if (isSquarespaceUrl(previewUrl)) {
+                if (previewBlockedBy === "pending" && !isSquarespaceUrl(previewUrl)) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
+                      Loading preview…
+                    </div>
+                  );
+                }
+                if (isSquarespaceUrl(previewUrl) || previewBlockedBy !== null) {
                   return (
                     <div className="flex flex-col h-full">
                       <p className="text-xs text-[#6b6b6b] px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
-                        Squarespace blocks iframe embedding. Using a simplified preview.
+                        {previewBlockedBy === "x-frame-options" ? (
+                          <>
+                            Your site blocks embedding, so we're showing a simplified preview. For the full live
+                            preview, turn off Clickjack protection in Squarespace under Settings → Developer Tools →
+                            Website Protection.
+                          </>
+                        ) : (
+                          "Squarespace blocks iframe embedding. Using a simplified preview."
+                        )}
                       </p>
                       <div className="flex-1 min-h-0 overflow-y-auto">
                         <BlogPreviewRenderer

@@ -22,7 +22,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { getDashboardMe, updateProfile, cancelSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, updateProfile, cancelSubscription, resumeSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
 import { getPlanDisplayName } from "@/lib/planLabels";
 
 export default function Account() {
@@ -31,6 +31,7 @@ export default function Account() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | null>(null);
@@ -65,6 +66,28 @@ export default function Account() {
       }
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleRestoreSubscription = async () => {
+    setRestoring(true);
+    try {
+      const result = await resumeSubscription();
+      if (result.success) {
+        setMe((prev) =>
+          prev?.subscription
+            ? {
+                ...prev,
+                subscription: { ...prev.subscription, cancelAtPeriodEnd: false },
+              }
+            : prev
+        );
+        toast.success("Your subscription will renew on your next billing date.");
+      } else {
+        toast.error(result.error ?? "Failed to restore subscription");
+      }
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -232,7 +255,7 @@ export default function Account() {
                   variant="ghost"
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   onClick={() => setShowCancelModal(true)}
-                  disabled={canceling || portalLoading}
+                  disabled={canceling || portalLoading || restoring}
                 >
                   Cancel Subscription
                 </Button>
@@ -262,13 +285,22 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            <Button
-              variant="outline"
-              onClick={handleOpenPortal("updatePayment")}
-              disabled={portalLoading || !me.subscription}
-            >
-              {portalLoadingButton === "updatePayment" ? "Opening…" : "Update Payment Method"}
-            </Button>
+            {me.subscription?.cancelAtPeriodEnd ? (
+              <Button
+                onClick={() => void handleRestoreSubscription()}
+                disabled={restoring || portalLoading}
+              >
+                {restoring ? "Restoring…" : "Restore Subscription"}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={handleOpenPortal("updatePayment")}
+                disabled={portalLoading || restoring || !me.subscription}
+              >
+                {portalLoadingButton === "updatePayment" ? "Opening…" : "Update Payment Method"}
+              </Button>
+            )}
           </CardFooter>
         </Card>
       </div>
