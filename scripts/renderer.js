@@ -8567,6 +8567,8 @@
       var showReadingTime = Boolean(cfg.showReadingTime);
       /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
       var showPostExcerpt = cfg.showPostExcerpt !== false;
+      /** Logged-out collection JSON often lacks full post body, so reading time cannot be calculated. */
+      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
