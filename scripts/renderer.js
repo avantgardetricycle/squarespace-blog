@@ -7387,7 +7387,8 @@
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
-        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:8px;padding:16px 20px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-border,#e8e7e4);}' +
         '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
@@ -9008,7 +9009,7 @@
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
         var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : fiCfg.aspectRatio === '21:8' ? '21:8' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
-        /** Reporter (split header): 3:2 contained image regardless of saved aspectBehavior. */
+        /** Reporter (split header): 3:2 cover crop regardless of saved aspectBehavior. */
         var reporterPostHeaderLayout = isSinglePost && self._isReporterPostLayout(cfg);
         var reporterPostHeaderImage = reporterPostHeaderLayout && fiShow;
         if (reporterPostHeaderImage) {
@@ -9348,7 +9349,7 @@
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.display = 'block';
-            img.style.objectFit = reporterPostHeaderImage ? 'contain' : ((fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain');
+            img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
             img.style.objectPosition = 'center';
             img.onerror = function() { fiWrap.style.display = 'none'; };
             fiInner.appendChild(img);
@@ -11585,7 +11586,7 @@
           var leftCol = document.createElement('div');
           leftCol.style.flex = '1 1 200px';
           leftCol.style.minWidth = '0';
-          var titleFooter = document.createElement('div');
+          var titleFooter = document.createElement('h3');
           titleFooter.className = 'bb-newsletter-heading';
           titleFooter.textContent = headerText;
           titleFooter.style.lineHeight = '1.3';
@@ -11618,17 +11619,14 @@
           emailInputF.setAttribute('autocomplete', 'section-newsletter email');
           emailInputF.placeholder = 'you@example.com';
           emailInputF.setAttribute('aria-label', 'Email address');
-          self._applyChromeInputStyle(emailInputF);
-          emailInputF.style.flex = '1 1 160px';
-          emailInputF.style.minWidth = '140px';
-          emailInputF.style.maxWidth = '320px';
+          emailInputF.className = 'bb-form-input';
+          emailInputF.style.flex = '1 1 240px';
+          emailInputF.style.minWidth = '0';
           var btnF = document.createElement('button');
           btnF.textContent = ecCfg.buttonText || 'Subscribe';
           btnF.type = 'button';
-          btnF.className = 'bb-newsletter-btn';
+          btnF.className = 'sqs-button-element--primary';
           btnF.style.flexShrink = '0';
-          btnF.onmouseover = function() { btnF.style.filter = 'brightness(0.92)'; };
-          btnF.onmouseout = function() { btnF.style.filter = ''; };
           rightCol.appendChild(emailInputF);
           rightCol.appendChild(btnF);
           row.appendChild(rightCol);
