@@ -8566,7 +8566,6 @@
       var showReadingTime = Boolean(cfg.showReadingTime);
       /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
       var showPostExcerpt = cfg.showPostExcerpt !== false;
-      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
@@ -12512,7 +12511,7 @@
                   leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
                   leftSidebarEl.style.position = 'relative';
                   leftSidebarEl.style.top = '';
-                  leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+                  leftSidebarEl.style.paddingTop = (stickySidebarPadTop + leftPadTop) + 'px';
                 } else {
                   leftSidebarEl.removeAttribute('data-bb-sticky-rail');
                   leftSidebarEl.style.position = 'static';
@@ -12531,7 +12530,7 @@
                   rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
                   rightSidebarEl.style.position = 'relative';
                   rightSidebarEl.style.top = '';
-                  rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+                  rightSidebarEl.style.paddingTop = (stickySidebarPadTop + rightPadTop) + 'px';
                 } else {
                   rightSidebarEl.removeAttribute('data-bb-sticky-rail');
                   rightSidebarEl.style.position = 'static';
