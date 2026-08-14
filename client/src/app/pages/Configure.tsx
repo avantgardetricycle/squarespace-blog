@@ -666,7 +666,7 @@ function isPostTemplatePathLocked(path: string, locks: ReadonlySet<PostTemplateL
   if (path === "postHeader.imagePosition") return locks.has("imagePosition");
   if (path === "postHeader.fullBleedLayout") return locks.has("fullBleedControls");
   if (path === "postHeader.contentVerticalAlignment") {
-    return locks.has("contentVerticalAlignment") || locks.has("fullBleedControls");
+    return locks.has("contentVerticalAlignment");
   }
   if (path === "postHeader.sideGap") return locks.has("sidePadding");
   if (path === "postHeader.showTags" || path === "postHeader.showCategories") {
@@ -701,15 +701,9 @@ function enforcePostTemplateLockedValues(
     ph = { ...ph, imagePosition: tplPh.imagePosition };
     phChanged = true;
   }
-  if (locks.has("fullBleedControls")) {
-    if (ph.fullBleedLayout !== tplPh.fullBleedLayout) {
-      ph = { ...ph, fullBleedLayout: tplPh.fullBleedLayout };
-      phChanged = true;
-    }
-    if (ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
-      ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
-      phChanged = true;
-    }
+  if (locks.has("fullBleedControls") && ph.fullBleedLayout !== tplPh.fullBleedLayout) {
+    ph = { ...ph, fullBleedLayout: tplPh.fullBleedLayout };
+    phChanged = true;
   }
   if (locks.has("contentVerticalAlignment") && ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
     ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
@@ -4383,25 +4377,29 @@ export default function Configure() {
                                   </SelectContent>
                                 </Select>
                                 {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" ||
-                                  (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") &&
-                                  !isPostControlLocked("contentVerticalAlignment") && (
-                                  <Select
-                                    value={
-                                      (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
-                                    }
-                                    onValueChange={(v) =>
-                                      updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                    }
+                                  (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
+                                  <LockedControlField
+                                    locked={isPostControlLocked("contentVerticalAlignment")}
+                                    label="Vertical post info alignment"
                                   >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="top">Top</SelectItem>
-                                      <SelectItem value="center">Center</SelectItem>
-                                      <SelectItem value="bottom">Bottom</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    <Select
+                                      value={
+                                        (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                      }
+                                      onValueChange={(v) =>
+                                        updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="top">Top</SelectItem>
+                                        <SelectItem value="center">Center</SelectItem>
+                                        <SelectItem value="bottom">Bottom</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </LockedControlField>
                                 )}
                               </div>
                             )}

@@ -7314,8 +7314,9 @@
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
         '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
-        '#blog-overlay-list .blog-overlay-story-header-row{gap:40px;margin-bottom:0;}' +
-        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;display:flex;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-story-header-row{display:flex;align-items:stretch;gap:40px;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col{display:flex;flex-direction:column;min-width:0;align-self:stretch;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;display:flex;margin:0;align-self:stretch;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image img{width:100%;height:100%;object-fit:cover;display:block;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel{background:transparent;padding:0;border-radius:0;box-sizing:border-box;gap:0;}' +
@@ -9138,15 +9139,15 @@
           if (storyPostLayout) {
             rowEl.classList.add('blog-overlay-story-header-row');
             rowEl.style.gap = '40px';
-            rowEl.style.alignItems = phVerticalAlignItems;
+            rowEl.style.alignItems = 'stretch';
             rowEl.style.marginBottom = '0';
           } else {
             rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact)
               ? '10px'
               : (isSinglePost && phSideImageGapPx > 0 ? (phSideImageGapPx + 'px') : '20px');
             rowEl.style.alignItems =
-              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && phShowBreadcrumbs)
-                ? 'flex-start'
+              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo'))
+                ? 'stretch'
                 : ((!isSinglePost && collectionLayout === 'listRows')
                     ? 'center'
                     : (isSinglePost ? phVerticalAlignItems : 'flex-start'));
@@ -9157,6 +9158,13 @@
           contentEl = document.createElement('div');
           contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
           contentEl.style.minWidth = '0';
+          if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
+            if (storyPostLayout) contentEl.classList.add('blog-overlay-story-info-col');
+            contentEl.style.display = 'flex';
+            contentEl.style.flexDirection = 'column';
+            contentEl.style.justifyContent = phVertical === 'center' ? 'center' : phVertical === 'bottom' ? 'flex-end' : 'flex-start';
+            contentEl.style.alignSelf = 'stretch';
+          }
           if (!isSinglePost && collectionLayout === 'listRows') {
             contentEl.style.display = 'flex';
             contentEl.style.flexDirection = 'column';
@@ -9324,8 +9332,8 @@
               fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             }
             fiWrap.style.minWidth = '0';
-            fiWrap.style.alignSelf = storyPostLayout
-              ? phVerticalAlignItems
+            fiWrap.style.alignSelf = storyPostLayout || (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo'))
+              ? 'stretch'
               : ((!isSinglePost && collectionLayout === 'listRows') ? 'center' : 'flex-start');
           }
           var fiInner = document.createElement('div');
