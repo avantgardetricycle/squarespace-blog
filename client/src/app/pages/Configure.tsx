@@ -168,7 +168,7 @@ export interface PostModulesConfig {
   leadMagnet: { enabled: boolean; position: ModulePosition; resourceTitle: string; description: string; buttonText: string };
 }
 
-export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
+export const SOCIAL_PLATFORMS = ["facebook", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
 export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";

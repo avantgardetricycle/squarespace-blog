@@ -6025,7 +6025,6 @@
       var w = 16; var h = 16;
       var svgs = {
         facebook: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-        instagram: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>',
         x: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
         reddit: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.88-7.004 4.88-3.874 0-7.004-2.186-7.004-4.88 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>',
         linkedin: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
@@ -6107,7 +6106,6 @@
         var platform = platforms[p];
         var href = '';
         if (platform === 'facebook') href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodedShareUrl;
-        else if (platform === 'instagram') href = 'https://www.instagram.com/';
         else if (platform === 'x') href = 'https://twitter.com/intent/tweet?url=' + encodedShareUrl + '&text=' + encTitle;
         else if (platform === 'email') {
           href = 'mailto:?subject=' + encTitle + '&body=' + encodedShareUrl;
@@ -7315,7 +7313,9 @@
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
         '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-story-header-row{display:flex;align-items:stretch;gap:40px;margin-bottom:0;}' +
-        '#blog-overlay-list .blog-overlay-story-info-col{display:flex;flex-direction:column;min-width:0;align-self:stretch;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col{display:flex;flex-direction:column;justify-content:flex-start;min-width:0;align-self:stretch;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-post-breadcrumbs{flex-shrink:0;margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-story-info-panel{flex:1 1 auto;min-height:0;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;display:flex;margin:0;align-self:stretch;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image img{width:100%;height:100%;object-fit:cover;display:block;}' +
@@ -9162,7 +9162,7 @@
             if (storyPostLayout) contentEl.classList.add('blog-overlay-story-info-col');
             contentEl.style.display = 'flex';
             contentEl.style.flexDirection = 'column';
-            contentEl.style.justifyContent = phVertical === 'center' ? 'center' : phVertical === 'bottom' ? 'flex-end' : 'flex-start';
+            contentEl.style.justifyContent = 'flex-start';
             contentEl.style.alignSelf = 'stretch';
           }
           if (!isSinglePost && collectionLayout === 'listRows') {
@@ -9421,6 +9421,11 @@
           if (storyPostLayout) {
             postInfoWrap.classList.add('blog-overlay-story-info-panel');
             postInfoWrap.style.gap = '0';
+          }
+          if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
+            postInfoWrap.style.flex = '1 1 auto';
+            postInfoWrap.style.minHeight = '0';
+            postInfoWrap.style.justifyContent = phVertical === 'center' ? 'center' : phVertical === 'bottom' ? 'flex-end' : 'flex-start';
           }
           if (reporterPostHeaderLayout) {
             postInfoWrap.classList.add('blog-overlay-reporter-header-stack');
@@ -9965,9 +9970,6 @@
             } else {
               fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
             }
-          } else if (storyPostLayout && postInfoWrap) {
-            postBreadcrumbNav.style.justifyContent = bcJustify;
-            postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
           } else if (
             isSideBySide &&
             isSinglePost &&
@@ -9975,7 +9977,7 @@
             contentEl
           ) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
-            postBreadcrumbNav.style.marginBottom = '8px';
+            if (!storyPostLayout) postBreadcrumbNav.style.marginBottom = '8px';
             contentEl.insertBefore(postBreadcrumbNav, contentEl.firstChild);
           } else if (singlePostBelowInfo && postInfoWrap && postInfoWrap.parentNode) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
@@ -10627,7 +10629,6 @@
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
-      var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowAuthorEl = null;
       var featureBelowRowMoreToReadEl = null;
@@ -12918,10 +12919,14 @@
             headerModulesHostEl.style.marginTop = '0';
           }
 
-          if (footerContentCfg && footerContentCfg.show) {
-            var fcModules = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+          if (footerContentCfg) {
+            var fcAvail = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+            var fcOrder = Array.isArray(footerContentCfg.moduleOrder) ? footerContentCfg.moduleOrder : [];
+            /* Prefer moduleOrder (Configure source of truth). An empty modules list with a
+               non-empty moduleOrder must still render — same as sidebar TOC. */
+            var fcModules = (fcOrder.length > 0) ? fcOrder.slice() : fcAvail.slice();
             self._warnDuplicateValues('footer', fcModules);
-            if (fcModules.length > 0) {
+            if ((footerContentCfg.show || fcModules.length > 0) && fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
               if (isSinglePost) {
                 featureFooterLeftPad = 0;
@@ -12953,18 +12958,6 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
-                /** Writer/Story: no "More to Read" grid (spec module order). */
-                if (fmod === 'relevantPosts' && (writerPostLayoutForFooter || storyPostLayoutForFooter)) {
-                  continue;
-                }
-                /** Writer: lead magnet is skipped entirely; prev/next replaces it instead. */
-                if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
-                  continue;
-                }
-                /** Prev/next navigation is Writer-only. */
-                if (fmod === 'prevNextArticle' && !writerPostLayoutForFooter) {
-                  continue;
-                }
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
@@ -13014,7 +13007,7 @@
                   }
                 }
               }
-              if (!featurePostLayout && footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
+              if (footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
             }
           }
           if (paywallShowFooter && !featurePostLayout) {
