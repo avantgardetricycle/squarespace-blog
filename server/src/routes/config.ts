@@ -113,7 +113,7 @@ function pickProgressBarFromPostConfig (postRaw: unknown, existing: ProgressBarP
 /** Ensure postConfig always carries progressBar for the renderer and Configure UI. */
 function mergeProgressBarIntoPostConfig (
   postConfig: Record<string, unknown>,
-  fallback: ProgressBarPayload
+  fallback: { show?: boolean; position?: string | null; thickness?: number; color?: string }
 ): Record<string, unknown> {
   const raw = postConfig.progressBar
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -121,7 +121,7 @@ function mergeProgressBarIntoPostConfig (
     return {
       ...postConfig,
       progressBar: {
-        show: Boolean(pb.show ?? fallback.show),
+        show: Boolean(pb.show ?? fallback.show ?? false),
         position: typeof pb.position === 'string' ? pb.position : fallback.position ?? 'top',
         thickness: typeof pb.thickness === 'number' ? pb.thickness : fallback.thickness ?? 6,
         color: typeof pb.color === 'string' ? pb.color : fallback.color ?? '#5B4FE8'
@@ -131,7 +131,7 @@ function mergeProgressBarIntoPostConfig (
   return {
     ...postConfig,
     progressBar: {
-      show: fallback.show ?? false,
+      show: Boolean(fallback.show ?? false),
       position: fallback.position ?? 'top',
       thickness: fallback.thickness ?? 6,
       color: fallback.color ?? '#5B4FE8'
