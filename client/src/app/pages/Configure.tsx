@@ -5805,6 +5805,7 @@ export default function Configure() {
               <AuthorImageUpload
                 value={newAuthorImageUrl}
                 onChange={setNewAuthorImageUrl}
+                siteKey={effectiveSiteKey}
                 authorName={newAuthorName}
               />
               <div className="space-y-2">

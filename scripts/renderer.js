@@ -2725,35 +2725,6 @@
       footerZoneEl.style.marginRight = '';
     },
 
-    /** Expand footer zone to main column width when post body uses extra horizontal inset. */
-    _bleedPostFooterZoneToMainWidth: function(footerZoneEl, mainEl, footerContentEl) {
-      if (!footerZoneEl || !footerZoneEl.style || !mainEl || !mainEl.querySelector) return;
-      var bodyEl = mainEl.querySelector('.blog-overlay-body');
-      if (!window.getComputedStyle) return;
-      var pl = 0;
-      var pr = 0;
-      if (bodyEl) {
-        try {
-          var cs = window.getComputedStyle(bodyEl);
-          pl = parseFloat(cs.paddingLeft) || 0;
-          pr = parseFloat(cs.paddingRight) || 0;
-        } catch (ePad) { /* ignore */ }
-      }
-      if (pl <= 0 && pr <= 0 && footerContentEl) {
-        try {
-          var fcs = window.getComputedStyle(footerContentEl);
-          pl = parseFloat(fcs.paddingLeft) || 0;
-          pr = parseFloat(fcs.paddingRight) || 0;
-        } catch (eFooterPad) { /* ignore */ }
-      }
-      if (pl <= 0 && pr <= 0) return;
-      footerZoneEl.style.boxSizing = 'border-box';
-      footerZoneEl.style.width = 'calc(100% + ' + (pl + pr) + 'px)';
-      footerZoneEl.style.maxWidth = 'none';
-      footerZoneEl.style.marginLeft = (-pl) + 'px';
-      footerZoneEl.style.marginRight = (-pr) + 'px';
-    },
-
     /**
      * @param {boolean|{ subscribeButton?: boolean, imageOverlay?: boolean }} opts - pass false to omit subscribe pill; or { imageOverlay: true } for editorial cards on dark imagery
      */
@@ -10629,7 +10600,6 @@
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
-      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowAuthorEl = null;
       var featureBelowRowMoreToReadEl = null;
       var featureBelowRowLeadMagnetEl = null;
@@ -13175,10 +13145,6 @@
               wrapper.appendChild(footerZoneEl);
             } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
               main.appendChild(footerZoneEl);
-              if (footerSideMarginsMode === 'fullScreen' && storyPostLayoutForFooter) {
-                var footerContentEl = footerZoneEl.querySelector('.blog-overlay-footer-content');
-                self._bleedPostFooterZoneToMainWidth(footerZoneEl, main, footerContentEl);
-              }
             } else if (isSinglePost) {
               wrapper.appendChild(footerZoneEl);
             } else {
