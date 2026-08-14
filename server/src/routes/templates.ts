@@ -376,7 +376,8 @@ const CANONICAL_PUBLISHER_POST_TEMPLATE = {
       description: 'Subscribe to get our guide in your inbox.',
       buttonText: 'Get it free'
     }
-  }
+  },
+  progressBar: { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
 }
 
 const CANONICAL_FEATURE_POST_TEMPLATE = {
@@ -413,8 +414,8 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48 },
   footerContent: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+    modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+    moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
     topPadding: 16,
     sideMargins: 'fullScreen'
   },
@@ -439,14 +440,21 @@ const CANONICAL_FEATURE_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'rightSidebar' },
     popularPosts: { enabled: true, position: 'rightSidebar', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    leadMagnet: {
+    emailCapture: {
       enabled: true,
       position: 'footer',
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      enabled: false,
+      position: 'none',
       resourceTitle: 'Free resource',
       description: 'Subscribe to get our guide in your inbox.',
       buttonText: 'Get it free'
     }
-  }
+  },
+  progressBar: { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
 }
 
 const CANONICAL_WRITER_POST_TEMPLATE = {
@@ -491,7 +499,8 @@ const CANONICAL_WRITER_POST_TEMPLATE = {
   },
   postModules: {
     authorProfiles: { enabled: true, position: 'footer' }
-  }
+  },
+  progressBar: { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
 }
 
 const CANONICAL_REPORTER_POST_TEMPLATE = {
@@ -527,8 +536,8 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 48 },
   footerContent: {
     show: true,
-    modules: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
-    moduleOrder: ['authorProfiles', 'relevantPosts', 'leadMagnet'],
+    modules: ['authorProfiles', 'relevantPosts', 'emailCapture'],
+    moduleOrder: ['authorProfiles', 'relevantPosts', 'emailCapture'],
     topPadding: 16,
     sideMargins: 'postBody'
   },
@@ -551,9 +560,15 @@ const CANONICAL_REPORTER_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'rightSidebar' },
     popularPosts: { enabled: false, position: 'none', count: 3 },
     relevantPosts: { enabled: true, position: 'rightSidebar' },
-    leadMagnet: {
+    emailCapture: {
       enabled: true,
       position: 'footer',
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      enabled: false,
+      position: 'none',
       resourceTitle: 'Free resource',
       description: 'Subscribe to get our guide in your inbox.',
       buttonText: 'Get it free'
@@ -595,8 +610,8 @@ const CANONICAL_STORY_POST_TEMPLATE = {
   headerContent: { show: false, modules: [] as string[], moduleOrder: [] as string[], height: 56 },
   footerContent: {
     show: true,
-    modules: ['authorProfiles', 'leadMagnet'],
-    moduleOrder: ['authorProfiles', 'leadMagnet'],
+    modules: ['authorProfiles', 'emailCapture'],
+    moduleOrder: ['authorProfiles', 'emailCapture'],
     topPadding: 16,
     sideMargins: 'postBody'
   },
@@ -617,14 +632,21 @@ const CANONICAL_STORY_POST_TEMPLATE = {
     authorProfiles: { enabled: true, position: 'footer' },
     popularPosts: { enabled: false, position: 'none', count: 3 },
     relevantPosts: { enabled: false, position: 'none' },
-    leadMagnet: {
+    emailCapture: {
       enabled: true,
       position: 'footer',
+      header: 'Subscribe to our newsletter',
+      buttonText: 'Subscribe'
+    },
+    leadMagnet: {
+      enabled: false,
+      position: 'none',
       resourceTitle: 'Free resource',
       description: 'Subscribe to get our guide in your inbox.',
       buttonText: 'Get it free'
     }
-  }
+  },
+  progressBar: { show: false, position: 'top', thickness: 6, color: '#5B4FE8' }
 }
 
 function normalizeTemplateForResponse (

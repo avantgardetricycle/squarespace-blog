@@ -626,7 +626,6 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showDecorativeAccentLine",
   ]),
   story: new Set([
-    "fullBleedControls",
     "showFeaturedImage",
     "aspectRatio",
     "imageWidth",
