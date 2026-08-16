@@ -425,7 +425,25 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
       type: l.type,
       resourceTitle: l.resourceTitle,
       createdAt: l.createdAt.toISOString()
-    }))
+    })),
+    // #region agent log
+    _debug: {
+      siteId: site.id,
+      siteKey,
+      timeRange,
+      since: since.toISOString(),
+      typeFilter: typeFilter ?? null,
+      reqPath: req.path,
+      filteredCount: leads.length,
+      unfilteredCount: unfiltered.length,
+      unfilteredSample: unfiltered.map((l) => ({
+        id: l.id,
+        type: l.type,
+        createdAt: l.createdAt.toISOString(),
+        inRange: l.createdAt >= since,
+      })),
+    },
+    // #endregion
   })
 })
 

@@ -7360,9 +7360,12 @@
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-newsletter-footer-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;width:100%;}' +
         '#blog-overlay-list .bb-newsletter-footer-copy{flex:1 1 200px;min-width:0;}' +
-        '#blog-overlay-list .bb-newsletter-footer-form{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;flex:1 1 260px;min-width:0;}' +
-        '#blog-overlay-list .bb-newsletter-footer-form .bb-form-input{flex:1 1 240px;min-width:0;}' +
-        '@media (max-width:1449px){#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-row{flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-copy,#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex:0 0 auto;width:100%;max-width:100%;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex-wrap:nowrap;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form .bb-form-input{flex:1 1 auto;}}' +
+        '#blog-overlay-list .bb-newsletter-footer-form-stack{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:1 1 280px;min-width:min(100%,280px);}' +
+        '#blog-overlay-list .bb-newsletter-footer-form{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:8px;width:100%;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .bb-form-input{display:block;box-sizing:border-box;width:auto;flex:1 1 auto;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .sqs-button-element--primary{flex:0 0 auto;width:auto;max-width:none;display:inline-flex;align-items:center;white-space:nowrap;}' +
+        '#blog-overlay-list .bb-newsletter-footer-msg{font-size:0.85rem;width:100%;text-align:right;}' +
+        '@media (max-width:1449px){#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-row{flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-copy,#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form-stack{flex:0 0 auto;width:100%;max-width:100%;min-width:0;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex-wrap:nowrap;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form .bb-form-input{flex:1 1 auto;width:auto;min-width:0;}}' +
         '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-border,#e8e7e4);}' +
         '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
@@ -11591,15 +11594,15 @@
           btnF.style.flexShrink = '0';
           rightCol.appendChild(emailInputF);
           rightCol.appendChild(btnF);
-          row.appendChild(rightCol);
+          var msgFooter = document.createElement('div');
+          msgFooter.className = 'bb-newsletter-footer-msg';
+          var formStack = document.createElement('div');
+          formStack.className = 'bb-newsletter-footer-form-stack';
+          formStack.appendChild(rightCol);
+          formStack.appendChild(msgFooter);
+          row.appendChild(formStack);
 
           outer.appendChild(row);
-
-          var msgFooter = document.createElement('div');
-          msgFooter.style.fontSize = '0.85rem';
-          msgFooter.style.textAlign = 'right';
-          msgFooter.style.width = '100%';
-          outer.appendChild(msgFooter);
 
           wireEmailCaptureSubmit(emailInputF, btnF, msgFooter);
           return outer;
