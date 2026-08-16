@@ -7358,6 +7358,11 @@
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;width:100%;}' +
+        '#blog-overlay-list .bb-newsletter-footer-copy{flex:1 1 200px;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;flex:1 1 260px;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .bb-form-input{flex:1 1 240px;min-width:0;}' +
+        '@media (max-width:1449px){#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-row{flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-copy,#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex:0 0 auto;width:100%;max-width:100%;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex-wrap:nowrap;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form .bb-form-input{flex:1 1 auto;}}' +
         '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-border,#e8e7e4);}' +
         '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
@@ -11537,6 +11542,9 @@
           var headerText = ecCfg.header || 'Subscribe to our newsletter';
           var outer = document.createElement('div');
           outer.className = 'blog-overlay-email-capture blog-overlay-email-capture-footer bb-footer-card';
+          if (self._isStoryPostLayout(cfg)) {
+            outer.classList.add('blog-overlay-email-capture-footer--story');
+          }
           outer.style.width = '100%';
           var footerWidth = typeof width === 'number' ? width : parseInt(width, 10);
           outer.style.maxWidth = (footerWidth && footerWidth > 0) ? footerWidth + 'px' : '100%';
@@ -11545,16 +11553,10 @@
           outer.style.gap = '10px';
 
           var row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.flexWrap = 'wrap';
-          row.style.alignItems = 'center';
-          row.style.justifyContent = 'space-between';
-          row.style.gap = '16px';
-          row.style.width = '100%';
+          row.className = 'bb-newsletter-footer-row';
 
           var leftCol = document.createElement('div');
-          leftCol.style.flex = '1 1 200px';
-          leftCol.style.minWidth = '0';
+          leftCol.className = 'bb-newsletter-footer-copy';
           var titleFooter = document.createElement('h3');
           titleFooter.className = 'bb-newsletter-heading';
           titleFooter.textContent = headerText;
@@ -11572,14 +11574,7 @@
           row.appendChild(leftCol);
 
           var rightCol = document.createElement('div');
-          rightCol.style.display = 'flex';
-          rightCol.style.flexDirection = 'row';
-          rightCol.style.alignItems = 'center';
-          rightCol.style.justifyContent = 'flex-end';
-          rightCol.style.flexWrap = 'wrap';
-          rightCol.style.gap = '8px';
-          rightCol.style.flex = '1 1 260px';
-          rightCol.style.minWidth = '0';
+          rightCol.className = 'bb-newsletter-footer-form';
 
           var emailInputF = document.createElement('input');
           emailInputF.type = 'email';
@@ -11589,8 +11584,6 @@
           emailInputF.placeholder = 'you@example.com';
           emailInputF.setAttribute('aria-label', 'Email address');
           emailInputF.className = 'bb-form-input';
-          emailInputF.style.flex = '1 1 240px';
-          emailInputF.style.minWidth = '0';
           var btnF = document.createElement('button');
           btnF.textContent = ecCfg.buttonText || 'Subscribe';
           btnF.type = 'button';
