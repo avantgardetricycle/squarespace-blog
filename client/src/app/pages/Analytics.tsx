@@ -181,9 +181,6 @@ export default function Analytics() {
     fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include" })
       .then((res) => res.json().then((body) => ({ ok: res.ok, status: res.status, body })).catch(() => ({ ok: false, status: res.status, body: null })))
       .then((result) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'A,C,D,F',location:'Analytics.tsx:leads-fetch',message:'analytics leads client response',data:{siteKey,timeRange,ok:result.ok,status:result.status,hasSummary:!!(result.body&&result.body.summary),hasLeadsArray:Array.isArray(result.body&&result.body.leads),summary:result.body&&result.body.summary?result.body.summary:null,leadsLen:Array.isArray(result.body&&result.body.leads)?result.body.leads.length:null,bodyKeys:result.body&&typeof result.body==='object'?Object.keys(result.body):[],debug:result.body&&result.body._debug?result.body._debug:null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         setLeadsData(result.ok && result.body ? result.body : { summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] });
       })
       .catch(() => setLeadsData({ summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] }));
