@@ -358,6 +358,10 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
     where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
+    // #region agent log
+    const anySite = await prisma.site.findFirst({ where: { siteKey, deletedAt: null }, select: { id: true, userId: true } })
+    fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'B,C',location:'analytics.ts:leads-site-miss',message:'leads GET site not found for user',data:{siteKey,userId:user.id,otherOwnerSiteId:anySite?.id??null,otherOwnerUserId:anySite?.userId??null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     res.status(404).json({ error: 'Site not found' })
     return
   }
@@ -376,6 +380,16 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
     where,
     orderBy: { createdAt: 'desc' }
   })
+
+  // #region agent log
+  const unfiltered = await prisma.leadCapture.findMany({
+    where: { siteId: site.id },
+    select: { id: true, type: true, createdAt: true, resourceTitle: true },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  })
+  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'A,C,D,E',location:'analytics.ts:leads-query',message:'leads GET query result',data:{siteKey,siteId:site.id,userId:user.id,timeRange,since:since.toISOString(),typeFilter:typeFilter??null,filteredCount:leads.length,unfilteredCount:unfiltered.length,unfilteredSample:unfiltered.map((l)=>({id:l.id,type:l.type,createdAt:l.createdAt.toISOString(),resourceTitleLen:(l.resourceTitle??'').length,inRange:l.createdAt>=since}))},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const newsletterCount = leads.filter((l) => l.type === 'newsletter').length
   const leadMagnetCount = leads.filter((l) => l.type === 'lead_magnet').length
