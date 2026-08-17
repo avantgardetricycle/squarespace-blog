@@ -354,12 +354,21 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
   const typeFilter = req.query.type as string | undefined
   const timeRange = (req.query.timeRange as string) || '30d'
 
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('X-BB-Leads-Handler', 'leads-v2')
+
+  // #region agent log
+  console.log('[analytics/leads] v2 enter', JSON.stringify({ siteKey, timeRange, format, path: req.path, url: req.url, userId: user.id }))
+  // #endregion
+
   const site = await prisma.site.findFirst({
     where: { siteKey, userId: user.id, deletedAt: null }
   })
   if (!site) {
     // #region agent log
     const anySite = await prisma.site.findFirst({ where: { siteKey, deletedAt: null }, select: { id: true, userId: true } })
+    console.log('[analytics/leads] v2 site-miss', JSON.stringify({ siteKey, userId: user.id, otherOwnerSiteId: anySite?.id ?? null, otherOwnerUserId: anySite?.userId ?? null }))
     fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'B,C',location:'analytics.ts:leads-site-miss',message:'leads GET site not found for user',data:{siteKey,userId:user.id,otherOwnerSiteId:anySite?.id??null,otherOwnerUserId:anySite?.userId??null},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     res.status(404).json({ error: 'Site not found' })
@@ -388,7 +397,9 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
     orderBy: { createdAt: 'desc' },
     take: 10,
   })
-  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'A,C,D,E',location:'analytics.ts:leads-query',message:'leads GET query result',data:{siteKey,siteId:site.id,userId:user.id,timeRange,since:since.toISOString(),typeFilter:typeFilter??null,filteredCount:leads.length,unfilteredCount:unfiltered.length,unfilteredSample:unfiltered.map((l)=>({id:l.id,type:l.type,createdAt:l.createdAt.toISOString(),resourceTitleLen:(l.resourceTitle??'').length,inRange:l.createdAt>=since}))},timestamp:Date.now()})}).catch(()=>{});
+  const debugPayload = { siteKey, siteId: site.id, userId: user.id, timeRange, since: since.toISOString(), typeFilter: typeFilter ?? null, filteredCount: leads.length, unfilteredCount: unfiltered.length, unfilteredSample: unfiltered.map((l) => ({ id: l.id, type: l.type, createdAt: l.createdAt.toISOString(), resourceTitleLen: (l.resourceTitle ?? '').length, inRange: l.createdAt >= since })) }
+  console.log('[analytics/leads] v2 query', JSON.stringify(debugPayload))
+  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'A,C,D,E',location:'analytics.ts:leads-query',message:'leads GET query result',data:debugPayload,timestamp:Date.now()})}).catch(()=>{});
   // #endregion
 
   const newsletterCount = leads.filter((l) => l.type === 'newsletter').length
@@ -452,6 +463,13 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const timeRange = (req.query.timeRange as string) || '30d'
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+
+  // #region agent log
+  console.log('[analytics/GET] v2 enter', JSON.stringify({ siteKey, timeRange, path: req.path, url: req.url, userId: user.id }))
+  // #endregion
 
   const site = await prisma.site.findFirst({
     where: { siteKey, userId: user.id, deletedAt: null }

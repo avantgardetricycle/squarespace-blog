@@ -64,6 +64,11 @@ function runExpress(handler: ExpressHandler, req: VercelRequest, res: VercelResp
 
 export default async function expressHandler(req: VercelRequest, res: VercelResponse) {
   const incomingUrl = req.url ?? '/'
+  // #region agent log
+  if (typeof incomingUrl === 'string' && incomingUrl.includes('analytics')) {
+    console.log('[express-handler] analytics request', JSON.stringify({ incomingUrl, original: req.headers['x-vercel-original-url'] ?? null, invokePath: req.headers['x-invoke-path'] ?? null }))
+  }
+  // #endregion
   // Vercel rewrites /api/* requests to this function; pass the original path into Express.
   if (incomingUrl.startsWith('/api/')) {
     req.headers['x-betterblog-original-path'] = incomingUrl

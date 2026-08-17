@@ -178,9 +178,15 @@ export default function Analytics() {
   useEffect(() => {
     if (!siteKey) return;
     const params = new URLSearchParams({ timeRange, format: "json" });
-    fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include" })
-      .then((res) => res.json().then((body) => ({ ok: res.ok, status: res.status, body })).catch(() => ({ ok: false, status: res.status, body: null })))
+    fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include", cache: "no-store" })
+      .then((res) => {
+        const handler = res.headers.get("x-bb-leads-handler");
+        return res.json().then((body) => ({ ok: res.ok, status: res.status, handler, body })).catch(() => ({ ok: false, status: res.status, handler, body: null }));
+      })
       .then((result) => {
+        // #region agent log
+        console.info("[bb-leads-debug]", result.status, result.handler, result.body?._debug ?? "NO_DEBUG", result.body ? Object.keys(result.body) : []);
+        // #endregion
         setLeadsData(result.ok && result.body ? result.body : { summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] });
       })
       .catch(() => setLeadsData({ summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] }));
