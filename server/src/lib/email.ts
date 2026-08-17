@@ -240,6 +240,9 @@ export async function sendCommentNotificationEmail(
     moderate: 'hide',
     commentId,
   }).toString()}`
+  const commentSettingsUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey,
+  }).toString()}#comment-settings`
 
   sgMail.setApiKey(apiKey)
 
@@ -248,22 +251,40 @@ export async function sendCommentNotificationEmail(
     postTitle,
     commentExcerpt,
     viewUrl,
+    commentSettingsUrl,
     commentStatus,
     approveUrl,
     spamUrl,
     hideUrl,
   })
 
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `New comment on "${postTitle}"`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+
   try {
-    await sgMail.send({
-      to,
-      from: mailFrom,
-      subject: `New comment on "${postTitle}"`,
-      html,
-      trackingSettings: { clickTracking: { enable: false } },
-    })
-  } catch (err) {
-    console.error('[Comment] SendGrid error sending comment notification:', err)
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[Comment] SendGrid error sending comment notification:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    }
   }
 }
 

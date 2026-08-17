@@ -8,6 +8,7 @@ interface CommentNotificationEmailProps {
   postTitle: string
   commentExcerpt: string
   viewUrl: string
+  commentSettingsUrl: string
   commentStatus: CommentNotificationCommentStatus
   approveUrl: string
   spamUrl: string
@@ -37,6 +38,7 @@ export function CommentNotificationEmail({
   postTitle = 'Untitled',
   commentExcerpt = '',
   viewUrl = '#',
+  commentSettingsUrl = '#',
   commentStatus = 'pending',
   approveUrl = '#',
   spamUrl = '#',
@@ -65,6 +67,13 @@ export function CommentNotificationEmail({
     color: '#ffffff',
   }
 
+  const settingsStyle: React.CSSProperties = {
+    ...linkBase,
+    backgroundColor: '#ffffff',
+    color: '#5B4FE8',
+    border: '1px solid #5B4FE8',
+  }
+
   return (
     <Html>
       <Head>
@@ -72,8 +81,22 @@ export function CommentNotificationEmail({
       </Head>
       <Body style={{ fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", backgroundColor: '#f7f6f3', padding: '40px 20px', margin: 0 }}>
         <Container style={{ maxWidth: 600, margin: '0 auto', backgroundColor: '#ffffff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', border: '1px solid #e5e4e0' }}>
-          <Section style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #5B4FE8 50%, #8F86F0 100%)', padding: '32px 40px', textAlign: 'center' as const }}>
-            <Text style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 24, fontWeight: 700, color: '#ffffff', margin: 0 }}>
+          <Section style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #5B4FE8 50%, #8F86F0 100%)', padding: '40px 40px 32px', textAlign: 'center' as const }}>
+            <table align="center" cellPadding={0} cellSpacing={0} style={{ margin: '0 auto 16px' }}>
+              <tbody>
+                <tr>
+                  <td style={{ verticalAlign: 'middle', paddingRight: 12 }}>
+                    <img src={'cid:logo'} alt="" width={48} height={48} style={{ display: 'block', borderRadius: 8, border: 0 }} />
+                  </td>
+                  <td style={{ verticalAlign: 'middle' }}>
+                    <h1 style={{ fontFamily: "'DM Serif Display', Georgia, serif", fontSize: 32, fontWeight: 700, color: '#ffffff', margin: 0, lineHeight: 1 }}>
+                      BetterBlog
+                    </h1>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <Text style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 16, margin: 0 }}>
               New Comment
             </Text>
           </Section>
@@ -123,9 +146,19 @@ export function CommentNotificationEmail({
               </table>
             </Section>
 
+            <Section style={{ marginBottom: 16 }}>
+              <Link href={commentSettingsUrl} style={settingsStyle}>
+                Comment Settings
+              </Link>
+            </Section>
+
             <Hr style={{ borderColor: '#e5e4e0' }} />
             <Text style={{ color: '#6b6b6b', fontSize: 12, margin: '16px 0 0' }}>
-              Manage your notification preferences in BetterBlog Settings.
+              Manage notification preferences in{' '}
+              <Link href={commentSettingsUrl} style={{ color: '#5B4FE8', textDecoration: 'underline' }}>
+                Comment Settings
+              </Link>
+              .
             </Text>
           </Section>
         </Container>

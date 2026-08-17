@@ -101,6 +101,26 @@ function apiStatusFilterLabel(s: ApiStatus): string {
   return "Spam";
 }
 
+/** Keep moderated rows visible when their new status still matches active filters. */
+function applyLocalCommentStatusUpdates(
+  comments: Comment[],
+  updates: { id: string; status: ApiStatus }[],
+  visibleStatuses: Set<ApiStatus>
+): { comments: Comment[]; totalDelta: number } {
+  const updateById = new Map(updates.map((u) => [u.id, u.status]));
+  let totalDelta = 0;
+  const next = comments.flatMap((c) => {
+    const newStatus = updateById.get(c.id);
+    if (!newStatus) return [c];
+    const wasVisible = visibleStatuses.has(c.status);
+    const stillVisible = visibleStatuses.has(newStatus);
+    if (stillVisible) return [{ ...c, status: newStatus }];
+    if (wasVisible) totalDelta -= 1;
+    return [];
+  });
+  return { comments: next, totalDelta };
+}
+
 interface Counts {
   pending: number;
   approved: number;
@@ -157,6 +177,16 @@ export default function Comments() {
   const emailModerationAttempted = useRef<string | null>(null);
   const highlightHandled = useRef<string | null>(null);
   const highlightSetupRef = useRef<string | null>(null);
+
+  const syncCommentsAfterStatusChange = (updates: { id: string; status: ApiStatus }[]) => {
+    setComments((prev) => {
+      const { comments: next, totalDelta } = applyLocalCommentStatusUpdates(prev, updates, selectedStatuses);
+      if (totalDelta !== 0) {
+        setTotal((t) => Math.max(0, t + totalDelta));
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -242,6 +272,16 @@ export default function Comments() {
           });
       });
   }, [siteKey, comments]);
+
+  useEffect(() => {
+    if (window.location.hash !== "#comment-settings") return;
+    const el = document.getElementById("comment-settings");
+    if (!el) return;
+    const timer = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [siteKey, settings]);
 
   useEffect(() => {
     if (!siteKey) return;
@@ -378,8 +418,7 @@ export default function Comments() {
         toast.success(
           status === "approved" ? "Comment approved" : status === "hidden" ? "Comment hidden" : "Marked as spam"
         );
-        setComments((prev) => prev.filter((x) => x.id !== commentId));
-        setTotal((n) => Math.max(0, n - 1));
+        syncCommentsAfterStatusChange([{ id: commentId, status }]);
         refreshCounts();
         setListRefreshKey((k) => k + 1);
         clearCommentQueryKeys(["moderate", "commentId"]);
@@ -423,8 +462,7 @@ export default function Comments() {
     );
     await Promise.all(promises);
     setSelectedComments(new Set());
-    setComments((prev) => prev.filter((c) => !ids.includes(c.id)));
-    setTotal((t) => Math.max(0, t - ids.length));
+    syncCommentsAfterStatusChange(ids.map((id) => ({ id, status })));
     refreshCounts();
     toast.success(
       action === "approve"
@@ -503,8 +541,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Comment approved");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "approved" }]);
         refreshCounts();
       }
     });
@@ -519,8 +556,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Marked as spam");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "spam" }]);
         refreshCounts();
       }
     });
@@ -540,8 +576,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Comment hidden");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "hidden" }]);
         refreshCounts();
       }
     });
@@ -556,8 +591,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Comment published");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "approved" }]);
         refreshCounts();
       }
     });
@@ -1238,7 +1272,7 @@ export default function Comments() {
           </div>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-neutral-200">
+        <div id="comment-settings" className="mt-6 pt-6 border-t border-neutral-200 scroll-mt-8">
           <h3 className="font-medium text-sm text-[#0a0a0a] mb-4">Settings</h3>
           {!settings && siteKey ? (
             <p className="text-sm text-neutral-500">Loading settings…</p>
