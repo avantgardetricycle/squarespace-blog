@@ -110,15 +110,6 @@ export default function Analytics() {
   const [leadsData, setLeadsData] = useState<{
     summary: { totalNewsletter: number; totalLeadMagnet: number; total: number };
     leads: Array<{ id: string; email: string; name: string | null; type: string; resourceTitle: string | null; createdAt: string }>;
-    _debug?: {
-      siteId: string;
-      siteKey: string;
-      timeRange: string;
-      since: string;
-      filteredCount: number;
-      unfilteredCount: number;
-      unfilteredSample: Array<{ id: string; type: string; createdAt: string; inRange: boolean }>;
-    };
   } | null>(null);
 
   useEffect(() => {
@@ -178,17 +169,9 @@ export default function Analytics() {
   useEffect(() => {
     if (!siteKey) return;
     const params = new URLSearchParams({ timeRange, format: "json" });
-    fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include", cache: "no-store" })
-      .then((res) => {
-        const handler = res.headers.get("x-bb-leads-handler");
-        return res.json().then((body) => ({ ok: res.ok, status: res.status, handler, body })).catch(() => ({ ok: false, status: res.status, handler, body: null }));
-      })
-      .then((result) => {
-        // #region agent log
-        console.info("[bb-leads-debug]", result.status, result.handler, result.body?._debug ?? "NO_DEBUG", result.body ? Object.keys(result.body) : []);
-        // #endregion
-        setLeadsData(result.ok && result.body ? result.body : { summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] });
-      })
+    fetch(`/api/analytics/${encodeURIComponent(siteKey)}/leads?${params}`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setLeadsData(data ?? { summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] }))
       .catch(() => setLeadsData({ summary: { totalNewsletter: 0, totalLeadMagnet: 0, total: 0 }, leads: [] }));
   }, [siteKey, timeRange]);
 
@@ -240,25 +223,23 @@ export default function Analytics() {
   return (
     <div className="min-h-screen bg-[#f7f6f3] p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
-          <p className="text-[#6b6b6b] font-light">
-            Track your blog's performance and reader engagement
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
+      <div>
+        <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
+        <p className="text-[#6b6b6b] font-light">
+          Track your blog's performance and reader engagement
+        </p>
+        <div className="flex items-center gap-3 flex-wrap mt-4">
           {me && me.sites.length > 1 && (
             <Select
               value={siteKey ?? undefined}
               onValueChange={(v) => setSearchParams({ siteKey: v })}
             >
-              <SelectTrigger className="w-[180px] bg-white border-[#e4e3de]">
+              <SelectTrigger className="w-[200px] h-10 bg-white border-[#e4e3de] text-base">
                 <SelectValue placeholder="Select blog" />
               </SelectTrigger>
               <SelectContent>
                 {me.sites.map((s) => (
-                  <SelectItem key={s.id} value={s.siteKey}>
+                  <SelectItem key={s.id} value={s.siteKey} className="text-base">
                     {s.name || s.url || "Unnamed blog"}
                   </SelectItem>
                 ))}
@@ -266,14 +247,14 @@ export default function Analytics() {
             </Select>
           )}
           <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[160px] bg-white border-[#e4e3de]">
+            <SelectTrigger className="w-[180px] h-10 bg-white border-[#e4e3de] text-base">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="12m">Last 12 months</SelectItem>
+              <SelectItem value="7d" className="text-base">Last 7 days</SelectItem>
+              <SelectItem value="30d" className="text-base">Last 30 days</SelectItem>
+              <SelectItem value="90d" className="text-base">Last 90 days</SelectItem>
+              <SelectItem value="12m" className="text-base">Last 12 months</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -451,13 +432,6 @@ export default function Analytics() {
             No leads or subscribers yet. Add Email Capture or Lead Magnet modules in Configure to start collecting.
           </p>
         )}
-        {/* #region agent log */}
-        {leadsData?._debug && (
-          <p className="text-xs text-[#9a9a9a] mt-2 font-mono break-all">
-            debug filtered={leadsData._debug.filteredCount} unfiltered={leadsData._debug.unfilteredCount} since={leadsData._debug.since} site={leadsData._debug.siteId} sample={JSON.stringify(leadsData._debug.unfilteredSample)}
-          </p>
-        )}
-        {/* #endregion */}
       </Card>
 
       {/* Key Metrics */}

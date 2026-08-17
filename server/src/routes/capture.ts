@@ -105,7 +105,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     const resourceTitleForDb = type === 'newsletter' ? '' : (resourceTitle ?? '')
 
-    const record = await prisma.leadCapture.upsert({
+    await prisma.leadCapture.upsert({
       where: {
         siteId_email_type_resourceTitle: {
           siteId: site.id,
@@ -123,13 +123,6 @@ router.post('/', async (req: Request, res: Response) => {
       },
       update: { name },
     })
-
-    // #region agent log
-    const createdAtMs = record.createdAt.getTime()
-    const ageMs = Date.now() - createdAtMs
-    const siteCount = await prisma.leadCapture.count({ where: { siteId: site.id } })
-    fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fc5c1f'},body:JSON.stringify({sessionId:'fc5c1f',runId:'pre-fix',hypothesisId:'A,C,E',location:'capture.ts:upsert',message:'capture upsert completed',data:{siteId:site.id,siteKey,siteStatus:site.status,type,resourceTitleLen:resourceTitleForDb.length,recordId:record.id,createdAt:record.createdAt.toISOString(),ageMs,looksLikeUpdate:ageMs>5000,siteLeadCount:siteCount,emailLen:email.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const siteOwner = await prisma.user.findUnique({
       where: { id: site.userId },
