@@ -4116,30 +4116,17 @@
       return this._isPlaceholderImageUrl(url);
     },
 
-    /** Same gradient set as editorial cards when no usable featured image. */
-    _editorialImagePlaceholderGradients: [
-      'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      'linear-gradient(135deg, #2d1b69 0%, #11998e 100%)',
-      'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
-      'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
-      'linear-gradient(135deg, #4b1248 0%, #f10711 100%)',
-      'linear-gradient(135deg, #0d0d0d 0%, #4a4a4a 100%)'
-    ],
+    /** Accent gradient shown when a post has no usable featured image. */
+    _featuredImagePlaceholderGradient:
+      'linear-gradient(135deg, var(--bb-accent), color-mix(in srgb, var(--bb-accent) 60%, black))',
     /**
-     * CSS `background` value for a featured/collection image area: cover photo or editorial-style gradient.
+     * CSS `background` value for a featured/collection image area: cover photo or accent gradient.
      */
     _featuredImageAreaBackground: function(imgUrl, placeholderMap, post, items) {
       if (imgUrl && typeof imgUrl === 'string' && !this._isPlaceholderWithMap(imgUrl, placeholderMap)) {
         return 'url(' + imgUrl + ') center/cover';
       }
-      var idx = 0;
-      if (post && items && Array.isArray(items)) {
-        var ix = this._postIndexInItems(items, post, this._itemIndexMap);
-        if (ix >= 0) idx = ix;
-      }
-      var g = this._editorialImagePlaceholderGradients;
-      var tokens = this._getCollectionStyleTokens();
-      return (tokens && tokens.placeholder) ? tokens.placeholder : g[idx % g.length];
+      return this._featuredImagePlaceholderGradient;
     },
 
     /**
