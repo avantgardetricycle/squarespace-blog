@@ -8948,10 +8948,11 @@
       var phShowDecorativeAccentLine = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showDecorativeAccentLine);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
+      var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
       var sidebarRowPostLayout = isSinglePost && (
         self._isFeaturePostLayout(cfg) ||
         self._isReporterPostLayout(cfg) ||
-        self._isPublisherPostLayout(cfg)
+        publisherPostLayout
       );
       var postHeaderAccentDividerLayout = phShowDecorativeAccentLine && (writerPostLayout || storyPostLayout);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
@@ -8968,6 +8969,7 @@
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
         var showFiPlaceholder = !isSinglePost && fiShow && !imgUrl;
+        var showSinglePostFiPlaceholder = isSinglePost && fiShow && !imgUrl && (storyPostLayout || publisherPostLayout);
         if (isSinglePost) {
           fiLayout = phImagePos === 'fullBleed' ? 'fullBleed' : phImagePos === 'rightOfInfo' ? 'rightJustified' : 'leftJustified';
           if (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') fiImageWidth = fiImageWidth;
@@ -9095,7 +9097,7 @@
         var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
         var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl || showFiPlaceholder) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && (imgUrl || showFiPlaceholder);
         if (isSinglePost && (phImagePos === 'belowInfo' || phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) isSideBySide = false;
-        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || showFiPlaceholder)) isSideBySide = true;
+        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || (storyPostLayout && !imgUrl))) isSideBySide = true;
         var rowEl = null;
         var contentEl = null;
         if (isSideBySide) {
@@ -9141,7 +9143,7 @@
           }
         }
         var appendTo = isSideBySide ? contentEl : article;
-        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && !!imgUrl;
+        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && (!!imgUrl || publisherPostLayout);
         var fullBleedLayoutStacked = postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked';
         var singlePostFullBleedStacked = hasFullBleedImg && fullBleedLayoutStacked;
         var singlePostFullBleedHero = hasFullBleedImg && !fullBleedLayoutStacked;
@@ -9256,7 +9258,7 @@
             stackedFullBleedWrap.appendChild(stackCap);
           }
         }
-        if (fiShow && (imgUrl || showFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
+        if (fiShow && (imgUrl || showFiPlaceholder || showSinglePostFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
           var fiWrap = document.createElement('div');
           fiWrap.className = 'blog-overlay-featured-image';
           if (fiLayout === 'fullBleed') {
@@ -9469,7 +9471,6 @@
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
         }
 
-        var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
         var featurePostLayoutForCat = isSinglePost && self._isFeaturePostLayout(cfg);
         /** Publisher ribbon is template-locked; other templates respect postHeader.showCategories. */
         var postHeaderCategoryLayout = isSinglePost && (
