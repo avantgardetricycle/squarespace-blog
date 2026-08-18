@@ -94,6 +94,17 @@ function statusBadgeLabel(ui: UiStatus): string {
 
 const ALL_API_STATUSES: ApiStatus[] = ["pending", "approved", "spam", "hidden"];
 
+function emailLinkActionFromParams(params: URLSearchParams): { action: string; commentId: string } | null {
+  const moderate = params.get("moderate");
+  const commentId = params.get("commentId");
+  const highlight = params.get("highlight");
+  if (moderate && commentId && ["approve", "spam", "hide"].includes(moderate)) {
+    return { action: moderate, commentId };
+  }
+  if (highlight) return { action: "view", commentId: highlight };
+  return null;
+}
+
 function apiStatusFilterLabel(s: ApiStatus): string {
   if (s === "pending") return "Awaiting review";
   if (s === "approved") return "Published";
@@ -177,6 +188,8 @@ export default function Comments() {
   const emailModerationAttempted = useRef<string | null>(null);
   const highlightHandled = useRef<string | null>(null);
   const highlightSetupRef = useRef<string | null>(null);
+  const emailLinkVerifyKey = useRef<string | null>(null);
+  const [emailLinkVerified, setEmailLinkVerified] = useState<boolean | null>(null);
 
   const syncCommentsAfterStatusChange = (updates: { id: string; status: ApiStatus }[]) => {
     setComments((prev) => {
@@ -342,6 +355,46 @@ export default function Comments() {
   }, [searchParams, navigate]);
 
   useEffect(() => {
+    const action = emailLinkActionFromParams(searchParams);
+    if (!action) {
+      setEmailLinkVerified(null);
+      emailLinkVerifyKey.current = null;
+      return;
+    }
+    const token = searchParams.get("token");
+    const key = `${token}:${action.action}:${action.commentId}`;
+    if (emailLinkVerifyKey.current === key) return;
+    emailLinkVerifyKey.current = key;
+    setEmailLinkVerified(null);
+
+    let cancelled = false;
+    (async () => {
+      let valid = false;
+      if (token) {
+        const r = await fetch(`/api/comment-actions/verify?token=${encodeURIComponent(token)}`, {
+          credentials: "include",
+        });
+        if (r.ok) {
+          const data = (await r.json().catch(() => null)) as { commentId?: string; action?: string } | null;
+          valid = data?.commentId === action.commentId && data?.action === action.action;
+        }
+      }
+      if (cancelled) return;
+      if (!valid) {
+        toast.error("That link is invalid or expired.");
+        clearCommentQueryKeys(["token", "moderate", "commentId", "highlight"]);
+        setEmailLinkVerified(false);
+        return;
+      }
+      setEmailLinkVerified(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, navigate]);
+
+  useEffect(() => {
     const approvedId = searchParams.get("approved");
     if (!approvedId) return;
     toast.success("Comment approved.");
@@ -363,6 +416,7 @@ export default function Comments() {
       highlightSetupRef.current = null;
       return;
     }
+    if (emailLinkVerified !== true) return;
     if (!siteKey) return;
     if (highlightSetupRef.current === hid) return;
     highlightSetupRef.current = hid;
@@ -372,7 +426,7 @@ export default function Comments() {
     setPage(1);
     setSearchQuery("");
     setListRefreshKey((k) => k + 1);
-  }, [searchParams, siteKey]);
+  }, [searchParams, siteKey, emailLinkVerified]);
 
   useEffect(() => {
     if (!me || loading) return;
@@ -380,7 +434,7 @@ export default function Comments() {
     const validKeys = new Set((me.sites || []).map((s) => s.siteKey).filter(Boolean));
     if (urlSk && !validKeys.has(urlSk)) {
       toast.error("This comment does not belong to your account.");
-      clearCommentQueryKeys(["siteKey", "moderate", "commentId", "highlight"]);
+      clearCommentQueryKeys(["siteKey", "moderate", "commentId", "highlight", "token"]);
       return;
     }
     const moderate = searchParams.get("moderate");
@@ -396,6 +450,7 @@ export default function Comments() {
 
   useEffect(() => {
     if (!me || loading || !siteKey) return;
+    if (emailLinkVerified !== true) return;
     const moderate = searchParams.get("moderate");
     const commentId = searchParams.get("commentId");
     if (!moderate || !commentId || !["approve", "spam", "hide"].includes(moderate)) return;
@@ -421,19 +476,20 @@ export default function Comments() {
         syncCommentsAfterStatusChange([{ id: commentId, status }]);
         refreshCounts();
         setListRefreshKey((k) => k + 1);
-        clearCommentQueryKeys(["moderate", "commentId"]);
+        clearCommentQueryKeys(["moderate", "commentId", "token"]);
       } else {
         emailModerationAttempted.current = null;
         const data = await r.json().catch(() => ({}));
         toast.error((data as { error?: string }).error ?? "Could not update comment");
-        clearCommentQueryKeys(["moderate", "commentId"]);
+        clearCommentQueryKeys(["moderate", "commentId", "token"]);
       }
     })();
-  }, [me, loading, siteKey, searchParams, navigate]);
+  }, [me, loading, siteKey, searchParams, navigate, emailLinkVerified]);
 
   useEffect(() => {
     const hid = searchParams.get("highlight");
     if (!hid || fetching) return;
+    if (emailLinkVerified !== true) return;
     if (highlightHandled.current === hid) return;
     const el = document.getElementById(`bb-comment-row-${hid}`);
     if (!el) return;
@@ -443,9 +499,9 @@ export default function Comments() {
     const timer = window.setTimeout(() => {
       el.classList.remove("ring-2", "ring-[#5B4FE8]", "ring-offset-2", "rounded-lg");
     }, 4000);
-    clearCommentQueryKeys(["highlight"]);
+    clearCommentQueryKeys(["highlight", "token"]);
     return () => window.clearTimeout(timer);
-  }, [comments, fetching, searchParams, navigate]);
+  }, [comments, fetching, searchParams, navigate, emailLinkVerified]);
 
   const doBulkAction = async (action: "approve" | "spam" | "hide") => {
     if (selectedComments.size === 0) return;

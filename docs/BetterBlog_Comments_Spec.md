@@ -424,7 +424,7 @@ Subject: New comment on "[Post Title]"
 Manage your notification preferences in BetterBlog Settings.
 ```
 
-Action links are signed, time-limited tokens (expire 72 hours) that perform the action server-side without requiring dashboard login. This matches the workflow convenience of Squarespace's native email moderation.
+Action links are signed, time-limited tokens (expire after 72 hours) that perform the action server-side without requiring dashboard login. This matches the workflow convenience of Squarespace's native email moderation.
 
 ---
 

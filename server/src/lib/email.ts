@@ -1,6 +1,7 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
 import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
+import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
 import { getAppUrl, getSupportPortalUrl } from './url.js'
 
 const transporter = nodemailer.createTransport({
@@ -204,6 +205,23 @@ export async function sendNewLeadMagnetNotification(
   }
 }
 
+function dashboardCommentActionUrl(
+  base: string,
+  siteKey: string,
+  commentId: string,
+  action: CommentAction
+): string {
+  const token = signCommentActionToken(commentId, action)
+  const params = new URLSearchParams({ siteKey, token })
+  if (action === 'view') {
+    params.set('highlight', commentId)
+  } else {
+    params.set('moderate', action)
+    params.set('commentId', commentId)
+  }
+  return `${base}/dashboard/comments?${params.toString()}`
+}
+
 /** Send notification to blogger: new comment or comment approved */
 export async function sendCommentNotificationEmail(
   to: string,
@@ -221,25 +239,10 @@ export async function sendCommentNotificationEmail(
   }
 
   const base = getAppUrl().replace(/\/+$/, '')
-  const viewUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    highlight: commentId,
-  }).toString()}`
-  const approveUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'approve',
-    commentId,
-  }).toString()}`
-  const spamUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'spam',
-    commentId,
-  }).toString()}`
-  const hideUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'hide',
-    commentId,
-  }).toString()}`
+  const viewUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'view')
+  const approveUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'approve')
+  const spamUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'spam')
+  const hideUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'hide')
   const commentSettingsUrl = `${base}/dashboard/comments?${new URLSearchParams({
     siteKey,
   }).toString()}#comment-settings`
