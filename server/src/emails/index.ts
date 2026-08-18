@@ -27,6 +27,7 @@ export async function renderCommentNotificationEmail(props: {
   postTitle: string
   commentExcerpt: string
   viewUrl: string
+  commentSettingsUrl: string
   commentStatus: 'pending' | 'approved'
   approveUrl: string
   spamUrl: string

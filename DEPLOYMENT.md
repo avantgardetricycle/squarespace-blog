@@ -8,7 +8,7 @@
 | --------- | ---- |
 | **Vercel** | Express API (`api/index.ts`), SPA, `loader.js` / `renderer.js`, Stripe webhook |
 | **Vercel Queues** | Async Stripe jobs (`checkout.session.completed`, `customer.subscription.updated`) |
-| **Supabase** | Postgres for Prisma (`DATABASE_URL` pooler + `DIRECT_URL` for migrations) |
+| **Supabase** | Postgres for Prisma (`DATABASE_URL` pooler + `DIRECT_URL` for migrations) and Storage for author photos |
 
 There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers are `api/queues/*.ts`.
 
@@ -18,8 +18,12 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 2. In **Project Settings → Database**, copy:
    - **Transaction pooler** URI → `DATABASE_URL` (port `6543`, `?pgbouncer=true` for Prisma).
    - **Session / direct** URI → `DIRECT_URL` (port `5432`, for migrations).
-3. Migrate data from Heroku Postgres (dump/restore) before cutover.
-4. Optional: drop legacy `pgboss` schema on Supabase after cutover (no longer used).
+3. In **Storage**, create a **public** bucket named `author-photos` (public so Squarespace `<img>` tags work). Leave writes closed to anon; only the service role uploads. The API can also create this bucket on first upload if it is missing.
+4. In **Project Settings → API**, copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (server only; never expose as `VITE_`)
+5. Migrate data from Heroku Postgres (dump/restore) before cutover.
+6. Optional: drop legacy `pgboss` schema on Supabase after cutover (no longer used).
 
 ### Vercel setup
 
@@ -35,6 +39,8 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | -------- | ----------- |
 | `DATABASE_URL` | Supabase **transaction pooler** (`postgres.[ref]` @ `*.pooler.supabase.com:6543`, `?pgbouncer=true`) — see [docs/SUPABASE_CONNECTION.md](docs/SUPABASE_CONNECTION.md) |
 | `DIRECT_URL` | Supabase **session pooler** (`:5432`) or **direct** (`db.[ref].supabase.co:5432`) — for `prisma db push` / CI |
+| `SUPABASE_URL` | Supabase project URL (`https://<project-ref>.supabase.co`) — author photo Storage |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase **service_role** key (server only) — author photo uploads |
 | `APP_URL` | `https://your-app.vercel.app` or custom domain |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `https://your-app.vercel.app/api/webhooks/stripe` |

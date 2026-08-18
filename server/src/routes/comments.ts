@@ -82,6 +82,7 @@ async function getSiteWithSubscription(siteToken: string) {
 
 type CommentSettingsRow = {
   commentsEnabled: boolean
+  allowNewComments: boolean
   allowAnonymousComments: boolean
   subscriberCommentsEnabled: boolean
   requireApproval: boolean
@@ -98,6 +99,7 @@ function effectiveCommentSettings(s: CommentSettingsRow | null) {
   if (!s) {
     return {
       commentsEnabled: true,
+      allowNewComments: true,
       allowAnonymousComments: true,
       subscriberCommentsEnabled: false,
       requireApproval: false,
@@ -283,6 +285,10 @@ router.post('/', async (req: Request, res: Response) => {
   })
   if (!settings.commentsEnabled) {
     res.status(403).json({ error: 'Comments are disabled' })
+    return
+  }
+  if (!settings.allowNewComments) {
+    res.status(403).json({ error: 'New comments are disabled' })
     return
   }
 

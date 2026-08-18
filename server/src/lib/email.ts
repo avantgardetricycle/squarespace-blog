@@ -1,6 +1,7 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
 import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
+import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
 import { getAppUrl, getSupportPortalUrl } from './url.js'
 
 const transporter = nodemailer.createTransport({
@@ -204,6 +205,23 @@ export async function sendNewLeadMagnetNotification(
   }
 }
 
+function dashboardCommentActionUrl(
+  base: string,
+  siteKey: string,
+  commentId: string,
+  action: CommentAction
+): string {
+  const token = signCommentActionToken(commentId, action)
+  const params = new URLSearchParams({ siteKey, token })
+  if (action === 'view') {
+    params.set('highlight', commentId)
+  } else {
+    params.set('moderate', action)
+    params.set('commentId', commentId)
+  }
+  return `${base}/dashboard/comments?${params.toString()}`
+}
+
 /** Send notification to blogger: new comment or comment approved */
 export async function sendCommentNotificationEmail(
   to: string,
@@ -221,25 +239,13 @@ export async function sendCommentNotificationEmail(
   }
 
   const base = getAppUrl().replace(/\/+$/, '')
-  const viewUrl = `${base}/dashboard/comments?${new URLSearchParams({
+  const viewUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'view')
+  const approveUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'approve')
+  const spamUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'spam')
+  const hideUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'hide')
+  const commentSettingsUrl = `${base}/dashboard/comments?${new URLSearchParams({
     siteKey,
-    highlight: commentId,
-  }).toString()}`
-  const approveUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'approve',
-    commentId,
-  }).toString()}`
-  const spamUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'spam',
-    commentId,
-  }).toString()}`
-  const hideUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'hide',
-    commentId,
-  }).toString()}`
+  }).toString()}#comment-settings`
 
   sgMail.setApiKey(apiKey)
 
@@ -248,22 +254,40 @@ export async function sendCommentNotificationEmail(
     postTitle,
     commentExcerpt,
     viewUrl,
+    commentSettingsUrl,
     commentStatus,
     approveUrl,
     spamUrl,
     hideUrl,
   })
 
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `New comment on "${postTitle}"`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+
   try {
-    await sgMail.send({
-      to,
-      from: mailFrom,
-      subject: `New comment on "${postTitle}"`,
-      html,
-      trackingSettings: { clickTracking: { enable: false } },
-    })
-  } catch (err) {
-    console.error('[Comment] SendGrid error sending comment notification:', err)
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[Comment] SendGrid error sending comment notification:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    }
   }
 }
 

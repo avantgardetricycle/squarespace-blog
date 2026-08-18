@@ -56,6 +56,7 @@ import BlogPreviewIframe, {
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
+import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
 import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
@@ -168,7 +169,7 @@ export interface PostModulesConfig {
   leadMagnet: { enabled: boolean; position: ModulePosition; resourceTitle: string; description: string; buttonText: string };
 }
 
-export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
+export const SOCIAL_PLATFORMS = ["facebook", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
 export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";
@@ -626,7 +627,6 @@ const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
     "showDecorativeAccentLine",
   ]),
   story: new Set([
-    "fullBleedControls",
     "showFeaturedImage",
     "aspectRatio",
     "imageWidth",
@@ -667,7 +667,7 @@ function isPostTemplatePathLocked(path: string, locks: ReadonlySet<PostTemplateL
   if (path === "postHeader.imagePosition") return locks.has("imagePosition");
   if (path === "postHeader.fullBleedLayout") return locks.has("fullBleedControls");
   if (path === "postHeader.contentVerticalAlignment") {
-    return locks.has("contentVerticalAlignment") || locks.has("fullBleedControls");
+    return locks.has("contentVerticalAlignment");
   }
   if (path === "postHeader.sideGap") return locks.has("sidePadding");
   if (path === "postHeader.showTags" || path === "postHeader.showCategories") {
@@ -702,15 +702,9 @@ function enforcePostTemplateLockedValues(
     ph = { ...ph, imagePosition: tplPh.imagePosition };
     phChanged = true;
   }
-  if (locks.has("fullBleedControls")) {
-    if (ph.fullBleedLayout !== tplPh.fullBleedLayout) {
-      ph = { ...ph, fullBleedLayout: tplPh.fullBleedLayout };
-      phChanged = true;
-    }
-    if (ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
-      ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
-      phChanged = true;
-    }
+  if (locks.has("fullBleedControls") && ph.fullBleedLayout !== tplPh.fullBleedLayout) {
+    ph = { ...ph, fullBleedLayout: tplPh.fullBleedLayout };
+    phChanged = true;
   }
   if (locks.has("contentVerticalAlignment") && ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
     ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
@@ -2239,6 +2233,7 @@ export default function Configure() {
   const [previewViewSyncToken, setPreviewViewSyncToken] = useState(0);
   const [commentSettings, setCommentSettings] = useState<{
     commentsEnabled: boolean;
+    allowNewComments: boolean;
     allowAnonymousComments: boolean;
     subscriberCommentsEnabled: boolean;
     apiKeyVerified: boolean;
@@ -2251,13 +2246,8 @@ export default function Configure() {
     sortOrder: "newest" | "oldest" | "most_liked";
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
-  const [commentSettingsSaving, setCommentSettingsSaving] = useState(false);
   const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
-  const [commentApiKeyInput, setCommentApiKeyInput] = useState("");
-  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<false | "setup" | "edit">(false);
-  const [commentApiKeyStatus, setCommentApiKeyStatus] = useState<
-    "unverified" | "verifying" | "verified" | "invalid" | "missing_permission"
-  >("unverified");
+  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     authorProfiles: false,
@@ -2409,6 +2399,7 @@ export default function Configure() {
       .then((data) => {
         const settings = data && typeof data === "object" ? {
           commentsEnabled: data.commentsEnabled ?? true,
+          allowNewComments: data.allowNewComments ?? true,
           allowAnonymousComments: data.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
           apiKeyVerified: data.apiKeyVerified ?? false,
@@ -2421,6 +2412,7 @@ export default function Configure() {
           sortOrder: (["newest", "oldest", "most_liked"].includes(data.sortOrder) ? data.sortOrder : "newest") as "newest" | "oldest" | "most_liked",
         } : {
           commentsEnabled: true,
+          allowNewComments: true,
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
@@ -2434,11 +2426,11 @@ export default function Configure() {
         };
         setCommentSettings(settings);
         setSavedCommentSettings(settings);
-        setCommentApiKeyStatus(settings.apiKeyVerified ? "verified" : "unverified");
       })
       .catch(() => {
         const settings = {
           commentsEnabled: true,
+          allowNewComments: true,
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
@@ -2559,6 +2551,7 @@ export default function Configure() {
 
   const commentSettingsDirty = commentSettings && savedCommentSettings &&
     (commentSettings.commentsEnabled !== savedCommentSettings.commentsEnabled ||
+     commentSettings.allowNewComments !== savedCommentSettings.allowNewComments ||
      commentSettings.allowAnonymousComments !== savedCommentSettings.allowAnonymousComments ||
      commentSettings.subscriberCommentsEnabled !== savedCommentSettings.subscriberCommentsEnabled ||
      commentSettings.requireApproval !== savedCommentSettings.requireApproval ||
@@ -3062,6 +3055,7 @@ export default function Configure() {
               body: JSON.stringify({
                 siteKey: keyToSave,
                 commentsEnabled: commentSettings.commentsEnabled,
+                allowNewComments: commentSettings.allowNewComments,
                 allowAnonymousComments: commentSettings.allowAnonymousComments,
                 subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled,
                 requireApproval: commentSettings.requireApproval,
@@ -4122,6 +4116,17 @@ export default function Configure() {
                           <div className="pb-4 space-y-4">
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow New Comments</Label>
+                                <Switch
+                                  checked={commentSettings.allowNewComments}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowNewComments: v } : p)}
+                                />
+                              </div>
+                            </div>
+                            {commentSettings.allowNewComments && (
+                            <>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
                                 <Label className="text-sm">Allow Anonymous Comments</Label>
                                 <Switch
                                   checked={commentSettings.allowAnonymousComments}
@@ -4132,7 +4137,7 @@ export default function Configure() {
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <Label className="text-sm">Verified Subscriber Comments</Label>
+                                <Label className="text-sm">Verify subscriber comments</Label>
                                 <Switch
                                   checked={commentSettings.subscriberCommentsEnabled}
                                   onCheckedChange={(v) => {
@@ -4209,19 +4214,21 @@ export default function Configure() {
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Comment Likes</Label>
-                                <Switch
-                                  checked={commentSettings.allowLikes}
-                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowLikes: v } : p)}
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
                                 <Label className="text-sm">Allow Threaded Replies</Label>
                                 <Switch
                                   checked={commentSettings.allowThreadedReplies}
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowThreadedReplies: v } : p)}
+                                />
+                              </div>
+                            </div>
+                            </>
+                            )}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow Comment Likes</Label>
+                                <Switch
+                                  checked={commentSettings.allowLikes}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowLikes: v } : p)}
                                 />
                               </div>
                             </div>
@@ -4384,25 +4391,29 @@ export default function Configure() {
                                   </SelectContent>
                                 </Select>
                                 {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" ||
-                                  (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") &&
-                                  !isPostControlLocked("contentVerticalAlignment") && (
-                                  <Select
-                                    value={
-                                      (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
-                                    }
-                                    onValueChange={(v) =>
-                                      updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                    }
+                                  (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
+                                  <LockedControlField
+                                    locked={isPostControlLocked("contentVerticalAlignment")}
+                                    label="Vertical post info alignment"
                                   >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="top">Top</SelectItem>
-                                      <SelectItem value="center">Center</SelectItem>
-                                      <SelectItem value="bottom">Bottom</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    <Select
+                                      value={
+                                        (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                      }
+                                      onValueChange={(v) =>
+                                        updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="top">Top</SelectItem>
+                                        <SelectItem value="center">Center</SelectItem>
+                                        <SelectItem value="bottom">Bottom</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </LockedControlField>
                                 )}
                               </div>
                             )}
@@ -5808,6 +5819,7 @@ export default function Configure() {
               <AuthorImageUpload
                 value={newAuthorImageUrl}
                 onChange={setNewAuthorImageUrl}
+                siteKey={effectiveSiteKey}
                 authorName={newAuthorName}
               />
               <div className="space-y-2">
@@ -5887,145 +5899,22 @@ export default function Configure() {
           </DialogContent>
         </Dialog>
 
-        {/* Squarespace API Key Modal */}
-        <Dialog
-          open={squarespaceApiKeyModalOpen !== false}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSquarespaceApiKeyModalOpen(false);
-              setCommentApiKeyInput("");
-              setCommentApiKeyStatus("unverified");
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {squarespaceApiKeyModalOpen === "setup" ? "Connect Squarespace API" : "Update Squarespace API Key"}
-              </DialogTitle>
-              <DialogDescription>
-                {squarespaceApiKeyModalOpen === "setup"
-                  ? "Connect your Squarespace API to verify subscriber emails for paywalled comment threads."
-                  : "Replace your Squarespace API key."}
-              </DialogDescription>
-            </DialogHeader>
-            {squarespaceApiKeyModalOpen === "edit" && (
-              <p className="text-sm text-[#6b6b6b] -mt-2">Required permission: Profiles (Read).</p>
-            )}
-            {squarespaceApiKeyModalOpen === "setup" && (
-              <div className="text-sm text-[#6b6b6b] space-y-2 -mt-2">
-                <p>To generate an API key:</p>
-                <ol className="list-decimal list-inside space-y-1 pl-1">
-                  <li>In Squarespace, go to Settings → Developer Tools → Developer API Keys (or Settings → Advanced → Developer API Keys)</li>
-                  <li>Generate a new API key</li>
-                  <li>Enable the <strong>Profiles (Read)</strong> permission</li>
-                  <li>Copy the key and paste it below</li>
-                </ol>
-              </div>
-            )}
-            <form
-              className="space-y-4 pt-2"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!effectiveSiteKey || !commentApiKeyInput.trim() || commentApiKeyStatus !== "verified") return;
-                setCommentSettingsSaving(true);
-                try {
-                  const res = await fetch("/api/dashboard/settings/comments", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                      siteKey: effectiveSiteKey,
-                      squarespaceApiKey: commentApiKeyInput.trim(),
-                      ...(squarespaceApiKeyModalOpen === "setup" ? { subscriberCommentsEnabled: true } : {}),
-                    }),
-                  });
-                  if (res.ok) {
-                    toast.success(squarespaceApiKeyModalOpen === "setup" ? "Squarespace API connected!" : "API key updated!");
-                    setCommentSettings((p) =>
-                      p ? { ...p, apiKeyVerified: true, subscriberCommentsEnabled: squarespaceApiKeyModalOpen === "setup" ? true : p.subscriberCommentsEnabled } : p
-                    );
-                    setSquarespaceApiKeyModalOpen(false);
-                    setCommentApiKeyInput("");
-                    setCommentApiKeyStatus("unverified");
-                  } else {
-                    const data = await res.json().catch(() => ({}));
-                    toast.error(data?.error ?? "Failed to save");
+        <SquarespaceApiKeyModal
+          mode={squarespaceApiKeyModalOpen}
+          onModeChange={setSquarespaceApiKeyModalOpen}
+          siteKey={effectiveSiteKey}
+          onSaved={({ enableSubscriberComments }) => {
+            setCommentSettings((p) =>
+              p
+                ? {
+                    ...p,
+                    apiKeyVerified: true,
+                    subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
                   }
-                } finally {
-                  setCommentSettingsSaving(false);
-                }
-              }}
-            >
-              <div className="space-y-2">
-                <Label className="text-sm">Squarespace API Key</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="password"
-                    placeholder="Paste your Squarespace API key"
-                    value={commentApiKeyInput}
-                    onChange={(e) => {
-                      setCommentApiKeyInput(e.target.value);
-                      setCommentApiKeyStatus("unverified");
-                    }}
-                    className="flex-1 font-mono text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!commentApiKeyInput.trim() || commentApiKeyStatus === "verifying"}
-                    onClick={async () => {
-                      if (!effectiveSiteKey || !commentApiKeyInput.trim()) return;
-                      setCommentApiKeyStatus("verifying");
-                      const res = await fetch("/api/dashboard/settings/comments/verify-api-key", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "include",
-                        body: JSON.stringify({ siteKey: effectiveSiteKey, apiKey: commentApiKeyInput.trim() }),
-                      });
-                      const data = await res.json();
-                      if (data?.valid) {
-                        setCommentApiKeyStatus("verified");
-                      } else if (data?.error === "MISSING_PERMISSION") {
-                        setCommentApiKeyStatus("missing_permission");
-                      } else {
-                        setCommentApiKeyStatus("invalid");
-                      }
-                    }}
-                  >
-                    {commentApiKeyStatus === "verifying" ? "Verifying…" : "Verify"}
-                  </Button>
-                </div>
-                <p className="text-xs">
-                  {commentApiKeyStatus === "verified" && <span className="text-green-600">Verified ✓</span>}
-                  {commentApiKeyStatus === "invalid" && <span className="text-red-600">Invalid key ✗</span>}
-                  {commentApiKeyStatus === "missing_permission" && <span className="text-red-600">Missing Profiles permission ✗</span>}
-                </p>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setSquarespaceApiKeyModalOpen(false);
-                    setCommentApiKeyInput("");
-                    setCommentApiKeyStatus("unverified");
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={commentApiKeyStatus !== "verified" || commentSettingsSaving}
-                >
-                  {commentSettingsSaving ? "Saving…" : squarespaceApiKeyModalOpen === "setup" ? "Connect" : "Save Key"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                : p
+            );
+          }}
+        />
       </aside>
 
       {/* Preview Area */}

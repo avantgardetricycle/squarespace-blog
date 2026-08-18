@@ -979,6 +979,7 @@
         return daysSince > closeAfterDays;
       }
       var commentsClosed = bbCommentsClosedForPost(post, cs.autoCloseAfterDays);
+      var allowNewComments = cs.allowNewComments !== false;
       var allowAnonymousComments = cs.allowAnonymousComments !== false;
       var subscriberCommentsEnabled = cs.subscriberCommentsEnabled === true;
       var loggedInOptionalEmail =
@@ -1185,6 +1186,7 @@
           var threadingOn = cs.allowThreadedReplies !== false;
           var replyMode = currentCommentViewerMode().mode;
           var showReply =
+            allowNewComments &&
             !commentsClosed &&
             !isDeletedStub &&
             threadingOn &&
@@ -1421,6 +1423,7 @@
       formWrap.className = 'bb-comment-form-wrap';
       formWrap.style.marginTop = '16px';
 
+      if (allowNewComments) {
       var heading = document.createElement('h2');
       heading.className = 'bb-below-main-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
@@ -1683,8 +1686,9 @@
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      }
 
-      bbDiv.appendChild(formWrap);
+      if (allowNewComments) bbDiv.appendChild(formWrap);
 
       mountBbCommentsEl(bbDiv);
     },
@@ -2723,35 +2727,6 @@
       footerZoneEl.style.maxWidth = '';
       footerZoneEl.style.marginLeft = '';
       footerZoneEl.style.marginRight = '';
-    },
-
-    /** Expand footer zone to main column width when post body uses extra horizontal inset. */
-    _bleedPostFooterZoneToMainWidth: function(footerZoneEl, mainEl, footerContentEl) {
-      if (!footerZoneEl || !footerZoneEl.style || !mainEl || !mainEl.querySelector) return;
-      var bodyEl = mainEl.querySelector('.blog-overlay-body');
-      if (!window.getComputedStyle) return;
-      var pl = 0;
-      var pr = 0;
-      if (bodyEl) {
-        try {
-          var cs = window.getComputedStyle(bodyEl);
-          pl = parseFloat(cs.paddingLeft) || 0;
-          pr = parseFloat(cs.paddingRight) || 0;
-        } catch (ePad) { /* ignore */ }
-      }
-      if (pl <= 0 && pr <= 0 && footerContentEl) {
-        try {
-          var fcs = window.getComputedStyle(footerContentEl);
-          pl = parseFloat(fcs.paddingLeft) || 0;
-          pr = parseFloat(fcs.paddingRight) || 0;
-        } catch (eFooterPad) { /* ignore */ }
-      }
-      if (pl <= 0 && pr <= 0) return;
-      footerZoneEl.style.boxSizing = 'border-box';
-      footerZoneEl.style.width = 'calc(100% + ' + (pl + pr) + 'px)';
-      footerZoneEl.style.maxWidth = 'none';
-      footerZoneEl.style.marginLeft = (-pl) + 'px';
-      footerZoneEl.style.marginRight = (-pr) + 'px';
     },
 
     /**
@@ -4145,30 +4120,17 @@
       return this._isPlaceholderImageUrl(url);
     },
 
-    /** Same gradient set as editorial cards when no usable featured image. */
-    _editorialImagePlaceholderGradients: [
-      'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      'linear-gradient(135deg, #2d1b69 0%, #11998e 100%)',
-      'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
-      'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
-      'linear-gradient(135deg, #4b1248 0%, #f10711 100%)',
-      'linear-gradient(135deg, #0d0d0d 0%, #4a4a4a 100%)'
-    ],
+    /** Accent gradient shown when a post has no usable featured image. */
+    _featuredImagePlaceholderGradient:
+      'linear-gradient(135deg, var(--bb-accent), color-mix(in srgb, var(--bb-accent) 60%, black))',
     /**
-     * CSS `background` value for a featured/collection image area: cover photo or editorial-style gradient.
+     * CSS `background` value for a featured/collection image area: cover photo or accent gradient.
      */
     _featuredImageAreaBackground: function(imgUrl, placeholderMap, post, items) {
       if (imgUrl && typeof imgUrl === 'string' && !this._isPlaceholderWithMap(imgUrl, placeholderMap)) {
         return 'url(' + imgUrl + ') center/cover';
       }
-      var idx = 0;
-      if (post && items && Array.isArray(items)) {
-        var ix = this._postIndexInItems(items, post, this._itemIndexMap);
-        if (ix >= 0) idx = ix;
-      }
-      var g = this._editorialImagePlaceholderGradients;
-      var tokens = this._getCollectionStyleTokens();
-      return (tokens && tokens.placeholder) ? tokens.placeholder : g[idx % g.length];
+      return this._featuredImagePlaceholderGradient;
     },
 
     /**
@@ -6025,7 +5987,6 @@
       var w = 16; var h = 16;
       var svgs = {
         facebook: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-        instagram: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>',
         x: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
         reddit: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.88-7.004 4.88-3.874 0-7.004-2.186-7.004-4.88 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>',
         linkedin: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
@@ -6107,7 +6068,6 @@
         var platform = platforms[p];
         var href = '';
         if (platform === 'facebook') href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodedShareUrl;
-        else if (platform === 'instagram') href = 'https://www.instagram.com/';
         else if (platform === 'x') href = 'https://twitter.com/intent/tweet?url=' + encodedShareUrl + '&text=' + encTitle;
         else if (platform === 'email') {
           href = 'mailto:?subject=' + encTitle + '&body=' + encodedShareUrl;
@@ -6619,10 +6579,6 @@
           link.classList.toggle('blog-overlay-toc-active', isActive);
           link.classList.toggle('is-active', isActive);
           if (tocStyle === 'connectedDots') {
-            link.style.fontWeight = isActive ? '600' : '';
-            link.style.color = isActive ? '#333' : '';
-          }
-          if (tocStyle === 'connectedDots') {
             var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
             if (dot) dot.style.background = (idx <= activeIdx) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
           }
@@ -6670,10 +6626,6 @@
         var isActive = idx === activeIndex;
         link.classList.toggle('blog-overlay-toc-active', isActive);
         link.classList.toggle('is-active', isActive);
-        if (tocStyle === 'connectedDots') {
-          link.style.fontWeight = isActive ? '600' : '';
-          link.style.color = isActive ? '#333' : '';
-        }
         if (tocStyle === 'connectedDots') {
           var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
           if (dot) dot.style.background = (idx <= activeIndex) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
@@ -7322,8 +7274,11 @@
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
         '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
-        '#blog-overlay-list .blog-overlay-story-header-row{gap:40px;align-items:flex-start;margin-bottom:0;}' +
-        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;align-self:flex-start;display:flex;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-story-header-row{display:flex;align-items:stretch;gap:40px;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col{display:flex;flex-direction:column;justify-content:flex-start;min-width:0;align-self:stretch;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-post-breadcrumbs{flex-shrink:0;margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-story-info-panel{flex:1 1 auto;min-height:0;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;display:flex;margin:0;align-self:stretch;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image img{width:100%;height:100%;object-fit:cover;display:block;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel{background:transparent;padding:0;border-radius:0;box-sizing:border-box;gap:0;}' +
@@ -7355,8 +7310,13 @@
         '#blog-overlay-list .blog-overlay-prev-next-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-extra-muted,#888);margin-bottom:8px;}' +
         '#blog-overlay-list .blog-overlay-prev-next-category{margin-bottom:4px;}' +
         '#blog-overlay-list .blog-overlay-prev-next-title{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
-        '#blog-overlay-list .bb-toc-item{display:block;font-size:16px;line-height:1.4;color:var(--bb-muted,#888);border-left:2px solid transparent;padding:8px 12px;text-decoration:none;box-sizing:border-box;}' +
-        '#blog-overlay-list .bb-toc-item.is-active,#blog-overlay-list .bb-toc-item.blog-overlay-toc-active{color:var(--bb-accent,#5B4FE8);border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));font-weight:600;}' +
+        '#blog-overlay-list .blog-overlay-toc .bb-toc-item{display:block;font-family:var(--bb-heading-font-family,inherit);font-size:16px;line-height:1.4;font-weight:400;color:var(--bb-muted,#888);text-decoration:none;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-toc .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc .bb-toc-item.blog-overlay-toc-active{color:var(--bb-accent,#5B4FE8);font-weight:600;}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="numbered"] .bb-toc-item{padding:8px 12px;border-left:none;background:transparent;}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item{border-left:2px solid transparent;padding:8px 12px;background:transparent;}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.blog-overlay-toc-active{border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="connectedDots"] .bb-toc-item{flex:1;min-width:0;padding:4px 0;border-left:none;background:transparent;}' +
+        '#blog-overlay-list .blog-overlay-toc-row{display:flex;align-items:center;gap:10px;margin-left:-18px;}' +
         '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
         '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
         '#blog-overlay-list .bb-pagination-btn{padding:6px 12px;font-size:14px;min-width:36px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-chrome-radius,6px);background:transparent;color:var(--bb-body,#333);cursor:pointer;font-family:inherit;}' +
@@ -7387,7 +7347,16 @@
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
-        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:8px;padding:16px 20px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;width:100%;}' +
+        '#blog-overlay-list .bb-newsletter-footer-copy{flex:1 1 200px;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form-stack{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:1 1 280px;min-width:min(100%,280px);}' +
+        '#blog-overlay-list .bb-newsletter-footer-form{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:8px;width:100%;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .bb-form-input{display:block;box-sizing:border-box;width:auto;flex:1 1 auto;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .sqs-button-element--primary{flex:0 0 auto;width:auto;max-width:none;display:inline-flex;align-items:center;white-space:nowrap;}' +
+        '#blog-overlay-list .bb-newsletter-footer-msg{font-size:0.85rem;width:100%;text-align:right;}' +
+        '@media (max-width:1449px){#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-row{flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-copy,#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form-stack{flex:0 0 auto;width:100%;max-width:100%;min-width:0;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex-wrap:nowrap;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form .bb-form-input{flex:1 1 auto;width:auto;min-width:0;}}' +
         '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-border,#e8e7e4);}' +
         '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
@@ -8566,7 +8535,12 @@
       var showReadingTime = Boolean(cfg.showReadingTime);
       /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
       var showPostExcerpt = cfg.showPostExcerpt !== false;
-      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
+      /** Paywalled logged-out collection JSON often lacks full post body, so reading time cannot be calculated. */
+      if (viewerMode === 'loggedOut' && !isSinglePost && self._isPaywalledSite()) showReadingTime = false;
+      var pbCfg = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
+      var showProgressBar = Boolean(pbCfg.show != null ? pbCfg.show : cfg.showProgressBar);
+      /** Logged-out paywalled readers may see a gated post body — scroll progress is misleading. */
+      if (viewerMode === 'loggedOut' && isSinglePost && self._isPaywalledSite()) showProgressBar = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
@@ -8685,6 +8659,7 @@
         showDate: showDate,
         showAuthor: showAuthor,
         showReadingTime: showReadingTime,
+        showProgressBar: showProgressBar,
         showPostExcerpt: showPostExcerpt,
         fiCfg: fiCfg,
         faCfg: faCfg,
@@ -8977,10 +8952,11 @@
       var phShowDecorativeAccentLine = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showDecorativeAccentLine);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
+      var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
       var sidebarRowPostLayout = isSinglePost && (
         self._isFeaturePostLayout(cfg) ||
         self._isReporterPostLayout(cfg) ||
-        self._isPublisherPostLayout(cfg)
+        publisherPostLayout
       );
       var postHeaderAccentDividerLayout = phShowDecorativeAccentLine && (writerPostLayout || storyPostLayout);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
@@ -8997,6 +8973,7 @@
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
         var showFiPlaceholder = !isSinglePost && fiShow && !imgUrl;
+        var showSinglePostFiPlaceholder = isSinglePost && fiShow && !imgUrl && (storyPostLayout || publisherPostLayout);
         if (isSinglePost) {
           fiLayout = phImagePos === 'fullBleed' ? 'fullBleed' : phImagePos === 'rightOfInfo' ? 'rightJustified' : 'leftJustified';
           if (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') fiImageWidth = fiImageWidth;
@@ -9009,7 +8986,7 @@
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
         var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : fiCfg.aspectRatio === '21:8' ? '21:8' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
-        /** Reporter (split header): 3:2 contained image regardless of saved aspectBehavior. */
+        /** Reporter (split header): 3:2 cover crop regardless of saved aspectBehavior. */
         var reporterPostHeaderLayout = isSinglePost && self._isReporterPostLayout(cfg);
         var reporterPostHeaderImage = reporterPostHeaderLayout && fiShow;
         if (reporterPostHeaderImage) {
@@ -9124,7 +9101,7 @@
         var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
         var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl || showFiPlaceholder) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && (imgUrl || showFiPlaceholder);
         if (isSinglePost && (phImagePos === 'belowInfo' || phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) isSideBySide = false;
-        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || showFiPlaceholder)) isSideBySide = true;
+        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || (storyPostLayout && !imgUrl))) isSideBySide = true;
         var rowEl = null;
         var contentEl = null;
         if (isSideBySide) {
@@ -9134,15 +9111,15 @@
           if (storyPostLayout) {
             rowEl.classList.add('blog-overlay-story-header-row');
             rowEl.style.gap = '40px';
-            rowEl.style.alignItems = 'flex-start';
+            rowEl.style.alignItems = 'stretch';
             rowEl.style.marginBottom = '0';
           } else {
             rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact)
               ? '10px'
               : (isSinglePost && phSideImageGapPx > 0 ? (phSideImageGapPx + 'px') : '20px');
             rowEl.style.alignItems =
-              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && phShowBreadcrumbs)
-                ? 'flex-start'
+              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo'))
+                ? 'stretch'
                 : ((!isSinglePost && collectionLayout === 'listRows')
                     ? 'center'
                     : (isSinglePost ? phVerticalAlignItems : 'flex-start'));
@@ -9153,6 +9130,13 @@
           contentEl = document.createElement('div');
           contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
           contentEl.style.minWidth = '0';
+          if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
+            if (storyPostLayout) contentEl.classList.add('blog-overlay-story-info-col');
+            contentEl.style.display = 'flex';
+            contentEl.style.flexDirection = 'column';
+            contentEl.style.justifyContent = 'flex-start';
+            contentEl.style.alignSelf = 'stretch';
+          }
           if (!isSinglePost && collectionLayout === 'listRows') {
             contentEl.style.display = 'flex';
             contentEl.style.flexDirection = 'column';
@@ -9163,7 +9147,7 @@
           }
         }
         var appendTo = isSideBySide ? contentEl : article;
-        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && !!imgUrl;
+        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && (!!imgUrl || publisherPostLayout);
         var fullBleedLayoutStacked = postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked';
         var singlePostFullBleedStacked = hasFullBleedImg && fullBleedLayoutStacked;
         var singlePostFullBleedHero = hasFullBleedImg && !fullBleedLayoutStacked;
@@ -9278,7 +9262,7 @@
             stackedFullBleedWrap.appendChild(stackCap);
           }
         }
-        if (fiShow && (imgUrl || showFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
+        if (fiShow && (imgUrl || showFiPlaceholder || showSinglePostFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
           var fiWrap = document.createElement('div');
           fiWrap.className = 'blog-overlay-featured-image';
           if (fiLayout === 'fullBleed') {
@@ -9320,8 +9304,8 @@
               fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             }
             fiWrap.style.minWidth = '0';
-            fiWrap.style.alignSelf = storyPostLayout
-              ? 'flex-start'
+            fiWrap.style.alignSelf = storyPostLayout || (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo'))
+              ? 'stretch'
               : ((!isSinglePost && collectionLayout === 'listRows') ? 'center' : 'flex-start');
           }
           var fiInner = document.createElement('div');
@@ -9349,7 +9333,7 @@
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.display = 'block';
-            img.style.objectFit = reporterPostHeaderImage ? 'contain' : ((fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain');
+            img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
             img.style.objectPosition = 'center';
             img.onerror = function() { fiWrap.style.display = 'none'; };
             fiInner.appendChild(img);
@@ -9409,6 +9393,11 @@
           if (storyPostLayout) {
             postInfoWrap.classList.add('blog-overlay-story-info-panel');
             postInfoWrap.style.gap = '0';
+          }
+          if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
+            postInfoWrap.style.flex = '1 1 auto';
+            postInfoWrap.style.minHeight = '0';
+            postInfoWrap.style.justifyContent = phVertical === 'center' ? 'center' : phVertical === 'bottom' ? 'flex-end' : 'flex-start';
           }
           if (reporterPostHeaderLayout) {
             postInfoWrap.classList.add('blog-overlay-reporter-header-stack');
@@ -9486,7 +9475,6 @@
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
         }
 
-        var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
         var featurePostLayoutForCat = isSinglePost && self._isFeaturePostLayout(cfg);
         /** Publisher ribbon is template-locked; other templates respect postHeader.showCategories. */
         var postHeaderCategoryLayout = isSinglePost && (
@@ -9953,9 +9941,6 @@
             } else {
               fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
             }
-          } else if (storyPostLayout && postInfoWrap) {
-            postBreadcrumbNav.style.justifyContent = bcJustify;
-            postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
           } else if (
             isSideBySide &&
             isSinglePost &&
@@ -9963,7 +9948,7 @@
             contentEl
           ) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
-            postBreadcrumbNav.style.marginBottom = '8px';
+            if (!storyPostLayout) postBreadcrumbNav.style.marginBottom = '8px';
             contentEl.insertBefore(postBreadcrumbNav, contentEl.firstChild);
           } else if (singlePostBelowInfo && postInfoWrap && postInfoWrap.parentNode) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
@@ -10615,8 +10600,6 @@
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
-      var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
-      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowAuthorEl = null;
       var featureBelowRowMoreToReadEl = null;
       var featureBelowRowLeadMagnetEl = null;
@@ -10855,12 +10838,11 @@
       }
 
       var progressTrackForPreview = null;
-      var pb = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
-      var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
+      var showProgressBar = Boolean(vs.showProgressBar);
       var progressBarPosition = 'top';
       var progressBarThickness = 6;
       var progressBarColor = self._resolveProgressBarColor(cfg);
-      if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
+      if (isSinglePost && showProgressBar) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.height = progressBarThickness + 'px';
@@ -11182,45 +11164,32 @@
                   var active = other === link;
                   other.classList.toggle('blog-overlay-toc-active', active);
                   other.classList.toggle('is-active', active);
-                  if (tocStyle === 'connectedDots') other.style.fontWeight = active ? '700' : '';
                 }
               } catch (e2) {}
               smoothScrollToTocTarget(href.slice(1));
             };
           }
-          link.style.display = 'block';
-          link.style.textDecoration = 'none';
+          link.classList.add('bb-toc-item');
           if (tocStyle === 'numbered') {
-            link.classList.add('bb-toc-item');
             link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
             if (prefix) link.textContent = prefix + ' ' + (link.textContent || '');
           } else if (tocStyle === 'connectedDots') {
-            link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
-            link.style.lineHeight = '1.3';
-            link.style.color = '#333';
             var row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.alignItems = 'center';
-            row.style.gap = '10px';
-            row.style.marginLeft = '-18px';
+            row.className = 'blog-overlay-toc-row';
             var dot = document.createElement('div');
             dot.style.width = '8px';
             dot.style.height = '8px';
             dot.style.borderRadius = '50%';
-            dot.style.background = '#e5e4e0';
+            dot.style.background = 'var(--bb-border, #e5e4e0)';
             dot.style.flexShrink = '0';
             dot.style.position = 'relative';
             dot.style.zIndex = '1';
             dot.className = 'blog-overlay-toc-dot';
             row.appendChild(dot);
             row.appendChild(link);
-            link.style.padding = '4px 0';
-            link.style.flex = '1';
-            link.style.minWidth = '0';
             el.appendChild(row);
             return;
           } else if (tocStyle === 'bookmark') {
-            link.classList.add('bb-toc-item');
             if (level > 1) link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
           }
           el.appendChild(link);
@@ -11568,6 +11537,9 @@
           var headerText = ecCfg.header || 'Subscribe to our newsletter';
           var outer = document.createElement('div');
           outer.className = 'blog-overlay-email-capture blog-overlay-email-capture-footer bb-footer-card';
+          if (self._isStoryPostLayout(cfg)) {
+            outer.classList.add('blog-overlay-email-capture-footer--story');
+          }
           outer.style.width = '100%';
           var footerWidth = typeof width === 'number' ? width : parseInt(width, 10);
           outer.style.maxWidth = (footerWidth && footerWidth > 0) ? footerWidth + 'px' : '100%';
@@ -11576,17 +11548,11 @@
           outer.style.gap = '10px';
 
           var row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.flexWrap = 'wrap';
-          row.style.alignItems = 'center';
-          row.style.justifyContent = 'space-between';
-          row.style.gap = '16px';
-          row.style.width = '100%';
+          row.className = 'bb-newsletter-footer-row';
 
           var leftCol = document.createElement('div');
-          leftCol.style.flex = '1 1 200px';
-          leftCol.style.minWidth = '0';
-          var titleFooter = document.createElement('div');
+          leftCol.className = 'bb-newsletter-footer-copy';
+          var titleFooter = document.createElement('h3');
           titleFooter.className = 'bb-newsletter-heading';
           titleFooter.textContent = headerText;
           titleFooter.style.lineHeight = '1.3';
@@ -11603,14 +11569,7 @@
           row.appendChild(leftCol);
 
           var rightCol = document.createElement('div');
-          rightCol.style.display = 'flex';
-          rightCol.style.flexDirection = 'row';
-          rightCol.style.alignItems = 'center';
-          rightCol.style.justifyContent = 'flex-end';
-          rightCol.style.flexWrap = 'wrap';
-          rightCol.style.gap = '8px';
-          rightCol.style.flex = '1 1 260px';
-          rightCol.style.minWidth = '0';
+          rightCol.className = 'bb-newsletter-footer-form';
 
           var emailInputF = document.createElement('input');
           emailInputF.type = 'email';
@@ -11619,28 +11578,23 @@
           emailInputF.setAttribute('autocomplete', 'section-newsletter email');
           emailInputF.placeholder = 'you@example.com';
           emailInputF.setAttribute('aria-label', 'Email address');
-          self._applyChromeInputStyle(emailInputF);
-          emailInputF.style.flex = '1 1 160px';
-          emailInputF.style.minWidth = '140px';
-          emailInputF.style.maxWidth = '320px';
+          emailInputF.className = 'bb-form-input';
           var btnF = document.createElement('button');
           btnF.textContent = ecCfg.buttonText || 'Subscribe';
           btnF.type = 'button';
-          btnF.className = 'bb-newsletter-btn';
+          btnF.className = 'sqs-button-element--primary';
           btnF.style.flexShrink = '0';
-          btnF.onmouseover = function() { btnF.style.filter = 'brightness(0.92)'; };
-          btnF.onmouseout = function() { btnF.style.filter = ''; };
           rightCol.appendChild(emailInputF);
           rightCol.appendChild(btnF);
-          row.appendChild(rightCol);
+          var msgFooter = document.createElement('div');
+          msgFooter.className = 'bb-newsletter-footer-msg';
+          var formStack = document.createElement('div');
+          formStack.className = 'bb-newsletter-footer-form-stack';
+          formStack.appendChild(rightCol);
+          formStack.appendChild(msgFooter);
+          row.appendChild(formStack);
 
           outer.appendChild(row);
-
-          var msgFooter = document.createElement('div');
-          msgFooter.style.fontSize = '0.85rem';
-          msgFooter.style.textAlign = 'right';
-          msgFooter.style.width = '100%';
-          outer.appendChild(msgFooter);
 
           wireEmailCaptureSubmit(emailInputF, btnF, msgFooter);
           return outer;
@@ -12512,7 +12466,7 @@
                   leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
                   leftSidebarEl.style.position = 'relative';
                   leftSidebarEl.style.top = '';
-                  leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+                  leftSidebarEl.style.paddingTop = (stickySidebarPadTop + leftPadTop) + 'px';
                 } else {
                   leftSidebarEl.removeAttribute('data-bb-sticky-rail');
                   leftSidebarEl.style.position = 'static';
@@ -12531,7 +12485,7 @@
                   rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
                   rightSidebarEl.style.position = 'relative';
                   rightSidebarEl.style.top = '';
-                  rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+                  rightSidebarEl.style.paddingTop = (stickySidebarPadTop + rightPadTop) + 'px';
                 } else {
                   rightSidebarEl.removeAttribute('data-bb-sticky-rail');
                   rightSidebarEl.style.position = 'static';
@@ -12923,10 +12877,14 @@
             headerModulesHostEl.style.marginTop = '0';
           }
 
-          if (footerContentCfg && footerContentCfg.show) {
-            var fcModules = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+          if (footerContentCfg) {
+            var fcAvail = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+            var fcOrder = Array.isArray(footerContentCfg.moduleOrder) ? footerContentCfg.moduleOrder : [];
+            /* Prefer moduleOrder (Configure source of truth). An empty modules list with a
+               non-empty moduleOrder must still render — same as sidebar TOC. */
+            var fcModules = (fcOrder.length > 0) ? fcOrder.slice() : fcAvail.slice();
             self._warnDuplicateValues('footer', fcModules);
-            if (fcModules.length > 0) {
+            if ((footerContentCfg.show || fcModules.length > 0) && fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
               if (isSinglePost) {
                 featureFooterLeftPad = 0;
@@ -12958,18 +12916,6 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
-                /** Writer/Story: no "More to Read" grid (spec module order). */
-                if (fmod === 'relevantPosts' && (writerPostLayoutForFooter || storyPostLayoutForFooter)) {
-                  continue;
-                }
-                /** Writer: lead magnet is skipped entirely; prev/next replaces it instead. */
-                if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
-                  continue;
-                }
-                /** Prev/next navigation is Writer-only. */
-                if (fmod === 'prevNextArticle' && !writerPostLayoutForFooter) {
-                  continue;
-                }
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
@@ -13019,7 +12965,7 @@
                   }
                 }
               }
-              if (!featurePostLayout && footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
+              if (footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
             }
           }
           if (paywallShowFooter && !featurePostLayout) {
@@ -13187,10 +13133,6 @@
               wrapper.appendChild(footerZoneEl);
             } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
               main.appendChild(footerZoneEl);
-              if (footerSideMarginsMode === 'fullScreen' && storyPostLayoutForFooter) {
-                var footerContentEl = footerZoneEl.querySelector('.blog-overlay-footer-content');
-                self._bleedPostFooterZoneToMainWidth(footerZoneEl, main, footerContentEl);
-              }
             } else if (isSinglePost) {
               wrapper.appendChild(footerZoneEl);
             } else {
@@ -13256,7 +13198,7 @@
         root.insertBefore(progressTrackForPreview, root.firstChild);
       }
 
-      if (isSinglePost && showProgressBar && self._resolveViewerMode() === 'loggedIn') {
+      if (isSinglePost && showProgressBar) {
         requestAnimationFrame(function() {
           self._updateProgressBar();
         });

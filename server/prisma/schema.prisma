@@ -365,6 +365,7 @@ model CommentLike {
 model BlogCommentSettings {
   siteId                   String   @id @map("site_id")
   commentsEnabled          Boolean  @default(true) @map("comments_enabled")
+  allowNewComments         Boolean  @default(true) @map("allow_new_comments")
   allowAnonymousComments   Boolean  @default(true) @map("allow_anonymous_comments")
   subscriberCommentsEnabled Boolean @default(false) @map("subscriber_comments_enabled")
   requireApproval          Boolean  @default(false) @map("require_approval")

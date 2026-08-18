@@ -110,6 +110,35 @@ function pickProgressBarFromPostConfig (postRaw: unknown, existing: ProgressBarP
   }
 }
 
+/** Ensure postConfig always carries progressBar for the renderer and Configure UI. */
+function mergeProgressBarIntoPostConfig (
+  postConfig: Record<string, unknown>,
+  fallback: { show?: boolean; position?: string | null; thickness?: number; color?: string }
+): Record<string, unknown> {
+  const raw = postConfig.progressBar
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const pb = raw as Record<string, unknown>
+    return {
+      ...postConfig,
+      progressBar: {
+        show: Boolean(pb.show ?? fallback.show ?? false),
+        position: typeof pb.position === 'string' ? pb.position : fallback.position ?? 'top',
+        thickness: typeof pb.thickness === 'number' ? pb.thickness : fallback.thickness ?? 6,
+        color: typeof pb.color === 'string' ? pb.color : fallback.color ?? '#5B4FE8'
+      }
+    }
+  }
+  return {
+    ...postConfig,
+    progressBar: {
+      show: Boolean(fallback.show ?? false),
+      position: fallback.position ?? 'top',
+      thickness: fallback.thickness ?? 6,
+      color: fallback.color ?? '#5B4FE8'
+    }
+  }
+}
+
 /** Extract legacy sidebar/header/social/featuredImage columns from the primary bucket of collectionConfig. */
 function pickLegacyColumnsFromCollectionConfig (collectionRaw: unknown, existingRow: Record<string, unknown> | null) {
   const bucket = resolvePrimaryBucket(collectionRaw)
@@ -771,6 +800,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         }
       }
     }
+    resolvedPostConfig = mergeProgressBarIntoPostConfig(resolvedPostConfig, progressBar)
     const cs = site.blogCommentSettings
     const commentsTurnedOff = cs != null && cs.commentsEnabled === false
     const sortOrder =
@@ -779,6 +809,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ? { commentsEnabled: false }
       : {
           commentsEnabled: true,
+          allowNewComments: cs?.allowNewComments ?? true,
           allowAnonymousComments: cs?.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: cs?.subscriberCommentsEnabled ?? false,
           requireApproval: cs?.requireApproval ?? false,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import {
   MessageCircle,
   ThumbsUp,
@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
+import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -94,11 +95,42 @@ function statusBadgeLabel(ui: UiStatus): string {
 
 const ALL_API_STATUSES: ApiStatus[] = ["pending", "approved", "spam", "hidden"];
 
+function emailLinkActionFromParams(params: URLSearchParams): { action: string; commentId: string } | null {
+  const moderate = params.get("moderate");
+  const commentId = params.get("commentId");
+  const highlight = params.get("highlight");
+  if (moderate && commentId && ["approve", "spam", "hide"].includes(moderate)) {
+    return { action: moderate, commentId };
+  }
+  if (highlight) return { action: "view", commentId: highlight };
+  return null;
+}
+
 function apiStatusFilterLabel(s: ApiStatus): string {
   if (s === "pending") return "Awaiting review";
   if (s === "approved") return "Published";
   if (s === "hidden") return "Hidden";
   return "Spam";
+}
+
+/** Keep moderated rows visible when their new status still matches active filters. */
+function applyLocalCommentStatusUpdates(
+  comments: Comment[],
+  updates: { id: string; status: ApiStatus }[],
+  visibleStatuses: Set<ApiStatus>
+): { comments: Comment[]; totalDelta: number } {
+  const updateById = new Map(updates.map((u) => [u.id, u.status]));
+  let totalDelta = 0;
+  const next = comments.flatMap((c) => {
+    const newStatus = updateById.get(c.id);
+    if (!newStatus) return [c];
+    const wasVisible = visibleStatuses.has(c.status);
+    const stillVisible = visibleStatuses.has(newStatus);
+    if (stillVisible) return [{ ...c, status: newStatus }];
+    if (wasVisible) totalDelta -= 1;
+    return [];
+  });
+  return { comments: next, totalDelta };
 }
 
 interface Counts {
@@ -110,6 +142,7 @@ interface Counts {
 
 interface CommentSettings {
   commentsEnabled: boolean;
+  allowNewComments: boolean;
   allowAnonymousComments: boolean;
   subscriberCommentsEnabled: boolean;
   apiKeyVerified: boolean;
@@ -151,12 +184,25 @@ export default function Comments() {
   const [permanentDeleting, setPermanentDeleting] = useState(false);
   const [settings, setSettings] = useState<CommentSettings | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const emailModerationAttempted = useRef<string | null>(null);
   const highlightHandled = useRef<string | null>(null);
   const highlightSetupRef = useRef<string | null>(null);
+  const emailLinkVerifyKey = useRef<string | null>(null);
+  const [emailLinkVerified, setEmailLinkVerified] = useState<boolean | null>(null);
+
+  const syncCommentsAfterStatusChange = (updates: { id: string; status: ApiStatus }[]) => {
+    setComments((prev) => {
+      const { comments: next, totalDelta } = applyLocalCommentStatusUpdates(prev, updates, selectedStatuses);
+      if (totalDelta !== 0) {
+        setTotal((t) => Math.max(0, t + totalDelta));
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -244,6 +290,16 @@ export default function Comments() {
   }, [siteKey, comments]);
 
   useEffect(() => {
+    if (window.location.hash !== "#comment-settings") return;
+    const el = document.getElementById("comment-settings");
+    if (!el) return;
+    const timer = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [siteKey, settings]);
+
+  useEffect(() => {
     if (!siteKey) return;
     fetch(`/api/dashboard/settings/comments?siteKey=${encodeURIComponent(siteKey)}`, {
       credentials: "include",
@@ -253,6 +309,7 @@ export default function Comments() {
         if (data)
           setSettings({
             commentsEnabled: data.commentsEnabled ?? true,
+            allowNewComments: data.allowNewComments ?? true,
             allowAnonymousComments: data.allowAnonymousComments ?? true,
             subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
             apiKeyVerified: data.apiKeyVerified ?? false,
@@ -302,6 +359,46 @@ export default function Comments() {
   }, [searchParams, navigate]);
 
   useEffect(() => {
+    const action = emailLinkActionFromParams(searchParams);
+    if (!action) {
+      setEmailLinkVerified(null);
+      emailLinkVerifyKey.current = null;
+      return;
+    }
+    const token = searchParams.get("token");
+    const key = `${token}:${action.action}:${action.commentId}`;
+    if (emailLinkVerifyKey.current === key) return;
+    emailLinkVerifyKey.current = key;
+    setEmailLinkVerified(null);
+
+    let cancelled = false;
+    (async () => {
+      let valid = false;
+      if (token) {
+        const r = await fetch(`/api/comment-actions/verify?token=${encodeURIComponent(token)}`, {
+          credentials: "include",
+        });
+        if (r.ok) {
+          const data = (await r.json().catch(() => null)) as { commentId?: string; action?: string } | null;
+          valid = data?.commentId === action.commentId && data?.action === action.action;
+        }
+      }
+      if (cancelled) return;
+      if (!valid) {
+        toast.error("That link is invalid or expired.");
+        clearCommentQueryKeys(["token", "moderate", "commentId", "highlight"]);
+        setEmailLinkVerified(false);
+        return;
+      }
+      setEmailLinkVerified(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, navigate]);
+
+  useEffect(() => {
     const approvedId = searchParams.get("approved");
     if (!approvedId) return;
     toast.success("Comment approved.");
@@ -323,6 +420,7 @@ export default function Comments() {
       highlightSetupRef.current = null;
       return;
     }
+    if (emailLinkVerified !== true) return;
     if (!siteKey) return;
     if (highlightSetupRef.current === hid) return;
     highlightSetupRef.current = hid;
@@ -332,7 +430,7 @@ export default function Comments() {
     setPage(1);
     setSearchQuery("");
     setListRefreshKey((k) => k + 1);
-  }, [searchParams, siteKey]);
+  }, [searchParams, siteKey, emailLinkVerified]);
 
   useEffect(() => {
     if (!me || loading) return;
@@ -340,7 +438,7 @@ export default function Comments() {
     const validKeys = new Set((me.sites || []).map((s) => s.siteKey).filter(Boolean));
     if (urlSk && !validKeys.has(urlSk)) {
       toast.error("This comment does not belong to your account.");
-      clearCommentQueryKeys(["siteKey", "moderate", "commentId", "highlight"]);
+      clearCommentQueryKeys(["siteKey", "moderate", "commentId", "highlight", "token"]);
       return;
     }
     const moderate = searchParams.get("moderate");
@@ -356,6 +454,7 @@ export default function Comments() {
 
   useEffect(() => {
     if (!me || loading || !siteKey) return;
+    if (emailLinkVerified !== true) return;
     const moderate = searchParams.get("moderate");
     const commentId = searchParams.get("commentId");
     if (!moderate || !commentId || !["approve", "spam", "hide"].includes(moderate)) return;
@@ -378,23 +477,23 @@ export default function Comments() {
         toast.success(
           status === "approved" ? "Comment approved" : status === "hidden" ? "Comment hidden" : "Marked as spam"
         );
-        setComments((prev) => prev.filter((x) => x.id !== commentId));
-        setTotal((n) => Math.max(0, n - 1));
+        syncCommentsAfterStatusChange([{ id: commentId, status }]);
         refreshCounts();
         setListRefreshKey((k) => k + 1);
-        clearCommentQueryKeys(["moderate", "commentId"]);
+        clearCommentQueryKeys(["moderate", "commentId", "token"]);
       } else {
         emailModerationAttempted.current = null;
         const data = await r.json().catch(() => ({}));
         toast.error((data as { error?: string }).error ?? "Could not update comment");
-        clearCommentQueryKeys(["moderate", "commentId"]);
+        clearCommentQueryKeys(["moderate", "commentId", "token"]);
       }
     })();
-  }, [me, loading, siteKey, searchParams, navigate]);
+  }, [me, loading, siteKey, searchParams, navigate, emailLinkVerified]);
 
   useEffect(() => {
     const hid = searchParams.get("highlight");
     if (!hid || fetching) return;
+    if (emailLinkVerified !== true) return;
     if (highlightHandled.current === hid) return;
     const el = document.getElementById(`bb-comment-row-${hid}`);
     if (!el) return;
@@ -404,9 +503,9 @@ export default function Comments() {
     const timer = window.setTimeout(() => {
       el.classList.remove("ring-2", "ring-[#5B4FE8]", "ring-offset-2", "rounded-lg");
     }, 4000);
-    clearCommentQueryKeys(["highlight"]);
+    clearCommentQueryKeys(["highlight", "token"]);
     return () => window.clearTimeout(timer);
-  }, [comments, fetching, searchParams, navigate]);
+  }, [comments, fetching, searchParams, navigate, emailLinkVerified]);
 
   const doBulkAction = async (action: "approve" | "spam" | "hide") => {
     if (selectedComments.size === 0) return;
@@ -423,8 +522,7 @@ export default function Comments() {
     );
     await Promise.all(promises);
     setSelectedComments(new Set());
-    setComments((prev) => prev.filter((c) => !ids.includes(c.id)));
-    setTotal((t) => Math.max(0, t - ids.length));
+    syncCommentsAfterStatusChange(ids.map((id) => ({ id, status })));
     refreshCounts();
     toast.success(
       action === "approve"
@@ -503,8 +601,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Comment approved");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "approved" }]);
         refreshCounts();
       }
     });
@@ -519,8 +616,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Marked as spam");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "spam" }]);
         refreshCounts();
       }
     });
@@ -540,8 +636,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Comment hidden");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "hidden" }]);
         refreshCounts();
       }
     });
@@ -556,8 +651,7 @@ export default function Comments() {
     }).then((r) => {
       if (r.ok) {
         toast.success("Comment published");
-        setComments((prev) => prev.filter((x) => x.id !== c.id));
-        setTotal((t) => Math.max(0, t - 1));
+        syncCommentsAfterStatusChange([{ id: c.id, status: "approved" }]);
         refreshCounts();
       }
     });
@@ -608,6 +702,7 @@ export default function Comments() {
     const payload = {
       siteKey,
       commentsEnabled: next.commentsEnabled,
+      allowNewComments: next.allowNewComments,
       allowAnonymousComments: next.allowAnonymousComments,
       subscriberCommentsEnabled: next.subscriberCommentsEnabled,
       requireApproval: next.requireApproval,
@@ -1238,7 +1333,7 @@ export default function Comments() {
           </div>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-neutral-200">
+        <div id="comment-settings" className="mt-6 pt-6 border-t border-neutral-200 scroll-mt-8">
           <h3 className="font-medium text-sm text-[#0a0a0a] mb-4">Settings</h3>
           {!settings && siteKey ? (
             <p className="text-sm text-neutral-500">Loading settings…</p>
@@ -1254,6 +1349,16 @@ export default function Comments() {
             </div>
             {(settings?.commentsEnabled ?? true) && (
             <>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Allow New Comments</Label>
+              <Switch
+                checked={settings?.allowNewComments ?? true}
+                onCheckedChange={(v) => settings && updateSetting("allowNewComments", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            {(settings?.allowNewComments ?? true) && (
+            <>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-sm">Allow Anonymous Comments</Label>
@@ -1267,7 +1372,7 @@ export default function Comments() {
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <Label className="text-sm">Verified Subscriber Comments</Label>
+                <Label className="text-sm">Verify subscriber comments</Label>
                 <Switch
                   checked={settings?.subscriberCommentsEnabled ?? false}
                   onCheckedChange={(v) => settings && updateSetting("subscriberCommentsEnabled", v)}
@@ -1278,20 +1383,25 @@ export default function Comments() {
               {settings?.apiKeyVerified && (
                 <div className="flex items-center gap-2 text-sm mt-1">
                   <span className="font-mono text-neutral-500">••••••••••••••••</span>
-                  <Link
-                    to="/dashboard/configure"
+                  <button
+                    type="button"
+                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
                     className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
-                    aria-label="Edit API key in Customize Blog"
-                    title="Manage API key in Customize Blog"
+                    aria-label="Edit API key"
+                    title="Edit API key"
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                  </Link>
+                  </button>
                 </div>
               )}
               {!settings?.apiKeyVerified && settings && (
-                <Link to="/dashboard/configure" className="text-xs text-[#5B4FE8] hover:underline">
-                  Set up API key in Customize Blog
-                </Link>
+                <button
+                  type="button"
+                  onClick={() => setSquarespaceApiKeyModalOpen("setup")}
+                  className="text-xs text-[#5B4FE8] hover:underline"
+                >
+                  Connect Squarespace API key to enable this setting
+                </button>
               )}
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -1335,18 +1445,20 @@ export default function Comments() {
               <p className="text-xs text-neutral-500">Notifications go to your account email.</p>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Allow Comment Likes</Label>
-              <Switch
-                checked={settings?.allowLikes ?? true}
-                onCheckedChange={(v) => settings && updateSetting("allowLikes", v)}
-                disabled={settingsSaving}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2">
               <Label className="text-sm">Allow Threaded Replies</Label>
               <Switch
                 checked={settings?.allowThreadedReplies ?? true}
                 onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            </>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Allow Comment Likes</Label>
+              <Switch
+                checked={settings?.allowLikes ?? true}
+                onCheckedChange={(v) => settings && updateSetting("allowLikes", v)}
                 disabled={settingsSaving}
               />
             </div>
@@ -1408,6 +1520,22 @@ export default function Comments() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    <SquarespaceApiKeyModal
+      mode={squarespaceApiKeyModalOpen}
+      onModeChange={setSquarespaceApiKeyModalOpen}
+      siteKey={siteKey}
+      onSaved={({ enableSubscriberComments }) => {
+        setSettings((p) =>
+          p
+            ? {
+                ...p,
+                apiKeyVerified: true,
+                subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
+              }
+            : p
+        );
+      }}
+    />
     </>
   );
 }

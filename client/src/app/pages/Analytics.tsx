@@ -223,25 +223,23 @@ export default function Analytics() {
   return (
     <div className="min-h-screen bg-[#f7f6f3] p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
-          <p className="text-[#6b6b6b] font-light">
-            Track your blog's performance and reader engagement
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
+      <div>
+        <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
+        <p className="text-[#6b6b6b] font-light">
+          Track your blog's performance and reader engagement
+        </p>
+        <div className="flex items-center gap-3 flex-wrap mt-4">
           {me && me.sites.length > 1 && (
             <Select
               value={siteKey ?? undefined}
               onValueChange={(v) => setSearchParams({ siteKey: v })}
             >
-              <SelectTrigger className="w-[180px] bg-white border-[#e4e3de]">
+              <SelectTrigger className="w-[200px] h-10 bg-white border-[#e4e3de] text-base">
                 <SelectValue placeholder="Select blog" />
               </SelectTrigger>
               <SelectContent>
                 {me.sites.map((s) => (
-                  <SelectItem key={s.id} value={s.siteKey}>
+                  <SelectItem key={s.id} value={s.siteKey} className="text-base">
                     {s.name || s.url || "Unnamed blog"}
                   </SelectItem>
                 ))}
@@ -249,14 +247,14 @@ export default function Analytics() {
             </Select>
           )}
           <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[160px] bg-white border-[#e4e3de]">
+            <SelectTrigger className="w-[180px] h-10 bg-white border-[#e4e3de] text-base">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="12m">Last 12 months</SelectItem>
+              <SelectItem value="7d" className="text-base">Last 7 days</SelectItem>
+              <SelectItem value="30d" className="text-base">Last 30 days</SelectItem>
+              <SelectItem value="90d" className="text-base">Last 90 days</SelectItem>
+              <SelectItem value="12m" className="text-base">Last 12 months</SelectItem>
             </SelectContent>
           </Select>
         </div>
