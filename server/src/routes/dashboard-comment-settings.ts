@@ -7,6 +7,7 @@ const router = Router()
 
 const DEFAULT_SETTINGS = {
   commentsEnabled: true,
+  allowNewComments: true,
   allowAnonymousComments: true,
   subscriberCommentsEnabled: false,
   requireApproval: false,
@@ -49,6 +50,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   const rawAutoClose = s?.autoCloseAfterDays ?? DEFAULT_SETTINGS.autoCloseAfterDays
   const settings = {
     commentsEnabled: s?.commentsEnabled ?? DEFAULT_SETTINGS.commentsEnabled,
+    allowNewComments: s?.allowNewComments ?? DEFAULT_SETTINGS.allowNewComments,
     allowAnonymousComments: s?.allowAnonymousComments ?? DEFAULT_SETTINGS.allowAnonymousComments,
     subscriberCommentsEnabled: s?.subscriberCommentsEnabled ?? DEFAULT_SETTINGS.subscriberCommentsEnabled,
     apiKeyVerified: !!effectiveApiKeyEnc,
@@ -70,6 +72,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
   const body = req.body as {
     siteKey?: string
     commentsEnabled?: boolean
+    allowNewComments?: boolean
     allowAnonymousComments?: boolean
     subscriberCommentsEnabled?: boolean
     squarespaceApiKey?: string
@@ -97,6 +100,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
 
   const updates: Record<string, unknown> = {
     commentsEnabled: body.commentsEnabled ?? site.blogCommentSettings?.commentsEnabled ?? true,
+    allowNewComments: body.allowNewComments ?? site.blogCommentSettings?.allowNewComments ?? true,
     allowAnonymousComments: body.allowAnonymousComments ?? site.blogCommentSettings?.allowAnonymousComments ?? true,
     subscriberCommentsEnabled: body.subscriberCommentsEnabled ?? site.blogCommentSettings?.subscriberCommentsEnabled ?? false,
     requireApproval: body.requireApproval ?? site.blogCommentSettings?.requireApproval ?? false,
@@ -136,6 +140,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
   const createData = {
     siteId: site.id,
     commentsEnabled: updates.commentsEnabled as boolean,
+    allowNewComments: updates.allowNewComments as boolean,
     allowAnonymousComments: updates.allowAnonymousComments as boolean,
     subscriberCommentsEnabled: updates.subscriberCommentsEnabled as boolean,
     requireApproval: updates.requireApproval as boolean,
@@ -149,6 +154,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
 
   const updateData: {
     commentsEnabled?: boolean
+    allowNewComments?: boolean
     allowAnonymousComments?: boolean
     subscriberCommentsEnabled?: boolean
     requireApproval?: boolean
@@ -160,6 +166,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     sortOrder?: string
   } = {
     commentsEnabled: updates.commentsEnabled as boolean,
+    allowNewComments: updates.allowNewComments as boolean,
     allowAnonymousComments: updates.allowAnonymousComments as boolean,
     subscriberCommentsEnabled: updates.subscriberCommentsEnabled as boolean,
     requireApproval: updates.requireApproval as boolean,

@@ -809,6 +809,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ? { commentsEnabled: false }
       : {
           commentsEnabled: true,
+          allowNewComments: cs?.allowNewComments ?? true,
           allowAnonymousComments: cs?.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: cs?.subscriberCommentsEnabled ?? false,
           requireApproval: cs?.requireApproval ?? false,

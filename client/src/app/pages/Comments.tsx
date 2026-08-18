@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import {
   MessageCircle,
   ThumbsUp,
@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
+import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -141,6 +142,7 @@ interface Counts {
 
 interface CommentSettings {
   commentsEnabled: boolean;
+  allowNewComments: boolean;
   allowAnonymousComments: boolean;
   subscriberCommentsEnabled: boolean;
   apiKeyVerified: boolean;
@@ -182,6 +184,7 @@ export default function Comments() {
   const [permanentDeleting, setPermanentDeleting] = useState(false);
   const [settings, setSettings] = useState<CommentSettings | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -306,6 +309,7 @@ export default function Comments() {
         if (data)
           setSettings({
             commentsEnabled: data.commentsEnabled ?? true,
+            allowNewComments: data.allowNewComments ?? true,
             allowAnonymousComments: data.allowAnonymousComments ?? true,
             subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
             apiKeyVerified: data.apiKeyVerified ?? false,
@@ -698,6 +702,7 @@ export default function Comments() {
     const payload = {
       siteKey,
       commentsEnabled: next.commentsEnabled,
+      allowNewComments: next.allowNewComments,
       allowAnonymousComments: next.allowAnonymousComments,
       subscriberCommentsEnabled: next.subscriberCommentsEnabled,
       requireApproval: next.requireApproval,
@@ -1344,6 +1349,16 @@ export default function Comments() {
             </div>
             {(settings?.commentsEnabled ?? true) && (
             <>
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Allow New Comments</Label>
+              <Switch
+                checked={settings?.allowNewComments ?? true}
+                onCheckedChange={(v) => settings && updateSetting("allowNewComments", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            {(settings?.allowNewComments ?? true) && (
+            <>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-sm">Allow Anonymous Comments</Label>
@@ -1357,7 +1372,7 @@ export default function Comments() {
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <Label className="text-sm">Verified Subscriber Comments</Label>
+                <Label className="text-sm">Verify subscriber comments</Label>
                 <Switch
                   checked={settings?.subscriberCommentsEnabled ?? false}
                   onCheckedChange={(v) => settings && updateSetting("subscriberCommentsEnabled", v)}
@@ -1368,20 +1383,25 @@ export default function Comments() {
               {settings?.apiKeyVerified && (
                 <div className="flex items-center gap-2 text-sm mt-1">
                   <span className="font-mono text-neutral-500">••••••••••••••••</span>
-                  <Link
-                    to="/dashboard/configure"
+                  <button
+                    type="button"
+                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
                     className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
-                    aria-label="Edit API key in Customize Blog"
-                    title="Manage API key in Customize Blog"
+                    aria-label="Edit API key"
+                    title="Edit API key"
                   >
                     <Pencil className="h-3.5 w-3.5" />
-                  </Link>
+                  </button>
                 </div>
               )}
               {!settings?.apiKeyVerified && settings && (
-                <Link to="/dashboard/configure" className="text-xs text-[#5B4FE8] hover:underline">
-                  Set up API key in Customize Blog
-                </Link>
+                <button
+                  type="button"
+                  onClick={() => setSquarespaceApiKeyModalOpen("setup")}
+                  className="text-xs text-[#5B4FE8] hover:underline"
+                >
+                  Connect Squarespace API key to enable this setting
+                </button>
               )}
             </div>
             <div className="flex items-center justify-between gap-2">
@@ -1425,18 +1445,20 @@ export default function Comments() {
               <p className="text-xs text-neutral-500">Notifications go to your account email.</p>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Allow Comment Likes</Label>
-              <Switch
-                checked={settings?.allowLikes ?? true}
-                onCheckedChange={(v) => settings && updateSetting("allowLikes", v)}
-                disabled={settingsSaving}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-2">
               <Label className="text-sm">Allow Threaded Replies</Label>
               <Switch
                 checked={settings?.allowThreadedReplies ?? true}
                 onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
+                disabled={settingsSaving}
+              />
+            </div>
+            </>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm">Allow Comment Likes</Label>
+              <Switch
+                checked={settings?.allowLikes ?? true}
+                onCheckedChange={(v) => settings && updateSetting("allowLikes", v)}
                 disabled={settingsSaving}
               />
             </div>
@@ -1498,6 +1520,22 @@ export default function Comments() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    <SquarespaceApiKeyModal
+      mode={squarespaceApiKeyModalOpen}
+      onModeChange={setSquarespaceApiKeyModalOpen}
+      siteKey={siteKey}
+      onSaved={({ enableSubscriberComments }) => {
+        setSettings((p) =>
+          p
+            ? {
+                ...p,
+                apiKeyVerified: true,
+                subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
+              }
+            : p
+        );
+      }}
+    />
     </>
   );
 }

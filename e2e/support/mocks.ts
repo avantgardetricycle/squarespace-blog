@@ -184,6 +184,7 @@ function apiPath(url: URL): string {
 
 const commentSettingsResponse = {
   commentsEnabled: true,
+  allowNewComments: true,
   allowAnonymousComments: true,
   subscriberCommentsEnabled: false,
   apiKeyVerified: false,

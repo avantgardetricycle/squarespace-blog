@@ -979,6 +979,7 @@
         return daysSince > closeAfterDays;
       }
       var commentsClosed = bbCommentsClosedForPost(post, cs.autoCloseAfterDays);
+      var allowNewComments = cs.allowNewComments !== false;
       var allowAnonymousComments = cs.allowAnonymousComments !== false;
       var subscriberCommentsEnabled = cs.subscriberCommentsEnabled === true;
       var loggedInOptionalEmail =
@@ -1185,6 +1186,7 @@
           var threadingOn = cs.allowThreadedReplies !== false;
           var replyMode = currentCommentViewerMode().mode;
           var showReply =
+            allowNewComments &&
             !commentsClosed &&
             !isDeletedStub &&
             threadingOn &&
@@ -1421,6 +1423,7 @@
       formWrap.className = 'bb-comment-form-wrap';
       formWrap.style.marginTop = '16px';
 
+      if (allowNewComments) {
       var heading = document.createElement('h2');
       heading.className = 'bb-below-main-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
@@ -1683,8 +1686,9 @@
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      }
 
-      bbDiv.appendChild(formWrap);
+      if (allowNewComments) bbDiv.appendChild(formWrap);
 
       mountBbCommentsEl(bbDiv);
     },
