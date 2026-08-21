@@ -73,6 +73,26 @@ interface AnalyticsData {
   readPercentDistribution: Array<{ range: string; count: number; color: string }>;
 }
 
+function timeRangeDays(range: string): number {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  if (range === "90d") return 90;
+  return 365;
+}
+
+function emptyPageViewsSeries(range: string): AnalyticsData["pageViewsData"] {
+  const days = timeRangeDays(range);
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (days - 1 - i));
+    return {
+      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      views: 0,
+      uniqueVisitors: 0,
+    };
+  });
+}
+
 const emptyAnalytics: AnalyticsData = {
   keyMetrics: {
     totalPageViews: 0,
@@ -504,19 +524,7 @@ export default function Analytics() {
             data={
               data.pageViewsData.length > 0
                 ? data.pageViewsData
-                : (() => {
-                    const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : timeRange === "90d" ? 90 : 365;
-                    const points = Math.min(days, 14);
-                    return Array.from({ length: points }, (_, i) => {
-                      const d = new Date();
-                      d.setDate(d.getDate() - (points - 1 - i));
-                      return {
-                        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-                        views: 0,
-                        uniqueVisitors: 0,
-                      };
-                    });
-                  })()
+                : emptyPageViewsSeries(timeRange)
             }
           >
             <defs>
@@ -534,8 +542,14 @@ export default function Analytics() {
               dataKey="date"
               stroke="#6b6b6b"
               style={{ fontSize: "12px" }}
+              minTickGap={24}
             />
-            <YAxis stroke="#6b6b6b" style={{ fontSize: "12px" }} />
+            <YAxis
+              stroke="#6b6b6b"
+              style={{ fontSize: "12px" }}
+              domain={[0, "auto"]}
+              allowDecimals={false}
+            />
             <Tooltip
               contentStyle={{
                 backgroundColor: "white",
