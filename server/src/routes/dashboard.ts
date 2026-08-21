@@ -543,13 +543,6 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
 
     const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
-    if (userPaywallState === 'detected_paywalled' && !subscribeNormalized) {
-      res.status(400).json({
-        error:
-          'Paywalled blogs need a valid signup or subscription page URL. Enter the full URL where visitors can become members.'
-      })
-      return
-    }
 
     const updatedSite = await prisma.site.create({
       data: {

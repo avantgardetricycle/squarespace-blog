@@ -140,11 +140,7 @@ export default function Dashboard() {
     }
     if (newBlogPaywalled === "yes") {
       const su = newBlogSubscribeUrl.trim();
-      if (!su) {
-        toast.error("Enter the URL of your blog signup or subscription page.");
-        return;
-      }
-      if (!isValidSignupPageUrl(su)) {
+      if (su && !isValidSignupPageUrl(su)) {
         toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
         return;
       }
@@ -619,7 +615,7 @@ export default function Dashboard() {
                 {newBlogPaywalled === "yes" ? (
                   <div className="space-y-2">
                     <Label htmlFor="blog-subscribe-url">
-                      Signup / subscription page URL <span className="text-red-500">*</span>
+                      Signup / subscription page URL (optional)
                     </Label>
                     <Input
                       id="blog-subscribe-url"
@@ -634,8 +630,7 @@ export default function Dashboard() {
                       }}
                     />
                     <p className="text-xs text-[#6b6b6b]">
-                      Where visitors go to become members (e.g. your Squarespace pricing or plan page). This link is used
-                      for subscribe buttons on the paywalled blog instead of the blog URL alone.
+                      Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
                     </p>
                   </div>
                 ) : null}
