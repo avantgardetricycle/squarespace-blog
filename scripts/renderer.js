@@ -444,6 +444,9 @@
     _currentPageJsonIdentity: null,
     _currentPageAuthProbeUrl: null,
     _memberAccountsEnabledHint: false,
+    _paywallPriceLabel: null,
+    _paywallPricingPlansHydrated: false,
+    _paywallPricingPlansInflight: null,
     _lastBlogRoutePathname: null,
     _lastBlogRouteSearch: '',
     _lastBlogRouteHash: '',
@@ -2543,14 +2546,248 @@
       return { accent: accent, bg: bg, text: text, secondary: secondary };
     },
 
-    _extractPaywallPriceLabel: function() {
+    _paywallCurrencySymbol: function(code) {
+      var c = String(code || 'USD').toUpperCase();
+      if (c === 'USD') return '$';
+      if (c === 'EUR') return '€';
+      if (c === 'GBP') return '£';
+      if (c === 'CAD' || c === 'AUD' || c === 'NZD') return '$';
+      return c + ' ';
+    },
+
+    _formatPaywallMonthlyPrice: function(value, currency) {
+      var n = Number(value);
+      if (!isFinite(n) || n <= 0) return null;
+      var rounded = Math.round(n * 100) / 100;
+      var num = (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(2);
+      return this._paywallCurrencySymbol(currency) + num + '/month';
+    },
+
+    _normalizePaywallMonthlyLabel: function(raw) {
+      if (!raw || typeof raw !== 'string') return null;
+      var text = raw.replace(/\s+/g, ' ').trim();
+      if (!text) return null;
+      var monthly = text.match(/([€£$]|[A-Z]{3}\s*)?\s*(\d+(?:\.\d+)?)\s*(?:\/|\s+every\s+|\s+per\s+)?\s*(month|mo)\b/i);
+      if (!monthly) return null;
+      var currency = /€/.test(monthly[1] || '') ? 'EUR' : (/£/.test(monthly[1] || '') ? 'GBP' : 'USD');
+      if (/^[A-Z]{3}/.test((monthly[1] || '').trim())) currency = (monthly[1] || '').trim().slice(0, 3);
+      return this._formatPaywallMonthlyPrice(monthly[2], currency);
+    },
+
+    /** Unique simple monthly price from Squarespace member-area pricingPlans, or null if ambiguous. */
+    _labelFromSquarespacePricingPlans: function(plans) {
+      if (!Array.isArray(plans) || plans.length === 0) return null;
+      var paidMonthly = [];
+      var hasFree = false;
+      var hasNonMonthlyPaid = false;
+      for (var i = 0; i < plans.length; i++) {
+        var plan = plans[i];
+        if (!plan || typeof plan !== 'object') continue;
+        if (plan.isActive === false) continue;
+        var type = String(plan.pricingType || '').toUpperCase();
+        if (type === 'FREE') {
+          hasFree = true;
+          continue;
+        }
+        if (type === 'FIXED_AMOUNT' || type === 'FIXED' || type === 'ONE_TIME' || type === 'OTP') {
+          hasNonMonthlyPaid = true;
+          continue;
+        }
+        var opts = Array.isArray(plan.pricingOptions) ? plan.pricingOptions : [];
+        if (opts.length === 0 && plan.price && typeof plan.price === 'object') {
+          opts = [{ price: plan.price, billingPeriod: plan.billingPeriod || { value: 1, unit: 'MONTH' } }];
+        }
+        if (opts.length === 0) {
+          hasNonMonthlyPaid = true;
+          continue;
+        }
+        for (var oi = 0; oi < opts.length; oi++) {
+          var opt = opts[oi];
+          if (!opt || typeof opt !== 'object') continue;
+          var period = opt.billingPeriod && typeof opt.billingPeriod === 'object' ? opt.billingPeriod : null;
+          var unit = period && period.unit != null ? String(period.unit).toUpperCase() : '';
+          var freq = period && period.value != null ? Number(period.value) : 1;
+          var isMonthly = (unit === 'MONTH' || unit === 'MONTHS' || unit === 'MONTHLY') && (freq === 1 || !isFinite(freq));
+          if (opt.numBillingCycles != null && Number(opt.numBillingCycles) > 0) {
+            hasNonMonthlyPaid = true;
+            continue;
+          }
+          var priceObj = opt.price && typeof opt.price === 'object' ? opt.price : null;
+          var amount = priceObj ? (priceObj.value != null ? priceObj.value : priceObj.decimalValue) : null;
+          if (amount == null && opt.amount != null) amount = opt.amount;
+          if (!isMonthly) {
+            if (amount != null && Number(amount) > 0) hasNonMonthlyPaid = true;
+            continue;
+          }
+          var label = this._formatPaywallMonthlyPrice(amount, priceObj && priceObj.currency);
+          if (label) paidMonthly.push(label);
+        }
+      }
+      if (hasFree && paidMonthly.length > 0) return null;
+      if (hasNonMonthlyPaid) return null;
+      var unique = [];
+      for (var u = 0; u < paidMonthly.length; u++) {
+        if (unique.indexOf(paidMonthly[u]) < 0) unique.push(paidMonthly[u]);
+      }
+      if (unique.length !== 1) return null;
+      return unique[0];
+    },
+
+    _pricingPlansFromBootstrapPayload: function(data) {
+      if (!data || typeof data !== 'object') return null;
+      if (Array.isArray(data.pricingPlans)) return data.pricingPlans;
+      if (data.bootstrapData && Array.isArray(data.bootstrapData.pricingPlans)) return data.bootstrapData.pricingPlans;
+      return null;
+    },
+
+    _pricingPlansFromHtml: function(html) {
+      if (!html || typeof html !== 'string') return null;
+      var match = html.match(/<script[^>]*id=["']bootstrap-data["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (!match) return null;
       try {
-        var priceEl = document.querySelector('.pricing-plan-price, [data-pricing-amount]');
-        if (!priceEl) return null;
-        var raw = (priceEl.textContent || '').trim().replace(/\s+/g, ' ');
-        var compact = raw.replace(/\s/g, '');
-        if (/^\$[\d.]+\/(month|mo)$/i.test(compact)) return raw;
+        return this._pricingPlansFromBootstrapPayload(JSON.parse(match[1]));
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _pricingPlansFromDocument: function() {
+      try {
+        var el = document.getElementById('bootstrap-data');
+        if (el && el.textContent) {
+          return this._pricingPlansFromBootstrapPayload(JSON.parse(el.textContent));
+        }
+      } catch (e1) {}
+      return null;
+    },
+
+    _extractPaywallPriceFromDom: function() {
+      try {
+        var nodes = document.querySelectorAll(
+          '.pricing-plan-price-amount, .pricing-plan-price, .pricing-plan-product-price, [data-pricing-amount]'
+        );
+        var labels = [];
+        for (var i = 0; i < nodes.length; i++) {
+          var label = this._normalizePaywallMonthlyLabel((nodes[i].textContent || '').trim());
+          if (label && labels.indexOf(label) < 0) labels.push(label);
+        }
+        if (labels.length === 1) return labels[0];
       } catch (e) {}
+      return null;
+    },
+
+    _paywallSubscribeButtonLabel: function() {
+      var priceBit = this._extractPaywallPriceLabel();
+      return priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
+    },
+
+    _refreshPaywallSubscribeLabels: function() {
+      var label = this._paywallSubscribeButtonLabel();
+      try {
+        var nodes = document.querySelectorAll('.bb-paywall-subscribe-btn');
+        for (var i = 0; i < nodes.length; i++) nodes[i].textContent = label;
+      } catch (e) {}
+    },
+
+    _applyPaywallPricingPlans: function(plans, source) {
+      var label = this._labelFromSquarespacePricingPlans(plans);
+      if (label) this._paywallPriceLabel = label;
+      this._paywallDebug('pricingPlans', {
+        source: source || null,
+        planCount: Array.isArray(plans) ? plans.length : 0,
+        priceLabel: this._paywallPriceLabel
+      });
+      this._refreshPaywallSubscribeLabels();
+      return label;
+    },
+
+    _memberAccessUrlFromJson: function(json) {
+      var ctx = json && json.pagePreviewContext && typeof json.pagePreviewContext === 'object'
+        ? json.pagePreviewContext
+        : null;
+      var raw = ctx && typeof ctx.memberAccessUrl === 'string' ? ctx.memberAccessUrl.trim() : '';
+      if (!raw) return null;
+      try {
+        return new URL(raw, window.location.origin).toString();
+      } catch (e) {
+        return raw;
+      }
+    },
+
+    /**
+     * Blog ?format=json does not include plan prices. Squarespace puts them on the
+     * member-gate page (#bootstrap-data) linked from pagePreviewContext.memberAccessUrl.
+     */
+    _hydratePaywallPricingPlans: function(json) {
+      if (this._previewMode) return;
+      if (this._paywallPriceLabel) return;
+      var fromDomPlans = this._pricingPlansFromDocument();
+      if (fromDomPlans) {
+        this._applyPaywallPricingPlans(fromDomPlans, 'document');
+        this._paywallPricingPlansHydrated = true;
+        return;
+      }
+      var fromDomPrice = this._extractPaywallPriceFromDom();
+      if (fromDomPrice) {
+        this._paywallPriceLabel = fromDomPrice;
+        this._refreshPaywallSubscribeLabels();
+        this._paywallPricingPlansHydrated = true;
+        return;
+      }
+      var jsonPlans = this._pricingPlansFromBootstrapPayload(json)
+        || (json && Array.isArray(json.pricingPlans) ? json.pricingPlans : null);
+      if (jsonPlans) {
+        this._applyPaywallPricingPlans(jsonPlans, 'page-json');
+        this._paywallPricingPlansHydrated = true;
+        return;
+      }
+      if (this._paywallPricingPlansHydrated || this._paywallPricingPlansInflight) return;
+      if (!this._isPaywalledSite()) return;
+      var url = this._memberAccessUrlFromJson(json);
+      if (!url) {
+        try {
+          var path = this._currentBlogPathForRouteMatch() || window.location.pathname || '/';
+          url = new URL(path, window.location.origin).toString();
+          url += (url.indexOf('?') >= 0 ? '&' : '?') + 'requestAccess=true';
+        } catch (eUrl) {
+          return;
+        }
+      }
+      var self = this;
+      this._paywallPricingPlansInflight = fetch(url, { credentials: 'same-origin' })
+        .then(function(res) { return res.text(); })
+        .then(function(text) {
+          self._paywallPricingPlansHydrated = true;
+          self._paywallPricingPlansInflight = null;
+          if (self._paywallPriceLabel) return;
+          var plans = null;
+          try {
+            var parsed = JSON.parse(text);
+            plans = self._pricingPlansFromBootstrapPayload(parsed)
+              || (parsed && Array.isArray(parsed.pricingPlans) ? parsed.pricingPlans : null);
+          } catch (eJson) {
+            plans = self._pricingPlansFromHtml(text);
+          }
+          if (plans) self._applyPaywallPricingPlans(plans, 'memberAccessUrl');
+        })
+        .catch(function() {
+          self._paywallPricingPlansHydrated = true;
+          self._paywallPricingPlansInflight = null;
+        });
+    },
+
+    _extractPaywallPriceLabel: function() {
+      if (this._paywallPriceLabel) return this._paywallPriceLabel;
+      var fromPlans = this._labelFromSquarespacePricingPlans(this._pricingPlansFromDocument());
+      if (fromPlans) {
+        this._paywallPriceLabel = fromPlans;
+        return fromPlans;
+      }
+      var fromDom = this._extractPaywallPriceFromDom();
+      if (fromDom) {
+        this._paywallPriceLabel = fromDom;
+        return fromDom;
+      }
       return null;
     },
 
@@ -2913,8 +3150,7 @@
         var st = ctx && ctx.website && ctx.website.siteTitle;
         if (typeof st === 'string' && st.trim()) blogTitle = st.trim();
       } catch (e) {}
-      var priceBit = this._extractPaywallPriceLabel();
-      var subLabel = priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
+      var subLabel = this._paywallSubscribeButtonLabel();
       var borderAlpha = 'rgba(0,0,0,0.1)';
 
       var block = document.createElement('div');
@@ -2965,6 +3201,7 @@
 
       var subBtn = document.createElement('a');
       subBtn.href = this._resolvePaywallSubscribeHref();
+      subBtn.className = 'bb-paywall-subscribe-btn';
       subBtn.textContent = subLabel;
       subBtn.style.display = 'inline-flex';
       subBtn.style.alignItems = 'center';
@@ -3038,8 +3275,7 @@
       var features = (ps && Array.isArray(ps.featureItems) && ps.featureItems.length)
         ? ps.featureItems.slice(0, 4)
         : ['Unlimited articles', 'Full archive', 'Ad-free', 'Cancel anytime'];
-      var priceBit = this._extractPaywallPriceLabel();
-      var subLabel = priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
+      var subLabel = this._paywallSubscribeButtonLabel();
 
       var card = document.createElement('div');
       card.className = 'bb-paywall-inline-card';
@@ -3088,6 +3324,7 @@
 
       var subBtn = document.createElement('a');
       subBtn.href = this._resolvePaywallSubscribeHref();
+      subBtn.className = 'bb-paywall-subscribe-btn';
       subBtn.textContent = subLabel;
       subBtn.style.display = 'inline-flex';
       subBtn.style.alignItems = 'center';
@@ -3613,6 +3850,7 @@
         })
         .then(function(json) {
           if (!json || typeof json !== 'object') return null;
+          self._hydratePaywallPricingPlans(json);
           return self._updateJsonAuthSignals(json, 'currentPage');
         })
         .catch(function() { return null; });
@@ -6463,6 +6701,7 @@
           blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
         };
         self._collection = collection;
+        self._hydratePaywallPricingPlans(json);
         if (self._featuredDebugEnabled()) {
           var collKeys = collection && typeof collection === 'object' ? Object.keys(collection) : [];
           console.warn('[BlogOverlay][featured-debug] collection keys (sample)', collKeys.slice(0, 100));
