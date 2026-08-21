@@ -594,6 +594,7 @@
         isPaywalledSite: isPaywalled,
         paywallFullActive: paywallFullActive,
         paywallShowFooter: paywallShowFooter,
+        paywallHideFooterModules: Boolean(vs.paywallHideFooterModules),
         paywallReplaceCollectionTeaser: Boolean(vs.paywallReplaceCollectionTeaser),
         likelyCollectionIndex: this._isLikelyBlogCollectionIndexView(),
         hasSquarespacePostListing: this._hasSquarespacePostListing(),
@@ -8482,6 +8483,10 @@
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
+      /** Explicit public-preview posts stay fully readable, including configured footer modules. */
+      var paywallHideFooterModules = paywalledLoggedOut && !(
+        isSinglePost && displayItems[0] && self._isExplicitPaywallPublicPreviewPost(displayItems[0])
+      );
       if (self._isTocDebugEnabled()) {
         try {
           var pmToc = cfg.postModules && cfg.postModules.tableOfContents ? cfg.postModules.tableOfContents : null;
@@ -8604,6 +8609,7 @@
           selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
           paywallFullActive: paywallFullActiveForRender,
           paywallShowFooter: paywalledLoggedOut && !isSinglePost,
+          paywallHideFooterModules: paywallHideFooterModules,
           paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && self._shouldGateSinglePostBody(selectedPostForLog),
           paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
           paywallDetectionState: rawCfg.paywallDetectionState || null,
@@ -8676,6 +8682,7 @@
         categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
         paywallFullActive: paywallFullActiveForRender,
         paywallShowFooter: paywalledLoggedOut && !isSinglePost,
+        paywallHideFooterModules: paywallHideFooterModules,
         paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && self._shouldGateSinglePostBody(displayItems[0]),
         paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
       };
@@ -10590,7 +10597,8 @@
         siteContentInsetsSource: this._siteContentInsetsSource || null,
         leftSidebarModules: cfg.leftSidebar && Array.isArray(cfg.leftSidebar.modules) ? cfg.leftSidebar.modules.slice() : [],
         rightSidebarModules: cfg.rightSidebar && Array.isArray(cfg.rightSidebar.modules) ? cfg.rightSidebar.modules.slice() : [],
-        footerModules: cfg.footerContent && Array.isArray(cfg.footerContent.modules) ? cfg.footerContent.modules.slice() : []
+        footerModules: cfg.footerContent && Array.isArray(cfg.footerContent.modules) ? cfg.footerContent.modules.slice() : [],
+        paywallHideFooterModules: Boolean(vs.paywallHideFooterModules)
       });
       var recentPostsCount = vs.recentPostsCount;
       var leftSidebarCfg = vs.leftSidebarCfg;
@@ -10598,6 +10606,7 @@
       var headerContentCfg = vs.headerContentCfg;
       var footerContentCfg = vs.footerContentCfg;
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
+      var paywallHideFooterModules = Boolean(vs.paywallHideFooterModules);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var featureBelowRowAuthorEl = null;
@@ -12877,7 +12886,7 @@
             headerModulesHostEl.style.marginTop = '0';
           }
 
-          if (footerContentCfg) {
+          if (footerContentCfg && !paywallHideFooterModules) {
             var fcAvail = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
             var fcOrder = Array.isArray(footerContentCfg.moduleOrder) ? footerContentCfg.moduleOrder : [];
             /* Prefer moduleOrder (Configure source of truth). An empty modules list with a
