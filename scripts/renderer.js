@@ -2797,7 +2797,9 @@
     _isExplicitPaywallPublicPreviewPost: function(post) {
       if (!post || typeof post !== 'object') return false;
       if (post.bbPaywallPublicPreview === true || post.bbIsPublicPreview === true) return true;
-      return post.publicPreview === true;
+      if (post.publicPreview === true || post.isPublicPreview === true) return true;
+      if (post.memberAreaPublicPreview === true || post.enablePublicPreview === true) return true;
+      return false;
     },
 
     /**
@@ -2811,13 +2813,13 @@
       return plainBody.length >= 40;
     },
 
-    /** Logged-out single-post body gate: explicit public-preview flags only (not body-length heuristic). */
+    /** Logged-out single-post body gate: same public-preview test as collection cards. */
     _shouldGateSinglePostBody: function(post) {
       return (
         this._isPaywalledSite() &&
         this._resolveViewerMode() === 'loggedOut' &&
         post &&
-        !this._isExplicitPaywallPublicPreviewPost(post)
+        !this._isPaywallPublicPreviewPost(post)
       );
     },
 
@@ -8722,9 +8724,9 @@
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
-      /** Explicit public-preview posts stay fully readable, including configured footer modules. */
+      /** Public-preview posts stay fully readable, including configured footer modules. */
       var paywallHideFooterModules = paywalledLoggedOut && !(
-        isSinglePost && displayItems[0] && self._isExplicitPaywallPublicPreviewPost(displayItems[0])
+        isSinglePost && displayItems[0] && self._isPaywallPublicPreviewPost(displayItems[0])
       );
       if (self._isTocDebugEnabled()) {
         try {
@@ -8784,7 +8786,13 @@
       var pbCfg = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pbCfg.show != null ? pbCfg.show : cfg.showProgressBar);
       /** Logged-out paywalled readers may see a gated post body — scroll progress is misleading. */
-      if (viewerMode === 'loggedOut' && isSinglePost && self._isPaywalledSite()) showProgressBar = false;
+      if (
+        viewerMode === 'loggedOut' &&
+        isSinglePost &&
+        self._isPaywalledSite() &&
+        displayItems[0] &&
+        self._shouldGateSinglePostBody(displayItems[0])
+      ) showProgressBar = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
