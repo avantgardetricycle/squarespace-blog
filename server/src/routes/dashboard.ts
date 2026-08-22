@@ -14,7 +14,7 @@ import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { randomBytes } from 'crypto'
-import { resolveDefaultPostTemplate } from './templates.js'
+import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
@@ -560,7 +560,15 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
-    const defaultPostTemplate = await resolveDefaultPostTemplate()
+    const [defaultPostTemplate, defaultCollectionTemplate] = await Promise.all([
+      resolveDefaultPostTemplate(),
+      resolveDefaultCollectionTemplate()
+    ])
+    const collectionCfg = defaultCollectionTemplate?.collectionConfig
+    const asObject = (value: unknown): object | undefined =>
+      value && typeof value === 'object' && !Array.isArray(value) ? (value as object) : undefined
+    const asBool = (value: unknown, fallback: boolean): boolean =>
+      typeof value === 'boolean' ? value : fallback
     const templateProgressBar =
       defaultPostTemplate?.postConfig?.progressBar &&
       typeof defaultPostTemplate.postConfig.progressBar === 'object' &&
@@ -571,9 +579,9 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       data: {
         siteId: updatedSite.id,
         version: 1,
-        showDate: true,
-        showAuthor: false,
-        showReadingTime: false,
+        showDate: asBool(collectionCfg?.showDate, true),
+        showAuthor: asBool(collectionCfg?.showAuthor, false),
+        showReadingTime: asBool(collectionCfg?.showReadingTime, false),
         progressBar: {
           show: Boolean(templateProgressBar?.show ?? false),
           position: 'top',
@@ -582,10 +590,19 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         },
         tableOfContents: { show: false, position: null },
         recentPostsSidebar: { show: false, position: null },
-        leftSidebar: { show: false, modules: [], width: 240 },
-        rightSidebar: { show: false, modules: [], width: 240 },
-        headerContent: { show: false, modules: [], height: 48 },
-        socialMediaLinks: { show: false, platforms: [] },
+        leftSidebar: asObject(collectionCfg?.leftSidebar) ?? { show: false, modules: [], width: 240 },
+        rightSidebar: asObject(collectionCfg?.rightSidebar) ?? { show: false, modules: [], width: 240 },
+        headerContent: asObject(collectionCfg?.headerContent) ?? { show: false, modules: [], height: 48 },
+        socialMediaLinks: asObject(collectionCfg?.socialMediaLinks) ?? { show: false, platforms: [] },
+        ...(asObject(collectionCfg?.featuredImage)
+          ? { featuredImage: asObject(collectionCfg?.featuredImage) }
+          : {}),
+        ...(defaultCollectionTemplate
+          ? {
+              collectionConfig: defaultCollectionTemplate.collectionConfig as object,
+              collectionTemplateId: defaultCollectionTemplate.id,
+            }
+          : {}),
         ...(defaultPostTemplate
           ? {
               postConfig: defaultPostTemplate.postConfig as object,
