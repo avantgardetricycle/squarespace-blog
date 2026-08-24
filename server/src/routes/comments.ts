@@ -7,6 +7,10 @@ import crypto from 'crypto'
 import prisma from '../db/index.js'
 import { decrypt } from '../lib/encryption.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
+import {
+  clampParentIdsForThreadDepth,
+  resolveParentIdForReply,
+} from '../lib/comment-thread-depth.js'
 import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
 
 const router = Router()
@@ -189,10 +193,12 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   const visibleRows = rawRows.filter((c) => keepIds.has(c.id))
-  const rowsForTree = visibleRows.map((c) => ({
-    ...c,
-    parentId: c.parentId !== null && keepIds.has(c.parentId) ? c.parentId : null,
-  }))
+  const rowsForTree = clampParentIdsForThreadDepth(
+    visibleRows.map((c) => ({
+      ...c,
+      parentId: c.parentId !== null && keepIds.has(c.parentId) ? c.parentId : null,
+    }))
+  )
 
   const byParent = new Map<string | null, typeof rowsForTree>()
   for (const c of rowsForTree) {
@@ -404,6 +410,11 @@ router.post('/', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Invalid parent comment' })
       return
     }
+    resolvedParentId = await resolveParentIdForReply(prisma, {
+      siteId: site.id,
+      postId,
+      requestedParentId: parent.id,
+    })
   }
 
   // Upsert cached post for auto-close check

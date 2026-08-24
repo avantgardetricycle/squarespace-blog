@@ -4220,6 +4220,7 @@ export default function Configure() {
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowThreadedReplies: v } : p)}
                                 />
                               </div>
+                              <p className="text-xs text-[#6b6b6b]">Replies nest up to 4 levels.</p>
                             </div>
                             </>
                             )}

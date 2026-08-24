@@ -1444,13 +1444,16 @@ export default function Comments() {
               </div>
               <p className="text-xs text-neutral-500">Notifications go to your account email.</p>
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Allow Threaded Replies</Label>
-              <Switch
-                checked={settings?.allowThreadedReplies ?? true}
-                onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
-                disabled={settingsSaving}
-              />
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Allow Threaded Replies</Label>
+                <Switch
+                  checked={settings?.allowThreadedReplies ?? true}
+                  onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
+                  disabled={settingsSaving}
+                />
+              </div>
+              <p className="text-xs text-neutral-500">Replies nest up to 4 levels.</p>
             </div>
             </>
             )}

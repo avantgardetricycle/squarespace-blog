@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
+import { resolveParentIdForReply } from '../lib/comment-thread-depth.js'
 import { ensureSquarespaceThreadImportedForModeration } from '../lib/squarespace-comments-import.js'
 
 const router = Router()
@@ -324,11 +325,17 @@ router.post('/:id/reply', requireSession, async (req: Request, res: Response) =>
     ? body.displayName.trim().slice(0, 100)
     : (site?.name || 'Blog author')
 
+  const parentId = await resolveParentIdForReply(prisma, {
+    siteId: parent.siteId,
+    postId: parent.postId,
+    requestedParentId: parent.id,
+  })
+
   const reply = await prisma.comment.create({
     data: {
       siteId: parent.siteId,
       postId: parent.postId,
-      parentId: parent.id,
+      parentId,
       displayName,
       body: replyBody,
       status: 'approved',

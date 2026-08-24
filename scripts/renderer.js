@@ -9,6 +9,8 @@
   'use strict';
 
   var BB_POST_CONTENT_TOP_PADDING = 25;
+  /** Top-level comment is level 1; replies nest through this many levels. */
+  var BB_MAX_COMMENT_THREAD_LEVELS = 4;
 
   function getVisitorId() {
     try {
@@ -346,6 +348,47 @@
       })(roots[ri]);
     }
     return roots;
+  }
+
+  /**
+   * Hoist replies past BB_MAX_COMMENT_THREAD_LEVELS so they render as siblings
+   * of the last allowed nested comment instead of nesting further.
+   */
+  function bbClampCommentTreeDepth(roots, maxLevels) {
+    var cap = typeof maxLevels === 'number' && maxLevels > 0 ? maxLevels : BB_MAX_COMMENT_THREAD_LEVELS;
+    function hoistAll(nodes) {
+      var out = [];
+      for (var i = 0; i < (nodes || []).length; i++) {
+        var n = Object.assign({}, nodes[i]);
+        var nested = n.replies || [];
+        n.replies = [];
+        out.push(n);
+        var more = hoistAll(nested);
+        for (var j = 0; j < more.length; j++) out.push(more[j]);
+      }
+      return out;
+    }
+    function cloneClamp(node, depth) {
+      var copy = Object.assign({}, node);
+      var rawReplies = node.replies || [];
+      if (depth >= cap - 1) {
+        copy.replies = [];
+        return { node: copy, hoist: hoistAll(rawReplies) };
+      }
+      var newReplies = [];
+      for (var i = 0; i < rawReplies.length; i++) {
+        var result = cloneClamp(rawReplies[i], depth + 1);
+        newReplies.push(result.node);
+        for (var h = 0; h < result.hoist.length; h++) newReplies.push(result.hoist[h]);
+      }
+      copy.replies = newReplies;
+      return { node: copy, hoist: [] };
+    }
+    var result = [];
+    for (var r = 0; r < (roots || []).length; r++) {
+      result.push(cloneClamp(roots[r], 0).node);
+    }
+    return result;
   }
 
   function bbFetchSquarespaceCommentsForPost(post) {
@@ -1013,7 +1056,7 @@
           }
           return rootCreatedMs(b) - rootCreatedMs(a);
         });
-        return merged;
+        return bbClampCommentTreeDepth(merged, BB_MAX_COMMENT_THREAD_LEVELS);
       }
       var refreshBetterBlogCommentsList = function() {};
       var verifiedCookieName = 'bb_verified_commenter_' + String(siteKey || 'site');
@@ -1120,7 +1163,8 @@
           var wrap = document.createElement('div');
           wrap.className = 'bb-comment' + (depthLevel > 0 ? ' bb-comment-reply' : '') + (isDeletedStub ? ' bb-comment-deleted' : '');
           wrap.style.marginBottom = depthLevel > 0 ? '12px' : '20px';
-          wrap.style.paddingLeft = depthLevel > 0 ? depthLevel * 22 + 'px' : '0';
+          var indentLevel = Math.min(depthLevel, BB_MAX_COMMENT_THREAD_LEVELS - 1);
+          wrap.style.paddingLeft = indentLevel > 0 ? indentLevel * 22 + 'px' : '0';
           var initials = isDeletedStub ? '—' : (c.display_name || '?').slice(0, 2).toUpperCase();
           var avatar = document.createElement('span');
           avatar.className = 'bb-comment-avatar';
@@ -1189,11 +1233,13 @@
           actions.style.color = '#999';
           var threadingOn = cs.allowThreadedReplies !== false;
           var replyMode = currentCommentViewerMode().mode;
+          var atMaxThreadDepth = depthLevel >= BB_MAX_COMMENT_THREAD_LEVELS - 1;
           var showReply =
             allowNewComments &&
             !commentsClosed &&
             !isDeletedStub &&
             threadingOn &&
+            !atMaxThreadDepth &&
             c.id &&
             (allowAnonymousComments || replyMode === 'loggedIn');
           if (!isDeletedStub) {
