@@ -65,7 +65,7 @@ export async function resolveParentIdForReply(
   while (currentId && rows.length < 32) {
     if (guard.has(currentId)) break
     guard.add(currentId)
-    const row = await prisma.comment.findFirst({
+    const row: { id: string; parentId: string | null } | null = await prisma.comment.findFirst({
       where: { id: currentId, siteId: args.siteId, postId: args.postId },
       select: { id: true, parentId: true },
     })
