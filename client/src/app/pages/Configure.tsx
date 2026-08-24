@@ -2560,7 +2560,13 @@ export default function Configure() {
      commentSettings.allowLikes !== savedCommentSettings.allowLikes ||
      commentSettings.allowThreadedReplies !== savedCommentSettings.allowThreadedReplies ||
      commentSettings.sortOrder !== savedCommentSettings.sortOrder);
-  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty;
+  const paywallFormDirty =
+    shouldShowViewerModeToggle &&
+    (paywallForm.subscribeUrl !== savedPaywallForm.subscribeUrl ||
+      paywallForm.footerDescription !== savedPaywallForm.footerDescription ||
+      paywallForm.featureItems.length !== savedPaywallForm.featureItems.length ||
+      paywallForm.featureItems.some((item, i) => item !== savedPaywallForm.featureItems[i]));
+  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty || paywallFormDirty;
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
