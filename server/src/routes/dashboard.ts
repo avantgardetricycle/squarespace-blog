@@ -440,6 +440,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
 
+    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
     const verified = await verifyBlogUrl(blogJsonUrl)
     if (!verified) {
       res.status(400).json({
