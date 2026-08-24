@@ -69,12 +69,16 @@ function normalizeSubscribeUrlInput(raw: unknown): string | null {
 function paywallSettingsJson(s: {
   subscribeUrl: string | null
   footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
   featureItems: string[]
 }) {
   return {
     subscribeUrl: s.subscribeUrl,
     footerDescription: s.footerDescription,
-    featureItems: s.featureItems
+    eyebrowText: s.eyebrowText,
+    headlineText: s.headlineText,
+    featureItems: Array.isArray(s.featureItems) ? s.featureItems : []
   }
 }
 
@@ -210,11 +214,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         verificationStatus: s.verificationStatus,
         createdAt: s.createdAt,
         paywallSettings: s.sitePaywallSettings
-          ? {
-              subscribeUrl: s.sitePaywallSettings.subscribeUrl,
-              footerDescription: s.sitePaywallSettings.footerDescription,
-              featureItems: s.sitePaywallSettings.featureItems
-            }
+          ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
       canCreateSite: maxSites === null || siteCount < maxSites
@@ -434,19 +434,12 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           status: activeSameUrl.status,
           verificationStatus: activeSameUrl.verificationStatus,
           createdAt: activeSameUrl.createdAt,
-          paywallSettings: pw
-            ? {
-                subscribeUrl: pw.subscribeUrl,
-                footerDescription: pw.footerDescription,
-                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
-              }
-            : null
+          paywallSettings: pw ? paywallSettingsJson(pw) : null
         }
       })
       return
     }
 
-    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
     const verified = await verifyBlogUrl(blogJsonUrl)
     if (!verified) {
       res.status(400).json({
@@ -510,13 +503,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           verificationStatus: deletedSameUrl.verificationStatus,
           createdAt: deletedSameUrl.createdAt,
           deletedAt: deletedSameUrl.deletedAt ? deletedSameUrl.deletedAt.toISOString() : null,
-          paywallSettings: pw
-            ? {
-                subscribeUrl: pw.subscribeUrl,
-                footerDescription: pw.footerDescription,
-                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
-              }
-            : null
+          paywallSettings: pw ? paywallSettingsJson(pw) : null
         }
       })
       return
@@ -613,7 +600,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
-    let createdPaywall: { subscribeUrl: string | null; footerDescription: string | null; featureItems: string[] } | null =
+    let createdPaywall: ReturnType<typeof paywallSettingsJson> | null =
       null
     if (userPaywallState === 'detected_paywalled' && subscribeNormalized) {
       await prisma.sitePaywallSettings.create({
@@ -621,14 +608,18 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           siteId: updatedSite.id,
           subscribeUrl: subscribeNormalized,
           footerDescription: null,
+          eyebrowText: null,
+          headlineText: null,
           featureItems: []
         }
       })
-      createdPaywall = {
+      createdPaywall = paywallSettingsJson({
         subscribeUrl: subscribeNormalized,
         footerDescription: null,
+        eyebrowText: null,
+        headlineText: null,
         featureItems: []
-      }
+      })
     }
 
     res.status(201).json({
@@ -718,13 +709,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       status: restored.status,
       verificationStatus: restored.verificationStatus,
       createdAt: restored.createdAt,
-      paywallSettings: pw
-        ? paywallSettingsJson({
-            subscribeUrl: pw.subscribeUrl,
-            footerDescription: pw.footerDescription,
-            featureItems: pw.featureItems ?? []
-          })
-        : null
+      paywallSettings: pw ? paywallSettingsJson(pw) : null
     })
   } catch (err) {
     console.error('Restore site error:', err)
@@ -869,11 +854,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt,
       paywallSettings: updated!.sitePaywallSettings
-        ? paywallSettingsJson({
-            subscribeUrl: updated!.sitePaywallSettings.subscribeUrl,
-            footerDescription: updated!.sitePaywallSettings.footerDescription,
-            featureItems: updated!.sitePaywallSettings.featureItems
-          })
+        ? paywallSettingsJson(updated!.sitePaywallSettings)
         : null
     })
   } catch (err) {

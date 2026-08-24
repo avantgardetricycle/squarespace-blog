@@ -2608,6 +2608,32 @@
       }
     },
 
+    _paywallTrimmedSetting: function(key) {
+      var ps = this.config && this.config.paywallSettings;
+      var v = ps && ps[key];
+      return typeof v === 'string' ? v.trim() : '';
+    },
+
+    _resolvePaywallBlogTitle: function() {
+      var blogTitle = (this._blogMeta && this._blogMeta.blogName) ? this._blogMeta.blogName : 'this blog';
+      try {
+        var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
+        var st = ctx && ctx.website && ctx.website.siteTitle;
+        if (typeof st === 'string' && st.trim()) blogTitle = st.trim();
+      } catch (e) {}
+      return blogTitle;
+    },
+
+    _resolvePaywallEyebrowText: function() {
+      return this._paywallTrimmedSetting('eyebrowText') || 'MEMBER EXCLUSIVE';
+    },
+
+    _resolvePaywallHeadlineText: function(fallback) {
+      var custom = this._paywallTrimmedSetting('headlineText');
+      if (!custom) return fallback;
+      return custom.replace(/\{blogName\}/gi, this._resolvePaywallBlogTitle());
+    },
+
     _bbReadCssVar: function(name, fallback) {
       try {
         var v = window.getComputedStyle(document.documentElement).getPropertyValue(name);
@@ -3234,12 +3260,7 @@
       var features = (ps && Array.isArray(ps.featureItems) && ps.featureItems.length)
         ? ps.featureItems.slice(0, 4)
         : ['Unlimited articles', 'Full archive access', 'Cancel anytime'];
-      var blogTitle = (this._blogMeta && this._blogMeta.blogName) ? this._blogMeta.blogName : 'this blog';
-      try {
-        var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
-        var st = ctx && ctx.website && ctx.website.siteTitle;
-        if (typeof st === 'string' && st.trim()) blogTitle = st.trim();
-      } catch (e) {}
+      var blogTitle = this._resolvePaywallBlogTitle();
       var subLabel = this._paywallSubscribeButtonLabel();
       var borderAlpha = 'rgba(0,0,0,0.1)';
 
@@ -3258,7 +3279,7 @@
       inner.style.margin = '0 auto';
 
       var eyebrow = document.createElement('div');
-      eyebrow.textContent = 'MEMBER EXCLUSIVE';
+      eyebrow.textContent = this._resolvePaywallEyebrowText();
       eyebrow.style.fontSize = '0.65rem';
       eyebrow.style.fontWeight = '700';
       eyebrow.style.letterSpacing = '0.2em';
@@ -3267,7 +3288,7 @@
       eyebrow.style.marginBottom = '12px';
 
       var headline = document.createElement('h2');
-      headline.textContent = 'Unlock unlimited access to ' + blogTitle;
+      headline.textContent = this._resolvePaywallHeadlineText('Unlock unlimited access to ' + blogTitle);
       headline.style.margin = '0 0 12px';
       headline.style.fontSize = 'clamp(1.25rem, 2.5vw, 1.75rem)';
       headline.style.fontWeight = '700';
@@ -3381,7 +3402,7 @@
       card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
 
       var eyebrow = document.createElement('div');
-      eyebrow.textContent = 'MEMBER EXCLUSIVE';
+      eyebrow.textContent = this._resolvePaywallEyebrowText();
       eyebrow.style.fontSize = '0.65rem';
       eyebrow.style.fontWeight = '700';
       eyebrow.style.letterSpacing = '0.2em';
@@ -3390,7 +3411,7 @@
       eyebrow.style.marginBottom = '10px';
 
       var headline = document.createElement('h2');
-      headline.textContent = 'Continue reading with a membership';
+      headline.textContent = this._resolvePaywallHeadlineText('Continue reading with a membership');
       headline.style.margin = '0 0 10px';
       headline.style.fontSize = 'clamp(1.15rem, 3vw, 1.5rem)';
       headline.style.fontWeight = '700';

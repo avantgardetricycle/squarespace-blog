@@ -386,6 +386,8 @@ model SitePaywallSettings {
   siteId             String   @id @map("site_id")
   subscribeUrl       String?  @map("subscribe_url") @db.Text
   footerDescription  String?  @map("footer_description") @db.VarChar(160)
+  eyebrowText        String?  @map("eyebrow_text") @db.VarChar(80)
+  headlineText       String?  @map("headline_text") @db.VarChar(160)
   featureItems       String[] @default([]) @map("feature_items")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 

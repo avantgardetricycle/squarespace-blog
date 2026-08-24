@@ -62,10 +62,16 @@ import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallati
 import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
 
 const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
+const PAYWALL_EYEBROW_MAX = 80;
+const PAYWALL_HEADLINE_MAX = 160;
+const DEFAULT_PAYWALL_EYEBROW = "Member Exclusive";
+const DEFAULT_PAYWALL_HEADLINE = "Unlock unlimited access to {blogName}";
 
 type PaywallFormState = {
   subscribeUrl: string;
   footerDescription: string;
+  eyebrowText: string;
+  headlineText: string;
   featureItems: string[];
 };
 
@@ -2277,11 +2283,15 @@ export default function Configure() {
   const [paywallForm, setPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
     footerDescription: "",
+    eyebrowText: "",
+    headlineText: "",
     featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const [savedPaywallForm, setSavedPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
     footerDescription: "",
+    eyebrowText: "",
+    headlineText: "",
     featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const previewDebugEnabled = useMemo(() => isPreviewDebugEnabled(), []);
@@ -2369,6 +2379,8 @@ export default function Configure() {
     return JSON.stringify({
       subscribeUrl: effectiveSite.paywallSettings?.subscribeUrl ?? null,
       footerDescription: effectiveSite.paywallSettings?.footerDescription ?? null,
+      eyebrowText: effectiveSite.paywallSettings?.eyebrowText ?? null,
+      headlineText: effectiveSite.paywallSettings?.headlineText ?? null,
       featureItems: effectiveSite.paywallSettings?.featureItems ?? [],
     });
   }, [effectiveSite?.siteKey, effectiveSite?.paywallSettings]);
@@ -2383,6 +2395,8 @@ export default function Configure() {
     const next: PaywallFormState = {
       subscribeUrl: ps?.subscribeUrl ?? "",
       footerDescription: ps?.footerDescription ?? "",
+      eyebrowText: ps?.eyebrowText ?? "",
+      headlineText: ps?.headlineText ?? "",
       featureItems: feats.length ? feats : [...DEFAULT_PAYWALL_FEATURE_ITEMS],
     };
     setPaywallForm(next);
@@ -2564,6 +2578,8 @@ export default function Configure() {
     shouldShowViewerModeToggle &&
     (paywallForm.subscribeUrl !== savedPaywallForm.subscribeUrl ||
       paywallForm.footerDescription !== savedPaywallForm.footerDescription ||
+      paywallForm.eyebrowText !== savedPaywallForm.eyebrowText ||
+      paywallForm.headlineText !== savedPaywallForm.headlineText ||
       paywallForm.featureItems.length !== savedPaywallForm.featureItems.length ||
       paywallForm.featureItems.some((item, i) => item !== savedPaywallForm.featureItems[i]));
   const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty || paywallFormDirty;
@@ -2959,6 +2975,8 @@ export default function Configure() {
           ? {
               subscribeUrl: paywallForm.subscribeUrl.trim() || null,
               footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
+              eyebrowText: paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX) || null,
+              headlineText: paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX) || null,
               featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
             }
           : null,
@@ -2978,6 +2996,8 @@ export default function Configure() {
     shouldShowViewerModeToggle,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
+    paywallForm.eyebrowText,
+    paywallForm.headlineText,
     paywallForm.featureItems,
   ]);
 
@@ -2993,6 +3013,8 @@ export default function Configure() {
           ? {
               subscribeUrl: paywallForm.subscribeUrl,
               footerDescription: paywallForm.footerDescription,
+              eyebrowText: paywallForm.eyebrowText,
+              headlineText: paywallForm.headlineText,
               featureItems: paywallForm.featureItems,
             }
           : null,
@@ -3006,6 +3028,8 @@ export default function Configure() {
       shouldShowViewerModeToggle,
       paywallForm.subscribeUrl,
       paywallForm.footerDescription,
+      paywallForm.eyebrowText,
+      paywallForm.headlineText,
       paywallForm.featureItems,
       previewSelectedPostIndex,
     ]
@@ -3047,6 +3071,12 @@ export default function Configure() {
                     footerDescription: paywallForm.footerDescription.trim()
                       ? paywallForm.footerDescription.trim().slice(0, 160)
                       : null,
+                    eyebrowText: paywallForm.eyebrowText.trim()
+                      ? paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX)
+                      : null,
+                    headlineText: paywallForm.headlineText.trim()
+                      ? paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX)
+                      : null,
                     featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
                   },
                 }
@@ -3084,6 +3114,8 @@ export default function Configure() {
           setSavedPaywallForm({
             subscribeUrl: paywallForm.subscribeUrl,
             footerDescription: paywallForm.footerDescription,
+            eyebrowText: paywallForm.eyebrowText,
+            headlineText: paywallForm.headlineText,
             featureItems: paywallForm.featureItems.slice(0, 4),
           });
           getDashboardMe().then((d) => setMe(d ?? null));
@@ -3114,6 +3146,8 @@ export default function Configure() {
     shouldShowViewerModeToggle,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
+    paywallForm.eyebrowText,
+    paywallForm.headlineText,
     paywallForm.featureItems,
   ]);
 
@@ -3146,6 +3180,15 @@ export default function Configure() {
       applyDerivedModules(copy);
       return copy;
     });
+    if (clearSettingsCollection && shouldShowViewerModeToggle) {
+      setPaywallForm({
+        subscribeUrl: "",
+        footerDescription: "",
+        eyebrowText: "",
+        headlineText: "",
+        featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
+      });
+    }
     setClearSettingsModalOpen(false);
     setClearSettingsCollection(false);
     setClearSettingsPost(false);
@@ -3154,7 +3197,7 @@ export default function Configure() {
         ? "Post layout was reset to The Reporter template. Save to publish on your blog."
         : "Selected layout settings were reset to defaults. Save to publish on your blog."
     );
-  }, [clearSettingsCollection, clearSettingsPost, templateCatalogPost]);
+  }, [clearSettingsCollection, clearSettingsPost, shouldShowViewerModeToggle, templateCatalogPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
@@ -3480,7 +3523,7 @@ export default function Configure() {
                 <DialogHeader>
                   <DialogTitle>Clear layout settings?</DialogTitle>
                   <DialogDescription>
-                    This resets BetterBlog layout options to their defaults for the levels you choose. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
+                    This resets BetterBlog layout options to their defaults for the levels you choose. Choosing Collection also resets Paywall settings. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2">
@@ -3492,7 +3535,7 @@ export default function Configure() {
                     />
                     <span>
                       <span className="text-sm font-medium text-[#0a0a0a] block">Collection</span>
-                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, etc.</span>
+                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, paywall, etc.</span>
                     </span>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer rounded-md border border-[#e5e4e0] p-3 hover:bg-[#f7f6f3]/80">
@@ -4855,6 +4898,34 @@ export default function Configure() {
                               />
                               <p className="text-[10px] text-[#6b6b6b] leading-snug">
                                 Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Eyebrow (optional, max {PAYWALL_EYEBROW_MAX} characters)</Label>
+                              <Input
+                                value={paywallForm.eyebrowText}
+                                onChange={(e) =>
+                                  setPaywallForm((p) => ({ ...p, eyebrowText: e.target.value.slice(0, PAYWALL_EYEBROW_MAX) }))
+                                }
+                                placeholder={DEFAULT_PAYWALL_EYEBROW}
+                                className="text-sm"
+                              />
+                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
+                                Small label above the headline. Displayed in uppercase. Leave blank for “{DEFAULT_PAYWALL_EYEBROW}”.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Header text (optional, max {PAYWALL_HEADLINE_MAX} characters)</Label>
+                              <Input
+                                value={paywallForm.headlineText}
+                                onChange={(e) =>
+                                  setPaywallForm((p) => ({ ...p, headlineText: e.target.value.slice(0, PAYWALL_HEADLINE_MAX) }))
+                                }
+                                placeholder={DEFAULT_PAYWALL_HEADLINE}
+                                className="text-sm"
+                              />
+                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
+                                Headline below the eyebrow. Leave blank for the default. Use {"{blogName}"} to insert your site title.
                               </p>
                             </div>
                             <div className="space-y-2">

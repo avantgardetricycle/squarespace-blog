@@ -1,5 +1,13 @@
 const API = '/api'
 
+export type SitePaywallSettingsJson = {
+  subscribeUrl: string | null
+  footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
+  featureItems: string[]
+}
+
 export interface DashboardMe {
   user: { id: number; email: string; name: string | null; createdAt: string }
   subscription: {
@@ -23,11 +31,7 @@ export interface DashboardMe {
     paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
     paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
     paywallDetectionSource?: 'json_probe' | 'manual' | null
-    paywallSettings?: {
-      subscribeUrl: string | null
-      footerDescription: string | null
-      featureItems: string[]
-    } | null
+    paywallSettings?: SitePaywallSettingsJson | null
     status: string
     verificationStatus: 'pending' | 'verified' | 'needs_attention'
     createdAt: string
@@ -66,11 +70,7 @@ export interface CreatedSite {
   createdAt: string
   /** Present when API returns a previously soft-deleted site match (409 deleted_blog_url_match). */
   deletedAt?: string | null
-  paywallSettings?: {
-    subscribeUrl: string | null
-    footerDescription: string | null
-    featureItems: string[]
-  } | null
+  paywallSettings?: SitePaywallSettingsJson | null
 }
 
 export type CreateSiteResult =
@@ -235,11 +235,7 @@ export type SitePatchResponse = {
   status: string
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
-  paywallSettings?: {
-    subscribeUrl: string | null
-    footerDescription: string | null
-    featureItems: string[]
-  } | null
+  paywallSettings?: SitePaywallSettingsJson | null
 }
 
 export async function updateSite(
