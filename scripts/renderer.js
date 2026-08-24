@@ -1175,6 +1175,13 @@
         try { input.focus(); } catch (e) {}
       }
 
+      function currentCommentViewerMode() {
+        var mode = self._resolveViewerMode();
+        var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
+        if (id && id.loggedIn === true) mode = 'loggedIn';
+        return { mode: mode, identity: id };
+      }
+
       var renderComments = function(comments, total) {
         var listEl = bbDiv.querySelector('.bb-comments-list');
         if (!listEl) return;
@@ -1590,13 +1597,6 @@
         submitBtn.disabled = !ok;
         submitBtn.style.opacity = ok ? '1' : '0.55';
         submitBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
-      }
-
-      function currentCommentViewerMode() {
-        var mode = self._resolveViewerMode();
-        var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
-        if (id && id.loggedIn === true) mode = 'loggedIn';
-        return { mode: mode, identity: id };
       }
 
       function applyCommentIdentityMode() {
