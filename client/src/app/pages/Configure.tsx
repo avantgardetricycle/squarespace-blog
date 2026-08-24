@@ -3567,7 +3567,7 @@ export default function Configure() {
                     });
                     return (
                       <div className="space-y-2">
-                        <pre className="text-xs bg-[#f7f6f3] p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
+                        <pre className="text-xs leading-4 bg-[#f7f6f3] p-3 rounded-md max-h-[7.5rem] overflow-auto whitespace-pre-wrap break-all font-mono">
                           {snippet}
                         </pre>
                         <Button

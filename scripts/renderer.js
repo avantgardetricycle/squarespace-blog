@@ -4362,8 +4362,11 @@
     },
 
     /** Accent gradient shown when a post has no usable featured image. */
-    _featuredImagePlaceholderGradient:
-      'linear-gradient(135deg, var(--bb-accent), color-mix(in srgb, var(--bb-accent) 60%, black))',
+    _featuredImagePlaceholderBackground: function() {
+      var tokens = this._getCollectionStyleTokens();
+      var accent = (tokens && tokens.accent) || this._getSiteAccentColor() || '#5B4FE8';
+      return 'linear-gradient(135deg, ' + accent + ', color-mix(in srgb, ' + accent + ' 60%, black))';
+    },
     /**
      * CSS `background` value for a featured/collection image area: cover photo or accent gradient.
      */
@@ -4371,7 +4374,37 @@
       if (imgUrl && typeof imgUrl === 'string' && !this._isPlaceholderWithMap(imgUrl, placeholderMap)) {
         return 'url(' + imgUrl + ') center/cover';
       }
-      return this._featuredImagePlaceholderGradient;
+      return this._featuredImagePlaceholderBackground();
+    },
+    /** Replace a broken featured `<img>` with the accent gradient placeholder. */
+    _swapFeaturedImageForPlaceholder: function(container, placeholderMap, post, items) {
+      if (!container) return;
+      var imgs = container.querySelectorAll('img');
+      for (var i = 0; i < imgs.length; i++) {
+        if (imgs[i].parentNode) imgs[i].parentNode.removeChild(imgs[i]);
+      }
+      container.style.background = this._featuredImageAreaBackground(null, placeholderMap, post, items);
+      container.style.backgroundSize = 'cover';
+      container.style.backgroundPosition = 'center';
+    },
+
+    _getApiBaseUrl: function() {
+      var cfg = this.config;
+      if (cfg && cfg.baseUrl && typeof cfg.baseUrl === 'string' && cfg.baseUrl.trim()) {
+        return cfg.baseUrl.replace(/\/+$/, '');
+      }
+      if (typeof document === 'undefined') return '';
+      try {
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+          var s = scripts[i];
+          if (!s.src || s.src.indexOf('loader.js') < 0) continue;
+          var attr = s.getAttribute('data-api-base');
+          if (attr && String(attr).trim()) return String(attr).trim().replace(/\/+$/, '');
+          try { return new URL(s.src).origin; } catch (eOrigin) { /* ignore */ }
+        }
+      } catch (eScripts) { /* ignore */ }
+      return '';
     },
 
     /**
@@ -8938,7 +8971,7 @@
     _fetchPlaceholderImageMap: async function(featuredPost, displayItemsForLoop) {
       var self = this;
       var placeholderMap = {};
-      var baseUrl = self.config && self.config.baseUrl;
+      var baseUrl = self._getApiBaseUrl();
       var urlsToCheck = [];
       function addImgUrl(u) {
         if (u && typeof u === 'string' && u.trim() && (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) && urlsToCheck.indexOf(u) < 0) urlsToCheck.push(u);
@@ -8989,8 +9022,7 @@
 
     _schedulePlaceholderMapFollowUp: function(featuredPost, displayItemsForLoop, renderSeq) {
       var self = this;
-      if (self._previewMode || self._bbPreview) return;
-      var baseUrl = self.config && self.config.baseUrl;
+      var baseUrl = self._getApiBaseUrl();
       if (!baseUrl) return;
       var fetchKey = self._placeholderImageUrlsKey(featuredPost, displayItemsForLoop);
       if (!fetchKey) return;
@@ -9488,7 +9520,9 @@
             stackImg.style.display = 'block';
             stackImg.style.objectFit = (fiFixedAspectCrop || featureStackedHero) ? 'cover' : 'contain';
             stackImg.style.objectPosition = 'center';
-            stackImg.onerror = function() { if (stackedFullBleedWrap) stackedFullBleedWrap.style.display = 'none'; };
+            stackImg.onerror = function() {
+              self._swapFeaturedImageForPlaceholder(stackFiInner, placeholderMap, post, items);
+            };
             stackFiInner.appendChild(stackImg);
           } else {
             var stackPh = document.createElement('div');
@@ -9589,7 +9623,9 @@
             img.style.display = 'block';
             img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
             img.style.objectPosition = 'center';
-            img.onerror = function() { fiWrap.style.display = 'none'; };
+            img.onerror = function() {
+              self._swapFeaturedImageForPlaceholder(fiInner, placeholderMap, post, items);
+            };
             fiInner.appendChild(img);
           } else {
             fiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
@@ -10136,7 +10172,9 @@
             belowImg.style.display = 'block';
             belowImg.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
             belowImg.style.objectPosition = 'center';
-            belowImg.onerror = function() { belowFiWrap.style.display = 'none'; };
+            belowImg.onerror = function() {
+              self._swapFeaturedImageForPlaceholder(belowFiInner, placeholderMap, post, items);
+            };
             belowFiInner.appendChild(belowImg);
           } else {
             belowFiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
