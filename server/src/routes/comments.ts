@@ -167,12 +167,39 @@ router.get('/', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'post_id is required' })
     return
   }
+  const postUrl =
+    typeof req.query.post_url === 'string' && req.query.post_url.trim()
+      ? req.query.post_url.trim()
+      : null
 
   const page = Math.max(1, parseInt(String(req.query.page || 1), 10))
   const perPage = Math.min(50, Math.max(1, parseInt(String(req.query.per_page || 20), 10)))
 
+  const postIdSet = new Set<string>([postId])
+  if (postUrl) postIdSet.add(postUrl)
+  const cachedMatches = await prisma.cachedPost.findMany({
+    where: {
+      siteId: site.id,
+      OR: [
+        { externalPostId: postId },
+        { url: postId },
+        ...(postUrl ? [{ externalPostId: postUrl }, { url: postUrl }] : []),
+      ],
+    },
+    select: { externalPostId: true, url: true },
+  })
+  for (const row of cachedMatches) {
+    if (row.externalPostId) postIdSet.add(row.externalPostId)
+    if (row.url) postIdSet.add(row.url)
+  }
+  const postIds = [...postIdSet]
+
   const rawRows = await prisma.comment.findMany({
-    where: { siteId: site.id, postId, status: { in: ['approved', 'deleted'] } },
+    where: {
+      siteId: site.id,
+      postId: postIds.length === 1 ? postIds[0] : { in: postIds },
+      status: { in: ['approved', 'deleted'] },
+    },
     include: { _count: { select: { commentLikes: true } } },
   })
 
@@ -193,26 +220,63 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   const visibleRows = rawRows.filter((c) => keepIds.has(c.id))
+  const visibleIdSet = new Set(visibleRows.map((c) => c.id))
   const rowsForTree = clampParentIdsForThreadDepth(
     visibleRows.map((c) => ({
       ...c,
-      parentId: c.parentId !== null && keepIds.has(c.parentId) ? c.parentId : null,
+      parentId: c.parentId !== null && visibleIdSet.has(c.parentId) ? c.parentId : null,
     }))
   )
 
   const byParent = new Map<string | null, typeof rowsForTree>()
   for (const c of rowsForTree) {
-    const k = c.parentId
+    const k = c.parentId ?? null
     if (!byParent.has(k)) byParent.set(k, [])
     byParent.get(k)!.push(c)
   }
 
+  const reachable = new Set<string>()
+  const visitReachable = (id: string) => {
+    if (reachable.has(id)) return
+    reachable.add(id)
+    for (const child of byParent.get(id) ?? []) visitReachable(child.id)
+  }
+  for (const r of byParent.get(null) ?? []) visitReachable(r.id)
+  const rootList = byParent.get(null) ?? []
+  for (const c of rowsForTree) {
+    if (reachable.has(c.id)) continue
+    if (c.parentId != null) {
+      const siblings = byParent.get(c.parentId)
+      if (siblings) {
+        const idx = siblings.findIndex((s) => s.id === c.id)
+        if (idx >= 0) siblings.splice(idx, 1)
+      }
+      c.parentId = null
+    }
+    if (!rootList.some((r) => r.id === c.id)) rootList.push(c)
+    visitReachable(c.id)
+  }
+  byParent.set(null, rootList)
+
+  const createdMs = (createdAt: Date | string) => {
+    const t = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime()
+    return Number.isNaN(t) ? 0 : t
+  }
+  const createdIso = (createdAt: Date | string) => {
+    if (createdAt instanceof Date && !Number.isNaN(createdAt.getTime())) return createdAt.toISOString()
+    const d = new Date(createdAt)
+    return Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
+  }
+
   const sortSiblings = (arr: typeof rowsForTree) => {
     arr.sort((a, b) => {
-      if (settings.sortOrder === 'oldest') return a.createdAt.getTime() - b.createdAt.getTime()
-      if (settings.sortOrder === 'most_liked')
-        return b._count.commentLikes - a._count.commentLikes
-      return b.createdAt.getTime() - a.createdAt.getTime()
+      if (settings.sortOrder === 'oldest') return createdMs(a.createdAt) - createdMs(b.createdAt)
+      if (settings.sortOrder === 'most_liked') {
+        const likesA = a._count?.commentLikes ?? 0
+        const likesB = b._count?.commentLikes ?? 0
+        return likesB - likesA
+      }
+      return createdMs(b.createdAt) - createdMs(a.createdAt)
     })
   }
 
@@ -221,8 +285,24 @@ router.get('/', async (req: Request, res: Response) => {
   const total = roots.length
   const pageRoots = roots.slice((page - 1) * perPage, (page - 1) * perPage + perPage)
 
-  const formatNode = (c: (typeof rowsForTree)[0]): Record<string, unknown> => {
-    const kids = byParent.get(c.id) ?? []
+  const formatNode = (
+    c: (typeof rowsForTree)[0],
+    seen: Set<string> = new Set()
+  ): Record<string, unknown> => {
+    if (seen.has(c.id)) {
+      return {
+        id: c.id,
+        display_name: c.displayName,
+        verified_subscriber: false,
+        body: c.body,
+        like_count: 0,
+        created_at: createdIso(c.createdAt),
+        replies: [],
+      }
+    }
+    const nextSeen = new Set(seen)
+    nextSeen.add(c.id)
+    const kids = (byParent.get(c.id) ?? []).filter((k) => !nextSeen.has(k.id))
     sortSiblings(kids)
     if (c.status === 'deleted') {
       return {
@@ -231,9 +311,9 @@ router.get('/', async (req: Request, res: Response) => {
         verified_subscriber: false,
         body: '[deleted]',
         like_count: 0,
-        created_at: c.createdAt.toISOString(),
+        created_at: createdIso(c.createdAt),
         comment_deleted: true,
-        replies: kids.map((k) => formatNode(k)),
+        replies: kids.map((k) => formatNode(k, nextSeen)),
       }
     }
     const ext = c.externalCommentId
@@ -242,9 +322,9 @@ router.get('/', async (req: Request, res: Response) => {
       display_name: c.displayName,
       verified_subscriber: c.verifiedSubscriber,
       body: c.body,
-      like_count: c._count.commentLikes,
-      created_at: c.createdAt.toISOString(),
-      replies: kids.map((k) => formatNode(k)),
+      like_count: c._count?.commentLikes ?? 0,
+      created_at: createdIso(c.createdAt),
+      replies: kids.map((k) => formatNode(k, nextSeen)),
     }
     const emailNorm = c.email && typeof c.email === 'string' ? c.email.trim() : ''
     if (emailNorm) out.email = emailNorm

@@ -46,7 +46,10 @@ export function clampParentIdsForThreadDepth<T extends { id: string; parentId: s
 
   return rows.map((row) => {
     if (!row.parentId) return row
+    // Parent missing from this result set: show as a top-level comment rather than dropping it.
+    if (!byId.has(row.parentId)) return { ...row, parentId: null }
     const clamped = parentIdWithinMaxThreadDepth(parentChainRootFirst(row.parentId), maxLevels)
+    if (!clamped) return { ...row, parentId: null }
     if (clamped === row.parentId) return row
     return { ...row, parentId: clamped }
   })

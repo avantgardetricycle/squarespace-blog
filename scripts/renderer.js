@@ -356,28 +356,45 @@
    */
   function bbClampCommentTreeDepth(roots, maxLevels) {
     var cap = typeof maxLevels === 'number' && maxLevels > 0 ? maxLevels : BB_MAX_COMMENT_THREAD_LEVELS;
-    function hoistAll(nodes) {
+    function hoistAll(nodes, seen) {
       var out = [];
+      seen = seen || {};
       for (var i = 0; i < (nodes || []).length; i++) {
-        var n = Object.assign({}, nodes[i]);
-        var nested = n.replies || [];
+        var src = nodes[i];
+        if (!src || typeof src !== 'object') continue;
+        var nid = src.id != null ? String(src.id) : '';
+        if (nid && seen[nid]) continue;
+        var nextSeen = Object.assign({}, seen);
+        if (nid) nextSeen[nid] = true;
+        var n = Object.assign({}, src);
+        var nested = Array.isArray(src.replies) ? src.replies : [];
         n.replies = [];
         out.push(n);
-        var more = hoistAll(nested);
+        var more = hoistAll(nested, nextSeen);
         for (var j = 0; j < more.length; j++) out.push(more[j]);
       }
       return out;
     }
-    function cloneClamp(node, depth) {
+    function cloneClamp(node, depth, seen) {
+      if (!node || typeof node !== 'object') return { node: { replies: [] }, hoist: [] };
+      seen = seen || {};
+      var nid = node.id != null ? String(node.id) : '';
+      if (nid && seen[nid]) {
+        var dup = Object.assign({}, node);
+        dup.replies = [];
+        return { node: dup, hoist: [] };
+      }
+      var nextSeen = Object.assign({}, seen);
+      if (nid) nextSeen[nid] = true;
       var copy = Object.assign({}, node);
-      var rawReplies = node.replies || [];
+      var rawReplies = Array.isArray(node.replies) ? node.replies : [];
       if (depth >= cap - 1) {
         copy.replies = [];
-        return { node: copy, hoist: hoistAll(rawReplies) };
+        return { node: copy, hoist: hoistAll(rawReplies, nextSeen) };
       }
       var newReplies = [];
       for (var i = 0; i < rawReplies.length; i++) {
-        var result = cloneClamp(rawReplies[i], depth + 1);
+        var result = cloneClamp(rawReplies[i], depth + 1, nextSeen);
         newReplies.push(result.node);
         for (var h = 0; h < result.hoist.length; h++) newReplies.push(result.hoist[h]);
       }
@@ -386,7 +403,8 @@
     }
     var result = [];
     for (var r = 0; r < (roots || []).length; r++) {
-      result.push(cloneClamp(roots[r], 0).node);
+      if (!roots[r]) continue;
+      result.push(cloneClamp(roots[r], 0, {}).node);
     }
     return result;
   }
@@ -1056,7 +1074,12 @@
           }
           return rootCreatedMs(b) - rootCreatedMs(a);
         });
-        return bbClampCommentTreeDepth(merged, BB_MAX_COMMENT_THREAD_LEVELS);
+        try {
+          return bbClampCommentTreeDepth(merged, BB_MAX_COMMENT_THREAD_LEVELS);
+        } catch (err) {
+          console.error('[BlogOverlay] comment depth clamp error', err);
+          return merged;
+        }
       }
       var refreshBetterBlogCommentsList = function() {};
       var verifiedCookieName = 'bb_verified_commenter_' + String(siteKey || 'site');
@@ -1158,6 +1181,7 @@
         listEl.innerHTML = '';
         var list = (comments || []).slice();
         var addComment = function(c, depth) {
+          if (!c || typeof c !== 'object') return;
           var depthLevel = typeof depth === 'number' && !isNaN(depth) ? depth : 0;
           var isDeletedStub = c.comment_deleted === true || c.comment_deleted === 1;
           var wrap = document.createElement('div');
@@ -1447,9 +1471,14 @@
             wrap.appendChild(actions);
           }
           listEl.appendChild(wrap);
-          (c.replies || []).forEach(function(r) { addComment(r, depthLevel + 1); });
+          (c.replies || []).forEach(function(r) {
+            if (!r) return;
+            try { addComment(r, depthLevel + 1); } catch (err) { console.error('[BlogOverlay] comment render error', err); }
+          });
         };
-        list.forEach(function(c) { addComment(c, 0); });
+        list.forEach(function(c) {
+          try { addComment(c, 0); } catch (err) { console.error('[BlogOverlay] comment render error', err); }
+        });
       };
 
       var listEl = document.createElement('div');
@@ -1457,17 +1486,31 @@
       listEl.style.marginBottom = '24px';
       bbDiv.appendChild(listEl);
 
-      var bbCommentsPromise = fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+      var postUrlForComments = (post && (post.fullUrl || post.url)) ? String(post.fullUrl || post.url) : '';
+      function bbCommentsListUrl() {
+        var url = apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey);
+        if (postUrlForComments) url += '&post_url=' + encodeURIComponent(postUrlForComments);
+        return url;
+      }
+      var latestBbCommentsData = { comments: [], total: 0 };
+      function applyMergedComments(sqRoots, data) {
+        if (sqRoots != null) mergedSqRootsForComments = sqRoots;
+        var payload = data || latestBbCommentsData;
+        if (data) latestBbCommentsData = payload;
+        try {
+          var merged = mergeSqAndBbForRender(mergedSqRootsForComments, payload);
+          renderComments(merged, (payload && payload.total) || 0);
+        } catch (err) {
+          console.error('[BlogOverlay] comment merge error', err);
+        }
+      }
+      fetch(bbCommentsListUrl())
         .then(function(r) { return r.json(); })
-        .catch(function() { return { comments: [], total: 0 }; });
-      Promise.all([bbFetchSquarespaceCommentsForPost(post), bbCommentsPromise])
-        .then(function(pair) {
-          mergedSqRootsForComments = pair[0] || [];
-          var data = pair[1] || {};
-          var merged = mergeSqAndBbForRender(mergedSqRootsForComments, data);
-          renderComments(merged, (data && data.total) || 0);
-        })
-        .catch(function() {});
+        .then(function(data) { applyMergedComments(null, data || { comments: [], total: 0 }); })
+        .catch(function() { applyMergedComments(null, { comments: [], total: 0 }); });
+      bbFetchSquarespaceCommentsForPost(post)
+        .then(function(sqRoots) { applyMergedComments(sqRoots || [], null); })
+        .catch(function() { applyMergedComments([], null); });
 
       var formWrap = document.createElement('div');
       formWrap.className = 'bb-comment-form-wrap';
@@ -1631,11 +1674,10 @@
       }, 500);
 
       refreshBetterBlogCommentsList = function() {
-        return fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+        return fetch(bbCommentsListUrl())
           .then(function(r) { return r.json(); })
           .then(function(d) {
-            var merged = mergeSqAndBbForRender(mergedSqRootsForComments, d);
-            renderComments(merged, (d && d.total) || 0);
+            applyMergedComments(null, d || { comments: [], total: 0 });
           })
           .catch(function() {});
       };
