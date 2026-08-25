@@ -142,6 +142,39 @@ function fingerprintHash(ip: string, userAgent: string): string {
   return crypto.createHash('sha256').update(`${ip}:${userAgent}`).digest('hex')
 }
 
+function emailLookupMeta(email: string | null) {
+  if (!email) return { hasEmail: false, emailHasPlus: false, emailDomain: null as string | null }
+  const at = email.lastIndexOf('@')
+  return {
+    hasEmail: true,
+    emailHasPlus: email.includes('+'),
+    emailDomain: at >= 0 ? email.slice(at + 1) : null,
+  }
+}
+
+function debugCommentsIngest(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>
+) {
+  // #region agent log
+  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd05d9c' },
+    body: JSON.stringify({
+      sessionId: 'd05d9c',
+      runId: 'pre-fix',
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+}
+
 // GET /api/comments?post_id=xxx&page=1&per_page=20
 router.get('/', async (req: Request, res: Response) => {
   const siteToken = getSiteToken(req)
@@ -588,6 +621,22 @@ router.post('/', async (req: Request, res: Response) => {
   let verifiedSubscriber = false
   let squarespaceProfileId: string | null = null
   const memberEmailAttempt = !displayNameRaw && !!email
+  const verifyDebug: Record<string, unknown> = {
+    ...emailLookupMeta(email),
+    memberEmailAttempt,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+    attempted: false,
+    skipReason: null,
+    profilesStatus: null,
+    profilesCount: null,
+    hasProfile: false,
+    hasAccount: null,
+    topLevelKeys: [],
+    verifiedSubscriber: false,
+    fallbackAnonymous: false,
+  }
   console.log('[comments] identity incoming', {
     siteId: site.id,
     postId,
@@ -602,9 +651,15 @@ router.post('/', async (req: Request, res: Response) => {
   // Subscriber verification for paywalled posts - spec says check if subscriber_comments_enabled
   // For MVP we simplify: if they have API key and subscriber_comments_enabled, verify when email provided
   if (settings.subscriberCommentsEnabled && email && effectiveSquarespaceApiKeyEnc) {
+    verifyDebug.attempted = true
     try {
       const apiKey = decrypt(effectiveSquarespaceApiKeyEnc)
       const profilesUrl = `https://api.squarespace.com/1.0/profiles?filter=email,${encodeURIComponent(email)}`
+      debugCommentsIngest('H4', 'comments.ts:profiles-start', 'profiles verify start', {
+        ...emailLookupMeta(email),
+        hasApiKey: Boolean(apiKey),
+        filterUsesPlusEncoding: Boolean(email && email.includes('+')),
+      })
       console.log('[comments] Profiles verify start', {
         siteId: site.id,
         postId,
@@ -667,6 +722,25 @@ router.post('/', async (req: Request, res: Response) => {
             displayName = String(profile.firstName || profile.first_name)
           }
         }
+        verifyDebug.profilesStatus = resProfiles.status
+        verifyDebug.profilesCount = profiles.length
+        verifyDebug.hasProfile = Boolean(profile)
+        verifyDebug.hasAccount = hasAccount
+        verifyDebug.topLevelKeys =
+          data && typeof data === 'object' ? Object.keys(data).slice(0, 20) : []
+        verifyDebug.verifiedSubscriber = verifiedSubscriber
+        debugCommentsIngest('H2', 'comments.ts:profiles-decision', 'profiles verify decision', {
+          ...emailLookupMeta(email),
+          profilesStatus: resProfiles.status,
+          profilesCount: profiles.length,
+          hasProfile: Boolean(profile),
+          hasAccount,
+          hasAccountRaw,
+          hasAccountSnake,
+          verifiedSubscriber,
+          hasProfileId: Boolean(squarespaceProfileId),
+          displayNameSetFromProfile: Boolean(displayName),
+        })
         console.log('[comments] Profiles verify decision', {
           siteId: site.id,
           postId,
@@ -688,6 +762,12 @@ router.post('/', async (req: Request, res: Response) => {
           requestId: sqReqId,
           body: errText ? errText.slice(0, 1000) : null,
         })
+        verifyDebug.profilesStatus = resProfiles.status
+        verifyDebug.skipReason = 'profiles-api-non-200'
+        debugCommentsIngest('H3', 'comments.ts:profiles-non-200', 'profiles API non-200', {
+          ...emailLookupMeta(email),
+          status: resProfiles.status,
+        })
         console.log('[comments] Profiles verify decision', {
           siteId: site.id,
           postId,
@@ -699,6 +779,11 @@ router.post('/', async (req: Request, res: Response) => {
       }
     } catch (err) {
       console.error('[comments] Profiles API error:', err)
+      verifyDebug.skipReason = 'profiles-api-exception'
+      debugCommentsIngest('H3', 'comments.ts:profiles-exception', 'profiles API exception', {
+        ...emailLookupMeta(email),
+        errorType: err instanceof Error ? err.name : typeof err,
+      })
       console.log('[comments] Profiles verify decision', {
         siteId: site.id,
         postId,
@@ -716,6 +801,14 @@ router.post('/', async (req: Request, res: Response) => {
         : !effectiveSquarespaceApiKeyEnc
           ? 'no-squarespace-api-key'
           : 'unknown'
+    verifyDebug.skipReason = skipReason
+    debugCommentsIngest('H4', 'comments.ts:profiles-skipped', 'profiles verify skipped', {
+      skipReason,
+      ...emailLookupMeta(email),
+      subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+      hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+      memberEmailAttempt,
+    })
     console.log('[comments] Profiles verify skipped', {
       skipReason,
       subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
@@ -764,6 +857,21 @@ router.post('/', async (req: Request, res: Response) => {
   if (!displayName) {
     displayName = 'Anonymous'
   }
+  verifyDebug.verifiedSubscriber = verifiedSubscriber
+  verifyDebug.fallbackAnonymous = displayName === 'Anonymous' && !verifiedSubscriber
+  debugCommentsIngest('H5', 'comments.ts:identity-resolved', 'identity resolved', {
+    ...emailLookupMeta(email),
+    memberEmailAttempt,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    verifiedSubscriber,
+    fallbackAnonymous: verifyDebug.fallbackAnonymous,
+    displayNameIsAnonymous: displayName === 'Anonymous',
+    attempted: verifyDebug.attempted,
+    skipReason: verifyDebug.skipReason,
+    profilesCount: verifyDebug.profilesCount,
+    hasProfile: verifyDebug.hasProfile,
+    hasAccount: verifyDebug.hasAccount,
+  })
   console.log('[comments] identity resolved', {
     siteId: site.id,
     postId,
@@ -841,6 +949,7 @@ router.post('/', async (req: Request, res: Response) => {
     created_at: comment.createdAt.toISOString(),
     replies: [],
     ...(createdEmailNorm ? { email: createdEmailNorm } : {}),
+    verify_debug: verifyDebug,
   })
 })
 

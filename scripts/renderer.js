@@ -1932,8 +1932,12 @@
               status: data && data.status ? data.status : null,
               hasEmail: Boolean(data && data.email),
               email: data && data.email ? data.email : null,
-              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
+              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse),
+              verify_debug: data && data.verify_debug ? data.verify_debug : null
             });
+            // #region agent log
+            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'pre-fix',hypothesisId:'H1',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous'),willSetVerifiedCookie:Boolean(modeNow==='loggedIn'&&data&&data.verified_subscriber&&emailToUse),verify_debug:data&&data.verify_debug?data.verify_debug:null,emailHasPlus:Boolean(emailToUse&&String(emailToUse).indexOf('+')>=0)},timestamp:Date.now()})}).catch(function(){});
+            // #endregion
             if (data && data.id) {
               if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse) {
                 bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
@@ -2974,7 +2978,11 @@
         }
         shape.push({
           isActive: p.isActive,
+          isPaywall: p.isPaywall,
           pricingType: p.pricingType,
+          hasMultiplePricingOptions: p.hasMultiplePricingOptions,
+          firstPricingOptionPriceAmount: p.firstPricingOptionPriceAmount || null,
+          firstPricingOptionPriceBillingPeriod: p.firstPricingOptionPriceBillingPeriod || null,
           planKeys: Object.keys(p).slice(0, 20),
           hasPlanPrice: Boolean(p.price && typeof p.price === 'object'),
           planBillingPeriod: p.billingPeriod || null,
@@ -2986,8 +2994,19 @@
       var paidMonthly = [];
       var hasFree = false;
       var hasNonMonthlyPaid = false;
-      for (var i = 0; i < plans.length; i++) {
-        var plan = plans[i];
+      var scan = plans;
+      var paywallOnly = [];
+      for (var pi = 0; pi < plans.length; pi++) {
+        if (plans[pi] && plans[pi].isPaywall === true) paywallOnly.push(plans[pi]);
+      }
+      if (paywallOnly.length > 0) scan = paywallOnly;
+      this._bbPriceDebug('H3', 'pricingPlans scan set', {
+        planCount: plans.length,
+        paywallOnlyCount: paywallOnly.length,
+        scanCount: scan.length
+      });
+      for (var i = 0; i < scan.length; i++) {
+        var plan = scan[i];
         if (!plan || typeof plan !== 'object') continue;
         if (plan.isActive === false) continue;
         var type = String(plan.pricingType || '').toUpperCase();
@@ -2999,12 +3018,25 @@
           hasNonMonthlyPaid = true;
           continue;
         }
+        if (plan.hasMultiplePricingOptions === true) {
+          hasNonMonthlyPaid = true;
+          continue;
+        }
         var opts = Array.isArray(plan.pricingOptions) ? plan.pricingOptions : [];
         if (opts.length === 0 && plan.price && typeof plan.price === 'object') {
           opts = [{ price: plan.price, billingPeriod: plan.billingPeriod || { value: 1, unit: 'MONTH' } }];
         }
         if (opts.length === 0) {
-          hasNonMonthlyPaid = true;
+          var firstAmt = typeof plan.firstPricingOptionPriceAmount === 'string' ? plan.firstPricingOptionPriceAmount.trim() : '';
+          var firstPeriod = typeof plan.firstPricingOptionPriceBillingPeriod === 'string' ? plan.firstPricingOptionPriceBillingPeriod.trim() : '';
+          var fromFirst = this._normalizePaywallMonthlyLabel((firstAmt + ' ' + firstPeriod).trim());
+          this._bbPriceDebug('H3', 'firstPricingOption fallback', {
+            firstAmt: firstAmt || null,
+            firstPeriod: firstPeriod || null,
+            fromFirst: fromFirst
+          });
+          if (fromFirst) paidMonthly.push(fromFirst);
+          else hasNonMonthlyPaid = true;
           continue;
         }
         for (var oi = 0; oi < opts.length; oi++) {
