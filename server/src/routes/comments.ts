@@ -756,6 +756,7 @@ router.post('/', async (req: Request, res: Response) => {
         })
       } else {
         const errText = await resProfiles.text().catch(() => '')
+        const errSnippet = errText ? errText.slice(0, 300) : null
         console.error('[comments] Profiles API non-200', {
           status: resProfiles.status,
           statusText: resProfiles.statusText,
@@ -764,9 +765,49 @@ router.post('/', async (req: Request, res: Response) => {
         })
         verifyDebug.profilesStatus = resProfiles.status
         verifyDebug.skipReason = 'profiles-api-non-200'
-        debugCommentsIngest('H3', 'comments.ts:profiles-non-200', 'profiles API non-200', {
+        verifyDebug.profilesErrorBody = errSnippet
+        let retryStatus: number | null = null
+        let retryCount: number | null = null
+        let retryBodySnippet: string | null = null
+        try {
+          const retryUrl = `https://api.squarespace.com/1.0/profiles?email=${encodeURIComponent(email)}`
+          const retryRes = await fetch(retryUrl, {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              Accept: 'application/json',
+              'User-Agent': 'BetterBlog/1.0',
+            },
+          })
+          retryStatus = retryRes.status
+          if (retryRes.ok) {
+            const retryData = (await retryRes.json()) as Record<string, unknown>
+            const retryProfiles =
+              (Array.isArray((retryData as { Profiles?: unknown[] }).Profiles)
+                ? (retryData as { Profiles: unknown[] }).Profiles
+                : null) ||
+              (Array.isArray((retryData as { profiles?: unknown[] }).profiles)
+                ? (retryData as { profiles: unknown[] }).profiles
+                : null) ||
+              []
+            retryCount = retryProfiles.length
+          } else {
+            const retryText = await retryRes.text().catch(() => '')
+            retryBodySnippet = retryText ? retryText.slice(0, 300) : null
+          }
+        } catch (retryErr) {
+          retryBodySnippet = retryErr instanceof Error ? retryErr.name : 'retry-failed'
+        }
+        verifyDebug.profilesRetryStatus = retryStatus
+        verifyDebug.profilesRetryCount = retryCount
+        verifyDebug.profilesRetryBody = retryBodySnippet
+        debugCommentsIngest('H6', 'comments.ts:profiles-non-200', 'profiles API non-200', {
           ...emailLookupMeta(email),
           status: resProfiles.status,
+          errorBodyLen: errText ? errText.length : 0,
+          errorBodySnippet: errSnippet,
+          retryStatus,
+          retryCount,
+          retryBodySnippet,
         })
         console.log('[comments] Profiles verify decision', {
           siteId: site.id,
@@ -775,6 +816,8 @@ router.post('/', async (req: Request, res: Response) => {
           verifiedSubscriber: false,
           reason: 'profiles-api-non-200',
           status: resProfiles.status,
+          retryStatus,
+          retryCount,
         })
       }
     } catch (err) {
