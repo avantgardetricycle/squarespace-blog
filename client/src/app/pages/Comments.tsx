@@ -246,6 +246,29 @@ export default function Comments() {
         if (data) {
           setComments(data.comments || []);
           setTotal(data.total || 0);
+          const list = (data.comments || []) as Array<{
+            id: string;
+            displayName?: string;
+            verifiedSubscriber?: boolean;
+            email?: string | null;
+            squarespaceProfileId?: string | null;
+            status?: string;
+          }>;
+          console.log("[BetterBlog comments] dashboard list", {
+            siteKey,
+            total: data.total || 0,
+            verifiedCount: list.filter((c) => c.verifiedSubscriber === true).length,
+            anonymousCount: list.filter((c) => c.verifiedSubscriber !== true).length,
+            comments: list.map((c) => ({
+              id: c.id,
+              displayName: c.displayName,
+              verifiedSubscriber: Boolean(c.verifiedSubscriber),
+              hasEmail: Boolean(c.email),
+              email: c.email ?? null,
+              squarespaceProfileId: c.squarespaceProfileId ?? null,
+              status: c.status,
+            })),
+          });
         }
       })
       .finally(() => setFetching(false));
@@ -306,7 +329,15 @@ export default function Comments() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data)
+        if (data) {
+          console.log("[BetterBlog comments] dashboard settings", {
+            siteKey,
+            allowAnonymousComments: data.allowAnonymousComments ?? true,
+            subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
+            apiKeyVerified: data.apiKeyVerified ?? false,
+            commentsEnabled: data.commentsEnabled ?? true,
+            allowNewComments: data.allowNewComments ?? true,
+          });
           setSettings({
             commentsEnabled: data.commentsEnabled ?? true,
             allowNewComments: data.allowNewComments ?? true,
@@ -322,6 +353,7 @@ export default function Comments() {
               ? data.sortOrder
               : "newest",
           });
+        }
       });
   }, [siteKey]);
 

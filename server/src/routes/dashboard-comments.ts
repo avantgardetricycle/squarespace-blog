@@ -127,6 +127,17 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     search: search ?? null,
     total,
     returned: comments.length,
+    verifiedCount: comments.filter((c) => c.verifiedSubscriber === true).length,
+    anonymousCount: comments.filter((c) => c.verifiedSubscriber !== true).length,
+    comments: comments.map((c) => ({
+      id: c.id,
+      displayName: c.displayName,
+      verifiedSubscriber: c.verifiedSubscriber,
+      hasEmail: Boolean(c.email),
+      email: c.email,
+      squarespaceProfileId: c.squarespaceProfileId,
+      status: c.status,
+    })),
   })
 
   res.json({

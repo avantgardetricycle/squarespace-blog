@@ -245,7 +245,7 @@ export async function updateSite(
     blogPassword?: string
     paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
     paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
-    subscribeUrl?: string
+    subscribeUrl?: string | null
   }
 ): Promise<{ ok: true; site: SitePatchResponse } | { ok: false; error?: string }> {
   const res = await fetch(`${API}/dashboard/sites/by-key/${encodeURIComponent(siteKey)}`, {

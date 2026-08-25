@@ -273,11 +273,7 @@ export default function Dashboard() {
     }
     if (editBlogRequiresLogin === "yes") {
       const su = editBlogSubscribeUrl.trim();
-      if (!su) {
-        toast.error("Enter the URL of your blog signup or subscription page.");
-        return;
-      }
-      if (!isValidSignupPageUrl(su)) {
+      if (su && !isValidSignupPageUrl(su)) {
         toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
         return;
       }
@@ -815,7 +811,7 @@ export default function Dashboard() {
             {editBlogRequiresLogin === "yes" ? (
               <div className="space-y-2">
                 <Label htmlFor="edit-blog-subscribe-url">
-                  Signup / subscription page URL <span className="text-red-500">*</span>
+                  Signup / subscription page URL (optional)
                 </Label>
                 <Input
                   id="edit-blog-subscribe-url"
@@ -830,7 +826,7 @@ export default function Dashboard() {
                   }}
                 />
                 <p className="text-xs text-[#6b6b6b]">
-                  Used for subscribe links on the paywalled blog (overrides using the blog URL alone).
+                  Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
                 </p>
               </div>
             ) : null}

@@ -860,7 +860,12 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
     }
 
-    console.log(`[config] GET ${siteKey} ok (${reqId})`)
+    console.log(`[config] GET ${siteKey} ok (${reqId})`, {
+      allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
+      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
+      commentsEnabled: commentSettings.commentsEnabled,
+      allowNewComments: 'allowNewComments' in commentSettings ? commentSettings.allowNewComments : null,
+    })
     res.json(configData)
   } catch (err) {
     console.error(`[config] GET ${siteKey} error (${reqId}):`, err)

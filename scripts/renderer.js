@@ -591,10 +591,28 @@
       else console.log('[BlogOverlay][auth-debug] ' + label);
     },
 
+    /** Always-on comment identity logs so we can compare verified vs anonymous across browsers. */
+    _commentsLog: function(label, payload) {
+      try {
+        if (payload !== undefined) console.log('[BetterBlog comments] ' + label, payload);
+        else console.log('[BetterBlog comments] ' + label);
+      } catch (e) {}
+    },
+
     _paywallDebug: function(label, payload) {
       if (!this._isPaywallDebugEnabled()) return;
       if (payload !== undefined) console.log('[BlogOverlay][paywall-debug] ' + label, payload);
       else console.log('[BlogOverlay][paywall-debug] ' + label);
+    },
+
+    _bbPriceDebug: function(hypothesisId, message, data) {
+      var payload = data || {};
+      try {
+        console.log('[BB paywall price] ' + message, payload);
+      } catch (e0) {}
+      // #region agent log
+      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '50d457' }, body: JSON.stringify({ sessionId: '50d457', location: 'scripts/renderer.js:_bbPriceDebug', message: message, data: payload, timestamp: Date.now(), hypothesisId: hypothesisId }) }).catch(function() {});
+      // #endregion
     },
 
     /** Add ?bbTocDebug=1 to the page URL (or bbPreviewDebug=1) to log Table of Contents wiring. */
@@ -965,20 +983,39 @@
     _initComments: function(container, post, cfg) {
       var self = this;
       var cs = (cfg && cfg.commentSettings) || {};
-      if (!cs.commentsEnabled) return;
+      if (!cs.commentsEnabled) {
+        this._commentsLog('init skipped', { reason: 'commentsEnabled=false' });
+        return;
+      }
       var vm = this._resolveViewerMode();
       if (
         vm !== 'loggedIn' &&
         this._isPaywalledSite() &&
         !this._isPaywallPublicPreviewPost(post)
       ) {
+        this._commentsLog('init skipped', {
+          reason: 'paywalled-and-not-logged-in',
+          viewerMode: vm,
+          isPaywalledSite: true,
+          publicPreviewPost: Boolean(this._isPaywallPublicPreviewPost(post))
+        });
         return;
       }
       var baseUrl = (cfg && cfg.baseUrl) || '';
       var siteKey = (cfg && cfg.siteKey) || '';
-      if (!baseUrl || !siteKey) return;
+      if (!baseUrl || !siteKey) {
+        this._commentsLog('init skipped', {
+          reason: 'missing-baseUrl-or-siteKey',
+          hasBaseUrl: Boolean(baseUrl),
+          hasSiteKey: Boolean(siteKey)
+        });
+        return;
+      }
       var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
-      if (!postId) return;
+      if (!postId) {
+        this._commentsLog('init skipped', { reason: 'missing-postId' });
+        return;
+      }
 
       var NAME_MAX = 100;
       var BODY_MAX = 5000;
@@ -1049,6 +1086,44 @@
       var subscriberCommentsEnabled = cs.subscriberCommentsEnabled === true;
       var loggedInOptionalEmail =
         allowAnonymousComments && !subscriberCommentsEnabled;
+      function bbCommentsLog(label, payload) {
+        if (self._commentsLog) self._commentsLog(label, payload);
+      }
+      function bbEmailDebug(email) {
+        var e = email ? String(email).trim() : '';
+        if (!e) return { hasEmail: false, email: null, domain: null };
+        var at = e.lastIndexOf('@');
+        return { hasEmail: true, email: e, domain: at >= 0 ? e.slice(at + 1) : null };
+      }
+      function bbCommentDebugSummary(c) {
+        return {
+          id: c && c.id != null ? String(c.id) : null,
+          display_name: c && c.display_name != null ? String(c.display_name) : null,
+          verified_subscriber: Boolean(c && c.verified_subscriber),
+          hasEmail: Boolean(c && c.email),
+          email: c && c.email ? String(c.email) : null,
+          status: c && c.status != null ? c.status : null,
+          bb_legacy_squarespace: Boolean(c && c.bb_legacy_squarespace),
+          replyCount: c && c.replies && c.replies.length ? c.replies.length : 0
+        };
+      }
+      function bbFlattenCommentDebug(list, acc) {
+        acc = acc || [];
+        (list || []).forEach(function(c) {
+          acc.push(bbCommentDebugSummary(c));
+          if (c && c.replies && c.replies.length) bbFlattenCommentDebug(c.replies, acc);
+        });
+        return acc;
+      }
+      function bbCountVerified(flat) {
+        var verified = 0;
+        var anonymous = 0;
+        for (var i = 0; i < (flat || []).length; i++) {
+          if (flat[i] && flat[i].verified_subscriber) verified++;
+          else anonymous++;
+        }
+        return { verified: verified, anonymous: anonymous, total: (flat || []).length };
+      }
       var mergedSqRootsForComments = [];
       var commentSortOrder =
         cs.sortOrder === 'oldest' || cs.sortOrder === 'most_liked' ? cs.sortOrder : 'newest';
@@ -1090,34 +1165,51 @@
             var part = all[i].trim();
             if (part.indexOf(name + '=') === 0) return decodeURIComponent(part.slice(name.length + 1));
           }
-        } catch (e) {}
+        } catch (e) {
+          bbCommentsLog('cookie read failed', { name: name, error: String(e && e.message || e) });
+        }
         return null;
       }
       function bbWriteCookie(name, value, days) {
         try {
           var maxAge = Math.max(1, Math.floor((days || 30) * 24 * 60 * 60));
           document.cookie = name + '=' + encodeURIComponent(value) + '; Path=/; Max-Age=' + maxAge + '; SameSite=Lax';
-        } catch (e) {}
+          bbCommentsLog('cookie write', { name: name, maxAgeSeconds: maxAge, valueLen: String(value || '').length });
+        } catch (e) {
+          bbCommentsLog('cookie write failed', { name: name, error: String(e && e.message || e) });
+        }
       }
       function bbGetVerifiedIdentity() {
         try {
           var raw = bbReadCookie(verifiedCookieName);
           if (!raw) return null;
           var parsed = JSON.parse(raw);
-          if (!parsed || typeof parsed !== 'object') return null;
+          if (!parsed || typeof parsed !== 'object') {
+            bbCommentsLog('verified cookie parse skipped', { reason: 'not-an-object', rawLen: raw.length });
+            return null;
+          }
           var n = parsed.name ? String(parsed.name).trim() : '';
           var e = parsed.email ? String(parsed.email).trim() : '';
-          if (!n || !e) return null;
+          if (!n || !e) {
+            bbCommentsLog('verified cookie incomplete', { hasName: Boolean(n), hasEmail: Boolean(e) });
+            return null;
+          }
           return { name: n, email: e };
         } catch (e) {
+          bbCommentsLog('verified cookie parse failed', { error: String(e && e.message || e) });
           return null;
         }
       }
       function bbSetVerifiedIdentity(name, email) {
-        if (!name || !email) return;
+        if (!name || !email) {
+          bbCommentsLog('verified cookie NOT set', { reason: 'missing-name-or-email', hasName: Boolean(name), hasEmail: Boolean(email) });
+          return;
+        }
+        bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
       }
       function bbPromptForEmail(initialValue, done) {
+        bbCommentsLog('email prompt shown', { hasInitialValue: Boolean(initialValue) });
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
         var modal = document.createElement('div');
@@ -1150,6 +1242,7 @@
         ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer';
         ok.style.background = 'var(--bb-accent, #5B4FE8)';
         function close(ret) {
+          bbCommentsLog('email prompt closed', ret ? bbEmailDebug(ret) : { cancelled: true });
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
         }
@@ -1182,9 +1275,38 @@
         return { mode: mode, identity: id };
       }
 
+      bbCommentsLog('init', {
+        siteKey: siteKey,
+        postId: postId,
+        allowAnonymousComments: allowAnonymousComments,
+        subscriberCommentsEnabled: subscriberCommentsEnabled,
+        loggedInOptionalEmail: loggedInOptionalEmail,
+        commentsClosed: commentsClosed,
+        allowNewComments: allowNewComments,
+        viewerMode: currentCommentViewerMode().mode,
+        squarespaceIdentity: (function() {
+          var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
+          if (!id) return null;
+          return {
+            loggedIn: id.loggedIn,
+            name: id.name || null,
+            email: id.email || null
+          };
+        })(),
+        verifiedCookieName: verifiedCookieName,
+        verifiedIdentity: bbGetVerifiedIdentity()
+      });
+
       var renderComments = function(comments, total) {
         var listEl = bbDiv.querySelector('.bb-comments-list');
         if (!listEl) return;
+        var flat = bbFlattenCommentDebug(comments);
+        var counts = bbCountVerified(flat);
+        bbCommentsLog('render list', {
+          total: total,
+          counts: counts,
+          comments: flat
+        });
         listEl.innerHTML = '';
         var list = (comments || []).slice();
         var addComment = function(c, depth) {
@@ -1397,7 +1519,18 @@
               if (!bd) { rBody.focus(); return; }
               var verifiedIdentity = bbGetVerifiedIdentity();
               var loggedInEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null);
+              bbCommentsLog('reply submit start', {
+                mode: modeNow,
+                allowAnonymousComments: allowAnonymousComments,
+                subscriberCommentsEnabled: subscriberCommentsEnabled,
+                loggedInOptionalEmail: loggedInOptionalEmail,
+                displayName: modeNow === 'loggedIn' ? '' : nm,
+                verifiedCookie: verifiedIdentity,
+                emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none')),
+                email: bbEmailDebug(loggedInEmail)
+              });
               if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail) {
+                bbCommentsLog('reply submit waiting for email prompt', { mode: modeNow });
                 bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', function(confirmedEmail) {
                   if (!confirmedEmail) return;
                   replyEmailOverride = confirmedEmail;
@@ -1421,6 +1554,13 @@
               };
               var rEm = modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim();
               if (rEm) payload.email = rEm;
+              bbCommentsLog('reply POST payload', {
+                post_id: payload.post_id,
+                parent_id: payload.parent_id,
+                display_name: payload.display_name,
+                hasEmail: Boolean(payload.email),
+                email: payload.email || null
+              });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
                 payload.squarespace_record_type = post.recordType;
               }
@@ -1439,9 +1579,26 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                   rSubmit.textContent = 'Post reply';
+                  bbCommentsLog('reply POST response', {
+                    id: data && data.id ? data.id : null,
+                    error: data && data.error ? data.error : null,
+                    display_name: data && data.display_name ? data.display_name : null,
+                    verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+                    status: data && data.status ? data.status : null,
+                    hasEmail: Boolean(data && data.email),
+                    email: data && data.email ? data.email : null,
+                    willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && rEm)
+                  });
                   if (data && data.id) {
                     if (modeNow === 'loggedIn' && data.verified_subscriber && rEm) {
                       bbSetVerifiedIdentity(data.display_name || 'Member', rEm);
+                    } else if (modeNow === 'loggedIn') {
+                      bbCommentsLog('reply verified cookie NOT set', {
+                        reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
+                        display_name: data && data.display_name ? data.display_name : null,
+                        verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+                        hasEmail: Boolean(rEm)
+                      });
                     }
                     replyFormShell.style.display = 'none';
                     rBody.value = '';
@@ -1466,7 +1623,8 @@
                     rReplySync();
                   }
                 })
-                .catch(function() {
+                .catch(function(err) {
+                  bbCommentsLog('reply POST failed', { error: String(err && err.message || err) });
                   rSubmit.textContent = 'Post reply';
                   rReplySync();
                 });
@@ -1505,6 +1663,12 @@
         var payload = data || latestBbCommentsData;
         if (data) latestBbCommentsData = payload;
         try {
+          var bbFlat = bbFlattenCommentDebug((payload && payload.comments) || []);
+          var sqFlat = bbFlattenCommentDebug(mergedSqRootsForComments || []);
+          bbCommentsLog('merge lists', {
+            betterBlog: Object.assign({ comments: bbFlat }, bbCountVerified(bbFlat)),
+            squarespaceLegacy: Object.assign({ comments: sqFlat }, bbCountVerified(sqFlat))
+          });
           var merged = mergeSqAndBbForRender(mergedSqRootsForComments, payload);
           renderComments(merged, (payload && payload.total) || 0);
         } catch (err) {
@@ -1513,8 +1677,19 @@
       }
       fetch(bbCommentsListUrl())
         .then(function(r) { return r.json(); })
-        .then(function(data) { applyMergedComments(null, data || { comments: [], total: 0 }); })
-        .catch(function() { applyMergedComments(null, { comments: [], total: 0 }); });
+        .then(function(data) {
+          bbCommentsLog('list fetch', {
+            ok: true,
+            total: data && data.total != null ? data.total : null,
+            rootCount: data && data.comments ? data.comments.length : 0,
+            comments: bbFlattenCommentDebug((data && data.comments) || [])
+          });
+          applyMergedComments(null, data || { comments: [], total: 0 });
+        })
+        .catch(function(err) {
+          bbCommentsLog('list fetch failed', { error: String(err && err.message || err) });
+          applyMergedComments(null, { comments: [], total: 0 });
+        });
       bbFetchSquarespaceCommentsForPost(post)
         .then(function(sqRoots) { applyMergedComments(sqRoots || [], null); })
         .catch(function() { applyMergedComments([], null); });
@@ -1605,6 +1780,17 @@
         var id = resolved.identity || null;
         var verifiedIdentity = bbGetVerifiedIdentity();
         var guestsMayPost = allowAnonymousComments || mode === 'loggedIn';
+        var formModePayload = {
+          mode: mode,
+          guestsMayPost: guestsMayPost,
+          allowAnonymousComments: allowAnonymousComments,
+          subscriberCommentsEnabled: subscriberCommentsEnabled,
+          loggedInOptionalEmail: loggedInOptionalEmail,
+          squarespaceIdentity: id ? { loggedIn: id.loggedIn, name: id.name || null, email: id.email || null } : null,
+          verifiedIdentity: verifiedIdentity,
+          nameInputVisible: null,
+          emailInputVisible: null
+        };
         if (!guestsMayPost) {
           heading.textContent = 'Sign in to comment';
           guestOnlyNote.style.display = 'block';
@@ -1650,6 +1836,15 @@
           loggedInIdentityLine.textContent = '';
         }
         mainFormSync();
+        formModePayload.nameInputVisible = nameInput.style.display !== 'none';
+        formModePayload.emailInputVisible = emailInput.style.display !== 'none';
+        formModePayload.loggedInIdentityLineVisible = loggedInIdentityLine.style.display !== 'none';
+        formModePayload.loggedInIdentityLineText = loggedInIdentityLine.textContent || '';
+        var formModeSig = JSON.stringify(formModePayload);
+        if (formModeSig !== self._lastCommentsFormModeLogSig) {
+          self._lastCommentsFormModeLogSig = formModeSig;
+          bbCommentsLog('form mode', formModePayload);
+        }
         self._emitAuthDebugSnapshot('comments.formMode');
         self._authDebug('comments.formMode.details', {
           mode: mode,
@@ -1677,9 +1872,15 @@
         return fetch(bbCommentsListUrl())
           .then(function(r) { return r.json(); })
           .then(function(d) {
+            bbCommentsLog('list refresh', {
+              total: d && d.total != null ? d.total : null,
+              comments: bbFlattenCommentDebug((d && d.comments) || [])
+            });
             applyMergedComments(null, d || { comments: [], total: 0 });
           })
-          .catch(function() {});
+          .catch(function(err) {
+            bbCommentsLog('list refresh failed', { error: String(err && err.message || err) });
+          });
       };
 
       var mainEmailOverride = null;
@@ -1698,6 +1899,16 @@
           post_url: (post && (post.fullUrl || post.url)) || null
         };
         if (emailToUse) payload.email = emailToUse;
+        bbCommentsLog('main POST payload', {
+          mode: modeNow,
+          post_id: payload.post_id,
+          display_name: payload.display_name,
+          hasEmail: Boolean(payload.email),
+          email: payload.email || null,
+          allowAnonymousComments: allowAnonymousComments,
+          subscriberCommentsEnabled: subscriberCommentsEnabled,
+          loggedInOptionalEmail: loggedInOptionalEmail
+        });
         if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
           try {
             var token = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
@@ -1713,9 +1924,26 @@
           .then(function(r) { return r.json(); })
           .then(function(data) {
             submitBtn.textContent = 'Post Comment';
+            bbCommentsLog('main POST response', {
+              id: data && data.id ? data.id : null,
+              error: data && data.error ? data.error : null,
+              display_name: data && data.display_name ? data.display_name : null,
+              verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+              status: data && data.status ? data.status : null,
+              hasEmail: Boolean(data && data.email),
+              email: data && data.email ? data.email : null,
+              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
+            });
             if (data && data.id) {
               if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse) {
                 bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
+              } else if (modeNow === 'loggedIn') {
+                bbCommentsLog('main verified cookie NOT set', {
+                  reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
+                  display_name: data && data.display_name ? data.display_name : null,
+                  verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+                  hasEmail: Boolean(emailToUse)
+                });
               }
               bodyArea.value = '';
               if (data.status === 'pending') {
@@ -1744,7 +1972,8 @@
               mainFormSync();
             }
           })
-          .catch(function() {
+          .catch(function(err) {
+            bbCommentsLog('main POST failed', { error: String(err && err.message || err) });
             submitBtn.textContent = 'Post Comment';
             mainFormSync();
           });
@@ -1760,11 +1989,23 @@
           var verifiedIdentity = bbGetVerifiedIdentity();
           var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
           var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : mainEmailOverride;
+          bbCommentsLog('main submit start', {
+            mode: modeNow,
+            allowAnonymousComments: allowAnonymousComments,
+            subscriberCommentsEnabled: subscriberCommentsEnabled,
+            loggedInOptionalEmail: loggedInOptionalEmail,
+            verifiedCookie: verifiedIdentity,
+            typedEmail: typedEmail || null,
+            emailOverride: mainEmailOverride,
+            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (mainEmailOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
+            useEmail: useEmail || null
+          });
           if (loggedInOptionalEmail) {
             submitMainCommentWithEmail(modeNow, name, body, typedEmail || useEmail || null);
             return;
           }
           if (!useEmail) {
+            bbCommentsLog('main submit waiting for email prompt', { mode: modeNow });
             bbPromptForEmail(typedEmail || '', function(confirmedEmail) {
               if (!confirmedEmail) return;
               mainEmailOverride = confirmedEmail;
@@ -1775,6 +2016,13 @@
           submitMainCommentWithEmail(modeNow, name, body, useEmail);
           return;
         }
+        bbCommentsLog('main submit start', {
+          mode: modeNow,
+          allowAnonymousComments: allowAnonymousComments,
+          subscriberCommentsEnabled: subscriberCommentsEnabled,
+          displayName: name || null,
+          email: (emailInput.value || '').trim() || null
+        });
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
@@ -1837,6 +2085,15 @@
       var bbPreview = this._hasBbPreviewParam();
       this._previewMode = previewMode;
       this._bbPreview = bbPreview;
+      var csInit = (this.config && this.config.commentSettings) || {};
+      this._commentsLog('renderer init comment settings', {
+        commentsEnabled: csInit.commentsEnabled,
+        allowAnonymousComments: csInit.allowAnonymousComments,
+        subscriberCommentsEnabled: csInit.subscriberCommentsEnabled,
+        allowNewComments: csInit.allowNewComments,
+        previewMode: previewMode,
+        bbPreview: bbPreview
+      });
 
       // #region agent log
       var _rendererDbg = {
@@ -2598,11 +2855,18 @@
       var ps = this.config && this.config.paywallSettings;
       var custom = ps && typeof ps.subscribeUrl === 'string' ? ps.subscribeUrl.trim() : '';
       if (custom) return custom;
+      var collectionUrl = typeof this._buildBlogCollectionNavUrl === 'function'
+        ? this._buildBlogCollectionNavUrl()
+        : '';
+      if (collectionUrl) return collectionUrl;
       try {
-        var bp = (this.config && this.config.blogPath) || '/';
-        if (bp === '/' || bp === '') return window.location.origin + '/';
-        var path = bp.charAt(0) === '/' ? bp : '/' + bp;
-        return window.location.origin + path;
+        var bp = typeof this._getBlogCollectionPath === 'function'
+          ? this._getBlogCollectionPath()
+          : ((this.config && this.config.blogPath) || '/');
+        if (typeof window !== 'undefined' && window.location && window.location.origin) {
+          return window.location.origin + (bp === '/' ? '/' : bp);
+        }
+        return bp || '/';
       } catch (e2) {
         return typeof window !== 'undefined' ? window.location.pathname || '/' : '/';
       }
@@ -2691,6 +2955,34 @@
     /** Unique simple monthly price from Squarespace member-area pricingPlans, or null if ambiguous. */
     _labelFromSquarespacePricingPlans: function(plans) {
       if (!Array.isArray(plans) || plans.length === 0) return null;
+      var shape = [];
+      for (var si = 0; si < plans.length && si < 8; si++) {
+        var p = plans[si];
+        if (!p || typeof p !== 'object') continue;
+        var o = Array.isArray(p.pricingOptions) ? p.pricingOptions : [];
+        var optShapes = [];
+        for (var sj = 0; sj < o.length && sj < 4; sj++) {
+          var opt0 = o[sj];
+          if (!opt0 || typeof opt0 !== 'object') continue;
+          optShapes.push({
+            keys: Object.keys(opt0).slice(0, 16),
+            billingPeriod: opt0.billingPeriod || null,
+            numBillingCycles: opt0.numBillingCycles,
+            price: opt0.price && typeof opt0.price === 'object' ? opt0.price : null,
+            amount: opt0.amount != null ? opt0.amount : null
+          });
+        }
+        shape.push({
+          isActive: p.isActive,
+          pricingType: p.pricingType,
+          planKeys: Object.keys(p).slice(0, 20),
+          hasPlanPrice: Boolean(p.price && typeof p.price === 'object'),
+          planBillingPeriod: p.billingPeriod || null,
+          optCount: o.length,
+          opts: optShapes
+        });
+      }
+      this._bbPriceDebug('H3', 'pricingPlans raw shape', { planCount: plans.length, shape: shape });
       var paidMonthly = [];
       var hasFree = false;
       var hasNonMonthlyPaid = false;
@@ -2737,13 +3029,44 @@
           if (label) paidMonthly.push(label);
         }
       }
-      if (hasFree && paidMonthly.length > 0) return null;
-      if (hasNonMonthlyPaid) return null;
+      if (hasFree && paidMonthly.length > 0) {
+        this._bbPriceDebug('H3', 'pricingPlans parse rejected', {
+          reason: 'free-plus-paid',
+          hasFree: hasFree,
+          hasNonMonthlyPaid: hasNonMonthlyPaid,
+          paidMonthly: paidMonthly.slice(0, 6)
+        });
+        return null;
+      }
+      if (hasNonMonthlyPaid) {
+        this._bbPriceDebug('H3', 'pricingPlans parse rejected', {
+          reason: 'has-non-monthly-paid',
+          hasFree: hasFree,
+          hasNonMonthlyPaid: hasNonMonthlyPaid,
+          paidMonthly: paidMonthly.slice(0, 6)
+        });
+        return null;
+      }
       var unique = [];
       for (var u = 0; u < paidMonthly.length; u++) {
         if (unique.indexOf(paidMonthly[u]) < 0) unique.push(paidMonthly[u]);
       }
-      if (unique.length !== 1) return null;
+      if (unique.length !== 1) {
+        this._bbPriceDebug('H3', 'pricingPlans parse rejected', {
+          reason: 'unique-count-' + unique.length,
+          hasFree: hasFree,
+          hasNonMonthlyPaid: hasNonMonthlyPaid,
+          paidMonthly: paidMonthly.slice(0, 6),
+          unique: unique
+        });
+        return null;
+      }
+      this._bbPriceDebug('H3', 'pricingPlans parse accepted', {
+        hasFree: hasFree,
+        hasNonMonthlyPaid: hasNonMonthlyPaid,
+        paidMonthly: paidMonthly.slice(0, 6),
+        unique: unique
+      });
       return unique[0];
     },
 
@@ -2797,10 +3120,17 @@
 
     _refreshPaywallSubscribeLabels: function() {
       var label = this._paywallSubscribeButtonLabel();
+      var btnCount = 0;
       try {
         var nodes = document.querySelectorAll('.bb-paywall-subscribe-btn');
+        btnCount = nodes.length;
         for (var i = 0; i < nodes.length; i++) nodes[i].textContent = label;
       } catch (e) {}
+      this._bbPriceDebug('H5', 'refreshed subscribe labels', {
+        label: label,
+        cachedPriceLabel: this._paywallPriceLabel,
+        buttonCount: btnCount
+      });
     },
 
     _applyPaywallPricingPlans: function(plans, source) {
@@ -2833,16 +3163,33 @@
      * member-gate page (#bootstrap-data) linked from pagePreviewContext.memberAccessUrl.
      */
     _hydratePaywallPricingPlans: function(json) {
-      if (this._previewMode) return;
+      var memberAccessUrl = this._memberAccessUrlFromJson(json);
+      this._bbPriceDebug('H1', 'hydrate start', {
+        previewMode: Boolean(this._previewMode),
+        bbPreview: Boolean(this._bbPreview),
+        alreadyHasLabel: this._paywallPriceLabel,
+        hydrated: Boolean(this._paywallPricingPlansHydrated),
+        inflight: Boolean(this._paywallPricingPlansInflight),
+        isPaywalledSite: Boolean(this._isPaywalledSite()),
+        jsonHasPricingPlans: Boolean(json && Array.isArray(json.pricingPlans)),
+        jsonTopKeys: json && typeof json === 'object' ? Object.keys(json).slice(0, 24) : [],
+        memberAccessUrl: memberAccessUrl
+      });
+      if (this._previewMode) {
+        this._bbPriceDebug('H1', 'hydrate skipped: previewMode', {});
+        return;
+      }
       if (this._paywallPriceLabel) return;
       var fromDomPlans = this._pricingPlansFromDocument();
       if (fromDomPlans) {
+        this._bbPriceDebug('H2', 'using document bootstrap-data plans', { planCount: fromDomPlans.length });
         this._applyPaywallPricingPlans(fromDomPlans, 'document');
         this._paywallPricingPlansHydrated = true;
         return;
       }
       var fromDomPrice = this._extractPaywallPriceFromDom();
       if (fromDomPrice) {
+        this._bbPriceDebug('H2', 'using DOM price text', { fromDomPrice: fromDomPrice });
         this._paywallPriceLabel = fromDomPrice;
         this._refreshPaywallSubscribeLabels();
         this._paywallPricingPlansHydrated = true;
@@ -2851,40 +3198,69 @@
       var jsonPlans = this._pricingPlansFromBootstrapPayload(json)
         || (json && Array.isArray(json.pricingPlans) ? json.pricingPlans : null);
       if (jsonPlans) {
+        this._bbPriceDebug('H2', 'using page-json pricingPlans', { planCount: jsonPlans.length });
         this._applyPaywallPricingPlans(jsonPlans, 'page-json');
         this._paywallPricingPlansHydrated = true;
         return;
       }
-      if (this._paywallPricingPlansHydrated || this._paywallPricingPlansInflight) return;
-      if (!this._isPaywalledSite()) return;
-      var url = this._memberAccessUrlFromJson(json);
+      if (this._paywallPricingPlansHydrated || this._paywallPricingPlansInflight) {
+        this._bbPriceDebug('H4', 'hydrate skipped: already hydrated or inflight', {
+          hydrated: Boolean(this._paywallPricingPlansHydrated),
+          inflight: Boolean(this._paywallPricingPlansInflight)
+        });
+        return;
+      }
+      if (!this._isPaywalledSite()) {
+        this._bbPriceDebug('H4', 'hydrate skipped: site not marked paywalled', {});
+        return;
+      }
+      var url = memberAccessUrl;
+      var urlSource = url ? 'memberAccessUrl' : null;
       if (!url) {
         try {
           var path = this._currentBlogPathForRouteMatch() || window.location.pathname || '/';
           url = new URL(path, window.location.origin).toString();
           url += (url.indexOf('?') >= 0 ? '&' : '?') + 'requestAccess=true';
+          urlSource = 'requestAccess-fallback';
         } catch (eUrl) {
+          this._bbPriceDebug('H2', 'hydrate aborted: could not build member URL', { message: String(eUrl && eUrl.message || eUrl) });
           return;
         }
       }
       var self = this;
+      this._bbPriceDebug('H2', 'fetching member-gate for pricingPlans', { url: url, urlSource: urlSource });
       this._paywallPricingPlansInflight = fetch(url, { credentials: 'same-origin' })
-        .then(function(res) { return res.text(); })
+        .then(function(res) {
+          self._bbPriceDebug('H2', 'member-gate response', { ok: res.ok, status: res.status, contentType: res.headers.get('content-type') });
+          return res.text();
+        })
         .then(function(text) {
           self._paywallPricingPlansHydrated = true;
           self._paywallPricingPlansInflight = null;
           if (self._paywallPriceLabel) return;
+          var trimmed = (text || '').replace(/^\s+/, '');
           var plans = null;
+          var parsePath = null;
           try {
             var parsed = JSON.parse(text);
             plans = self._pricingPlansFromBootstrapPayload(parsed)
               || (parsed && Array.isArray(parsed.pricingPlans) ? parsed.pricingPlans : null);
+            parsePath = plans ? 'json' : 'json-no-plans';
           } catch (eJson) {
             plans = self._pricingPlansFromHtml(text);
+            parsePath = plans ? 'html-bootstrap' : 'html-no-bootstrap';
           }
+          self._bbPriceDebug('H2', 'member-gate body parsed', {
+            parsePath: parsePath,
+            textLen: (text || '').length,
+            looksLikeHtml: trimmed.charAt(0) === '<',
+            planCount: Array.isArray(plans) ? plans.length : 0
+          });
           if (plans) self._applyPaywallPricingPlans(plans, 'memberAccessUrl');
+          else self._bbPriceDebug('H2', 'no pricingPlans extracted from member-gate', {});
         })
-        .catch(function() {
+        .catch(function(err) {
+          self._bbPriceDebug('H2', 'member-gate fetch failed', { message: String(err && err.message || err) });
           self._paywallPricingPlansHydrated = true;
           self._paywallPricingPlansInflight = null;
         });

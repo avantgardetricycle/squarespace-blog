@@ -63,6 +63,17 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     sortOrder: (s?.sortOrder ?? DEFAULT_SETTINGS.sortOrder) as 'newest' | 'oldest' | 'most_liked',
   }
 
+  console.log('[dashboard-comment-settings] GET', {
+    userId: user.id,
+    siteKey,
+    siteId: site.id,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    apiKeyVerified: settings.apiKeyVerified,
+    commentsEnabled: settings.commentsEnabled,
+    allowNewComments: settings.allowNewComments,
+  })
+
   res.json(settings)
 })
 

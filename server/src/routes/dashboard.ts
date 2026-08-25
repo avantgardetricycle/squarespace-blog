@@ -743,16 +743,20 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
     let normalizedSubscribePatch: string | null | undefined
     if ('subscribeUrl' in req.body) {
       const su = (req.body as { subscribeUrl?: unknown }).subscribeUrl
-      if (typeof su !== 'string') {
+      if (su !== null && typeof su !== 'string') {
         res.status(400).json({ error: 'subscribeUrl must be a string' })
         return
       }
-      normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
-      if (su.trim() && normalizedSubscribePatch === null) {
-        res.status(400).json({
-          error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
-        })
-        return
+      if (su === null || (typeof su === 'string' && !su.trim())) {
+        normalizedSubscribePatch = null
+      } else {
+        normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
+        if (normalizedSubscribePatch === null) {
+          res.status(400).json({
+            error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+          })
+          return
+        }
       }
     }
 
@@ -786,19 +790,6 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       updates.paywallDetectionSource = 'manual'
     }
 
-    const transitioningToPaywalled =
-      'paywallDetectionState' in updates &&
-      updates.paywallDetectionState === 'detected_paywalled' &&
-      site.paywallDetectionState !== 'detected_paywalled'
-
-    if (transitioningToPaywalled && !normalizedSubscribePatch) {
-      res.status(400).json({
-        error:
-          'Enter the URL of your blog signup or subscription page (e.g. your Squarespace member pricing page).'
-      })
-      return
-    }
-
     if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {
       res.status(400).json({ error: 'No valid updates provided' })
       return
@@ -818,22 +809,18 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 
     if (afterSite!.paywallDetectionState === 'detected_paywalled') {
       const existingPw = afterSite!.sitePaywallSettings
-      const effectiveUrl =
-        typeof normalizedSubscribePatch === 'string'
+      const nextSubscribeUrl =
+        normalizedSubscribePatch !== undefined
           ? normalizedSubscribePatch
-          : existingPw?.subscribeUrl || null
-      if (!effectiveUrl) {
-        res.status(400).json({
-          error: 'Paywalled blogs need a signup page URL where visitors can subscribe.'
+          : existingPw?.subscribeUrl ?? null
+      if (existingPw || normalizedSubscribePatch !== undefined) {
+        await prisma.sitePaywallSettings.upsert({
+          where: { siteId: site.id },
+          create: { siteId: site.id, subscribeUrl: nextSubscribeUrl, featureItems: [] },
+          update:
+            normalizedSubscribePatch !== undefined ? { subscribeUrl: normalizedSubscribePatch } : {}
         })
-        return
       }
-      await prisma.sitePaywallSettings.upsert({
-        where: { siteId: site.id },
-        create: { siteId: site.id, subscribeUrl: effectiveUrl, featureItems: [] },
-        update:
-          typeof normalizedSubscribePatch === 'string' ? { subscribeUrl: normalizedSubscribePatch } : {}
-      })
     }
 
     const updated = await prisma.site.findUnique({
