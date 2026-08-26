@@ -1,10 +1,11 @@
-name: Database seed
+name: Database sync
 
 on:
   push:
-    branches: ["main"]
+    branches: ["develop", "main"]
     paths:
       - "server/prisma/**"
+      - "server/scripts/apply-sql-migrations.sh"
       - "server/src/lib/plan-seed-data.ts"
       - "server/src/lib/planLabels.ts"
       - "server/src/lib/stripeEnvironment.ts"
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Database environment to seed"
+        description: "Database environment to sync"
         type: choice
         required: true
         default: staging
@@ -32,14 +33,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: database-seed-${{ github.event_name == 'workflow_dispatch' && inputs.target || 'staging' }}
+  group: database-sync-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', inputs.target) || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
   cancel-in-progress: false
 
 jobs:
-  seed-staging:
-    name: Seed staging
+  sync-staging:
+    name: Sync staging
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
       (github.event_name == 'workflow_dispatch' && (inputs.target == 'staging' || inputs.target == 'both'))
     runs-on: ubuntu-latest
     environment: staging
@@ -47,7 +48,7 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
-      SUPABASE_SSL_NO_VERIFY: ${{ secrets.STAGING_SUPABASE_SSL_NO_VERIFY }}
+      SUPABASE_SSL_NO_VERIFY: ${{ secrets.STAGING_SUPABASE_SSL_NO_VERIFY || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,6 +64,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npm --workspace=server exec prisma generate
+
+      - name: Sync schema and SQL migrations
+        run: npm run db:sync --workspace=server
 
       - name: Seed staging database
         run: |
@@ -73,18 +77,18 @@ jobs:
           fi
           npm run db:seed:staging --workspace=server -- $flags
 
-  seed-production:
-    name: Seed production
+  sync-production:
+    name: Sync production
     if: >-
-      github.event_name == 'workflow_dispatch' &&
-      (inputs.target == 'production' || inputs.target == 'both')
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.target == 'production' || inputs.target == 'both'))
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
     env:
       DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
       DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
-      SUPABASE_SSL_NO_VERIFY: ${{ secrets.PRODUCTION_SUPABASE_SSL_NO_VERIFY }}
+      SUPABASE_SSL_NO_VERIFY: ${{ secrets.PRODUCTION_SUPABASE_SSL_NO_VERIFY || 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -100,6 +104,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npm --workspace=server exec prisma generate
+
+      - name: Sync schema and SQL migrations
+        run: npm run db:sync --workspace=server
 
       - name: Seed production database
         run: npm run db:seed:production --workspace=server

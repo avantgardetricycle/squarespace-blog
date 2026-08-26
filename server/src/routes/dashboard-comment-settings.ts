@@ -19,7 +19,16 @@ const DEFAULT_SETTINGS = {
   sortOrder: 'newest' as 'newest' | 'oldest' | 'most_liked',
 }
 
-/** Ensure site is owned by user */
+function hostnameOfSiteUrl(url: string | null | undefined): string | null {
+  if (!url || !url.trim()) return null
+  try {
+    const withProto = /^https?:\/\//i.test(url) ? url : `https://${url}`
+    return new URL(withProto).hostname.replace(/^www\./i, '').toLowerCase()
+  } catch {
+    return null
+  }
+}
+
 async function getSiteForUser(siteKey: string, userId: number) {
   const site = await prisma.site.findFirst({
     where: { siteKey, userId, deletedAt: null },
@@ -54,6 +63,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     allowAnonymousComments: s?.allowAnonymousComments ?? DEFAULT_SETTINGS.allowAnonymousComments,
     subscriberCommentsEnabled: s?.subscriberCommentsEnabled ?? DEFAULT_SETTINGS.subscriberCommentsEnabled,
     apiKeyVerified: !!effectiveApiKeyEnc,
+    apiKeyInvalid: Boolean(site.squarespaceApiKeyInvalidAt),
     requireApproval: s?.requireApproval ?? DEFAULT_SETTINGS.requireApproval,
     autoCloseAfterDays: rawAutoClose === 0 ? null : rawAutoClose,
     notifyEmail: s?.notifyEmail ?? DEFAULT_SETTINGS.notifyEmail,
@@ -62,6 +72,18 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     allowThreadedReplies: s?.allowThreadedReplies ?? DEFAULT_SETTINGS.allowThreadedReplies,
     sortOrder: (s?.sortOrder ?? DEFAULT_SETTINGS.sortOrder) as 'newest' | 'oldest' | 'most_liked',
   }
+
+  console.log('[dashboard-comment-settings] GET', {
+    userId: user.id,
+    siteKey,
+    siteId: site.id,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    apiKeyVerified: settings.apiKeyVerified,
+    apiKeyInvalid: settings.apiKeyInvalid,
+    commentsEnabled: settings.commentsEnabled,
+    allowNewComments: settings.allowNewComments,
+  })
 
   res.json(settings)
 })
@@ -184,9 +206,31 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
   })
 
   if (updates.squarespaceApiKeyEnc !== undefined) {
-    await prisma.site.update({
-      where: { id: site.id },
-      data: { squarespaceApiKeyEnc: updates.squarespaceApiKeyEnc as string },
+    const host = hostnameOfSiteUrl(site.url)
+    const siblingIds = host
+      ? (
+          await prisma.site.findMany({
+            where: { userId: site.userId, deletedAt: null },
+            select: { id: true, url: true },
+          })
+        )
+          .filter((s) => hostnameOfSiteUrl(s.url) === host)
+          .map((s) => s.id)
+      : [site.id]
+    const idsToUpdate = siblingIds.length > 0 ? siblingIds : [site.id]
+    await prisma.site.updateMany({
+      where: { id: { in: idsToUpdate } },
+      data: {
+        squarespaceApiKeyEnc: updates.squarespaceApiKeyEnc as string,
+        squarespaceApiKeyInvalidAt: null,
+        squarespaceApiKeyAlertEmailSentAt: null,
+      },
+    })
+    console.log('[comment-settings] API key saved', {
+      userId: user.id,
+      siteId: site.id,
+      sharedToSiteCount: siblingIds.length > 0 ? siblingIds.length : 1,
+      host,
     })
   }
 

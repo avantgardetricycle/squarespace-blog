@@ -133,9 +133,12 @@ export default function BlogPreviewIframe({
       try {
         const parentOrigin = typeof window !== "undefined" ? window.location.origin : "";
         const iframeOrigin = getTargetOrigin();
+        const parentHost = parentOrigin ? new URL(parentOrigin).hostname : "";
+        const isLocalParent = parentHost === "localhost" || parentHost === "127.0.0.1";
         if (
           parentOrigin &&
           iframeOrigin !== "*" &&
+          isLocalParent &&
           new URL(parentOrigin).hostname !== new URL(iframeOrigin).hostname
         ) {
           delete serialized.baseUrl;

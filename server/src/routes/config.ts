@@ -27,21 +27,26 @@ function isRecord (value: unknown): value is Record<string, unknown> {
 }
 
 /** Optional payload with POST /api/config to upsert site_paywall_settings. */
+function optionalTrimmedString (raw: unknown, maxLen: number): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim().slice(0, maxLen)
+  return trimmed.length > 0 ? trimmed : null
+}
+
 function normalizePaywallSettingsPayload (raw: unknown): {
   subscribeUrl: string | null
   footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
   featureItems: string[]
 } | null {
   if (raw === undefined) return null
   if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
     const o = raw as Record<string, unknown>
-    const su = o.subscribeUrl
-    const subscribeUrl =
-      typeof su === 'string' && su.trim() ? su.trim().slice(0, 2048) : null
-    const fdRaw = o.footerDescription
-    const footerDescriptionRaw = typeof fdRaw === 'string' ? fdRaw.trim().slice(0, 160) : null
-    const footerDescription =
-      footerDescriptionRaw && footerDescriptionRaw.length > 0 ? footerDescriptionRaw : null
+    const subscribeUrl = optionalTrimmedString(o.subscribeUrl, 2048)
+    const footerDescription = optionalTrimmedString(o.footerDescription, 160)
+    const eyebrowText = optionalTrimmedString(o.eyebrowText, 80)
+    const headlineText = optionalTrimmedString(o.headlineText, 160)
     const featureItems: string[] = []
     if (Array.isArray(o.featureItems)) {
       for (const it of o.featureItems) {
@@ -51,7 +56,7 @@ function normalizePaywallSettingsPayload (raw: unknown): {
         if (featureItems.length >= 4) break
       }
     }
-    return { subscribeUrl, footerDescription, featureItems }
+    return { subscribeUrl, footerDescription, eyebrowText, headlineText, featureItems }
   }
   return null
 }
@@ -556,10 +561,28 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
     return
   }
   const placeholders: Record<string, boolean> = {}
-  const PLACEHOLDER_MARKERS = ['no-image.png', 'configuration/no-image']
+  const PLACEHOLDER_MARKERS = [
+    'configuration/no-image',
+    'no-image.png',
+    'no-image-',
+    'universal/images-v6/configuration/no-image',
+    'universal/images-v6/default/no-image',
+  ]
 
   function isPlaceholderUrl (url: string): boolean {
     const u = url.toLowerCase()
+    if (
+      (u.includes('static1.squarespace.com/static/') || u.includes('static.squarespace.com/static/'))
+      && !u.includes('/t/')
+    ) {
+      try {
+        const path = new URL(url).pathname.replace(/\/+$/, '')
+        const last = path.split('/').pop() ?? ''
+        if (/^\d+$/.test(last)) return true
+      } catch {
+        /* fall through to marker checks */
+      }
+    }
     return PLACEHOLDER_MARKERS.some((m) => u.includes(m))
   }
 
@@ -825,6 +848,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ? {
           subscribeUrl: pw.subscribeUrl,
           footerDescription: pw.footerDescription,
+          eyebrowText: pw.eyebrowText,
+          headlineText: pw.headlineText,
           featureItems: pw.featureItems
         }
       : null
@@ -853,7 +878,12 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
     }
 
-    console.log(`[config] GET ${siteKey} ok (${reqId})`)
+    console.log(`[config] GET ${siteKey} ok (${reqId})`, {
+      allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
+      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
+      commentsEnabled: commentSettings.commentsEnabled,
+      allowNewComments: 'allowNewComments' in commentSettings ? commentSettings.allowNewComments : null,
+    })
     res.json(configData)
   } catch (err) {
     console.error(`[config] GET ${siteKey} error (${reqId}):`, err)
@@ -965,11 +995,15 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
           siteId: site.id,
           subscribeUrl: paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
+          eyebrowText: paywallNorm.eyebrowText,
+          headlineText: paywallNorm.headlineText,
           featureItems: paywallNorm.featureItems
         },
         update: {
           subscribeUrl: paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
+          eyebrowText: paywallNorm.eyebrowText,
+          headlineText: paywallNorm.headlineText,
           featureItems: paywallNorm.featureItems
         }
       })

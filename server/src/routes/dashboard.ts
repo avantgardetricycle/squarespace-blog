@@ -14,7 +14,7 @@ import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { randomBytes } from 'crypto'
-import { resolveDefaultPostTemplate } from './templates.js'
+import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
@@ -69,12 +69,16 @@ function normalizeSubscribeUrlInput(raw: unknown): string | null {
 function paywallSettingsJson(s: {
   subscribeUrl: string | null
   footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
   featureItems: string[]
 }) {
   return {
     subscribeUrl: s.subscribeUrl,
     footerDescription: s.footerDescription,
-    featureItems: s.featureItems
+    eyebrowText: s.eyebrowText,
+    headlineText: s.headlineText,
+    featureItems: Array.isArray(s.featureItems) ? s.featureItems : []
   }
 }
 
@@ -208,13 +212,10 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         paywallDetectionSource: s.paywallDetectionSource,
         status: s.status,
         verificationStatus: s.verificationStatus,
+        squarespaceApiKeyInvalid: Boolean(s.squarespaceApiKeyInvalidAt),
         createdAt: s.createdAt,
         paywallSettings: s.sitePaywallSettings
-          ? {
-              subscribeUrl: s.sitePaywallSettings.subscribeUrl,
-              footerDescription: s.sitePaywallSettings.footerDescription,
-              featureItems: s.sitePaywallSettings.featureItems
-            }
+          ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
       canCreateSite: maxSites === null || siteCount < maxSites
@@ -434,13 +435,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           status: activeSameUrl.status,
           verificationStatus: activeSameUrl.verificationStatus,
           createdAt: activeSameUrl.createdAt,
-          paywallSettings: pw
-            ? {
-                subscribeUrl: pw.subscribeUrl,
-                footerDescription: pw.footerDescription,
-                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
-              }
-            : null
+          paywallSettings: pw ? paywallSettingsJson(pw) : null
         }
       })
       return
@@ -510,13 +505,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           verificationStatus: deletedSameUrl.verificationStatus,
           createdAt: deletedSameUrl.createdAt,
           deletedAt: deletedSameUrl.deletedAt ? deletedSameUrl.deletedAt.toISOString() : null,
-          paywallSettings: pw
-            ? {
-                subscribeUrl: pw.subscribeUrl,
-                footerDescription: pw.footerDescription,
-                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
-              }
-            : null
+          paywallSettings: pw ? paywallSettingsJson(pw) : null
         }
       })
       return
@@ -543,13 +532,6 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
 
     const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
-    if (userPaywallState === 'detected_paywalled' && !subscribeNormalized) {
-      res.status(400).json({
-        error:
-          'Paywalled blogs need a valid signup or subscription page URL. Enter the full URL where visitors can become members.'
-      })
-      return
-    }
 
     const updatedSite = await prisma.site.create({
       data: {
@@ -567,7 +549,15 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
-    const defaultPostTemplate = await resolveDefaultPostTemplate()
+    const [defaultPostTemplate, defaultCollectionTemplate] = await Promise.all([
+      resolveDefaultPostTemplate(),
+      resolveDefaultCollectionTemplate()
+    ])
+    const collectionCfg = defaultCollectionTemplate?.collectionConfig
+    const asObject = (value: unknown): object | undefined =>
+      value && typeof value === 'object' && !Array.isArray(value) ? (value as object) : undefined
+    const asBool = (value: unknown, fallback: boolean): boolean =>
+      typeof value === 'boolean' ? value : fallback
     const templateProgressBar =
       defaultPostTemplate?.postConfig?.progressBar &&
       typeof defaultPostTemplate.postConfig.progressBar === 'object' &&
@@ -578,9 +568,9 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       data: {
         siteId: updatedSite.id,
         version: 1,
-        showDate: true,
-        showAuthor: false,
-        showReadingTime: false,
+        showDate: asBool(collectionCfg?.showDate, true),
+        showAuthor: asBool(collectionCfg?.showAuthor, false),
+        showReadingTime: asBool(collectionCfg?.showReadingTime, false),
         progressBar: {
           show: Boolean(templateProgressBar?.show ?? false),
           position: 'top',
@@ -589,10 +579,19 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         },
         tableOfContents: { show: false, position: null },
         recentPostsSidebar: { show: false, position: null },
-        leftSidebar: { show: false, modules: [], width: 240 },
-        rightSidebar: { show: false, modules: [], width: 240 },
-        headerContent: { show: false, modules: [], height: 48 },
-        socialMediaLinks: { show: false, platforms: [] },
+        leftSidebar: asObject(collectionCfg?.leftSidebar) ?? { show: false, modules: [], width: 240 },
+        rightSidebar: asObject(collectionCfg?.rightSidebar) ?? { show: false, modules: [], width: 240 },
+        headerContent: asObject(collectionCfg?.headerContent) ?? { show: false, modules: [], height: 48 },
+        socialMediaLinks: asObject(collectionCfg?.socialMediaLinks) ?? { show: false, platforms: [] },
+        ...(asObject(collectionCfg?.featuredImage)
+          ? { featuredImage: asObject(collectionCfg?.featuredImage) }
+          : {}),
+        ...(defaultCollectionTemplate
+          ? {
+              collectionConfig: defaultCollectionTemplate.collectionConfig as object,
+              collectionTemplateId: defaultCollectionTemplate.id,
+            }
+          : {}),
         ...(defaultPostTemplate
           ? {
               postConfig: defaultPostTemplate.postConfig as object,
@@ -603,7 +602,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
-    let createdPaywall: { subscribeUrl: string | null; footerDescription: string | null; featureItems: string[] } | null =
+    let createdPaywall: ReturnType<typeof paywallSettingsJson> | null =
       null
     if (userPaywallState === 'detected_paywalled' && subscribeNormalized) {
       await prisma.sitePaywallSettings.create({
@@ -611,14 +610,18 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           siteId: updatedSite.id,
           subscribeUrl: subscribeNormalized,
           footerDescription: null,
+          eyebrowText: null,
+          headlineText: null,
           featureItems: []
         }
       })
-      createdPaywall = {
+      createdPaywall = paywallSettingsJson({
         subscribeUrl: subscribeNormalized,
         footerDescription: null,
+        eyebrowText: null,
+        headlineText: null,
         featureItems: []
-      }
+      })
     }
 
     res.status(201).json({
@@ -708,13 +711,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       status: restored.status,
       verificationStatus: restored.verificationStatus,
       createdAt: restored.createdAt,
-      paywallSettings: pw
-        ? paywallSettingsJson({
-            subscribeUrl: pw.subscribeUrl,
-            footerDescription: pw.footerDescription,
-            featureItems: pw.featureItems ?? []
-          })
-        : null
+      paywallSettings: pw ? paywallSettingsJson(pw) : null
     })
   } catch (err) {
     console.error('Restore site error:', err)
@@ -747,16 +744,20 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
     let normalizedSubscribePatch: string | null | undefined
     if ('subscribeUrl' in req.body) {
       const su = (req.body as { subscribeUrl?: unknown }).subscribeUrl
-      if (typeof su !== 'string') {
+      if (su !== null && typeof su !== 'string') {
         res.status(400).json({ error: 'subscribeUrl must be a string' })
         return
       }
-      normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
-      if (su.trim() && normalizedSubscribePatch === null) {
-        res.status(400).json({
-          error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
-        })
-        return
+      if (su === null || (typeof su === 'string' && !su.trim())) {
+        normalizedSubscribePatch = null
+      } else {
+        normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
+        if (normalizedSubscribePatch === null) {
+          res.status(400).json({
+            error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+          })
+          return
+        }
       }
     }
 
@@ -790,19 +791,6 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       updates.paywallDetectionSource = 'manual'
     }
 
-    const transitioningToPaywalled =
-      'paywallDetectionState' in updates &&
-      updates.paywallDetectionState === 'detected_paywalled' &&
-      site.paywallDetectionState !== 'detected_paywalled'
-
-    if (transitioningToPaywalled && !normalizedSubscribePatch) {
-      res.status(400).json({
-        error:
-          'Enter the URL of your blog signup or subscription page (e.g. your Squarespace member pricing page).'
-      })
-      return
-    }
-
     if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {
       res.status(400).json({ error: 'No valid updates provided' })
       return
@@ -822,22 +810,18 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 
     if (afterSite!.paywallDetectionState === 'detected_paywalled') {
       const existingPw = afterSite!.sitePaywallSettings
-      const effectiveUrl =
-        typeof normalizedSubscribePatch === 'string'
+      const nextSubscribeUrl =
+        normalizedSubscribePatch !== undefined
           ? normalizedSubscribePatch
-          : existingPw?.subscribeUrl || null
-      if (!effectiveUrl) {
-        res.status(400).json({
-          error: 'Paywalled blogs need a signup page URL where visitors can subscribe.'
+          : existingPw?.subscribeUrl ?? null
+      if (existingPw || normalizedSubscribePatch !== undefined) {
+        await prisma.sitePaywallSettings.upsert({
+          where: { siteId: site.id },
+          create: { siteId: site.id, subscribeUrl: nextSubscribeUrl, featureItems: [] },
+          update:
+            normalizedSubscribePatch !== undefined ? { subscribeUrl: normalizedSubscribePatch } : {}
         })
-        return
       }
-      await prisma.sitePaywallSettings.upsert({
-        where: { siteId: site.id },
-        create: { siteId: site.id, subscribeUrl: effectiveUrl, featureItems: [] },
-        update:
-          typeof normalizedSubscribePatch === 'string' ? { subscribeUrl: normalizedSubscribePatch } : {}
-      })
     }
 
     const updated = await prisma.site.findUnique({
@@ -859,11 +843,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt,
       paywallSettings: updated!.sitePaywallSettings
-        ? paywallSettingsJson({
-            subscribeUrl: updated!.sitePaywallSettings.subscribeUrl,
-            footerDescription: updated!.sitePaywallSettings.footerDescription,
-            featureItems: updated!.sitePaywallSettings.featureItems
-          })
+        ? paywallSettingsJson(updated!.sitePaywallSettings)
         : null
     })
   } catch (err) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams, useNavigate } from "react-router";
+import { useSearchParams, useNavigate, useRevalidator } from "react-router";
 import {
   MessageCircle,
   ThumbsUp,
@@ -146,6 +146,7 @@ interface CommentSettings {
   allowAnonymousComments: boolean;
   subscriberCommentsEnabled: boolean;
   apiKeyVerified: boolean;
+  apiKeyInvalid: boolean;
   requireApproval: boolean;
   autoCloseAfterDays: number | null;
   notifyEmail: boolean;
@@ -155,6 +156,7 @@ interface CommentSettings {
 }
 
 export default function Comments() {
+  const revalidator = useRevalidator();
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [siteKey, setSiteKey] = useState<string | null>(null);
@@ -246,6 +248,29 @@ export default function Comments() {
         if (data) {
           setComments(data.comments || []);
           setTotal(data.total || 0);
+          const list = (data.comments || []) as Array<{
+            id: string;
+            displayName?: string;
+            verifiedSubscriber?: boolean;
+            email?: string | null;
+            squarespaceProfileId?: string | null;
+            status?: string;
+          }>;
+          console.log("[BetterBlog comments] dashboard list", {
+            siteKey,
+            total: data.total || 0,
+            verifiedCount: list.filter((c) => c.verifiedSubscriber === true).length,
+            anonymousCount: list.filter((c) => c.verifiedSubscriber !== true).length,
+            comments: list.map((c) => ({
+              id: c.id,
+              displayName: c.displayName,
+              verifiedSubscriber: Boolean(c.verifiedSubscriber),
+              hasEmail: Boolean(c.email),
+              email: c.email ?? null,
+              squarespaceProfileId: c.squarespaceProfileId ?? null,
+              status: c.status,
+            })),
+          });
         }
       })
       .finally(() => setFetching(false));
@@ -306,13 +331,23 @@ export default function Comments() {
     })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data)
+        if (data) {
+          console.log("[BetterBlog comments] dashboard settings", {
+            siteKey,
+            allowAnonymousComments: data.allowAnonymousComments ?? true,
+            subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
+            apiKeyVerified: data.apiKeyVerified ?? false,
+            apiKeyInvalid: data.apiKeyInvalid ?? false,
+            commentsEnabled: data.commentsEnabled ?? true,
+            allowNewComments: data.allowNewComments ?? true,
+          });
           setSettings({
             commentsEnabled: data.commentsEnabled ?? true,
             allowNewComments: data.allowNewComments ?? true,
             allowAnonymousComments: data.allowAnonymousComments ?? true,
             subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
             apiKeyVerified: data.apiKeyVerified ?? false,
+            apiKeyInvalid: data.apiKeyInvalid ?? false,
             requireApproval: data.requireApproval ?? false,
             autoCloseAfterDays: data.autoCloseAfterDays ?? null,
             notifyEmail: data.notifyEmail ?? true,
@@ -322,6 +357,7 @@ export default function Comments() {
               ? data.sortOrder
               : "newest",
           });
+        }
       });
   }, [siteKey]);
 
@@ -1381,17 +1417,31 @@ export default function Comments() {
               </div>
               <p className="text-xs text-neutral-500">Require email for paywalled posts, verified against your Squarespace member list.</p>
               {settings?.apiKeyVerified && (
-                <div className="flex items-center gap-2 text-sm mt-1">
-                  <span className="font-mono text-neutral-500">••••••••••••••••</span>
-                  <button
-                    type="button"
-                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
-                    className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
-                    aria-label="Edit API key"
-                    title="Edit API key"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
+                <div className={settings.apiKeyInvalid ? "opacity-70" : undefined}>
+                  <div className="flex items-center gap-2 text-sm mt-1">
+                    <span className="font-mono text-neutral-500">••••••••••••••••</span>
+                    <button
+                      type="button"
+                      onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                      className="p-1 rounded hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
+                      aria-label="Edit API key"
+                      title="Edit API key"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {settings.apiKeyInvalid && (
+                    <p className="text-xs text-amber-800 mt-1">
+                      Squarespace rejected this key.{" "}
+                      <button
+                        type="button"
+                        onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                        className="text-[#5B4FE8] hover:underline"
+                      >
+                        Update it
+                      </button>
+                    </p>
+                  )}
                 </div>
               )}
               {!settings?.apiKeyVerified && settings && (
@@ -1444,13 +1494,16 @@ export default function Comments() {
               </div>
               <p className="text-xs text-neutral-500">Notifications go to your account email.</p>
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm">Allow Threaded Replies</Label>
-              <Switch
-                checked={settings?.allowThreadedReplies ?? true}
-                onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
-                disabled={settingsSaving}
-              />
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm">Allow Threaded Replies</Label>
+                <Switch
+                  checked={settings?.allowThreadedReplies ?? true}
+                  onCheckedChange={(v) => settings && updateSetting("allowThreadedReplies", v)}
+                  disabled={settingsSaving}
+                />
+              </div>
+              <p className="text-xs text-neutral-500">Replies nest up to 4 levels.</p>
             </div>
             </>
             )}
@@ -1530,10 +1583,12 @@ export default function Comments() {
             ? {
                 ...p,
                 apiKeyVerified: true,
+                apiKeyInvalid: false,
                 subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
               }
             : p
         );
+        void revalidator.revalidate();
       }}
     />
     </>

@@ -1,5 +1,5 @@
--- CreateTable
-CREATE TABLE "site_google_analytics" (
+-- CreateTable (idempotent: db:migrate re-runs every *.sql after prisma db push)
+CREATE TABLE IF NOT EXISTS "site_google_analytics" (
     "id" TEXT NOT NULL,
     "site_id" TEXT NOT NULL,
     "measurement_id" TEXT NOT NULL,
@@ -12,7 +12,14 @@ CREATE TABLE "site_google_analytics" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "site_google_analytics_site_id_key" ON "site_google_analytics"("site_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "site_google_analytics_site_id_key" ON "site_google_analytics"("site_id");
 
 -- AddForeignKey
-ALTER TABLE "site_google_analytics" ADD CONSTRAINT "site_google_analytics_site_id_fkey" FOREIGN KEY ("site_id") REFERENCES "sites"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "site_google_analytics"
+    ADD CONSTRAINT "site_google_analytics_site_id_fkey"
+    FOREIGN KEY ("site_id") REFERENCES "sites"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

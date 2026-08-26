@@ -18,7 +18,7 @@ const protectedLoader = async ({ request }: LoaderFunctionArgs) => {
     const u = new URL(request.url);
     return redirect("/login?returnTo=" + encodeURIComponent(u.pathname + u.search));
   }
-  return null;
+  return me;
 };
 
 const publicLoader = async () => {

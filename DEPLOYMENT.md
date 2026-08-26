@@ -105,9 +105,9 @@ Analytics is gated in code: gtag loads only when the hostname is `betterblog.xyz
 | `interest_modal_success` | Email captured successfully |
 | `interest_modal_dismiss` | Modal closed without completing (param: `had_input`) |
 
-### Database seed (CI)
+### Database sync (CI)
 
-[.github/workflows/database-seed.yml](.github/workflows/database-seed.yml) keeps reference data aligned with code.
+[.github/workflows/database-seed.yml](.github/workflows/database-seed.yml) keeps the database schema and reference data aligned with code.
 
 Repository secrets:
 
@@ -118,11 +118,19 @@ Repository secrets:
 
 Behavior:
 
-- Pushes to `main` that touch seed-related files automatically run the staging seed.
-- Manual dispatch can run `staging`, `production`, or `both`.
+- Pushes to **`develop`** that touch seed- or schema-related files run **`prisma db push`**, apply `server/prisma/migrations/*.sql`, then seed **staging**.
+- Pushes to **`main`** with the same path filters run schema sync and seed **production**.
+- Manual dispatch can run `staging`, `production`, or `both` (each runs schema sync before seeding).
 - Production uses the `production` GitHub Environment, so configure environment protection if you want approval before it runs.
 - Production seeding updates reference data only: live Stripe plans and built-in templates. Demo fixtures are staging-only.
 - The optional **include_legacy_plan_migration** input updates old `starter` / `pro` / `agency` values in `subscriptions` and `checkout_sessions`; leave it off unless you are intentionally running that one-time cleanup.
+
+Local equivalent:
+
+```bash
+cd server
+npm run db:sync    # prisma db push + apply prisma/migrations/*.sql
+```
 
 ### Local development
 

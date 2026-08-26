@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useRevalidator } from "react-router";
 import {
   Copy,
   Monitor,
@@ -62,10 +62,16 @@ import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallati
 import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
 
 const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
+const PAYWALL_EYEBROW_MAX = 80;
+const PAYWALL_HEADLINE_MAX = 160;
+const DEFAULT_PAYWALL_EYEBROW = "Member Exclusive";
+const DEFAULT_PAYWALL_HEADLINE = "Unlock unlimited access to {blogName}";
 
 type PaywallFormState = {
   subscribeUrl: string;
   footerDescription: string;
+  eyebrowText: string;
+  headlineText: string;
   featureItems: string[];
 };
 
@@ -2190,6 +2196,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
 
 export default function Configure() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
   const siteKey = searchParams.get("siteKey");
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2237,6 +2244,7 @@ export default function Configure() {
     allowAnonymousComments: boolean;
     subscriberCommentsEnabled: boolean;
     apiKeyVerified: boolean;
+    apiKeyInvalid: boolean;
     requireApproval: boolean;
     autoCloseAfterDays: number | null;
     notifyEmail: boolean;
@@ -2277,11 +2285,15 @@ export default function Configure() {
   const [paywallForm, setPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
     footerDescription: "",
+    eyebrowText: "",
+    headlineText: "",
     featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const [savedPaywallForm, setSavedPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
     footerDescription: "",
+    eyebrowText: "",
+    headlineText: "",
     featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const previewDebugEnabled = useMemo(() => isPreviewDebugEnabled(), []);
@@ -2369,6 +2381,8 @@ export default function Configure() {
     return JSON.stringify({
       subscribeUrl: effectiveSite.paywallSettings?.subscribeUrl ?? null,
       footerDescription: effectiveSite.paywallSettings?.footerDescription ?? null,
+      eyebrowText: effectiveSite.paywallSettings?.eyebrowText ?? null,
+      headlineText: effectiveSite.paywallSettings?.headlineText ?? null,
       featureItems: effectiveSite.paywallSettings?.featureItems ?? [],
     });
   }, [effectiveSite?.siteKey, effectiveSite?.paywallSettings]);
@@ -2383,6 +2397,8 @@ export default function Configure() {
     const next: PaywallFormState = {
       subscribeUrl: ps?.subscribeUrl ?? "",
       footerDescription: ps?.footerDescription ?? "",
+      eyebrowText: ps?.eyebrowText ?? "",
+      headlineText: ps?.headlineText ?? "",
       featureItems: feats.length ? feats : [...DEFAULT_PAYWALL_FEATURE_ITEMS],
     };
     setPaywallForm(next);
@@ -2403,6 +2419,7 @@ export default function Configure() {
           allowAnonymousComments: data.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
           apiKeyVerified: data.apiKeyVerified ?? false,
+          apiKeyInvalid: data.apiKeyInvalid ?? false,
           requireApproval: data.requireApproval ?? false,
           autoCloseAfterDays: (data.autoCloseAfterDays ?? null) as number | null,
           notifyEmail: data.notifyEmail ?? true,
@@ -2416,6 +2433,7 @@ export default function Configure() {
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
+          apiKeyInvalid: false,
           requireApproval: false,
           autoCloseAfterDays: null as number | null,
           notifyEmail: true,
@@ -2434,6 +2452,7 @@ export default function Configure() {
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
+          apiKeyInvalid: false,
           requireApproval: false,
           autoCloseAfterDays: null as number | null,
           notifyEmail: true,
@@ -2560,7 +2579,15 @@ export default function Configure() {
      commentSettings.allowLikes !== savedCommentSettings.allowLikes ||
      commentSettings.allowThreadedReplies !== savedCommentSettings.allowThreadedReplies ||
      commentSettings.sortOrder !== savedCommentSettings.sortOrder);
-  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty;
+  const paywallFormDirty =
+    shouldShowViewerModeToggle &&
+    (paywallForm.subscribeUrl !== savedPaywallForm.subscribeUrl ||
+      paywallForm.footerDescription !== savedPaywallForm.footerDescription ||
+      paywallForm.eyebrowText !== savedPaywallForm.eyebrowText ||
+      paywallForm.headlineText !== savedPaywallForm.headlineText ||
+      paywallForm.featureItems.length !== savedPaywallForm.featureItems.length ||
+      paywallForm.featureItems.some((item, i) => item !== savedPaywallForm.featureItems[i]));
+  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty || paywallFormDirty;
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
@@ -2953,6 +2980,8 @@ export default function Configure() {
           ? {
               subscribeUrl: paywallForm.subscribeUrl.trim() || null,
               footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
+              eyebrowText: paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX) || null,
+              headlineText: paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX) || null,
               featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
             }
           : null,
@@ -2972,6 +3001,8 @@ export default function Configure() {
     shouldShowViewerModeToggle,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
+    paywallForm.eyebrowText,
+    paywallForm.headlineText,
     paywallForm.featureItems,
   ]);
 
@@ -2987,6 +3018,8 @@ export default function Configure() {
           ? {
               subscribeUrl: paywallForm.subscribeUrl,
               footerDescription: paywallForm.footerDescription,
+              eyebrowText: paywallForm.eyebrowText,
+              headlineText: paywallForm.headlineText,
               featureItems: paywallForm.featureItems,
             }
           : null,
@@ -3000,6 +3033,8 @@ export default function Configure() {
       shouldShowViewerModeToggle,
       paywallForm.subscribeUrl,
       paywallForm.footerDescription,
+      paywallForm.eyebrowText,
+      paywallForm.headlineText,
       paywallForm.featureItems,
       previewSelectedPostIndex,
     ]
@@ -3041,6 +3076,12 @@ export default function Configure() {
                     footerDescription: paywallForm.footerDescription.trim()
                       ? paywallForm.footerDescription.trim().slice(0, 160)
                       : null,
+                    eyebrowText: paywallForm.eyebrowText.trim()
+                      ? paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX)
+                      : null,
+                    headlineText: paywallForm.headlineText.trim()
+                      ? paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX)
+                      : null,
                     featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
                   },
                 }
@@ -3078,6 +3119,8 @@ export default function Configure() {
           setSavedPaywallForm({
             subscribeUrl: paywallForm.subscribeUrl,
             footerDescription: paywallForm.footerDescription,
+            eyebrowText: paywallForm.eyebrowText,
+            headlineText: paywallForm.headlineText,
             featureItems: paywallForm.featureItems.slice(0, 4),
           });
           getDashboardMe().then((d) => setMe(d ?? null));
@@ -3108,6 +3151,8 @@ export default function Configure() {
     shouldShowViewerModeToggle,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
+    paywallForm.eyebrowText,
+    paywallForm.headlineText,
     paywallForm.featureItems,
   ]);
 
@@ -3140,6 +3185,15 @@ export default function Configure() {
       applyDerivedModules(copy);
       return copy;
     });
+    if (clearSettingsCollection && shouldShowViewerModeToggle) {
+      setPaywallForm({
+        subscribeUrl: "",
+        footerDescription: "",
+        eyebrowText: "",
+        headlineText: "",
+        featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
+      });
+    }
     setClearSettingsModalOpen(false);
     setClearSettingsCollection(false);
     setClearSettingsPost(false);
@@ -3148,7 +3202,7 @@ export default function Configure() {
         ? "Post layout was reset to The Reporter template. Save to publish on your blog."
         : "Selected layout settings were reset to defaults. Save to publish on your blog."
     );
-  }, [clearSettingsCollection, clearSettingsPost, templateCatalogPost]);
+  }, [clearSettingsCollection, clearSettingsPost, shouldShowViewerModeToggle, templateCatalogPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
@@ -3474,7 +3528,7 @@ export default function Configure() {
                 <DialogHeader>
                   <DialogTitle>Clear layout settings?</DialogTitle>
                   <DialogDescription>
-                    This resets BetterBlog layout options to their defaults for the levels you choose. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
+                    This resets BetterBlog layout options to their defaults for the levels you choose. Choosing Collection also resets Paywall settings. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2">
@@ -3486,7 +3540,7 @@ export default function Configure() {
                     />
                     <span>
                       <span className="text-sm font-medium text-[#0a0a0a] block">Collection</span>
-                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, etc.</span>
+                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, paywall, etc.</span>
                     </span>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer rounded-md border border-[#e5e4e0] p-3 hover:bg-[#f7f6f3]/80">
@@ -3567,7 +3621,7 @@ export default function Configure() {
                     });
                     return (
                       <div className="space-y-2">
-                        <pre className="text-xs bg-[#f7f6f3] p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
+                        <pre className="text-xs leading-4 bg-[#f7f6f3] p-3 rounded-md max-h-[7.5rem] overflow-auto whitespace-pre-wrap break-all font-mono">
                           {snippet}
                         </pre>
                         <Button
@@ -4153,16 +4207,30 @@ export default function Configure() {
                               </div>
                               <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
                               {commentSettings.apiKeyVerified && (
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
-                                    className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
-                                    aria-label="Edit API key"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
+                                <div className={commentSettings.apiKeyInvalid ? "opacity-70" : undefined}>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                      className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
+                                      aria-label="Edit API key"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  {commentSettings.apiKeyInvalid && (
+                                    <p className="text-xs text-amber-800">
+                                      Squarespace rejected this key.{" "}
+                                      <button
+                                        type="button"
+                                        onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                        className="text-[#5B4FE8] hover:underline"
+                                      >
+                                        Update it
+                                      </button>
+                                    </p>
+                                  )}
                                 </div>
                               )}
                               {!commentSettings.apiKeyVerified && (
@@ -4220,6 +4288,7 @@ export default function Configure() {
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowThreadedReplies: v } : p)}
                                 />
                               </div>
+                              <p className="text-xs text-[#6b6b6b]">Replies nest up to 4 levels.</p>
                             </div>
                             </>
                             )}
@@ -4848,6 +4917,34 @@ export default function Configure() {
                               />
                               <p className="text-[10px] text-[#6b6b6b] leading-snug">
                                 Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Eyebrow (optional, max {PAYWALL_EYEBROW_MAX} characters)</Label>
+                              <Input
+                                value={paywallForm.eyebrowText}
+                                onChange={(e) =>
+                                  setPaywallForm((p) => ({ ...p, eyebrowText: e.target.value.slice(0, PAYWALL_EYEBROW_MAX) }))
+                                }
+                                placeholder={DEFAULT_PAYWALL_EYEBROW}
+                                className="text-sm"
+                              />
+                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
+                                Small label above the headline. Displayed in uppercase. Leave blank for “{DEFAULT_PAYWALL_EYEBROW}”.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs text-[#6b6b6b]">Header text (optional, max {PAYWALL_HEADLINE_MAX} characters)</Label>
+                              <Input
+                                value={paywallForm.headlineText}
+                                onChange={(e) =>
+                                  setPaywallForm((p) => ({ ...p, headlineText: e.target.value.slice(0, PAYWALL_HEADLINE_MAX) }))
+                                }
+                                placeholder={DEFAULT_PAYWALL_HEADLINE}
+                                className="text-sm"
+                              />
+                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
+                                Headline below the eyebrow. Leave blank for the default. Use {"{blogName}"} to insert your site title.
                               </p>
                             </div>
                             <div className="space-y-2">
@@ -5909,10 +6006,12 @@ export default function Configure() {
                 ? {
                     ...p,
                     apiKeyVerified: true,
+                    apiKeyInvalid: false,
                     subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
                   }
                 : p
             );
+            void revalidator.revalidate();
           }}
         />
       </aside>

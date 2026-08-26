@@ -482,13 +482,16 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
       if (e.visitorId) entry.uniqueVisitors.add(e.visitorId)
       byDate.set(d, entry)
     }
-    const pageViewsData = Array.from(byDate.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, v]) => ({
+    // Always emit one point per day in the selected range so the chart axis
+    // matches the filter (days with no events plot as 0).
+    const pageViewsData = lastNUtcDateKeys(days).map((date) => {
+      const v = byDate.get(date)
+      return {
         date: formatChartDate(date),
-        views: v.views,
-        uniqueVisitors: v.uniqueVisitors.size
-      }))
+        views: v?.views ?? 0,
+        uniqueVisitors: v?.uniqueVisitors.size ?? 0
+      }
+    })
 
     const postViews = new Map<string, { views: number; readDepths: number[]; timeSeconds: number[]; postTitle?: string; authorName?: string }>()
     for (const e of pageViews) {
@@ -663,10 +666,19 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function lastNUtcDateKeys(days: number, end = new Date()): string[] {
+  const endUtc = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+  const keys: string[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    keys.push(new Date(endUtc - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+  }
+  return keys
+}
+
 function formatChartDate(isoDate: string): string {
-  const d = new Date(isoDate)
-  const mon = d.toLocaleDateString('en-US', { month: 'short' })
-  const day = d.getDate()
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const d = new Date(Date.UTC(year, month - 1, day))
+  const mon = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
   return `${mon} ${day}`
 }
 
@@ -675,7 +687,7 @@ function formatElementName(element: string): string {
     toc: 'TOC Links',
     breadcrumb: 'Breadcrumb Navigation',
     relatedPosts: 'Related Posts Widget',
-    relevantPosts: 'Relevant Posts Widget',
+    relevantPosts: 'Related Posts Widget',
     authorBio: 'Author Bio Link',
     shareTwitter: 'Social Share - Twitter',
     shareX: 'Social Share - X',

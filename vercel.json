@@ -11,6 +11,10 @@
       "destination": "/api/health"
     },
     {
+      "source": "/api/cron/ping-squarespace-api-keys",
+      "destination": "/api/cron/ping-squarespace-api-keys"
+    },
+    {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
     },
@@ -34,6 +38,10 @@
   "functions": {
     "api/health.ts": {
       "maxDuration": 10
+    },
+    "api/cron/ping-squarespace-api-keys.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**"
     },
     "api/index.ts": {
       "maxDuration": 60,
@@ -65,5 +73,11 @@
         }
       ]
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/ping-squarespace-api-keys",
+      "schedule": "0 15 * * *"
+    }
+  ]
 }

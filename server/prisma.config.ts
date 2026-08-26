@@ -11,9 +11,14 @@ function isPrismaSchemaCli(): boolean {
   return SCHEMA_CLI_MARKERS.some((marker) => argvJoined.includes(marker));
 }
 
-/** Local dev: SUPABASE_SSL_NO_VERIFY=true → sslmode=no-verify on Postgres URLs */
+/** Local / Vercel / GitHub Actions: sslmode=no-verify on Supabase URLs */
+function shouldRelaxSupabaseTls(): boolean {
+  const flag = (process.env.SUPABASE_SSL_NO_VERIFY ?? "").trim().toLowerCase();
+  return flag === "true" || process.env.VERCEL === "1" || process.env.GITHUB_ACTIONS === "true";
+}
+
 function applySupabaseSslModeForPrisma(url: string): string {
-  if (process.env.SUPABASE_SSL_NO_VERIFY !== "true" || !url.includes("supabase.co")) {
+  if (!shouldRelaxSupabaseTls() || !url.includes("supabase.co")) {
     return url;
   }
   try {

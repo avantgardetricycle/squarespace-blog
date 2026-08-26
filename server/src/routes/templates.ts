@@ -764,8 +764,48 @@ function normalizeTemplateForResponse (
   return template
 }
 
+/** Default collection template for new sites. */
+export const DEFAULT_COLLECTION_TEMPLATE_KEY = 'showcase'
+
 /** Default post template for new sites / configs with no template assigned. */
 export const DEFAULT_POST_TEMPLATE_KEY = 'reporter'
+
+/** Resolve the Showcase collection template (canonical config + DB id) for new-site defaults. */
+export async function resolveDefaultCollectionTemplate (): Promise<{
+  id: string
+  templateKey: string
+  name: string
+  collectionConfig: Record<string, unknown>
+} | null> {
+  try {
+    const template = await prisma.templateConfig.findUnique({
+      where: { templateKey_level: { templateKey: DEFAULT_COLLECTION_TEMPLATE_KEY, level: 'collection' } },
+      select: {
+        id: true,
+        templateKey: true,
+        name: true,
+        description: true,
+        collectionConfig: true,
+        postConfig: true,
+        previewLayout: true,
+      },
+    })
+    if (!template) return null
+    const normalized = normalizeTemplateForResponse(template, 'collection')
+    const collectionConfig =
+      normalized.collectionConfig && typeof normalized.collectionConfig === 'object'
+        ? (normalized.collectionConfig as Record<string, unknown>)
+        : ({ ...CANONICAL_SHOWCASE_COLLECTION_TEMPLATE } as Record<string, unknown>)
+    return {
+      id: normalized.id,
+      templateKey: normalized.templateKey,
+      name: normalized.name,
+      collectionConfig,
+    }
+  } catch {
+    return null
+  }
+}
 
 /** Resolve the Reporter post template (canonical config + DB id) for new-site defaults. */
 export async function resolveDefaultPostTemplate (): Promise<{

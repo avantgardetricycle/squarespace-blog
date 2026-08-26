@@ -68,8 +68,7 @@ export function SquarespaceApiKeyModal({
             <p>To generate an API key:</p>
             <ol className="list-decimal list-inside space-y-1 pl-1">
               <li>In Squarespace, go to Settings → Developer Tools → Developer API Keys (or Settings → Advanced → Developer API Keys)</li>
-              <li>Generate a new API key</li>
-              <li>Enable the <strong>Profiles (Read)</strong> permission</li>
+              <li>Paste an existing key with <strong>Profiles (Read)</strong>, or create one if you do not have one yet. Do not delete an old key until it has been replaced on every BetterBlog blog that uses it.</li>
               <li>Copy the key and paste it below</li>
             </ol>
           </div>

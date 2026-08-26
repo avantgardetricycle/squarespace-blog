@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-07-30-sidebar-body-align";
+const RENDERER_VERSION = "2026-08-25-comments-debug";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -21,6 +21,8 @@ interface RendererConfigOverrides {
   paywallSettings?: {
     subscribeUrl: string | null;
     footerDescription: string | null;
+    eyebrowText: string | null;
+    headlineText: string | null;
     featureItems: string[];
   } | null;
   /** Configure preview chrome: drives editorial mobile striping when the browser window is wider than the phone frame */
