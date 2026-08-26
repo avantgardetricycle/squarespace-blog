@@ -19,7 +19,16 @@ const DEFAULT_SETTINGS = {
   sortOrder: 'newest' as 'newest' | 'oldest' | 'most_liked',
 }
 
-/** Ensure site is owned by user */
+function hostnameOfSiteUrl(url: string | null | undefined): string | null {
+  if (!url || !url.trim()) return null
+  try {
+    const withProto = /^https?:\/\//i.test(url) ? url : `https://${url}`
+    return new URL(withProto).hostname.replace(/^www\./i, '').toLowerCase()
+  } catch {
+    return null
+  }
+}
+
 async function getSiteForUser(siteKey: string, userId: number) {
   const site = await prisma.site.findFirst({
     where: { siteKey, userId, deletedAt: null },
@@ -195,9 +204,26 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
   })
 
   if (updates.squarespaceApiKeyEnc !== undefined) {
-    await prisma.site.update({
-      where: { id: site.id },
+    const host = hostnameOfSiteUrl(site.url)
+    const siblingIds = host
+      ? (
+          await prisma.site.findMany({
+            where: { userId: site.userId, deletedAt: null },
+            select: { id: true, url: true },
+          })
+        )
+          .filter((s) => hostnameOfSiteUrl(s.url) === host)
+          .map((s) => s.id)
+      : [site.id]
+    await prisma.site.updateMany({
+      where: { id: { in: siblingIds.length > 0 ? siblingIds : [site.id] } },
       data: { squarespaceApiKeyEnc: updates.squarespaceApiKeyEnc as string },
+    })
+    console.log('[comment-settings] API key saved', {
+      userId: user.id,
+      siteId: site.id,
+      sharedToSiteCount: siblingIds.length > 0 ? siblingIds.length : 1,
+      host,
     })
   }
 

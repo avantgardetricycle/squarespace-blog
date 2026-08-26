@@ -1,6 +1,6 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail } from '../emails/index.js'
 import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
 import { getAppUrl, getSupportPortalUrl } from './url.js'
 
@@ -284,6 +284,67 @@ export async function sendCommentNotificationEmail(
     const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
     const errors = res?.body?.errors
     console.error('[Comment] SendGrid error sending comment notification:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    }
+  }
+}
+
+export async function sendProfilesApiAlertEmail(
+  to: string[],
+  details: {
+    siteName: string
+    siteUrl: string | null
+    siteKey: string
+    status: number | null
+    reason: string
+    errorBodySnippet: string | null
+    emailDomain: string | null
+    emailHasPlus: boolean
+  }
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey || to.length === 0) {
+    console.log('[BetterBlog alert] SENDGRID_API_KEY missing or no recipients; skipping Profiles API alert email', {
+      siteKey: details.siteKey,
+      reason: details.reason,
+      recipientCount: to.length,
+    })
+    return
+  }
+
+  const base = getAppUrl().replace(/\/+$/, '')
+  const commentSettingsUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey: details.siteKey,
+  }).toString()}#comment-settings`
+
+  sgMail.setApiKey(apiKey)
+  const html = await renderProfilesApiAlertEmail({
+    ...details,
+    commentSettingsUrl,
+  })
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `Squarespace API key failed for ${details.siteName}`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[BetterBlog alert] SendGrid error sending Profiles API alert:', errors ?? err)
     if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
       const { attachments: _, ...msgWithoutLogo } = msg
       await sgMail.send(msgWithoutLogo)

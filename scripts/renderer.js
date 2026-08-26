@@ -1932,11 +1932,10 @@
               status: data && data.status ? data.status : null,
               hasEmail: Boolean(data && data.email),
               email: data && data.email ? data.email : null,
-              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse),
-              verify_debug: data && data.verify_debug ? data.verify_debug : null
+              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
             });
             // #region agent log
-            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'pre-fix',hypothesisId:'H1',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous'),willSetVerifiedCookie:Boolean(modeNow==='loggedIn'&&data&&data.verified_subscriber&&emailToUse),verify_debug:data&&data.verify_debug?data.verify_debug:null,emailHasPlus:Boolean(emailToUse&&String(emailToUse).indexOf('+')>=0)},timestamp:Date.now()})}).catch(function(){});
+            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'post-fix',hypothesisId:'H6',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous')},timestamp:Date.now()})}).catch(function(){});
             // #endregion
             if (data && data.id) {
               if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse) {
@@ -9756,6 +9755,8 @@
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
       var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
+      var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
+      var reporterPostLayout = isSinglePost && self._isReporterPostLayout(cfg);
       var sidebarRowPostLayout = isSinglePost && (
         self._isFeaturePostLayout(cfg) ||
         self._isReporterPostLayout(cfg) ||
@@ -9776,7 +9777,9 @@
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
         var showFiPlaceholder = !isSinglePost && fiShow && !imgUrl;
-        var showSinglePostFiPlaceholder = isSinglePost && fiShow && !imgUrl && (storyPostLayout || publisherPostLayout);
+        var showSinglePostFiPlaceholder = isSinglePost && fiShow && !imgUrl && (
+          writerPostLayout || storyPostLayout || publisherPostLayout || featurePostLayout || reporterPostLayout
+        );
         if (isSinglePost) {
           fiLayout = phImagePos === 'fullBleed' ? 'fullBleed' : phImagePos === 'rightOfInfo' ? 'rightJustified' : 'leftJustified';
           if (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') fiImageWidth = fiImageWidth;
@@ -9790,7 +9793,7 @@
         var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : fiCfg.aspectRatio === '21:8' ? '21:8' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
         /** Reporter (split header): 3:2 cover crop regardless of saved aspectBehavior. */
-        var reporterPostHeaderLayout = isSinglePost && self._isReporterPostLayout(cfg);
+        var reporterPostHeaderLayout = reporterPostLayout;
         var reporterPostHeaderImage = reporterPostHeaderLayout && fiShow;
         if (reporterPostHeaderImage) {
           fiRatio = '3:2';
@@ -9802,7 +9805,7 @@
           fiRatio = '4:3';
         }
         /** Feature (stacked fullBleed header): cover crop at 16:9 (spec). */
-        var featureStackedHeaderCrop = isSinglePost && self._isFeaturePostLayout(cfg) && phImagePos === 'fullBleed' && postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked' && fiShow;
+        var featureStackedHeaderCrop = isSinglePost && featurePostLayout && phImagePos === 'fullBleed' && postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked' && fiShow;
         if (featureStackedHeaderCrop) {
           fiAspect = 'cropped';
           fiRatio = '16:9';
@@ -9904,7 +9907,7 @@
         var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
         var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl || showFiPlaceholder) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && (imgUrl || showFiPlaceholder);
         if (isSinglePost && (phImagePos === 'belowInfo' || phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) isSideBySide = false;
-        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || (storyPostLayout && !imgUrl))) isSideBySide = true;
+        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || ((storyPostLayout || reporterPostLayout) && !imgUrl))) isSideBySide = true;
         var rowEl = null;
         var contentEl = null;
         if (isSideBySide) {
@@ -9950,11 +9953,11 @@
           }
         }
         var appendTo = isSideBySide ? contentEl : article;
-        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && (!!imgUrl || publisherPostLayout);
+        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && (!!imgUrl || publisherPostLayout || featurePostLayout);
         var fullBleedLayoutStacked = postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked';
         var singlePostFullBleedStacked = hasFullBleedImg && fullBleedLayoutStacked;
         var singlePostFullBleedHero = hasFullBleedImg && !fullBleedLayoutStacked;
-        var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && !!imgUrl;
+        var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && (!!imgUrl || writerPostLayout);
         var fullBleedHeaderBlock = null;
         var stackedFullBleedWrap = null;
         var stackedHeaderBlock = null;
@@ -10010,7 +10013,7 @@
           }
         }
         if (singlePostFullBleedStacked) {
-          var featureStackedHero = isSinglePost && self._isFeaturePostLayout(cfg);
+          var featureStackedHero = isSinglePost && featurePostLayout;
           stackedFullBleedWrap = document.createElement('div');
           stackedFullBleedWrap.className = 'blog-overlay-featured-image blog-overlay-featured-image-stacked-fullbleed';
           if (featureStackedHero) {

@@ -7,6 +7,7 @@ import crypto from 'crypto'
 import prisma from '../db/index.js'
 import { decrypt } from '../lib/encryption.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
+import { reportSquarespaceProfilesApiFailure } from '../lib/profiles-api-alert.js'
 import {
   clampParentIdsForThreadDepth,
   resolveParentIdForReply,
@@ -63,12 +64,14 @@ async function getSiteWithSubscription(siteToken: string) {
       id: true,
       userId: true,
       siteKey: true,
+      name: true,
       url: true,
       blogPassword: true,
       squarespaceApiKeyEnc: true,
       user: {
         select: {
           id: true,
+          email: true,
           subscriptions: {
             where: { status: { in: ['trialing', 'active'] } },
             orderBy: { updatedAt: 'desc' },
@@ -636,6 +639,7 @@ router.post('/', async (req: Request, res: Response) => {
     topLevelKeys: [],
     verifiedSubscriber: false,
     fallbackAnonymous: false,
+    verificationFailureReason: null,
   }
   console.log('[comments] identity incoming', {
     siteId: site.id,
@@ -754,6 +758,9 @@ router.post('/', async (req: Request, res: Response) => {
           squarespaceProfileId,
           displayNameAfterVerify: displayName || null,
         })
+        if (!verifiedSubscriber) {
+          verifyDebug.verificationFailureReason = 'profile_not_found'
+        }
       } else {
         const errText = await resProfiles.text().catch(() => '')
         const errSnippet = errText ? errText.slice(0, 300) : null
@@ -766,48 +773,17 @@ router.post('/', async (req: Request, res: Response) => {
         verifyDebug.profilesStatus = resProfiles.status
         verifyDebug.skipReason = 'profiles-api-non-200'
         verifyDebug.profilesErrorBody = errSnippet
-        let retryStatus: number | null = null
-        let retryCount: number | null = null
-        let retryBodySnippet: string | null = null
-        try {
-          const retryUrl = `https://api.squarespace.com/1.0/profiles?email=${encodeURIComponent(email)}`
-          const retryRes = await fetch(retryUrl, {
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              Accept: 'application/json',
-              'User-Agent': 'BetterBlog/1.0',
-            },
-          })
-          retryStatus = retryRes.status
-          if (retryRes.ok) {
-            const retryData = (await retryRes.json()) as Record<string, unknown>
-            const retryProfiles =
-              (Array.isArray((retryData as { Profiles?: unknown[] }).Profiles)
-                ? (retryData as { Profiles: unknown[] }).Profiles
-                : null) ||
-              (Array.isArray((retryData as { profiles?: unknown[] }).profiles)
-                ? (retryData as { profiles: unknown[] }).profiles
-                : null) ||
-              []
-            retryCount = retryProfiles.length
-          } else {
-            const retryText = await retryRes.text().catch(() => '')
-            retryBodySnippet = retryText ? retryText.slice(0, 300) : null
-          }
-        } catch (retryErr) {
-          retryBodySnippet = retryErr instanceof Error ? retryErr.name : 'retry-failed'
-        }
-        verifyDebug.profilesRetryStatus = retryStatus
-        verifyDebug.profilesRetryCount = retryCount
-        verifyDebug.profilesRetryBody = retryBodySnippet
+        verifyDebug.verificationFailureReason =
+          resProfiles.status === 401
+            ? 'profiles_unauthorized'
+            : resProfiles.status === 403
+              ? 'profiles_forbidden'
+              : 'profiles_http_error'
         debugCommentsIngest('H6', 'comments.ts:profiles-non-200', 'profiles API non-200', {
           ...emailLookupMeta(email),
           status: resProfiles.status,
           errorBodyLen: errText ? errText.length : 0,
           errorBodySnippet: errSnippet,
-          retryStatus,
-          retryCount,
-          retryBodySnippet,
         })
         console.log('[comments] Profiles verify decision', {
           siteId: site.id,
@@ -816,9 +792,23 @@ router.post('/', async (req: Request, res: Response) => {
           verifiedSubscriber: false,
           reason: 'profiles-api-non-200',
           status: resProfiles.status,
-          retryStatus,
-          retryCount,
         })
+        reportSquarespaceProfilesApiFailure({
+          siteId: site.id,
+          siteKey: site.siteKey,
+          siteName: site.name ?? null,
+          siteUrl: site.url ?? null,
+          status: resProfiles.status,
+          reason:
+            resProfiles.status === 401
+              ? 'profiles_unauthorized'
+              : resProfiles.status === 403
+                ? 'profiles_forbidden'
+                : 'profiles_http_error',
+          errorBodySnippet: errSnippet,
+          ...emailLookupMeta(email),
+          ownerEmails: [site.user?.email, settings.notificationEmail],
+        }).catch((err) => console.error('[comments] Profiles API alert error:', err))
       }
     } catch (err) {
       console.error('[comments] Profiles API error:', err)
@@ -834,6 +824,17 @@ router.post('/', async (req: Request, res: Response) => {
         verifiedSubscriber: false,
         reason: 'profiles-api-exception',
       })
+      reportSquarespaceProfilesApiFailure({
+        siteId: site.id,
+        siteKey: site.siteKey,
+        siteName: site.name ?? null,
+        siteUrl: site.url ?? null,
+        status: null,
+        reason: 'profiles_api_exception',
+        errorBodySnippet: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
+        ...emailLookupMeta(email),
+        ownerEmails: [site.user?.email, settings.notificationEmail],
+      }).catch((alertErr) => console.error('[comments] Profiles API alert error:', alertErr))
       // Graceful degradation - continue as unverified
     }
   } else {
@@ -992,7 +993,6 @@ router.post('/', async (req: Request, res: Response) => {
     created_at: comment.createdAt.toISOString(),
     replies: [],
     ...(createdEmailNorm ? { email: createdEmailNorm } : {}),
-    verify_debug: verifyDebug,
   })
 })
 

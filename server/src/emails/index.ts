@@ -5,6 +5,7 @@ import { render } from '@react-email/render'
 import { InviteEmail } from './InviteEmail.js'
 import { MagicLinkEmail } from './MagicLinkEmail.js'
 import { CommentNotificationEmail } from './CommentNotificationEmail.js'
+import { ProfilesApiAlertEmail } from './ProfilesApiAlertEmail.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const logoPath = join(__dirname, 'logo-email.png')
@@ -34,4 +35,18 @@ export async function renderCommentNotificationEmail(props: {
   hideUrl: string
 }): Promise<string> {
   return render(CommentNotificationEmail(props))
+}
+
+export async function renderProfilesApiAlertEmail(props: {
+  siteName: string
+  siteUrl: string | null
+  siteKey: string
+  status: number | null
+  reason: string
+  errorBodySnippet: string | null
+  emailDomain: string | null
+  emailHasPlus: boolean
+  commentSettingsUrl: string
+}): Promise<string> {
+  return render(ProfilesApiAlertEmail(props))
 }
