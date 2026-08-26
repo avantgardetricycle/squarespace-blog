@@ -4057,6 +4057,7 @@
         im.style.height = '100%';
         im.style.objectFit = 'cover';
         im.style.display = 'block';
+        self._bindFeaturedImagePlaceholderFallback(im, imgWrap, imgUrl, placeholderMap, post, items);
         imgWrap.appendChild(im);
       }
       if (gated) self._appendPaywallCardImageLock(imgWrap);
@@ -4861,20 +4862,77 @@
       return mins;
     },
 
+    /** Substrings that identify Squarespace's default no-featured-image asset (incl. CDN redirects). */
+    _placeholderImageUrlMarkers: [
+      'configuration/no-image',
+      'no-image.png',
+      'no-image-',
+      'universal/images-v6/configuration/no-image',
+      'universal/images-v6/default/no-image'
+    ],
+    /**
+     * Squarespace JSON often returns a bare static URL (no filename) for posts
+     * without a featured image; it 302s to universal/images-v6/configuration/no-image.png.
+     * Real uploads use a /t/{assetId}/ segment in the same host pattern.
+     */
+    _isLikelySquarespaceStaticPlaceholderUrl: function(url) {
+      if (!url || typeof url !== 'string') return false;
+      var u = url.toLowerCase();
+      if (u.indexOf('static1.squarespace.com/static/') < 0 && u.indexOf('static.squarespace.com/static/') < 0) return false;
+      if (u.indexOf('/t/') >= 0) return false;
+      try {
+        var parsed = new URL(url);
+        var path = parsed.pathname.replace(/\/+$/, '');
+        var last = path.split('/').pop();
+        return /^\d+$/.test(last);
+      } catch (e) {
+        return false;
+      }
+    },
     /**
      * Returns true if url is Squarespace's no-image placeholder (should not be displayed).
      * Checks both the given url and, via fetch, the final URL after redirects.
      */
     _isPlaceholderImageUrl: function(url) {
       if (!url || typeof url !== 'string') return false;
+      if (this._isLikelySquarespaceStaticPlaceholderUrl(url)) return true;
       var u = url.toLowerCase();
-      return u.indexOf('no-image.png') >= 0 || u.indexOf('configuration/no-image') >= 0;
+      var markers = this._placeholderImageUrlMarkers;
+      for (var mi = 0; mi < markers.length; mi++) {
+        if (u.indexOf(markers[mi]) >= 0) return true;
+      }
+      return false;
     },
     _isPlaceholderWithMap: function(url, placeholderMap) {
       if (!url || typeof url !== 'string') return true;
-      if (placeholderMap === null) return false;
+      if (placeholderMap === null) return this._isPlaceholderImageUrl(url);
       if (placeholderMap && placeholderMap.hasOwnProperty(url)) return placeholderMap[url] === true;
       return this._isPlaceholderImageUrl(url);
+    },
+    /** After load/error, swap Squarespace no-image graphics for the accent gradient placeholder. */
+    _bindFeaturedImagePlaceholderFallback: function(img, container, imgUrl, placeholderMap, post, items) {
+      var self = this;
+      if (!img || !container) return;
+      var swapIfPlaceholder = function(resolvedUrl) {
+        if (self._isPlaceholderWithMap(resolvedUrl || imgUrl, placeholderMap)) {
+          self._swapFeaturedImageForPlaceholder(container, placeholderMap, post, items);
+          return true;
+        }
+        return false;
+      };
+      img.onerror = function() {
+        self._swapFeaturedImageForPlaceholder(container, placeholderMap, post, items);
+      };
+      img.onload = function() {
+        swapIfPlaceholder(img.currentSrc || img.src || imgUrl);
+      };
+      if (img.complete) {
+        if (!img.naturalWidth) {
+          self._swapFeaturedImageForPlaceholder(container, placeholderMap, post, items);
+        } else {
+          swapIfPlaceholder(img.currentSrc || img.src || imgUrl);
+        }
+      }
     },
 
     /** Accent gradient shown when a post has no usable featured image. */
@@ -10040,9 +10098,7 @@
             stackImg.style.display = 'block';
             stackImg.style.objectFit = (fiFixedAspectCrop || featureStackedHero) ? 'cover' : 'contain';
             stackImg.style.objectPosition = 'center';
-            stackImg.onerror = function() {
-              self._swapFeaturedImageForPlaceholder(stackFiInner, placeholderMap, post, items);
-            };
+            self._bindFeaturedImagePlaceholderFallback(stackImg, stackFiInner, imgUrl, placeholderMap, post, items);
             stackFiInner.appendChild(stackImg);
           } else {
             var stackPh = document.createElement('div');
@@ -10143,9 +10199,7 @@
             img.style.display = 'block';
             img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
             img.style.objectPosition = 'center';
-            img.onerror = function() {
-              self._swapFeaturedImageForPlaceholder(fiInner, placeholderMap, post, items);
-            };
+            self._bindFeaturedImagePlaceholderFallback(img, fiInner, imgUrl, placeholderMap, post, items);
             fiInner.appendChild(img);
           } else {
             fiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
@@ -10692,9 +10746,7 @@
             belowImg.style.display = 'block';
             belowImg.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
             belowImg.style.objectPosition = 'center';
-            belowImg.onerror = function() {
-              self._swapFeaturedImageForPlaceholder(belowFiInner, placeholderMap, post, items);
-            };
+            self._bindFeaturedImagePlaceholderFallback(belowImg, belowFiInner, imgUrl, placeholderMap, post, items);
             belowFiInner.appendChild(belowImg);
           } else {
             belowFiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
@@ -11775,6 +11827,7 @@
             heroImg.style.height = '100%';
             heroImg.style.objectFit = 'cover';
             heroImg.style.display = 'block';
+            self._bindFeaturedImagePlaceholderFallback(heroImg, heroInner, heroImgUrl, placeholderMap, featuredPost, items);
             heroInner.appendChild(heroImg);
           }
 

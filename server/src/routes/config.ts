@@ -561,10 +561,28 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
     return
   }
   const placeholders: Record<string, boolean> = {}
-  const PLACEHOLDER_MARKERS = ['no-image.png', 'configuration/no-image']
+  const PLACEHOLDER_MARKERS = [
+    'configuration/no-image',
+    'no-image.png',
+    'no-image-',
+    'universal/images-v6/configuration/no-image',
+    'universal/images-v6/default/no-image',
+  ]
 
   function isPlaceholderUrl (url: string): boolean {
     const u = url.toLowerCase()
+    if (
+      (u.includes('static1.squarespace.com/static/') || u.includes('static.squarespace.com/static/'))
+      && !u.includes('/t/')
+    ) {
+      try {
+        const path = new URL(url).pathname.replace(/\/+$/, '')
+        const last = path.split('/').pop() ?? ''
+        if (/^\d+$/.test(last)) return true
+      } catch {
+        /* fall through to marker checks */
+      }
+    }
     return PLACEHOLDER_MARKERS.some((m) => u.includes(m))
   }
 
