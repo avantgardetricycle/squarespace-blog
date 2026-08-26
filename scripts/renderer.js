@@ -2911,20 +2911,50 @@
     },
 
     _bbPaywallFooterColors: function() {
-      var accent = this._bbReadCssVar('--tweak-accent-color', null)
+      var tokens = this._getCollectionStyleTokens();
+      var accent = (tokens && tokens.accent)
+        || this._bbReadCssVar('--tweak-accent-color', null)
         || this._bbReadCssVar('--siteAccentColor', null)
         || this._bbReadCssVar('--primaryButtonBackgroundColor', null)
         || '#e91e8c';
-      var bg = this._bbReadCssVar('--tweak-blog-site-background', null)
+      var bg = (tokens && tokens.surface)
+        || this._bbReadCssVar('--tweak-blog-site-background', null)
         || this._bbReadCssVar('--siteBackgroundColor', null)
         || '#ffffff';
-      var text = this._bbReadCssVar('--paragraphMediumColor', null)
-        || this._bbReadCssVar('--tweak-text-color', null)
-        || '#111111';
-      var secondary = this._bbReadCssVar('--paragraphSmallColor', null)
-        || this._bbReadCssVar('--tweak-secondary-text-color', null)
-        || '#666666';
+      var text = 'var(--paragraphLargeColor, var(--bb-body, #111111))';
+      var secondary = 'var(--bb-excerpt, #666666)';
       return { accent: accent, bg: bg, text: text, secondary: secondary };
+    },
+
+    /**
+     * Paywall surfaces sit on a light (90% white) overlay. Body text must come from
+     * Squarespace --paragraphLargeColor (or --bb-body derived from it) — never from
+     * the computed color of a DOM node (Story headers and hidden paywalled <p>s go white).
+     */
+    _applyPaywallSurfaceTokens: function(el) {
+      if (!el || !el.style) return;
+      el.style.setProperty('--bb-body', 'var(--paragraphLargeColor, #111111)');
+      el.style.setProperty('--bb-excerpt', this._bodyColorMix(80));
+      el.style.setProperty('--bb-muted', this._bodyColorMix(60));
+    },
+
+    _createPaywallSubscribeButton: function() {
+      var subBtn = document.createElement('a');
+      subBtn.href = this._resolvePaywallSubscribeHref();
+      subBtn.className = 'sqs-button-element--primary bb-paywall-subscribe-btn';
+      subBtn.textContent = this._paywallSubscribeButtonLabel();
+      return subBtn;
+    },
+
+    _createPaywallSignInButton: function() {
+      var signBtn = document.createElement('a');
+      signBtn.href = this._resolvePaywallSignInHref();
+      signBtn.className = 'sqs-button-element--primary bb-paywall-signin-btn';
+      signBtn.textContent = 'Sign in';
+      signBtn.style.background = 'transparent';
+      signBtn.style.color = 'var(--bb-accent)';
+      signBtn.style.border = '2px solid var(--bb-accent)';
+      return signBtn;
     },
 
     _paywallCurrencySymbol: function(code) {
@@ -3383,15 +3413,6 @@
     _createPaywallInlineCardWrap: function() {
       var wrap = document.createElement('div');
       wrap.className = 'bb-paywall-inline-card-wrap';
-      wrap.style.position = 'relative';
-      wrap.style.width = '50%';
-      wrap.style.minWidth = 'min(100%, 280px)';
-      wrap.style.maxWidth = '560px';
-      wrap.style.marginLeft = 'auto';
-      wrap.style.marginRight = 'auto';
-      wrap.style.zIndex = '2';
-      wrap.style.boxSizing = 'border-box';
-      wrap.style.pointerEvents = 'auto';
       wrap.appendChild(this._createPaywallInlineArticleCard());
       return wrap;
     },
@@ -3658,7 +3679,6 @@
 
     _appendPaywallFooter: function(footerZoneEl) {
       if (!footerZoneEl) return;
-      var colors = this._bbPaywallFooterColors();
       var ps = this.config && this.config.paywallSettings;
       var defaultDesc = 'Subscribe for full access to every story, the complete archive, and exclusive reading.';
       var desc = (ps && typeof ps.footerDescription === 'string' && ps.footerDescription.trim())
@@ -3668,94 +3688,32 @@
         ? ps.featureItems.slice(0, 4)
         : ['Unlimited articles', 'Full archive access', 'Cancel anytime'];
       var blogTitle = this._resolvePaywallBlogTitle();
-      var subLabel = this._paywallSubscribeButtonLabel();
-      var borderAlpha = 'rgba(0,0,0,0.1)';
 
       var block = document.createElement('div');
       block.className = 'bb-paywall-footer';
-      block.style.width = '100%';
-      block.style.boxSizing = 'border-box';
-      block.style.marginTop = '32px';
-      block.style.padding = '40px 24px 48px';
-      block.style.background = colors.bg;
-      block.style.borderTop = '1px solid ' + borderAlpha;
-      block.style.textAlign = 'center';
+      this._applyPaywallSurfaceTokens(block);
 
       var inner = document.createElement('div');
-      inner.style.maxWidth = '640px';
-      inner.style.margin = '0 auto';
+      inner.className = 'bb-paywall-card';
 
       var eyebrow = document.createElement('div');
+      eyebrow.className = 'bb-paywall-label';
       eyebrow.textContent = this._resolvePaywallEyebrowText();
-      eyebrow.style.fontSize = '0.65rem';
-      eyebrow.style.fontWeight = '700';
-      eyebrow.style.letterSpacing = '0.2em';
-      eyebrow.style.textTransform = 'uppercase';
-      eyebrow.style.color = colors.accent;
-      eyebrow.style.marginBottom = '12px';
 
-      var headline = document.createElement('h2');
+      var headline = document.createElement('h3');
+      headline.className = 'bb-paywall-heading';
       headline.textContent = this._resolvePaywallHeadlineText('Unlock unlimited access to ' + blogTitle);
-      headline.style.margin = '0 0 12px';
-      headline.style.fontSize = 'clamp(1.25rem, 2.5vw, 1.75rem)';
-      headline.style.fontWeight = '700';
-      headline.style.lineHeight = '1.25';
-      headline.style.color = colors.text;
 
       var p = document.createElement('p');
+      p.className = 'bb-paywall-subtitle';
       p.textContent = desc;
-      p.style.margin = '0 auto 28px';
-      p.style.fontSize = '1rem';
-      p.style.lineHeight = '1.55';
-      p.style.color = colors.secondary;
-      p.style.maxWidth = '520px';
 
       var btnRow = document.createElement('div');
-      btnRow.style.display = 'flex';
-      btnRow.style.flexWrap = 'wrap';
-      btnRow.style.gap = '12px';
-      btnRow.style.justifyContent = 'center';
-      btnRow.style.marginBottom = '28px';
+      btnRow.className = 'bb-paywall-btn-row';
+      btnRow.appendChild(this._createPaywallSubscribeButton());
+      btnRow.appendChild(this._createPaywallSignInButton());
 
-      var subBtn = document.createElement('a');
-      subBtn.href = this._resolvePaywallSubscribeHref();
-      subBtn.className = 'bb-paywall-subscribe-btn';
-      subBtn.textContent = subLabel;
-      subBtn.style.display = 'inline-flex';
-      subBtn.style.alignItems = 'center';
-      subBtn.style.justifyContent = 'center';
-      subBtn.style.padding = '12px 22px';
-      subBtn.style.borderRadius = '4px';
-      subBtn.style.background = colors.accent;
-      subBtn.style.color = '#fff';
-      subBtn.style.fontWeight = '600';
-      subBtn.style.textDecoration = 'none';
-      subBtn.style.fontSize = '0.95rem';
-
-      btnRow.appendChild(subBtn);
-
-      var list = document.createElement('div');
-      list.style.display = 'flex';
-      list.style.flexWrap = 'wrap';
-      list.style.gap = '10px 24px';
-      list.style.justifyContent = 'center';
-      list.style.fontSize = '0.9rem';
-      list.style.color = colors.secondary;
-      for (var fi = 0; fi < features.length; fi++) {
-        var row = document.createElement('div');
-        row.style.display = 'inline-flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '8px';
-        var check = document.createElement('span');
-        check.textContent = '✓';
-        check.style.color = colors.accent;
-        check.style.fontWeight = '700';
-        var tx = document.createElement('span');
-        tx.textContent = features[fi];
-        row.appendChild(check);
-        row.appendChild(tx);
-        list.appendChild(row);
-      }
+      var list = this._createPaywallBenefitList(features);
 
       inner.appendChild(eyebrow);
       inner.appendChild(headline);
@@ -3780,9 +3738,27 @@
       }
     },
 
-    /** Inline article gate (single post): card overlaid on faded second-paragraph teaser. */
+    _createPaywallBenefitList: function(features) {
+      var list = document.createElement('div');
+      list.className = 'bb-paywall-benefits';
+      var items = Array.isArray(features) ? features : [];
+      for (var fi = 0; fi < items.length; fi++) {
+        var row = document.createElement('div');
+        row.className = 'bb-paywall-benefit';
+        var check = document.createElement('span');
+        check.className = 'bb-paywall-benefit-check';
+        check.textContent = '✓';
+        var tx = document.createElement('span');
+        tx.textContent = items[fi];
+        row.appendChild(check);
+        row.appendChild(tx);
+        list.appendChild(row);
+      }
+      return list;
+    },
+
+    /** Inline article gate (single post): overlay card on faded second-paragraph teaser. */
     _createPaywallInlineArticleCard: function() {
-      var colors = this._bbPaywallFooterColors();
       var ps = this.config && this.config.paywallSettings;
       var defaultDesc = 'Subscribe for unlimited access to every article, the full archive, and ad-free reading.';
       var desc = (ps && typeof ps.inlineDescription === 'string' && ps.inlineDescription.trim())
@@ -3793,114 +3769,33 @@
       var features = (ps && Array.isArray(ps.featureItems) && ps.featureItems.length)
         ? ps.featureItems.slice(0, 4)
         : ['Unlimited articles', 'Full archive', 'Ad-free', 'Cancel anytime'];
-      var subLabel = this._paywallSubscribeButtonLabel();
 
       var card = document.createElement('div');
-      card.className = 'bb-paywall-inline-card';
-      card.style.width = '100%';
-      card.style.maxWidth = 'none';
-      card.style.margin = '0';
-      card.style.boxSizing = 'border-box';
-      card.style.background = '#fff';
-      card.style.border = '1px solid rgba(0,0,0,0.1)';
-      card.style.borderRadius = '8px';
-      card.style.padding = '24px 20px 20px';
-      card.style.textAlign = 'center';
-      card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
+      card.className = 'bb-paywall-inline-card bb-paywall-card';
+      this._applyPaywallSurfaceTokens(card);
 
       var eyebrow = document.createElement('div');
+      eyebrow.className = 'bb-paywall-label';
       eyebrow.textContent = this._resolvePaywallEyebrowText();
-      eyebrow.style.fontSize = '0.65rem';
-      eyebrow.style.fontWeight = '700';
-      eyebrow.style.letterSpacing = '0.2em';
-      eyebrow.style.textTransform = 'uppercase';
-      eyebrow.style.color = colors.accent;
-      eyebrow.style.marginBottom = '10px';
 
-      var headline = document.createElement('h2');
+      var headline = document.createElement('h3');
+      headline.className = 'bb-paywall-heading bb-paywall-heading--overlay';
       headline.textContent = this._resolvePaywallHeadlineText('Continue reading with a membership');
-      headline.style.margin = '0 0 10px';
-      headline.style.fontSize = 'clamp(1.15rem, 3vw, 1.5rem)';
-      headline.style.fontWeight = '700';
-      headline.style.lineHeight = '1.25';
-      headline.style.color = colors.text;
 
       var p = document.createElement('p');
+      p.className = 'bb-paywall-subtitle';
       p.textContent = desc;
-      p.style.margin = '0 auto 20px';
-      p.style.fontSize = '0.92rem';
-      p.style.lineHeight = '1.55';
-      p.style.color = colors.secondary;
-      p.style.maxWidth = '420px';
 
       var btnRow = document.createElement('div');
-      btnRow.style.display = 'flex';
-      btnRow.style.flexWrap = 'wrap';
-      btnRow.style.gap = '10px';
-      btnRow.style.justifyContent = 'center';
-      btnRow.style.marginBottom = '18px';
-
-      var subBtn = document.createElement('a');
-      subBtn.href = this._resolvePaywallSubscribeHref();
-      subBtn.className = 'bb-paywall-subscribe-btn';
-      subBtn.textContent = subLabel;
-      subBtn.style.display = 'inline-flex';
-      subBtn.style.alignItems = 'center';
-      subBtn.style.justifyContent = 'center';
-      subBtn.style.padding = '10px 18px';
-      subBtn.style.borderRadius = '4px';
-      subBtn.style.background = colors.accent;
-      subBtn.style.color = '#fff';
-      subBtn.style.fontWeight = '600';
-      subBtn.style.textDecoration = 'none';
-      subBtn.style.fontSize = '0.9rem';
-
-      var signBtn = document.createElement('a');
-      signBtn.href = this._resolvePaywallSignInHref();
-      signBtn.textContent = 'Sign in';
-      signBtn.style.display = 'inline-flex';
-      signBtn.style.alignItems = 'center';
-      signBtn.style.justifyContent = 'center';
-      signBtn.style.padding = '10px 18px';
-      signBtn.style.borderRadius = '4px';
-      signBtn.style.background = '#fff';
-      signBtn.style.color = colors.text;
-      signBtn.style.border = '1px solid rgba(0,0,0,0.18)';
-      signBtn.style.fontWeight = '600';
-      signBtn.style.textDecoration = 'none';
-      signBtn.style.fontSize = '0.9rem';
-
-      btnRow.appendChild(subBtn);
-      btnRow.appendChild(signBtn);
-
-      var list = document.createElement('div');
-      list.style.display = 'flex';
-      list.style.flexWrap = 'wrap';
-      list.style.gap = '8px 18px';
-      list.style.justifyContent = 'center';
-      list.style.fontSize = '0.82rem';
-      list.style.color = colors.secondary;
-      for (var fi = 0; fi < features.length; fi++) {
-        var row = document.createElement('div');
-        row.style.display = 'inline-flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '6px';
-        var check = document.createElement('span');
-        check.textContent = '✓';
-        check.style.color = colors.accent;
-        check.style.fontWeight = '700';
-        var tx = document.createElement('span');
-        tx.textContent = features[fi];
-        row.appendChild(check);
-        row.appendChild(tx);
-        list.appendChild(row);
-      }
+      btnRow.className = 'bb-paywall-btn-row';
+      btnRow.appendChild(this._createPaywallSubscribeButton());
+      btnRow.appendChild(this._createPaywallSignInButton());
 
       card.appendChild(eyebrow);
       card.appendChild(headline);
       card.appendChild(p);
       card.appendChild(btnRow);
-      card.appendChild(list);
+      card.appendChild(this._createPaywallBenefitList(features));
       return card;
     },
 
@@ -7851,8 +7746,8 @@
 
     _readBodyColorFromScope: function(scopeEl) {
       var varNames = [
-        '--paragraphMediumColor', '--paragraph-medium-color',
         '--paragraphLargeColor', '--paragraph-large-color',
+        '--paragraphMediumColor', '--paragraph-medium-color',
         '--tweak-text-color', '--text-color'
       ];
       var scope = scopeEl;
@@ -8214,7 +8109,21 @@
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:40px;display:flex;align-items:center;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s ease;box-sizing:border-box;border:none;padding:0;margin:0;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);pointer-events:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;justify-content:flex-start;padding-left:2px;background:linear-gradient(to right,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}';
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
+        '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
+        '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
+        '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
+        '#blog-overlay-list .bb-paywall-card{width:100%;box-sizing:border-box;background:color-mix(in srgb,var(--siteBackgroundColor,white),white 90%);border:none;border-radius:var(--bb-card-radius,20px);padding:40px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.10);}' +
+        '#blog-overlay-list .bb-paywall-label{font-family:var(--bb-heading-font-family,inherit);font-size:12px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);margin:0 0 14px 0;}' +
+        '#blog-overlay-list .bb-paywall-heading{font-family:var(--bb-heading-font-family,inherit);font-size:24px;font-weight:700;line-height:1.2;color:var(--paragraphLargeColor,var(--bb-body,#111));margin:0 0 14px 0;}' +
+        '#blog-overlay-list .bb-paywall-heading--overlay{font-size:32px;}' +
+        '#blog-overlay-list .bb-paywall-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 28px 0;}' +
+        '#blog-overlay-list .bb-paywall-btn-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-bottom:28px;}' +
+        '#blog-overlay-list .bb-paywall-subscribe-btn,#blog-overlay-list .bb-paywall-signin-btn{text-decoration:none;}' +
+        '#blog-overlay-list .bb-paywall-signin-btn.sqs-button-element--primary{background:transparent;color:var(--bb-accent,#5B4FE8);border:2px solid var(--bb-accent,#5B4FE8);}' +
+        '#blog-overlay-list .bb-paywall-benefits{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 18px;font-size:14px;font-weight:inherit;line-height:1.2;color:var(--bb-muted,#888);}' +
+        '#blog-overlay-list .bb-paywall-benefit{display:inline-flex;align-items:center;gap:6px;}' +
+        '#blog-overlay-list .bb-paywall-benefit-check{color:var(--bb-accent,#5B4FE8);font-weight:700;}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
