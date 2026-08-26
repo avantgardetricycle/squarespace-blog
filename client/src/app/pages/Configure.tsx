@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useRevalidator } from "react-router";
 import {
   Copy,
   Monitor,
@@ -2196,6 +2196,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
 
 export default function Configure() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
   const siteKey = searchParams.get("siteKey");
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2243,6 +2244,7 @@ export default function Configure() {
     allowAnonymousComments: boolean;
     subscriberCommentsEnabled: boolean;
     apiKeyVerified: boolean;
+    apiKeyInvalid: boolean;
     requireApproval: boolean;
     autoCloseAfterDays: number | null;
     notifyEmail: boolean;
@@ -2417,6 +2419,7 @@ export default function Configure() {
           allowAnonymousComments: data.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
           apiKeyVerified: data.apiKeyVerified ?? false,
+          apiKeyInvalid: data.apiKeyInvalid ?? false,
           requireApproval: data.requireApproval ?? false,
           autoCloseAfterDays: (data.autoCloseAfterDays ?? null) as number | null,
           notifyEmail: data.notifyEmail ?? true,
@@ -2430,6 +2433,7 @@ export default function Configure() {
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
+          apiKeyInvalid: false,
           requireApproval: false,
           autoCloseAfterDays: null as number | null,
           notifyEmail: true,
@@ -2448,6 +2452,7 @@ export default function Configure() {
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
+          apiKeyInvalid: false,
           requireApproval: false,
           autoCloseAfterDays: null as number | null,
           notifyEmail: true,
@@ -4202,16 +4207,30 @@ export default function Configure() {
                               </div>
                               <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
                               {commentSettings.apiKeyVerified && (
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
-                                    className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
-                                    aria-label="Edit API key"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
+                                <div className={commentSettings.apiKeyInvalid ? "opacity-70" : undefined}>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                      className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
+                                      aria-label="Edit API key"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  {commentSettings.apiKeyInvalid && (
+                                    <p className="text-xs text-amber-800">
+                                      Squarespace rejected this key.{" "}
+                                      <button
+                                        type="button"
+                                        onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                        className="text-[#5B4FE8] hover:underline"
+                                      >
+                                        Update it
+                                      </button>
+                                    </p>
+                                  )}
                                 </div>
                               )}
                               {!commentSettings.apiKeyVerified && (
@@ -5987,10 +6006,12 @@ export default function Configure() {
                 ? {
                     ...p,
                     apiKeyVerified: true,
+                    apiKeyInvalid: false,
                     subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
                   }
                 : p
             );
+            void revalidator.revalidate();
           }}
         />
       </aside>

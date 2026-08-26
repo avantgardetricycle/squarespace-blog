@@ -48,7 +48,8 @@ model Site {
   blogPath            String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
   blogPassword        String?  @map("blog_password") // for password-protected Squarespace blogs (?password=)
   squarespaceApiKeyEnc String? @map("squarespace_api_key_enc") @db.Text // encrypted Squarespace Profiles API key
-  profilesApiLastAlertAt DateTime? @map("profiles_api_last_alert_at")
+  squarespaceApiKeyInvalidAt DateTime? @map("squarespace_api_key_invalid_at")
+  squarespaceApiKeyAlertEmailSentAt DateTime? @map("squarespace_api_key_alert_email_sent_at")
   status              String   @default("active") // active | disabled
   verificationStatus  String   @default("pending") @map("verification_status") // pending | verified | needs_attention
   paywallMode         String   @default("auto") @map("paywall_mode") // auto | force_logged_out | force_logged_in

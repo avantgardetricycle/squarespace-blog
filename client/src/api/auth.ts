@@ -34,6 +34,7 @@ export interface DashboardMe {
     paywallSettings?: SitePaywallSettingsJson | null
     status: string
     verificationStatus: 'pending' | 'verified' | 'needs_attention'
+    squarespaceApiKeyInvalid?: boolean
     createdAt: string
   }>
   canCreateSite: boolean

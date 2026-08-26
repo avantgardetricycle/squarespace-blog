@@ -212,6 +212,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         paywallDetectionSource: s.paywallDetectionSource,
         status: s.status,
         verificationStatus: s.verificationStatus,
+        squarespaceApiKeyInvalid: Boolean(s.squarespaceApiKeyInvalidAt),
         createdAt: s.createdAt,
         paywallSettings: s.sitePaywallSettings
           ? paywallSettingsJson(s.sitePaywallSettings)

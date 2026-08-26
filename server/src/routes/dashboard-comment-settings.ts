@@ -63,6 +63,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     allowAnonymousComments: s?.allowAnonymousComments ?? DEFAULT_SETTINGS.allowAnonymousComments,
     subscriberCommentsEnabled: s?.subscriberCommentsEnabled ?? DEFAULT_SETTINGS.subscriberCommentsEnabled,
     apiKeyVerified: !!effectiveApiKeyEnc,
+    apiKeyInvalid: Boolean(site.squarespaceApiKeyInvalidAt),
     requireApproval: s?.requireApproval ?? DEFAULT_SETTINGS.requireApproval,
     autoCloseAfterDays: rawAutoClose === 0 ? null : rawAutoClose,
     notifyEmail: s?.notifyEmail ?? DEFAULT_SETTINGS.notifyEmail,
@@ -79,6 +80,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     allowAnonymousComments: settings.allowAnonymousComments,
     subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
     apiKeyVerified: settings.apiKeyVerified,
+    apiKeyInvalid: settings.apiKeyInvalid,
     commentsEnabled: settings.commentsEnabled,
     allowNewComments: settings.allowNewComments,
   })
@@ -215,9 +217,14 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
           .filter((s) => hostnameOfSiteUrl(s.url) === host)
           .map((s) => s.id)
       : [site.id]
+    const idsToUpdate = siblingIds.length > 0 ? siblingIds : [site.id]
     await prisma.site.updateMany({
-      where: { id: { in: siblingIds.length > 0 ? siblingIds : [site.id] } },
-      data: { squarespaceApiKeyEnc: updates.squarespaceApiKeyEnc as string },
+      where: { id: { in: idsToUpdate } },
+      data: {
+        squarespaceApiKeyEnc: updates.squarespaceApiKeyEnc as string,
+        squarespaceApiKeyInvalidAt: null,
+        squarespaceApiKeyAlertEmailSentAt: null,
+      },
     })
     console.log('[comment-settings] API key saved', {
       userId: user.id,

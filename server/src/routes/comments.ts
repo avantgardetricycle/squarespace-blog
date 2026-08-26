@@ -7,7 +7,7 @@ import crypto from 'crypto'
 import prisma from '../db/index.js'
 import { decrypt } from '../lib/encryption.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
-import { reportSquarespaceProfilesApiFailure } from '../lib/profiles-api-alert.js'
+import { markSquarespaceApiKeyInvalid } from '../lib/profiles-api-alert.js'
 import {
   clampParentIdsForThreadDepth,
   resolveParentIdForReply,
@@ -793,22 +793,18 @@ router.post('/', async (req: Request, res: Response) => {
           reason: 'profiles-api-non-200',
           status: resProfiles.status,
         })
-        reportSquarespaceProfilesApiFailure({
-          siteId: site.id,
-          siteKey: site.siteKey,
-          siteName: site.name ?? null,
-          siteUrl: site.url ?? null,
-          status: resProfiles.status,
-          reason:
-            resProfiles.status === 401
-              ? 'profiles_unauthorized'
-              : resProfiles.status === 403
-                ? 'profiles_forbidden'
-                : 'profiles_http_error',
-          errorBodySnippet: errSnippet,
-          ...emailLookupMeta(email),
-          ownerEmails: [site.user?.email, settings.notificationEmail],
-        }).catch((err) => console.error('[comments] Profiles API alert error:', err))
+        if (resProfiles.status === 401 || resProfiles.status === 403) {
+          markSquarespaceApiKeyInvalid({
+            siteId: site.id,
+            siteKey: site.siteKey,
+            siteName: site.name ?? null,
+            siteUrl: site.url ?? null,
+            status: resProfiles.status,
+            reason: resProfiles.status === 403 ? 'profiles_forbidden' : 'profiles_unauthorized',
+            errorBodySnippet: errSnippet,
+            ownerEmails: [site.user?.email, settings.notificationEmail],
+          }).catch((err) => console.error('[comments] Profiles API alert error:', err))
+        }
       }
     } catch (err) {
       console.error('[comments] Profiles API error:', err)
@@ -824,18 +820,7 @@ router.post('/', async (req: Request, res: Response) => {
         verifiedSubscriber: false,
         reason: 'profiles-api-exception',
       })
-      reportSquarespaceProfilesApiFailure({
-        siteId: site.id,
-        siteKey: site.siteKey,
-        siteName: site.name ?? null,
-        siteUrl: site.url ?? null,
-        status: null,
-        reason: 'profiles_api_exception',
-        errorBodySnippet: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
-        ...emailLookupMeta(email),
-        ownerEmails: [site.user?.email, settings.notificationEmail],
-      }).catch((alertErr) => console.error('[comments] Profiles API alert error:', alertErr))
-      // Graceful degradation - continue as unverified
+      // Graceful degradation - continue as unverified. Network/5xx is not a dead API key.
     }
   } else {
     const skipReason = !settings.subscriberCommentsEnabled
