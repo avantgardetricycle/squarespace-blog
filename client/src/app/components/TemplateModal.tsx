@@ -146,7 +146,7 @@ export function TemplateModal({
   return (
     <Dialog open={open} onOpenChange={handlePickerOpenChange}>
       <DialogContent
-        className="relative sm:max-w-5xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0"
+        className="sm:max-w-5xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0"
         onEscapeKeyDown={(e) => {
           if (pending) {
             e.preventDefault();
