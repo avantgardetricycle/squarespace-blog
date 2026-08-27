@@ -1,15 +1,23 @@
 /**
  * Group BetterBlog blogs by Squarespace website (origin).
  * Header code injection is per website, so install snippets are per origin.
+ *
+ * `www.example.com` and `example.com` are the same Squarespace site (apex vs www
+ * are interchangeable on custom domains), so grouping strips a leading `www.`.
  */
 
 export type SquarespaceSiteGroup<T extends { url?: string | null }> = {
-  /** `https://example.com`, or null when the blog has no parseable URL. */
+  /** Canonical origin (`https://example.com`), or null when the blog has no parseable URL. */
   origin: string | null;
-  /** Hostname for display (`example.com`), or "Unconfigured". */
+  /** Hostname for display (`example.com`, www stripped), or "Unconfigured". */
   originLabel: string;
   blogs: T[];
 };
+
+/** Drop only the `www.` subdomain; `shop.example.com` stays distinct. */
+function stripWww(hostname: string): string {
+  return hostname.replace(/^www\./i, "").toLowerCase();
+}
 
 export function squarespaceOriginFromUrl(
   url: string | null | undefined,
@@ -22,7 +30,10 @@ export function squarespaceOriginFromUrl(
   try {
     const parsed = new URL(toParse);
     if (!parsed.hostname) return null;
-    return { origin: parsed.origin, hostname: parsed.hostname };
+    const hostname = stripWww(parsed.hostname);
+    const defaultPort = parsed.protocol === "https:" ? "443" : "80";
+    const port = parsed.port && parsed.port !== defaultPort ? `:${parsed.port}` : "";
+    return { origin: `${parsed.protocol}//${hostname}${port}`, hostname };
   } catch {
     return null;
   }
