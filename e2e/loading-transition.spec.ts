@@ -12,6 +12,9 @@
  *      load, but exercised on the single-post code path that has its own
  *      auth-hydration / paywall flow.
  *
+ * A second describe covers two BetterBlog collections on one Squarespace site:
+ * a combined Header snippet, and a dual-paste of two single-blog snippets.
+ *
  * The check works frame-by-frame via requestAnimationFrame: any frame in
  * which (a) <body> is not visibility:hidden / display:none, and (b) at least
  * one <article data-native-squarespace="true"> has a non-zero box rect and
@@ -500,3 +503,168 @@ test.describe("Loading transition", () => {
     expect(overlayPosts).toBe(1);
   });
 });
+
+const PATH_A = "/e2e/fake-blog-a";
+const PATH_B = "/e2e/fake-blog-b";
+const KEY_A = "loading-transition-blog-a";
+const KEY_B = "loading-transition-blog-b";
+
+function makeConfig(siteKey: string, blogPath: string) {
+  return { ...configResponse, siteKey, blogPath };
+}
+
+function makeBlogJson(blogPath: string, label: string) {
+  return {
+    collection: { title: `${label} Collection`, fullUrl: blogPath },
+    website: { title: "E2E Fixture Site" },
+    items: [
+      {
+        id: `${label}-post-1`,
+        title: `${label} Post 1`,
+        urlId: `${label}-post-1`,
+        fullUrl: `${blogPath}/${label}-post-1`,
+        assetUrl: "https://example.invalid/x.jpg",
+        body: `<p>${label} body</p>`,
+        excerpt: `${label} excerpt`,
+        publishOn: 1_700_000_000_000,
+        author: { displayName: "BetterBlog Author" },
+      },
+    ],
+  };
+}
+
+function fakeSquarespaceHtml(headerInjection: string, blogPath: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fake Squarespace Blog (e2e multi)</title>
+  <style>
+    body { margin: 0; font-family: Georgia, serif; background: #f3edda; color: #2a2a2a; }
+    article.native-squarespace-blog-item {
+      background: #ff00ff;
+      border: 4px solid #00ff00;
+      padding: 24px;
+      min-height: 120px;
+    }
+  </style>
+  ${headerInjection}
+</head>
+<body>
+  <main id="content">
+    <article class="native-squarespace-blog-item" data-native-squarespace="true">
+      <h2>Native Squarespace Post</h2>
+      <p>This server-rendered Squarespace blog markup must NEVER appear on screen.</p>
+    </article>
+  </main>
+</body>
+</html>`;
+}
+
+async function installMultiBlogRoutes(
+  page: Page,
+  htmlForPath: Record<string, string>,
+): Promise<void> {
+  await page.route("**/api/**", async (route) => {
+    await route.fulfill({ status: 204, contentType: "application/json", body: "{}" });
+  });
+  await page.route("**/api/config/check-placeholder-images", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await route.fulfill({ status: 200, contentType: "application/json", body: '{"data":{}}' });
+  });
+  await page.route(`**/api/config/${KEY_A}`, async (route) =>
+    fulfillJson(route, makeConfig(KEY_A, PATH_A)),
+  );
+  await page.route(`**/api/config/${KEY_B}`, async (route) =>
+    fulfillJson(route, makeConfig(KEY_B, PATH_B)),
+  );
+
+  const jsonA = makeBlogJson(PATH_A, "BlogA");
+  const jsonB = makeBlogJson(PATH_B, "BlogB");
+
+  for (const [blogPath, json] of [
+    [PATH_A, jsonA],
+    [PATH_B, jsonB],
+  ] as const) {
+    const escapedPath = blogPath.replace(/[/.]/g, "\\$&");
+    const blogPathRegex = new RegExp(`${escapedPath}(/[^?]*)?(\\?.*)?$`);
+    await page.route(blogPathRegex, async (route) => {
+      const reqUrl = new URL(route.request().url());
+      if (reqUrl.searchParams.get("format") === "json") {
+        await fulfillJson(route, json);
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: htmlForPath[blogPath],
+      });
+    });
+  }
+
+  await page.route(/\/loader\.js(\?.*)?$/, async (route) => fulfillScript(route, LOADER_PATH));
+  await page.route(/\/renderer\.js(\?.*)?$/, async (route) => fulfillScript(route, RENDERER_PATH));
+}
+
+test.describe("Loading transition — multiple blogs on one Squarespace site", () => {
+  test("combined snippet: cold load of each collection never paints native markup", async ({
+    page,
+  }) => {
+    const headerInjection = buildBetterBlogSquarespaceHeaderHtml({
+      loaderUrl: "/loader.js",
+      blogs: [
+        { siteKey: KEY_A, blogPath: PATH_A },
+        { siteKey: KEY_B, blogPath: PATH_B },
+      ],
+    });
+    await installMultiBlogRoutes(page, {
+      [PATH_A]: fakeSquarespaceHtml(headerInjection, PATH_A),
+      [PATH_B]: fakeSquarespaceHtml(headerInjection, PATH_B),
+    });
+    await installFlashWatcher(page);
+
+    await page.goto(PATH_A, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+    expect(await collectFlashFrames(page), "no flash on collection A").toEqual([]);
+    await expect(page.locator("#blog-overlay-list")).toContainText("BlogA Post 1");
+    await expect(page.locator("#blog-overlay-list")).not.toContainText("BlogB Post 1");
+
+    await installFlashWatcher(page);
+    await page.goto(PATH_B, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+    expect(await collectFlashFrames(page), "no flash on collection B").toEqual([]);
+    await expect(page.locator("#blog-overlay-list")).toContainText("BlogB Post 1");
+    await expect(page.locator("#blog-overlay-list")).not.toContainText("BlogA Post 1");
+  });
+
+  test("dual-paste of two single-blog snippets: visiting blog B does not flash", async ({
+    page,
+  }) => {
+    const snippetA = buildBetterBlogSquarespaceHeaderHtml({
+      loaderUrl: "/loader.js",
+      siteKey: KEY_A,
+      blogPath: PATH_A,
+    });
+    const snippetB = buildBetterBlogSquarespaceHeaderHtml({
+      loaderUrl: "/loader.js",
+      siteKey: KEY_B,
+      blogPath: PATH_B,
+    });
+    const headerInjection = `${snippetA}\n${snippetB}`;
+    await installMultiBlogRoutes(page, {
+      [PATH_A]: fakeSquarespaceHtml(headerInjection, PATH_A),
+      [PATH_B]: fakeSquarespaceHtml(headerInjection, PATH_B),
+    });
+    await installFlashWatcher(page);
+
+    await page.goto(PATH_B, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+    expect(
+      await collectFlashFrames(page),
+      "Native markup must stay hidden when a second pasted loader is off-route",
+    ).toEqual([]);
+    await expect(page.locator("#blog-overlay-list")).toContainText("BlogB Post 1");
+  });
+});
+

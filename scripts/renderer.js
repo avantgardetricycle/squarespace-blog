@@ -2146,7 +2146,8 @@
         // #endregion
         if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
-          this._clearBootstrapLoading();
+          // Do not clear bb-loading-blog: another collection on this Squarespace
+          // site (or a loader that has not finished) may own the overlay.
           return;
         }
         // #region agent log
@@ -7099,7 +7100,6 @@
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
         if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route');
-          this._clearBootstrapLoading();
           return;
         }
       }

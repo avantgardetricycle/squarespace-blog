@@ -76,6 +76,65 @@
     return false;
   }
 
+  function normalizeBlogPath(blogPath) {
+    var raw = (blogPath && String(blogPath).trim()) || '/blog';
+    if (raw === '/') return '/';
+    if (raw.charAt(0) !== '/') raw = '/' + raw;
+    return raw.replace(/\/+$/, '') || '/blog';
+  }
+
+  /** KEEP IN SYNC with client/src/lib/betterBlogInstallationSnippet.ts pathMatchesBlogPrefix. */
+  function pathMatchesPrefix(pathname, prefix) {
+    if (!prefix) return false;
+    var path = pathname || '/';
+    if (prefix === '/') return path === '/' || path === '';
+    return path === prefix || path.indexOf(prefix + '/') === 0;
+  }
+
+  function matchBlogEntry(pathname, entries) {
+    var withPath = [];
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i] && entries[i].blogPath) withPath.push(entries[i]);
+    }
+    withPath.sort(function (a, b) {
+      return String(b.blogPath).length - String(a.blogPath).length;
+    });
+    for (var j = 0; j < withPath.length; j++) {
+      if (pathMatchesPrefix(pathname, withPath[j].blogPath)) return withPath[j];
+    }
+    return null;
+  }
+
+  function parseBlogEntries(el) {
+    if (!el) return [];
+    var blogsAttr = el.getAttribute('data-blogs');
+    if (blogsAttr && String(blogsAttr).trim()) {
+      try {
+        var parsed = JSON.parse(blogsAttr);
+        if (Object.prototype.toString.call(parsed) === '[object Array]') {
+          var fromJson = [];
+          for (var bi = 0; bi < parsed.length; bi++) {
+            var row = parsed[bi] || {};
+            var key = row.siteKey ? String(row.siteKey).trim() : '';
+            if (!key) continue;
+            fromJson.push({
+              siteKey: key,
+              blogPath: row.blogPath ? normalizeBlogPath(row.blogPath) : null
+            });
+          }
+          if (fromJson.length) return fromJson;
+        }
+      } catch (eParse) { /* fall through to data-site-key */ }
+    }
+    var singleKey = el.getAttribute('data-site-key');
+    if (!singleKey || !String(singleKey).trim()) return [];
+    var pathAttr = el.getAttribute('data-blog-path');
+    return [{
+      siteKey: String(singleKey).trim(),
+      blogPath: pathAttr && String(pathAttr).trim() ? normalizeBlogPath(pathAttr) : null
+    }];
+  }
+
   // 1. Read attributes from the injected script tag
   var script = document.currentScript;
   if (!script) {
@@ -88,7 +147,22 @@
       }
     }
   }
-  var siteKey = script && script.getAttribute('data-site-key');
+  var blogEntries = parseBlogEntries(script);
+  var pathnameNow = (typeof location !== 'undefined' && location.pathname) ? location.pathname : '/';
+  var knownPathEntries = [];
+  var unknownPathEntries = [];
+  for (var ei = 0; ei < blogEntries.length; ei++) {
+    if (blogEntries[ei].blogPath) knownPathEntries.push(blogEntries[ei]);
+    else unknownPathEntries.push(blogEntries[ei]);
+  }
+  var matchedEntry = knownPathEntries.length ? matchBlogEntry(pathnameNow, knownPathEntries) : null;
+  var siteKey = matchedEntry
+    ? matchedEntry.siteKey
+    : (unknownPathEntries.length
+      ? unknownPathEntries[0].siteKey
+      : (blogEntries[0] ? blogEntries[0].siteKey : null));
+  var onKnownBlogRoute = Boolean(matchedEntry);
+  var hasUnknownBlogPaths = unknownPathEntries.length > 0;
   // Placeholder is replaced at build time (see scripts/build.mjs) BEFORE minify.
   // Do not compare to the placeholder string — terser constant-folds that away.
   // After injection the value starts with "ht" (https://); the placeholder starts with "__".
@@ -106,12 +180,18 @@
   }
   var normalizedApiBase = apiBase.replace(/\/+$/, '');
 
-  if (!siteKey) {
-    console.error('[BlogOverlay] Missing data-site-key attribute');
+  if (!blogEntries.length || !siteKey) {
+    console.error('[BlogOverlay] Missing data-site-key / data-blogs attribute');
     return;
   }
   if (!normalizedApiBase) {
     console.error('[BlogOverlay] Missing data-api-base and could not derive from script src');
+    return;
+  }
+  // Combined snippet lists every collection path. If none match, this page is
+  // not a BetterBlog route — leave native Squarespace alone (do not install
+  // or clear the shared overlay; another snippet/loader may own it).
+  if (knownPathEntries.length && !hasUnknownBlogPaths && !onKnownBlogRoute) {
     return;
   }
 
@@ -232,11 +312,10 @@
   window.__bbClearBootstrapLoading = clearBootstrapLoading;
   window.__bbInstallBootstrapLoading = installBootstrapLoading;
 
-  // The Header injection already added bb-loading-blog synchronously. We
-  // (re)assert it here as a belt-and-suspenders fallback for sites that only
-  // installed the loader script. Safe to call before <body> exists because the
-  // class lives on <html>, and the overlay is rendered via :before/:after
-  // pseudo-elements on <html>.
+  // The Header injection already added bb-loading-blog synchronously when the
+  // path matches a listed collection. Re-assert only when this loader owns the
+  // current route so a sibling loader on the same Header cannot hide non-blog
+  // pages or fight over the overlay.
   try {
     var _earlyEditResult = isSquarespaceEditingUi();
     var _inIframeEarly = false;
@@ -249,8 +328,11 @@
       console.warn('[BB-DEBUG-7918cd] loader: IFRAME detected, skipping bootstrap overlay (hypothesisId=H2_FIX)');
       // #endregion
       clearBootstrapLoading();
-    } else if (!_earlyEditResult) installBootstrapLoading();
-    else clearBootstrapLoading();
+    } else if (_earlyEditResult) {
+      clearBootstrapLoading();
+    } else if (onKnownBlogRoute) {
+      installBootstrapLoading();
+    }
   } catch (earlyBootErr) { /* ignore */ }
 
   var configPromise = null;
@@ -313,12 +395,9 @@
     }, 10);
   }
 
-  function startLoader() {
-    if (isSquarespaceEditingUi()) {
-      console.log('[BlogOverlay] Skipping loader: Squarespace editing UI detected');
-      clearBootstrapLoading();
-      return;
-    }
+  function beginOwnedLoader(config) {
+    if (window.__bbLoaderStarted) return;
+    window.__bbLoaderStarted = true;
     var _inIframeStart = false;
     try { _inIframeStart = window.parent !== window; } catch (e) { _inIframeStart = true; }
     if (!_inIframeStart || isExplicitPreviewContext()) {
@@ -328,18 +407,51 @@
       console.warn('[BB-DEBUG-7918cd] startLoader: IFRAME detected, skipping installBootstrapLoading (hypothesisId=H2_FIX)');
       // #endregion
     }
+    appendRendererScript(config);
+  }
 
+  function configMatchesCurrentPath(config) {
+    var bp = config && config.blogPath ? normalizeBlogPath(config.blogPath) : '';
+    return pathMatchesPrefix(pathnameNow, bp);
+  }
+
+  function startLoader() {
+    if (isSquarespaceEditingUi()) {
+      console.log('[BlogOverlay] Skipping loader: Squarespace editing UI detected');
+      clearBootstrapLoading();
+      return;
+    }
+    if (window.__bbLoaderStarted) return;
+
+    function onConfigError(error) {
+      // Only lift the overlay if this page is a blog we intended to own.
+      // Off-route / sibling-blog failures must not uncover native chrome
+      // that another loader is still covering.
+      if (onKnownBlogRoute) clearBootstrapLoading();
+      console.error('[BlogOverlay] Failed to fetch config:', error);
+      if (error && error.message === 'Failed to fetch') {
+        console.error('[BlogOverlay] This often means: (1) Mixed content - use HTTPS for the API when your blog is on HTTPS, or (2) CORS/network - ensure the API server is running and reachable.');
+      }
+    }
+
+    if (onKnownBlogRoute) {
+      fetchConfig()
+        .then(function(config) {
+          beginOwnedLoader(config);
+        })
+        .catch(onConfigError);
+      return;
+    }
+
+    // Legacy Header snippets only have data-site-key. Fetch config to learn
+    // the collection path, then bail without clearing if this is not our route
+    // (another pasted loader may own the current collection).
     fetchConfig()
       .then(function(config) {
-        appendRendererScript(config);
+        if (!configMatchesCurrentPath(config)) return;
+        beginOwnedLoader(config);
       })
-      .catch(function(error) {
-        clearBootstrapLoading();
-        console.error('[BlogOverlay] Failed to fetch config:', error);
-        if (error && error.message === 'Failed to fetch') {
-          console.error('[BlogOverlay] This often means: (1) Mixed content - use HTTPS for the API when your blog is on HTTPS, or (2) CORS/network - ensure the API server is running and reachable.');
-        }
-      });
+      .catch(onConfigError);
   }
 
   // Start immediately — do not wait for DOMContentLoaded. The config fetch begins

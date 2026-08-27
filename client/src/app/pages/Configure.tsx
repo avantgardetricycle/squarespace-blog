@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useSearchParams, useRevalidator } from "react-router";
 import {
-  Copy,
   Monitor,
   Tablet,
   Smartphone,
@@ -58,8 +57,8 @@ import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
-import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
-import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
+import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
+import { groupBlogsBySquarespaceOrigin, squarespaceOriginFromUrl } from "@/lib/squarespaceSiteGroups";
 
 const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
 const PAYWALL_EYEBROW_MAX = 80;
@@ -2205,7 +2204,6 @@ export default function Configure() {
   const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [saving, setSaving] = useState(false);
-  const [copiedSiteKey, setCopiedSiteKey] = useState<string | null>(null);
   const [authors, setAuthors] = useState<BlogAuthorOption[]>([]);
   const [blogItems, setBlogItems] = useState<Array<{
     id?: string;
@@ -3595,52 +3593,34 @@ export default function Configure() {
                 </DialogTrigger>
                 .
               </p>
-              <DialogContent className="sm:max-w-lg">
+              <DialogContent className="sm:max-w-lg overflow-x-hidden">
                 <DialogHeader>
                   <DialogTitle>Installation instructions</DialogTitle>
+                  <DialogDescription>
+                    One snippet per Squarespace site. Paste it in Header code injection.
+                  </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <p className="text-sm text-[#6b6b6b]">
-                    In Squarespace, go to Settings → Advanced → Code Injection → Header. Paste the
-                    full block below in order: the inline preloader first (reduces native blog flash),
-                    then the BetterBlog loader. The path inside the small script should match your
-                    blog URL prefix (we use your saved blog path when known; default is{" "}
-                    <code className="bg-[#f0eefc] px-1 rounded text-[#0a0a0a]">/blog</code>).
-                  </p>
-                  {typeof window !== "undefined" && window.location.protocol === "http:" && (
-                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                      Local dev (HTTP): If your blog is on HTTPS, the overlay may fail to load due to mixed content. Use a tunnel (e.g. ngrok) or deploy to test.
-                    </p>
-                  )}
-                  {(() => {
-                    const snippet = buildBetterBlogSquarespaceHeaderHtml({
-                      loaderUrl: getBetterBlogLoaderUrl(),
-                      siteKey: effectiveSiteKey,
-                      blogPath: effectiveSite?.blogPath ?? null,
-                      apiBase: getBetterBlogApiBase(),
-                    });
-                    return (
-                      <div className="space-y-2">
-                        <pre className="text-xs leading-4 bg-[#f7f6f3] p-3 rounded-md max-h-[7.5rem] overflow-auto whitespace-pre-wrap break-all font-mono">
-                          {snippet}
-                        </pre>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            navigator.clipboard.writeText(snippet);
-                            setCopiedSiteKey(effectiveSiteKey);
-                            toast.success("Installation code copied to clipboard");
-                            setTimeout(() => setCopiedSiteKey(null), 2000);
-                          }}
-                        >
-                          <Copy className="h-3.5 w-3.5 mr-1.5" />
-                          {copiedSiteKey === effectiveSiteKey ? "Copied!" : "Copy code"}
-                        </Button>
-                      </div>
-                    );
-                  })()}
-                </div>
+                {(() => {
+                  const originInfo = squarespaceOriginFromUrl(effectiveSite?.url);
+                  const group = originInfo
+                    ? groupBlogsBySquarespaceOrigin(me?.sites ?? []).find(
+                        (g) => g.origin === originInfo.origin,
+                      )
+                    : null;
+                  const blogs = group?.blogs?.length
+                    ? group.blogs
+                    : effectiveSite
+                      ? [effectiveSite]
+                      : [];
+                  const originLabel = group?.originLabel || originInfo?.hostname || "this site";
+                  return (
+                    <InstallationInstructionsBody
+                      originLabel={originLabel}
+                      blogs={blogs}
+                      variant="manage"
+                    />
+                  );
+                })()}
               </DialogContent>
             </Dialog>
           )}
