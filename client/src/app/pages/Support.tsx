@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLoaderData, useSearchParams } from "react-router";
+import { useRouteLoaderData, useSearchParams } from "react-router";
 import { ArrowUp, Check, Loader2, Paperclip } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -39,11 +39,12 @@ function transcriptText(messages: SupportChatMessage[]): string {
 }
 
 export default function Support() {
-  const me = useLoaderData() as DashboardMe;
+  const me = useRouteLoaderData("dashboard") as DashboardMe | undefined;
   const [searchParams, setSearchParams] = useSearchParams();
   const siteKey = searchParams.get("siteKey");
+  const sites = me?.sites ?? [];
   const selectedSite =
-    me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0] ?? null;
+    sites.find((s) => s.siteKey === siteKey) ?? sites[0] ?? null;
 
   const [tab, setTab] = useState("ask");
   const [messages, setMessages] = useState<SupportChatMessage[]>([]);
@@ -63,11 +64,11 @@ export default function Support() {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!me.sites.length) return;
-    if (!siteKey || !me.sites.some((s) => s.siteKey === siteKey)) {
-      setSearchParams({ siteKey: me.sites[0].siteKey }, { replace: true });
+    if (!sites.length) return;
+    if (!siteKey || !sites.some((s) => s.siteKey === siteKey)) {
+      setSearchParams({ siteKey: sites[0].siteKey }, { replace: true });
     }
-  }, [me.sites, siteKey, setSearchParams]);
+  }, [sites, siteKey, setSearchParams]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
@@ -169,6 +170,12 @@ export default function Support() {
     [selectedSite]
   );
 
+  if (!me) {
+    return (
+      <div className="flex h-full items-center justify-center text-[#6b6b6b]">Loading…</div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f7f6f3] p-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -178,7 +185,7 @@ export default function Support() {
             Ask about setup, templates, analytics, comments, or troubleshooting.
           </p>
         </div>
-        {me.sites.length > 1 && (
+        {sites.length > 1 && (
           <Select
             value={selectedSite?.siteKey}
             onValueChange={(v) => setSearchParams({ siteKey: v })}
@@ -187,7 +194,7 @@ export default function Support() {
               <SelectValue placeholder="Select blog" />
             </SelectTrigger>
             <SelectContent>
-              {me.sites.map((s) => (
+              {sites.map((s) => (
                 <SelectItem key={s.id} value={s.siteKey}>
                   {s.name || s.url || "Unnamed blog"}
                 </SelectItem>
@@ -360,7 +367,7 @@ export default function Support() {
                 </div>
                 <div className="rounded-xl bg-[#f7f6f3] px-3 py-2 text-sm text-[#6b6b6b] space-y-0.5">
                   <p>
-                    We&apos;ll reply to <span className="font-medium text-[#0a0a0a]">{me.user.email}</span>
+                    We&apos;ll reply to <span className="font-medium text-[#0a0a0a]">{me?.user.email}</span>
                   </p>
                   {selectedSite && (
                     <p>

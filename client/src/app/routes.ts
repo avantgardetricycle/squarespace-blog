@@ -67,6 +67,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/dashboard",
+    id: "dashboard",
     Component: AppLayout,
     loader: protectedLoader,
     children: [
