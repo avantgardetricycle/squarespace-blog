@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/app/components/ui/table";
+import { SupportMarkdown } from "@/app/components/SupportMarkdown";
 import type { DashboardMe } from "@/api/auth";
 import {
   fetchSupportConversation,
@@ -55,7 +56,13 @@ function Transcript({ messages }: { messages: SupportChatMessage[] }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
             {m.role === "user" ? "User" : "Assistant"}
           </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-[#0a0a0a]">{m.content}</p>
+          {m.role === "assistant" ? (
+            <div className="mt-1 text-sm text-[#0a0a0a]">
+              <SupportMarkdown>{m.content}</SupportMarkdown>
+            </div>
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap text-sm text-[#0a0a0a]">{m.content}</p>
+          )}
         </div>
       ))}
     </div>

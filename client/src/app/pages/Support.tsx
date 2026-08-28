@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/app/components/ui/select";
 import { cn } from "@/app/components/ui/utils";
+import { SupportMarkdown } from "@/app/components/SupportMarkdown";
 import type { DashboardMe } from "@/api/auth";
 import {
   streamSupportChat,
@@ -252,13 +253,21 @@ export default function Support() {
                 <div
                   key={`${message.role}-${index}`}
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-3 text-[14.5px] leading-relaxed whitespace-pre-wrap",
+                    "max-w-[85%] rounded-2xl px-4 py-3 text-[14.5px] leading-relaxed",
                     message.role === "user"
-                      ? "ml-auto bg-[#5B4FE8] text-white"
+                      ? "ml-auto whitespace-pre-wrap bg-[#5B4FE8] text-white"
                       : "bg-[#f7f6f3] text-[#0a0a0a]"
                   )}
                 >
-                  {message.content || (streaming && index === messages.length - 1 ? "…" : "")}
+                  {message.role === "assistant" ? (
+                    message.content ? (
+                      <SupportMarkdown>{message.content}</SupportMarkdown>
+                    ) : streaming && index === messages.length - 1 ? (
+                      "…"
+                    ) : null
+                  ) : (
+                    message.content
+                  )}
                 </div>
               ))}
               {chatError && <p className="text-sm text-red-600">{chatError}</p>}
