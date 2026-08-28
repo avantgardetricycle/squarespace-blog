@@ -4872,8 +4872,6 @@ export default function Configure() {
                     </div>
                     )}
 
-                    )}
-
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Footer Content</span>
