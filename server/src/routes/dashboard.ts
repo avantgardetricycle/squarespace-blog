@@ -13,6 +13,7 @@ import {
 import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
+import { isSupportTeamEmail } from '../lib/support-team.js'
 import { randomBytes } from 'crypto'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 
@@ -218,7 +219,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
-      canCreateSite: maxSites === null || siteCount < maxSites
+      canCreateSite: maxSites === null || siteCount < maxSites,
+      isSupportTeam: isSupportTeamEmail(userWithRelations.email)
     })
   } catch (err) {
     console.error('Dashboard me error:', err)

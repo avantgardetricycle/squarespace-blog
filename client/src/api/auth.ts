@@ -38,6 +38,7 @@ export interface DashboardMe {
     createdAt: string
   }>
   canCreateSite: boolean
+  isSupportTeam?: boolean
 }
 
 export async function getDashboardMe(): Promise<DashboardMe | null> {

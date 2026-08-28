@@ -19,6 +19,7 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
    - **Transaction pooler** URI → `DATABASE_URL` (port `6543`, `?pgbouncer=true` for Prisma).
    - **Session / direct** URI → `DIRECT_URL` (port `5432`, for migrations).
 3. In **Storage**, create a **public** bucket named `author-photos` (public so Squarespace `<img>` tags work). Leave writes closed to anon; only the service role uploads. The API can also create this bucket on first upload if it is missing.
+4. Create a **private** bucket named `support-screenshots` for Support tab attachments (PNG/JPG/GIF, max 5MB). The API can also create this bucket on first upload if it is missing. Do not make it public — team views use signed URLs.
 4. In **Project Settings → API**, copy:
    - **Project URL** → `SUPABASE_URL`
    - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (server only; never expose as `VITE_`)
@@ -39,14 +40,17 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | -------- | ----------- |
 | `DATABASE_URL` | Supabase **transaction pooler** (`postgres.[ref]` @ `*.pooler.supabase.com:6543`, `?pgbouncer=true`) — see [docs/SUPABASE_CONNECTION.md](docs/SUPABASE_CONNECTION.md) |
 | `DIRECT_URL` | Supabase **session pooler** (`:5432`) or **direct** (`db.[ref].supabase.co:5432`) — for `prisma db push` / CI |
-| `SUPABASE_URL` | Supabase project URL (`https://<project-ref>.supabase.co`) — author photo Storage |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase **service_role** key (server only) — author photo uploads |
+| `SUPABASE_URL` | Supabase project URL (`https://<project-ref>.supabase.co`) — author photo Storage and support screenshot Storage |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase **service_role** key (server only) — author photo and support screenshot uploads |
 | `APP_URL` | `https://your-app.vercel.app` or custom domain |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `https://your-app.vercel.app/api/webhooks/stripe` |
 | `STRIPE_ENVIRONMENT` | `sandbox` (Preview / test key) or `live` (Production / live key). Aliases: `test`/`staging` → sandbox; `production`/`prod` → live. If unset, inferred from `STRIPE_SECRET_KEY` (`sk_test` / `sk_live`). |
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_MAIL_FROM` | Verified sender |
+| `SUPPORT_EMAIL` | Inbox for support portal and Support tab tickets (default `support@betterblog.xyz`) |
+| `ANTHROPIC_API_KEY` | Server-only key for the dashboard Support chatbot (`claude-sonnet-4-6`) |
+| `TEAM_SUPPORT_EMAILS` | Comma-separated emails allowed to open `/internal/support` and team support APIs |
 | `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
 | `HCAPTCHA_*` | hCaptcha keys |
 | `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA (checkout + Log in). Set per environment (e.g. `true` on Preview / staging, `false` on Production). Baked into the client at build time; `/api/health` overrides when reachable. |

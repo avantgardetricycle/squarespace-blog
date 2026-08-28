@@ -427,3 +427,62 @@ export async function sendSupportRequestEmail(payload: SupportRequestPayload): P
     throw err
   }
 }
+
+export interface SupportTicketEmailPayload {
+  ticketId: string
+  accountEmail: string
+  accountName: string | null
+  subject: string
+  description: string
+  blogUrl: string | null
+  conversationId: string | null
+  screenshotUrl?: string
+}
+
+/** Notify the support inbox of a dashboard Support tab ticket. */
+export async function sendSupportTicketEmail(payload: SupportTicketEmailPayload): Promise<void> {
+  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.xyz'
+  const subjectLine = `[BetterBlog Support] Ticket: ${payload.subject}`
+  const fields: Array<[string, string]> = [
+    ['Ticket ID', payload.ticketId],
+    ['From', payload.accountName ? `${payload.accountName} <${payload.accountEmail}>` : payload.accountEmail],
+    ['Subject', payload.subject],
+    ...(payload.blogUrl ? ([['Blog URL', payload.blogUrl]] as Array<[string, string]>) : []),
+    ...(payload.conversationId
+      ? ([['Conversation ID', payload.conversationId]] as Array<[string, string]>)
+      : []),
+    ...(payload.screenshotUrl ? ([['Screenshot', payload.screenshotUrl]] as Array<[string, string]>) : []),
+    ['Description', payload.description],
+  ]
+
+  const html = `
+    <h2>New support ticket</h2>
+    ${fields
+      .map(([label, value]) => `<p><strong>${label}:</strong><br/>${value.replace(/\n/g, '<br/>')}</p>`)
+      .join('\n')}
+  `
+  const text = fields.map(([label, value]) => `${label}: ${value}`).join('\n\n')
+
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[Support ticket] SENDGRID_API_KEY not set. Ticket ${payload.ticketId} from ${payload.accountEmail}:\n${text}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  try {
+    await sgMail.send({
+      to: supportTo,
+      from: mailFrom,
+      replyTo: payload.accountEmail,
+      subject: subjectLine,
+      text,
+      html,
+      trackingSettings: { clickTracking: { enable: false } },
+    })
+  } catch (err) {
+    console.error('[Support ticket] SendGrid error:', err)
+    throw err
+  }
+}

@@ -289,7 +289,7 @@ export default function SupportPortal() {
             Talk to a <em className="italic text-[#8F86F0]">human.</em>
           </h2>
           <p className="mx-auto mt-3.5 max-w-[440px] text-base text-white/55">
-            No bots, no ticket queues that go nowhere. A real BetterBlog teammate reads every message.
+            Logged-in customers can also chat with BetterBlog Support from the dashboard. A real teammate still reads every message sent here.
           </p>
 
           <div className="mt-9 inline-flex rounded-full border border-white/15 bg-white/6 p-1">

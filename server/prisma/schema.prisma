@@ -23,6 +23,8 @@ model User {
   sessions        Session[]
   sites           Site[]
   checkoutSessions CheckoutSession[]
+  supportConversations SupportConversation[]
+  supportTickets       SupportTicket[]
 
   @@map("users")
 }
@@ -70,6 +72,8 @@ model Site {
   sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
+  supportConversations  SupportConversation[]
+  supportTickets        SupportTicket[]
 
   @@index([siteKey])
   @@index([userId])
@@ -396,4 +400,48 @@ model SitePaywallSettings {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_paywall_settings")
+}
+
+model SupportConversation {
+  id          String    @id @default(uuid())
+  userId      Int       @map("user_id")
+  siteId      String?   @map("site_id")
+  messages    Json
+  escalated   Boolean   @default(false)
+  escalatedAt DateTime? @map("escalated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site    Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  tickets SupportTicket[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([escalated])
+  @@map("support_conversations")
+}
+
+model SupportTicket {
+  id             String   @id @default(uuid())
+  userId         Int      @map("user_id")
+  siteId         String?  @map("site_id")
+  subject        String
+  description    String   @db.Text
+  screenshotUrl  String?  @map("screenshot_url") @db.Text
+  conversationId String?  @map("conversation_id")
+  accountEmail   String   @map("account_email")
+  blogUrl        String?  @map("blog_url") @db.Text
+  status         String   @default("open")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site         Site?                @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  conversation SupportConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("support_tickets")
 }

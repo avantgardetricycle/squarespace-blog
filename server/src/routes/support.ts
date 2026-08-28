@@ -1,7 +1,14 @@
 import { Router, Request, Response } from 'express'
 import { sendSupportRequestEmail } from '../lib/email.js'
+import supportChatRoutes from './support-chat.js'
+import supportContactRoutes from './support-contact.js'
+import supportInternalRoutes from './support-internal.js'
 
 const router = Router()
+
+router.use(supportChatRoutes)
+router.use(supportContactRoutes)
+router.use(supportInternalRoutes)
 
 const SUPPORT_SUBJECTS = new Set([
   'Installation',
