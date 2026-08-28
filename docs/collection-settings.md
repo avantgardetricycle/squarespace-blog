@@ -113,9 +113,9 @@ Some templates only allow these modules in the footer (not in sidebars).
 
 ---
 
-## Paywall (collection)
+## Paywall
 
-If BetterBlog detects that the blog is membership-gated, a **Paywall** section appears on the Collection tab. Use it to customize the subscribe URL, eyebrow, headline, description, and feature checklist shown to logged-out readers. See [Paywall & Membership](paywall-membership.md).
+Paywall copy is site-level, not a Collection-tab setting. If BetterBlog detects that the blog is membership-gated, a **Paywall Settings** button appears above the Collection / Post toggle. It opens a modal for subscribe URL, eyebrow, headline, description, and feature checklist. Those values apply to both collection and post views. See [Paywall & Membership](paywall-membership.md).
 
 ---
 

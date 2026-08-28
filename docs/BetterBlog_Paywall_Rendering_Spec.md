@@ -301,13 +301,14 @@ The collection URL fallback is valid because in "blog posts only" mode, navigati
 
 ---
 
-## 7. BetterBlog Settings — New Fields
+## 7. BetterBlog Settings — Paywall fields
 
-Two new fields are added to the Collection-level settings panel under a new **Paywall** section:
+Paywall copy is **site-level**, not nested under Collection or Post. When the site is detected as paywalled, Customize Blog shows a **Paywall Settings** button above the Collection / Post toggle. That button opens a modal with:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  PAYWALL                                             │
+│  PAYWALL SETTINGS                                    │
+│  These settings apply to both collection and post.   │
 │                                                      │
 │  Subscribe URL  (optional)                           │
 │  [                                        ]          │
@@ -315,10 +316,9 @@ Two new fields are added to the Collection-level settings panel under a new **Pa
 │  Enter a custom URL if you have a dedicated          │
 │  sign-up or membership page.                         │
 │                                                      │
-│  Footer description  (optional)                      │
-│  [                                        ]          │
-│  Shown beneath the headline in the paywall footer.   │
-│  Max 160 characters. Leave blank to use the default. │
+│  Eyebrow  (optional, max 80)                         │
+│  Header text  (optional, max 160, {blogName} ok)     │
+│  Footer description  (optional, max 160)             │
 │                                                      │
 │  Feature checklist  (optional, one per line)         │
 │  [ Unlimited articles                     ]          │
@@ -328,7 +328,7 @@ Two new fields are added to the Collection-level settings panel under a new **Pa
 └─────────────────────────────────────────────────────┘
 ```
 
-These settings are collection-level only. The same subscribe URL and footer content apply at both the collection and post level (the footer is shared, not independently configured per level).
+The same subscribe URL, headline, description, and checklist apply at both the collection and post level. They are not independently configured per level. Clearing Collection or Post layout settings does not reset paywall copy.
 
 ---
 

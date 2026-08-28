@@ -18,7 +18,6 @@ import { Button } from "@/app/components/ui/button";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Slider } from "@/app/components/ui/slider";
 import { Switch } from "@/app/components/ui/switch";
@@ -56,23 +55,16 @@ import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
+import {
+  PaywallSettingsModal,
+  DEFAULT_PAYWALL_FEATURE_ITEMS,
+  PAYWALL_EYEBROW_MAX,
+  PAYWALL_HEADLINE_MAX,
+  type PaywallFormState,
+} from "@/app/components/PaywallSettingsModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
 import { groupBlogsBySquarespaceOrigin, squarespaceOriginFromUrl } from "@/lib/squarespaceSiteGroups";
-
-const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
-const PAYWALL_EYEBROW_MAX = 80;
-const PAYWALL_HEADLINE_MAX = 160;
-const DEFAULT_PAYWALL_EYEBROW = "Member Exclusive";
-const DEFAULT_PAYWALL_HEADLINE = "Unlock unlimited access to {blogName}";
-
-type PaywallFormState = {
-  subscribeUrl: string;
-  footerDescription: string;
-  eyebrowText: string;
-  headlineText: string;
-  featureItems: string[];
-};
 
 function isPreviewDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
@@ -2230,6 +2222,7 @@ export default function Configure() {
   const [clearSettingsModalOpen, setClearSettingsModalOpen] = useState(false);
   const [clearSettingsCollection, setClearSettingsCollection] = useState(false);
   const [clearSettingsPost, setClearSettingsPost] = useState(false);
+  const [paywallSettingsModalOpen, setPaywallSettingsModalOpen] = useState(false);
   /** Cached API templates for comparing config to applied template (name + equality). */
   const [templateCatalogCollection, setTemplateCatalogCollection] = useState<Template[]>([]);
   const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
@@ -2278,7 +2271,6 @@ export default function Configure() {
     socialMediaLinks: false,
     postHeader: false,
     comments: false,
-    paywall: false,
   });
   const [paywallForm, setPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
@@ -3183,15 +3175,6 @@ export default function Configure() {
       applyDerivedModules(copy);
       return copy;
     });
-    if (clearSettingsCollection && shouldShowViewerModeToggle) {
-      setPaywallForm({
-        subscribeUrl: "",
-        footerDescription: "",
-        eyebrowText: "",
-        headlineText: "",
-        featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
-      });
-    }
     setClearSettingsModalOpen(false);
     setClearSettingsCollection(false);
     setClearSettingsPost(false);
@@ -3200,7 +3183,7 @@ export default function Configure() {
         ? "Post layout was reset to The Reporter template. Save to publish on your blog."
         : "Selected layout settings were reset to defaults. Save to publish on your blog."
     );
-  }, [clearSettingsCollection, clearSettingsPost, shouldShowViewerModeToggle, templateCatalogPost]);
+  }, [clearSettingsCollection, clearSettingsPost, templateCatalogPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
@@ -3466,6 +3449,16 @@ export default function Configure() {
                 </SelectContent>
               </Select>
             )}
+            {shouldShowViewerModeToggle && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setPaywallSettingsModalOpen(true)}
+              >
+                Paywall Settings
+              </Button>
+            )}
             <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
               <button
                 type="button"
@@ -3526,7 +3519,7 @@ export default function Configure() {
                 <DialogHeader>
                   <DialogTitle>Clear layout settings?</DialogTitle>
                   <DialogDescription>
-                    This resets BetterBlog layout options to their defaults for the levels you choose. Choosing Collection also resets Paywall settings. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
+                    This resets BetterBlog layout options to their defaults for the levels you choose. Default authors, comment settings, and paywall settings are not changed. Use Save when you are ready to update your live blog.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2">
@@ -3538,7 +3531,7 @@ export default function Configure() {
                     />
                     <span>
                       <span className="text-sm font-medium text-[#0a0a0a] block">Collection</span>
-                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, paywall, etc.</span>
+                      <span className="text-xs text-[#6b6b6b]">Blog index: layout, sidebars, modules, featured article, pagination, etc.</span>
                     </span>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer rounded-md border border-[#e5e4e0] p-3 hover:bg-[#f7f6f3]/80">
@@ -3632,6 +3625,14 @@ export default function Configure() {
             collectionTemplateId={config.collectionTemplateId}
             postTemplateId={config.postTemplateId}
           />
+          {shouldShowViewerModeToggle && (
+            <PaywallSettingsModal
+              open={paywallSettingsModalOpen}
+              onOpenChange={setPaywallSettingsModalOpen}
+              form={paywallForm}
+              onChange={setPaywallForm}
+            />
+          )}
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
 
@@ -4871,127 +4872,6 @@ export default function Configure() {
                     </div>
                     )}
 
-                    {selectedLevel === "collection" && shouldShowViewerModeToggle && (
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Paywall</span>
-                        <button
-                          type="button"
-                          onClick={() => setSectionExpanded((p) => ({ ...p, paywall: !p.paywall }))}
-                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                          aria-label={sectionExpanded.paywall ? "Collapse" : "Expand"}
-                        >
-                          {sectionExpanded.paywall ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <Collapsible open={sectionExpanded.paywall}>
-                        <CollapsibleContent>
-                          <div className="pb-4 space-y-4">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Subscribe URL (optional)</Label>
-                              <Input
-                                value={paywallForm.subscribeUrl}
-                                onChange={(e) => setPaywallForm((p) => ({ ...p, subscribeUrl: e.target.value }))}
-                                placeholder="https://…"
-                                className="text-sm"
-                              />
-                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
-                                Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
-                              </p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Eyebrow (optional, max {PAYWALL_EYEBROW_MAX} characters)</Label>
-                              <Input
-                                value={paywallForm.eyebrowText}
-                                onChange={(e) =>
-                                  setPaywallForm((p) => ({ ...p, eyebrowText: e.target.value.slice(0, PAYWALL_EYEBROW_MAX) }))
-                                }
-                                placeholder={DEFAULT_PAYWALL_EYEBROW}
-                                className="text-sm"
-                              />
-                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
-                                Small label above the headline. Displayed in uppercase. Leave blank for “{DEFAULT_PAYWALL_EYEBROW}”.
-                              </p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Header text (optional, max {PAYWALL_HEADLINE_MAX} characters)</Label>
-                              <Input
-                                value={paywallForm.headlineText}
-                                onChange={(e) =>
-                                  setPaywallForm((p) => ({ ...p, headlineText: e.target.value.slice(0, PAYWALL_HEADLINE_MAX) }))
-                                }
-                                placeholder={DEFAULT_PAYWALL_HEADLINE}
-                                className="text-sm"
-                              />
-                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
-                                Headline below the eyebrow. Leave blank for the default. Use {"{blogName}"} to insert your site title.
-                              </p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Footer description (optional, max 160 characters)</Label>
-                              <Textarea
-                                value={paywallForm.footerDescription}
-                                onChange={(e) =>
-                                  setPaywallForm((p) => ({ ...p, footerDescription: e.target.value.slice(0, 160) }))
-                                }
-                                placeholder="Subscribe for full access to every story, the complete archive, and exclusive reading."
-                                rows={3}
-                                className="text-sm resize-y min-h-[72px]"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Feature checklist (optional, max 4)</Label>
-                              {paywallForm.featureItems.map((line, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <Input
-                                    value={line}
-                                    onChange={(e) =>
-                                      setPaywallForm((p) => {
-                                        const next = p.featureItems.slice();
-                                        next[idx] = e.target.value;
-                                        return { ...p, featureItems: next };
-                                      })
-                                    }
-                                    className="text-sm flex-1"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="p-2 rounded hover:bg-red-100 text-[#6b6b6b] shrink-0"
-                                    aria-label="Remove feature line"
-                                    onClick={() =>
-                                      setPaywallForm((p) => ({
-                                        ...p,
-                                        featureItems: p.featureItems.filter((_, i) => i !== idx),
-                                      }))
-                                    }
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              ))}
-                              {paywallForm.featureItems.length < 4 && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="gap-1"
-                                  onClick={() =>
-                                    setPaywallForm((p) =>
-                                      p.featureItems.length >= 4
-                                        ? p
-                                        : { ...p, featureItems: [...p.featureItems, ""] }
-                                    )
-                                  }
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add item
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
                     )}
 
                     <div className="border-b border-[#e5e4e0]">
