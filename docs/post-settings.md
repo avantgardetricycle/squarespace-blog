@@ -124,7 +124,7 @@ Comment settings live on the Post tab under **Comments**, and can also be change
 
 ## Paywall
 
-Paywall copy is not nested under Collection or Post. If the blog is membership-gated, use **Paywall Settings** above the Collection / Post toggle. Those values apply to both views. See [Paywall & Membership](paywall-membership.md).
+Paywall copy is not nested under Collection or Post. If the blog is membership-gated, use **Paywall Settings** below **Clear all settings**. Those values apply to both views. See [Paywall & Membership](paywall-membership.md).
 
 ---
 

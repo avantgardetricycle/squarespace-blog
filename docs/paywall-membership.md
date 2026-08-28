@@ -2,7 +2,7 @@
 
 BetterBlog does not create or charge for memberships. Squarespace’s pricing plans gate content. BetterBlog detects that a blog is paywalled and changes how the overlay looks for logged-out readers so the layout still works around Squarespace’s gate.
 
-You tell BetterBlog a blog is membership-required when you add or edit the blog. BetterBlog also detects paywall state from the live site. When a paywall is detected, a **Paywall Settings** button appears on **Customize Blog**, above the Collection / Post toggle. The same settings apply to both views.
+You tell BetterBlog a blog is membership-required when you add or edit the blog. BetterBlog also detects paywall state from the live site. When a paywall is detected, a **Paywall Settings** button appears on **Customize Blog**, below **Clear all settings**. The same settings apply to both views.
 
 ---
 
@@ -44,7 +44,7 @@ The live card includes:
 4. **Subscribe** button (may include a price such as “Subscribe — $X/month” when Squarespace exposes a plan price) and **Sign in**
 5. Feature checklist with checkmarks
 
-Customize it from **Customize Blog → Paywall Settings** (only when a paywall is detected). The button sits above Collection / Post because the copy applies to both levels.
+Customize it from **Customize Blog → Paywall Settings** (only when a paywall is detected). The button sits below **Clear all settings** because the copy applies to both Collection and Post.
 
 **Subscribe URL (optional)** — Leave blank to send readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
 

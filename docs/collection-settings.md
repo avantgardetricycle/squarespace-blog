@@ -115,7 +115,7 @@ Some templates only allow these modules in the footer (not in sidebars).
 
 ## Paywall
 
-Paywall copy is site-level, not a Collection-tab setting. If BetterBlog detects that the blog is membership-gated, a **Paywall Settings** button appears above the Collection / Post toggle. It opens a modal for subscribe URL, eyebrow, headline, description, and feature checklist. Those values apply to both collection and post views. See [Paywall & Membership](paywall-membership.md).
+Paywall copy is site-level, not a Collection-tab setting. If BetterBlog detects that the blog is membership-gated, a **Paywall Settings** button appears below **Clear all settings**. It opens a modal for subscribe URL, eyebrow, headline, description, and feature checklist. Those values apply to both collection and post views. See [Paywall & Membership](paywall-membership.md).
 
 ---
 

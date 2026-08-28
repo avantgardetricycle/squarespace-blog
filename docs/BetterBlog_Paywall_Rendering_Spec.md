@@ -303,7 +303,7 @@ The collection URL fallback is valid because in "blog posts only" mode, navigati
 
 ## 7. BetterBlog Settings — Paywall fields
 
-Paywall copy is **site-level**, not nested under Collection or Post. When the site is detected as paywalled, Customize Blog shows a **Paywall Settings** button above the Collection / Post toggle. That button opens a modal with:
+Paywall copy is **site-level**, not nested under Collection or Post. When the site is detected as paywalled, Customize Blog shows a **Paywall Settings** button below **Clear all settings**. That button opens a modal with:
 
 ```
 ┌─────────────────────────────────────────────────────┐

@@ -3449,16 +3449,6 @@ export default function Configure() {
                 </SelectContent>
               </Select>
             )}
-            {shouldShowViewerModeToggle && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => setPaywallSettingsModalOpen(true)}
-              >
-                Paywall Settings
-              </Button>
-            )}
             <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50">
               <button
                 type="button"
@@ -3505,6 +3495,16 @@ export default function Configure() {
               <Trash2 className="h-3.5 w-3.5 mr-1.5 shrink-0" />
               Clear all settings
             </Button>
+            {shouldShowViewerModeToggle && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setPaywallSettingsModalOpen(true)}
+              >
+                Paywall Settings
+              </Button>
+            )}
             <Dialog
               open={clearSettingsModalOpen}
               onOpenChange={(open) => {
