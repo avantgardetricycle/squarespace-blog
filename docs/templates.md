@@ -134,7 +134,7 @@ Best for: personal blogs, writing-focused publications, readers who expect a cla
 **What you can customize:**
 - Show Date, Reading Time, Author, Excerpt toggles
 - Sidebar width and sticky behavior
-- Sort and Search modules
+- Sort and Search modules in the header (not the sidebar)
 - Featured post selection
 
 ---

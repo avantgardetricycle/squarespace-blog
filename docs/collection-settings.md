@@ -81,6 +81,8 @@ When a sidebar is available:
 
 Most collection templates lock one or both sidebars. If the sidebar section is missing, the template does not use that sidebar.
 
+On **The Digest**, Search and Sort stay in the header. They cannot be added to the sidebar.
+
 If a sticky sidebar overlaps your Squarespace site header, increase **Space above** or turn sticky off. See [Troubleshooting](troubleshooting.md).
 
 ---

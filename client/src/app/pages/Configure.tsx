@@ -1206,6 +1206,29 @@ function enforceCollectionTemplateLockedValues(
     }
   }
 
+  if ((next.collectionLayout ?? "grid") === "digest") {
+    const lsOrder = stripDigestSidebarSearchSort(next.leftSidebar.moduleOrder ?? []);
+    const rsOrder = stripDigestSidebarSearchSort(next.rightSidebar.moduleOrder ?? []);
+    if (
+      JSON.stringify(next.leftSidebar.moduleOrder ?? []) !== JSON.stringify(lsOrder) ||
+      JSON.stringify(next.rightSidebar.moduleOrder ?? []) !== JSON.stringify(rsOrder)
+    ) {
+      next = {
+        ...next,
+        leftSidebar: {
+          ...next.leftSidebar,
+          moduleOrder: lsOrder,
+          modules: stripDigestSidebarSearchSort(next.leftSidebar.modules ?? []),
+        },
+        rightSidebar: {
+          ...next.rightSidebar,
+          moduleOrder: rsOrder,
+          modules: stripDigestSidebarSearchSort(next.rightSidebar.modules ?? []),
+        },
+      };
+    }
+  }
+
   if (locks.has("popularPosts")) {
     const stripPopular = (order: string[]) => order.filter((m) => m !== "popularPosts");
     const lsOrder = stripPopular(next.leftSidebar.moduleOrder ?? []);
@@ -1381,6 +1404,15 @@ function orderCollectionHeaderModules(moduleIds: string[]): string[] {
   return out;
 }
 const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
+const DIGEST_SIDEBAR_EXCLUDED_MODULES = new Set(["searchPosts", "postSearch", "postSort"]);
+
+function isDigestSidebarExcludedModule(moduleId: string): boolean {
+  return DIGEST_SIDEBAR_EXCLUDED_MODULES.has(moduleId);
+}
+
+function stripDigestSidebarSearchSort(order: string[]): string[] {
+  return order.filter((m) => !isDigestSidebarExcludedModule(m));
+}
 const COLLECTION_FOOTER_MODULES = ["emailCapture", "leadMagnet"] as const;
 const COLLECTION_FILTER_IDS = ["filterByCategory", "filterByTag", "filterByTagsAndCategories"] as const;
 type FeatureModuleLocation = Exclude<ModulePosition, "none">;
@@ -5093,9 +5125,14 @@ export default function Configure() {
                           const order = cm
                             ? normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm)
                             : (cfg.moduleOrder ?? []);
+                          const hideDigestSearchSort =
+                            selectedLevel === "collection" &&
+                            (effectiveConfig as CollectionLevelConfig).collectionLayout === "digest";
+                          const allowed = (m: string) =>
+                            !hideDigestSearchSort || !isDigestSidebarExcludedModule(m);
                           const set = new Set(modules);
-                          const fromOrder = order.filter((m) => set.has(m));
-                          const remaining = modules.filter((m) => !order.includes(m));
+                          const fromOrder = order.filter((m) => set.has(m) && allowed(m));
+                          const remaining = modules.filter((m) => !order.includes(m) && allowed(m));
                           return [...fromOrder, ...remaining];
                         })();
                         const moveModule = (fromIdx: number, toIdx: number) => {
@@ -5124,6 +5161,13 @@ export default function Configure() {
                         const handleAddSidebar = (moduleId: string) => {
                           const order = cfg.moduleOrder ?? [];
                           if (order.includes(moduleId)) return;
+                          if (
+                            selectedLevel === "collection" &&
+                            (effectiveConfig as CollectionLevelConfig).collectionLayout === "digest" &&
+                            isDigestSidebarExcludedModule(moduleId)
+                          ) {
+                            return;
+                          }
                           updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
                         };
                         return (
@@ -5208,6 +5252,12 @@ export default function Configure() {
                                             if (isCollectionFilterModuleId(m)) {
                                               const filterId = filterConfigToModuleId(cm.filter.filterByTags, cm.filter.filterByCategories);
                                               return m === filterId && !order.includes(filterId);
+                                            }
+                                            if (
+                                              isDigestSidebarExcludedModule(m) &&
+                                              (effectiveConfig as CollectionLevelConfig).collectionLayout === "digest"
+                                            ) {
+                                              return false;
                                             }
                                             return !order.includes(m);
                                           })

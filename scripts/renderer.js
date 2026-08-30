@@ -5136,13 +5136,15 @@
 
     /**
      * Categories line above post title (Newsroom, Showcase, Masthead, Digest, Editorial). Small caps + accent; optional filter buttons.
-     * opts.onDark: accent pill badges on editorial imagery (like FEATURED); opts.compact: smaller badges on small editorial tiles.
+     * opts.onDark: labels on imagery; opts.overImage: white 78% + weight 700 (Editorial big tiles / Masthead hero);
+     * opts.compact: tighter spacing on small editorial tiles.
      */
     _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled, opts) {
       var self = this;
       opts = opts && typeof opts === 'object' ? opts : {};
       var onDark = opts.onDark === true;
       var onDarkSolid = opts.onDarkSolid === true;
+      var overImage = opts.overImage === true;
       var compact = opts.compact === true;
       var cats = self._getPostCategories(post);
       if (cats.length === 0) return null;
@@ -5175,7 +5177,11 @@
           })(catName);
         }
         el.textContent = catName;
-        self._applyCategoryLabelStyle(el, { onImage: onDark && !onDarkSolid, onDarkSolid: onDarkSolid });
+        self._applyCategoryLabelStyle(el, {
+          onImage: onDark && !onDarkSolid,
+          onDarkSolid: onDarkSolid,
+          overImage: overImage
+        });
         if (categoryFilterUiEnabled) {
           el.style.background = 'none';
           el.style.border = 'none';
@@ -8118,6 +8124,7 @@
         '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
         '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-category-label--over-image{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-weight:700;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack{max-width:800px;margin-left:auto;margin-right:auto;box-sizing:border-box;gap:0;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
@@ -8330,6 +8337,7 @@
       el.classList.add('bb-category-label');
       if (opts.onDarkSolid) el.classList.add('bb-category-label--on-dark');
       else if (opts.onImage) el.classList.add('bb-category-label--on-image');
+      if (opts.overImage) el.classList.add('bb-category-label--over-image');
       if (opts.modifier) el.classList.add(opts.modifier);
     },
 
@@ -11917,7 +11925,7 @@
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
             heroCat.textContent = heroCats[0];
-            self._applyCategoryLabelStyle(heroCat, { onImage: true });
+            self._applyCategoryLabelStyle(heroCat, { onImage: true, overImage: true });
             heroCat.style.marginBottom = '8px';
             if (mastheadHeroMobile) heroCat.style.fontSize = '22px';
             heroContent.appendChild(heroCat);
@@ -12820,6 +12828,13 @@
           var mod = moduleIds[m];
           if (hideRecentPostsInBbPreview && mod === 'recentPosts') continue;
           if (mod === 'tableOfContents' && isSinglePost && self._isStoryPostLayout(cfg)) continue;
+          if (
+            !isSinglePost &&
+            collectionLayout === 'digest' &&
+            (mod === 'searchPosts' || mod === 'postSearch' || mod === 'postSort')
+          ) {
+            continue;
+          }
           var el = null;
           if (mod === 'tableOfContents') {
             el = createTocModule(width);
@@ -13010,7 +13025,7 @@
             p,
             siteAccentForPostCats,
             categoryFilterUiEnabled,
-            { onDark: true, compact: !isLarge }
+            { onDark: true, compact: !isLarge, overImage: isLarge }
           );
           if (mobilePairCard) {
             var edSpacer = document.createElement('div');
