@@ -1208,15 +1208,79 @@
         bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
       }
-      function bbPromptForEmail(initialValue, done) {
-        bbCommentsLog('email prompt shown', { hasInitialValue: Boolean(initialValue) });
+      function bbCreateCommentModalShell() {
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
         var modal = document.createElement('div');
         modal.style.cssText = 'width:100%;max-width:420px;background:#fff;border-radius:10px;padding:18px 18px 14px;box-shadow:0 18px 40px rgba(0,0,0,.22);box-sizing:border-box';
+        overlay.appendChild(modal);
+        return { overlay: overlay, modal: modal };
+      }
+      function bbCommentModalButton(label, primary) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        btn.style.cssText = primary
+          ? 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer'
+          : 'padding:8px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#444;cursor:pointer';
+        if (primary) btn.style.background = 'var(--bb-accent, #5B4FE8)';
+        return btn;
+      }
+      function bbShowCommentMessageModal(opts, done) {
+        opts = opts || {};
+        var shell = bbCreateCommentModalShell();
+        var overlay = shell.overlay;
+        var modal = shell.modal;
+        var title = document.createElement('div');
+        title.textContent = opts.title || 'Notice';
+        title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:10px';
+        var body = document.createElement('div');
+        body.textContent = opts.message || '';
+        body.style.cssText = 'font-size:0.92rem;color:#333;line-height:1.45;margin-bottom:14px';
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        function close(choice) {
+          bbCommentsLog('comment message modal closed', { title: opts.title || null, choice: choice || null });
+          if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          if (typeof done === 'function') done(choice || null);
+        }
+        if (opts.secondaryLabel) {
+          var secondary = bbCommentModalButton(opts.secondaryLabel, false);
+          secondary.onclick = function() { close('secondary'); };
+          row.appendChild(secondary);
+        }
+        var primary = bbCommentModalButton(opts.primaryLabel || 'OK', true);
+        primary.onclick = function() { close('primary'); };
+        row.appendChild(primary);
+        overlay.onclick = function(ev) { if (ev.target === overlay) close(null); };
+        modal.appendChild(title);
+        modal.appendChild(body);
+        modal.appendChild(row);
+        document.body.appendChild(overlay);
+        try { primary.focus(); } catch (e) {}
+      }
+      function bbPromptForEmail(initialValue, opts, done) {
+        if (typeof opts === 'function') {
+          done = opts;
+          opts = {};
+        }
+        opts = opts || {};
+        var allowAnonymousChoice = opts.allowAnonymousChoice === true;
+        bbCommentsLog('email prompt shown', {
+          hasInitialValue: Boolean(initialValue),
+          allowAnonymousChoice: allowAnonymousChoice
+        });
+        var shell = bbCreateCommentModalShell();
+        var overlay = shell.overlay;
+        var modal = shell.modal;
         var title = document.createElement('div');
         title.textContent = 'Confirm your email';
-        title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:10px';
+        title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:8px';
+        var blurb = document.createElement('div');
+        blurb.textContent = allowAnonymousChoice
+          ? 'We’ll use this to verify your site membership. You can also comment anonymously.'
+          : 'We’ll use this to verify your site membership.';
+        blurb.style.cssText = 'font-size:0.88rem;color:#555;line-height:1.4;margin-bottom:10px';
         var input = document.createElement('input');
         input.type = 'email';
         input.name = 'email';
@@ -1231,18 +1295,13 @@
         var msg = document.createElement('div');
         msg.style.cssText = 'min-height:16px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
         var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end';
-        var cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.textContent = 'Cancel';
-        cancel.style.cssText = 'padding:8px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#444;cursor:pointer';
-        var ok = document.createElement('button');
-        ok.type = 'button';
-        ok.textContent = 'Continue';
-        ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer';
-        ok.style.background = 'var(--bb-accent, #5B4FE8)';
+        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        var cancel = bbCommentModalButton('Cancel', false);
+        var ok = bbCommentModalButton('Continue', true);
         function close(ret) {
-          bbCommentsLog('email prompt closed', ret ? bbEmailDebug(ret) : { cancelled: true });
+          bbCommentsLog('email prompt closed', ret && ret.email
+            ? bbEmailDebug(ret.email)
+            : (ret && ret.anonymous ? { anonymous: true } : { cancelled: true }));
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
         }
@@ -1254,18 +1313,49 @@
             try { input.focus(); } catch (e) {}
             return;
           }
-          close(em);
+          close({ email: em });
         };
         overlay.onclick = function(ev) { if (ev.target === overlay) close(null); };
         row.appendChild(cancel);
+        if (allowAnonymousChoice) {
+          var anon = bbCommentModalButton('Comment anonymously', false);
+          anon.onclick = function() { close({ anonymous: true }); };
+          row.appendChild(anon);
+        }
         row.appendChild(ok);
         modal.appendChild(title);
+        modal.appendChild(blurb);
         modal.appendChild(input);
         modal.appendChild(msg);
         modal.appendChild(row);
-        overlay.appendChild(modal);
         document.body.appendChild(overlay);
         try { input.focus(); } catch (e) {}
+      }
+      function bbHandleVerificationPostError(data, onRetryAnonymous) {
+        var code = data && data.code ? String(data.code) : '';
+        var err = (data && data.error) || 'Failed to post';
+        if (code === 'verification_failed_anonymous_available') {
+          bbShowCommentMessageModal({
+            title: 'Couldn’t verify membership',
+            message: err,
+            primaryLabel: 'Post anonymously',
+            secondaryLabel: 'Cancel'
+          }, function(choice) {
+            if (choice === 'primary' && typeof onRetryAnonymous === 'function') {
+              onRetryAnonymous(data && data.anonymous_retry_token ? String(data.anonymous_retry_token) : '');
+            }
+          });
+          return true;
+        }
+        if (code === 'verification_failed' || /could not verify a member account/i.test(err)) {
+          bbShowCommentMessageModal({
+            title: 'Couldn’t verify membership',
+            message: err,
+            primaryLabel: 'OK'
+          });
+          return true;
+        }
+        return false;
       }
 
       function currentCommentViewerMode() {
@@ -1488,6 +1578,8 @@
             replyFormShell.appendChild(rRow);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
+            var replyPostAsAnonymous = false;
+            var replyAnonymousRetryToken = '';
             replyBtn.onclick = function() {
               var wasOpen = replyFormShell.style.display === 'block';
               var allInline = listEl.querySelectorAll('.bb-comment-inline-reply');
@@ -1529,11 +1621,19 @@
                 emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none')),
                 email: bbEmailDebug(loggedInEmail)
               });
-              if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail) {
+              if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
                 bbCommentsLog('reply submit waiting for email prompt', { mode: modeNow });
-                bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', function(confirmedEmail) {
-                  if (!confirmedEmail) return;
-                  replyEmailOverride = confirmedEmail;
+                bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', {
+                  allowAnonymousChoice: allowAnonymousComments && subscriberCommentsEnabled
+                }, function(result) {
+                  if (!result) return;
+                  if (result.anonymous) {
+                    replyPostAsAnonymous = true;
+                    rSubmit.onclick();
+                    return;
+                  }
+                  if (!result.email) return;
+                  replyEmailOverride = result.email;
                   rSubmit.onclick();
                 });
                 return;
@@ -1552,14 +1652,17 @@
                 post_published_at: bbResolvePostPublishedAt(post),
                 post_url: (post && (post.fullUrl || post.url)) || null
               };
-              var rEm = modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim();
+              var rEm = replyPostAsAnonymous ? null : (modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim());
+              if (replyPostAsAnonymous) payload.post_as_anonymous = true;
+              if (replyPostAsAnonymous && replyAnonymousRetryToken) payload.anonymous_retry_token = replyAnonymousRetryToken;
               if (rEm) payload.email = rEm;
               bbCommentsLog('reply POST payload', {
                 post_id: payload.post_id,
                 parent_id: payload.parent_id,
                 display_name: payload.display_name,
                 hasEmail: Boolean(payload.email),
-                email: payload.email || null
+                email: payload.email || null,
+                postAsAnonymous: Boolean(replyPostAsAnonymous)
               });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
                 payload.squarespace_record_type = post.recordType;
@@ -1603,6 +1706,8 @@
                     replyFormShell.style.display = 'none';
                     rBody.value = '';
                     rEmail.value = '';
+                    replyPostAsAnonymous = false;
+                    replyAnonymousRetryToken = '';
                     rReplySync();
                     if (data.status === 'pending') {
                       var pend = document.createElement('p');
@@ -1613,6 +1718,13 @@
                     } else {
                       refreshBetterBlogCommentsList();
                     }
+                  } else if (bbHandleVerificationPostError(data, function(retryToken) {
+                    replyPostAsAnonymous = true;
+                    replyAnonymousRetryToken = retryToken || '';
+                    rSubmit.onclick();
+                  })) {
+                    rSubmit.textContent = 'Post reply';
+                    rReplySync();
                   } else {
                     var err = (data && data.error) || 'Failed to post';
                     rSubmit.textContent = err;
@@ -1884,7 +1996,7 @@
       };
 
       var mainEmailOverride = null;
-      function submitMainCommentWithEmail(modeNow, name, body, emailToUse) {
+      function submitMainCommentWithEmail(modeNow, name, body, emailToUse, postAsAnonymous, anonymousRetryToken) {
         submitBtn.disabled = true;
         submitBtn.style.opacity = '0.55';
         submitBtn.style.cursor = 'not-allowed';
@@ -1898,7 +2010,9 @@
           post_published_at: bbResolvePostPublishedAt(post),
           post_url: (post && (post.fullUrl || post.url)) || null
         };
-        if (emailToUse) payload.email = emailToUse;
+        if (postAsAnonymous) payload.post_as_anonymous = true;
+        if (postAsAnonymous && anonymousRetryToken) payload.anonymous_retry_token = anonymousRetryToken;
+        if (!postAsAnonymous && emailToUse) payload.email = emailToUse;
         bbCommentsLog('main POST payload', {
           mode: modeNow,
           post_id: payload.post_id,
@@ -1907,7 +2021,8 @@
           email: payload.email || null,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
-          loggedInOptionalEmail: loggedInOptionalEmail
+          loggedInOptionalEmail: loggedInOptionalEmail,
+          postAsAnonymous: Boolean(postAsAnonymous)
         });
         if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
           try {
@@ -1965,6 +2080,11 @@
                 refreshBetterBlogCommentsList();
               }
               mainFormSync();
+            } else if (bbHandleVerificationPostError(data, function(retryToken) {
+              submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
+            })) {
+              submitBtn.textContent = 'Post Comment';
+              mainFormSync();
             } else {
               var err = (data && data.error) || 'Failed to post';
               submitBtn.textContent = err;
@@ -2009,10 +2129,17 @@
           }
           if (!useEmail) {
             bbCommentsLog('main submit waiting for email prompt', { mode: modeNow });
-            bbPromptForEmail(typedEmail || '', function(confirmedEmail) {
-              if (!confirmedEmail) return;
-              mainEmailOverride = confirmedEmail;
-              submitMainCommentWithEmail(modeNow, name, body, confirmedEmail);
+            bbPromptForEmail(typedEmail || '', {
+              allowAnonymousChoice: allowAnonymousComments && subscriberCommentsEnabled
+            }, function(result) {
+              if (!result) return;
+              if (result.anonymous) {
+                submitMainCommentWithEmail(modeNow, name, body, null, true);
+                return;
+              }
+              if (!result.email) return;
+              mainEmailOverride = result.email;
+              submitMainCommentWithEmail(modeNow, name, body, result.email);
             });
             return;
           }

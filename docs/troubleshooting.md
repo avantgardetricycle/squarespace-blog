@@ -87,7 +87,7 @@ Check the Close Comments After setting in Customize Blog → Post → Comments. 
 There are two common causes. First, confirm the key was generated with the **Profiles (Read)** permission — API key permissions can't be edited after creation, so if the permission was missing, you'll need to delete the key in Squarespace and generate a new one with the correct permission. Second, check whether your Squarespace site's plan has changed — the Profiles API requires a Business plan or higher, and if your Squarespace plan lapsed or was downgraded, the key will return a 401 even though it was previously working. Creating a new key on a lower plan will not fix this.
 
 **Subscriber comments aren't being verified — everyone shows as anonymous.**
-If your API key is valid but verification isn't working, check that the commenter's email actually exists in your Squarespace member list. Verification looks up the email against your Profiles API — if the email isn't found, the comment is stored as anonymous guest. This is expected behavior, not an error.
+If your API key is valid but verification isn't working, check that the commenter's email actually exists in your Squarespace member list. Verification looks up the email against your Profiles API. If the email isn't found and anonymous comments are off, the reader sees a modal and the comment is not posted. If anonymous comments are also on, they are asked to confirm posting as a guest — BetterBlog does not silently store an unverified comment as anonymous.
 
 ---
 

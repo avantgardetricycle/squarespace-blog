@@ -1404,7 +1404,7 @@ export default function Comments() {
                   disabled={settingsSaving}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Readers can comment with name only.</p>
+              <p className="text-xs text-neutral-500">Readers can comment with a name only. When verification is also on, guests still see the comment form.</p>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -1415,7 +1415,7 @@ export default function Comments() {
                   disabled={settingsSaving || !settings?.apiKeyVerified}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Require email for paywalled posts, verified against your Squarespace member list.</p>
+              <p className="text-xs text-neutral-500">Require a member email, verified against your Squarespace member list. Failed checks are shown in a modal.</p>
               {settings?.apiKeyVerified && (
                 <div className={settings.apiKeyInvalid ? "opacity-70" : undefined}>
                   <div className="flex items-center gap-2 text-sm mt-1">

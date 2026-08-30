@@ -15,9 +15,9 @@ When Show Comments is on, these options appear:
 
 **Allow New Comments** — When off, readers cannot submit new comments; existing comments can still display.
 
-**Allow Anonymous Comments** — Readers can comment with a name only (email optional unless subscriber verification is on). Helper text: “Readers can comment with name only.” When this is off, guests see a message to sign in with a site member account.
+**Allow Anonymous Comments** — Readers can comment with a name only (email optional). Helper text: “Readers can comment with name only.” When this is off and verification is also off, guests see a message to sign in with a site member account.
 
-**Verify subscriber comments** — For paywalled posts, require an email and check it against your Squarespace member list. Disabled until a Squarespace API key is connected.
+**Verify subscriber comments** — Require a member email and check it against your Squarespace member list. Disabled until a Squarespace API key is connected. Can be combined with anonymous comments; see below.
 
 **Require Approval Before Publishing** — New comments wait in **Awaiting Review** until you approve them.
 
@@ -41,7 +41,22 @@ If you have more than one blog, use **Select blog** at the top of the Comments p
 
 **Authenticated (member)** — The commenter’s email matched a Squarespace member via the Profiles API. These show an **Authenticated** badge and a checkmark (✓) on the live blog. Authenticated names may link to the Squarespace member profile.
 
-On paywalled posts, logged-out readers do not see the comment section unless the post is a public preview. Verification looks up the email in your member list — if the email is not found and anonymous comments are allowed, the comment is stored as a guest. That is expected, not an error.
+The two toggles are independent and can be combined. Reader experience:
+
+**Verify subscriber comments on, anonymous off**
+
+- Logged-out readers can still read comments, but the comment form is hidden. They need to sign in to comment.
+- Logged-in readers confirm their member email. If the Profiles API finds that email, the comment posts as verified.
+- If the email is not in your member list, the reader sees a modal explaining they could not be verified. The comment is not posted.
+
+**Verify subscriber comments on, anonymous on**
+
+- Logged-out readers see the comment form with an optional email field and can post as a guest.
+- Logged-in readers confirm their member email. They can also choose **Comment anonymously** in that modal before submitting.
+- If the Profiles API finds the email, the comment posts as verified.
+- If the email is not in your member list, a modal asks whether they want to post anonymously. The comment is only stored as a guest after they confirm.
+
+On paywalled posts, logged-out readers do not see the comment section unless the post is a public preview. That paywall rule is separate from the form behavior above.
 
 ---
 

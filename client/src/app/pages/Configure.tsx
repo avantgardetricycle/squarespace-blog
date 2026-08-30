@@ -4168,7 +4168,7 @@ export default function Configure() {
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowAnonymousComments: v } : p)}
                                 />
                               </div>
-                              <p className="text-xs text-[#6b6b6b]">Readers can comment with name only.</p>
+                              <p className="text-xs text-[#6b6b6b]">Readers can comment with a name only. When verification is also on, guests still see the comment form.</p>
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
@@ -4186,7 +4186,7 @@ export default function Configure() {
                                   disabled={!commentSettings.apiKeyVerified}
                                 />
                               </div>
-                              <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
+                              <p className="text-xs text-[#6b6b6b]">Require a member email, verified against your Squarespace member list. Failed checks are shown in a modal.</p>
                               {commentSettings.apiKeyVerified && (
                                 <div className={commentSettings.apiKeyInvalid ? "opacity-70" : undefined}>
                                   <div className="flex items-center gap-2 text-sm">
