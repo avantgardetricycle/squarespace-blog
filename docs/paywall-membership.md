@@ -2,7 +2,7 @@
 
 BetterBlog does not create or charge for memberships. Squarespace’s pricing plans gate content. BetterBlog detects that a blog is paywalled and changes how the overlay looks for logged-out readers so the layout still works around Squarespace’s gate.
 
-You tell BetterBlog a blog is membership-required when you add or edit the blog. BetterBlog also detects paywall state from the live site. When a paywall is detected, a **Paywall Settings** button appears on **Customize Blog**, below **Clear all settings**. The same settings apply to both views.
+You tell BetterBlog a blog is membership-required when you add or edit the blog. BetterBlog also checks the live Squarespace JSON when you open the dashboard, and can ask you to update if the two disagree. When a paywall is detected, a **Paywall Settings** button appears on **Customize Blog**, below **Clear all settings**. The same settings apply to both views.
 
 ---
 
@@ -78,6 +78,19 @@ For logged-out readers in posts-only mode, gated cards show **MEMBERS ONLY**, a 
 | Comments | Hidden on paywalled posts | Shown if Show Comments is on |
 
 BetterBlog updates the page when Squarespace auth state changes.
+
+---
+
+## Keeping BetterBlog in sync with Squarespace
+
+BetterBlog cannot see the moment you turn a Squarespace paywall on or off. The membership setting you choose when you add or edit a blog stays in force until you change it.
+
+When you open the dashboard, BetterBlog fetches each blog’s live `?format=json` and compares it to the stored setting. If they differ, a modal asks whether to update BetterBlog:
+
+- **Update BetterBlog** — apply the live Squarespace state. Turning a paywall on shows **Paywall Settings** on Customize Blog. Turning it off treats the blog as public; existing paywall copy is kept in case you turn the paywall back on.
+- **Keep current settings** — leave BetterBlog as-is for this browser session. The prompt can appear again later if the live site still disagrees.
+
+The check is best-effort. If the JSON cannot be fetched or read, BetterBlog does not prompt. You can always change the membership setting by editing the blog row.
 
 ---
 

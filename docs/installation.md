@@ -28,7 +28,7 @@ Fill in the three fields:
 
 **Blog URL** — the full URL of your Squarespace blog collection page, for example `https://yoursite.squarespace.com/blog`. Include `https://` and the full path to the blog page, not just your domain.
 
-**Does this blog require a membership to view posts?** — select Yes if your blog is gated by a Squarespace pricing plan, No if it's publicly accessible. This controls how BetterBlog handles logged-out readers. You can change this later if your setup changes.
+**Does this blog require a membership to view posts?** — select Yes if your blog is gated by a Squarespace pricing plan, No if it's publicly accessible. This controls how BetterBlog handles logged-out readers. You can change this later by editing the blog row. If you change the Squarespace paywall itself, the dashboard may ask whether to update BetterBlog to match.
 
 Click **Add Blog** to continue.
 

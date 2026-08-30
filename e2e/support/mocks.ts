@@ -213,6 +213,9 @@ export async function setupApiMocks(page: Page): Promise<void> {
     }
 
     if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, dashboardMe);
+    if (method === "GET" && path === "/api/dashboard/paywall-reconcile") {
+      return json(route, 200, { mismatches: [] });
+    }
     if (method === "GET" && path === "/api/checkout/prices") return json(route, 200, checkoutPlanPrices);
     if (method === "GET" && path === "/api/health") return json(route, 200, { status: "ok", isLive: true });
     if (method === "GET" && path === `/api/config/${siteKey}`) return json(route, 200, configResponse);

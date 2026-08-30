@@ -110,7 +110,10 @@ Connecting Google Analytics sends your blog's event data to your GA property —
 ## Paywall and membership issues
 
 **My paywall footer isn't showing for logged-out readers.**
-First, confirm your blog is set to membership required in the BetterBlog dashboard (edit the blog row and check the membership toggle). Second, confirm which Squarespace paywall mode you're using. If your blog is set to gate the overview page and posts (not posts only), Squarespace replaces the entire collection page with its own signup UI — BetterBlog intentionally steps back in this mode and does not render, which means no paywall footer. See [Paywall & Membership](paywall-membership.md) for a full explanation of how the two modes work.
+First, confirm your blog is set to membership required in the BetterBlog dashboard (edit the blog row and check the membership toggle). If you recently turned a Squarespace paywall on, open the dashboard — BetterBlog may ask whether to update to match the live site. Second, confirm which Squarespace paywall mode you're using. If your blog is set to gate the overview page and posts (not posts only), Squarespace replaces the entire collection page with its own signup UI — BetterBlog intentionally steps back in this mode and does not render, which means no paywall footer. See [Paywall & Membership](paywall-membership.md) for a full explanation of how the two modes work.
+
+**I turned off my Squarespace paywall but BetterBlog still shows membership UI.**
+Open the BetterBlog dashboard. If the live site no longer looks paywalled, BetterBlog will ask whether to update. You can also edit the blog row and set membership required to No. See [Paywall & Membership](paywall-membership.md).
 
 **Logged-out readers can see my full post content.**
 BetterBlog doesn't control post content gating — that's handled entirely by Squarespace's pricing plan configuration. If logged-out readers can read your full posts, the paywall is not configured in Squarespace. Check your Squarespace pricing plan settings and confirm the blog page is assigned to a plan.

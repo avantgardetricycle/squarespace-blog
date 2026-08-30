@@ -16,11 +16,18 @@ import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
 import { randomBytes } from 'crypto'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
+import {
+  buildBlogJsonUrl,
+  fetchSquarespaceBlogJson,
+  inferPaywallFromSquarespaceJson,
+  type PaywallDetectionState
+} from '../lib/squarespace-paywall-probe.js'
 
 const router = Router()
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
 type PaywallMode = (typeof PAYWALL_MODES)[number]
-type PaywallDetectionState = 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+const PAYWALL_DETECTION_SOURCES = ['json_probe', 'manual'] as const
+type PaywallDetectionSource = (typeof PAYWALL_DETECTION_SOURCES)[number]
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -81,16 +88,6 @@ function paywallSettingsJson(s: {
     headlineText: s.headlineText,
     featureItems: Array.isArray(s.featureItems) ? s.featureItems : []
   }
-}
-
-/**
- * Build the blog JSON fetch URL from site url and blogPath.
- */
-function buildBlogJsonUrl(url: string, blogPath: string | null): string {
-  const parsed = new URL(url)
-  const hasPath = parsed.pathname && parsed.pathname !== '/'
-  const base = url.replace(/\/+$/, '')
-  return hasPath ? base + '?format=json' : parsed.origin + (blogPath || '/blog') + '?format=json'
 }
 
 /**
@@ -225,6 +222,52 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Dashboard me error:', err)
     res.status(500).json({ error: 'Failed to load dashboard' })
+  }
+})
+
+// GET /api/dashboard/paywall-reconcile — probe live Squarespace JSON vs stored BB paywall state
+router.get('/paywall-reconcile', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+
+  try {
+    const sites = await prisma.site.findMany({
+      where: { userId: user.id, status: 'active', deletedAt: null },
+      select: {
+        id: true,
+        siteKey: true,
+        name: true,
+        url: true,
+        blogPath: true,
+        blogPassword: true,
+        paywallDetectionState: true
+      }
+    })
+
+    const mismatches = (
+      await Promise.all(
+        sites.map(async (site) => {
+          if (!site.url) return null
+          const json = await fetchSquarespaceBlogJson(site.url, site.blogPath, site.blogPassword)
+          const probed = inferPaywallFromSquarespaceJson(json)
+          if (probed.state === 'unknown') return null
+          const stored = (site.paywallDetectionState || 'unknown') as PaywallDetectionState
+          if (stored === probed.state) return null
+          return {
+            siteId: site.id,
+            siteKey: site.siteKey,
+            name: site.name,
+            storedState: stored,
+            probedState: probed.state,
+            signals: probed.signals
+          }
+        })
+      )
+    ).filter((row): row is NonNullable<typeof row> => row !== null)
+
+    res.json({ mismatches })
+  } catch (err) {
+    console.error('Paywall reconcile error:', err)
+    res.status(500).json({ error: 'Failed to reconcile paywall settings' })
   }
 })
 
@@ -725,7 +768,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
 router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = Array.isArray(req.params.siteKey) ? req.params.siteKey[0] : req.params.siteKey ?? ''
-  const { blogPassword, paywallMode, paywallDetectionState, name } = req.body ?? {}
+  const { blogPassword, paywallMode, paywallDetectionState, paywallDetectionSource, name } = req.body ?? {}
 
   if (!siteKey) {
     res.status(400).json({ error: 'Site key required' })
@@ -791,6 +834,12 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       }
       updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
       updates.paywallDetectionSource = 'manual'
+    }
+    if (
+      typeof paywallDetectionSource === 'string' &&
+      PAYWALL_DETECTION_SOURCES.includes(paywallDetectionSource as PaywallDetectionSource)
+    ) {
+      updates.paywallDetectionSource = paywallDetectionSource as PaywallDetectionSource
     }
 
     if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {

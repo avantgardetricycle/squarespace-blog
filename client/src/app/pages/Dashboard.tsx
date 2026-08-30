@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
 import {
   Settings,
@@ -38,9 +38,12 @@ import {
   deleteSite,
   updateSite,
   restoreSite,
+  getPaywallReconcile,
   type DashboardMe,
   type CreatedSite,
+  type PaywallReconcileMismatch,
 } from "@/api/auth";
+import { PaywallReconcileModal } from "@/app/components/PaywallReconcileModal";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -60,6 +63,28 @@ import {
   sameSquarespaceOrigin,
   squarespaceOriginFromUrl,
 } from "@/lib/squarespaceSiteGroups";
+
+const PAYWALL_RECONCILE_DISMISS_KEY = "bbPaywallReconcileDismissed";
+
+function readPaywallReconcileDismissed(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem(PAYWALL_RECONCILE_DISMISS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberPaywallReconcileDismissed(siteKey: string, probedState: string) {
+  const next = { ...readPaywallReconcileDismissed(), [siteKey]: probedState };
+  try {
+    sessionStorage.setItem(PAYWALL_RECONCILE_DISMISS_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
 
 function isValidSignupPageUrl(input: string): boolean {
   const t = input.trim();
@@ -98,6 +123,9 @@ export default function Dashboard() {
     | { kind: "deleted_previous"; existingSite: CreatedSite; message: string }
     | null
   >(null);
+  const [paywallReconcileQueue, setPaywallReconcileQueue] = useState<PaywallReconcileMismatch[]>([]);
+  const [paywallReconcileApplying, setPaywallReconcileApplying] = useState(false);
+  const paywallReconcileStarted = useRef(false);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -105,6 +133,18 @@ export default function Dashboard() {
       setLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (loading || !me || paywallReconcileStarted.current) return;
+    if (me.sites.length === 0) return;
+    paywallReconcileStarted.current = true;
+    void getPaywallReconcile().then((data) => {
+      if (!data?.mismatches?.length) return;
+      const dismissed = readPaywallReconcileDismissed();
+      const next = data.mismatches.filter((row) => dismissed[row.siteKey] !== row.probedState);
+      if (next.length) setPaywallReconcileQueue(next);
+    });
+  }, [loading, me]);
 
   const blogLimit = me?.subscription?.maxSites ?? 3;
   const userPlan =
@@ -307,6 +347,66 @@ export default function Dashboard() {
       setEditingSite(null);
     } finally {
       setSavingBlogEdit(false);
+    }
+  };
+
+  const otherDashboardDialogOpen =
+    showAddBlogModal ||
+    Boolean(editingSite) ||
+    Boolean(siteToDelete) ||
+    Boolean(justCreatedSite) ||
+    Boolean(blogUrlConflict) ||
+    Boolean(installGroupOrigin);
+  const paywallReconcileMismatch =
+    !otherDashboardDialogOpen && paywallReconcileQueue.length > 0 ? paywallReconcileQueue[0] : null;
+
+  const advancePaywallReconcile = (siteKey: string, probedState: string) => {
+    rememberPaywallReconcileDismissed(siteKey, probedState);
+    setPaywallReconcileQueue((prev) => prev.filter((row) => row.siteKey !== siteKey));
+  };
+
+  const handleDismissPaywallReconcile = () => {
+    if (!paywallReconcileMismatch) return;
+    advancePaywallReconcile(paywallReconcileMismatch.siteKey, paywallReconcileMismatch.probedState);
+  };
+
+  const handleApplyPaywallReconcile = async () => {
+    if (!paywallReconcileMismatch) return;
+    setPaywallReconcileApplying(true);
+    try {
+      const result = await updateSite(paywallReconcileMismatch.siteKey, {
+        paywallDetectionState: paywallReconcileMismatch.probedState,
+        paywallDetectionSource: "json_probe",
+      });
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to update paywall settings");
+        return;
+      }
+      const s = result.site;
+      setMe((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          sites: prev.sites.map((row) =>
+            row.siteKey === s.siteKey
+              ? {
+                  ...row,
+                  paywallDetectionState: s.paywallDetectionState,
+                  paywallDetectionSource: s.paywallDetectionSource,
+                  paywallSettings: s.paywallSettings ?? row.paywallSettings,
+                }
+              : row
+          ),
+        };
+      });
+      toast.success(
+        paywallReconcileMismatch.probedState === "detected_paywalled"
+          ? "BetterBlog now treats this blog as membership-gated. Adjust copy in Customize Blog → Paywall Settings."
+          : "BetterBlog no longer treats this blog as membership-gated."
+      );
+      advancePaywallReconcile(paywallReconcileMismatch.siteKey, paywallReconcileMismatch.probedState);
+    } finally {
+      setPaywallReconcileApplying(false);
     }
   };
 
@@ -824,6 +924,13 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PaywallReconcileModal
+        mismatch={paywallReconcileMismatch}
+        applying={paywallReconcileApplying}
+        onApply={() => void handleApplyPaywallReconcile()}
+        onDismiss={handleDismissPaywallReconcile}
+      />
 
       {/* My Blogs Section with Integrated Setup */}
       <Card className="border-[#e5e4e0] shadow-sm">
