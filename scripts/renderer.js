@@ -3829,7 +3829,7 @@
       eyebrow.textContent = this._resolvePaywallEyebrowText();
 
       var headline = document.createElement('h3');
-      headline.className = 'bb-paywall-heading';
+      headline.className = 'bb-paywall-heading bb-paywall-heading--overlay';
       headline.textContent = this._resolvePaywallHeadlineText('Unlock unlimited access to ' + blogTitle);
 
       var p = document.createElement('p');
