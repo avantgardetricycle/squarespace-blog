@@ -8245,11 +8245,14 @@
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-btn-font,inherit);font-weight:var(--bb-btn-weight,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
-        '#blog-overlay-list .bb-lead-magnet-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);margin:0 0 8px 0;}' +
-        '#blog-overlay-list .bb-lead-magnet-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:#fff;padding:8px 12px;border:1px solid var(--bb-border,#e8e7e4);border-radius:var(--bb-chrome-radius,6px);}' +
-        '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
-        '#blog-overlay-list .bb-lead-magnet-btn{padding:8px 16px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
+        '#blog-overlay-list .bb-lead-magnet-heading{font-size:15px;font-family:inherit;font-weight:600;color:var(--bb-body);margin:0 0 8px 0;}' +
+        '#blog-overlay-list .bb-lead-magnet-desc{font-size:0.85rem;color:var(--bb-muted);margin:0 0 12px 0;}' +
+        '#blog-overlay-list .bb-lead-magnet-form{display:flex;flex-direction:column;gap:8px;}' +
+        '#blog-overlay-list .bb-lead-magnet-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body);background:#fff;padding:8px 12px;border:1px solid var(--bb-border);border-radius:6px;}' +
+        '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted);opacity:1;}' +
+        '#blog-overlay-list .bb-lead-magnet-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent);color:var(--bb-text-on-accent);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
         '#blog-overlay-list .bb-lead-magnet-btn:hover{filter:brightness(0.92);}' +
+        '#blog-overlay-list .bb-lead-magnet-msg{font-size:0.85rem;margin-top:4px;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-newsletter-footer-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;width:100%;}' +
@@ -12559,31 +12562,25 @@
         wireEmailCaptureSubmit(emailInput, btn, msgEl);
         return wrap;
       }
-      function createLeadMagnetForm(lmCfg, width, hideHeader) {
+      function createLeadMagnetForm(lmCfg, width) {
         if (!lmCfg) return null;
         var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
-        if (!hideHeader) {
-          var titleEl = document.createElement('div');
-          titleEl.className = 'bb-lead-magnet-heading';
-          titleEl.textContent = resourceTitle;
-          wrap.appendChild(titleEl);
-        }
+        var titleEl = document.createElement('div');
+        titleEl.className = 'bb-lead-magnet-heading';
+        titleEl.textContent = resourceTitle;
+        wrap.appendChild(titleEl);
         if (lmCfg.description && lmCfg.description.trim()) {
           var descEl = document.createElement('div');
+          descEl.className = 'bb-lead-magnet-desc';
           descEl.textContent = lmCfg.description;
-          descEl.style.fontSize = '0.85rem';
-          descEl.style.color = 'var(--bb-muted,#666)';
-          descEl.style.marginBottom = '12px';
           wrap.appendChild(descEl);
         }
         var form = document.createElement('div');
-        form.style.display = 'flex';
-        form.style.flexDirection = 'column';
-        form.style.gap = '8px';
+        form.className = 'bb-lead-magnet-form';
         var emailInput = document.createElement('input');
         emailInput.type = 'email';
         emailInput.name = 'bb-lead-magnet-email';
@@ -12598,8 +12595,7 @@
         btn.type = 'button';
         btn.className = 'sqs-button-element--primary bb-lead-magnet-btn';
         var msgEl = document.createElement('div');
-        msgEl.style.fontSize = '0.85rem';
-        msgEl.style.marginTop = '4px';
+        msgEl.className = 'bb-lead-magnet-msg';
         form.appendChild(btn);
         form.appendChild(msgEl);
         wrap.appendChild(form);
@@ -12885,8 +12881,14 @@
             var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);
             el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm, isSinglePost) : null;
           } else if (mod === 'leadMagnet' && lmCfg) {
-            var lmForm = createLeadMagnetForm(lmCfg, width, isSinglePost);
-            el = lmForm ? createSidebarSection(lmCfg.resourceTitle || 'Lead Magnet', lmForm, isSinglePost) : null;
+            var lmForm = createLeadMagnetForm(lmCfg, width);
+            if (lmForm) {
+              var lmSection = document.createElement('div');
+              lmSection.className = 'blog-overlay-sidebar-section';
+              lmSection.style.marginBottom = '20px';
+              lmSection.appendChild(lmForm);
+              el = lmSection;
+            }
           }
           if (el) mods.push(el);
         }
