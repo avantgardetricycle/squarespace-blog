@@ -10584,22 +10584,6 @@
           headlineMount.appendChild(moDigestLbl);
         }
 
-        var singlePostDeckText = null;
-        if (isSinglePost && postInfoWrap && !phShowByline && !publisherPostLayout) {
-          var deckSourceText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
-          var deckSourceSentences = deckSourceText ? deckSourceText.match(/[^.!?]*[.!?]/g) : null;
-          singlePostDeckText = deckSourceSentences && deckSourceSentences.length > 0 ? deckSourceSentences[0].trim() : '';
-          if (!singlePostDeckText) singlePostDeckText = self._truncateText(post.excerpt || post.body || '', 200);
-          if (singlePostDeckText) singlePostDeckText = self._stripLeadingSquarespaceSectionMarkers(singlePostDeckText);
-          if (!singlePostDeckText) singlePostDeckText = null;
-        }
-        if (featurePostLayoutForCat && singlePostDeckText && postInfoWrap) {
-          var featureDeckEl = document.createElement('p');
-          featureDeckEl.className = 'blog-overlay-post-deck blog-overlay-post-deck--feature';
-          featureDeckEl.textContent = singlePostDeckText;
-          postInfoWrap.appendChild(featureDeckEl);
-        }
-
         var pendingWriterMetaRow = null;
         var pendingWriterShareRow = null;
 
@@ -10753,14 +10737,6 @@
         }
 
         if (isSinglePost && postInfoWrap) {
-          if (singlePostDeckText && !featurePostLayoutForCat && !singlePostFullBleedStacked && !phShowByline && !publisherPostLayout) {
-            var deckEl = document.createElement('p');
-            var deckModifier = singlePostFullBleedHero ? ' blog-overlay-post-deck--on-dark' : '';
-            if (reporterPostHeaderLayout) deckModifier += ' blog-overlay-post-deck--reporter';
-            deckEl.className = 'blog-overlay-post-deck' + deckModifier;
-            deckEl.textContent = singlePostDeckText;
-            postInfoWrap.appendChild(deckEl);
-          }
           var useDedicatedSinglePostHeaderZone = isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked;
           var postInfoTarget = useDedicatedSinglePostHeaderZone
             ? (isSideBySide ? appendTo : ensureSinglePostHeaderInnerEl())
