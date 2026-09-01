@@ -4699,10 +4699,36 @@
       return Math.random() < rate;
     },
 
+    _hasBbPerfParam: function() {
+      try {
+        return new URLSearchParams(window.location.search || '').get('bbPerf') === '1';
+      } catch (e) {
+        return false;
+      }
+    },
+
     _perfOnVisible: function() {
       if (this._perfReported) return;
       this._perfReported = true;
-      if (!this._perfShouldSample()) return;
+      var forceLog = this._hasBbPerfParam();
+      var breakdown = {
+        loaderToConfig: this._perfDelta('configResponse', 'loaderEval'),
+        configFetch: this._perfDelta('configResponse', 'configRequest'),
+        rendererDownload: this._perfDelta('rendererLoaded', 'rendererRequest'),
+        configToRenderer: this._perfDelta('rendererInit', 'rendererRequest'),
+        rendererToJsonFirst: this._perfDelta('blogJsonFirstPage', 'rendererInit'),
+        jsonFirstToDom: this._perfDelta('renderDomCommitted', 'blogJsonFirstPage'),
+        domToVisible: this._perfDelta('visible', 'renderDomCommitted'),
+        totalToVisible: this._perfDelta('visible', 'loaderEval'),
+        blogJsonPages: this._blogJsonPageCount || 1,
+        postCount: this.items ? this.items.length : 0
+      };
+      if (forceLog) {
+        try {
+          console.info('[BetterBlog perf] ms from loader eval to overlay visible', breakdown);
+        } catch (eLog) { /* ignore */ }
+      }
+      if (!forceLog && !this._perfShouldSample()) return;
       var p = window.__bbPerf || {};
       var conn = null;
       try {
@@ -4730,6 +4756,8 @@
       } catch (eLay) { /* ignore */ }
       this._analyticsTrack('render_perf', {
         loaderToConfig: this._perfDelta('configResponse', 'loaderEval'),
+        configFetch: this._perfDelta('configResponse', 'configRequest'),
+        rendererDownload: this._perfDelta('rendererLoaded', 'rendererRequest'),
         configToRenderer: this._perfDelta('rendererInit', 'rendererRequest'),
         rendererToJsonFirst: this._perfDelta('blogJsonFirstPage', 'rendererInit'),
         jsonFirstToDom: this._perfDelta('renderDomCommitted', 'blogJsonFirstPage'),
@@ -7409,7 +7437,11 @@
           firstJson = json;
           applyCollectionMetadata(json);
           self._perfMark('blogJsonFirstPage');
-          return paintFromCurrentItems(true);
+          // Collection index JSON is this page — skip a second ?format=json
+          // auth probe and the paywall hydration wait before first paint.
+          var probeCurrentPage = !self._isLikelyBlogCollectionIndexView()
+            && Boolean(self._currentPageJsonFetchUrl());
+          return paintFromCurrentItems(probeCurrentPage);
         })
         .then(
           function() {

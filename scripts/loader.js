@@ -246,8 +246,10 @@
    * native Squarespace blog between when our content lands in the DOM and when
    * it actually paints.
    *
-   * - Double requestAnimationFrame flushes layout and paint commit.
-   * - document.fonts.ready (capped at 600ms) avoids a font-swap reflow flash.
+   * - Double requestAnimationFrame flushes layout and paint commit so the
+   *   overlay is on screen before we lift visibility:hidden.
+   * - Do not wait for document.fonts.ready: that capped at 600ms after DOM
+   *   was already committed and kept the spinner up for no layout reason.
    */
   function clearBootstrapLoading() {
     var doRemove = function () {
@@ -266,34 +268,10 @@
       } catch (eVis) { /* ignore */ }
     };
 
-    var scheduleRemove = function () {
-      if (typeof requestAnimationFrame !== 'function') return doRemove();
-      requestAnimationFrame(function () {
-        requestAnimationFrame(doRemove);
-      });
-    };
-
-    try {
-      var fontsReady = document.fonts && document.fonts.ready;
-      if (fontsReady && typeof fontsReady.then === 'function') {
-        var settled = false;
-        var fontsTimeoutId = setTimeout(function () {
-          if (!settled) { settled = true; scheduleRemove(); }
-        }, 600);
-        fontsReady.then(
-          function () {
-            if (!settled) { settled = true; clearTimeout(fontsTimeoutId); scheduleRemove(); }
-          },
-          function () {
-            if (!settled) { settled = true; clearTimeout(fontsTimeoutId); scheduleRemove(); }
-          }
-        );
-      } else {
-        scheduleRemove();
-      }
-    } catch (e) {
-      scheduleRemove();
-    }
+    if (typeof requestAnimationFrame !== 'function') return doRemove();
+    requestAnimationFrame(function () {
+      requestAnimationFrame(doRemove);
+    });
   }
 
   function installBootstrapLoading() {
@@ -336,6 +314,16 @@
   } catch (earlyBootErr) { /* ignore */ }
 
   var configPromise = null;
+  var rendererLoadPromise = null;
+
+  function defaultRendererUrl() {
+    try {
+      if (script && script.src) {
+        return String(script.src).replace(/loader\.js(\?[^#]*)?(#.*)?$/i, 'renderer.js$1$2');
+      }
+    } catch (eSrc) { /* ignore */ }
+    return normalizedApiBase + '/renderer.js';
+  }
 
   function fetchConfig() {
     if (configPromise) return configPromise;
@@ -354,45 +342,69 @@
     return configPromise;
   }
 
-  function appendRendererScript(config) {
-    var renderer = document.createElement('script');
-    var rendererUrl = (config && config.rendererUrl) ? config.rendererUrl : 'https://avantgardetricycle.github.io/squarespace-blog/renderer.js';
-    renderer.src = rendererUrl;
-    renderer.async = true;
-
-    renderer.onload = function() {
-      perfMark('rendererLoaded');
+  function startRendererDownload(url) {
+    if (rendererLoadPromise) return rendererLoadPromise;
+    try {
+      if (window.__bbRendererLoadPromise) {
+        rendererLoadPromise = window.__bbRendererLoadPromise;
+        return rendererLoadPromise;
+      }
+    } catch (eShared) { /* ignore */ }
+    var src = url || defaultRendererUrl();
+    rendererLoadPromise = new Promise(function(resolve, reject) {
       if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer.init === 'function') {
-        window.BlogOverlayRenderer.init(config);
-      } else {
-        clearBootstrapLoading();
-        console.error('[BlogOverlay] Renderer loaded, but BlogOverlayRenderer.init was not found');
+        perfMark('rendererLoaded');
+        resolve();
+        return;
       }
-    };
-    renderer.onerror = function() {
-      clearBootstrapLoading();
-      console.error('[BlogOverlay] Failed to load renderer.js');
-    };
+      var renderer = document.createElement('script');
+      renderer.src = src;
+      renderer.async = true;
+      renderer.onload = function() {
+        perfMark('rendererLoaded');
+        resolve();
+      };
+      renderer.onerror = function() {
+        reject(new Error('Failed to load renderer.js'));
+      };
+      perfMark('rendererRequest');
+      var head = document.head || document.getElementsByTagName('head')[0];
+      if (head) {
+        head.appendChild(renderer);
+        return;
+      }
+      var waited = 0;
+      var waitForHead = setInterval(function() {
+        waited += 1;
+        var h = document.head || document.getElementsByTagName('head')[0];
+        if (h) {
+          clearInterval(waitForHead);
+          h.appendChild(renderer);
+        } else if (waited > 200) {
+          clearInterval(waitForHead);
+          reject(new Error('document.head not available; cannot load renderer'));
+        }
+      }, 10);
+    });
+    try { window.__bbRendererLoadPromise = rendererLoadPromise; } catch (eSet) { /* ignore */ }
+    return rendererLoadPromise;
+  }
 
-    perfMark('rendererRequest');
-    var head = document.head || document.getElementsByTagName('head')[0];
-    if (head) {
-      head.appendChild(renderer);
-      return;
-    }
-    var waited = 0;
-    var waitForHead = setInterval(function() {
-      waited += 1;
-      var h = document.head || document.getElementsByTagName('head')[0];
-      if (h) {
-        clearInterval(waitForHead);
-        h.appendChild(renderer);
-      } else if (waited > 200) {
-        clearInterval(waitForHead);
+  function initRendererWithConfig(config) {
+    var url = (config && config.rendererUrl) ? config.rendererUrl : defaultRendererUrl();
+    startRendererDownload(url)
+      .then(function() {
+        if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer.init === 'function') {
+          window.BlogOverlayRenderer.init(config);
+        } else {
+          clearBootstrapLoading();
+          console.error('[BlogOverlay] Renderer loaded, but BlogOverlayRenderer.init was not found');
+        }
+      })
+      .catch(function(err) {
         clearBootstrapLoading();
-        console.error('[BlogOverlay] document.head not available; cannot load renderer');
-      }
-    }, 10);
+        console.error('[BlogOverlay] Failed to load renderer.js', err && err.message ? err.message : err);
+      });
   }
 
   function beginOwnedLoader(config) {
@@ -407,7 +419,7 @@
       console.warn('[BB-DEBUG-7918cd] startLoader: IFRAME detected, skipping installBootstrapLoading (hypothesisId=H2_FIX)');
       // #endregion
     }
-    appendRendererScript(config);
+    initRendererWithConfig(config);
   }
 
   function configMatchesCurrentPath(config) {
@@ -435,6 +447,9 @@
     }
 
     if (onKnownBlogRoute) {
+      // Overlap renderer download with the config RTT. Header preload hints
+      // start the same URL during HTML parse when the snippet is up to date.
+      startRendererDownload(defaultRendererUrl());
       fetchConfig()
         .then(function(config) {
           beginOwnedLoader(config);

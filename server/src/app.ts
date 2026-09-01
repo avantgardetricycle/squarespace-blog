@@ -105,20 +105,16 @@ export function createApp(options: CreateAppOptions = {}): Express {
   const loaderPath = path.join(scriptBase, 'loader.js')
   if (fs.existsSync(rendererPath)) {
     app.get('/renderer.js', (_req, res) => {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-      res.setHeader('Surrogate-Control', 'no-store')
+      // Stable URL (pasted Header snippets). Short max-age so deploys land
+      // quickly; SWR lets repeat visitors reuse the previous file.
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400')
       res.type('application/javascript')
       res.sendFile(rendererPath)
     })
   }
   if (fs.existsSync(loaderPath)) {
     app.get('/loader.js', (_req, res) => {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-      res.setHeader('Surrogate-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400')
       res.type('application/javascript')
       res.sendFile(loaderPath)
     })

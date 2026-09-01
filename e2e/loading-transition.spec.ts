@@ -393,6 +393,70 @@ test.describe("Loading transition", () => {
     expect(overlayPosts).toBeGreaterThan(0);
   });
 
+  test("header snippet preloads loader and renderer scripts", () => {
+    expect(headerInjection).toContain('<link rel="preload" as="script" href="/loader.js">');
+    expect(headerInjection).toContain('<link rel="preload" as="script" href="/renderer.js">');
+  });
+
+  test("records __bbPerf marks and does not stall reveal on fonts", async ({ page }) => {
+    await page.goto(`${FAKE_BLOG_PATH}?bbPerf=1`, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+
+    const perf = await page.evaluate(() => {
+      const w = window as unknown as { __bbPerf?: Record<string, number> };
+      return w.__bbPerf || {};
+    });
+
+    expect(perf.loaderEval, "loaderEval").toEqual(expect.any(Number));
+    expect(perf.configRequest, "configRequest").toEqual(expect.any(Number));
+    expect(perf.configResponse, "configResponse").toEqual(expect.any(Number));
+    expect(perf.rendererRequest, "rendererRequest").toEqual(expect.any(Number));
+    expect(perf.rendererLoaded, "rendererLoaded").toEqual(expect.any(Number));
+    expect(perf.blogJsonFirstPage, "blogJsonFirstPage").toEqual(expect.any(Number));
+    expect(perf.renderDomCommitted, "renderDomCommitted").toEqual(expect.any(Number));
+    expect(perf.visible, "visible").toEqual(expect.any(Number));
+
+    // Renderer download must start without waiting for config (overlap).
+    expect(perf.rendererRequest).toBeLessThan(perf.configResponse);
+
+    // Reveal is double-rAF only — not document.fonts.ready (previously up to 600ms).
+    expect(perf.visible - perf.renderDomCommitted).toBeLessThan(250);
+
+    console.log("[e2e __bbPerf]", {
+      loaderToConfig: Math.round(perf.configResponse - perf.loaderEval),
+      configFetch: Math.round(perf.configResponse - perf.configRequest),
+      rendererDownload: Math.round(perf.rendererLoaded - perf.rendererRequest),
+      rendererOverlap: Math.round(perf.configResponse - perf.rendererRequest),
+      jsonFirstToDom: Math.round(perf.renderDomCommitted - perf.blogJsonFirstPage),
+      domToVisible: Math.round(perf.visible - perf.renderDomCommitted),
+      totalToVisible: Math.round(perf.visible - perf.loaderEval),
+    });
+  });
+
+  test("collection index fetches blog JSON once before first paint", async ({ page }) => {
+    const jsonUrls: string[] = [];
+    page.on("request", (req) => {
+      const url = req.url();
+      if (url.includes("format=json")) jsonUrls.push(url);
+    });
+
+    await page.goto(FAKE_BLOG_PATH, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+
+    const collectionJson = jsonUrls.filter((url) => {
+      try {
+        const parsed = new URL(url);
+        return parsed.searchParams.get("format") === "json" && parsed.pathname === FAKE_BLOG_PATH;
+      } catch {
+        return false;
+      }
+    });
+    expect(
+      collectionJson,
+      "collection index must not re-fetch the same ?format=json payload for the auth probe",
+    ).toHaveLength(1);
+  });
+
   test("native markup never paints during SPA navigation from collection to post", async ({ page }) => {
     await page.goto(FAKE_BLOG_PATH, { waitUntil: "domcontentloaded" });
     await waitForHandoffComplete(page);

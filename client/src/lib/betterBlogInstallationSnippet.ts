@@ -89,6 +89,11 @@ function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+/** Same-origin renderer URL the loader will fetch in parallel with config. */
+export function rendererUrlFromLoaderUrl(loaderUrl: string): string {
+  return loaderUrl.replace(/loader\.js(\?[^#]*)?(#.*)?$/i, "renderer.js$1$2");
+}
+
 /**
  * Full HTML to paste in Squarespace Settings → Advanced → Code Injection → Header.
  * Order matters: critical <style> + class-setting <script> must run before the
@@ -113,8 +118,11 @@ export function buildBetterBlogSquarespaceHeaderHtml(opts: BetterBlogHeaderSnipp
     typeof apiBase === "string" && apiBase.trim()
       ? `\n  data-api-base="${escapeHtmlAttr(apiBase.trim())}"`
       : "";
+  const rendererUrl = rendererUrlFromLoaderUrl(loaderUrl);
 
-  return `<style id="bb-critical-preload-style">
+  return `<link rel="preload" as="script" href="${loaderUrl}">
+<link rel="preload" as="script" href="${rendererUrl}">
+<style id="bb-critical-preload-style">
 html.bb-loading-blog body {
   visibility: hidden !important;
 }
