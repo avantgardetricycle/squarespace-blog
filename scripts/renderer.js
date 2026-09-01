@@ -7568,27 +7568,88 @@
       }
     },
 
+    /**
+     * Squarespace JSON (Static.SQUARESPACE_CONTEXT / tweakJSON) does not publish the
+     * rendered site-nav height — only logo/padding sliders. The engine writes computed
+     * CSS vars from those tweaks; use them when the header node is not in the DOM yet.
+     */
+    _readSquarespaceHeaderHeightHint: function() {
+      var names = [
+        '--header-first-section-padding-top',
+        '--header-height',
+        '--site-header-height',
+        '--siteHeaderHeight'
+      ];
+      for (var i = 0; i < names.length; i++) {
+        var raw = this._bbReadCssVar(names[i], null);
+        var px = this._parseCssLengthToPx(raw, typeof document !== 'undefined' ? document.documentElement : null);
+        if (px && px > 0 && px < 800) return Math.round(px);
+      }
+      try {
+        var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
+        var tweaks = ctx && (ctx.tweakJSON || ctx.tweakValues);
+        if (tweaks && typeof tweaks === 'object') {
+          var keys = ['header-height', 'tweak-header-height', 'headerHeight'];
+          for (var k = 0; k < keys.length; k++) {
+            var fromTweak = this._parseCssLengthToPx(tweaks[keys[k]], typeof document !== 'undefined' ? document.documentElement : null);
+            if (fromTweak && fromTweak > 0 && fromTweak < 800) return Math.round(fromTweak);
+          }
+        }
+      } catch (eCtx) { /* ignore */ }
+      return 0;
+    },
+
+    /** Visual bottom of site chrome (header + announcement bar) at the top of the viewport. */
+    _measureSiteNavHeightFromDom: function() {
+      var headerSelectors = [
+        'header', '.Header', '#header', '[data-section-type="header"]',
+        '.header-announcement-bar', '.Header-announcementBar',
+        '[data-nc-group="header"]', '.Index-nav', '.Index-header'
+      ];
+      var best = 0;
+      var seen = [];
+      for (var i = 0; i < headerSelectors.length; i++) {
+        try {
+          var nodes = document.querySelectorAll(headerSelectors[i]);
+          for (var n = 0; n < nodes.length; n++) {
+            var header = nodes[n];
+            if (!header || seen.indexOf(header) !== -1) continue;
+            seen.push(header);
+            if (header.closest && header.closest('#blog-overlay-list, .blog-overlay-wrapper')) continue;
+            var height = 0;
+            try {
+              var rect = header.getBoundingClientRect();
+              if (rect && rect.height > 0 && rect.top < 80) {
+                height = Math.round(rect.bottom);
+              }
+            } catch (eRect) { /* ignore */ }
+            if (!height) height = header.offsetHeight || 0;
+            if (height > best) best = height;
+          }
+        } catch (e) { /* invalid selector */ }
+      }
+      return best;
+    },
+
     _getNavbarOffset: function() {
       var root = this._root || document.getElementById('blogga-blogga-root');
       if (root) {
         var h = root.getAttribute('data-navbar-height');
         if (h) return parseInt(h, 10) || 0;
       }
-      var headerSelectors = [
-        'header', '.Header', '#header', '[data-section-type="header"]',
-        '.header-announcement-bar', '.Header-announcementBar',
-        '[data-nc-group="header"]', '.Index-nav', '.Index-header'
-      ];
-      for (var i = 0; i < headerSelectors.length; i++) {
-        try {
-          var header = document.querySelector(headerSelectors[i]);
-          if (header) {
-            var height = header.offsetHeight || 0;
-            if (height > 0) return height;
-          }
-        } catch (e) { /* invalid selector */ }
-      }
-      return 0;
+      var fromDom = this._measureSiteNavHeightFromDom();
+      if (fromDom > 0) return fromDom;
+      return this._readSquarespaceHeaderHeightHint();
+    },
+
+    _isFlushNavHeroLayout: function(cfg) {
+      return this._isStoryPostLayout(cfg) || this._isPublisherPostLayout(cfg);
+    },
+
+    _wrapperPadTopForNavbar: function(navbarOffset, flushNavHero) {
+      var nav = typeof navbarOffset === 'number' && isFinite(navbarOffset) ? Math.max(0, navbarOffset) : 0;
+      if (flushNavHero) return nav;
+      return nav > 0 ? nav + 16 : 16;
     },
 
     /** Sticky sidebar pin: a few px below the viewport top (fixed rail sync handles nav overlap). */
@@ -8138,6 +8199,7 @@
           '--bb-muted:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
           '--bb-extra-muted:color-mix(in srgb, var(--bb-body) 40%, transparent);' +
           '--bb-border:color-mix(in srgb, var(--bb-body) 15%, transparent);' +
+          '--bb-border-15:var(--bb-border);' +
           '--bb-placeholder:color-mix(in srgb, var(--bb-body) 5%, transparent);' +
           '--bb-btn-font:var(--primary-button-font-font-family);' +
           '--bb-btn-letter-spacing:var(--primary-button-font-letter-spacing);' +
@@ -8233,12 +8295,13 @@
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .blog-overlay-prev-next{display:flex;flex-direction:row;width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);margin-top:32px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next{display:flex;flex-direction:row;width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);margin-top:32px;padding:16px;}' +
         '#blog-overlay-list .blog-overlay-prev-next-col{flex:1 1 50%;min-width:0;padding:20px 24px;box-sizing:border-box;text-decoration:none;color:inherit;display:flex;flex-direction:column;}' +
-        '#blog-overlay-list .blog-overlay-prev-next-col--next{border-left:1px solid var(--bb-border,#e5e4e0);align-items:flex-end;text-align:right;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col:first-child{padding-right:16px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col--next{border-left:1px solid var(--bb-border-15);padding-left:16px;align-items:flex-end;text-align:right;}' +
         '#blog-overlay-list .blog-overlay-prev-next-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-extra-muted,#888);margin-bottom:8px;}' +
         '#blog-overlay-list .blog-overlay-prev-next-category{margin-bottom:4px;}' +
-        '#blog-overlay-list .blog-overlay-prev-next-title{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-title{font-size:20px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
         '#blog-overlay-list .blog-overlay-toc .bb-toc-item{display:block;font-family:var(--bb-heading-font-family,inherit);font-size:16px;line-height:1.4;font-weight:400;color:var(--bb-muted,#888);text-decoration:none;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-toc .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc .bb-toc-item.blog-overlay-toc-active{color:var(--bb-accent,#5B4FE8);font-weight:600;}' +
         '#blog-overlay-list .blog-overlay-toc[data-toc-style="numbered"] .bb-toc-item{padding:8px 12px;border-left:none;background:transparent;}' +
@@ -8707,10 +8770,11 @@
     _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
       if (!wrapper || !wrapper.style) return;
       var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
       wrapper.style.paddingTop = padT + 'px';
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
-      wrapper.style.marginTop = '16px';
+      wrapper.style.marginTop = flushNav ? '0' : '16px';
       wrapper.style.marginBottom = '16px';
 
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
@@ -11605,7 +11669,13 @@
       wrapper.style.display = 'block';
       self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
       var navbarOffset = this._getNavbarOffset();
-      var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
+      var flushNavHero = isSinglePost && self._isFlushNavHeroLayout(cfg);
+      if (flushNavHero) {
+        wrapper.setAttribute('data-bb-flush-nav-hero', '1');
+      } else {
+        wrapper.removeAttribute('data-bb-flush-nav-hero');
+      }
+      var wrapperPadTop = self._wrapperPadTopForNavbar(navbarOffset, flushNavHero);
       if (isSinglePost) {
         wrapper.setAttribute('data-bb-spec-horizontal-padding', '1');
         if (self._isWriterPostLayout(cfg)) {
@@ -11839,7 +11909,7 @@
           scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
         }
         /** Fixed top-positioned bar overlays the wrapper; reserve its height so content doesn't sit under it. */
-        if (progressBarPosition === 'top' && !this._previewMode) {
+        if (progressBarPosition === 'top' && !this._previewMode && !flushNavHero) {
           self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop + progressBarThickness);
         }
       }
@@ -14146,7 +14216,8 @@
       var applyNavbarOffset = function(offset) {
         if (offset <= 0 || !wrapper.parentNode) return;
         lastAppliedOffset = offset;
-        self._applySiteContentInsetsToWrapper(wrapper, offset + 16);
+        var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+        self._applySiteContentInsetsToWrapper(wrapper, self._wrapperPadTopForNavbar(offset, flushNav));
         var progressTrack = document.getElementById('blog-overlay-progress');
         if (progressTrack && progressTrack.style.position === 'fixed') {
           progressTrack.style.top = offset + 'px';
@@ -14159,7 +14230,12 @@
       var scheduleRecheck = function() {
         if (!wrapper.parentNode) return;
         var newOffset = self._getNavbarOffset();
-        if (newOffset > lastAppliedOffset) applyNavbarOffset(newOffset);
+        var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+        if (flushNav) {
+          if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
+        } else if (newOffset > lastAppliedOffset) {
+          applyNavbarOffset(newOffset);
+        }
       };
       requestAnimationFrame(function() {
         requestAnimationFrame(scheduleRecheck);
