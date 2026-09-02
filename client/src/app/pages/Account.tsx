@@ -24,6 +24,7 @@ import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardMe, updateProfile, cancelSubscription, resumeSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
 import { getPlanDisplayName } from "@/lib/planLabels";
+import { formatSubscriptionDate, hasActiveSubscription } from "@/lib/subscription";
 
 export default function Account() {
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -34,7 +35,7 @@ export default function Account() {
   const [restoring, setRestoring] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | null>(null);
+  const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | "restore" | null>(null);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -70,6 +71,27 @@ export default function Account() {
   };
 
   const handleRestoreSubscription = async () => {
+    if (!hasActiveSubscription(me?.subscription)) {
+      setRestoring(true);
+      setPortalLoading(true);
+      setPortalLoadingButton("restore");
+      try {
+        const { url, error } = await createPortalSession();
+        if (url) {
+          window.location.href = url;
+          return;
+        }
+        toast.error(error ?? "Failed to open billing portal");
+      } catch {
+        toast.error("Failed to open billing portal");
+      } finally {
+        setRestoring(false);
+        setPortalLoading(false);
+        setPortalLoadingButton(null);
+      }
+      return;
+    }
+
     setRestoring(true);
     try {
       const result = await resumeSubscription();
@@ -145,16 +167,13 @@ export default function Account() {
   const cadence = me.subscription?.cadence ?? "monthly";
   const cadenceDisplay = cadence.charAt(0).toUpperCase() + cadence.slice(1);
   const priceDisplay = me.subscription?.priceDisplay ?? "—";
+  const subscriptionActive = hasActiveSubscription(me.subscription);
   const statusDisplay = me.subscription?.status
     ? me.subscription.status.charAt(0).toUpperCase() + me.subscription.status.slice(1)
     : "—";
-  const currentPeriodEnd = me.subscription?.currentPeriodEnd
-    ? new Date(me.subscription.currentPeriodEnd).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
+  const currentPeriodEnd = formatSubscriptionDate(me.subscription?.currentPeriodEnd) ?? "—";
+  const scheduledCancel = Boolean(subscriptionActive && me.subscription?.cancelAtPeriodEnd);
+  const subscriptionExpired = !subscriptionActive;
 
   return (
     <div className="space-y-6">
@@ -206,7 +225,9 @@ export default function Account() {
           <CardHeader>
             <CardTitle>Current Plan</CardTitle>
             <CardDescription>
-              You are currently subscribed to the {planDisplay} plan.
+              {subscriptionExpired
+                ? `Your ${planDisplay} plan has been canceled.`
+                : `You are currently subscribed to the ${planDisplay} plan.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -226,13 +247,26 @@ export default function Account() {
                 variant="outline"
                 size="sm"
                 onClick={handleOpenPortal("changePlan")}
-                disabled={portalLoading || !me.subscription}
+                disabled={portalLoading || !me.subscription || subscriptionExpired}
               >
                 {portalLoadingButton === "changePlan" ? "Opening…" : "Change Plan"}
               </Button>
             </div>
             <div className="text-sm text-[#6b6b6b]">
-              {me.subscription?.cancelAtPeriodEnd ? (
+              {subscriptionExpired ? (
+                currentPeriodEnd !== "—" ? (
+                  <>
+                    Your subscription ended on{" "}
+                    <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
+                    Restore your subscription to continue using BetterBlog.
+                  </>
+                ) : (
+                  <>
+                    Your subscription has ended. Restore your subscription to continue using
+                    BetterBlog.
+                  </>
+                )
+              ) : scheduledCancel ? (
                 <>
                   Your subscription will end on{" "}
                   <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
@@ -247,8 +281,12 @@ export default function Account() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
-            {me.subscription?.cancelAtPeriodEnd ? (
-              <p className="text-sm text-amber-600">Cancellation scheduled for end of period</p>
+            {subscriptionExpired || scheduledCancel ? (
+              <p className="text-sm text-amber-600">
+                {subscriptionExpired
+                  ? "Subscription canceled"
+                  : "Cancellation scheduled for end of period"}
+              </p>
             ) : (
               <>
                 <Button
@@ -285,12 +323,16 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            {me.subscription?.cancelAtPeriodEnd ? (
+            {subscriptionExpired || scheduledCancel ? (
               <Button
                 onClick={() => void handleRestoreSubscription()}
                 disabled={restoring || portalLoading}
               >
-                {restoring ? "Restoring…" : "Restore Subscription"}
+                {portalLoadingButton === "restore"
+                  ? "Opening…"
+                  : restoring
+                    ? "Restoring…"
+                    : "Restore Subscription"}
               </Button>
             ) : (
               <Button

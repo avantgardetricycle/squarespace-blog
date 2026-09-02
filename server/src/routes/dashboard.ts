@@ -14,6 +14,7 @@ import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
+import { isActiveSubscriptionStatus } from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 import {
@@ -127,9 +128,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         where: { id: user.id },
         include: {
           subscriptions: {
-            where: { status: { in: ['trialing', 'active'] } },
-            orderBy: { createdAt: 'desc' },
-            take: 1
+            orderBy: { updatedAt: 'desc' },
+            take: 10
           },
           sites: {
             where: { status: 'active', deletedAt: null },
@@ -146,7 +146,11 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
       return
     }
 
-    const subscription = userWithRelations.subscriptions[0] ?? null
+    const subscription =
+      userWithRelations.subscriptions.find((s) => isActiveSubscriptionStatus(s.status)) ??
+      userWithRelations.subscriptions[0] ??
+      null
+    const subscriptionActive = isActiveSubscriptionStatus(subscription?.status)
     const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
 
     const stripeEnv = getStripeEnvironment()
@@ -216,7 +220,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
-      canCreateSite: maxSites === null || siteCount < maxSites,
+      canCreateSite: subscriptionActive && (maxSites === null || siteCount < maxSites),
       isSupportTeam: isSupportTeamEmail(userWithRelations.email)
     })
   } catch (err) {
@@ -438,6 +442,11 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }),
       prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
+
+    if (!isActiveSubscriptionStatus(subscription?.status)) {
+      res.status(403).json({ error: 'Subscription required' })
+      return
+    }
 
     const maxSites = subscription?.maxSites ?? 1
     if (maxSites !== null && siteCount >= maxSites) {
@@ -716,6 +725,10 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       }),
       prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
+    if (!isActiveSubscriptionStatus(subscription?.status)) {
+      res.status(403).json({ error: 'Subscription required' })
+      return
+    }
     const maxSites = subscription?.maxSites ?? 1
     if (maxSites !== null && activeCount >= maxSites) {
       res.status(403).json({ error: 'Site limit reached for your plan' })

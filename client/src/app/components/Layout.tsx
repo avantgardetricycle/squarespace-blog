@@ -1,8 +1,16 @@
-import { Outlet, NavLink, Link, useNavigate, useLocation, useLoaderData } from "react-router";
+import { Outlet, NavLink, Link, Navigate, useNavigate, useLocation, useLoaderData } from "react-router";
 import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, AlertCircle } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 import type { DashboardMe } from "@/api/auth";
+import { hasActiveSubscription } from "@/lib/subscription";
+
+const EXPIRED_REDIRECT_PATHS = [
+  "/dashboard/comments",
+  "/dashboard/analytics",
+  "/dashboard/configure",
+  "/dashboard/support",
+];
 
 export default function Layout() {
   const me = useLoaderData() as DashboardMe;
@@ -12,6 +20,14 @@ export default function Layout() {
   const isComments = location.pathname === "/dashboard/comments";
   const isSupport = location.pathname === "/dashboard/support";
   const invalidSites = me.sites.filter((site) => site.squarespaceApiKeyInvalid);
+  const subscriptionActive = hasActiveSubscription(me.subscription);
+  const shouldRedirectExpired = EXPIRED_REDIRECT_PATHS.some(
+    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
+  );
+
+  if (!subscriptionActive && shouldRedirectExpired) {
+    return <Navigate to="/dashboard/account" replace />;
+  }
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });

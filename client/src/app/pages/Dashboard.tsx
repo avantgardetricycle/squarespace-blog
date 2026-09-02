@@ -54,6 +54,7 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { getPlanDisplayName } from "@/lib/planLabels";
+import { formatSubscriptionDate, hasActiveSubscription } from "@/lib/subscription";
 import {
   InstallationInstructionsBody,
   InstallationInstructionsModal,
@@ -151,6 +152,8 @@ export default function Dashboard() {
     me?.subscription != null
       ? me.subscription.planDisplay ?? getPlanDisplayName(me.subscription.plan)
       : "Professional";
+  const subscriptionActive = hasActiveSubscription(me?.subscription);
+  const subscriptionEndDate = formatSubscriptionDate(me?.subscription?.currentPeriodEnd);
   const sites = me?.sites ?? [];
 
   const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
@@ -940,7 +943,7 @@ export default function Dashboard() {
               <CardTitle>My Blogs</CardTitle>
               <CardDescription>
                 {sites.length} of {blogLimit} blog{blogLimit !== 1 ? "s" : ""}{" "}
-                on your {userPlan} plan
+                on your {subscriptionActive ? userPlan : `canceled ${userPlan}`} plan
               </CardDescription>
             </div>
             {me.canCreateSite && (
@@ -1017,7 +1020,13 @@ export default function Dashboard() {
                               className="h-8 px-3 text-[#5B4FE8] hover:bg-[#5B4FE8]/10 hover:text-[#5B4FE8]"
                               asChild
                             >
-                              <Link to={`/dashboard/configure?siteKey=${site.siteKey}`}>
+                              <Link
+                                to={
+                                  subscriptionActive
+                                    ? `/dashboard/configure?siteKey=${site.siteKey}`
+                                    : "/dashboard/account"
+                                }
+                              >
                                 Customize
                               </Link>
                             </Button>
@@ -1063,8 +1072,10 @@ export default function Dashboard() {
                   <Plus className="w-4 h-4 mr-2" />
                   Add your first blog
                 </Button>
-              ) : (
+              ) : subscriptionActive ? (
                 <p>You&apos;ve reached your site limit.</p>
+              ) : (
+                <p>Restore your subscription to add blogs.</p>
               )}
             </div>
           )}
@@ -1088,7 +1099,7 @@ export default function Dashboard() {
             <CardDescription>Get straight to what matters.</CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
-            <Link to="/dashboard/configure" className="block group">
+            <Link to={subscriptionActive ? "/dashboard/configure" : "/dashboard/account"} className="block group">
               <div className="border border-[#e5e4e0] rounded-xl p-6 hover:border-[#5B4FE8] hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-[#5B4FE8]/5">
                 <div className="bg-[#5B4FE8]/10 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-[#5B4FE8] group-hover:text-white transition-colors text-[#5B4FE8]">
                   <Settings className="w-6 h-6" />
@@ -1136,13 +1147,26 @@ export default function Dashboard() {
                 Subscription
               </p>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 border border-green-200">
+                <span
+                  className={
+                    subscriptionActive
+                      ? "inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 border border-green-200"
+                      : "inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 border border-amber-200"
+                  }
+                >
                   {me.subscription?.status ? capitalize(me.subscription.status) : "—"}
                 </span>
                 <span className="text-sm font-semibold">
                   {capitalize(userPlan)} Plan
                 </span>
               </div>
+              {!subscriptionActive && (
+                <p className="text-sm text-[#6b6b6b]">
+                  {subscriptionEndDate
+                    ? `Access ended ${subscriptionEndDate}`
+                    : "Access has ended"}
+                </p>
+              )}
             </div>
 
             <Separator className="bg-[#5B4FE8]/20" />
