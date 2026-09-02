@@ -128,7 +128,7 @@ function resolveInitialAuthorForProfileEdit(
 
 export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
-export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTag", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
 export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
@@ -1386,7 +1386,7 @@ const defaultSiteConfig: SiteConfigForm = {
   postTemplateId: null,
 };
 
-const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTag", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "prevNextArticle", "emailCapture", "leadMagnet"] as const;
 
 const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
@@ -4820,7 +4820,7 @@ export default function Configure() {
                                 const HEADER_LABELS: Record<string, string> = {
                                   filterByCategory: "Filter by Category",
                                   filterByTag: "Filter by Tag",
-                                  filterByTagsAndCategories: "Filter by Tags & Categories",
+                                  filterByTagsAndCategories: "Filter by Tags",
                                   searchPosts: "Search Posts",
                                   postSort: "Sort Posts",
                                 };
@@ -5077,8 +5077,8 @@ export default function Configure() {
                     {(() => {
                       const SIDEBAR_MODULE_LABELS: Record<string, string> = {
                         filterByCategory: "Filter by Category",
-                        filterByTag: "Filter by Tag",
-                        filterByTagsAndCategories: "Filter by Tags & Categories",
+                        filterByTag: "Filter by Tags",
+                        filterByTagsAndCategories: "Filter by Tags",
                         searchPosts: "Search Posts",
                         postSort: "Sort Posts",
                         recentPosts: "Recent Posts",
@@ -5261,9 +5261,18 @@ export default function Configure() {
                                             }
                                             return !order.includes(m);
                                           })
-                                        : [...POST_SIDEBAR_MODULES].filter(
-                                            (m) => !orderedModules.includes(m) && !(m === "tableOfContents" && isStoryPostTemplate)
-                                          );
+                                        : [...POST_SIDEBAR_MODULES].filter((m) => {
+                                            if (m === "tableOfContents" && isStoryPostTemplate) return false;
+                                            if (m === "filterByTagsAndCategories") return false;
+                                            if (
+                                              m === "filterByTag" &&
+                                              (orderedModules.includes("filterByTag") ||
+                                                orderedModules.includes("filterByTagsAndCategories"))
+                                            ) {
+                                              return false;
+                                            }
+                                            return !orderedModules.includes(m);
+                                          });
                                       return available.length > 0 ? (
                                         <div className="flex items-center gap-2 mb-2">
                                           <Select value="" onValueChange={(v) => { if (v) handleAddSidebar(v); }}>

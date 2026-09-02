@@ -6022,7 +6022,7 @@
       wrap.style.width = (width || 200) + 'px';
       if (!noLabel) {
         var label = document.createElement('label');
-        label.textContent = 'Filter by Tags & Categories';
+        label.textContent = 'Filter by Tags';
         label.style.fontWeight = '600';
         label.style.fontSize = '0.9rem';
         label.style.marginBottom = '8px';
@@ -6212,45 +6212,7 @@
       var usePills = placement === 'header';
 
       if (placement === 'sidebar') {
-        var combinedWrap = document.createElement('div');
-        combinedWrap.style.width = '100%';
-        combinedWrap.style.boxSizing = 'border-box';
-        if (width) combinedWrap.style.maxWidth = width + 'px';
-        var badgeOpts = { clearOtherOnSelect: true };
-        if (categories.length > 0) {
-          combinedWrap.appendChild(self._createSidebarTopicBadgeList(categories, 'category', null, badgeOpts));
-        }
-        if (tags.length > 0) {
-          if (categories.length > 0) {
-            var tagSpacer = document.createElement('div');
-            tagSpacer.style.height = '16px';
-            combinedWrap.appendChild(tagSpacer);
-            var tagMiniHeader = document.createElement('div');
-            tagMiniHeader.textContent = 'Tags';
-            tagMiniHeader.style.fontSize = '0.7rem';
-            tagMiniHeader.style.fontWeight = '700';
-            tagMiniHeader.style.letterSpacing = '0.08em';
-            tagMiniHeader.style.textTransform = 'uppercase';
-            tagMiniHeader.style.color = '#111';
-            tagMiniHeader.style.marginBottom = '8px';
-            combinedWrap.appendChild(tagMiniHeader);
-            var tagBar = document.createElement('div');
-            tagBar.style.height = '2px';
-            tagBar.style.background = '#111';
-            tagBar.style.marginBottom = '12px';
-            combinedWrap.appendChild(tagBar);
-          }
-          combinedWrap.appendChild(self._createSidebarTopicBadgeList(tags, 'tag', null, badgeOpts));
-        }
-        if (categories.length === 0 && tags.length === 0) {
-          var noFilters = document.createElement('p');
-          noFilters.textContent = 'No filters available';
-          noFilters.style.fontSize = '0.8rem';
-          noFilters.style.color = '#888';
-          noFilters.style.margin = '0';
-          combinedWrap.appendChild(noFilters);
-        }
-        return combinedWrap;
+        return self._createFilterByTagModule(items, width, noLabel, 'sidebar');
       }
 
       if (usePills && (categories.length > 0 || tags.length > 0)) {
@@ -6336,7 +6298,7 @@
       wrap.style.width = (width || 200) + 'px';
       if (!noLabel) {
         var label = document.createElement('label');
-        label.textContent = 'Filter by Tags & Categories';
+        label.textContent = 'Filter by Tags';
         label.style.fontWeight = '600';
         label.style.fontSize = '0.9rem';
         label.style.marginBottom = '8px';
@@ -8324,7 +8286,7 @@
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child{margin-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child .bb-sidebar-header{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
-        '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
+        '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:min(var(--bb-btn-radius),8px);overflow:hidden;position:relative;}' +
         '#blog-overlay-list .blog-overlay-featured-image > div{border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-hero > div{border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div{width:100%;max-height:600px;aspect-ratio:16/9;overflow:hidden;border-radius:4px;}' +
@@ -8332,11 +8294,12 @@
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div [role="img"]{width:100%;height:100%;object-fit:cover;display:block;}' +
         '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
-        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
+        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;margin-bottom:5px;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
         '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:600;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{margin-top:5px;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
-        '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
+        '#blog-overlay-list .blog-overlay-topic-badges a,#blog-overlay-list .blog-overlay-topic-badges .bb-topic-badge{border-radius:min(var(--bb-btn-radius),8px);}' +
+        '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:min(var(--bb-btn-radius),8px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-btn-font,inherit);font-weight:var(--bb-btn-weight,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
@@ -12969,10 +12932,7 @@
           } else if (mod === 'filterByTag') {
             el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTagsAndCategories') {
-            var legacyCatEl = self._createFilterByCategoryModule(items, width || 200, true, 'sidebar');
-            if (legacyCatEl) mods.push(createSidebarSection('Categories', legacyCatEl));
-            var legacyTagEl = self._createFilterByTagModule(items, width || 200, true, 'sidebar');
-            el = legacyTagEl ? createSidebarSection('Tags', legacyTagEl) : null;
+            el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles') {
