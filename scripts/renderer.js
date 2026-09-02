@@ -7732,6 +7732,75 @@
       return null;
     },
 
+    /** Post body text node used for read-percent (not the article chrome / footer). */
+    _getAnalyticsPostBodyEl: function(scope) {
+      var root = scope || document.getElementById('blog-overlay-list') || document;
+      var body = root.querySelector ? root.querySelector('article .blog-overlay-body') : null;
+      if (body && (body.offsetHeight > 0 || (body.getBoundingClientRect && body.getBoundingClientRect().height > 0))) {
+        return body;
+      }
+      return null;
+    },
+
+    _getReadViewport: function() {
+      var viewportTop = 0;
+      var viewportBottom = (window.innerHeight || document.documentElement.clientHeight || 0);
+      var scrollTarget = this._getScrollContainer();
+      if (scrollTarget && scrollTarget !== window && scrollTarget.getBoundingClientRect) {
+        var crect = scrollTarget.getBoundingClientRect();
+        var winH = window.innerHeight || crect.height;
+        /* Ignore tall overflow:auto ancestors that are not the visible scrollport. */
+        if (crect.height > 40 && crect.height <= winH + 4) {
+          viewportTop = crect.top;
+          viewportBottom = crect.top + (scrollTarget.clientHeight || crect.height);
+        }
+      }
+      return { top: viewportTop, bottom: viewportBottom };
+    },
+
+    /** Bottom of the last real post block (skip trailing empty Squarespace spacers). */
+    _getPostBodyContentBottom: function(bodyEl) {
+      if (!bodyEl || !bodyEl.getBoundingClientRect) return 0;
+      var blocks = bodyEl.querySelectorAll(
+        'p, h1, h2, h3, h4, h5, h6, li, blockquote, figure, img, pre, table, iframe, video, .sqs-block, .sqs-html-content'
+      );
+      for (var i = blocks.length - 1; i >= 0; i--) {
+        var b = blocks[i];
+        var r;
+        try { r = b.getBoundingClientRect(); } catch (eR) { continue; }
+        if (!r || r.height <= 0) continue;
+        var tag = (b.tagName || '').toUpperCase();
+        var hasMedia = tag === 'IMG' || tag === 'IFRAME' || tag === 'VIDEO' || tag === 'FIGURE' || tag === 'TABLE';
+        var text = (b.textContent || '').replace(/\s+/g, '');
+        if (hasMedia || text.length > 0) return r.bottom;
+      }
+      try { return bodyEl.getBoundingClientRect().bottom; } catch (eB) { return 0; }
+    },
+
+    /**
+     * How far the reader has progressed through post text (0–1+).
+     * 1.0 when the last line of the body has reached the visible viewport —
+     * not when the page itself is fully scrolled.
+     */
+    _computePostReadRatio: function(bodyEl) {
+      if (!bodyEl || !bodyEl.getBoundingClientRect) return 0;
+      var rect;
+      try { rect = bodyEl.getBoundingClientRect(); } catch (eRect) { return 0; }
+      if (!rect) return 0;
+      var start = rect.top;
+      var end = this._getPostBodyContentBottom(bodyEl);
+      var span = end - start;
+      if (!(span > 0)) span = rect.height || bodyEl.offsetHeight || 0;
+      if (!(span > 0)) return 0;
+      var vp = this._getReadViewport();
+      if (vp.bottom <= vp.top) return 0;
+      var viewed = vp.bottom - start;
+      var ratio = viewed / span;
+      /* Last line of post text is on screen (subpixel / border slack). */
+      if (end <= vp.bottom + 16) ratio = Math.max(ratio, 1);
+      return Math.max(0, ratio);
+    },
+
     /**
      * Best-effort accent from the host Squarespace page: global --accent-hsl, section theme vars
      * (--primaryButtonBackgroundColor, link colors), or a primary .sqs-button-element--primary fill.
@@ -14249,28 +14318,24 @@
       });
 
       if (isSinglePost && selectedIndex >= 0) {
-        var postBody = main.querySelector('article .blog-overlay-body, article [class*="body"], article .post-body, article');
+        var postBody = self._getAnalyticsPostBodyEl(main);
         if (postBody) {
           var depthsSent = {};
           var checkDepth = function() {
-            var scrollTarget = self._getScrollContainer() || window;
-            var scrollTop = scrollTarget === window ? (window.scrollY || document.documentElement.scrollTop) : scrollTarget.scrollTop;
-            var viewportHeight = scrollTarget === window ? window.innerHeight : scrollTarget.clientHeight;
-            var elTop = postBody.getBoundingClientRect().top + (scrollTarget === window ? scrollTop : scrollTarget.scrollTop);
-            var elHeight = postBody.offsetHeight;
-            if (elHeight <= 0) return;
-            var scrollBottom = scrollTop + viewportHeight;
-            var readRatio = (scrollBottom - elTop) / elHeight;
-            var depth = readRatio >= 1 ? 100 : readRatio >= 0.75 ? 75 : readRatio >= 0.5 ? 50 : readRatio >= 0.25 ? 25 : 0;
+            var readRatio = self._computePostReadRatio(postBody);
+            var depth = readRatio >= 0.98 ? 100 : readRatio >= 0.75 ? 75 : readRatio >= 0.5 ? 50 : readRatio >= 0.25 ? 25 : 0;
             if (depth > 0 && !depthsSent[depth]) {
               depthsSent[depth] = true;
               var post = items[selectedIndex];
               self._analyticsTrack('scroll_depth', { depth: depth }, post ? post.id : null, selectedIndex);
             }
           };
-          var scrollTarget = self._getScrollContainer() || window;
           var onScroll = function() { checkDepth(); };
-          scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+          var scrollTarget = self._getScrollContainer();
+          if (scrollTarget && scrollTarget !== window) {
+            scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+          }
+          window.addEventListener('scroll', onScroll, { passive: true });
           setTimeout(checkDepth, 500);
         }
       }

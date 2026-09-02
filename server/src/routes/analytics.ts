@@ -504,14 +504,18 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
         postViews.set(e.postId, entry)
       }
     }
+    const postSessionMax = new Map<string, { postId: string; depth: number }>()
     for (const e of scrollDepths) {
-      if (e.postId) {
-        const entry = postViews.get(e.postId)
-        if (entry) {
-          const d = Number((e.payload as { depth?: number })?.depth)
-          if (d) entry.readDepths.push(d)
-        }
-      }
+      if (!e.postId || !postViews.has(e.postId)) continue
+      const d = Number((e.payload as { depth?: number })?.depth) || 0
+      if (!d) continue
+      const key = `${e.visitorId ?? 'anon'}|${e.postId}|${e.occurredAt.toISOString().slice(0, 10)}`
+      const prev = postSessionMax.get(key)
+      if (!prev || d > prev.depth) postSessionMax.set(key, { postId: e.postId, depth: d })
+    }
+    for (const { postId, depth } of postSessionMax.values()) {
+      const entry = postViews.get(postId)
+      if (entry) entry.readDepths.push(depth)
     }
     for (const e of timeOnPage) {
       const pid = (e.payload as { postId?: string })?.postId ?? e.postId
