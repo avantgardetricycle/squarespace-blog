@@ -1,6 +1,6 @@
 # BetterBlog Paywall Rendering — Technical Specification
-**Version:** 1.0 — MVP  
-**Status:** Draft  
+**Version:** 1.1  
+**Status:** Spec  
 **Authors:** BetterBlog Team
 
 ---
@@ -108,9 +108,7 @@ Full BetterBlog post rendering as normal. No paywall elements shown.
 
 ### 5.2 Logged-out reader on a paywalled blog
 
-BetterBlog renders the post page overlay normally (header, sidebars, etc.) but appends the paywall footer below the post body. Squarespace's own post-level paywall behavior (hiding post content, showing excerpt) continues to operate — BetterBlog does not interfere with it.
-
-The paywall footer at the post level is identical to the collection-level footer (see §6). It replaces all other footer content for logged-out readers — email capture, lead magnet, social links, and any other configured footer modules are not rendered.
+BetterBlog renders the post page overlay normally (header, sidebars, etc.). The article body is gated with a faded teaser plus the inline paywall overlay card (see §6). The paywall footer card is appended below the post body and replaces all other footer content for logged-out readers — email capture, lead magnet, social links, and any other configured footer modules are not rendered.
 
 ```javascript
 function shouldShowPaywallFooter() {
@@ -122,69 +120,156 @@ function shouldShowPaywallFooter() {
 
 ---
 
-## 6. Paywall Footer Specification
+## 6. Paywall Overlay & Footer Card Specification
 
-### 6.1 Layout
-
-The paywall footer is a full-width block. Its visual design mirrors the component shown in the reference screenshot: centered content, eyebrow label, headline, description, two action buttons, and a feature checklist.
+The inline article overlay (`.bb-paywall-inline-card`) and the collection/post footer card (`.bb-paywall-card` inside `.bb-paywall-footer`) share the same visual system. Overlay heading is 32px; footer/card heading is 24px. All other type, color, button, and container rules below apply to both.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                  │
-│                    MEMBER EXCLUSIVE                              │  ← eyebrow
+│                    MEMBER EXCLUSIVE                              │  ← label
 │                                                                  │
-│           Unlock unlimited access to [Blog Name]                 │  ← headline
+│           Unlock unlimited access to [Blog Name]                 │  ← heading
 │                                                                  │
-│        Subscribe for full access to every story, the             │  ← description
-│           complete archive, and ad-free reading.                 │    (blogger-configured
-│                                                                  │     or default copy)
+│        Subscribe for full access to every story, the             │  ← subtitle
+│           complete archive, and ad-free reading.                 │
 │                                                                  │
 │       [Subscribe — $X/month]      [Sign in]                      │  ← CTAs
 │                                                                  │
-│   ✓ Unlimited articles  ✓ Full archive  ✓ Cancel anytime         │  ← feature list
+│   ✓ Unlimited articles  ✓ Full archive  ✓ Cancel anytime         │  ← benefits
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.2 Color Inheritance
+### 6.1 Container
 
-All colors are inherited from Squarespace's CSS custom properties rather than hardcoded. BetterBlog reads these at render time from the computed styles of the Squarespace `<body>` or root element.
+| Property | Value |
+|---|---|
+| Background | `color-mix(in srgb, var(--siteBackgroundColor, white), white 90%)` — 90% white blended with 10% of the customer's site background. Feels subtly branded; always stands out against the page. |
+| Border | none |
+| Border-radius | `min(Primary Button radius, 20px)` — universal card radius (`--bb-card-radius`). Square Primary Button → 0px corners; pill Primary Button → caps at 20px. |
+| Padding | 40px uniform |
+| Box-shadow | `0 8px 24px rgba(0, 0, 0, 0.10)` |
+| Text-align | center |
+| Width | `min(70vw, 600px)`, centered. Scales with viewport, capped at 600px for readability. |
 
-| Footer element | Color source | Fallback |
-|---|---|---|
-| Footer background | Site background color (`--sqs-site-background` or equivalent) | `#ffffff` |
-| Footer border | Site border color (10% opacity of body text color) | `rgba(0,0,0,0.1)` |
-| Eyebrow text ("MEMBER EXCLUSIVE") | Site accent color | `#e91e8c` |
-| Headline text | Site primary text color | `#111111` |
-| Description text | Site secondary text color | `#666666` |
-| Subscribe button background | Site accent color | `#e91e8c` |
-| Subscribe button text | White | `#ffffff` |
-| Sign in button border | Site primary text color at 30% opacity | `rgba(0,0,0,0.3)` |
-| Sign in button text | Site primary text color | `#111111` |
-| Checkmark icon color | Site accent color | `#e91e8c` |
-| Feature list text | Site secondary text color | `#666666` |
+The overlay must render at that width regardless of the article column on the current template. Break out of a narrow parent with:
 
-> **Implementation note:** Squarespace 7.1 exposes site-level design tokens as CSS variables on `:root`. The exact variable names vary by template. BetterBlog should read `getComputedStyle(document.documentElement)` to retrieve the values, with the hardcoded fallbacks above if a variable is absent. The fallbacks intentionally use a pink/magenta accent to match the reference screenshot aesthetic, but the correct behavior in production is always to inherit from the site.
+```css
+position: relative;
+left: 50%;
+transform: translateX(-50%);
+width: min(70vw, 600px);
+```
 
-### 6.3 Content
+### 6.2 "MEMBER EXCLUSIVE" label
 
-**Eyebrow:** Always "MEMBER EXCLUSIVE" — not configurable.
+| Property | Value |
+|---|---|
+| Semantic | `<div>` (or `<h4>` if stricter heading semantics are preferred) |
+| Font family | inherits H1 (Rule B) via `--bb-heading-font-family` |
+| Font size | 12px |
+| Font weight | 700 |
+| Letter-spacing | 0.2em |
+| Text-transform | uppercase |
+| Color | `var(--bb-accent)` (Rule A) |
+| Margin-bottom | 14px |
 
-**Headline:** `Unlock unlimited access to [Blog Title]` where Blog Title is read from the Squarespace page context (`Static.SQUARESPACE_CONTEXT.website.siteTitle` or the blog page title). Not configurable by the blogger.
+Default copy is "MEMBER EXCLUSIVE". Blogger-configurable via paywall settings (`eyebrowText`).
 
-**Description:** Blogger-configurable in BetterBlog settings. Defaults to: *"Subscribe for full access to every story, the complete archive, and exclusive reading."* Maximum 160 characters.
+### 6.3 Heading
+
+| Property | Value |
+|---|---|
+| Semantic | `<h3>` (Rule F — section-level card/overlay header) |
+| Font family | inherits H1 |
+| Font size | **32px overlay** (`.bb-paywall-heading--overlay`); **24px card/footer** |
+| Font weight | 700 |
+| Line-height | 1.2 |
+| Color | Squarespace `--paragraphLargeColor` token (NOT the computed color of any DOM element). Equivalent BB token: `--bb-body` derived from `--paragraphLargeColor`. |
+| Margin-bottom | 14px |
+
+### 6.4 Subtitle
+
+| Property | Value |
+|---|---|
+| Font family | inherits P1 |
+| Font size | 18px |
+| Line-height | 1.5 |
+| Color | `var(--bb-excerpt)` (body 80%, Rule D) — derived from `--paragraphLargeColor` / `--bb-body` |
+| Max-width | none (no hardcoded max-width) |
+| Margin-bottom | 28px |
+
+### 6.5 Buttons
+
+**Subscribe**
+
+- Attach class `sqs-button-element--primary`
+- No inline style overrides — inherits the customer's Squarespace Primary Button styling entirely (background, color, font, padding, radius, letter-spacing, text-transform)
+- Keep `bb-paywall-subscribe-btn` in addition to the Squarespace class so price-label refresh can still find the control
+
+**Sign in**
+
+- Attach class `sqs-button-element--primary` (same as Subscribe — for sizing/font consistency)
+- Add BetterBlog overrides for outlined treatment only:
+  - `background: transparent`
+  - `color: var(--bb-accent)`
+  - `border: 2px solid var(--bb-accent)`
+- Result: visually paired outline button; matches Subscribe in size and typography but outlined instead of filled
+- Do **not** use Squarespace's Secondary Button class. Secondary is a design-system class that may not pair with Primary at CTA scale.
+
+**Button row**
+
+- `margin-bottom: 28px`
+- Flex, wrap, center-justified, 10px gap
+
+### 6.6 Benefit list
+
+| Property | Value |
+|---|---|
+| Font family | inherits P1 |
+| Font size | 14px |
+| Font weight | inherits (normal) |
+| Color | `var(--bb-muted)` (body 60%, Rule D) |
+| Line-height | 1.2 |
+| Layout | flex-wrap, center-justified, gap 4px vertical / 18px horizontal |
+
+**Checkmarks (✓):** `color: var(--bb-accent)` (Rule A); `font-weight: 700`.
+
+### 6.7 Critical implementation notes
+
+**Text color source.** The paywall renders on a light background (90% white overlay). Text colors MUST come from Squarespace's `--paragraphLargeColor` token (or the equivalent BB `--bb-body` token), **not** from the computed color of any DOM element on the page.
+
+- On templates like Story, header text is rendered white-on-dark. Sampling that element produces white text that is invisible on the paywall's light background.
+- On paywalled posts, the article body is hidden, so there is no visible article body `<p>` to sample from.
+
+Paywall surfaces set `--bb-body: var(--paragraphLargeColor, #111111)` so `--bb-excerpt` (80%) and `--bb-muted` (60%) derive from the token, not from sampled chrome.
+
+**Buttons.** Zero inline overrides on Subscribe. Attach `sqs-button-element--primary` only (plus the `bb-paywall-subscribe-btn` hook). Any hardcoded padding, font-size, font-weight, letter-spacing, or text-transform overrides the customer's Primary Button styling and breaks tokenization. Confirmed on customer sites: with the class attached and no overrides, buttons match every other Primary Button on the site.
+
+**Sign in** uses Primary class + outline overrides, not Secondary class.
+
+### 6.8 Content
+
+**Eyebrow:** Default "MEMBER EXCLUSIVE". Configurable via paywall settings (`eyebrowText`). Visual treatment is §6.2.
+
+**Headline:** Overlay default: `Continue reading with a membership`. Footer default: `Unlock unlimited access to [Blog Title]` where Blog Title is read from the Squarespace page context (`Static.SQUARESPACE_CONTEXT.website.siteTitle` or the blog page title). Configurable via `headlineText` (`{blogName}` placeholder supported). Visual treatment is §6.3.
+
+**Description:** Blogger-configurable in BetterBlog settings. Overlay prefers `inlineDescription`, then `footerDescription`. Footer uses `footerDescription`. Overlay default: *"Subscribe for unlimited access to every article, the full archive, and ad-free reading."* Footer default: *"Subscribe for full access to every story, the complete archive, and exclusive reading."* Maximum 160 characters. Visual treatment is §6.4.
 
 **Subscribe button:**
-- Label: `Subscribe` if no pricing information is available; `Subscribe — $X/month` if a price can be read from the Squarespace paywall DOM (see §6.4). Falling back to `Subscribe` is always safe.
-- Link: blogger-configured Subscribe URL. If not configured, defaults to the current collection's base URL (see §6.5).
+- Label: `Subscribe` if no pricing information is available; `Subscribe — $X/month` if a price can be read from the Squarespace paywall DOM (see §6.9). Falling back to `Subscribe` is always safe.
+- Link: blogger-configured Subscribe URL. If not configured, defaults to the current collection's base URL (see §6.10).
+- Styling: §6.5 — `sqs-button-element--primary`, no inline overrides.
 
 **Sign in button:**
 - Label: "Sign in" — not configurable.
-- Action: triggers Squarespace's native login flow. Use the same mechanism as Squarespace's own login links — typically a click on the member account nav element or a direct link to `/?login=true` (verify against live site behavior).
+- Action: configured `signInUrl`, else `/account/login`.
+- Styling: §6.5 — Primary class + outline overrides. Not Secondary class.
 
-**Feature checklist:** Blogger-configurable list of 2–4 short feature strings. Defaults to: "Unlimited articles", "Full archive access", "Cancel anytime". Each item rendered with a checkmark (✓) in the accent color.
+**Feature checklist:** Blogger-configurable list of 2–4 short feature strings. Overlay defaults: "Unlimited articles", "Full archive", "Ad-free", "Cancel anytime". Footer defaults: "Unlimited articles", "Full archive access", "Cancel anytime". Each item rendered with a checkmark (✓) per §6.6.
 
-### 6.4 Price Extraction (Best-Effort)
+### 6.9 Price Extraction (Best-Effort)
 
 If the Squarespace paywall DOM is present on the page (i.e., in "blog posts only" mode, post-level paywall elements may exist in the DOM even if hidden), BetterBlog attempts to read the lowest displayed price from the pricing plan markup to populate the button label.
 
@@ -205,7 +290,7 @@ function extractLowestPrice() {
 
 > **Open question:** Verify what Squarespace renders in the DOM for a paywalled collection in "blog posts only" mode — does it include any pricing markup even for logged-out readers, or is pricing only shown when the user navigates to an individual post? This affects whether price extraction is feasible at the collection level.
 
-### 6.5 Subscribe URL Resolution
+### 6.10 Subscribe URL Resolution
 
 Priority order for the Subscribe button link:
 
@@ -216,13 +301,14 @@ The collection URL fallback is valid because in "blog posts only" mode, navigati
 
 ---
 
-## 7. BetterBlog Settings — New Fields
+## 7. BetterBlog Settings — Paywall fields
 
-Two new fields are added to the Collection-level settings panel under a new **Paywall** section:
+Paywall copy is **site-level**, not nested under Collection or Post. When the site is detected as paywalled, Customize Blog shows a **Paywall Settings** button below **Clear all settings**. That button opens a modal with:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  PAYWALL                                             │
+│  PAYWALL SETTINGS                                    │
+│  These settings apply to both collection and post.   │
 │                                                      │
 │  Subscribe URL  (optional)                           │
 │  [                                        ]          │
@@ -230,10 +316,9 @@ Two new fields are added to the Collection-level settings panel under a new **Pa
 │  Enter a custom URL if you have a dedicated          │
 │  sign-up or membership page.                         │
 │                                                      │
-│  Footer description  (optional)                      │
-│  [                                        ]          │
-│  Shown beneath the headline in the paywall footer.   │
-│  Max 160 characters. Leave blank to use the default. │
+│  Eyebrow  (optional, max 80)                         │
+│  Header text  (optional, max 160, {blogName} ok)     │
+│  Footer description  (optional, max 160)             │
 │                                                      │
 │  Feature checklist  (optional, one per line)         │
 │  [ Unlimited articles                     ]          │
@@ -243,7 +328,7 @@ Two new fields are added to the Collection-level settings panel under a new **Pa
 └─────────────────────────────────────────────────────┘
 ```
 
-These settings are collection-level only. The same subscribe URL and footer content apply at both the collection and post level (the footer is shared, not independently configured per level).
+The same subscribe URL, headline, description, and checklist apply at both the collection and post level. They are not independently configured per level. Clearing Collection or Post layout settings does not reset paywall copy.
 
 ---
 
@@ -293,7 +378,7 @@ normally          │              │
                           • Members-only
                             teaser labels
                           • Paywall footer
-                            only (no other
+                            card only (no other
                             footer content)
 
 
@@ -307,8 +392,10 @@ Is blog paywalled AND reader logged out?
         ▼                    ▼
   Render BB             Render BB post
   normally              normally EXCEPT:
-                        • Paywall footer only
-                          (no other footer content)
+                        • Inline overlay card
+                          on gated body (32px heading)
+                        • Paywall footer card
+                          only (no other footer content)
 ```
 
 ---
@@ -328,11 +415,11 @@ Is blog paywalled AND reader logged out?
 
 ## 11. Out of Scope for MVP
 
-- Blogger-configurable eyebrow text ("MEMBER EXCLUSIVE")
-- Blogger-configurable headline
 - Custom paywall footer per post (footer is configured once at collection level)
 - Metered access (e.g. "3 free articles before paywall")
 - BetterBlog-owned checkout or subscription flow (always defers to Squarespace or blogger's subscribe URL)
+
+Eyebrow and headline copy are configurable (defaults in §6.8). Visual treatment is not configurable.
 
 ---
 
@@ -342,6 +429,7 @@ Is blog paywalled AND reader logged out?
 |---|---|---|---|
 | 1 | What exact DOM selectors does Squarespace use for the post listing in 7.1? Confirm across multiple templates. | Eng | Before build |
 | 2 | In "blog posts only" mode, does Squarespace render any pricing plan markup in the collection page DOM for logged-out readers? Affects price extraction feasibility. | Eng | Before build |
-| 3 | What is the correct mechanism to trigger Squarespace's native login flow from a custom button? Verify `/?login=true` or equivalent. | Eng | Before build |
-| 4 | Which Squarespace CSS variables expose the accent/primary/secondary colors reliably across 7.1 templates? Verify via DevTools on test blog. | Eng | Before build |
-| 5 | Should the paywall footer appear on public preview posts (posts the blogger has explicitly set as free)? Current assumption: no — if a post is a public preview, it is fully readable and no paywall footer should appear. Confirm intended behavior. | Product | Before build |
+| 3 | What is the correct mechanism to trigger Squarespace's native login flow from a custom button? Verify `/account/login` vs `/?login=true`. | Eng | Before build |
+| 4 | Should the paywall footer appear on public preview posts (posts the blogger has explicitly set as free)? Current assumption: no — if a post is a public preview, it is fully readable and no paywall footer should appear. Confirm intended behavior. | Product | Before build |
+
+**Resolved — text color source (was Q4):** Paywall heading/body colors use Squarespace `--paragraphLargeColor` (BB `--bb-body`), never computed `color` from a heading or `<p>`. Accent is Rule A (`--bb-accent`). Derived neutrals are Rule D (`--bb-excerpt` 80%, `--bb-muted` 60%). See §6.7.

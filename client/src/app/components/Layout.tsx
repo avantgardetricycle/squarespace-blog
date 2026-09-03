@@ -1,8 +1,16 @@
-import { Outlet, NavLink, Link, useNavigate, useLocation, useLoaderData } from "react-router";
-import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, ExternalLink, AlertCircle } from "lucide-react";
+import { Outlet, NavLink, Link, Navigate, useNavigate, useLocation, useLoaderData } from "react-router";
+import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, AlertCircle } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 import type { DashboardMe } from "@/api/auth";
+import { hasActiveSubscription } from "@/lib/subscription";
+
+const EXPIRED_REDIRECT_PATHS = [
+  "/dashboard/comments",
+  "/dashboard/analytics",
+  "/dashboard/configure",
+  "/dashboard/support",
+];
 
 export default function Layout() {
   const me = useLoaderData() as DashboardMe;
@@ -10,7 +18,16 @@ export default function Layout() {
   const location = useLocation();
   const isConfigure = location.pathname === "/dashboard/configure";
   const isComments = location.pathname === "/dashboard/comments";
+  const isSupport = location.pathname === "/dashboard/support";
   const invalidSites = me.sites.filter((site) => site.squarespaceApiKeyInvalid);
+  const subscriptionActive = hasActiveSubscription(me.subscription);
+  const shouldRedirectExpired = EXPIRED_REDIRECT_PATHS.some(
+    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
+  );
+
+  if (!subscriptionActive && shouldRedirectExpired) {
+    return <Navigate to="/dashboard/account" replace />;
+  }
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -23,6 +40,7 @@ export default function Layout() {
     { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics", end: false },
     { to: "/dashboard/configure", icon: Settings, label: "Customize Blog" },
     { to: "/dashboard/account", icon: User, label: "Account" },
+    { to: "/dashboard/support", icon: LifeBuoy, label: "Support" },
   ];
 
   return (
@@ -54,17 +72,6 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
-          <a
-            href="/support"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-[#6b6b6b] hover:bg-[#f7f6f3] hover:text-[#0a0a0a] transition-colors"
-          >
-            <LifeBuoy className="w-4 h-4" />
-            <span className="flex-1">Support</span>
-            <ExternalLink className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
-            <span className="sr-only">(opens in new tab)</span>
-          </a>
         </nav>
 
         <div className="p-4 border-t border-[#e5e4e0]">
@@ -79,7 +86,7 @@ export default function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className={isSupport ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex-1 overflow-auto"}>
         {invalidSites.length > 0 && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-3 text-amber-900">
             <div className="flex items-start gap-2 max-w-5xl">
@@ -118,8 +125,14 @@ export default function Layout() {
             </div>
           </div>
         )}
-        {isConfigure || isComments ? (
-          <Outlet />
+        {isConfigure || isComments || isSupport ? (
+          isSupport ? (
+            <div className="flex h-full min-h-0 flex-1 flex-col">
+              <Outlet />
+            </div>
+          ) : (
+            <Outlet />
+          )
         ) : (
           <div className="container mx-auto max-w-5xl p-8">
             <Outlet />

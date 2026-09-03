@@ -227,16 +227,6 @@
   <!-- SIDEBAR -->
   <aside class="sidebar">
 
-    <!-- Search widget -->
-    <div class="sw-search-widget">
-      <div class="widget-title">Search</div>
-      <div class="sw-search">
-        <svg width="13" height="13" fill="none" stroke="#bbb" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input type="text" placeholder="Search articles…">
-        <button class="sw-search-btn">Go</button>
-      </div>
-    </div>
-
     <!-- Newsletter -->
     <div class="sw-newsletter">
       <div class="widget-title">Newsletter</div>
@@ -301,7 +291,7 @@
     <div class="spec-comp"><span class="sc-id sc-n">NAV</span> Site navigation</div>
     <div class="spec-comp"><span class="sc-id sc-f">FILTER</span> Category tabs + inline search</div>
     <div class="spec-comp"><span class="sc-id sc-m">MAIN</span> Featured card + mini grid</div>
-    <div class="spec-comp"><span class="sc-id sc-s">SIDEBAR</span> Search · Newsletter · Popular · Tags</div>
+    <div class="spec-comp"><span class="sc-id sc-s">SIDEBAR</span> Newsletter · Popular · Tags</div>
     <div class="spec-comp"><span class="sc-id sc-p">PAGE</span> Numbered pagination</div>
   </div>
   <div class="spec-h">Main Column</div>
@@ -309,14 +299,12 @@
   <div class="spec-row"><span class="spec-k">Mini grid</span><span class="spec-v">2-col, <code>20px</code> gap</span></div>
   <div class="spec-row"><span class="spec-k">Per page</span><span class="spec-v">1 featured + 6 grid</span></div>
   <div class="spec-h">Sidebar Widgets</div>
-  <div class="spec-row"><span class="spec-k">Search</span><span class="spec-v">Input + Go button</span></div>
   <div class="spec-row"><span class="spec-k">Newsletter</span><span class="spec-v">Email input + Subscribe</span></div>
   <div class="spec-row"><span class="spec-k">Popular</span><span class="spec-v">4 posts, numbered</span></div>
   <div class="spec-row"><span class="spec-k">Tags</span><span class="spec-v">Pill tags, border style</span></div>
   <div class="spec-row"><span class="spec-k">Sticky</span><span class="spec-v"><code>top: 72px</code> (below nav)</span></div>
   <div class="spec-h">Search</div>
-  <div class="spec-row"><span class="spec-k">Placement</span><span class="spec-v">Both filter bar + sidebar</span></div>
-  <div class="spec-row"><span class="spec-k">Note</span><span class="spec-v">Both should trigger same search — keep state in sync</span></div>
+  <div class="spec-row"><span class="spec-k">Placement</span><span class="spec-v">Filter bar only — not in the sidebar</span></div>
   <div class="spec-h">Design Note</div>
   <div class="spec-note"><strong>Only collection layout with a sidebar.</strong> Discovery is baked in — readers browsing the index get newsletter, popular posts, and tags without having to go anywhere. Best for content-heavy blogs with 50+ posts. Pairs well with The Feature or The Publisher article layouts.</div>
 </div>

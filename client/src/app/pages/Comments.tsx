@@ -65,15 +65,15 @@ interface Comment {
   likeCount: number;
 }
 
-/** Opens Squarespace site config — member profile when id is known, otherwise profiles area. */
+/** Opens the commenter's profile in Squarespace site config when a profile id is known. */
 function squarespaceProfileHref(siteUrl: string | null | undefined, profileId: string | null | undefined): string | null {
   try {
     const s = (siteUrl || "").trim();
     if (!s) return null;
     const u = new URL(s.startsWith("http") ? s : `https://${s}`);
     const id = profileId?.trim();
-    if (id) return `${u.origin}/config/profiles/members/${encodeURIComponent(id)}/member`;
-    return `${u.origin}/config/profiles`;
+    if (!id) return null;
+    return `${u.origin}/config/profiles/all/${encodeURIComponent(id)}`;
   } catch {
     return null;
   }
@@ -1131,8 +1131,7 @@ export default function Comments() {
                   const siteUrl =
                     me?.sites?.find((s) => s.siteKey === siteKey)?.url ?? me?.sites?.[0]?.url ?? null;
                   const isAuthenticated = comment.verifiedSubscriber === true;
-                  const profileLink =
-                    isAuthenticated ? squarespaceProfileHref(siteUrl, comment.squarespaceProfileId) : null;
+                  const profileLink = squarespaceProfileHref(siteUrl, comment.squarespaceProfileId);
                   return (
                     <div
                       id={`bb-comment-row-${comment.id}`}
@@ -1159,6 +1158,7 @@ export default function Comments() {
                                       href={profileLink}
                                       target="_blank"
                                       rel="noopener noreferrer"
+                                      title="Open Squarespace profile"
                                       className="font-medium text-[#0a0a0a] hover:text-[#5B4FE8] hover:underline"
                                     >
                                       {comment.displayName}
@@ -1404,7 +1404,7 @@ export default function Comments() {
                   disabled={settingsSaving}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Readers can comment with name only.</p>
+              <p className="text-xs text-neutral-500">Readers can comment with a name only. When verification is also on, guests still see the comment form.</p>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -1415,7 +1415,7 @@ export default function Comments() {
                   disabled={settingsSaving || !settings?.apiKeyVerified}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Require email for paywalled posts, verified against your Squarespace member list.</p>
+              <p className="text-xs text-neutral-500">Require a member email, verified against your Squarespace member list. Failed checks are shown in a modal.</p>
               {settings?.apiKeyVerified && (
                 <div className={settings.apiKeyInvalid ? "opacity-70" : undefined}>
                   <div className="flex items-center gap-2 text-sm mt-1">

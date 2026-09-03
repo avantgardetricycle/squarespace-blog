@@ -17,8 +17,8 @@ This document specifies the design and implementation of comment support for Bet
 |---|---|
 | Squarespace native comments | **Preserved read-only** above BetterBlog comments. Native comment form suppressed via CSS; existing comments displayed in a distinct "Earlier comments" block. New comments go to BetterBlog only. |
 | Non-paywalled commenting | Anonymous guest — name required, email optional. Matches Squarespace's native behavior. |
-| Paywalled commenting | Email required. Verified against Squarespace Profiles API if API key is configured. If email not found in Profiles API, reader must enter a display name and comment is stored as unverified anonymous. |
-| Email verification failure | **Require display name.** Comment stored without subscriber flag. Comment is still allowed — graceful degradation. |
+| Paywalled commenting | Email required when **Verify subscriber comments** is on. Verified against Squarespace Profiles API if API key is configured. Failure handling depends on whether anonymous comments are also enabled (see §5.3). |
+| Email verification failure | Shown in a modal. If anonymous comments are off, the comment is rejected. If anonymous comments are on, the reader must confirm posting as a guest — no silent fallback. |
 | Notifications | **Email only** (matches Squarespace). No dashboard badge. |
 | Dashboard replies | Replies written in the dashboard appear **publicly on the blog**. |
 | Cookie expiry / new device | **Prompt for email again** (re-verify). No silent fallback. |
@@ -186,7 +186,7 @@ The API key is **never transmitted to the client** after being saved. The UI sho
 
 - `subscriber_comments_enabled` cannot be `TRUE` unless a verified API key is stored.
 - `auto_close_after_days` accepts `NULL` (never) or an integer between 1 and 365.
-- `allow_anonymous_comments` and `subscriber_comments_enabled` are independent toggles. Both can be on simultaneously — anonymous commenting applies to non-paywalled posts, subscriber verification applies to paywalled posts.
+- `allow_anonymous_comments` and `subscriber_comments_enabled` are independent toggles and can be on simultaneously. When both are on, logged-in readers can verify as a member or explicitly choose to comment anonymously. When verification is on and anonymous is off, logged-out readers see comments but not the comment form.
 
 ---
 
@@ -218,72 +218,66 @@ Displayed when `allow_anonymous_comments = TRUE` and the post is not paywalled.
 4. If `require_approval = TRUE` → status set to `pending`, "Your comment is awaiting moderation" shown to reader.
 5. Notification triggered if configured (§7).
 
-### 5.3 Paywalled Posts — Subscriber Verification Flow
+### 5.3 Subscriber Verification Flow
 
-Displayed when the post is paywalled and `subscriber_comments_enabled = TRUE`. The overlay detects authenticated state via Squarespace's DOM (presence of `.auth` class / absence of `.unauth` class on the body).
+Displayed when `subscriber_comments_enabled = TRUE`. The overlay detects authenticated state via Squarespace's DOM (presence of `.auth` class / absence of `.unauth` class on the body).
 
-**State: Reader not authenticated (no Squarespace login detected)**
+On paywalled posts that are not a public preview, logged-out readers still do not see the comment section at all. The form rules below apply when the comment section is shown.
 
-The comment form is hidden. Display:
-> *This post is members-only. [Subscribe] to join the conversation.*
+**Verified comments on, anonymous comments off**
 
-**State: Reader is authenticated (Squarespace login detected)**
+| Reader state | UI |
+|---|---|
+| Not logged in | Comment list is visible. The comment form is hidden. |
+| Logged in | Comment form is shown (body only). On submit, a **Confirm your email** modal collects the member email. |
 
-Show the comment form with an additional email field:
-
-```
-┌────────────────────────────────────────────────┐
-│  Leave a comment                                │
-│                                                 │
-│  Your email (to verify your membership)         │
-│  [                                    ]         │
-│                                                 │
-│  Name (displayed publicly)                      │
-│  [                                    ]         │
-│                                                 │
-│  Comment                                        │
-│  [                                              │
-│                                    ]            │
-│                                                 │
-│  [Post Comment]                                 │
-│                                                 │
-│  🔒 Your email is used for verification only    │
-│     and is never shown publicly.                │
-└────────────────────────────────────────────────┘
-```
-
-If a valid verification cookie exists (§5.4), the email field is pre-filled and labeled **"Commenting as [Name]"** with a "Not you?" link that clears the cookie and re-shows the email field.
-
-**On submit — server-side flow:**
+**On submit — server-side flow (anonymous off):**
 
 ```
 1. Verify hCaptcha token
 2. Call Squarespace Profiles API:
-   GET https://api.squarespace.com/1.0/commerce/profiles?filter=email:{email}
+   GET https://api.squarespace.com/1.0/profiles?filter=email,{email}
    Authorization: Bearer {blogger_api_key}
 
-3a. Profile found (hasAccount: true):
+3a. Profile found:
     - Set verified_subscriber = TRUE
     - Store squarespace_profile_id
     - Use firstName from profile as display_name if reader left name blank
     - Set verification cookie (§5.4)
     - Store and process comment normally
 
-3b. Profile not found OR API key not configured:
-    - Set verified_subscriber = FALSE
-    - Display name field is shown and becomes required
-    - Reader must enter a name to proceed
-    - Comment stored as unverified anonymous guest
-    - No verification cookie set
-    - Comment still allowed (graceful degradation)
-    - UI message shown: "We couldn't verify your membership.
-      Please enter a display name to comment as a guest."
-
-3c. Profiles API returns error (timeout, rate limit, etc.):
-    - Log error server-side
-    - Treat as 3b (graceful degradation)
-    - Do not surface API error to reader
+3b. Profile not found OR API key not configured OR Profiles API error:
+    - Do not create the comment
+    - Return 400 { code: "verification_failed", error: "We could not verify a member account…" }
+    - Overlay shows the error in a modal (not inline under the comment box)
 ```
+
+**Verified comments on, anonymous comments on**
+
+| Reader state | UI |
+|---|---|
+| Not logged in | Comment form is shown with name and optional email. Guests may post without signing in. |
+| Logged in | Comment form is shown (body only). On submit, a **Confirm your email** modal collects the member email and also offers **Comment anonymously**. |
+
+**On submit — server-side flow (anonymous on):**
+
+```
+1. Verify hCaptcha token
+2. If the client sent post_as_anonymous = true (reader chose anonymous in a modal):
+    - Skip Profiles lookup
+    - Store as unverified guest (display_name "Anonymous" if blank)
+3. Otherwise call Squarespace Profiles API as above
+
+3a. Profile found:
+    - Same as verified-only 3a (comment posts as verified)
+
+3b. Profile not found OR Profiles API error:
+    - Do not create the comment
+    - Return 400 { code: "verification_failed_anonymous_available", error: "…Would you like to post this comment anonymously?" }
+    - Overlay shows a confirmation modal. If the reader confirms, the client resubmits with post_as_anonymous = true
+```
+
+If a valid verification cookie exists (§5.4), the email modal is skipped and the stored email is sent automatically.
 
 ### 5.4 Verification Cookie
 
@@ -369,11 +363,19 @@ Submit a new comment.
   "body": "Great post!",
   "parent_id": null,
   "hcaptcha_token": "...",
-  "verification_cookie_token": "..."  // optional; sent if cookie exists
+  "verification_cookie_token": "...",
+  "post_as_anonymous": false,
+  "anonymous_retry_token": "..."
 }
 ```
 
+`post_as_anonymous` is sent when the reader confirms posting as a guest after a failed verification, or chooses **Comment anonymously** in the email modal. `anonymous_retry_token` is a one-time token from the `verification_failed_anonymous_available` error so the confirmation POST can skip a second captcha.
+
 **Response:** `201 Created` with the comment object (status will be `pending` or `approved` depending on settings).
+
+**Verification errors:**
+- `400 { code: "verification_failed" }` — email not found and anonymous comments are off. Overlay shows a modal.
+- `400 { code: "verification_failed_anonymous_available", anonymous_retry_token }` — email not found and anonymous comments are on. Overlay asks the reader to confirm posting as a guest.
 
 #### `POST /api/comments/:id/like`
 Toggle a like on a comment. Keyed by fingerprint server-side.
@@ -614,11 +616,11 @@ Comments are automatically closed based on `auto_close_after_days` relative to `
 | Scenario | Handling |
 |---|---|
 | Blogger disables comments globally mid-thread | Existing approved comments remain visible. Form is hidden. New submissions return `403`. |
-| Squarespace API key is revoked after being saved | Profiles API call fails at comment submit time. Treat as "not found" (§5.3, step 3c). Surface a warning in the blogger dashboard: "Your Squarespace API key appears to be invalid." |
+| Squarespace API key is revoked after being saved | Profiles API call fails at comment submit time. Treat as verification failure (§5.3, step 3b). Surface a warning in the blogger dashboard: "Your Squarespace API key appears to be invalid." |
 | Post has no Squarespace native comments | Legacy "Earlier comments" block is hidden entirely. No empty heading shown. BetterBlog comment section renders at normal position. |
 | Reader submits comment on a post that just passed its close window (race condition) | API returns `403 comments_closed`. UI shows: "Comments on this post are now closed." |
 | Threaded reply submitted to a deleted parent comment | Reply is stored but rendered flat (orphaned) with no parent reference shown. |
-| Profiles API rate limit hit | Log server-side. Treat as graceful degradation (anonymous comment allowed). Do not surface to reader. |
+| Profiles API rate limit hit | Log server-side. Treat as verification failure (§5.3, step 3b). Do not surface the API error to the reader — they see the same verification modal as "not found". |
 | `auto_close_after_days` changed after comments are already closed | Reopens or closes comments retroactively across all posts. This is intentional — the setting is blog-level, not per-post. |
 
 ---

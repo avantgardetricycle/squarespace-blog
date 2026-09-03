@@ -1,17 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router";
 import {
   Settings,
   User,
-  Copy,
-  Check,
   ArrowRight,
   Globe,
   Plus,
   Trash2,
   Pencil,
-  ChevronRight,
-  ChevronDown,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -42,9 +38,12 @@ import {
   deleteSite,
   updateSite,
   restoreSite,
+  getPaywallReconcile,
   type DashboardMe,
   type CreatedSite,
+  type PaywallReconcileMismatch,
 } from "@/api/auth";
+import { PaywallReconcileModal } from "@/app/components/PaywallReconcileModal";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -55,8 +54,38 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { getPlanDisplayName } from "@/lib/planLabels";
-import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
-import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
+import { formatSubscriptionDate, hasActiveSubscription } from "@/lib/subscription";
+import {
+  InstallationInstructionsBody,
+  InstallationInstructionsModal,
+} from "@/app/components/InstallationInstructionsModal";
+import {
+  groupBlogsBySquarespaceOrigin,
+  sameSquarespaceOrigin,
+  squarespaceOriginFromUrl,
+} from "@/lib/squarespaceSiteGroups";
+
+const PAYWALL_RECONCILE_DISMISS_KEY = "bbPaywallReconcileDismissed";
+
+function readPaywallReconcileDismissed(): Record<string, string> {
+  try {
+    const raw = sessionStorage.getItem(PAYWALL_RECONCILE_DISMISS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberPaywallReconcileDismissed(siteKey: string, probedState: string) {
+  const next = { ...readPaywallReconcileDismissed(), [siteKey]: probedState };
+  try {
+    sessionStorage.setItem(PAYWALL_RECONCILE_DISMISS_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
 
 function isValidSignupPageUrl(input: string): boolean {
   const t = input.trim();
@@ -73,9 +102,9 @@ function isValidSignupPageUrl(input: string): boolean {
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
-  const [copiedSiteKey, setCopiedSiteKey] = useState<string | null>(null);
   const [showAddBlogModal, setShowAddBlogModal] = useState(false);
+  const [installGroupOrigin, setInstallGroupOrigin] = useState<string | null>(null);
+  const [justCreatedReplaceHeader, setJustCreatedReplaceHeader] = useState(false);
   const [newBlogName, setNewBlogName] = useState("");
   const [newBlogUrl, setNewBlogUrl] = useState("");
   const [blogUrlError, setBlogUrlError] = useState<string | null>(null);
@@ -95,6 +124,9 @@ export default function Dashboard() {
     | { kind: "deleted_previous"; existingSite: CreatedSite; message: string }
     | null
   >(null);
+  const [paywallReconcileQueue, setPaywallReconcileQueue] = useState<PaywallReconcileMismatch[]>([]);
+  const [paywallReconcileApplying, setPaywallReconcileApplying] = useState(false);
+  const paywallReconcileStarted = useRef(false);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -103,25 +135,26 @@ export default function Dashboard() {
     });
   }, []);
 
+  useEffect(() => {
+    if (loading || !me || paywallReconcileStarted.current) return;
+    if (me.sites.length === 0) return;
+    paywallReconcileStarted.current = true;
+    void getPaywallReconcile().then((data) => {
+      if (!data?.mismatches?.length) return;
+      const dismissed = readPaywallReconcileDismissed();
+      const next = data.mismatches.filter((row) => dismissed[row.siteKey] !== row.probedState);
+      if (next.length) setPaywallReconcileQueue(next);
+    });
+  }, [loading, me]);
+
   const blogLimit = me?.subscription?.maxSites ?? 3;
   const userPlan =
     me?.subscription != null
       ? me.subscription.planDisplay ?? getPlanDisplayName(me.subscription.plan)
       : "Professional";
+  const subscriptionActive = hasActiveSubscription(me?.subscription);
+  const subscriptionEndDate = formatSubscriptionDate(me?.subscription?.currentPeriodEnd);
   const sites = me?.sites ?? [];
-
-  const handleCopy = (siteKey: string, blogPath?: string | null) => {
-    const html = buildBetterBlogSquarespaceHeaderHtml({
-      loaderUrl: getBetterBlogLoaderUrl(),
-      siteKey,
-      blogPath,
-      apiBase: getBetterBlogApiBase(),
-    });
-    navigator.clipboard.writeText(html);
-    setCopiedSiteKey(siteKey);
-    toast.success("Installation code copied to clipboard!");
-    setTimeout(() => setCopiedSiteKey(null), 2000);
-  };
 
   const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
 
@@ -172,6 +205,9 @@ export default function Dashboard() {
       }
       if (result.site) {
         const site = result.site;
+        const hadSiblingOnSameOrigin = sites.some(
+          (s) => s.id !== site.id && sameSquarespaceOrigin(s.url, site.url),
+        );
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = [...prev.sites, site];
@@ -190,7 +226,7 @@ export default function Dashboard() {
         setNewBlogPaywalled("no");
         setNewBlogSubscribeUrl("");
         setJustCreatedSite(site);
-        setExpandedSiteId(site.id);
+        setJustCreatedReplaceHeader(hadSiblingOnSameOrigin);
       } else {
         const errorMessage = result.error ?? "Failed to create site";
         if ("code" in result && result.code === "blog_url_unreachable") {
@@ -216,7 +252,7 @@ export default function Dashboard() {
     setNewBlogPaywalled("no");
     setNewBlogSubscribeUrl("");
     setJustCreatedSite(null);
-    setExpandedSiteId(existingSite.id);
+    setJustCreatedReplaceHeader(false);
     toast.success(
       `Using your existing blog "${existingSite.name ?? "Untitled"}" — all customization history is unchanged.`
     );
@@ -242,7 +278,6 @@ export default function Dashboard() {
       setNewBlogPaywalled("no");
       setNewBlogSubscribeUrl("");
       setJustCreatedSite(null);
-      setExpandedSiteId(r.site.id);
       toast.success(
         `Restored "${r.site.name ?? "your blog"}" — your previous layout and settings are back.`
       );
@@ -318,9 +353,76 @@ export default function Dashboard() {
     }
   };
 
+  const otherDashboardDialogOpen =
+    showAddBlogModal ||
+    Boolean(editingSite) ||
+    Boolean(siteToDelete) ||
+    Boolean(justCreatedSite) ||
+    Boolean(blogUrlConflict) ||
+    Boolean(installGroupOrigin);
+  const paywallReconcileMismatch =
+    !otherDashboardDialogOpen && paywallReconcileQueue.length > 0 ? paywallReconcileQueue[0] : null;
+
+  const advancePaywallReconcile = (siteKey: string, probedState: string) => {
+    rememberPaywallReconcileDismissed(siteKey, probedState);
+    setPaywallReconcileQueue((prev) => prev.filter((row) => row.siteKey !== siteKey));
+  };
+
+  const handleDismissPaywallReconcile = () => {
+    if (!paywallReconcileMismatch) return;
+    advancePaywallReconcile(paywallReconcileMismatch.siteKey, paywallReconcileMismatch.probedState);
+  };
+
+  const handleApplyPaywallReconcile = async () => {
+    if (!paywallReconcileMismatch) return;
+    setPaywallReconcileApplying(true);
+    try {
+      const result = await updateSite(paywallReconcileMismatch.siteKey, {
+        paywallDetectionState: paywallReconcileMismatch.probedState,
+        paywallDetectionSource: "json_probe",
+      });
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to update paywall settings");
+        return;
+      }
+      const s = result.site;
+      setMe((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          sites: prev.sites.map((row) =>
+            row.siteKey === s.siteKey
+              ? {
+                  ...row,
+                  paywallDetectionState: s.paywallDetectionState,
+                  paywallDetectionSource: s.paywallDetectionSource,
+                  paywallSettings: s.paywallSettings ?? row.paywallSettings,
+                }
+              : row
+          ),
+        };
+      });
+      toast.success(
+        paywallReconcileMismatch.probedState === "detected_paywalled"
+          ? "BetterBlog now treats this blog as membership-gated. Adjust copy in Customize Blog → Paywall Settings."
+          : "BetterBlog no longer treats this blog as membership-gated."
+      );
+      advancePaywallReconcile(paywallReconcileMismatch.siteKey, paywallReconcileMismatch.probedState);
+    } finally {
+      setPaywallReconcileApplying(false);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!siteToDelete) return;
     const siteId = siteToDelete.id;
+    const deletedSite = sites.find((s) => s.id === siteId);
+    const remainingSiblings = deletedSite
+      ? sites.filter((s) => s.id !== siteId && sameSquarespaceOrigin(s.url, deletedSite.url))
+      : [];
+    const siblingHostname = remainingSiblings.length
+      ? squarespaceOriginFromUrl(remainingSiblings[0].url)?.hostname
+      : null;
     setDeleting(true);
     try {
       const ok = await deleteSite(siteId);
@@ -337,9 +439,14 @@ export default function Dashboard() {
               newSites.length < maxSites,
           };
         });
-        if (expandedSiteId === siteId) setExpandedSiteId(null);
         setSiteToDelete(null);
-        toast.success("Blog removed");
+        if (remainingSiblings.length > 0 && siblingHostname) {
+          toast.success(
+            `Blog removed. Re-copy Installation instructions for ${siblingHostname} and replace the Header code.`,
+          );
+        } else {
+          toast.success("Blog removed");
+        }
       } else {
         toast.error("Failed to remove blog");
       }
@@ -348,10 +455,6 @@ export default function Dashboard() {
     } finally {
       setDeleting(false);
     }
-  };
-
-  const toggleExpand = (siteId: string) => {
-    setExpandedSiteId((prev) => (prev === siteId ? null : siteId));
   };
 
   const getVerificationStatus = (site: (typeof sites)[0]) => {
@@ -410,13 +513,17 @@ export default function Dashboard() {
     return null;
   }
 
-  const justCreatedSnippetHtml = justCreatedSite
-    ? buildBetterBlogSquarespaceHeaderHtml({
-        loaderUrl: getBetterBlogLoaderUrl(),
-        siteKey: justCreatedSite.siteKey,
-        blogPath: justCreatedSite.blogPath,
-        apiBase: getBetterBlogApiBase(),
-      })
+  const siteGroups = groupBlogsBySquarespaceOrigin(sites);
+  const justCreatedOrigin = justCreatedSite
+    ? squarespaceOriginFromUrl(justCreatedSite.url)
+    : null;
+  const justCreatedBlogs = justCreatedSite
+    ? justCreatedOrigin
+      ? sites.filter((s) => sameSquarespaceOrigin(s.url, justCreatedSite.url))
+      : [justCreatedSite]
+    : [];
+  const installGroup = installGroupOrigin
+    ? siteGroups.find((g) => g.origin === installGroupOrigin) ?? null
     : null;
 
   return (
@@ -440,71 +547,42 @@ export default function Dashboard() {
           setShowAddBlogModal(open);
           if (!open) {
             setJustCreatedSite(null);
+            setJustCreatedReplaceHeader(false);
             setBlogUrlError(null);
             setNewBlogPaywalled("no");
             setNewBlogSubscribeUrl("");
           }
         }}
       >
-        <DialogContent className="sm:max-w-[500px] overflow-x-hidden">
+        <DialogContent className={`overflow-x-hidden ${justCreatedSite ? "sm:max-w-lg" : "sm:max-w-[500px]"}`}>
           {justCreatedSite ? (
             <>
               <DialogHeader>
-                <DialogTitle>Blog added successfully</DialogTitle>
+                <DialogTitle>
+                  {justCreatedReplaceHeader
+                    ? "Blog added — update your install code"
+                    : "Blog added successfully"}
+                </DialogTitle>
                 <DialogDescription>
-                  Install the code snippet on your Squarespace site to get started.
+                  {justCreatedReplaceHeader
+                    ? `Replace the Header code for ${justCreatedOrigin?.hostname || "this site"} so every blog is covered.`
+                    : "Install the code snippet on your Squarespace site to get started."}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4 min-w-0 overflow-hidden">
-                <div className="flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-800 text-sm min-w-0">
-                  <CheckCircle className="h-5 w-5 shrink-0 text-green-600 mt-0.5" />
-                  <span className="min-w-0 break-words">
-                    <strong>{justCreatedSite.name || "Your blog"}</strong> has been added. Copy the code below and add it to your site.
-                  </span>
-                </div>
-                <div className="space-y-2 min-w-0">
-                  <p className="text-sm text-[#6b6b6b] break-words">
-                    Paste this into your Squarespace site&apos;s{" "}
-                    <span className="font-medium text-[#0a0a0a]">
-                      Settings → Advanced → Code Injection → Header
-                    </span>
-                    . Put the whole block in order: the inline preloader first, then the BetterBlog
-                    script tag. The preloader hides native Squarespace blog chrome until BetterBlog
-                    loads (adjust the path in the small script if your blog URL prefix is not{" "}
-                    <code className="bg-[#f0eefc] px-1 rounded text-[#0a0a0a]">/blog</code>).
-                  </p>
-                  <div className="relative min-w-0">
-                    <div className="absolute right-2 top-2 z-10">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 px-2 bg-[#0a0a0a] hover:bg-[#2d2a5e] text-white border-none"
-                        onClick={() => handleCopy(justCreatedSite.siteKey, justCreatedSite.blogPath)}
-                      >
-                        {copiedSiteKey === justCreatedSite.siteKey ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 mr-1.5 text-green-400" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5 mr-1.5" />
-                            Copy Code
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <pre className="max-h-[9.5rem] overflow-auto rounded-lg bg-[#0a0a0a] p-4 pr-24 text-sm leading-5 text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner min-w-0 max-w-full">
-                      <code>{justCreatedSnippetHtml}</code>
-                    </pre>
-                  </div>
-                </div>
+              <div className="py-2 min-w-0 overflow-hidden">
+                <InstallationInstructionsBody
+                  originLabel={justCreatedOrigin?.hostname || "this site"}
+                  blogs={justCreatedBlogs}
+                  variant={justCreatedReplaceHeader ? "added-replace" : "added-new-site"}
+                  justAddedName={justCreatedSite.name || "Your blog"}
+                />
               </div>
               <DialogFooter>
                 <Button
                   onClick={() => {
                     setShowAddBlogModal(false);
                     setJustCreatedSite(null);
+                    setJustCreatedReplaceHeader(false);
                   }}
                   className="bg-[#5B4FE8] hover:bg-[#4a3fd4]"
                 >
@@ -850,6 +928,13 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      <PaywallReconcileModal
+        mismatch={paywallReconcileMismatch}
+        applying={paywallReconcileApplying}
+        onApply={() => void handleApplyPaywallReconcile()}
+        onDismiss={handleDismissPaywallReconcile}
+      />
+
       {/* My Blogs Section with Integrated Setup */}
       <Card className="border-[#e5e4e0] shadow-sm">
         <CardHeader>
@@ -858,7 +943,7 @@ export default function Dashboard() {
               <CardTitle>My Blogs</CardTitle>
               <CardDescription>
                 {sites.length} of {blogLimit} blog{blogLimit !== 1 ? "s" : ""}{" "}
-                on your {userPlan} plan
+                on your {subscriptionActive ? userPlan : `canceled ${userPlan}`} plan
               </CardDescription>
             </div>
             {me.canCreateSite && (
@@ -874,136 +959,105 @@ export default function Dashboard() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="space-y-2">
-            {sites.map((site) => {
-              const isExpanded = expandedSiteId === site.id;
-              const status = getVerificationStatus(site);
-              const siteUrl = getSiteUrl(site);
-              const headerInjectionHtml = buildBetterBlogSquarespaceHeaderHtml({
-                loaderUrl: getBetterBlogLoaderUrl(),
-                siteKey: site.siteKey,
-                blogPath: site.blogPath,
-                apiBase: getBetterBlogApiBase(),
-              });
-
-              return (
-                <div
-                  key={site.id}
-                  className="border border-[#e5e4e0] rounded-lg overflow-hidden hover:border-[#5B4FE8]/50 transition-all"
-                >
-                  <div
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-[#5B4FE8]/5 transition-colors"
-                    onClick={() => toggleExpand(site.id)}
-                  >
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 bg-[#5B4FE8]/10 rounded-lg flex items-center justify-center shrink-0">
-                        <Globe className="w-5 h-5 text-[#5B4FE8]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold text-[#0a0a0a]">
-                            {site.name || "Unnamed site"}
-                          </h4>
-                          <div className="flex items-center gap-1 text-xs">
-                            {status.icon}
-                            <span className={status.color}>{status.text}</span>
+          <div className="space-y-6">
+            {siteGroups.map((group) => (
+              <div key={group.origin ?? "unconfigured"} className="space-y-2">
+                <div className="flex items-center justify-between gap-3 px-0.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Globe className="w-4 h-4 text-[#5B4FE8] shrink-0" />
+                    <h3 className="font-semibold text-[#0a0a0a] truncate">{group.originLabel}</h3>
+                    <span className="text-xs text-[#6b6b6b] shrink-0">
+                      {group.blogs.length} blog{group.blogs.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {group.origin ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => setInstallGroupOrigin(group.origin)}
+                    >
+                      Installation instructions
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  {group.blogs.map((site) => {
+                    const status = getVerificationStatus(site);
+                    const siteUrl = getSiteUrl(site);
+                    return (
+                      <div
+                        key={site.id}
+                        className="border border-[#e5e4e0] rounded-lg overflow-hidden hover:border-[#5B4FE8]/50 transition-all"
+                      >
+                        <div className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="w-10 h-10 bg-[#5B4FE8]/10 rounded-lg flex items-center justify-center shrink-0">
+                              <Globe className="w-5 h-5 text-[#5B4FE8]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-semibold text-[#0a0a0a]">
+                                  {site.name || "Unnamed site"}
+                                </h4>
+                                <div className="flex items-center gap-1 text-xs">
+                                  {status.icon}
+                                  <span className={status.color}>{status.text}</span>
+                                </div>
+                              </div>
+                              <p className="text-sm text-neutral-500 truncate">
+                                {siteUrl || "No URL configured"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-[#6b6b6b] hidden sm:flex">
+                              <span>{formatDate(site.createdAt)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 px-3 text-[#5B4FE8] hover:bg-[#5B4FE8]/10 hover:text-[#5B4FE8]"
+                              asChild
+                            >
+                              <Link
+                                to={
+                                  subscriptionActive
+                                    ? `/dashboard/configure?siteKey=${site.siteKey}`
+                                    : "/dashboard/account"
+                                }
+                              >
+                                Customize
+                              </Link>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-[#6b6b6b] hover:text-[#0a0a0a]"
+                              aria-label="Edit blog settings"
+                              onClick={() => openEditBlog(site)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label="Remove blog"
+                              onClick={() =>
+                                setSiteToDelete({ id: site.id, name: site.name || "Unnamed site" })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
                           </div>
                         </div>
-                        <p className="text-sm text-neutral-500 truncate">
-                          {siteUrl || "No URL configured"}
-                        </p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-[#6b6b6b] hidden sm:flex">
-                        <span>{formatDate(site.createdAt)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 ml-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-3 text-[#5B4FE8] hover:bg-[#5B4FE8]/10 hover:text-[#5B4FE8]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }}
-                        asChild
-                      >
-                        <Link to={`/dashboard/configure?siteKey=${site.siteKey}`}>
-                          Customize
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-[#6b6b6b] hover:text-[#0a0a0a]"
-                        aria-label="Edit blog settings"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditBlog(site);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label="Remove blog"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSiteToDelete({ id: site.id, name: site.name || "Unnamed site" });
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                      {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-[#6b6b6b]" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-[#6b6b6b]" />
-                      )}
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-[#e5e4e0] bg-[#f7f6f3] p-6 space-y-4">
-                      <p className="text-sm text-[#6b6b6b]">
-                        Copy the code below and paste it into your Squarespace
-                        site&apos;s{" "}
-                        <span className="font-medium text-[#0a0a0a]">
-                          Settings → Advanced → Code Injection → Header
-                        </span>
-                        . Keep the inline preloader above the BetterBlog script tag so native blog
-                        styling does not flash before the overlay loads.
-                      </p>
-                      <div className="relative">
-                        <div className="absolute right-2 top-2 z-10">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-8 px-2 bg-neutral-800 hover:bg-neutral-700 text-white border-none"
-                            onClick={() => handleCopy(site.siteKey, site.blogPath)}
-                          >
-                            {copiedSiteKey === site.siteKey ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 mr-1.5 text-green-400" />
-                                Copied
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-3.5 w-3.5 mr-1.5" />
-                                Copy Code
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                        <pre className="overflow-x-auto rounded-lg bg-[#0a0a0a] p-4 text-sm text-[#8F86F0] font-mono border border-[#2d2a5e] shadow-inner">
-                          <code>{headerInjectionHtml}</code>
-                        </pre>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
 
           {sites.length === 0 && (
@@ -1018,13 +1072,25 @@ export default function Dashboard() {
                   <Plus className="w-4 h-4 mr-2" />
                   Add your first blog
                 </Button>
-              ) : (
+              ) : subscriptionActive ? (
                 <p>You&apos;ve reached your site limit.</p>
+              ) : (
+                <p>Restore your subscription to add blogs.</p>
               )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <InstallationInstructionsModal
+        open={Boolean(installGroup && installGroup.origin)}
+        onOpenChange={(open) => {
+          if (!open) setInstallGroupOrigin(null);
+        }}
+        originLabel={installGroup?.originLabel ?? ""}
+        blogs={installGroup?.blogs ?? []}
+        variant="manage"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2 border-[#e5e4e0] shadow-sm">
@@ -1033,7 +1099,7 @@ export default function Dashboard() {
             <CardDescription>Get straight to what matters.</CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
-            <Link to="/dashboard/configure" className="block group">
+            <Link to={subscriptionActive ? "/dashboard/configure" : "/dashboard/account"} className="block group">
               <div className="border border-[#e5e4e0] rounded-xl p-6 hover:border-[#5B4FE8] hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-[#5B4FE8]/5">
                 <div className="bg-[#5B4FE8]/10 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-[#5B4FE8] group-hover:text-white transition-colors text-[#5B4FE8]">
                   <Settings className="w-6 h-6" />
@@ -1081,13 +1147,26 @@ export default function Dashboard() {
                 Subscription
               </p>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 border border-green-200">
+                <span
+                  className={
+                    subscriptionActive
+                      ? "inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 border border-green-200"
+                      : "inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 border border-amber-200"
+                  }
+                >
                   {me.subscription?.status ? capitalize(me.subscription.status) : "—"}
                 </span>
                 <span className="text-sm font-semibold">
                   {capitalize(userPlan)} Plan
                 </span>
               </div>
+              {!subscriptionActive && (
+                <p className="text-sm text-[#6b6b6b]">
+                  {subscriptionEndDate
+                    ? `Access ended ${subscriptionEndDate}`
+                    : "Access has ended"}
+                </p>
+              )}
             </div>
 
             <Separator className="bg-[#5B4FE8]/20" />

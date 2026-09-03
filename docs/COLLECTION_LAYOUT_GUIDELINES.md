@@ -58,6 +58,7 @@
   - **Showcase** — Footer Content is user-toggleable; default **OFF** (empty until the user adds modules such as Email Capture or Lead Magnet)
   - Footer is **not** Masthead-only; Editorial and Showcase intentionally expose the same opt-in footer zone
   - Templates without sidebars (Masthead, Editorial, Showcase) place Email Capture / Lead Magnet in Footer only; Filtering stays Header-only; Popular Posts is unavailable
+  - Digest: Search and Sort are header-only and must not render in the sidebar
 
 ## What must never happen
 - Sidebars must not use top: 0 when sticky — offset must equal header height
