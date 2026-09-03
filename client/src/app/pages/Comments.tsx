@@ -65,15 +65,15 @@ interface Comment {
   likeCount: number;
 }
 
-/** Opens Squarespace site config — member profile when id is known, otherwise profiles area. */
+/** Opens the commenter's profile in Squarespace site config when a profile id is known. */
 function squarespaceProfileHref(siteUrl: string | null | undefined, profileId: string | null | undefined): string | null {
   try {
     const s = (siteUrl || "").trim();
     if (!s) return null;
     const u = new URL(s.startsWith("http") ? s : `https://${s}`);
     const id = profileId?.trim();
-    if (id) return `${u.origin}/config/profiles/members/${encodeURIComponent(id)}/member`;
-    return `${u.origin}/config/profiles`;
+    if (!id) return null;
+    return `${u.origin}/config/profiles/all/${encodeURIComponent(id)}`;
   } catch {
     return null;
   }
@@ -1131,8 +1131,7 @@ export default function Comments() {
                   const siteUrl =
                     me?.sites?.find((s) => s.siteKey === siteKey)?.url ?? me?.sites?.[0]?.url ?? null;
                   const isAuthenticated = comment.verifiedSubscriber === true;
-                  const profileLink =
-                    isAuthenticated ? squarespaceProfileHref(siteUrl, comment.squarespaceProfileId) : null;
+                  const profileLink = squarespaceProfileHref(siteUrl, comment.squarespaceProfileId);
                   return (
                     <div
                       id={`bb-comment-row-${comment.id}`}
@@ -1159,6 +1158,7 @@ export default function Comments() {
                                       href={profileLink}
                                       target="_blank"
                                       rel="noopener noreferrer"
+                                      title="Open Squarespace profile"
                                       className="font-medium text-[#0a0a0a] hover:text-[#5B4FE8] hover:underline"
                                     >
                                       {comment.displayName}
