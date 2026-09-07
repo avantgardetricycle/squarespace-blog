@@ -512,6 +512,182 @@ function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: 
   return isStoryPostLayoutConfig(config.postConfig);
 }
 
+export type PostTemplateKey = "reporter" | "publisher" | "writer" | "story" | "feature";
+
+/** Default post template when none is selected yet. */
+const DEFAULT_POST_TEMPLATE_KEY: PostTemplateKey = "feature";
+
+const ALL_POST_IMAGE_POSITIONS: PostHeaderImagePosition[] = [
+  "fullBleed",
+  "leftOfInfo",
+  "rightOfInfo",
+  "belowInfo",
+];
+
+/** Per-template Configure locks. `true` = control disabled for that template. */
+export interface PostTemplateControlLocks {
+  imagePosition: boolean;
+  /** When set, only these image-position options are offered (if the control is enabled). */
+  imagePositionOptions?: PostHeaderImagePosition[];
+  fullBleedLayout: boolean;
+  showFeaturedImage: boolean;
+  imageWidth: boolean;
+  sideGap: boolean;
+  aspectBehavior: boolean;
+  aspectRatio: boolean;
+  roundedCorners: boolean;
+  shadow: boolean;
+  contentVerticalAlignment: boolean;
+  showTagsAndCategories: boolean;
+  showByline: boolean;
+  /** Entire left sidebar section (modules + width + sticky). */
+  leftSidebar: boolean;
+  /** Entire right sidebar section (modules + width + sticky). */
+  rightSidebar: boolean;
+  leftSidebarWidth: boolean;
+  rightSidebarWidth: boolean;
+  footerModuleReorder: boolean;
+  /**
+   * When true, image styling controls (aspect, width, corners, shadow, side gap)
+   * are locked while featured image is shown.
+   */
+  imageSettingsWhenFeaturedShown: boolean;
+}
+
+const UNLOCKED_POST_TEMPLATE_CONTROLS: PostTemplateControlLocks = {
+  imagePosition: false,
+  fullBleedLayout: false,
+  showFeaturedImage: false,
+  imageWidth: false,
+  sideGap: false,
+  aspectBehavior: false,
+  aspectRatio: false,
+  roundedCorners: false,
+  shadow: false,
+  contentVerticalAlignment: false,
+  showTagsAndCategories: false,
+  showByline: false,
+  leftSidebar: false,
+  rightSidebar: false,
+  leftSidebarWidth: false,
+  rightSidebarWidth: false,
+  footerModuleReorder: false,
+  imageSettingsWhenFeaturedShown: false,
+};
+
+export const POST_TEMPLATE_CONTROL_LOCKS: Record<PostTemplateKey, PostTemplateControlLocks> = {
+  reporter: {
+    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
+    imagePositionOptions: ["leftOfInfo", "rightOfInfo"],
+    imageWidth: true,
+    sideGap: true,
+    aspectBehavior: true,
+    aspectRatio: true,
+    roundedCorners: true,
+    shadow: true,
+    showTagsAndCategories: true,
+    rightSidebar: true,
+  },
+  publisher: {
+    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
+    showFeaturedImage: true,
+    imagePosition: true,
+    contentVerticalAlignment: true,
+    leftSidebar: true,
+    rightSidebarWidth: true,
+    showByline: true,
+    showTagsAndCategories: true,
+  },
+  writer: {
+    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
+    showFeaturedImage: true,
+    leftSidebar: true,
+    rightSidebar: true,
+    showTagsAndCategories: true,
+  },
+  story: {
+    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
+    imagePosition: true,
+    imagePositionOptions: ["leftOfInfo", "rightOfInfo"],
+    fullBleedLayout: true,
+    showFeaturedImage: true,
+    imageWidth: true,
+    sideGap: true,
+    aspectBehavior: true,
+    aspectRatio: true,
+    roundedCorners: true,
+    shadow: true,
+    showTagsAndCategories: true,
+    leftSidebar: true,
+    rightSidebar: true,
+  },
+  feature: {
+    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
+    imagePosition: true,
+    fullBleedLayout: true,
+    imageSettingsWhenFeaturedShown: true,
+    showTagsAndCategories: true,
+    leftSidebarWidth: true,
+    rightSidebarWidth: true,
+    footerModuleReorder: true,
+  },
+};
+
+function isPostTemplateKey(v: unknown): v is PostTemplateKey {
+  return v === "reporter" || v === "publisher" || v === "writer" || v === "story" || v === "feature";
+}
+
+/** Infer template key from layout shape (mirrors renderer heuristics) when catalog id is missing. */
+function inferPostTemplateKey(postConfig: PostLevelConfig): PostTemplateKey | null {
+  const ph = postConfig.postHeader ?? defaultPostHeader;
+  const leftOn = postConfig.leftSidebar?.show === true;
+  const rightOn = postConfig.rightSidebar?.show === true;
+  if (ph.imagePosition === "leftOfInfo" && !leftOn && !rightOn) return "story";
+  if (ph.imagePosition === "belowInfo" && !leftOn && !rightOn) return "writer";
+  if (ph.imagePosition === "rightOfInfo") return "reporter";
+  if (ph.imagePosition === "fullBleed" && ph.contentAlignment === "center" && leftOn && rightOn) return "feature";
+  if (ph.imagePosition === "fullBleed" && ph.contentAlignment === "left" && !leftOn && rightOn) return "publisher";
+  return null;
+}
+
+function resolveActivePostTemplateKey(
+  config: SiteConfigForm,
+  templateCatalogPost: Template[]
+): PostTemplateKey {
+  const tid = config.postTemplateId;
+  if (tid) {
+    const t = templateCatalogPost.find((x) => x.id === tid);
+    if (t && isPostTemplateKey(t.templateKey)) return t.templateKey;
+  }
+  return inferPostTemplateKey(config.postConfig) ?? DEFAULT_POST_TEMPLATE_KEY;
+}
+
+function getPostTemplateControlLocks(key: PostTemplateKey): PostTemplateControlLocks {
+  return POST_TEMPLATE_CONTROL_LOCKS[key] ?? UNLOCKED_POST_TEMPLATE_CONTROLS;
+}
+
+function findDefaultPostTemplate(templateCatalogPost: Template[]): Template | null {
+  return (
+    templateCatalogPost.find((t) => t.templateKey === DEFAULT_POST_TEMPLATE_KEY) ??
+    templateCatalogPost[0] ??
+    null
+  );
+}
+
+function applyPostTemplateToSiteConfig(prev: SiteConfigForm, template: Template): SiteConfigForm {
+  if (!template.postConfig || typeof template.postConfig !== "object") {
+    return { ...prev, postTemplateId: template.id };
+  }
+  const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+  const next: SiteConfigForm = {
+    ...prev,
+    postConfig: parsedPost,
+    postTemplateId: template.id,
+  };
+  applyDerivedModules(next);
+  return next;
+}
+
 function validPostHeaderBackgroundColor(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const trimmed = v.trim();
@@ -1727,6 +1903,70 @@ export default function Configure() {
     () => isStoryPostTemplateActive(config, templateCatalogPost),
     [config, templateCatalogPost]
   );
+  const activePostTemplateKey = useMemo(
+    () => resolveActivePostTemplateKey(config, templateCatalogPost),
+    [config, templateCatalogPost]
+  );
+  const activePostTemplate = useMemo(() => {
+    const tid = config.postTemplateId;
+    if (tid) {
+      const byId = templateCatalogPost.find((t) => t.id === tid);
+      if (byId) return byId;
+    }
+    return (
+      templateCatalogPost.find((t) => t.templateKey === activePostTemplateKey) ?? null
+    );
+  }, [config.postTemplateId, templateCatalogPost, activePostTemplateKey]);
+  const postControlLocks = useMemo(
+    () => getPostTemplateControlLocks(activePostTemplateKey),
+    [activePostTemplateKey]
+  );
+  const postImageSettingsLocked =
+    selectedLevel === "post" &&
+    (postControlLocks.imageSettingsWhenFeaturedShown
+      ? effectiveConfig.featuredImage.show
+      : false);
+
+  /** Ensure a post template is always selected; apply default template config for fresh setups. */
+  useEffect(() => {
+    if (configLoading || templateCatalogPost.length === 0) return;
+    const tid = config.postTemplateId;
+    const valid = Boolean(tid && templateCatalogPost.some((t) => t.id === tid));
+    if (valid) return;
+
+    const inferredKey = inferPostTemplateKey(config.postConfig);
+    const matchByKey =
+      (inferredKey && templateCatalogPost.find((t) => t.templateKey === inferredKey)) ||
+      findDefaultPostTemplate(templateCatalogPost);
+    if (!matchByKey) return;
+
+    const isPristinePost = levelConfigsEqual(config.postConfig, defaultPostConfig);
+    const savedAlsoMissing =
+      !savedConfig.postTemplateId ||
+      !templateCatalogPost.some((t) => t.id === savedConfig.postTemplateId);
+
+    if (isPristinePost) {
+      const next = applyPostTemplateToSiteConfig(config, matchByKey);
+      setConfig(next);
+      if (savedAlsoMissing && levelConfigsEqual(savedConfig.postConfig, defaultPostConfig)) {
+        setSavedConfig(next);
+      }
+      return;
+    }
+
+    setConfig((prev) => ({ ...prev, postTemplateId: matchByKey.id }));
+    if (savedAlsoMissing) {
+      setSavedConfig((prev) => ({ ...prev, postTemplateId: matchByKey.id }));
+    }
+  }, [
+    configLoading,
+    templateCatalogPost,
+    config.postTemplateId,
+    config.postConfig,
+    savedConfig.postTemplateId,
+    savedConfig.postConfig,
+  ]);
+
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
   const moduleOrderPathForLocation = useCallback((loc: FeatureModuleLocation): "headerContent.moduleOrder" | "leftSidebar.moduleOrder" | "rightSidebar.moduleOrder" | "footerContent.moduleOrder" => {
@@ -1754,6 +1994,10 @@ export default function Configure() {
   );
   const addFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
+      if (selectedLevel === "post") {
+        if (loc === "leftSidebar" && postControlLocks.leftSidebar) return;
+        if (loc === "rightSidebar" && postControlLocks.rightSidebar) return;
+      }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.enabled`, true);
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "header");
@@ -1768,10 +2012,21 @@ export default function Configure() {
       if (order.includes(moduleId)) return;
       updateLevelConfigPath(zonePath, [moduleId, ...order.filter((m) => m !== moduleId)]);
     },
-    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel]
+    [
+      effectiveConfig,
+      moduleOrderForLocation,
+      moduleOrderPathForLocation,
+      postControlLocks.leftSidebar,
+      postControlLocks.rightSidebar,
+      selectedLevel,
+    ]
   );
   const removeFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
+      if (selectedLevel === "post") {
+        if (loc === "leftSidebar" && postControlLocks.leftSidebar) return;
+        if (loc === "rightSidebar" && postControlLocks.rightSidebar) return;
+      }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "none");
         return;
@@ -1780,7 +2035,23 @@ export default function Configure() {
       const order = moduleOrderForLocation(effectiveConfig, loc);
       updateLevelConfigPath(zonePath, order.filter((m) => m !== moduleId));
     },
-    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel]
+    [
+      effectiveConfig,
+      moduleOrderForLocation,
+      moduleOrderPathForLocation,
+      postControlLocks.leftSidebar,
+      postControlLocks.rightSidebar,
+      selectedLevel,
+    ]
+  );
+  const isPostSidebarLocationLocked = useCallback(
+    (loc: FeatureModuleLocation): boolean => {
+      if (selectedLevel !== "post") return false;
+      if (loc === "leftSidebar") return postControlLocks.leftSidebar;
+      if (loc === "rightSidebar") return postControlLocks.rightSidebar;
+      return false;
+    },
+    [selectedLevel, postControlLocks.leftSidebar, postControlLocks.rightSidebar]
   );
   const renderFeatureLocationControl = useCallback((
     moduleId: string,
@@ -1789,27 +2060,33 @@ export default function Configure() {
     locationLabel = "Location",
   ) => {
     const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
-    const availableLocations = allowedLocations.filter((loc) => !selectedLocations.includes(loc));
+    const availableLocations = allowedLocations.filter(
+      (loc) => !selectedLocations.includes(loc) && !isPostSidebarLocationLocked(loc)
+    );
     return (
       <div className="space-y-2">
         <Label className="text-xs text-[#6b6b6b]">{locationLabel}</Label>
         <div className="flex flex-wrap items-center gap-2">
-          {selectedLocations.map((loc) => (
-            <span
-              key={loc}
-              className="inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]"
-            >
-              {FEATURE_LOCATION_LABELS[loc]}
-              <button
-                type="button"
-                onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
-                className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
-                aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
+          {selectedLocations.map((loc) => {
+            const locLocked = isPostSidebarLocationLocked(loc);
+            return (
+              <span
+                key={loc}
+                className={`inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]${locLocked ? " opacity-60" : ""}`}
               >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
+                {FEATURE_LOCATION_LABELS[loc]}
+                <button
+                  type="button"
+                  onClick={() => !locLocked && removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
+                  disabled={locLocked}
+                  className="rounded p-0.5 hover:bg-red-100 hover:text-red-600 disabled:pointer-events-none disabled:opacity-40"
+                  aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
           {availableLocations.length > 0 && (
             <Select value="" onValueChange={(v) => v && addFeatureLocation(moduleId, v as FeatureModuleLocation, postHeaderModuleKey)}>
               <SelectTrigger className="h-8 w-[170px] text-xs">
@@ -1825,7 +2102,7 @@ export default function Configure() {
         </div>
       </div>
     );
-  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation]);
+  }, [addFeatureLocation, isModuleInFeatureLocation, isPostSidebarLocationLocked, removeFeatureLocation]);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
@@ -2058,14 +2335,22 @@ export default function Configure() {
   const handleConfirmClearSettings = useCallback(() => {
     if (!clearSettingsCollection && !clearSettingsPost) return;
     setConfig((prev) => {
-      const next: SiteConfigForm = { ...prev };
+      let next: SiteConfigForm = { ...prev };
       if (clearSettingsCollection) {
         next.collectionConfig = JSON.parse(JSON.stringify(defaultCollectionConfig)) as CollectionLevelConfig;
         next.collectionTemplateId = null;
       }
       if (clearSettingsPost) {
-        next.postConfig = JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig;
-        next.postTemplateId = null;
+        const defaultPostTpl = findDefaultPostTemplate(templateCatalogPost);
+        if (defaultPostTpl) {
+          next = applyPostTemplateToSiteConfig(next, defaultPostTpl);
+        } else {
+          next.postConfig = JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig;
+          next.postTemplateId = null;
+          const copy = JSON.parse(JSON.stringify(next)) as SiteConfigForm;
+          applyDerivedModules(copy);
+          return copy;
+        }
       }
       const copy = JSON.parse(JSON.stringify(next)) as SiteConfigForm;
       applyDerivedModules(copy);
@@ -2075,7 +2360,7 @@ export default function Configure() {
     setClearSettingsCollection(false);
     setClearSettingsPost(false);
     toast.success("Selected layout settings were reset to defaults. Save to publish on your blog.");
-  }, [clearSettingsCollection, clearSettingsPost]);
+  }, [clearSettingsCollection, clearSettingsPost, templateCatalogPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
@@ -2425,12 +2710,18 @@ export default function Configure() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {unmodifiedTemplateInUse && (
+            {selectedLevel === "post" && activePostTemplate ? (
+              <p className="text-xs text-[#6b6b6b] leading-snug">
+                Post template:{" "}
+                <span className="font-medium text-[#0a0a0a]">{activePostTemplate.name}</span>
+                {unmodifiedTemplateInUse?.kind === "post" ? "" : " (customized)"}
+              </p>
+            ) : unmodifiedTemplateInUse ? (
               <p className="text-xs text-[#6b6b6b] leading-snug">
                 {unmodifiedTemplateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
                 <span className="font-medium text-[#0a0a0a]">{unmodifiedTemplateInUse.name}</span>
               </p>
-            )}
+            ) : null}
           </div>
           {effectiveSiteKey && (
             <Dialog open={installationModalOpen} onOpenChange={setInstallationModalOpen}>
@@ -3220,30 +3511,63 @@ export default function Configure() {
                                 </div>
                               </div>
                             )}
+                            {(() => {
+                              const locks = postControlLocks;
+                              const imageSettingsLocked =
+                                locks.imageWidth ||
+                                locks.sideGap ||
+                                locks.aspectBehavior ||
+                                locks.aspectRatio ||
+                                locks.roundedCorners ||
+                                locks.shadow ||
+                                postImageSettingsLocked;
+                              const phImagePos =
+                                (effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed";
+                              const baseImagePositions =
+                                locks.imagePositionOptions ?? ALL_POST_IMAGE_POSITIONS;
+                              const allowedImagePositions = baseImagePositions.includes(phImagePos)
+                                ? baseImagePositions
+                                : [phImagePos, ...baseImagePositions];
+                              const showSideImageControls =
+                                phImagePos === "leftOfInfo" || phImagePos === "rightOfInfo";
+                              const showPublisherHorizontalAlign =
+                                activePostTemplateKey === "publisher" && phImagePos === "fullBleed";
+                              return (
+                                <>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Image position</Label>
                               <Select
-                                value={(effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed"}
+                                value={phImagePos}
                                 onValueChange={(v) => updateLevelConfigPath("postHeader.imagePosition", v)}
+                                disabled={locks.imagePosition}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="fullBleed">Full bleed</SelectItem>
-                                  <SelectItem value="leftOfInfo">Left of post info</SelectItem>
-                                  <SelectItem value="rightOfInfo">Right of post info</SelectItem>
-                                  <SelectItem value="belowInfo">Below post info</SelectItem>
+                                  {allowedImagePositions.includes("fullBleed") && (
+                                    <SelectItem value="fullBleed">Full bleed</SelectItem>
+                                  )}
+                                  {allowedImagePositions.includes("leftOfInfo") && (
+                                    <SelectItem value="leftOfInfo">Left of post info</SelectItem>
+                                  )}
+                                  {allowedImagePositions.includes("rightOfInfo") && (
+                                    <SelectItem value="rightOfInfo">Right of post info</SelectItem>
+                                  )}
+                                  {allowedImagePositions.includes("belowInfo") && (
+                                    <SelectItem value="belowInfo">Below post info</SelectItem>
+                                  )}
                                 </SelectContent>
                               </Select>
                             </div>
-                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") && (
+                            {phImagePos === "fullBleed" && (
                               <div className="space-y-2">
                                 <Label className="text-xs text-[#6b6b6b]">Full bleed layout</Label>
                                 <p className="text-[10px] text-[#6b6b6b]">Hero places the title on the image; stacked places it above a full-width image</p>
                                 <Select
                                   value={(effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay"}
                                   onValueChange={(v) => updateLevelConfigPath("postHeader.fullBleedLayout", v as PostHeaderFullBleedLayout)}
+                                  disabled={locks.fullBleedLayout}
                                 >
                                   <SelectTrigger>
                                     <SelectValue />
@@ -3253,6 +3577,21 @@ export default function Configure() {
                                     <SelectItem value="stacked">Stacked (text above image)</SelectItem>
                                   </SelectContent>
                                 </Select>
+                                {showPublisherHorizontalAlign && (
+                                  <Select
+                                    value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
+                                    onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="left">Left</SelectItem>
+                                      <SelectItem value="center">Center</SelectItem>
+                                      <SelectItem value="right">Right</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
                                 {((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
                                   <Select
                                     value={
@@ -3261,6 +3600,7 @@ export default function Configure() {
                                     onValueChange={(v) =>
                                       updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
                                     }
+                                    disabled={locks.contentVerticalAlignment}
                                   >
                                     <SelectTrigger>
                                       <SelectValue />
@@ -3282,11 +3622,12 @@ export default function Configure() {
                               <Switch
                                 checked={effectiveConfig.featuredImage.show}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
+                                disabled={locks.showFeaturedImage}
                               />
                             </div>
-                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition !== "fullBleed") && (
+                            {phImagePos !== "fullBleed" && (
                               <>
-                                {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" || (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
+                                {showSideImageControls && (
                                   <>
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Image width</Label>
@@ -3298,6 +3639,7 @@ export default function Configure() {
                                           max={60}
                                           step={5}
                                           className="flex-1"
+                                          disabled={locks.imageWidth || imageSettingsLocked}
                                         />
                                         <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
                                           {effectiveConfig.featuredImage.imageWidthPercent}%
@@ -3314,6 +3656,7 @@ export default function Configure() {
                                           max={150}
                                           step={2}
                                           className="flex-1"
+                                          disabled={locks.sideGap || imageSettingsLocked}
                                         />
                                         <span className="text-xs text-[#6b6b6b] w-12 shrink-0">
                                           {((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)}px
@@ -3342,6 +3685,7 @@ export default function Configure() {
                                         onValueChange={(v) =>
                                           updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
                                         }
+                                        disabled={locks.contentVerticalAlignment}
                                       >
                                         <SelectTrigger>
                                           <SelectValue />
@@ -3360,6 +3704,7 @@ export default function Configure() {
                                   <Select
                                     value={effectiveConfig.featuredImage.aspectBehavior}
                                     onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
+                                    disabled={locks.aspectBehavior || imageSettingsLocked}
                                   >
                                     <SelectTrigger>
                                       <SelectValue />
@@ -3373,6 +3718,7 @@ export default function Configure() {
                                     <Select
                                       value={effectiveConfig.featuredImage.aspectRatio}
                                       onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
+                                      disabled={locks.aspectRatio || imageSettingsLocked}
                                     >
                                       <SelectTrigger className="mt-1">
                                         <SelectValue />
@@ -3392,6 +3738,7 @@ export default function Configure() {
                                   <Select
                                     value={effectiveConfig.featuredImage.roundedCorners}
                                     onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
+                                    disabled={locks.roundedCorners || imageSettingsLocked}
                                   >
                                     <SelectTrigger>
                                       <SelectValue />
@@ -3408,6 +3755,7 @@ export default function Configure() {
                                   <Switch
                                     checked={effectiveConfig.featuredImage.shadow}
                                     onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
+                                    disabled={locks.shadow || imageSettingsLocked}
                                   />
                                 </div>
                                 <div className="flex items-center justify-between">
@@ -3416,22 +3764,6 @@ export default function Configure() {
                                     checked={effectiveConfig.featuredImage.showCaption}
                                     onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
                                   />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
-                                  <Select
-                                    value={effectiveConfig.featuredImage.verticalSpacing}
-                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="tight">Tight</SelectItem>
-                                      <SelectItem value="normal">Normal</SelectItem>
-                                      <SelectItem value="spacious">Spacious</SelectItem>
-                                    </SelectContent>
-                                  </Select>
                                 </div>
                               </>
                             )}
@@ -3449,17 +3781,19 @@ export default function Configure() {
                               <Label className="text-xs text-[#6b6b6b]">Show Tags & Categories</Label>
                               <p className="text-[10px] text-[#6b6b6b]">Display tags and categories after breadcrumbs, before the title</p>
                               <div className="flex items-center gap-6">
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className={`flex items-center gap-2 ${locks.showTagsAndCategories ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
                                   <Checkbox
                                     checked={(effectiveConfig as PostLevelConfig).postHeader?.showTags ?? false}
                                     onCheckedChange={(v) => updateLevelConfigPath("postHeader.showTags", Boolean(v))}
+                                    disabled={locks.showTagsAndCategories}
                                   />
                                   <span className="text-xs text-[#6b6b6b]">Tags</span>
                                 </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
+                                <label className={`flex items-center gap-2 ${locks.showTagsAndCategories ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
                                   <Checkbox
                                     checked={(effectiveConfig as PostLevelConfig).postHeader?.showCategories ?? false}
                                     onCheckedChange={(v) => updateLevelConfigPath("postHeader.showCategories", Boolean(v))}
+                                    disabled={locks.showTagsAndCategories}
                                   />
                                   <span className="text-xs text-[#6b6b6b]">Categories</span>
                                 </label>
@@ -3473,8 +3807,12 @@ export default function Configure() {
                               <Switch
                                 checked={(effectiveConfig as PostLevelConfig).postHeader?.showByline ?? false}
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showByline", v)}
+                                disabled={locks.showByline}
                               />
                             </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -3895,8 +4233,14 @@ export default function Configure() {
                             </div>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Module order</Label>
-                              <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
+                              <p className="text-[10px] text-[#6b6b6b]">
+                                {selectedLevel === "post" && postControlLocks.footerModuleReorder
+                                  ? "Module order is locked for this template. Remove a module to disable that feature."
+                                  : "Drag to reorder. Remove a module to disable that feature."}
+                              </p>
                               {(() => {
+                                const footerReorderLocked =
+                                  selectedLevel === "post" && postControlLocks.footerModuleReorder;
                                 const footerDerived = selectedLevel === "collection"
                                   ? deriveCollectionModules(
                                       (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules,
@@ -3922,6 +4266,7 @@ export default function Configure() {
                                   return [...fromOrder, ...remaining];
                                 })();
                                 const moveModule = (fromIdx: number, toIdx: number) => {
+                                  if (footerReorderLocked) return;
                                   const list = orderedFooter.slice();
                                   const [removed] = list.splice(fromIdx, 1);
                                   list.splice(toIdx, 0, removed);
@@ -3970,24 +4315,34 @@ export default function Configure() {
                                       orderedFooter.map((m, idx) => (
                                         <div
                                           key={`${m}-${idx}`}
-                                          draggable
+                                          draggable={!footerReorderLocked}
                                           onDragStart={(e) => {
+                                            if (footerReorderLocked) {
+                                              e.preventDefault();
+                                              return;
+                                            }
                                             e.dataTransfer.setData("text/plain", String(idx));
                                             e.dataTransfer.effectAllowed = "move";
                                           }}
                                           onDragOver={(e) => {
+                                            if (footerReorderLocked) return;
                                             e.preventDefault();
                                             e.dataTransfer.dropEffect = "move";
                                           }}
                                           onDrop={(e) => {
+                                            if (footerReorderLocked) return;
                                             e.preventDefault();
                                             const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                                             if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
                                           }}
                                           onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                          className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm ${
+                                            footerReorderLocked
+                                              ? "cursor-default opacity-80"
+                                              : "cursor-grab active:cursor-grabbing"
+                                          }`}
                                         >
-                                          <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
+                                          <GripVertical className={`h-4 w-4 shrink-0 ${footerReorderLocked ? "text-[#c4c4c4]" : "text-[#6b6b6b]"}`} />
                                           <span className="flex-1 min-w-0 truncate">{FOOTER_LABELS[m] ?? m}</span>
                                           <button
                                             type="button"
@@ -4049,6 +4404,13 @@ export default function Configure() {
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
+                        const sidebarFullyLocked =
+                          selectedLevel === "post" &&
+                          (side === "left" ? postControlLocks.leftSidebar : postControlLocks.rightSidebar);
+                        const sidebarWidthLocked =
+                          sidebarFullyLocked ||
+                          (selectedLevel === "post" &&
+                            (side === "left" ? postControlLocks.leftSidebarWidth : postControlLocks.rightSidebarWidth));
                         const orderedModules = (() => {
                           const cm = selectedLevel === "collection"
                             ? (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules
@@ -4062,29 +4424,38 @@ export default function Configure() {
                           return [...fromOrder, ...remaining];
                         })();
                         const moveModule = (fromIdx: number, toIdx: number) => {
+                          if (sidebarFullyLocked) return;
                           const list = orderedModules.slice();
                           const [removed] = list.splice(fromIdx, 1);
                           list.splice(toIdx, 0, removed);
                           updateLevelConfigPath(`${subPath}.moduleOrder`, list);
                         };
                         const handleDragOver = (e: React.DragEvent) => {
+                          if (sidebarFullyLocked) return;
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
                         };
                         const handleDrop = (e: React.DragEvent, toIdx: number) => {
+                          if (sidebarFullyLocked) return;
                           e.preventDefault();
                           const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                           if (fromIdx !== toIdx && fromIdx >= 0) moveModule(fromIdx, toIdx);
                         };
                         const handleDragStart = (e: React.DragEvent, idx: number) => {
+                          if (sidebarFullyLocked) {
+                            e.preventDefault();
+                            return;
+                          }
                           e.dataTransfer.setData("text/plain", String(idx));
                           e.dataTransfer.effectAllowed = "move";
                         };
                         const handleRemove = (moduleId: string) => {
+                          if (sidebarFullyLocked) return;
                           const order = [...(cfg.moduleOrder ?? [])];
                           updateLevelConfigPath(`${subPath}.moduleOrder`, order.filter((m) => m !== moduleId));
                         };
                         const handleAddSidebar = (moduleId: string) => {
+                          if (sidebarFullyLocked) return;
                           const order = cfg.moduleOrder ?? [];
                           if (order.includes(moduleId)) return;
                           updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
@@ -4104,7 +4475,12 @@ export default function Configure() {
                             </div>
                             <Collapsible open={expanded}>
                               <CollapsibleContent>
-                                <div className="pb-4 space-y-3">
+                                <div className={`pb-4 space-y-3${sidebarFullyLocked ? " opacity-70" : ""}`}>
+                                  {sidebarFullyLocked && (
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      This sidebar is locked for the current post template.
+                                    </p>
+                                  )}
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Width</Label>
                                     <div className="flex items-center gap-3">
@@ -4115,6 +4491,7 @@ export default function Configure() {
                                         max={400}
                                         step={20}
                                         className="flex-1"
+                                        disabled={sidebarWidthLocked}
                                       />
                                       <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
                                     </div>
@@ -4124,12 +4501,18 @@ export default function Configure() {
                                     <Switch
                                       checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
+                                      disabled={sidebarFullyLocked}
                                     />
                                   </div>
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
-                                    <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      {sidebarFullyLocked
+                                        ? "Modules are locked for this template."
+                                        : "Drag to reorder. Remove a module to disable that feature."}
+                                    </p>
                                     {(() => {
+                                      if (sidebarFullyLocked) return null;
                                       const cm = (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules;
                                       const order = normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm);
                                       const dualFilter = isDualFilterMode(cm);
@@ -4169,19 +4552,24 @@ export default function Configure() {
                                         orderedModules.map((m, idx) => (
                                           <div
                                             key={`${m}-${idx}`}
-                                            draggable
+                                            draggable={!sidebarFullyLocked}
                                             onDragStart={(e) => handleDragStart(e, idx)}
                                             onDragOver={handleDragOver}
                                             onDrop={(e) => handleDrop(e, idx)}
                                             onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                            className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm ${
+                                              sidebarFullyLocked
+                                                ? "cursor-default"
+                                                : "cursor-grab active:cursor-grabbing"
+                                            }`}
                                           >
-                                            <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
+                                            <GripVertical className={`h-4 w-4 shrink-0 ${sidebarFullyLocked ? "text-[#c4c4c4]" : "text-[#6b6b6b]"}`} />
                                             <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m] ?? m}</span>
                                             <button
                                               type="button"
                                               onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
-                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
+                                              disabled={sidebarFullyLocked}
+                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0 disabled:pointer-events-none disabled:opacity-40"
                                               aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
                                             >
                                               <X className="h-4 w-4" />

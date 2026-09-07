@@ -1420,9 +1420,13 @@
       formWrap.style.marginTop = '16px';
 
       var heading = document.createElement('h2');
-      heading.className = 'bb-below-main-heading';
+      heading.className = 'bb-below-main-heading bb-comment-form-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
       formWrap.appendChild(heading);
+      var formRule = document.createElement('hr');
+      formRule.className = 'bb-comment-form-rule';
+      formRule.setAttribute('aria-hidden', 'true');
+      formWrap.appendChild(formRule);
       var guestOnlyNote = document.createElement('p');
       guestOnlyNote.style.cssText =
         'display:none;margin:0 0 12px 0;color:#666;font-size:0.92rem;max-width:520px;line-height:1.45';
@@ -1479,7 +1483,7 @@
       var submitBtn = document.createElement('button');
       submitBtn.type = 'button';
       submitBtn.textContent = 'Post Comment';
-      submitBtn.className = 'sqs-button-element--primary';
+      submitBtn.className = 'sqs-button-element--primary bb-comment-submit';
       submitBtn.style.cssText = 'margin-top:4px;cursor:not-allowed;opacity:0.55';
       submitBtn.disabled = true;
       function mainFormSync() {
@@ -1527,7 +1531,7 @@
           emailInput.placeholder = 'Email (optional)';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
-          submitBtn.style.display = 'inline-block';
+          submitBtn.style.display = '';
           identityNote.style.display = 'none';
           identityNote.textContent = '';
           if (verifiedIdentity) {
@@ -1546,7 +1550,7 @@
           emailInput.placeholder = 'Email (optional)';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
-          submitBtn.style.display = 'inline-block';
+          submitBtn.style.display = '';
           identityNote.style.display = 'none';
           loggedInIdentityLine.style.display = 'none';
           loggedInIdentityLine.textContent = '';
@@ -3257,11 +3261,18 @@
         textHost = document.createElement('div');
         textHost.className = 'bb-sidebar-post-text';
         card.appendChild(textHost);
+      } else {
+        card.classList.add('bb-more-to-read-card');
+        imgWrap.classList.add('bb-more-to-read-thumb');
+        textHost = document.createElement('div');
+        textHost.className = 'bb-more-to-read-text';
+        card.appendChild(textHost);
       }
 
       var cats = self._getPostCategories(post);
       if (variant === 'footer' && cats.length > 0) {
         var catEl = document.createElement('div');
+        catEl.className = 'bb-more-to-read-category';
         catEl.textContent = cats[0];
         self._applyCategoryLabelStyle(catEl);
         textHost.appendChild(catEl);
@@ -3296,6 +3307,7 @@
           }
           if (!deckEl.textContent) deckEl.textContent = self._truncateText(deckSrc, 160);
         }
+        deckEl.className = 'bb-more-to-read-deck';
         deckEl.style.fontSize = '0.85rem';
         deckEl.style.color = '#555';
         deckEl.style.lineHeight = '1.45';
@@ -5865,9 +5877,10 @@
         var email = (p && p.email) || null;
         var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
         var card = document.createElement('div');
-        if (useLongBio) card.className = 'blog-overlay-author-card';
+        card.className = useLongBio ? 'blog-overlay-author-card blog-overlay-author-unit' : 'blog-overlay-author-unit';
         card.style.marginBottom = useLongBio ? 0 : (i < authorIds.length - 1 ? '20px' : '0');
         var topRow = document.createElement('div');
+        topRow.className = 'blog-overlay-author-card-row';
         topRow.style.display = 'flex';
         topRow.style.gap = '12px';
         topRow.style.alignItems = 'flex-start';
@@ -5888,6 +5901,7 @@
         }
         topRow.appendChild(avatarWrap);
         var rightCol = document.createElement('div');
+        rightCol.className = 'blog-overlay-author-card-text';
         rightCol.style.flex = '1';
         rightCol.style.minWidth = '0';
         rightCol.style.display = 'flex';
@@ -7179,6 +7193,75 @@
       el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
     },
 
+    /** Reporter mobile (<768). `s` is a root selector, e.g. #blog-overlay-list[data-bb-reporter-layout="1"]. */
+    _reporterMobileCss: function(s) {
+      return (
+        s + '{padding-top:0!important;margin-top:calc(16px + var(--bb-wrapper-pad-top,16px) - 30px)!important;}' +
+        s + ' .blog-overlay-single-post-header-zone{padding-top:0!important;}' +
+        s + ' .blog-overlay-single-post-header-inner{padding-top:0!important;margin-top:0!important;gap:0!important;}' +
+        s + ' .blog-overlay-reporter-header-row{flex-direction:column!important;flex-wrap:nowrap;align-items:stretch!important;gap:0!important;margin-bottom:0!important;width:100%;}' +
+        s + ' .blog-overlay-reporter-header-row>*{flex:0 0 auto!important;width:100%!important;max-width:100%!important;height:auto!important;min-width:0!important;}' +
+        s + ' .blog-overlay-reporter-featured-image,' +
+        s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image{width:100%!important;max-width:100%!important;flex:0 0 auto!important;height:auto!important;margin-top:-10px;margin-bottom:15px;}' +
+        s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image>div{width:100%!important;height:auto!important;aspect-ratio:16/10!important;max-height:none!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:5px!important;}' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        s + ' .blog-overlay-post-deck--reporter{font-size:14px!important;line-height:1.4;font-family:inherit;margin-top:-5px!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-meta-row{font-size:13px;line-height:1.4;font-family:inherit;font-weight:var(--bb-heading-font-weight,inherit);margin-top:8px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-meta,' +
+        s + ' .bb-post-meta--on-bg{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.4;}' +
+        s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
+        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:-80px!important;}' +
+        s + ' .bb-comments-section{padding-top:calc(24px - 30px);}' +
+        s + ' .bb-comments-list{margin-top:15px;}' +
+        s + ' .bb-comment-form-wrap{padding-top:25px;margin-top:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-form-rule{display:block;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .blog-overlay-author-profiles{width:100%!important;max-width:none!important;}' +
+        s + ' .blog-overlay-author-unit{display:flex;flex-direction:column;gap:12px;width:100%;}' +
+        s + ' .blog-overlay-author-card-row{display:flex;flex-direction:row;align-items:center!important;gap:12px;margin-bottom:0!important;width:100%;}' +
+        s + ' .blog-overlay-author-card-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;}' +
+        s + ' .blog-overlay-author-card-avatar{width:44px!important;height:44px!important;flex-shrink:0;font-size:14px;}' +
+        s + ' .blog-overlay-author-card-name{font-size:16px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.2;}' +
+        s + ' .blog-overlay-author-card-bio{font-size:13px!important;line-height:1.5;margin-top:0!important;}' +
+        s + ' .blog-overlay-author-card-social{display:flex;flex-direction:row;flex-wrap:wrap;gap:12px!important;}' +
+        s + ' .blog-overlay-author-card-social a{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
+        s + ' .blog-overlay-author-card-social svg{width:18px;height:18px;display:block;}' +
+        s + ' aside.blog-overlay-relevant-posts{width:100%!important;max-width:none!important;flex-shrink:1;}' +
+        s + ' aside.blog-overlay-relevant-posts>div{width:100%!important;max-width:none!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-email-capture-footer{border:none!important;padding:0!important;border-radius:0!important;}' +
+        s + ' .bb-newsletter-footer-row,' +
+        s + ' .bb-email-capture-footer-row{border:none;padding:0;border-radius:0;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
+        s + ' .bb-email-capture-footer-form{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-chrome-input,' +
+        s + ' .blog-overlay-email-capture-footer .bb-form-input{font-size:14px;font-family:inherit;background:var(--bb-surface,#fff);color:var(--bb-body,#111);border:1px solid var(--bb-border);border-radius:6px;padding:8px 12px;width:100%!important;max-width:none!important;box-sizing:border-box;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="emailCapture"] .bb-sidebar-header{margin:0 0 8px 0;font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="emailCapture"] .bb-sidebar-divider{margin:0 0 8px 0;height:1px;background:var(--bb-border);border:none;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-more-to-read{border-top:none!important;padding-top:0!important;margin-top:24px!important;width:100%;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-below-main-heading{display:none;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-header{margin:0 0 8px 0;font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-divider{margin:0 0 20px 0;height:1px;background:var(--bb-border);border:none;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-footer-sidebar-alt{display:none!important;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-relevant-posts--footer{display:flex!important;flex-direction:column;gap:24px!important;width:100%;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-thumb{width:100%;aspect-ratio:16/10!important;border-radius:4px;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-text{display:flex;flex-direction:column;gap:4px;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-category,' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-category-label{font-size:11px!important;font-family:inherit;font-weight:700!important;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent)!important;background:none!important;padding:0!important;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.25;}' +
+        s + ' .bb-more-to-read-deck{display:none!important;}'
+      );
+    },
+
     _ensureCollectionStylesheet: function() {
       if (typeof document === 'undefined') return;
       var style = document.getElementById('bb-collection-styles');
@@ -7187,6 +7270,7 @@
           '--bb-chrome-radius:6px;' +
           '--bb-excerpt:color-mix(in srgb, var(--bb-body) 80%, transparent);' +
           '--bb-muted:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
+          '--bb-body-60:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
           '--bb-extra-muted:color-mix(in srgb, var(--bb-body) 40%, transparent);' +
           '--bb-border:color-mix(in srgb, var(--bb-body) 15%, transparent);' +
           '--bb-placeholder:color-mix(in srgb, var(--bb-body) 5%, transparent);' +
@@ -7249,6 +7333,9 @@
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-deck--on-dark{margin-bottom:14px;}' +
         '#blog-overlay-list .blog-overlay-reporter-meta-divider{border-top:1px solid var(--bb-border,#e8e7e4);margin-top:16px;padding-top:12px;width:100%;}' +
         '#blog-overlay-list .blog-overlay-reporter-header-stack{gap:0;}' +
+        '#blog-overlay-list .blog-overlay-reporter-accent-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0;}' +
+        '#blog-overlay-list .bb-comment-form-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;}' +
         '#blog-overlay-list .bb-comments-section{border-top:1px solid var(--bb-border,#e8e7e4);padding-top:24px;margin-top:32px;}' +
@@ -7308,7 +7395,44 @@
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret{position:absolute;top:0;bottom:0;width:40px;display:flex;align-items:center;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s ease;box-sizing:border-box;border:none;padding:0;margin:0;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);pointer-events:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;justify-content:flex-start;padding-left:2px;background:linear-gradient(to right,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
-        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}';
+        '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
+        /* Mobile (<768): hide footer duplicates of sidebar modules; restyle footer-only to sidebar chrome. */
+        '#blog-overlay-list .bb-mobile-sidebar-chrome{display:none;}' +
+        '#blog-overlay-list .bb-footer-sidebar-alt{display:none;}' +
+        '#blog-overlay-list .bb-mobile-duplicate-hidden,' +
+        '#blog-overlay-list .bb-mobile-toc-hidden,' +
+        '#blog-overlay-list .bb-mobile-rail-hidden,' +
+        '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>.blog-overlay-author-profiles,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>.blog-overlay-email-capture,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>.blog-overlay-lead-magnet{width:100%!important;max-width:100%!important;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment{width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-mobile-sidebar-chrome{display:block;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-below-main-heading{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-more-to-read{border-top:none;margin-top:0;padding-top:0;padding-bottom:0;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-relevant-posts--footer{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-footer-sidebar-alt{display:block;width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card{border:none;padding:0;margin:0;border-radius:0;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card-avatar{width:48px;height:48px;font-size:16px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card-name{font-size:15px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card-bio{font-size:14px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer.bb-footer-card,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-card{border:none;padding:0;border-radius:0;background:transparent;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-row{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form{flex-direction:column;align-items:stretch;justify-content:flex-start;flex:1 1 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-chrome-input,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-newsletter-btn{max-width:none;width:100%;flex:0 0 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-header{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-subtitle{font-size:0.85rem;line-height:1.45;margin:0 0 12px 0;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form{flex-direction:column;align-items:stretch;gap:8px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form .bb-form-input,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form button{width:100%;flex:0 0 auto;max-width:none;}' +
+        '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
+        this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]');
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
@@ -7688,6 +7812,7 @@
     _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
       if (!wrapper || !wrapper.style) return;
       var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      wrapper.style.setProperty('--bb-wrapper-pad-top', padT + 'px');
       wrapper.style.paddingTop = padT + 'px';
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
@@ -8121,6 +8246,139 @@
         return narrowByViewport || previewDeviceMobile || (overlayW > 0 && overlayW <= 767);
       } catch (eNarrowVp) {
         return typeof window !== 'undefined' && window.innerWidth <= 767;
+      }
+    },
+
+    /**
+     * Mobile (<768): if a pairable module is in the sidebar and duplicated in the footer,
+     * hide the footer copy. Footer-only modules keep rendering but get sidebar chrome.
+     * Feature template: hide Table of Contents. Comments are footer-only and exempt.
+     */
+    _applyMobileSidebarFooterRule: function(wrapper, opts) {
+      if (!wrapper) return;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var narrow = this._isNarrowCollectionViewport();
+      wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      var reporterLayout = wrapper.getAttribute('data-bb-reporter-layout') === '1';
+      var pairIds = [
+        'authorProfiles',
+        'emailCapture',
+        'leadMagnet',
+        'relevantPosts',
+        'popularPosts',
+        'filterByCategory',
+        'filterByTag',
+        'filterByTagsAndCategories'
+      ];
+      var i;
+      for (i = 0; i < pairIds.length; i++) {
+        var id = pairIds[i];
+        var sidebarHas = !!wrapper.querySelector('[data-bb-zone="sidebar"][data-bb-module="' + id + '"]');
+        var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
+        for (var f = 0; f < footerNodes.length; f++) {
+          var hideDup = narrow && sidebarHas;
+          var showTreatment = narrow && !sidebarHas;
+          footerNodes[f].classList.toggle('bb-mobile-duplicate-hidden', hideDup);
+          footerNodes[f].classList.toggle('bb-mobile-sidebar-treatment', showTreatment);
+          var chromes = footerNodes[f].querySelectorAll('.bb-mobile-sidebar-chrome');
+          for (var c = 0; c < chromes.length; c++) {
+            chromes[c].setAttribute('aria-hidden', showTreatment ? 'false' : 'true');
+          }
+          var altList = footerNodes[f].querySelector('.bb-footer-sidebar-alt');
+          var footerGrid = footerNodes[f].querySelector('.blog-overlay-relevant-posts--footer');
+          var footerHeading = footerNodes[f].querySelector('.bb-below-main-heading');
+          var reporterStackedRelated = reporterLayout && id === 'relevantPosts' && showTreatment;
+          if (altList) altList.setAttribute('aria-hidden', (showTreatment && !reporterStackedRelated) ? 'false' : 'true');
+          if (footerGrid) footerGrid.setAttribute('aria-hidden', (showTreatment && !reporterStackedRelated) ? 'true' : 'false');
+          if (footerHeading) footerHeading.setAttribute('aria-hidden', showTreatment ? 'true' : 'false');
+        }
+      }
+      var hideFeatureToc = narrow && opts.featurePostLayout === true;
+      var tocNodes = wrapper.querySelectorAll('[data-bb-module="tableOfContents"]');
+      for (i = 0; i < tocNodes.length; i++) {
+        tocNodes[i].classList.toggle('bb-mobile-toc-hidden', hideFeatureToc);
+        tocNodes[i].setAttribute('aria-hidden', hideFeatureToc ? 'true' : 'false');
+      }
+      var rails = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
+      for (i = 0; i < rails.length; i++) {
+        var rail = rails[i];
+        var hideRail = false;
+        if (hideFeatureToc) {
+          var tocInRail = rail.querySelector('[data-bb-module="tableOfContents"]');
+          var otherMods = rail.querySelectorAll('[data-bb-module]:not([data-bb-module="tableOfContents"])');
+          hideRail = !!tocInRail && otherMods.length === 0;
+        }
+        rail.classList.toggle('bb-mobile-rail-hidden', hideRail);
+      }
+      var footerContent = wrapper.querySelector('.blog-overlay-footer-content');
+      if (footerContent) {
+        var child = footerContent.firstChild;
+        var hasVisible = false;
+        while (child) {
+          if (
+            child.nodeType === 1 &&
+            !child.classList.contains('bb-mobile-duplicate-hidden') &&
+            !child.classList.contains('bb-mobile-toc-hidden')
+          ) {
+            hasVisible = true;
+            break;
+          }
+          child = child.nextSibling;
+        }
+        footerContent.classList.toggle('bb-mobile-empty-hidden', narrow && !hasVisible);
+      }
+      this._applyReporterMobileLayout(wrapper, narrow);
+    },
+
+    /**
+     * Reporter mobile: lift breadcrumbs onto the header inner, and flatten
+     * author cards so bio/social sit under the avatar+name row.
+     */
+    _applyReporterMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-reporter-layout') === '1' && !!narrow;
+      var inner = wrapper.querySelector('.blog-overlay-single-post-header-inner');
+      var bc = wrapper.querySelector('.blog-overlay-post-breadcrumbs');
+      if (bc) {
+        if (apply && inner) {
+          if (!bc._bbReporterBcHome) {
+            bc._bbReporterBcHome = { parent: bc.parentNode, next: bc.nextSibling };
+          }
+          if (bc.parentNode !== inner || inner.firstChild !== bc) {
+            inner.insertBefore(bc, inner.firstChild);
+          }
+          bc.style.order = '-1';
+        } else if (bc._bbReporterBcHome) {
+          var home = bc._bbReporterBcHome;
+          if (home.parent) {
+            if (home.next && home.next.parentNode === home.parent) {
+              home.parent.insertBefore(bc, home.next);
+            } else {
+              home.parent.appendChild(bc);
+            }
+          }
+          bc.style.order = '';
+          bc._bbReporterBcHome = null;
+        }
+      }
+      var units = wrapper.querySelectorAll('.blog-overlay-author-unit');
+      for (var i = 0; i < units.length; i++) {
+        var card = units[i];
+        var textCol = card.querySelector('.blog-overlay-author-card-text');
+        var bio = card.querySelector('.blog-overlay-author-card-bio');
+        var social = card.querySelector('.blog-overlay-author-card-social');
+        if (!textCol) continue;
+        if (apply) {
+          if (bio && bio.parentNode !== card) card.appendChild(bio);
+          if (social && social.parentNode !== card) card.appendChild(social);
+        } else {
+          if (social && social.parentNode === card) {
+            var nameEl = textCol.querySelector('.blog-overlay-author-card-name');
+            if (nameEl && nameEl.nextSibling) textCol.insertBefore(social, nameEl.nextSibling);
+            else textCol.appendChild(social);
+          }
+          if (bio && bio.parentNode === card) textCol.appendChild(bio);
+        }
       }
     },
 
@@ -8921,7 +9179,9 @@
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
         var fiShadow = Boolean(fiCfg.shadow);
         var fiCaption = Boolean(fiCfg.showCaption !== false);
-        var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
+        var fiSpacing = isSinglePost
+          ? 'normal'
+          : (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
         var phFullBleedOverlay = isSinglePost && phImagePos === 'fullBleed' && fiShow && !(postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked');
         var phVertRaw = postHeaderCfg && postHeaderCfg.contentVerticalAlignment;
         var phVertical = (phVertRaw === 'center' || phVertRaw === 'bottom' || phVertRaw === 'top') ? phVertRaw : (phFullBleedOverlay ? 'bottom' : 'top');
@@ -9040,6 +9300,10 @@
               : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           }
           contentEl = document.createElement('div');
+          if (reporterPostHeaderLayout) {
+            rowEl.classList.add('blog-overlay-reporter-header-row');
+            contentEl.classList.add('blog-overlay-reporter-header-copy');
+          }
           contentEl.style.flex = reporterPostHeaderLayout ? '1 1 0%' : '1';
           contentEl.style.minWidth = '0';
           if (!isSinglePost && collectionLayout === 'listRows') {
@@ -9200,6 +9464,7 @@
               fiWrap.classList.add('blog-overlay-story-featured-image');
               fiWrap.style.flex = '0 0 58%';
             } else if (reporterPostHeaderLayout) {
+              fiWrap.classList.add('blog-overlay-reporter-featured-image');
               fiWrap.style.flex = '0 0 60%';
             } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
@@ -9682,6 +9947,23 @@
             pendingWriterShareRow = shareRow;
           } else {
             headlineMount.appendChild(shareRow);
+          }
+        }
+
+        if (reporterPostHeaderLayout && postInfoWrap) {
+          var reporterAccent = document.createElement('hr');
+          reporterAccent.className = 'blog-overlay-reporter-accent-rule';
+          reporterAccent.setAttribute('aria-hidden', 'true');
+          var reporterMetaRow = postInfoWrap.querySelector('.blog-overlay-meta-row');
+          var reporterShareRow = postInfoWrap.querySelector('.blog-overlay-share-row');
+          if (reporterMetaRow && reporterMetaRow.nextSibling) {
+            postInfoWrap.insertBefore(reporterAccent, reporterMetaRow.nextSibling);
+          } else if (reporterMetaRow) {
+            postInfoWrap.appendChild(reporterAccent);
+          } else if (reporterShareRow) {
+            postInfoWrap.insertBefore(reporterAccent, reporterShareRow);
+          } else {
+            postInfoWrap.appendChild(reporterAccent);
           }
         }
 
@@ -10548,6 +10830,9 @@
       wrapper.id = 'blog-overlay-list';
       wrapper.className = 'blog-overlay-wrapper';
       wrapper.style.display = 'block';
+      if (featurePostLayout) wrapper.setAttribute('data-bb-feature-layout', '1');
+      if (isSinglePost && self._isReporterPostLayout(cfg)) wrapper.setAttribute('data-bb-reporter-layout', '1');
+      else wrapper.removeAttribute('data-bb-reporter-layout');
       self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
       var navbarOffset = this._getNavbarOffset();
       var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
@@ -11286,6 +11571,36 @@
         var relevantItems = pool.slice(0, limit);
         if (relevantItems.length === 0) return null;
 
+        function buildRelevantPostsList(fullWidth) {
+          var listEl = document.createElement('aside');
+          listEl.className = 'blog-overlay-relevant-posts';
+          listEl.style.flexShrink = '0';
+          listEl.style.width = fullWidth ? '100%' : ((sidebarWidth || 220) + 'px');
+          listEl.style.maxWidth = '100%';
+          listEl.style.boxSizing = 'border-box';
+          for (var r = 0; r < relevantItems.length; r++) {
+            var rpIdx = self._postIndexInItems(items, relevantItems[r], itemIndexMap);
+            if (rpIdx < 0) continue;
+            var rpPost = relevantItems[r];
+            var rpCard = self._createModulePostCard(rpPost, {
+              variant: 'list',
+              items: items,
+              itemIndexMap: itemIndexMap,
+              placeholderMap: placeholderMap,
+              postIndex: rpIdx,
+              analyticsElement: 'relevantPosts',
+              cfg: cfg,
+              onSinglePostView: isSinglePost
+            });
+            if (!rpCard) continue;
+            var rpEntry = document.createElement('div');
+            rpEntry.style.marginBottom = '14px';
+            rpEntry.appendChild(rpCard);
+            listEl.appendChild(rpEntry);
+          }
+          return listEl.childNodes.length ? listEl : null;
+        }
+
         if (isFooter) {
           var grid = document.createElement('div');
           grid.className = 'blog-overlay-relevant-posts blog-overlay-relevant-posts--footer';
@@ -11322,34 +11637,17 @@
           footHead.textContent = 'More to Read';
           footSection.appendChild(footHead);
           footSection.appendChild(grid);
+          var listAlt = buildRelevantPostsList(true);
+          if (listAlt) {
+            listAlt.classList.add('bb-footer-sidebar-alt');
+            listAlt.setAttribute('aria-hidden', 'true');
+            footSection.appendChild(listAlt);
+          }
           return footSection;
         }
 
-        var el = document.createElement('aside');
-        el.className = 'blog-overlay-relevant-posts';
-        el.style.flexShrink = '0';
-        el.style.width = (sidebarWidth || 220) + 'px';
-        for (var r = 0; r < relevantItems.length; r++) {
-          var rpIdx = self._postIndexInItems(items, relevantItems[r], itemIndexMap);
-          if (rpIdx < 0) continue;
-          var rpPost = relevantItems[r];
-          var rpCard = self._createModulePostCard(rpPost, {
-            variant: 'list',
-            items: items,
-            itemIndexMap: itemIndexMap,
-            placeholderMap: placeholderMap,
-            postIndex: rpIdx,
-            analyticsElement: 'relevantPosts',
-            cfg: cfg,
-            onSinglePostView: isSinglePost
-          });
-          if (!rpCard) continue;
-          var rpEntry = document.createElement('div');
-          rpEntry.style.marginBottom = '14px';
-          rpEntry.appendChild(rpCard);
-          el.appendChild(rpEntry);
-        }
-        return createSidebarSection('Related Posts', el, isSinglePost);
+        var el = buildRelevantPostsList(false);
+        return el ? createSidebarSection('Related Posts', el, isSinglePost) : null;
       }
       function createPrevNextArticleModule() {
         var activeIdx = -1;
@@ -11463,6 +11761,7 @@
           outer.style.gap = '10px';
 
           var row = document.createElement('div');
+          row.className = 'bb-email-capture-footer-row bb-newsletter-footer-row';
           row.style.display = 'flex';
           row.style.flexWrap = 'wrap';
           row.style.alignItems = 'center';
@@ -11471,6 +11770,7 @@
           row.style.width = '100%';
 
           var leftCol = document.createElement('div');
+          leftCol.className = 'bb-email-capture-footer-copy';
           leftCol.style.flex = '1 1 200px';
           leftCol.style.minWidth = '0';
           var titleFooter = document.createElement('div');
@@ -11490,6 +11790,7 @@
           row.appendChild(leftCol);
 
           var rightCol = document.createElement('div');
+          rightCol.className = 'bb-email-capture-footer-form';
           rightCol.style.display = 'flex';
           rightCol.style.flexDirection = 'row';
           rightCol.style.alignItems = 'center';
@@ -11705,6 +12006,7 @@
         }
 
         var formRow = document.createElement('div');
+        formRow.className = 'bb-lead-magnet-footer-form';
         formRow.style.display = 'flex';
         formRow.style.gap = '12px';
         formRow.style.alignItems = 'center';
@@ -11783,6 +12085,58 @@
       var lmCfg = isSinglePost
         ? ((cfg.postModules && cfg.postModules.leadMagnet) || (cfg.collectionModules && cfg.collectionModules.leadMagnet))
         : ((cfg.collectionModules && cfg.collectionModules.leadMagnet) || (cfg.postModules && cfg.postModules.leadMagnet));
+      var BB_SIDEBAR_FOOTER_PAIR_MODULES = {
+        authorProfiles: true,
+        emailCapture: true,
+        leadMagnet: true,
+        relevantPosts: true,
+        popularPosts: true,
+        filterByCategory: true,
+        filterByTag: true,
+        filterByTagsAndCategories: true
+      };
+      function tagZoneModule(el, moduleId, zone) {
+        if (!el || !moduleId) return el;
+        el.setAttribute('data-bb-module', moduleId);
+        el.setAttribute('data-bb-zone', zone);
+        return el;
+      }
+      function wrapFooterPairModule(el, moduleId, chromeTitle) {
+        if (!el || !BB_SIDEBAR_FOOTER_PAIR_MODULES[moduleId]) return el;
+        if (el.getAttribute && el.getAttribute('data-bb-zone') === 'footer') {
+          el.setAttribute('data-bb-module', moduleId);
+          return el;
+        }
+        var wrap = document.createElement('div');
+        wrap.className = 'blog-overlay-footer-module';
+        tagZoneModule(wrap, moduleId, 'footer');
+        if (chromeTitle) {
+          var chrome = document.createElement('div');
+          chrome.className = 'bb-mobile-sidebar-chrome';
+          var chromeHead = document.createElement('h3');
+          chromeHead.className = 'bb-sidebar-header';
+          chromeHead.textContent = chromeTitle;
+          var chromeBar = document.createElement('hr');
+          chromeBar.className = 'bb-sidebar-divider';
+          chrome.appendChild(chromeHead);
+          chrome.appendChild(chromeBar);
+          chrome.setAttribute('aria-hidden', 'true');
+          wrap.appendChild(chrome);
+        }
+        wrap.appendChild(el);
+        return wrap;
+      }
+      function footerChromeTitle(fmod, extra) {
+        if (fmod === 'authorProfiles') return (extra && extra.authorHeader) || 'About the Author';
+        if (fmod === 'emailCapture') return (ecCfg && ecCfg.header) || 'Subscribe to our newsletter';
+        if (fmod === 'leadMagnet') return (lmCfg && lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet';
+        if (fmod === 'relevantPosts') return 'More to Read';
+        if (fmod === 'popularPosts') return 'Popular Posts';
+        if (fmod === 'filterByCategory') return 'Categories';
+        if (fmod === 'filterByTag') return 'Tags';
+        if (fmod === 'filterByTagsAndCategories') return 'Categories';
+        return '';
+      }
       function buildSidebarModules(sidebarCfg, zoneLabel) {
         if (zoneLabel == null) zoneLabel = '';
         if (!sidebarCfg || !sidebarCfg.show) {
@@ -11901,9 +12255,14 @@
             el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTagsAndCategories') {
             var legacyCatEl = self._createFilterByCategoryModule(items, width || 200, true, 'sidebar');
-            if (legacyCatEl) mods.push(createSidebarSection('Categories', legacyCatEl));
+            if (legacyCatEl) {
+              mods.push(tagZoneModule(createSidebarSection('Categories', legacyCatEl), 'filterByCategory', 'sidebar'));
+            }
             var legacyTagEl = self._createFilterByTagModule(items, width || 200, true, 'sidebar');
             el = legacyTagEl ? createSidebarSection('Tags', legacyTagEl) : null;
+            if (el) {
+              tagZoneModule(el, 'filterByTag', 'sidebar');
+            }
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles') {
@@ -11917,7 +12276,10 @@
             var lmForm = createLeadMagnetForm(lmCfg, width, isSinglePost);
             el = lmForm ? createSidebarSection(lmCfg.resourceTitle || 'Lead Magnet', lmForm, isSinglePost) : null;
           }
-          if (el) mods.push(el);
+          if (el) {
+            if (!el.getAttribute('data-bb-module')) tagZoneModule(el, mod, 'sidebar');
+            mods.push(el);
+          }
         }
         return mods;
       }
@@ -12318,6 +12680,7 @@
               main.style.order = '';
               main.style.flex = '1';
               main.style.minWidth = '0';
+              self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout });
               return;
             }
             var cw = wrapper.clientWidth;
@@ -12429,6 +12792,7 @@
             if (collectionLayout === 'digest' && digestMobileNarrow) {
               self._syncDigestMobileFeaturedImageBleed(wrapper);
             }
+            self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout });
           }
 
           if (headerContentCfg && headerContentCfg.show) {
@@ -12847,6 +13211,7 @@
                 if (fmod === 'prevNextArticle' && !writerPostLayoutForFooter) {
                   continue;
                 }
+                var footerAuthorHeader = null;
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
@@ -12857,6 +13222,7 @@
                 } else if (fmod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
                   var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, 220, { useLongBio: true });
                   fmodEl = authorResult ? authorResult.content : null;
+                  footerAuthorHeader = authorResult ? authorResult.header : null;
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
                     fmodEl.style.maxWidth = '100%';
@@ -12883,6 +13249,9 @@
                     fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
+                }
+                if (fmodEl && BB_SIDEBAR_FOOTER_PAIR_MODULES[fmod]) {
+                  fmodEl = wrapFooterPairModule(fmodEl, fmod, footerChromeTitle(fmod, { authorHeader: footerAuthorHeader }));
                 }
                 if (fmodEl) {
                   if (featurePostLayout && fmod === 'authorProfiles') {
@@ -12996,6 +13365,8 @@
               section.style.boxSizing = 'border-box';
               section.style.paddingLeft = featureFooterLeftPad + 'px';
               section.style.paddingRight = featureFooterRightPad + 'px';
+              var modId = el.getAttribute && el.getAttribute('data-bb-module');
+              if (modId) tagZoneModule(section, modId, 'footer');
               section.appendChild(el);
               featureBelowRowHost.appendChild(section);
             };
