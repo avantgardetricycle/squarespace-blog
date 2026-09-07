@@ -23,6 +23,8 @@ model User {
   sessions        Session[]
   sites           Site[]
   checkoutSessions CheckoutSession[]
+  supportConversations SupportConversation[]
+  supportTickets       SupportTicket[]
 
   @@map("users")
 }
@@ -48,6 +50,8 @@ model Site {
   blogPath            String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
   blogPassword        String?  @map("blog_password") // for password-protected Squarespace blogs (?password=)
   squarespaceApiKeyEnc String? @map("squarespace_api_key_enc") @db.Text // encrypted Squarespace Profiles API key
+  squarespaceApiKeyInvalidAt DateTime? @map("squarespace_api_key_invalid_at")
+  squarespaceApiKeyAlertEmailSentAt DateTime? @map("squarespace_api_key_alert_email_sent_at")
   status              String   @default("active") // active | disabled
   verificationStatus  String   @default("pending") @map("verification_status") // pending | verified | needs_attention
   paywallMode         String   @default("auto") @map("paywall_mode") // auto | force_logged_out | force_logged_in
@@ -68,6 +72,8 @@ model Site {
   sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
+  supportConversations  SupportConversation[]
+  supportTickets        SupportTicket[]
 
   @@index([siteKey])
   @@index([userId])
@@ -365,6 +371,7 @@ model CommentLike {
 model BlogCommentSettings {
   siteId                   String   @id @map("site_id")
   commentsEnabled          Boolean  @default(true) @map("comments_enabled")
+  allowNewComments         Boolean  @default(true) @map("allow_new_comments")
   allowAnonymousComments   Boolean  @default(true) @map("allow_anonymous_comments")
   subscriberCommentsEnabled Boolean @default(false) @map("subscriber_comments_enabled")
   requireApproval          Boolean  @default(false) @map("require_approval")
@@ -385,10 +392,56 @@ model SitePaywallSettings {
   siteId             String   @id @map("site_id")
   subscribeUrl       String?  @map("subscribe_url") @db.Text
   footerDescription  String?  @map("footer_description") @db.VarChar(160)
+  eyebrowText        String?  @map("eyebrow_text") @db.VarChar(80)
+  headlineText       String?  @map("headline_text") @db.VarChar(160)
   featureItems       String[] @default([]) @map("feature_items")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_paywall_settings")
+}
+
+model SupportConversation {
+  id          String    @id @default(uuid())
+  userId      Int       @map("user_id")
+  siteId      String?   @map("site_id")
+  messages    Json
+  escalated   Boolean   @default(false)
+  escalatedAt DateTime? @map("escalated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site    Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  tickets SupportTicket[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([escalated])
+  @@map("support_conversations")
+}
+
+model SupportTicket {
+  id             String   @id @default(uuid())
+  userId         Int      @map("user_id")
+  siteId         String?  @map("site_id")
+  subject        String
+  description    String   @db.Text
+  screenshotUrl  String?  @map("screenshot_url") @db.Text
+  conversationId String?  @map("conversation_id")
+  accountEmail   String   @map("account_email")
+  blogUrl        String?  @map("blog_url") @db.Text
+  status         String   @default("open")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site         Site?                @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  conversation SupportConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("support_tickets")
 }

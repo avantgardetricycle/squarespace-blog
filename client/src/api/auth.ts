@@ -1,5 +1,13 @@
 const API = '/api'
 
+export type SitePaywallSettingsJson = {
+  subscribeUrl: string | null
+  footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
+  featureItems: string[]
+}
+
 export interface DashboardMe {
   user: { id: number; email: string; name: string | null; createdAt: string }
   subscription: {
@@ -23,16 +31,14 @@ export interface DashboardMe {
     paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
     paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
     paywallDetectionSource?: 'json_probe' | 'manual' | null
-    paywallSettings?: {
-      subscribeUrl: string | null
-      footerDescription: string | null
-      featureItems: string[]
-    } | null
+    paywallSettings?: SitePaywallSettingsJson | null
     status: string
     verificationStatus: 'pending' | 'verified' | 'needs_attention'
+    squarespaceApiKeyInvalid?: boolean
     createdAt: string
   }>
   canCreateSite: boolean
+  isSupportTeam?: boolean
 }
 
 export async function getDashboardMe(): Promise<DashboardMe | null> {
@@ -66,16 +72,12 @@ export interface CreatedSite {
   createdAt: string
   /** Present when API returns a previously soft-deleted site match (409 deleted_blog_url_match). */
   deletedAt?: string | null
-  paywallSettings?: {
-    subscribeUrl: string | null
-    footerDescription: string | null
-    featureItems: string[]
-  } | null
+  paywallSettings?: SitePaywallSettingsJson | null
 }
 
 export type CreateSiteResult =
   | { site: CreatedSite }
-  | { site: null; error: string }
+  | { site: null; error: string; code?: 'blog_url_unreachable' }
   | {
       site: null
       conflict: 'active_duplicate'
@@ -145,6 +147,16 @@ export async function createSite(
   }
 
   if (!res.ok) {
+    if (data.error === 'blog_url_unreachable') {
+      return {
+        site: null,
+        error:
+          typeof data.message === 'string'
+            ? data.message
+            : "We couldn't reach your blog at the URL you provided. Make sure you entered the full URL and try again.",
+        code: 'blog_url_unreachable'
+      }
+    }
     return { site: null, error: typeof data.error === 'string' ? data.error : 'Failed to create site' }
   }
   return { site: data as CreatedSite }
@@ -199,6 +211,18 @@ export async function cancelSubscription(): Promise<{ success: boolean; error?: 
   return { success: true, currentPeriodEnd: data.currentPeriodEnd }
 }
 
+export async function resumeSubscription(): Promise<{ success: boolean; error?: string; currentPeriodEnd?: string }> {
+  const res = await fetch(`${API}/dashboard/subscription/resume`, {
+    method: 'POST',
+    credentials: 'include'
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { success: false, error: data?.error ?? 'Failed to restore subscription' }
+  }
+  return { success: true, currentPeriodEnd: data.currentPeriodEnd }
+}
+
 /** Response body from PATCH /dashboard/sites/by-key/:siteKey */
 export type SitePatchResponse = {
   id: string
@@ -213,11 +237,26 @@ export type SitePatchResponse = {
   status: string
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
-  paywallSettings?: {
-    subscribeUrl: string | null
-    footerDescription: string | null
-    featureItems: string[]
-  } | null
+  paywallSettings?: SitePaywallSettingsJson | null
+}
+
+export type PaywallReconcileMismatch = {
+  siteId: string
+  siteKey: string
+  name: string | null
+  storedState: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+  probedState: 'detected_paywalled' | 'detected_unpaywalled'
+  signals: string[]
+}
+
+export async function getPaywallReconcile(): Promise<{ mismatches: PaywallReconcileMismatch[] } | null> {
+  try {
+    const res = await fetch(`${API}/dashboard/paywall-reconcile`, { credentials: 'include' })
+    if (!res.ok) return null
+    return res.json()
+  } catch {
+    return null
+  }
 }
 
 export async function updateSite(
@@ -227,7 +266,8 @@ export async function updateSite(
     blogPassword?: string
     paywallMode?: 'auto' | 'force_logged_out' | 'force_logged_in'
     paywallDetectionState?: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
-    subscribeUrl?: string
+    paywallDetectionSource?: 'json_probe' | 'manual'
+    subscribeUrl?: string | null
   }
 ): Promise<{ ok: true; site: SitePatchResponse } | { ok: false; error?: string }> {
   const res = await fetch(`${API}/dashboard/sites/by-key/${encodeURIComponent(siteKey)}`, {

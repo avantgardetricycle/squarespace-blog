@@ -21,26 +21,78 @@
  * The class is removed by a 10s safety timer in case the loader script never
  * runs (network failure, blocked, etc.) so visitors can never get stuck on a
  * blank page.
+ *
+ * One snippet covers every BetterBlog collection on a Squarespace website.
+ * Path matching here MUST stay in sync with scripts/loader.js.
  */
 
 const DEFAULT_BLOG_PATH = "/blog";
 
 /** Normalize blog collection path for URL prefix checks (e.g. /blog, /journal). */
-function blogPathPrefixForPreloader(blogPath: string | null | undefined): string {
+export function blogPathPrefixForPreloader(blogPath: string | null | undefined): string {
   const raw = (blogPath && blogPath.trim()) || DEFAULT_BLOG_PATH;
   if (raw === "/") return "/";
   const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
   return withSlash.replace(/\/+$/, "") || DEFAULT_BLOG_PATH;
 }
 
+/** KEEP IN SYNC with scripts/loader.js pathMatchesPrefix. */
+export function pathMatchesBlogPrefix(pathname: string, prefix: string): boolean {
+  const path = pathname || "/";
+  if (prefix === "/") return path === "/" || path === "";
+  return path === prefix || path.startsWith(prefix + "/");
+}
+
+export type BetterBlogSnippetBlog = {
+  siteKey: string;
+  blogPath?: string | null;
+};
+
 export type BetterBlogHeaderSnippetOptions = {
   loaderUrl: string;
-  siteKey: string;
-  /** From site settings; falls back to /blog if unset. */
-  blogPath?: string | null;
   /** When set, adds data-api-base (needed for local / non-default API origins). */
   apiBase?: string | null;
+  /**
+   * Single-blog back-compat. Ignored when `blogs` is a non-empty array.
+   */
+  siteKey?: string;
+  /** From site settings; falls back to /blog if unset. */
+  blogPath?: string | null;
+  /** All BetterBlog collections on this Squarespace website. */
+  blogs?: BetterBlogSnippetBlog[];
 };
+
+function resolveSnippetBlogs(opts: BetterBlogHeaderSnippetOptions): BetterBlogSnippetBlog[] {
+  if (opts.blogs && opts.blogs.length > 0) {
+    return opts.blogs.filter((b) => b.siteKey && b.siteKey.trim());
+  }
+  if (opts.siteKey && opts.siteKey.trim()) {
+    return [{ siteKey: opts.siteKey.trim(), blogPath: opts.blogPath }];
+  }
+  return [];
+}
+
+function uniquePrefixesLongestFirst(blogs: BetterBlogSnippetBlog[]): string[] {
+  const seen = new Set<string>();
+  const prefixes: string[] = [];
+  for (const blog of blogs) {
+    const prefix = blogPathPrefixForPreloader(blog.blogPath);
+    if (seen.has(prefix)) continue;
+    seen.add(prefix);
+    prefixes.push(prefix);
+  }
+  prefixes.sort((a, b) => b.length - a.length || a.localeCompare(b));
+  return prefixes;
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/** Same-origin renderer URL the loader will fetch in parallel with config. */
+export function rendererUrlFromLoaderUrl(loaderUrl: string): string {
+  return loaderUrl.replace(/loader\.js(\?[^#]*)?(#.*)?$/i, "renderer.js$1$2");
+}
 
 /**
  * Full HTML to paste in Squarespace Settings → Advanced → Code Injection → Header.
@@ -48,15 +100,29 @@ export type BetterBlogHeaderSnippetOptions = {
  * loader, so the overlay is up by the time the body starts parsing.
  */
 export function buildBetterBlogSquarespaceHeaderHtml(opts: BetterBlogHeaderSnippetOptions): string {
-  const { loaderUrl, siteKey, apiBase } = opts;
-  const prefix = blogPathPrefixForPreloader(opts.blogPath);
-  const prefixJson = JSON.stringify(prefix);
+  const { loaderUrl, apiBase } = opts;
+  const blogs = resolveSnippetBlogs(opts);
+  if (blogs.length === 0) {
+    throw new Error("buildBetterBlogSquarespaceHeaderHtml requires at least one siteKey");
+  }
+
+  const prefixes = uniquePrefixesLongestFirst(blogs);
+  const prefixesJson = JSON.stringify(prefixes);
+  const dataBlogs = blogs.map((b) => ({
+    siteKey: b.siteKey.trim(),
+    blogPath: blogPathPrefixForPreloader(b.blogPath),
+  }));
+  const dataBlogsAttr = escapeHtmlAttr(JSON.stringify(dataBlogs));
+  const primarySiteKey = escapeHtmlAttr(dataBlogs[0].siteKey);
   const apiAttr =
     typeof apiBase === "string" && apiBase.trim()
-      ? `\n  data-api-base="${apiBase.trim().replace(/"/g, "&quot;")}"`
+      ? `\n  data-api-base="${escapeHtmlAttr(apiBase.trim())}"`
       : "";
+  const rendererUrl = rendererUrlFromLoaderUrl(loaderUrl);
 
-  return `<style id="bb-critical-preload-style">
+  return `<link rel="preload" as="script" href="${loaderUrl}">
+<link rel="preload" as="script" href="${rendererUrl}">
+<style id="bb-critical-preload-style">
 html.bb-loading-blog body {
   visibility: hidden !important;
 }
@@ -87,7 +153,8 @@ html.bb-loading-blog::after {
 </style>
 <script>
 (function () {
-  var prefix = ${prefixJson};
+  // KEEP IN SYNC with scripts/loader.js pathMatchesPrefix (longest prefix first).
+  var prefixes = ${prefixesJson};
   try {
     var doc = document.documentElement;
     if (!doc) return;
@@ -104,9 +171,16 @@ html.bb-loading-blog::after {
     ) return;
     try { if (window.parent !== window) return; } catch (e2) { return; }
     var path = location.pathname || "/";
-    var onBlogRoute = prefix === "/"
-      ? path === "/"
-      : (path === prefix || path.indexOf(prefix + "/") === 0);
+    var onBlogRoute = false;
+    for (var i = 0; i < prefixes.length; i++) {
+      var prefix = prefixes[i];
+      if (prefix === "/") {
+        if (path === "/" || path === "") { onBlogRoute = true; break; }
+      } else if (path === prefix || path.indexOf(prefix + "/") === 0) {
+        onBlogRoute = true;
+        break;
+      }
+    }
     if (!onBlogRoute) return;
     doc.classList.add("bb-loading-blog");
     // Safety: never trap the visitor on a blank page if the loader/renderer never runs.
@@ -119,6 +193,7 @@ html.bb-loading-blog::after {
 <script
   defer
   src="${loaderUrl}"
-  data-site-key="${siteKey}"${apiAttr}
+  data-site-key="${primarySiteKey}"
+  data-blogs='${dataBlogsAttr}'${apiAttr}
 ></script>`;
 }

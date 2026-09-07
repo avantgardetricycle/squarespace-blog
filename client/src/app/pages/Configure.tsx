@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useSearchParams } from "react-router";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useSearchParams, useRevalidator } from "react-router";
 import {
-  Copy,
   Monitor,
   Tablet,
   Smartphone,
@@ -19,7 +18,6 @@ import { Button } from "@/app/components/ui/button";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Textarea } from "@/app/components/ui/textarea";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Slider } from "@/app/components/ui/slider";
 import { Switch } from "@/app/components/ui/switch";
@@ -31,6 +29,7 @@ import {
   SelectValue,
 } from "@/app/components/ui/select";
 import { Collapsible, CollapsibleContent } from "@/app/components/ui/collapsible";
+import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -55,17 +54,17 @@ import BlogPreviewIframe, {
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
+import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
+import {
+  PaywallSettingsModal,
+  DEFAULT_PAYWALL_FEATURE_ITEMS,
+  PAYWALL_EYEBROW_MAX,
+  PAYWALL_HEADLINE_MAX,
+  type PaywallFormState,
+} from "@/app/components/PaywallSettingsModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
-import { buildBetterBlogSquarespaceHeaderHtml } from "@/lib/betterBlogInstallationSnippet";
-import { getBetterBlogApiBase, getBetterBlogLoaderUrl } from "@/lib/betterBlogScriptUrls";
-
-const DEFAULT_PAYWALL_FEATURE_ITEMS = ["Unlimited articles", "Full archive access", "Cancel anytime"] as const;
-
-type PaywallFormState = {
-  subscribeUrl: string;
-  footerDescription: string;
-  featureItems: string[];
-};
+import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
+import { groupBlogsBySquarespaceOrigin, squarespaceOriginFromUrl } from "@/lib/squarespaceSiteGroups";
 
 function isPreviewDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
@@ -129,12 +128,12 @@ function resolveInitialAuthorForProfileEdit(
 
 export const SIDEBAR_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
 export type SidebarCollectionModuleType = (typeof SIDEBAR_COLLECTION_MODULES)[number];
-export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+export const SIDEBAR_POST_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTag", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 export type SidebarPostModuleType = (typeof SIDEBAR_POST_MODULES)[number];
 
 export const HEADER_COLLECTION_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
 export type HeaderCollectionModuleType = (typeof HEADER_COLLECTION_MODULES)[number];
-export const HEADER_POST_MODULES = ["breadcrumbs", "tableOfContents", "authorProfiles", "relevantPosts", "emailCapture", "leadMagnet"] as const;
+export const HEADER_POST_MODULES = ["breadcrumbs"] as const;
 export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
 
 /** Position for a discovery/navigation module */
@@ -167,7 +166,7 @@ export interface PostModulesConfig {
   leadMagnet: { enabled: boolean; position: ModulePosition; resourceTitle: string; description: string; buttonText: string };
 }
 
-export const SOCIAL_PLATFORMS = ["facebook", "instagram", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
+export const SOCIAL_PLATFORMS = ["facebook", "x", "email", "reddit", "linkedin", "pinterest", "whatsapp"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
 export type FeaturedImageLayoutMode = "fullBleed" | "leftJustified" | "rightJustified";
@@ -192,6 +191,8 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
+  /** Decorative accent rule above/between header elements (template-specific styling). */
+  showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
   backgroundColor?: string;
 }
@@ -214,6 +215,16 @@ export interface FeaturedImageConfig {
 
 export type ConfigLevel = "collection" | "post";
 
+export type FooterSideMarginsMode = "postBody" | "fullScreen";
+
+export interface FooterContentConfig {
+  show: boolean;
+  modules: string[];
+  moduleOrder: string[];
+  topPadding: number;
+  sideMargins?: FooterSideMarginsMode;
+}
+
 export interface BaseLevelConfig {
   showDate: boolean;
   showAuthor: boolean;
@@ -221,7 +232,7 @@ export interface BaseLevelConfig {
   leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
   headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
-  footerContent: { show: boolean; modules: string[]; moduleOrder: string[]; topPadding: number };
+  footerContent: FooterContentConfig;
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
   featuredImage: FeaturedImageConfig;
 }
@@ -238,6 +249,15 @@ export type CollectionLayoutMode = "grid" | "listRows" | "editorial" | "showcase
 export type GridColumnsOption = 2 | 3;
 
 export type FeaturedArticlePosition = "header" | "inLayout";
+
+/** Masthead (grid) and Digest own featured placement — position control is not user-facing. */
+function featuredArticlePositionForLayout(
+  layout: CollectionLayoutMode | undefined
+): FeaturedArticlePosition | null {
+  if (layout === "grid") return "header";
+  if (layout === "digest") return "inLayout";
+  return null;
+}
 
 export interface FeaturedArticleConfig {
   show: boolean;
@@ -351,6 +371,8 @@ export interface CollectionLevelConfig extends BaseLevelConfig {
   gridColumns?: GridColumnsOption;
   collectionModules?: CollectionModulesConfig;
   featuredArticle?: FeaturedArticleConfig;
+  /** Collection cards/rows: show post excerpt/teaser. Absent on Editorial/Digest (layout-driven). */
+  showPostExcerpt?: boolean;
 }
 
 function blogPreviewItemTimestampMs(item: {
@@ -473,8 +495,9 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   showDate: true,
   showAuthor: false,
   showReadingTime: false,
+  showPostExcerpt: true,
   postSort: "date",
-  pagination: { show: false, mode: "pages" as PaginationMode, postsPerPage: 10 },
+  pagination: { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 },
   collectionLayout: "grid",
   gridColumns: 3,
   collectionModules: defaultCollectionModules,
@@ -482,7 +505,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
+  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   socialMediaLinks: { show: false, platforms: [] },
   featuredImage: defaultFeaturedImage,
 };
@@ -496,11 +519,14 @@ const defaultPostHeader: PostHeaderConfig = {
   showTags: false,
   showCategories: false,
   showByline: false,
+  showDecorativeAccentLine: false,
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
   const ph = postConfig.postHeader ?? defaultPostHeader;
-  return ph.imagePosition === "leftOfInfo" && !postConfig.leftSidebar?.show && !postConfig.rightSidebar?.show;
+  const pos = ph.imagePosition;
+  if (pos !== "leftOfInfo" && pos !== "rightOfInfo") return false;
+  return !postConfig.leftSidebar?.show && !postConfig.rightSidebar?.show;
 }
 
 function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
@@ -512,180 +538,825 @@ function isStoryPostTemplateActive(config: SiteConfigForm, templateCatalogPost: 
   return isStoryPostLayoutConfig(config.postConfig);
 }
 
-export type PostTemplateKey = "reporter" | "publisher" | "writer" | "story" | "feature";
-
-/** Default post template when none is selected yet. */
-const DEFAULT_POST_TEMPLATE_KEY: PostTemplateKey = "feature";
-
-const ALL_POST_IMAGE_POSITIONS: PostHeaderImagePosition[] = [
-  "fullBleed",
-  "leftOfInfo",
-  "rightOfInfo",
-  "belowInfo",
-];
-
-/** Per-template Configure locks. `true` = control disabled for that template. */
-export interface PostTemplateControlLocks {
-  imagePosition: boolean;
-  /** When set, only these image-position options are offered (if the control is enabled). */
-  imagePositionOptions?: PostHeaderImagePosition[];
-  fullBleedLayout: boolean;
-  showFeaturedImage: boolean;
-  imageWidth: boolean;
-  sideGap: boolean;
-  aspectBehavior: boolean;
-  aspectRatio: boolean;
-  roundedCorners: boolean;
-  shadow: boolean;
-  contentVerticalAlignment: boolean;
-  showTagsAndCategories: boolean;
-  showByline: boolean;
-  /** Entire left sidebar section (modules + width + sticky). */
-  leftSidebar: boolean;
-  /** Entire right sidebar section (modules + width + sticky). */
-  rightSidebar: boolean;
-  leftSidebarWidth: boolean;
-  rightSidebarWidth: boolean;
-  footerModuleReorder: boolean;
-  /**
-   * When true, image styling controls (aspect, width, corners, shadow, side gap)
-   * are locked while featured image is shown.
-   */
-  imageSettingsWhenFeaturedShown: boolean;
-}
-
-const UNLOCKED_POST_TEMPLATE_CONTROLS: PostTemplateControlLocks = {
-  imagePosition: false,
-  fullBleedLayout: false,
-  showFeaturedImage: false,
-  imageWidth: false,
-  sideGap: false,
-  aspectBehavior: false,
-  aspectRatio: false,
-  roundedCorners: false,
-  shadow: false,
-  contentVerticalAlignment: false,
-  showTagsAndCategories: false,
-  showByline: false,
-  leftSidebar: false,
-  rightSidebar: false,
-  leftSidebarWidth: false,
-  rightSidebarWidth: false,
-  footerModuleReorder: false,
-  imageSettingsWhenFeaturedShown: false,
-};
-
-export const POST_TEMPLATE_CONTROL_LOCKS: Record<PostTemplateKey, PostTemplateControlLocks> = {
-  reporter: {
-    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
-    imagePositionOptions: ["leftOfInfo", "rightOfInfo"],
-    imageWidth: true,
-    sideGap: true,
-    aspectBehavior: true,
-    aspectRatio: true,
-    roundedCorners: true,
-    shadow: true,
-    showTagsAndCategories: true,
-    rightSidebar: true,
-  },
-  publisher: {
-    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
-    showFeaturedImage: true,
-    imagePosition: true,
-    contentVerticalAlignment: true,
-    leftSidebar: true,
-    rightSidebarWidth: true,
-    showByline: true,
-    showTagsAndCategories: true,
-  },
-  writer: {
-    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
-    showFeaturedImage: true,
-    leftSidebar: true,
-    rightSidebar: true,
-    showTagsAndCategories: true,
-  },
-  story: {
-    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
-    imagePosition: true,
-    imagePositionOptions: ["leftOfInfo", "rightOfInfo"],
-    fullBleedLayout: true,
-    showFeaturedImage: true,
-    imageWidth: true,
-    sideGap: true,
-    aspectBehavior: true,
-    aspectRatio: true,
-    roundedCorners: true,
-    shadow: true,
-    showTagsAndCategories: true,
-    leftSidebar: true,
-    rightSidebar: true,
-  },
-  feature: {
-    ...UNLOCKED_POST_TEMPLATE_CONTROLS,
-    imagePosition: true,
-    fullBleedLayout: true,
-    imageSettingsWhenFeaturedShown: true,
-    showTagsAndCategories: true,
-    leftSidebarWidth: true,
-    rightSidebarWidth: true,
-    footerModuleReorder: true,
-  },
-};
-
-function isPostTemplateKey(v: unknown): v is PostTemplateKey {
-  return v === "reporter" || v === "publisher" || v === "writer" || v === "story" || v === "feature";
-}
-
-/** Infer template key from layout shape (mirrors renderer heuristics) when catalog id is missing. */
-function inferPostTemplateKey(postConfig: PostLevelConfig): PostTemplateKey | null {
+function isFeaturePostLayoutConfig(postConfig: PostLevelConfig): boolean {
   const ph = postConfig.postHeader ?? defaultPostHeader;
-  const leftOn = postConfig.leftSidebar?.show === true;
-  const rightOn = postConfig.rightSidebar?.show === true;
-  if (ph.imagePosition === "leftOfInfo" && !leftOn && !rightOn) return "story";
-  if (ph.imagePosition === "belowInfo" && !leftOn && !rightOn) return "writer";
-  if (ph.imagePosition === "rightOfInfo") return "reporter";
-  if (ph.imagePosition === "fullBleed" && ph.contentAlignment === "center" && leftOn && rightOn) return "feature";
-  if (ph.imagePosition === "fullBleed" && ph.contentAlignment === "left" && !leftOn && rightOn) return "publisher";
-  return null;
+  if (ph.imagePosition !== "fullBleed" || ph.contentAlignment !== "center") return false;
+  if ((ph.fullBleedLayout ?? "overlay") !== "stacked") return false;
+  return Boolean(postConfig.leftSidebar?.show) && Boolean(postConfig.rightSidebar?.show);
 }
 
-function resolveActivePostTemplateKey(
-  config: SiteConfigForm,
-  templateCatalogPost: Template[]
-): PostTemplateKey {
+function isFeaturePostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
   const tid = config.postTemplateId;
   if (tid) {
     const t = templateCatalogPost.find((x) => x.id === tid);
-    if (t && isPostTemplateKey(t.templateKey)) return t.templateKey;
+    if (t?.templateKey === "feature") return true;
   }
-  return inferPostTemplateKey(config.postConfig) ?? DEFAULT_POST_TEMPLATE_KEY;
+  return isFeaturePostLayoutConfig(config.postConfig);
 }
 
-function getPostTemplateControlLocks(key: PostTemplateKey): PostTemplateControlLocks {
-  return POST_TEMPLATE_CONTROL_LOCKS[key] ?? UNLOCKED_POST_TEMPLATE_CONTROLS;
+function isWriterPostTemplateActive(config: SiteConfigForm, templateCatalogPost: Template[]): boolean {
+  const tid = config.postTemplateId;
+  if (tid) {
+    const t = templateCatalogPost.find((x) => x.id === tid);
+    if (t?.templateKey === "writer") return true;
+  }
+  const ph = config.postConfig.postHeader ?? defaultPostHeader;
+  return ph.imagePosition === "belowInfo" && !config.postConfig.leftSidebar?.show && !config.postConfig.rightSidebar?.show;
 }
 
-function findDefaultPostTemplate(templateCatalogPost: Template[]): Template | null {
+/** Post-level controls that a template may lock (disabled + forced to template value). */
+export type PostTemplateLockKey =
+  | "leftSidebar"
+  | "rightSidebar"
+  | "imagePosition"
+  | "fullBleedControls"
+  | "showFeaturedImage"
+  | "imageWidth"
+  | "sidePadding"
+  | "aspectBehavior"
+  | "aspectRatio"
+  | "roundedCorners"
+  | "photoShadow"
+  | "contentVerticalAlignment"
+  | "showTagsAndCategories"
+  | "showByline"
+  | "showDecorativeAccentLine"
+  | "verticalSpacing"
+  | "tableOfContents";
+
+const POST_TEMPLATE_LOCKS: Record<string, ReadonlySet<PostTemplateLockKey>> = {
+  reporter: new Set([
+    "leftSidebar",
+    "aspectRatio",
+    "imageWidth",
+    "sidePadding",
+    "aspectBehavior",
+    "roundedCorners",
+    "photoShadow",
+    "showTagsAndCategories",
+  ]),
+  publisher: new Set([
+    "showFeaturedImage",
+    "imagePosition",
+    "contentVerticalAlignment",
+    "leftSidebar",
+    "showByline",
+    "showTagsAndCategories",
+    "showDecorativeAccentLine",
+  ]),
+  writer: new Set([
+    "leftSidebar",
+    "rightSidebar",
+    "showTagsAndCategories",
+    "showFeaturedImage",
+    "verticalSpacing",
+  ]),
+  feature: new Set([
+    "imagePosition",
+    "fullBleedControls",
+    "aspectRatio",
+    "imageWidth",
+    "sidePadding",
+    "aspectBehavior",
+    "roundedCorners",
+    "photoShadow",
+    "showTagsAndCategories",
+    "showDecorativeAccentLine",
+  ]),
+  story: new Set([
+    "showFeaturedImage",
+    "aspectRatio",
+    "imageWidth",
+    "sidePadding",
+    "aspectBehavior",
+    "roundedCorners",
+    "photoShadow",
+    "showTagsAndCategories",
+    "leftSidebar",
+    "rightSidebar",
+    "tableOfContents",
+  ]),
+};
+
+/** When set, image-position Select is limited to these options (control stays enabled). */
+const POST_TEMPLATE_IMAGE_POSITION_OPTIONS: Record<string, readonly PostHeaderImagePosition[]> = {
+  reporter: ["leftOfInfo", "rightOfInfo"],
+  story: ["leftOfInfo", "rightOfInfo"],
+};
+
+function getActivePostTemplateKey(
+  config: SiteConfigForm,
+  templateCatalogPost: Template[]
+): string | null {
+  const tid = config.postTemplateId;
+  if (!tid) return null;
+  return templateCatalogPost.find((x) => x.id === tid)?.templateKey ?? null;
+}
+
+function getPostTemplateLocks(templateKey: string | null | undefined): ReadonlySet<PostTemplateLockKey> {
+  if (!templateKey) return new Set();
+  return POST_TEMPLATE_LOCKS[templateKey] ?? new Set();
+}
+
+function isPostTemplatePathLocked(path: string, locks: ReadonlySet<PostTemplateLockKey>): boolean {
+  if (path.startsWith("leftSidebar.")) return locks.has("leftSidebar");
+  if (path.startsWith("rightSidebar.")) return locks.has("rightSidebar");
+  if (path === "postHeader.imagePosition") return locks.has("imagePosition");
+  if (path === "postHeader.fullBleedLayout") return locks.has("fullBleedControls");
+  if (path === "postHeader.contentVerticalAlignment") {
+    return locks.has("contentVerticalAlignment");
+  }
+  if (path === "postHeader.sideGap") return locks.has("sidePadding");
+  if (path === "postHeader.showTags" || path === "postHeader.showCategories") {
+    return locks.has("showTagsAndCategories");
+  }
+  if (path === "postHeader.showByline") return locks.has("showByline");
+  if (path === "postHeader.showDecorativeAccentLine") return locks.has("showDecorativeAccentLine");
+  if (path === "featuredImage.show") return locks.has("showFeaturedImage");
+  if (path === "featuredImage.imageWidthPercent") return locks.has("imageWidth");
+  if (path === "featuredImage.aspectBehavior") return locks.has("aspectBehavior");
+  if (path === "featuredImage.aspectRatio") return locks.has("aspectRatio");
+  if (path === "featuredImage.roundedCorners") return locks.has("roundedCorners");
+  if (path === "featuredImage.shadow") return locks.has("photoShadow");
+  if (path === "featuredImage.verticalSpacing") return locks.has("verticalSpacing");
+  if (path.startsWith("postModules.tableOfContents")) return locks.has("tableOfContents");
+  return false;
+}
+
+/** Copy locked fields from the applied template so they cannot drift. */
+function enforcePostTemplateLockedValues(
+  postConfig: PostLevelConfig,
+  templatePostConfig: PostLevelConfig,
+  locks: ReadonlySet<PostTemplateLockKey>
+): PostLevelConfig {
+  if (locks.size === 0) return postConfig;
+  let next = postConfig;
+  const tplPh = templatePostConfig.postHeader ?? defaultPostHeader;
+  const curPh = next.postHeader ?? defaultPostHeader;
+  let ph = { ...curPh };
+  let phChanged = false;
+  if (locks.has("imagePosition") && ph.imagePosition !== tplPh.imagePosition) {
+    ph = { ...ph, imagePosition: tplPh.imagePosition };
+    phChanged = true;
+  }
+  if (locks.has("fullBleedControls") && ph.fullBleedLayout !== tplPh.fullBleedLayout) {
+    ph = { ...ph, fullBleedLayout: tplPh.fullBleedLayout };
+    phChanged = true;
+  }
+  if (locks.has("contentVerticalAlignment") && ph.contentVerticalAlignment !== tplPh.contentVerticalAlignment) {
+    ph = { ...ph, contentVerticalAlignment: tplPh.contentVerticalAlignment };
+    phChanged = true;
+  }
+  if (locks.has("sidePadding") && ph.sideGap !== tplPh.sideGap) {
+    ph = { ...ph, sideGap: tplPh.sideGap };
+    phChanged = true;
+  }
+  if (locks.has("showTagsAndCategories")) {
+    if (ph.showTags !== tplPh.showTags) {
+      ph = { ...ph, showTags: tplPh.showTags };
+      phChanged = true;
+    }
+    if (ph.showCategories !== tplPh.showCategories) {
+      ph = { ...ph, showCategories: tplPh.showCategories };
+      phChanged = true;
+    }
+  }
+  if (locks.has("showByline") && ph.showByline !== tplPh.showByline) {
+    ph = { ...ph, showByline: tplPh.showByline };
+    phChanged = true;
+  }
+  if (locks.has("showDecorativeAccentLine") && ph.showDecorativeAccentLine !== tplPh.showDecorativeAccentLine) {
+    ph = { ...ph, showDecorativeAccentLine: tplPh.showDecorativeAccentLine };
+    phChanged = true;
+  }
+  if (phChanged) next = { ...next, postHeader: ph };
+
+  const tplFi = templatePostConfig.featuredImage ?? defaultFeaturedImage;
+  const curFi = next.featuredImage ?? defaultFeaturedImage;
+  let fi = { ...curFi };
+  let fiChanged = false;
+  if (locks.has("showFeaturedImage") && fi.show !== tplFi.show) {
+    fi = { ...fi, show: tplFi.show };
+    fiChanged = true;
+  }
+  if (locks.has("imageWidth") && fi.imageWidthPercent !== tplFi.imageWidthPercent) {
+    fi = { ...fi, imageWidthPercent: tplFi.imageWidthPercent };
+    fiChanged = true;
+  }
+  if (locks.has("aspectBehavior") && fi.aspectBehavior !== tplFi.aspectBehavior) {
+    fi = { ...fi, aspectBehavior: tplFi.aspectBehavior };
+    fiChanged = true;
+  }
+  if (locks.has("aspectRatio") && fi.aspectRatio !== tplFi.aspectRatio) {
+    fi = { ...fi, aspectRatio: tplFi.aspectRatio };
+    fiChanged = true;
+  }
+  if (locks.has("roundedCorners") && fi.roundedCorners !== tplFi.roundedCorners) {
+    fi = { ...fi, roundedCorners: tplFi.roundedCorners };
+    fiChanged = true;
+  }
+  if (locks.has("photoShadow") && fi.shadow !== tplFi.shadow) {
+    fi = { ...fi, shadow: tplFi.shadow };
+    fiChanged = true;
+  }
+  if (locks.has("verticalSpacing") && fi.verticalSpacing !== tplFi.verticalSpacing) {
+    fi = { ...fi, verticalSpacing: tplFi.verticalSpacing };
+    fiChanged = true;
+  }
+  if (fiChanged) next = { ...next, featuredImage: fi };
+
+  if (locks.has("tableOfContents")) {
+    const tplPm = templatePostConfig.postModules ?? defaultPostModules;
+    const curPm = next.postModules ?? defaultPostModules;
+    const tplToc = tplPm.tableOfContents;
+    const curToc = curPm.tableOfContents;
+    if (
+      curToc.enabled !== tplToc.enabled ||
+      curToc.position !== tplToc.position ||
+      curToc.style !== tplToc.style
+    ) {
+      next = {
+        ...next,
+        postModules: {
+          ...curPm,
+          tableOfContents: { ...tplToc },
+        },
+      };
+    }
+    const stripToc = (order: string[]) => order.filter((m) => m !== "tableOfContents");
+    const lsOrder = stripToc(next.leftSidebar.moduleOrder ?? []);
+    const rsOrder = stripToc(next.rightSidebar.moduleOrder ?? []);
+    const hcOrder = stripToc(next.headerContent.moduleOrder ?? []);
+    if (
+      JSON.stringify(next.leftSidebar.moduleOrder ?? []) !== JSON.stringify(lsOrder) ||
+      JSON.stringify(next.rightSidebar.moduleOrder ?? []) !== JSON.stringify(rsOrder) ||
+      JSON.stringify(next.headerContent.moduleOrder ?? []) !== JSON.stringify(hcOrder)
+    ) {
+      next = {
+        ...next,
+        leftSidebar: { ...next.leftSidebar, moduleOrder: lsOrder, modules: stripToc(next.leftSidebar.modules ?? []) },
+        rightSidebar: { ...next.rightSidebar, moduleOrder: rsOrder, modules: stripToc(next.rightSidebar.modules ?? []) },
+        headerContent: { ...next.headerContent, moduleOrder: hcOrder, modules: stripToc(next.headerContent.modules ?? []) },
+      };
+    }
+  }
+
+  if (locks.has("leftSidebar")) {
+    const tpl = templatePostConfig.leftSidebar;
+    const cur = next.leftSidebar;
+    if (
+      cur.show !== tpl.show ||
+      cur.width !== tpl.width ||
+      cur.spaceAbove !== tpl.spaceAbove ||
+      cur.sticky !== tpl.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tpl.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tpl.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        leftSidebar: {
+          ...tpl,
+          modules: [...(tpl.modules ?? [])],
+          moduleOrder: [...(tpl.moduleOrder ?? [])],
+        },
+      };
+    }
+  }
+  if (locks.has("rightSidebar")) {
+    const tpl = templatePostConfig.rightSidebar;
+    const cur = next.rightSidebar;
+    if (
+      cur.show !== tpl.show ||
+      cur.width !== tpl.width ||
+      cur.spaceAbove !== tpl.spaceAbove ||
+      cur.sticky !== tpl.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tpl.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tpl.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        rightSidebar: {
+          ...tpl,
+          modules: [...(tpl.modules ?? [])],
+          moduleOrder: [...(tpl.moduleOrder ?? [])],
+        },
+      };
+    }
+  }
+  return next;
+}
+
+function resolvePostTemplateConfig(
+  templateId: string | null | undefined,
+  templateCatalogPost: Template[]
+): PostLevelConfig | null {
+  if (!templateId) return null;
+  const t = templateCatalogPost.find((x) => x.id === templateId);
+  if (!t?.postConfig || typeof t.postConfig !== "object") return null;
+  return parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+}
+
+/** Collection-level controls that a template may lock (hidden + forced to template value). */
+export type CollectionTemplateLockKey =
+  | "imageWidth"
+  | "aspectBehavior"
+  | "aspectRatio"
+  | "roundedCorners"
+  | "photoShadow"
+  | "verticalSpacing"
+  | "footerTopPadding"
+  | "leftSidebarSpaceAbove"
+  | "rightSidebarSpaceAbove"
+  | "socialSharing"
+  | "featuredImage"
+  | "headerHeight"
+  | "leftSidebar"
+  | "rightSidebar"
+  | "rightSidebarWidth"
+  | "featuredArticlePosition"
+  | "paginationMode"
+  | "showCaption"
+  | "popularPosts"
+  | "showPostExcerpt";
+
+/** Locked on every collection template for now; per-template sets can diverge later. */
+const COLLECTION_TEMPLATE_UNIVERSAL_LOCKS: ReadonlySet<CollectionTemplateLockKey> = new Set([
+  "imageWidth",
+  "aspectBehavior",
+  "aspectRatio",
+  "roundedCorners",
+  "photoShadow",
+  "verticalSpacing",
+  "footerTopPadding",
+  "leftSidebarSpaceAbove",
+  "rightSidebarSpaceAbove",
+  "socialSharing",
+]);
+
+function withCollectionLocks(
+  base: ReadonlySet<CollectionTemplateLockKey>,
+  ...extra: CollectionTemplateLockKey[]
+): ReadonlySet<CollectionTemplateLockKey> {
+  return new Set([...base, ...extra]);
+}
+
+const COLLECTION_TEMPLATE_LOCKS: Record<string, ReadonlySet<CollectionTemplateLockKey>> = {
+  masthead: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebar",
+    "featuredArticlePosition",
+    "popularPosts",
+    "paginationMode"
+  ),
+  newsroom: COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+  digest: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebarWidth",
+    "featuredArticlePosition",
+    "showPostExcerpt"
+  ),
+  showcase: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebar",
+    "showCaption",
+    "popularPosts"
+  ),
+  editorial: withCollectionLocks(
+    COLLECTION_TEMPLATE_UNIVERSAL_LOCKS,
+    "featuredImage",
+    "headerHeight",
+    "leftSidebar",
+    "rightSidebar",
+    "showCaption",
+    "popularPosts",
+    "showPostExcerpt"
+  ),
+};
+
+function getActiveCollectionTemplateKey(
+  config: SiteConfigForm,
+  templateCatalogCollection: Template[]
+): string | null {
+  const tid = config.collectionTemplateId;
+  if (!tid) return null;
+  return templateCatalogCollection.find((x) => x.id === tid)?.templateKey ?? null;
+}
+
+function getCollectionTemplateLocks(templateKey: string | null | undefined): ReadonlySet<CollectionTemplateLockKey> {
+  if (!templateKey) return COLLECTION_TEMPLATE_UNIVERSAL_LOCKS;
+  return COLLECTION_TEMPLATE_LOCKS[templateKey] ?? COLLECTION_TEMPLATE_UNIVERSAL_LOCKS;
+}
+
+function isCollectionTemplatePathLocked(path: string, locks: ReadonlySet<CollectionTemplateLockKey>): boolean {
+  if (path === "collectionLayout") return true;
+  if (locks.has("featuredImage") && path.startsWith("featuredImage.")) return true;
+  if (path === "featuredImage.imageWidthPercent") return locks.has("imageWidth");
+  if (path === "featuredImage.aspectBehavior") return locks.has("aspectBehavior");
+  if (path === "featuredImage.aspectRatio") return locks.has("aspectRatio") || locks.has("aspectBehavior");
+  if (path === "featuredImage.roundedCorners") return locks.has("roundedCorners");
+  if (path === "featuredImage.shadow") return locks.has("photoShadow");
+  if (path === "featuredImage.verticalSpacing") return locks.has("verticalSpacing");
+  if (path === "featuredImage.showCaption") return locks.has("showCaption");
+  if (path === "headerContent.height") return locks.has("headerHeight");
+  if (path === "footerContent.topPadding") return locks.has("footerTopPadding");
+  if (path === "featuredArticle.position") return locks.has("featuredArticlePosition");
+  if (path === "pagination.mode") return locks.has("paginationMode");
+  if (path === "showPostExcerpt") return locks.has("showPostExcerpt");
+  if (path.startsWith("leftSidebar.")) {
+    return locks.has("leftSidebar") || (path === "leftSidebar.spaceAbove" && locks.has("leftSidebarSpaceAbove"));
+  }
+  if (path.startsWith("rightSidebar.")) {
+    if (locks.has("rightSidebar")) return true;
+    if (path === "rightSidebar.spaceAbove" && locks.has("rightSidebarSpaceAbove")) return true;
+    if (path === "rightSidebar.width" && locks.has("rightSidebarWidth")) return true;
+    return false;
+  }
+  if (path === "socialMediaLinks" || path.startsWith("socialMediaLinks.")) return locks.has("socialSharing");
+  return false;
+}
+
+/** Copy locked fields from the applied collection template so they cannot drift. */
+function enforceCollectionTemplateLockedValues(
+  collectionConfig: CollectionLevelConfig,
+  templateCollectionConfig: CollectionLevelConfig | null,
+  locks: ReadonlySet<CollectionTemplateLockKey>
+): CollectionLevelConfig {
+  const tpl = templateCollectionConfig ?? defaultCollectionConfig;
+  let next = collectionConfig;
+
+  const tplLayout = tpl.collectionLayout ?? "grid";
+  if ((next.collectionLayout ?? "grid") !== tplLayout) {
+    next = { ...next, collectionLayout: tplLayout };
+  }
+
+  if (locks.size === 0) return next;
+
+  const tplFi = tpl.featuredImage ?? defaultFeaturedImage;
+  const curFi = next.featuredImage ?? defaultFeaturedImage;
+  let fi = { ...curFi };
+  let fiChanged = false;
+  if (locks.has("featuredImage")) {
+    if (JSON.stringify(fi) !== JSON.stringify(tplFi)) {
+      fi = { ...tplFi };
+      fiChanged = true;
+    }
+  } else {
+    if (locks.has("imageWidth") && fi.imageWidthPercent !== tplFi.imageWidthPercent) {
+      fi = { ...fi, imageWidthPercent: tplFi.imageWidthPercent };
+      fiChanged = true;
+    }
+    if (locks.has("aspectBehavior") && fi.aspectBehavior !== tplFi.aspectBehavior) {
+      fi = { ...fi, aspectBehavior: tplFi.aspectBehavior };
+      fiChanged = true;
+    }
+    if ((locks.has("aspectRatio") || locks.has("aspectBehavior")) && fi.aspectRatio !== tplFi.aspectRatio) {
+      fi = { ...fi, aspectRatio: tplFi.aspectRatio };
+      fiChanged = true;
+    }
+    if (locks.has("roundedCorners") && fi.roundedCorners !== tplFi.roundedCorners) {
+      fi = { ...fi, roundedCorners: tplFi.roundedCorners };
+      fiChanged = true;
+    }
+    if (locks.has("photoShadow") && fi.shadow !== tplFi.shadow) {
+      fi = { ...fi, shadow: tplFi.shadow };
+      fiChanged = true;
+    }
+    if (locks.has("verticalSpacing") && fi.verticalSpacing !== tplFi.verticalSpacing) {
+      fi = { ...fi, verticalSpacing: tplFi.verticalSpacing };
+      fiChanged = true;
+    }
+    if (locks.has("showCaption") && fi.showCaption !== tplFi.showCaption) {
+      fi = { ...fi, showCaption: tplFi.showCaption };
+      fiChanged = true;
+    }
+  }
+  if (fiChanged) next = { ...next, featuredImage: fi };
+
+  if (locks.has("headerHeight")) {
+    const tplHeight = tpl.headerContent?.height ?? 48;
+    if ((next.headerContent?.height ?? 48) !== tplHeight) {
+      next = { ...next, headerContent: { ...next.headerContent, height: tplHeight } };
+    }
+  }
+
+  // Masthead/Digest layouts pin featured position (header hero vs in-layout).
+  if ("featuredArticle" in next) {
+    const layoutForced = featuredArticlePositionForLayout(next.collectionLayout);
+    const tplFa = tpl.featuredArticle ?? defaultFeaturedArticle;
+    const curFa = next.featuredArticle ?? defaultFeaturedArticle;
+    const forcedPosition =
+      layoutForced ??
+      (locks.has("featuredArticlePosition") ? tplFa.position : null);
+    if (forcedPosition && curFa.position !== forcedPosition) {
+      next = {
+        ...next,
+        featuredArticle: { ...curFa, position: forcedPosition },
+      };
+    }
+  }
+
+  if (locks.has("paginationMode") && "pagination" in next) {
+    const tplPag = tpl.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    const curPag = next.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    if (curPag.mode !== tplPag.mode) {
+      next = {
+        ...next,
+        pagination: { ...curPag, mode: tplPag.mode },
+      };
+    }
+  }
+
+  // Pagination is always enabled on collection pages.
+  if ("pagination" in next) {
+    const curPag = next.pagination ?? { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    if (curPag.show !== true) {
+      next = { ...next, pagination: { ...curPag, show: true } };
+    }
+  }
+
+  if (locks.has("showPostExcerpt")) {
+    const tplExcerpt = tpl.showPostExcerpt ?? false;
+    if ((next.showPostExcerpt ?? true) !== tplExcerpt) {
+      next = { ...next, showPostExcerpt: tplExcerpt };
+    }
+  }
+
+  if (locks.has("footerTopPadding")) {
+    const tplPad = tpl.footerContent?.topPadding ?? 16;
+    const curPad = next.footerContent?.topPadding ?? 16;
+    if (curPad !== tplPad) {
+      next = {
+        ...next,
+        footerContent: {
+          ...(next.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" }),
+          topPadding: tplPad,
+        },
+      };
+    }
+  }
+
+  // Before clearing locked sidebars, relocate modules that still have a valid home.
+  if (locks.has("leftSidebar") || locks.has("rightSidebar")) {
+    const FILTER_IDS = new Set(["filterByCategory", "filterByTag", "filterByTagsAndCategories"]);
+    const FOOTER_ONLY = new Set(["emailCapture", "leadMagnet"]);
+    const collectIds = (order: string[], ids: Set<string>) => order.filter((m) => ids.has(m));
+    const sidebarFilters = [
+      ...(locks.has("leftSidebar") ? collectIds(next.leftSidebar.moduleOrder ?? [], FILTER_IDS) : []),
+      ...(locks.has("rightSidebar") ? collectIds(next.rightSidebar.moduleOrder ?? [], FILTER_IDS) : []),
+    ];
+    const sidebarFooterMods = [
+      ...(locks.has("leftSidebar") ? collectIds(next.leftSidebar.moduleOrder ?? [], FOOTER_ONLY) : []),
+      ...(locks.has("rightSidebar") ? collectIds(next.rightSidebar.moduleOrder ?? [], FOOTER_ONLY) : []),
+    ];
+    if (sidebarFilters.length > 0) {
+      let hcOrder = [...(next.headerContent.moduleOrder ?? [])];
+      for (const f of sidebarFilters) {
+        if (!hcOrder.includes(f)) hcOrder = [...hcOrder, f];
+      }
+      next = {
+        ...next,
+        headerContent: { ...next.headerContent, moduleOrder: hcOrder, modules: [...hcOrder] },
+      };
+    }
+    if (sidebarFooterMods.length > 0) {
+      let fcOrder = [...(next.footerContent?.moduleOrder ?? [])];
+      for (const m of sidebarFooterMods) {
+        if (!fcOrder.includes(m)) fcOrder = [...fcOrder, m];
+      }
+      next = {
+        ...next,
+        footerContent: {
+          ...(next.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" }),
+          moduleOrder: fcOrder,
+          modules: [...fcOrder],
+          show: fcOrder.length > 0,
+        },
+      };
+    }
+  }
+
+  if (locks.has("leftSidebar")) {
+    const tplSb = tpl.leftSidebar;
+    const cur = next.leftSidebar;
+    if (
+      cur.show !== tplSb.show ||
+      cur.width !== tplSb.width ||
+      cur.spaceAbove !== tplSb.spaceAbove ||
+      cur.sticky !== tplSb.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tplSb.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tplSb.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        leftSidebar: {
+          ...tplSb,
+          modules: [...(tplSb.modules ?? [])],
+          moduleOrder: [...(tplSb.moduleOrder ?? [])],
+        },
+      };
+    }
+  } else if (locks.has("leftSidebarSpaceAbove")) {
+    const tplSpace = tpl.leftSidebar?.spaceAbove ?? 0;
+    if ((next.leftSidebar?.spaceAbove ?? 0) !== tplSpace) {
+      next = { ...next, leftSidebar: { ...next.leftSidebar, spaceAbove: tplSpace } };
+    }
+  }
+
+  if (locks.has("rightSidebar")) {
+    const tplSb = tpl.rightSidebar;
+    const cur = next.rightSidebar;
+    if (
+      cur.show !== tplSb.show ||
+      cur.width !== tplSb.width ||
+      cur.spaceAbove !== tplSb.spaceAbove ||
+      cur.sticky !== tplSb.sticky ||
+      JSON.stringify(cur.moduleOrder ?? []) !== JSON.stringify(tplSb.moduleOrder ?? []) ||
+      JSON.stringify(cur.modules ?? []) !== JSON.stringify(tplSb.modules ?? [])
+    ) {
+      next = {
+        ...next,
+        rightSidebar: {
+          ...tplSb,
+          modules: [...(tplSb.modules ?? [])],
+          moduleOrder: [...(tplSb.moduleOrder ?? [])],
+        },
+      };
+    }
+  } else {
+    if (locks.has("rightSidebarSpaceAbove")) {
+      const tplSpace = tpl.rightSidebar?.spaceAbove ?? 0;
+      if ((next.rightSidebar?.spaceAbove ?? 0) !== tplSpace) {
+        next = { ...next, rightSidebar: { ...next.rightSidebar, spaceAbove: tplSpace } };
+      }
+    }
+    if (locks.has("rightSidebarWidth")) {
+      const tplWidth = tpl.rightSidebar?.width ?? 280;
+      if ((next.rightSidebar?.width ?? 240) !== tplWidth) {
+        next = { ...next, rightSidebar: { ...next.rightSidebar, width: tplWidth } };
+      }
+    }
+  }
+
+  if ((next.collectionLayout ?? "grid") === "digest") {
+    const lsOrder = stripDigestSidebarSearchSort(next.leftSidebar.moduleOrder ?? []);
+    const rsOrder = stripDigestSidebarSearchSort(next.rightSidebar.moduleOrder ?? []);
+    if (
+      JSON.stringify(next.leftSidebar.moduleOrder ?? []) !== JSON.stringify(lsOrder) ||
+      JSON.stringify(next.rightSidebar.moduleOrder ?? []) !== JSON.stringify(rsOrder)
+    ) {
+      next = {
+        ...next,
+        leftSidebar: {
+          ...next.leftSidebar,
+          moduleOrder: lsOrder,
+          modules: stripDigestSidebarSearchSort(next.leftSidebar.modules ?? []),
+        },
+        rightSidebar: {
+          ...next.rightSidebar,
+          moduleOrder: rsOrder,
+          modules: stripDigestSidebarSearchSort(next.rightSidebar.modules ?? []),
+        },
+      };
+    }
+  }
+
+  if (locks.has("popularPosts")) {
+    const stripPopular = (order: string[]) => order.filter((m) => m !== "popularPosts");
+    const lsOrder = stripPopular(next.leftSidebar.moduleOrder ?? []);
+    const rsOrder = stripPopular(next.rightSidebar.moduleOrder ?? []);
+    const hcOrder = stripPopular(next.headerContent.moduleOrder ?? []);
+    const fcOrder = stripPopular(next.footerContent?.moduleOrder ?? []);
+    if (
+      JSON.stringify(next.leftSidebar.moduleOrder ?? []) !== JSON.stringify(lsOrder) ||
+      JSON.stringify(next.rightSidebar.moduleOrder ?? []) !== JSON.stringify(rsOrder) ||
+      JSON.stringify(next.headerContent.moduleOrder ?? []) !== JSON.stringify(hcOrder) ||
+      JSON.stringify(next.footerContent?.moduleOrder ?? []) !== JSON.stringify(fcOrder)
+    ) {
+      next = {
+        ...next,
+        leftSidebar: { ...next.leftSidebar, moduleOrder: lsOrder, modules: stripPopular(next.leftSidebar.modules ?? []) },
+        rightSidebar: { ...next.rightSidebar, moduleOrder: rsOrder, modules: stripPopular(next.rightSidebar.modules ?? []) },
+        headerContent: { ...next.headerContent, moduleOrder: hcOrder, modules: stripPopular(next.headerContent.modules ?? []) },
+        footerContent: {
+          ...(next.footerContent ?? { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" }),
+          moduleOrder: fcOrder,
+          modules: stripPopular(next.footerContent?.modules ?? []),
+          show: fcOrder.length > 0,
+        },
+      };
+    }
+  }
+
+  if (locks.has("socialSharing")) {
+    const tplSm = tpl.socialMediaLinks ?? { show: false, platforms: [] as SocialPlatform[] };
+    const curSm = next.socialMediaLinks ?? { show: false, platforms: [] as SocialPlatform[] };
+    const tplPlatforms = tplSm.platforms ?? [];
+    const curPlatforms = curSm.platforms ?? [];
+    if (
+      curSm.show !== tplSm.show ||
+      curPlatforms.length !== tplPlatforms.length ||
+      curPlatforms.some((p, i) => p !== tplPlatforms[i])
+    ) {
+      next = {
+        ...next,
+        socialMediaLinks: {
+          show: tplSm.show,
+          platforms: [...tplPlatforms],
+        },
+      };
+    }
+  }
+
+  return next;
+}
+
+function resolveCollectionTemplateConfig(
+  templateId: string | null | undefined,
+  templateCatalogCollection: Template[]
+): CollectionLevelConfig | null {
+  if (!templateId) return null;
+  const t = templateCatalogCollection.find((x) => x.id === templateId);
+  if (!t?.collectionConfig || typeof t.collectionConfig !== "object") return null;
+  return parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
+}
+
+/** Horizontal label + control row; hidden when locked on a template. */
+function LockedControlRow({
+  locked,
+  label,
+  description,
+  children,
+}: {
+  locked: boolean;
+  label: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+}) {
+  if (locked) return null;
   return (
-    templateCatalogPost.find((t) => t.templateKey === DEFAULT_POST_TEMPLATE_KEY) ??
-    templateCatalogPost[0] ??
-    null
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        {typeof label === "string" ? (
+          <Label className="text-xs text-[#6b6b6b]">{label}</Label>
+        ) : (
+          label
+        )}
+        {description != null && description !== "" ? (
+          typeof description === "string" ? (
+            <p className="text-[10px] text-[#6b6b6b]">{description}</p>
+          ) : (
+            description
+          )
+        ) : null}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
   );
 }
 
-function applyPostTemplateToSiteConfig(prev: SiteConfigForm, template: Template): SiteConfigForm {
-  if (!template.postConfig || typeof template.postConfig !== "object") {
-    return { ...prev, postTemplateId: template.id };
-  }
-  const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
-  const next: SiteConfigForm = {
-    ...prev,
-    postConfig: parsedPost,
-    postTemplateId: template.id,
-  };
-  applyDerivedModules(next);
-  return next;
+/** Stacked label + control; hidden when locked on a post template. */
+function LockedControlField({
+  locked,
+  label,
+  description,
+  children,
+  className = "space-y-2",
+}: {
+  locked: boolean;
+  label: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  if (locked) return null;
+  return (
+    <div className={className}>
+      <div>
+        {typeof label === "string" ? (
+          <Label className="text-xs text-[#6b6b6b]">{label}</Label>
+        ) : (
+          label
+        )}
+        {description != null && description !== "" ? (
+          typeof description === "string" ? (
+            <p className="text-[10px] text-[#6b6b6b]">{description}</p>
+          ) : (
+            description
+          )
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function validPostHeaderBackgroundColor(v: unknown): string | undefined {
@@ -702,7 +1373,7 @@ const defaultPostConfig: PostLevelConfig = {
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
-  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16 },
+  footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
 };
 
@@ -715,7 +1386,7 @@ const defaultSiteConfig: SiteConfigForm = {
   postTemplateId: null,
 };
 
-const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
+const POST_SIDEBAR_MODULES = ["tableOfContents", "authorProfiles", "popularPosts", "relevantPosts", "filterByCategory", "filterByTag", "filterByTagsAndCategories", "emailCapture", "leadMagnet"] as const;
 const POST_FOOTER_MODULES = ["authorProfiles", "relevantPosts", "prevNextArticle", "emailCapture", "leadMagnet"] as const;
 
 const COLLECTION_HEADER_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort"] as const;
@@ -733,6 +1404,15 @@ function orderCollectionHeaderModules(moduleIds: string[]): string[] {
   return out;
 }
 const COLLECTION_SIDEBAR_MODULES = ["filterByCategory", "filterByTag", "filterByTagsAndCategories", "searchPosts", "postSort", "recentPosts", "popularPosts", "authorProfiles", "emailCapture", "leadMagnet"] as const;
+const DIGEST_SIDEBAR_EXCLUDED_MODULES = new Set(["searchPosts", "postSearch", "postSort"]);
+
+function isDigestSidebarExcludedModule(moduleId: string): boolean {
+  return DIGEST_SIDEBAR_EXCLUDED_MODULES.has(moduleId);
+}
+
+function stripDigestSidebarSearchSort(order: string[]): string[] {
+  return order.filter((m) => !isDigestSidebarExcludedModule(m));
+}
 const COLLECTION_FOOTER_MODULES = ["emailCapture", "leadMagnet"] as const;
 const COLLECTION_FILTER_IDS = ["filterByCategory", "filterByTag", "filterByTagsAndCategories"] as const;
 type FeatureModuleLocation = Exclude<ModulePosition, "none">;
@@ -743,6 +1423,56 @@ const FEATURE_LOCATION_LABELS: Record<FeatureModuleLocation, string> = {
   rightSidebar: "Right Sidebar",
   footer: "Footer",
 };
+const POST_FEATURE_SIDEBAR_LOCATIONS: FeatureModuleLocation[] = ["leftSidebar", "rightSidebar"];
+const POST_FEATURE_SIDEBAR_FOOTER_LOCATIONS: FeatureModuleLocation[] = ["leftSidebar", "rightSidebar", "footer"];
+
+function filterFeatureLocationsByLocks(
+  locations: FeatureModuleLocation[],
+  locks: ReadonlySet<PostTemplateLockKey>
+): FeatureModuleLocation[] {
+  return locations.filter((loc) => {
+    if (loc === "leftSidebar" && locks.has("leftSidebar")) return false;
+    if (loc === "rightSidebar" && locks.has("rightSidebar")) return false;
+    return true;
+  });
+}
+
+function filterCollectionFeatureLocationsByLocks(
+  locations: FeatureModuleLocation[],
+  locks: ReadonlySet<CollectionTemplateLockKey>
+): FeatureModuleLocation[] {
+  return locations.filter((loc) => {
+    if (loc === "leftSidebar" && locks.has("leftSidebar")) return false;
+    if (loc === "rightSidebar" && locks.has("rightSidebar")) return false;
+    return true;
+  });
+}
+
+/** Per-template allowed locations for collection Nav & Discovery modules. */
+function getCollectionModuleAllowedLocations(
+  templateKey: string | null | undefined,
+  module: "filter" | "popularPosts" | "emailCapture" | "leadMagnet",
+  locks: ReadonlySet<CollectionTemplateLockKey>
+): FeatureModuleLocation[] {
+  let locations: FeatureModuleLocation[];
+  if (templateKey === "editorial" || templateKey === "masthead" || templateKey === "showcase") {
+    if (module === "filter") locations = ["header"];
+    else if (module === "popularPosts") locations = [];
+    else locations = ["footer"];
+  } else if (module === "filter") {
+    locations = ["header", "leftSidebar", "rightSidebar"];
+  } else if (module === "popularPosts") {
+    locations = ["leftSidebar", "rightSidebar"];
+  } else {
+    locations = ["leftSidebar", "rightSidebar", "footer"];
+  }
+  return filterCollectionFeatureLocationsByLocks(locations, locks);
+}
+
+/** Post modules that cannot be placed in the header zone. */
+function normalizePostModulePosition(position: ModulePosition): ModulePosition {
+  return position === "header" ? "none" : position;
+}
 
 /**
  * Zone list for derive: prefer non-empty moduleOrder. If moduleOrder is [] or missing, use modules.
@@ -789,10 +1519,9 @@ function deriveCollectionModules(
 
 /**
  * Derive modules arrays for each zone from explicit postModules config + moduleOrder.
- * For post level: left/right/footer use zone moduleOrder directly (zone-driven). Header still uses postModules + postHeader.
+ * For post level: left/right/footer use zone moduleOrder directly (zone-driven). Header still uses postHeader.
  */
 function derivePostModules(
-  pm: PostModulesConfig,
   pc: { postHeader?: PostHeaderConfig } | undefined,
   headerOrder: string[],
   leftOrder: string[],
@@ -802,11 +1531,6 @@ function derivePostModules(
   const header: string[] = [];
   const ph = pc?.postHeader;
   if (ph && ph.showBreadcrumbs) header.push("breadcrumbs");
-  if (pm.tableOfContents.enabled && pm.tableOfContents.position !== "none" && pm.tableOfContents.position === "header") header.push("tableOfContents");
-  if (pm.authorProfiles.enabled && pm.authorProfiles.position !== "none" && pm.authorProfiles.position === "header") header.push("authorProfiles");
-  if (pm.relevantPosts.enabled && pm.relevantPosts.position !== "none" && pm.relevantPosts.position === "header") header.push("relevantPosts");
-  if (pm.emailCapture.enabled && pm.emailCapture.position !== "none" && pm.emailCapture.position === "header") header.push("emailCapture");
-  if (pm.leadMagnet.enabled && pm.leadMagnet.position !== "none" && pm.leadMagnet.position === "header") header.push("leadMagnet");
   const orderModules = (order: string[], available: string[]): string[] => {
     const set = new Set(available);
     const fromOrder = order.filter((m) => set.has(m));
@@ -853,12 +1577,7 @@ function syncModuleOrderFromExplicit(
     let h = pc.headerContent.moduleOrder ?? [];
     h = removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(removeFromOrder(h, "tableOfContents"), "breadcrumbs"), "authorProfiles"), "emailCapture"), "leadMagnet");
     h = removeFromOrder(h, "relevantPosts");
-    if (pm.tableOfContents.enabled && pm.tableOfContents.position === "header") h = addToOrder(h, "tableOfContents");
     if (pc.postHeader?.showBreadcrumbs) h = addToOrder(h, "breadcrumbs");
-    if (pm.authorProfiles.enabled && pm.authorProfiles.position === "header") h = addToOrder(h, "authorProfiles");
-    if (pm.relevantPosts.enabled && pm.relevantPosts.position === "header") h = addToOrder(h, "relevantPosts");
-    if (pm.emailCapture.enabled && pm.emailCapture.position === "header") h = addToOrder(h, "emailCapture");
-    if (pm.leadMagnet.enabled && pm.leadMagnet.position === "header") h = addToOrder(h, "leadMagnet");
     return { ...pc, postModules: pm, headerContent: { ...pc.headerContent, moduleOrder: h } };
   }
   return cfg;
@@ -871,7 +1590,6 @@ function applyDerivedModules(config: SiteConfigForm): void {
   const cc = config.collectionConfig;
   const pc = config.postConfig;
   const cm = cc.collectionModules ?? defaultCollectionModules;
-  const pm = pc.postModules ?? defaultPostModules;
   const headerOrder = normalizeCollectionFilterModuleOrder(
     effectiveZoneModuleOrder(cc.headerContent.moduleOrder, cc.headerContent.modules),
     cm
@@ -898,7 +1616,6 @@ function applyDerivedModules(config: SiteConfigForm): void {
   cc.leftSidebar.show = coll.left.length > 0;
   cc.rightSidebar.show = coll.right.length > 0;
   const post = derivePostModules(
-    pm,
     pc,
     effectiveZoneModuleOrder(pc.headerContent.moduleOrder, pc.headerContent.modules),
     effectiveZoneModuleOrder(pc.leftSidebar.moduleOrder, pc.leftSidebar.modules),
@@ -940,7 +1657,7 @@ function parseLevelConfig(
   const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
   const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
-  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number } : null;
+  const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number; sideMargins?: string } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
     Array.isArray(arr) ? arr.filter((m): m is SidebarCollectionModuleType => SIDEBAR_COLLECTION_MODULES.includes(m as SidebarCollectionModuleType)) : [];
   const validSidebarPost = (arr: unknown): SidebarPostModuleType[] =>
@@ -985,21 +1702,23 @@ function parseLevelConfig(
       ? Math.min(120, Math.max(0, Number(fc.topPadding) || 0))
       : Math.min(120, Math.max(0, Number(fc.height) || 16)))
     : 16;
+  const sideMargins: FooterSideMarginsMode = fc?.sideMargins === "fullScreen" ? "fullScreen" : "postBody";
   const footerContent = fc
     ? {
         show: Boolean(fc.show ?? false),
         modules: fcModuleOrder,
         moduleOrder: fcModuleOrder,
         topPadding,
+        sideMargins,
       }
-    : { show: false, modules: [] as string[], moduleOrder: [] as string[], topPadding: 16 };
+    : { show: false, modules: [] as string[], moduleOrder: [] as string[], topPadding: 16, sideMargins: "postBody" as FooterSideMarginsMode };
   const postSort = (raw?.postSort === "az" || raw?.postSort === "popularity") ? raw.postSort as PostSortOption : "date";
   const pagRaw = raw?.pagination && typeof raw.pagination === "object" ? raw.pagination as { show?: boolean; mode?: string; postsPerPage?: number } : null;
   const validPostsPerPage = (v: unknown): PostsPerPageOption => (v === 5 || v === 10 || v === 20) ? v : 10;
   const validPaginationMode = (v: unknown): PaginationMode => (v === "infiniteScroll") ? "infiniteScroll" : "pages";
   const pagination = pagRaw
-    ? { show: Boolean(pagRaw.show ?? false), mode: validPaginationMode(pagRaw.mode), postsPerPage: validPostsPerPage(pagRaw.postsPerPage) }
-    : { show: false, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
+    ? { show: true, mode: validPaginationMode(pagRaw.mode), postsPerPage: validPostsPerPage(pagRaw.postsPerPage) }
+    : { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 as PostsPerPageOption };
   const validCollectionLayout = (v: unknown): CollectionLayoutMode =>
     (v === "grid" || v === "listRows" || v === "editorial" || v === "showcase" || v === "digest") ? v : "grid";
   const validGridColumns = (v: unknown): GridColumnsOption =>
@@ -1127,25 +1846,25 @@ function parseLevelConfig(
       const lm = pmRaw.leadMagnet && typeof pmRaw.leadMagnet === "object" ? pmRaw.leadMagnet as Record<string, unknown> : {};
       const validTocStyle = (v: unknown): TocStyle => (v === "numbered" || v === "connectedDots" || v === "bookmark") ? v : "numbered";
       return {
-        tableOfContents: { enabled: Boolean(toc.enabled ?? false), position: validModulePosition(toc.position), style: validTocStyle(toc.style) },
+        tableOfContents: { enabled: Boolean(toc.enabled ?? false), position: normalizePostModulePosition(validModulePosition(toc.position)), style: validTocStyle(toc.style) },
         breadcrumbs: { enabled: Boolean(bc.enabled ?? false), position: validModulePosition(bc.position) },
-        authorProfiles: { enabled: Boolean(ap.enabled ?? false), position: validModulePosition(ap.position) },
+        authorProfiles: { enabled: Boolean(ap.enabled ?? false), position: normalizePostModulePosition(validModulePosition(ap.position)) },
         popularPosts: {
           enabled: Boolean(pop.enabled ?? false),
-          position: validModulePosition(pop.position),
+          position: normalizePostModulePosition(validModulePosition(pop.position)),
           count: 3,
         },
-        relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: validModulePosition(rel.position) },
+        relevantPosts: { enabled: Boolean(rel.enabled ?? false), position: normalizePostModulePosition(validModulePosition(rel.position)) },
         emailCapture: {
           enabled: Boolean(ec.enabled ?? false),
-          position: validModulePosition(ec.position),
+          position: normalizePostModulePosition(validModulePosition(ec.position)),
           header: typeof ec.header === "string" ? ec.header : "Subscribe to our newsletter",
           byline: typeof ec.byline === "string" ? ec.byline : undefined,
           buttonText: typeof ec.buttonText === "string" ? ec.buttonText : "Subscribe",
         },
         leadMagnet: {
           enabled: Boolean(lm.enabled ?? false),
-          position: validModulePosition(lm.position),
+          position: normalizePostModulePosition(validModulePosition(lm.position)),
           resourceTitle: typeof lm.resourceTitle === "string" ? lm.resourceTitle : "",
           description: typeof lm.description === "string" ? lm.description : "",
           buttonText: typeof lm.buttonText === "string" ? lm.buttonText : "Get it free",
@@ -1153,13 +1872,13 @@ function parseLevelConfig(
       };
     }
     const modsPost: string[] = [...(hcModuleOrder as string[]), ...(lsModuleOrder as string[]), ...(rsModuleOrder as string[]), ...(fcModuleOrder as string[])];
-    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((hcModuleOrder as string[]).includes("tableOfContents") ? "header" : (lsModuleOrder as string[]).includes("tableOfContents") ? "leftSidebar" : "rightSidebar") : "none";
+    const tocPos: ModulePosition = modsPost.includes("tableOfContents") ? ((lsModuleOrder as string[]).includes("tableOfContents") ? "leftSidebar" : (rsModuleOrder as string[]).includes("tableOfContents") ? "rightSidebar" : "none") : "none";
     const bcPos: ModulePosition = modsPost.includes("breadcrumbs") ? ((hcModuleOrder as string[]).includes("breadcrumbs") ? "header" : (lsModuleOrder as string[]).includes("breadcrumbs") ? "leftSidebar" : "rightSidebar") : "none";
-    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((hcModuleOrder as string[]).includes("authorProfiles") ? "header" : (lsModuleOrder as string[]).includes("authorProfiles") ? "leftSidebar" : (rsModuleOrder as string[]).includes("authorProfiles") ? "rightSidebar" : (fcModuleOrder as string[]).includes("authorProfiles") ? "footer" : "none") : "none";
-    const popPos: ModulePosition = modsPost.includes("popularPosts") ? ((hcModuleOrder as string[]).includes("popularPosts") ? "header" : (lsModuleOrder as string[]).includes("popularPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("popularPosts") ? "rightSidebar" : "none") : "none";
-    const relPos: ModulePosition = modsPost.includes("relevantPosts") ? ((hcModuleOrder as string[]).includes("relevantPosts") ? "header" : (lsModuleOrder as string[]).includes("relevantPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("relevantPosts") ? "rightSidebar" : (fcModuleOrder as string[]).includes("relevantPosts") ? "footer" : "none") : "none";
-    const ecPos: ModulePosition = modsPost.includes("emailCapture") ? ((hcModuleOrder as string[]).includes("emailCapture") ? "header" : (lsModuleOrder as string[]).includes("emailCapture") ? "leftSidebar" : (rsModuleOrder as string[]).includes("emailCapture") ? "rightSidebar" : (fcModuleOrder as string[]).includes("emailCapture") ? "footer" : "none") : "none";
-    const lmPos: ModulePosition = modsPost.includes("leadMagnet") ? ((hcModuleOrder as string[]).includes("leadMagnet") ? "header" : (lsModuleOrder as string[]).includes("leadMagnet") ? "leftSidebar" : (rsModuleOrder as string[]).includes("leadMagnet") ? "rightSidebar" : (fcModuleOrder as string[]).includes("leadMagnet") ? "footer" : "none") : "none";
+    const apPos: ModulePosition = modsPost.includes("authorProfiles") ? ((lsModuleOrder as string[]).includes("authorProfiles") ? "leftSidebar" : (rsModuleOrder as string[]).includes("authorProfiles") ? "rightSidebar" : (fcModuleOrder as string[]).includes("authorProfiles") ? "footer" : "none") : "none";
+    const popPos: ModulePosition = modsPost.includes("popularPosts") ? ((lsModuleOrder as string[]).includes("popularPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("popularPosts") ? "rightSidebar" : "none") : "none";
+    const relPos: ModulePosition = modsPost.includes("relevantPosts") ? ((lsModuleOrder as string[]).includes("relevantPosts") ? "leftSidebar" : (rsModuleOrder as string[]).includes("relevantPosts") ? "rightSidebar" : (fcModuleOrder as string[]).includes("relevantPosts") ? "footer" : "none") : "none";
+    const ecPos: ModulePosition = modsPost.includes("emailCapture") ? ((lsModuleOrder as string[]).includes("emailCapture") ? "leftSidebar" : (rsModuleOrder as string[]).includes("emailCapture") ? "rightSidebar" : (fcModuleOrder as string[]).includes("emailCapture") ? "footer" : "none") : "none";
+    const lmPos: ModulePosition = modsPost.includes("leadMagnet") ? ((lsModuleOrder as string[]).includes("leadMagnet") ? "leftSidebar" : (rsModuleOrder as string[]).includes("leadMagnet") ? "rightSidebar" : (fcModuleOrder as string[]).includes("leadMagnet") ? "footer" : "none") : "none";
     return {
       tableOfContents: { enabled: tocPos !== "none", position: tocPos, style: "numbered" as TocStyle },
       breadcrumbs: { enabled: bcPos !== "none", position: bcPos },
@@ -1210,6 +1929,7 @@ function parseLevelConfig(
         showTags: Boolean(phRaw.showTags ?? false),
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
+        showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -1218,7 +1938,7 @@ function parseLevelConfig(
   const normalizedHcOrder = normalizeCollectionFilterModuleOrder(finalHcOrder, collectionModules);
   const normalizedLsOrder = normalizeCollectionFilterModuleOrder(finalLsOrder, collectionModules);
   const normalizedRsOrder = normalizeCollectionFilterModuleOrder(finalRsOrder, collectionModules);
-  const postDerived = derivePostModules(postModules, postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
+  const postDerived = derivePostModules(postHeaderForDerive ? { postHeader: postHeaderForDerive } : undefined, finalHcOrder, finalLsOrder, finalRsOrder, finalFcOrder);
   const base: CollectionLevelConfig = {
     showDate: Boolean(raw?.showDate ?? true),
     showAuthor: Boolean(raw?.showAuthor ?? false),
@@ -1236,6 +1956,7 @@ function parseLevelConfig(
     featuredImage,
   };
   if (level === "collection") {
+    base.showPostExcerpt = Boolean(raw?.showPostExcerpt ?? true);
     const faRaw = raw?.featuredArticle && typeof raw.featuredArticle === "object" ? raw.featuredArticle as Record<string, unknown> : null;
     if (faRaw) {
       const fa: FeaturedArticleConfig = {
@@ -1423,6 +2144,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     a.headerContent.modules.every((m, i) => m === b.headerContent.modules[i]);
   const fcEqual = (a.footerContent?.show ?? false) === (b.footerContent?.show ?? false) &&
     (a.footerContent?.topPadding ?? 16) === (b.footerContent?.topPadding ?? 16) &&
+    (a.footerContent?.sideMargins ?? "postBody") === (b.footerContent?.sideMargins ?? "postBody") &&
     (a.footerContent?.modules?.length ?? 0) === (b.footerContent?.modules?.length ?? 0) &&
     (a.footerContent?.modules ?? []).every((m, i) => m === (b.footerContent?.modules ?? [])[i]);
   const smEqual = a.socialMediaLinks.show === b.socialMediaLinks.show &&
@@ -1456,6 +2178,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     (a.headerContent.moduleOrder ?? []).every((m, i) => m === (b.headerContent.moduleOrder ?? [])[i]) &&
     (a.footerContent?.moduleOrder ?? []).every((m, i) => m === (b.footerContent?.moduleOrder ?? [])[i]);
   const base = a.showDate === b.showDate && a.showAuthor === b.showAuthor && a.showReadingTime === b.showReadingTime &&
+    (a as CollectionLevelConfig).showPostExcerpt === (b as CollectionLevelConfig).showPostExcerpt &&
     postSortEqual && pagEqual && collLayoutEqual && gridColsEqual && faEqual && cmEqual && pmEqual && moduleOrderEqual && fcEqual && lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
   if ("progressBar" in a && "progressBar" in b) {
     const pa = (a as PostLevelConfig).progressBar;
@@ -1470,6 +2193,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showTags ?? false) === (phB.showTags ?? false) &&
       (phA.showCategories ?? false) === (phB.showCategories ?? false) &&
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
+      (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "");
     return base && pa.show === pb.show && phEqual;
   }
@@ -1495,6 +2219,7 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
 
 export default function Configure() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const revalidator = useRevalidator();
   const siteKey = searchParams.get("siteKey");
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1503,7 +2228,6 @@ export default function Configure() {
   const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [saving, setSaving] = useState(false);
-  const [copiedSiteKey, setCopiedSiteKey] = useState<string | null>(null);
   const [authors, setAuthors] = useState<BlogAuthorOption[]>([]);
   const [blogItems, setBlogItems] = useState<Array<{
     id?: string;
@@ -1530,6 +2254,7 @@ export default function Configure() {
   const [clearSettingsModalOpen, setClearSettingsModalOpen] = useState(false);
   const [clearSettingsCollection, setClearSettingsCollection] = useState(false);
   const [clearSettingsPost, setClearSettingsPost] = useState(false);
+  const [paywallSettingsModalOpen, setPaywallSettingsModalOpen] = useState(false);
   /** Cached API templates for comparing config to applied template (name + equality). */
   const [templateCatalogCollection, setTemplateCatalogCollection] = useState<Template[]>([]);
   const [templateCatalogPost, setTemplateCatalogPost] = useState<Template[]>([]);
@@ -1538,9 +2263,11 @@ export default function Configure() {
   const [previewViewSyncToken, setPreviewViewSyncToken] = useState(0);
   const [commentSettings, setCommentSettings] = useState<{
     commentsEnabled: boolean;
+    allowNewComments: boolean;
     allowAnonymousComments: boolean;
     subscriberCommentsEnabled: boolean;
     apiKeyVerified: boolean;
+    apiKeyInvalid: boolean;
     requireApproval: boolean;
     autoCloseAfterDays: number | null;
     notifyEmail: boolean;
@@ -1550,18 +2277,12 @@ export default function Configure() {
     sortOrder: "newest" | "oldest" | "most_liked";
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
-  const [commentSettingsSaving, setCommentSettingsSaving] = useState(false);
   const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
-  const [commentApiKeyInput, setCommentApiKeyInput] = useState("");
-  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<false | "setup" | "edit">(false);
-  const [commentApiKeyStatus, setCommentApiKeyStatus] = useState<
-    "unverified" | "verifying" | "verified" | "invalid" | "missing_permission"
-  >("unverified");
+  const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
     authorProfiles: false,
     pagination: false,
-    collectionLayout: false,
     featuredArticle: false,
     featuredImage: false,
     filtering: false,
@@ -1582,16 +2303,19 @@ export default function Configure() {
     socialMediaLinks: false,
     postHeader: false,
     comments: false,
-    paywall: false,
   });
   const [paywallForm, setPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
     footerDescription: "",
+    eyebrowText: "",
+    headlineText: "",
     featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const [savedPaywallForm, setSavedPaywallForm] = useState<PaywallFormState>({
     subscribeUrl: "",
     footerDescription: "",
+    eyebrowText: "",
+    headlineText: "",
     featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
   });
   const previewDebugEnabled = useMemo(() => isPreviewDebugEnabled(), []);
@@ -1645,6 +2369,32 @@ export default function Configure() {
       ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
+
+  // Sites can block framing (Squarespace's Clickjack protection sends X-Frame-Options: SAMEORIGIN),
+  // which renders the iframe as a browser error page. Only the server can read that header.
+  const [previewBlockedBy, setPreviewBlockedBy] = useState<
+    "x-frame-options" | "frame-ancestors" | null | "pending"
+  >("pending");
+  useEffect(() => {
+    if (!effectiveSiteKey) return;
+    let cancelled = false;
+    setPreviewBlockedBy("pending");
+    fetch(`/api/config/preview-embeddable/${encodeURIComponent(effectiveSiteKey)}`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setPreviewBlockedBy(data?.blockedBy ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewBlockedBy(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveSiteKey]);
+
   const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
   const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
 
@@ -1653,6 +2403,8 @@ export default function Configure() {
     return JSON.stringify({
       subscribeUrl: effectiveSite.paywallSettings?.subscribeUrl ?? null,
       footerDescription: effectiveSite.paywallSettings?.footerDescription ?? null,
+      eyebrowText: effectiveSite.paywallSettings?.eyebrowText ?? null,
+      headlineText: effectiveSite.paywallSettings?.headlineText ?? null,
       featureItems: effectiveSite.paywallSettings?.featureItems ?? [],
     });
   }, [effectiveSite?.siteKey, effectiveSite?.paywallSettings]);
@@ -1667,6 +2419,8 @@ export default function Configure() {
     const next: PaywallFormState = {
       subscribeUrl: ps?.subscribeUrl ?? "",
       footerDescription: ps?.footerDescription ?? "",
+      eyebrowText: ps?.eyebrowText ?? "",
+      headlineText: ps?.headlineText ?? "",
       featureItems: feats.length ? feats : [...DEFAULT_PAYWALL_FEATURE_ITEMS],
     };
     setPaywallForm(next);
@@ -1683,9 +2437,11 @@ export default function Configure() {
       .then((data) => {
         const settings = data && typeof data === "object" ? {
           commentsEnabled: data.commentsEnabled ?? true,
+          allowNewComments: data.allowNewComments ?? true,
           allowAnonymousComments: data.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
           apiKeyVerified: data.apiKeyVerified ?? false,
+          apiKeyInvalid: data.apiKeyInvalid ?? false,
           requireApproval: data.requireApproval ?? false,
           autoCloseAfterDays: (data.autoCloseAfterDays ?? null) as number | null,
           notifyEmail: data.notifyEmail ?? true,
@@ -1695,9 +2451,11 @@ export default function Configure() {
           sortOrder: (["newest", "oldest", "most_liked"].includes(data.sortOrder) ? data.sortOrder : "newest") as "newest" | "oldest" | "most_liked",
         } : {
           commentsEnabled: true,
+          allowNewComments: true,
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
+          apiKeyInvalid: false,
           requireApproval: false,
           autoCloseAfterDays: null as number | null,
           notifyEmail: true,
@@ -1708,14 +2466,15 @@ export default function Configure() {
         };
         setCommentSettings(settings);
         setSavedCommentSettings(settings);
-        setCommentApiKeyStatus(settings.apiKeyVerified ? "verified" : "unverified");
       })
       .catch(() => {
         const settings = {
           commentsEnabled: true,
+          allowNewComments: true,
           allowAnonymousComments: true,
           subscriberCommentsEnabled: false,
           apiKeyVerified: false,
+          apiKeyInvalid: false,
           requireApproval: false,
           autoCloseAfterDays: null as number | null,
           notifyEmail: true,
@@ -1833,6 +2592,7 @@ export default function Configure() {
 
   const commentSettingsDirty = commentSettings && savedCommentSettings &&
     (commentSettings.commentsEnabled !== savedCommentSettings.commentsEnabled ||
+     commentSettings.allowNewComments !== savedCommentSettings.allowNewComments ||
      commentSettings.allowAnonymousComments !== savedCommentSettings.allowAnonymousComments ||
      commentSettings.subscriberCommentsEnabled !== savedCommentSettings.subscriberCommentsEnabled ||
      commentSettings.requireApproval !== savedCommentSettings.requireApproval ||
@@ -1841,7 +2601,15 @@ export default function Configure() {
      commentSettings.allowLikes !== savedCommentSettings.allowLikes ||
      commentSettings.allowThreadedReplies !== savedCommentSettings.allowThreadedReplies ||
      commentSettings.sortOrder !== savedCommentSettings.sortOrder);
-  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty;
+  const paywallFormDirty =
+    shouldShowViewerModeToggle &&
+    (paywallForm.subscribeUrl !== savedPaywallForm.subscribeUrl ||
+      paywallForm.footerDescription !== savedPaywallForm.footerDescription ||
+      paywallForm.eyebrowText !== savedPaywallForm.eyebrowText ||
+      paywallForm.headlineText !== savedPaywallForm.headlineText ||
+      paywallForm.featureItems.length !== savedPaywallForm.featureItems.length ||
+      paywallForm.featureItems.some((item, i) => item !== savedPaywallForm.featureItems[i]));
+  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty || paywallFormDirty;
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
@@ -1873,28 +2641,23 @@ export default function Configure() {
     };
   }, [me]);
 
-  const unmodifiedTemplateInUse = useMemo((): { name: string; kind: "collection" | "post" } | null => {
+  /** Template assigned to the current level (post configs always have one; collection may not). */
+  const templateInUse = useMemo((): { name: string; kind: "collection" | "post" } | null => {
     if (selectedLevel === "collection") {
       const tid = config.collectionTemplateId;
       if (!tid) return null;
       const t = templateCatalogCollection.find((x) => x.id === tid);
-      if (!t?.collectionConfig || typeof t.collectionConfig !== "object") return null;
-      const parsed = parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection");
-      if (!levelConfigsEqual(config.collectionConfig, parsed)) return null;
+      if (!t) return null;
       return { name: t.name, kind: "collection" };
     }
     const tid = config.postTemplateId;
     if (!tid) return null;
     const t = templateCatalogPost.find((x) => x.id === tid);
-    if (!t?.postConfig || typeof t.postConfig !== "object") return null;
-    const parsed = parseLevelConfig(t.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
-    if (!levelConfigsEqual(config.postConfig, parsed)) return null;
+    if (!t) return null;
     return { name: t.name, kind: "post" };
   }, [
     selectedLevel,
-    config.collectionConfig,
     config.collectionTemplateId,
-    config.postConfig,
     config.postTemplateId,
     templateCatalogCollection,
     templateCatalogPost,
@@ -1903,72 +2666,153 @@ export default function Configure() {
     () => isStoryPostTemplateActive(config, templateCatalogPost),
     [config, templateCatalogPost]
   );
-  const activePostTemplateKey = useMemo(
-    () => resolveActivePostTemplateKey(config, templateCatalogPost),
+  const isFeaturePostTemplate = useMemo(
+    () => isFeaturePostTemplateActive(config, templateCatalogPost),
     [config, templateCatalogPost]
   );
-  const activePostTemplate = useMemo(() => {
-    const tid = config.postTemplateId;
-    if (tid) {
-      const byId = templateCatalogPost.find((t) => t.id === tid);
-      if (byId) return byId;
-    }
-    return (
-      templateCatalogPost.find((t) => t.templateKey === activePostTemplateKey) ?? null
-    );
-  }, [config.postTemplateId, templateCatalogPost, activePostTemplateKey]);
-  const postControlLocks = useMemo(
-    () => getPostTemplateControlLocks(activePostTemplateKey),
+  const isWriterPostTemplate = useMemo(
+    () => isWriterPostTemplateActive(config, templateCatalogPost),
+    [config, templateCatalogPost]
+  );
+  const activePostTemplateKey = useMemo(
+    () => (selectedLevel === "post" ? getActivePostTemplateKey(config, templateCatalogPost) : null),
+    [selectedLevel, config, templateCatalogPost]
+  );
+  const activeCollectionTemplateKey = useMemo(
+    () => getActiveCollectionTemplateKey(config, templateCatalogCollection),
+    [config, templateCatalogCollection]
+  );
+  const postTemplateLocks = useMemo(
+    () => getPostTemplateLocks(activePostTemplateKey),
     [activePostTemplateKey]
   );
-  const postImageSettingsLocked =
-    selectedLevel === "post" &&
-    (postControlLocks.imageSettingsWhenFeaturedShown
-      ? effectiveConfig.featuredImage.show
-      : false);
-
-  /** Ensure a post template is always selected; apply default template config for fresh setups. */
+  const collectionTemplateLocks = useMemo(
+    () => getCollectionTemplateLocks(activeCollectionTemplateKey),
+    [activeCollectionTemplateKey]
+  );
+  const collectionFilterLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "filter", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const collectionPopularPostsLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "popularPosts", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const collectionEmailCaptureLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "emailCapture", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const collectionLeadMagnetLocations = useMemo(
+    () => getCollectionModuleAllowedLocations(activeCollectionTemplateKey, "leadMagnet", collectionTemplateLocks),
+    [activeCollectionTemplateKey, collectionTemplateLocks]
+  );
+  const postFeatureSidebarLocations = useMemo(
+    () => filterFeatureLocationsByLocks(POST_FEATURE_SIDEBAR_LOCATIONS, postTemplateLocks),
+    [postTemplateLocks]
+  );
+  const postFeatureSidebarFooterLocations = useMemo(
+    () => filterFeatureLocationsByLocks(POST_FEATURE_SIDEBAR_FOOTER_LOCATIONS, postTemplateLocks),
+    [postTemplateLocks]
+  );
+  const showPostTableOfContentsControls =
+    postFeatureSidebarLocations.length > 0 && !isStoryPostTemplate && !postTemplateLocks.has("tableOfContents");
+  const showPostCaptionInHeader = useMemo(() => {
+    if (selectedLevel !== "post") return false;
+    if (isWriterPostTemplate) return false;
+    if (isFeaturePostTemplate) return true;
+    return effectiveConfig.featuredImage.show;
+  }, [selectedLevel, isWriterPostTemplate, isFeaturePostTemplate, effectiveConfig.featuredImage.show]);
+  const isPostControlLocked = useCallback(
+    (key: PostTemplateLockKey) => selectedLevel === "post" && postTemplateLocks.has(key),
+    [selectedLevel, postTemplateLocks]
+  );
+  const isCollectionControlLocked = useCallback(
+    (key: CollectionTemplateLockKey) => selectedLevel === "collection" && collectionTemplateLocks.has(key),
+    [selectedLevel, collectionTemplateLocks]
+  );
+  const postTemplateImagePositionOptions = useMemo(() => {
+    if (!activePostTemplateKey) return null;
+    return POST_TEMPLATE_IMAGE_POSITION_OPTIONS[activePostTemplateKey] ?? null;
+  }, [activePostTemplateKey]);
+  const appliedPostTemplateConfig = useMemo(
+    () => resolvePostTemplateConfig(config.postTemplateId, templateCatalogPost),
+    [config.postTemplateId, templateCatalogPost]
+  );
+  const appliedCollectionTemplateConfig = useMemo(
+    () => resolveCollectionTemplateConfig(config.collectionTemplateId, templateCatalogCollection),
+    [config.collectionTemplateId, templateCatalogCollection]
+  );
+  // Keep locked post-template fields pinned to the template when a template is active.
   useEffect(() => {
-    if (configLoading || templateCatalogPost.length === 0) return;
-    const tid = config.postTemplateId;
-    const valid = Boolean(tid && templateCatalogPost.some((t) => t.id === tid));
-    if (valid) return;
-
-    const inferredKey = inferPostTemplateKey(config.postConfig);
-    const matchByKey =
-      (inferredKey && templateCatalogPost.find((t) => t.templateKey === inferredKey)) ||
-      findDefaultPostTemplate(templateCatalogPost);
-    if (!matchByKey) return;
-
-    const isPristinePost = levelConfigsEqual(config.postConfig, defaultPostConfig);
-    const savedAlsoMissing =
-      !savedConfig.postTemplateId ||
-      !templateCatalogPost.some((t) => t.id === savedConfig.postTemplateId);
-
-    if (isPristinePost) {
-      const next = applyPostTemplateToSiteConfig(config, matchByKey);
-      setConfig(next);
-      if (savedAlsoMissing && levelConfigsEqual(savedConfig.postConfig, defaultPostConfig)) {
-        setSavedConfig(next);
-      }
-      return;
-    }
-
-    setConfig((prev) => ({ ...prev, postTemplateId: matchByKey.id }));
-    if (savedAlsoMissing) {
-      setSavedConfig((prev) => ({ ...prev, postTemplateId: matchByKey.id }));
-    }
+    if (!config.postTemplateId || !appliedPostTemplateConfig || postTemplateLocks.size === 0) return;
+    const enforced = enforcePostTemplateLockedValues(
+      config.postConfig,
+      appliedPostTemplateConfig,
+      postTemplateLocks
+    );
+    if (enforced === config.postConfig) return;
+    if (levelConfigsEqual(enforced, config.postConfig)) return;
+    setConfig((prev) => {
+      if (prev.postTemplateId !== config.postTemplateId) return prev;
+      const nextEnforced = enforcePostTemplateLockedValues(
+        prev.postConfig,
+        appliedPostTemplateConfig,
+        postTemplateLocks
+      );
+      if (levelConfigsEqual(nextEnforced, prev.postConfig)) return prev;
+      return { ...prev, postConfig: nextEnforced };
+    });
   }, [
-    configLoading,
-    templateCatalogPost,
     config.postTemplateId,
     config.postConfig,
-    savedConfig.postTemplateId,
-    savedConfig.postConfig,
+    appliedPostTemplateConfig,
+    postTemplateLocks,
   ]);
-
+  // Keep locked collection-template fields pinned (universal locks apply even without a template id).
+  useEffect(() => {
+    if (collectionTemplateLocks.size === 0) return;
+    const locks = getCollectionTemplateLocks(getActiveCollectionTemplateKey(config, templateCatalogCollection));
+    if (locks.size === 0) return;
+    const enforced = enforceCollectionTemplateLockedValues(
+      config.collectionConfig,
+      appliedCollectionTemplateConfig,
+      locks
+    );
+    if (enforced === config.collectionConfig) return;
+    if (levelConfigsEqual(enforced, config.collectionConfig)) return;
+    setConfig((prev) => {
+      const nextLocks = getCollectionTemplateLocks(getActiveCollectionTemplateKey(prev, templateCatalogCollection));
+      const nextEnforced = enforceCollectionTemplateLockedValues(
+        prev.collectionConfig,
+        resolveCollectionTemplateConfig(prev.collectionTemplateId, templateCatalogCollection),
+        nextLocks
+      );
+      if (levelConfigsEqual(nextEnforced, prev.collectionConfig)) return prev;
+      return { ...prev, collectionConfig: nextEnforced };
+    });
+  }, [
+    config.collectionTemplateId,
+    config.collectionConfig,
+    appliedCollectionTemplateConfig,
+    collectionTemplateLocks,
+    templateCatalogCollection,
+  ]);
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
-  const updateLevelConfigPath = (subPath: string, value: unknown) => updateConfig(`${pathPrefix}.${subPath}`, value);
+  const updateLevelConfigPath = (subPath: string, value: unknown) => {
+    if (
+      selectedLevel === "post" &&
+      isPostTemplatePathLocked(subPath, postTemplateLocks)
+    ) {
+      return;
+    }
+    if (
+      selectedLevel === "collection" &&
+      isCollectionTemplatePathLocked(subPath, collectionTemplateLocks)
+    ) {
+      return;
+    }
+    updateConfig(`${pathPrefix}.${subPath}`, value);
+  };
   const moduleOrderPathForLocation = useCallback((loc: FeatureModuleLocation): "headerContent.moduleOrder" | "leftSidebar.moduleOrder" | "rightSidebar.moduleOrder" | "footerContent.moduleOrder" => {
     if (loc === "header") return "headerContent.moduleOrder";
     if (loc === "leftSidebar") return "leftSidebar.moduleOrder";
@@ -1995,8 +2839,12 @@ export default function Configure() {
   const addFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
       if (selectedLevel === "post") {
-        if (loc === "leftSidebar" && postControlLocks.leftSidebar) return;
-        if (loc === "rightSidebar" && postControlLocks.rightSidebar) return;
+        if (loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")) return;
+      }
+      if (selectedLevel === "collection") {
+        if (loc === "leftSidebar" && collectionTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && collectionTemplateLocks.has("rightSidebar")) return;
       }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.enabled`, true);
@@ -2012,20 +2860,17 @@ export default function Configure() {
       if (order.includes(moduleId)) return;
       updateLevelConfigPath(zonePath, [moduleId, ...order.filter((m) => m !== moduleId)]);
     },
-    [
-      effectiveConfig,
-      moduleOrderForLocation,
-      moduleOrderPathForLocation,
-      postControlLocks.leftSidebar,
-      postControlLocks.rightSidebar,
-      selectedLevel,
-    ]
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks, collectionTemplateLocks]
   );
   const removeFeatureLocation = useCallback(
     (moduleId: string, loc: FeatureModuleLocation, postHeaderModuleKey?: PostHeaderModuleKey) => {
       if (selectedLevel === "post") {
-        if (loc === "leftSidebar" && postControlLocks.leftSidebar) return;
-        if (loc === "rightSidebar" && postControlLocks.rightSidebar) return;
+        if (loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")) return;
+      }
+      if (selectedLevel === "collection") {
+        if (loc === "leftSidebar" && collectionTemplateLocks.has("leftSidebar")) return;
+        if (loc === "rightSidebar" && collectionTemplateLocks.has("rightSidebar")) return;
       }
       if (selectedLevel === "post" && loc === "header" && postHeaderModuleKey) {
         updateLevelConfigPath(`postModules.${postHeaderModuleKey}.position`, "none");
@@ -2035,23 +2880,7 @@ export default function Configure() {
       const order = moduleOrderForLocation(effectiveConfig, loc);
       updateLevelConfigPath(zonePath, order.filter((m) => m !== moduleId));
     },
-    [
-      effectiveConfig,
-      moduleOrderForLocation,
-      moduleOrderPathForLocation,
-      postControlLocks.leftSidebar,
-      postControlLocks.rightSidebar,
-      selectedLevel,
-    ]
-  );
-  const isPostSidebarLocationLocked = useCallback(
-    (loc: FeatureModuleLocation): boolean => {
-      if (selectedLevel !== "post") return false;
-      if (loc === "leftSidebar") return postControlLocks.leftSidebar;
-      if (loc === "rightSidebar") return postControlLocks.rightSidebar;
-      return false;
-    },
-    [selectedLevel, postControlLocks.leftSidebar, postControlLocks.rightSidebar]
+    [effectiveConfig, moduleOrderForLocation, moduleOrderPathForLocation, selectedLevel, postTemplateLocks, collectionTemplateLocks]
   );
   const renderFeatureLocationControl = useCallback((
     moduleId: string,
@@ -2059,34 +2888,39 @@ export default function Configure() {
     postHeaderModuleKey?: PostHeaderModuleKey,
     locationLabel = "Location",
   ) => {
+    const isLocLocked = (loc: FeatureModuleLocation) =>
+      (selectedLevel === "post" &&
+        ((loc === "leftSidebar" && postTemplateLocks.has("leftSidebar")) ||
+          (loc === "rightSidebar" && postTemplateLocks.has("rightSidebar")))) ||
+      (selectedLevel === "collection" &&
+        ((loc === "leftSidebar" && collectionTemplateLocks.has("leftSidebar")) ||
+          (loc === "rightSidebar" && collectionTemplateLocks.has("rightSidebar"))));
     const selectedLocations = allowedLocations.filter((loc) => isModuleInFeatureLocation(moduleId, loc, postHeaderModuleKey));
+    const visibleSelectedLocations = selectedLocations.filter((loc) => !isLocLocked(loc));
     const availableLocations = allowedLocations.filter(
-      (loc) => !selectedLocations.includes(loc) && !isPostSidebarLocationLocked(loc)
+      (loc) => !selectedLocations.includes(loc) && !isLocLocked(loc)
     );
+    if (visibleSelectedLocations.length === 0 && availableLocations.length === 0) return null;
     return (
       <div className="space-y-2">
         <Label className="text-xs text-[#6b6b6b]">{locationLabel}</Label>
         <div className="flex flex-wrap items-center gap-2">
-          {selectedLocations.map((loc) => {
-            const locLocked = isPostSidebarLocationLocked(loc);
-            return (
+          {visibleSelectedLocations.map((loc) => (
               <span
                 key={loc}
-                className={`inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]${locLocked ? " opacity-60" : ""}`}
+                className="inline-flex items-center gap-1 rounded-full border border-[#e5e4e0] bg-white px-2 py-0.5 text-xs text-[#4a4a4a]"
               >
                 {FEATURE_LOCATION_LABELS[loc]}
                 <button
                   type="button"
-                  onClick={() => !locLocked && removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
-                  disabled={locLocked}
-                  className="rounded p-0.5 hover:bg-red-100 hover:text-red-600 disabled:pointer-events-none disabled:opacity-40"
+                  onClick={() => removeFeatureLocation(moduleId, loc, postHeaderModuleKey)}
+                  className="rounded p-0.5 hover:bg-red-100 hover:text-red-600"
                   aria-label={`Remove ${FEATURE_LOCATION_LABELS[loc]}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
               </span>
-            );
-          })}
+          ))}
           {availableLocations.length > 0 && (
             <Select value="" onValueChange={(v) => v && addFeatureLocation(moduleId, v as FeatureModuleLocation, postHeaderModuleKey)}>
               <SelectTrigger className="h-8 w-[170px] text-xs">
@@ -2102,7 +2936,7 @@ export default function Configure() {
         </div>
       </div>
     );
-  }, [addFeatureLocation, isModuleInFeatureLocation, isPostSidebarLocationLocked, removeFeatureLocation]);
+  }, [addFeatureLocation, isModuleInFeatureLocation, removeFeatureLocation, selectedLevel, postTemplateLocks, collectionTemplateLocks]);
   /** Aligns with iframe postMessage: collection tab = list; post tab = single post (default first post if none selected). */
   const previewSelectedPostIndex =
     selectedLevel === "collection" ? -1 : selectedPostIndex >= 0 ? selectedPostIndex : 0;
@@ -2168,6 +3002,8 @@ export default function Configure() {
           ? {
               subscribeUrl: paywallForm.subscribeUrl.trim() || null,
               footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
+              eyebrowText: paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX) || null,
+              headlineText: paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX) || null,
               featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
             }
           : null,
@@ -2187,6 +3023,8 @@ export default function Configure() {
     shouldShowViewerModeToggle,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
+    paywallForm.eyebrowText,
+    paywallForm.headlineText,
     paywallForm.featureItems,
   ]);
 
@@ -2202,6 +3040,8 @@ export default function Configure() {
           ? {
               subscribeUrl: paywallForm.subscribeUrl,
               footerDescription: paywallForm.footerDescription,
+              eyebrowText: paywallForm.eyebrowText,
+              headlineText: paywallForm.headlineText,
               featureItems: paywallForm.featureItems,
             }
           : null,
@@ -2215,6 +3055,8 @@ export default function Configure() {
       shouldShowViewerModeToggle,
       paywallForm.subscribeUrl,
       paywallForm.footerDescription,
+      paywallForm.eyebrowText,
+      paywallForm.headlineText,
       paywallForm.featureItems,
       previewSelectedPostIndex,
     ]
@@ -2256,6 +3098,12 @@ export default function Configure() {
                     footerDescription: paywallForm.footerDescription.trim()
                       ? paywallForm.footerDescription.trim().slice(0, 160)
                       : null,
+                    eyebrowText: paywallForm.eyebrowText.trim()
+                      ? paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX)
+                      : null,
+                    headlineText: paywallForm.headlineText.trim()
+                      ? paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX)
+                      : null,
                     featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
                   },
                 }
@@ -2270,6 +3118,7 @@ export default function Configure() {
               body: JSON.stringify({
                 siteKey: keyToSave,
                 commentsEnabled: commentSettings.commentsEnabled,
+                allowNewComments: commentSettings.allowNewComments,
                 allowAnonymousComments: commentSettings.allowAnonymousComments,
                 subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled,
                 requireApproval: commentSettings.requireApproval,
@@ -2292,6 +3141,8 @@ export default function Configure() {
           setSavedPaywallForm({
             subscribeUrl: paywallForm.subscribeUrl,
             footerDescription: paywallForm.footerDescription,
+            eyebrowText: paywallForm.eyebrowText,
+            headlineText: paywallForm.headlineText,
             featureItems: paywallForm.featureItems.slice(0, 4),
           });
           getDashboardMe().then((d) => setMe(d ?? null));
@@ -2322,6 +3173,8 @@ export default function Configure() {
     shouldShowViewerModeToggle,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
+    paywallForm.eyebrowText,
+    paywallForm.headlineText,
     paywallForm.featureItems,
   ]);
 
@@ -2335,21 +3188,19 @@ export default function Configure() {
   const handleConfirmClearSettings = useCallback(() => {
     if (!clearSettingsCollection && !clearSettingsPost) return;
     setConfig((prev) => {
-      let next: SiteConfigForm = { ...prev };
+      const next: SiteConfigForm = { ...prev };
       if (clearSettingsCollection) {
         next.collectionConfig = JSON.parse(JSON.stringify(defaultCollectionConfig)) as CollectionLevelConfig;
         next.collectionTemplateId = null;
       }
       if (clearSettingsPost) {
-        const defaultPostTpl = findDefaultPostTemplate(templateCatalogPost);
-        if (defaultPostTpl) {
-          next = applyPostTemplateToSiteConfig(next, defaultPostTpl);
+        const reporter = templateCatalogPost.find((t) => t.templateKey === "reporter");
+        if (reporter?.postConfig && typeof reporter.postConfig === "object") {
+          next.postConfig = parseLevelConfig(reporter.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+          next.postTemplateId = reporter.id;
         } else {
           next.postConfig = JSON.parse(JSON.stringify(defaultPostConfig)) as PostLevelConfig;
           next.postTemplateId = null;
-          const copy = JSON.parse(JSON.stringify(next)) as SiteConfigForm;
-          applyDerivedModules(copy);
-          return copy;
         }
       }
       const copy = JSON.parse(JSON.stringify(next)) as SiteConfigForm;
@@ -2359,26 +3210,32 @@ export default function Configure() {
     setClearSettingsModalOpen(false);
     setClearSettingsCollection(false);
     setClearSettingsPost(false);
-    toast.success("Selected layout settings were reset to defaults. Save to publish on your blog.");
+    toast.success(
+      clearSettingsPost && !clearSettingsCollection
+        ? "Post layout was reset to The Reporter template. Save to publish on your blog."
+        : "Selected layout settings were reset to defaults. Save to publish on your blog."
+    );
   }, [clearSettingsCollection, clearSettingsPost, templateCatalogPost]);
 
   const handleSelectTemplate = useCallback(
     (template: Template, level: "collection" | "post") => {
       if (level === "collection" && template.collectionConfig && typeof template.collectionConfig === "object") {
         const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
+        const locks = getCollectionTemplateLocks(template.templateKey);
+        const enforcedCollection = enforceCollectionTemplateLockedValues(parsedCollection, parsedCollection, locks);
         setConfig((prev) => ({
           ...prev,
-          collectionConfig: parsedCollection,
+          collectionConfig: enforcedCollection,
           collectionTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
           console.log("[Configure] Applied collection template", {
             templateId: template.id,
             templateName: template.name,
-            leftSidebar: parsedCollection.leftSidebar,
-            rightSidebar: parsedCollection.rightSidebar,
-            headerContent: parsedCollection.headerContent,
-            footerContent: parsedCollection.footerContent,
+            leftSidebar: enforcedCollection.leftSidebar,
+            rightSidebar: enforcedCollection.rightSidebar,
+            headerContent: enforcedCollection.headerContent,
+            footerContent: enforcedCollection.footerContent,
           });
         }
         toast.success(`Applied "${template.name}" collection template.`);
@@ -2420,13 +3277,31 @@ export default function Configure() {
         const [head, ...subParts] = rest.split(".");
         const sub =
           head === "loggedOut" || head === "loggedIn" ? subParts.join(".") : rest;
-        next.collectionConfig = updateLevelConfig(prev.collectionConfig, sub, value) as CollectionLevelConfig;
+        const collLocks = getCollectionTemplateLocks(getActiveCollectionTemplateKey(prev, templateCatalogCollection));
+        if (isCollectionTemplatePathLocked(sub, collLocks)) {
+          return prev;
+        }
+        let updatedCollection = updateLevelConfig(prev.collectionConfig, sub, value) as CollectionLevelConfig;
+        const tplCollCfg = resolveCollectionTemplateConfig(prev.collectionTemplateId, templateCatalogCollection);
+        if (collLocks.size > 0) {
+          updatedCollection = enforceCollectionTemplateLockedValues(updatedCollection, tplCollCfg, collLocks);
+        }
+        next.collectionConfig = updatedCollection;
       } else if (path.startsWith("postConfig.")) {
         const rest = path.slice("postConfig.".length);
         const [head, ...subParts] = rest.split(".");
         const sub =
           head === "loggedOut" || head === "loggedIn" ? subParts.join(".") : rest;
-        next.postConfig = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
+        const locks = getPostTemplateLocks(getActivePostTemplateKey(prev, templateCatalogPost));
+        if (isPostTemplatePathLocked(sub, locks)) {
+          return prev;
+        }
+        let updatedPost = updateLevelConfig(prev.postConfig, sub, value) as PostLevelConfig;
+        const tplCfg = resolvePostTemplateConfig(prev.postTemplateId, templateCatalogPost);
+        if (tplCfg && locks.size > 0) {
+          updatedPost = enforcePostTemplateLockedValues(updatedPost, tplCfg, locks);
+        }
+        next.postConfig = updatedPost;
       } else if (path === "collectionTemplateId") next.collectionTemplateId = value as string | null;
       else if (path === "postTemplateId") next.postTemplateId = value as string | null;
       return next;
@@ -2438,6 +3313,7 @@ export default function Configure() {
     if (path === "showDate") return { ...cfg, showDate: value as boolean };
     if (path === "showAuthor") return { ...cfg, showAuthor: value as boolean };
     if (path === "showReadingTime") return { ...cfg, showReadingTime: value as boolean };
+    if (path === "showPostExcerpt" && "showPostExcerpt" in cfg) return { ...cfg, showPostExcerpt: value as boolean };
     if (path === "leftSidebar.show") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, show: value as boolean } };
     if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
     if (path === "leftSidebar.width") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, width: value as number } };
@@ -2450,10 +3326,9 @@ export default function Configure() {
     if (path === "headerContent.modules") return { ...cfg, headerContent: { ...cfg.headerContent, modules: value as string[] } };
     if (path === "headerContent.height") return { ...cfg, headerContent: { ...cfg.headerContent, height: value as number } };
     if (path === "postSort" && "postSort" in cfg) return { ...cfg, postSort: value as PostSortOption };
-    if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, mode: "pages", postsPerPage: 10 }), show: value as boolean } };
-    if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
-    if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: false, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
-    if (path === "collectionLayout" && "collectionLayout" in cfg) return { ...cfg, collectionLayout: value as CollectionLayoutMode };
+    if (path === "pagination.show") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), show: true } };
+    if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
+    if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
     if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
     if (path === "featuredArticle.show" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), show: value as boolean } };
     if (path === "featuredArticle.position" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), position: value as FeaturedArticlePosition } };
@@ -2508,6 +3383,7 @@ export default function Configure() {
     if (path === "rightSidebar.moduleOrder") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, moduleOrder: value as string[] } };
     if (path === "headerContent.moduleOrder") return { ...cfg, headerContent: { ...cfg.headerContent, moduleOrder: value as string[] } };
     if (path === "footerContent.topPadding") return { ...cfg, footerContent: { ...cfg.footerContent, topPadding: value as number } };
+    if (path === "footerContent.sideMargins") return { ...cfg, footerContent: { ...cfg.footerContent, sideMargins: value as FooterSideMarginsMode } };
     if (path === "footerContent.moduleOrder") return { ...cfg, footerContent: { ...cfg.footerContent, moduleOrder: value as string[] } };
     if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
     if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
@@ -2536,6 +3412,7 @@ export default function Configure() {
     if (path === "postHeader.showTags" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showTags: value as boolean } };
     if (path === "postHeader.showCategories" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showCategories: value as boolean } };
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
+    if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
     return cfg;
   }
@@ -2634,7 +3511,7 @@ export default function Configure() {
               className="w-full"
               onClick={() => setTemplateModalOpen(true)}
             >
-              Use a template
+              Change Template
             </Button>
             <Button
               variant="outline"
@@ -2650,6 +3527,16 @@ export default function Configure() {
               <Trash2 className="h-3.5 w-3.5 mr-1.5 shrink-0" />
               Clear all settings
             </Button>
+            {shouldShowViewerModeToggle && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setPaywallSettingsModalOpen(true)}
+              >
+                Paywall Settings
+              </Button>
+            )}
             <Dialog
               open={clearSettingsModalOpen}
               onOpenChange={(open) => {
@@ -2664,7 +3551,7 @@ export default function Configure() {
                 <DialogHeader>
                   <DialogTitle>Clear layout settings?</DialogTitle>
                   <DialogDescription>
-                    This resets BetterBlog layout options to their defaults for the levels you choose. Default authors and comment settings are not changed. Use Save when you are ready to update your live blog.
+                    This resets BetterBlog layout options to their defaults for the levels you choose. Default authors, comment settings, and paywall settings are not changed. Use Save when you are ready to update your live blog.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2">
@@ -2710,18 +3597,12 @@ export default function Configure() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            {selectedLevel === "post" && activePostTemplate ? (
+            {templateInUse && (
               <p className="text-xs text-[#6b6b6b] leading-snug">
-                Post template:{" "}
-                <span className="font-medium text-[#0a0a0a]">{activePostTemplate.name}</span>
-                {unmodifiedTemplateInUse?.kind === "post" ? "" : " (customized)"}
+                {templateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
+                <span className="font-medium text-[#0a0a0a]">{templateInUse.name}</span>
               </p>
-            ) : unmodifiedTemplateInUse ? (
-              <p className="text-xs text-[#6b6b6b] leading-snug">
-                {unmodifiedTemplateInUse.kind === "collection" ? "Collection" : "Post"} template in use:{" "}
-                <span className="font-medium text-[#0a0a0a]">{unmodifiedTemplateInUse.name}</span>
-              </p>
-            ) : null}
+            )}
           </div>
           {effectiveSiteKey && (
             <Dialog open={installationModalOpen} onOpenChange={setInstallationModalOpen}>
@@ -2737,52 +3618,34 @@ export default function Configure() {
                 </DialogTrigger>
                 .
               </p>
-              <DialogContent className="sm:max-w-lg">
+              <DialogContent className="sm:max-w-lg overflow-x-hidden">
                 <DialogHeader>
                   <DialogTitle>Installation instructions</DialogTitle>
+                  <DialogDescription>
+                    One snippet per Squarespace site. Paste it in Header code injection.
+                  </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
-                  <p className="text-sm text-[#6b6b6b]">
-                    In Squarespace, go to Settings → Advanced → Code Injection → Header. Paste the
-                    full block below in order: the inline preloader first (reduces native blog flash),
-                    then the BetterBlog loader. The path inside the small script should match your
-                    blog URL prefix (we use your saved blog path when known; default is{" "}
-                    <code className="bg-[#f0eefc] px-1 rounded text-[#0a0a0a]">/blog</code>).
-                  </p>
-                  {typeof window !== "undefined" && window.location.protocol === "http:" && (
-                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                      Local dev (HTTP): If your blog is on HTTPS, the overlay may fail to load due to mixed content. Use a tunnel (e.g. ngrok) or deploy to test.
-                    </p>
-                  )}
-                  {(() => {
-                    const snippet = buildBetterBlogSquarespaceHeaderHtml({
-                      loaderUrl: getBetterBlogLoaderUrl(),
-                      siteKey: effectiveSiteKey,
-                      blogPath: effectiveSite?.blogPath ?? null,
-                      apiBase: getBetterBlogApiBase(),
-                    });
-                    return (
-                      <div className="space-y-2">
-                        <pre className="text-xs bg-[#f7f6f3] p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
-                          {snippet}
-                        </pre>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            navigator.clipboard.writeText(snippet);
-                            setCopiedSiteKey(effectiveSiteKey);
-                            toast.success("Installation code copied to clipboard");
-                            setTimeout(() => setCopiedSiteKey(null), 2000);
-                          }}
-                        >
-                          <Copy className="h-3.5 w-3.5 mr-1.5" />
-                          {copiedSiteKey === effectiveSiteKey ? "Copied!" : "Copy code"}
-                        </Button>
-                      </div>
-                    );
-                  })()}
-                </div>
+                {(() => {
+                  const originInfo = squarespaceOriginFromUrl(effectiveSite?.url);
+                  const group = originInfo
+                    ? groupBlogsBySquarespaceOrigin(me?.sites ?? []).find(
+                        (g) => g.origin === originInfo.origin,
+                      )
+                    : null;
+                  const blogs = group?.blogs?.length
+                    ? group.blogs
+                    : effectiveSite
+                      ? [effectiveSite]
+                      : [];
+                  const originLabel = group?.originLabel || originInfo?.hostname || "this site";
+                  return (
+                    <InstallationInstructionsBody
+                      originLabel={originLabel}
+                      blogs={blogs}
+                      variant="manage"
+                    />
+                  );
+                })()}
               </DialogContent>
             </Dialog>
           )}
@@ -2791,7 +3654,17 @@ export default function Configure() {
             onOpenChange={setTemplateModalOpen}
             onSelectTemplate={handleSelectTemplate}
             initialLevel={selectedLevel}
+            collectionTemplateId={config.collectionTemplateId}
+            postTemplateId={config.postTemplateId}
           />
+          {shouldShowViewerModeToggle && (
+            <PaywallSettingsModal
+              open={paywallSettingsModalOpen}
+              onOpenChange={setPaywallSettingsModalOpen}
+              form={paywallForm}
+              onChange={setPaywallForm}
+            />
+          )}
           <h2 className="font-semibold text-lg">Settings</h2>
         </div>
 
@@ -2829,6 +3702,20 @@ export default function Configure() {
                       </div>
                     </div>
 
+                    {selectedLevel === "collection" && !isCollectionControlLocked("showPostExcerpt") && (
+                    <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
+                      <span className="font-medium">Show Post Excerpt</span>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          id="show-post-excerpt"
+                          checked={(effectiveConfig as CollectionLevelConfig).showPostExcerpt ?? true}
+                          onCheckedChange={(v) => updateLevelConfigPath("showPostExcerpt", v)}
+                        />
+                        <span className="w-6 h-6 shrink-0" aria-hidden />
+                      </div>
+                    </div>
+                    )}
+
                     {selectedLevel === "post" && (
                     <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
                       <span className="font-medium">Show Author(s)</span>
@@ -2846,94 +3733,36 @@ export default function Configure() {
                     {selectedLevel === "collection" && (
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium">Collection Layout</span>
-                          <span className="text-xs text-[#6b6b6b] truncate">
-                            {(() => {
-                              const layout = (effectiveConfig as CollectionLevelConfig).collectionLayout ?? "grid";
-                              if (layout === "grid") return "Masthead";
-                              if (layout === "listRows") return "Newsroom";
-                              if (layout === "editorial") return "Editorial";
-                              if (layout === "showcase") return "Showcase";
-                              if (layout === "digest") return "Digest";
-                              return "Masthead";
-                            })()}
-                          </span>
-                        </div>
+                        <span className="font-medium">Pagination</span>
                         <button
                           type="button"
-                          onClick={() => setSectionExpanded((p) => ({ ...p, collectionLayout: !p.collectionLayout }))}
+                          onClick={() => setSectionExpanded((p) => ({ ...p, pagination: !p.pagination }))}
                           className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                          aria-label={sectionExpanded.collectionLayout ? "Collapse" : "Expand"}
+                          aria-label={sectionExpanded.pagination ? "Collapse" : "Expand"}
                         >
-                          {sectionExpanded.collectionLayout ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          {sectionExpanded.pagination ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
                       </div>
-                      <Collapsible open={sectionExpanded.collectionLayout}>
+                      <Collapsible open={sectionExpanded.pagination}>
                         <CollapsibleContent>
-                          <div className="pb-4 space-y-3">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Layout</Label>
+                          <div className="pb-4 space-y-2">
+                            <LockedControlField
+                              locked={isCollectionControlLocked("paginationMode")}
+                              label="Mode"
+                            >
                               <Select
-                                value={(effectiveConfig as CollectionLevelConfig).collectionLayout ?? "grid"}
-                                onValueChange={(v) => updateLevelConfigPath("collectionLayout", v as CollectionLayoutMode)}
+                                value={(effectiveConfig as CollectionLevelConfig).pagination?.mode ?? "pages"}
+                                onValueChange={(v) => updateLevelConfigPath("pagination.mode", v as PaginationMode)}
                               >
-                                <SelectTrigger className="w-full">
+                                <SelectTrigger className="mt-2 w-[180px]">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="grid">Masthead</SelectItem>
-                                  <SelectItem value="listRows">Newsroom</SelectItem>
-                                  <SelectItem value="editorial">Editorial</SelectItem>
-                                  <SelectItem value="showcase">Showcase</SelectItem>
-                                  <SelectItem value="digest">Digest</SelectItem>
+                                  <SelectItem value="pages">Numbered pages</SelectItem>
+                                  <SelectItem value="infiniteScroll">Load more</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
-                    )}
-
-                    {selectedLevel === "collection" && (
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Pagination</span>
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={(effectiveConfig as CollectionLevelConfig).pagination?.show ?? false}
-                            onCheckedChange={(v) => {
-                              updateLevelConfigPath("pagination.show", v);
-                              setSectionExpanded((p) => ({ ...p, pagination: v }));
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => (effectiveConfig as CollectionLevelConfig).pagination?.show && setSectionExpanded((p) => ({ ...p, pagination: !p.pagination }))}
-                            className={`p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0 ${!(effectiveConfig as CollectionLevelConfig).pagination?.show ? "invisible pointer-events-none" : ""}`}
-                            aria-label={sectionExpanded.pagination ? "Collapse" : "Expand"}
-                          >
-                            {sectionExpanded.pagination ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </button>
-                        </div>
-                      </div>
-                      <Collapsible open={(effectiveConfig as CollectionLevelConfig).pagination?.show && sectionExpanded.pagination}>
-                        <CollapsibleContent>
-                          <div className="pb-4 space-y-2">
-                            <Label className="text-xs text-[#6b6b6b]">Mode</Label>
-                            <Select
-                              value={(effectiveConfig as CollectionLevelConfig).pagination?.mode ?? "pages"}
-                              onValueChange={(v) => updateLevelConfigPath("pagination.mode", v as PaginationMode)}
-                            >
-                              <SelectTrigger className="mt-2 w-[180px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pages">Numbered pages</SelectItem>
-                                <SelectItem value="infiniteScroll">Infinite scroll</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            </LockedControlField>
                             <Label className="text-xs text-[#6b6b6b]">Posts per page</Label>
                             <Select
                               value={String((effectiveConfig as CollectionLevelConfig).pagination?.postsPerPage ?? 10)}
@@ -3027,8 +3856,16 @@ export default function Configure() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="min-w-0 space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Position</Label>
+                            <LockedControlField
+                              locked={
+                                isCollectionControlLocked("featuredArticlePosition") ||
+                                featuredArticlePositionForLayout(
+                                  (effectiveConfig as CollectionLevelConfig).collectionLayout
+                                ) != null
+                              }
+                              label="Position"
+                              className="min-w-0 space-y-2"
+                            >
                               <Select
                                 value={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).position}
                                 onValueChange={(v) => updateLevelConfigPath("featuredArticle.position", v as FeaturedArticlePosition)}
@@ -3041,7 +3878,7 @@ export default function Configure() {
                                   <SelectItem value="inLayout">In-layout (at top with indicator)</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
+                            </LockedControlField>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -3346,17 +4183,28 @@ export default function Configure() {
                           <div className="pb-4 space-y-4">
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow New Comments</Label>
+                                <Switch
+                                  checked={commentSettings.allowNewComments}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowNewComments: v } : p)}
+                                />
+                              </div>
+                            </div>
+                            {commentSettings.allowNewComments && (
+                            <>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
                                 <Label className="text-sm">Allow Anonymous Comments</Label>
                                 <Switch
                                   checked={commentSettings.allowAnonymousComments}
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowAnonymousComments: v } : p)}
                                 />
                               </div>
-                              <p className="text-xs text-[#6b6b6b]">Readers can comment with name only.</p>
+                              <p className="text-xs text-[#6b6b6b]">Readers can comment with a name only. When verification is also on, guests still see the comment form.</p>
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <Label className="text-sm">Verified Subscriber Comments</Label>
+                                <Label className="text-sm">Verify subscriber comments</Label>
                                 <Switch
                                   checked={commentSettings.subscriberCommentsEnabled}
                                   onCheckedChange={(v) => {
@@ -3370,18 +4218,32 @@ export default function Configure() {
                                   disabled={!commentSettings.apiKeyVerified}
                                 />
                               </div>
-                              <p className="text-xs text-[#6b6b6b]">Require email for paywalled posts, verified against your Squarespace member list.</p>
+                              <p className="text-xs text-[#6b6b6b]">Require a member email, verified against your Squarespace member list. Failed checks are shown in a modal.</p>
                               {commentSettings.apiKeyVerified && (
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSquarespaceApiKeyModalOpen("edit")}
-                                    className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
-                                    aria-label="Edit API key"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
+                                <div className={commentSettings.apiKeyInvalid ? "opacity-70" : undefined}>
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <span className="font-mono text-[#6b6b6b]">••••••••••••••••</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                      className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] hover:text-[#0a0a0a]"
+                                      aria-label="Edit API key"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  {commentSettings.apiKeyInvalid && (
+                                    <p className="text-xs text-amber-800">
+                                      Squarespace rejected this key.{" "}
+                                      <button
+                                        type="button"
+                                        onClick={() => setSquarespaceApiKeyModalOpen("edit")}
+                                        className="text-[#5B4FE8] hover:underline"
+                                      >
+                                        Update it
+                                      </button>
+                                    </p>
+                                  )}
                                 </div>
                               )}
                               {!commentSettings.apiKeyVerified && (
@@ -3433,19 +4295,22 @@ export default function Configure() {
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <Label className="text-sm">Allow Comment Likes</Label>
-                                <Switch
-                                  checked={commentSettings.allowLikes}
-                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowLikes: v } : p)}
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
                                 <Label className="text-sm">Allow Threaded Replies</Label>
                                 <Switch
                                   checked={commentSettings.allowThreadedReplies}
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowThreadedReplies: v } : p)}
+                                />
+                              </div>
+                              <p className="text-xs text-[#6b6b6b]">Replies nest up to 4 levels.</p>
+                            </div>
+                            </>
+                            )}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm">Allow Comment Likes</Label>
+                                <Switch
+                                  checked={commentSettings.allowLikes}
+                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowLikes: v } : p)}
                                 />
                               </div>
                             </div>
@@ -3511,261 +4376,128 @@ export default function Configure() {
                                 </div>
                               </div>
                             )}
-                            {(() => {
-                              const locks = postControlLocks;
-                              const imageSettingsLocked =
-                                locks.imageWidth ||
-                                locks.sideGap ||
-                                locks.aspectBehavior ||
-                                locks.aspectRatio ||
-                                locks.roundedCorners ||
-                                locks.shadow ||
-                                postImageSettingsLocked;
-                              const phImagePos =
-                                (effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed";
-                              const baseImagePositions =
-                                locks.imagePositionOptions ?? ALL_POST_IMAGE_POSITIONS;
-                              const allowedImagePositions = baseImagePositions.includes(phImagePos)
-                                ? baseImagePositions
-                                : [phImagePos, ...baseImagePositions];
-                              const showSideImageControls =
-                                phImagePos === "leftOfInfo" || phImagePos === "rightOfInfo";
-                              const showPublisherHorizontalAlign =
-                                activePostTemplateKey === "publisher" && phImagePos === "fullBleed";
-                              return (
-                                <>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Image position</Label>
+                            <LockedControlRow
+                              locked={isPostControlLocked("showFeaturedImage")}
+                              label="Show featured image"
+                              description="Display the post's featured image in the header"
+                            >
+                              <Switch
+                                checked={effectiveConfig.featuredImage.show}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
+                              />
+                            </LockedControlRow>
+                            {showPostCaptionInHeader && (
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
+                              <Switch
+                                checked={effectiveConfig.featuredImage.showCaption}
+                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
+                              />
+                            </div>
+                            )}
+                            {effectiveConfig.featuredImage.show && (
+                            <LockedControlField
+                              locked={isPostControlLocked("imagePosition")}
+                              label="Image position"
+                            >
                               <Select
-                                value={phImagePos}
+                                value={(effectiveConfig as PostLevelConfig).postHeader?.imagePosition ?? "fullBleed"}
                                 onValueChange={(v) => updateLevelConfigPath("postHeader.imagePosition", v)}
-                                disabled={locks.imagePosition}
                               >
                                 <SelectTrigger>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {allowedImagePositions.includes("fullBleed") && (
-                                    <SelectItem value="fullBleed">Full bleed</SelectItem>
-                                  )}
-                                  {allowedImagePositions.includes("leftOfInfo") && (
-                                    <SelectItem value="leftOfInfo">Left of post info</SelectItem>
-                                  )}
-                                  {allowedImagePositions.includes("rightOfInfo") && (
-                                    <SelectItem value="rightOfInfo">Right of post info</SelectItem>
-                                  )}
-                                  {allowedImagePositions.includes("belowInfo") && (
-                                    <SelectItem value="belowInfo">Below post info</SelectItem>
-                                  )}
+                                  {(postTemplateImagePositionOptions
+                                    ? postTemplateImagePositionOptions
+                                    : (["fullBleed", "leftOfInfo", "rightOfInfo", "belowInfo"] as const)
+                                  ).map((opt) => (
+                                    <SelectItem key={opt} value={opt}>
+                                      {opt === "fullBleed"
+                                        ? "Full bleed"
+                                        : opt === "leftOfInfo"
+                                          ? "Left of post info"
+                                          : opt === "rightOfInfo"
+                                            ? "Right of post info"
+                                            : "Below post info"}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
-                            </div>
-                            {phImagePos === "fullBleed" && (
-                              <div className="space-y-2">
-                                <Label className="text-xs text-[#6b6b6b]">Full bleed layout</Label>
-                                <p className="text-[10px] text-[#6b6b6b]">Hero places the title on the image; stacked places it above a full-width image</p>
+                            </LockedControlField>
+                            )}
+                            {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") &&
+                              ((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
+                              <LockedControlField
+                                locked={
+                                  isPostControlLocked("fullBleedControls") ||
+                                  isPostControlLocked("contentVerticalAlignment")
+                                }
+                                label="Vertical text placement"
+                              >
                                 <Select
-                                  value={(effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay"}
-                                  onValueChange={(v) => updateLevelConfigPath("postHeader.fullBleedLayout", v as PostHeaderFullBleedLayout)}
-                                  disabled={locks.fullBleedLayout}
+                                  value={
+                                    (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "bottom"
+                                  }
+                                  onValueChange={(v) =>
+                                    updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                  }
                                 >
                                   <SelectTrigger>
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="overlay">Hero (text on image)</SelectItem>
-                                    <SelectItem value="stacked">Stacked (text above image)</SelectItem>
+                                    <SelectItem value="top">Top</SelectItem>
+                                    <SelectItem value="center">Center</SelectItem>
+                                    <SelectItem value="bottom">Bottom</SelectItem>
                                   </SelectContent>
                                 </Select>
-                                {showPublisherHorizontalAlign && (
-                                  <Select
-                                    value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
-                                    onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="left">Left</SelectItem>
-                                      <SelectItem value="center">Center</SelectItem>
-                                      <SelectItem value="right">Right</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                                {((effectiveConfig as PostLevelConfig).postHeader?.fullBleedLayout ?? "overlay") !== "stacked" && (
-                                  <Select
-                                    value={
-                                      (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "bottom"
-                                    }
-                                    onValueChange={(v) =>
-                                      updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                    }
-                                    disabled={locks.contentVerticalAlignment}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="top">Top</SelectItem>
-                                      <SelectItem value="center">Center</SelectItem>
-                                      <SelectItem value="bottom">Bottom</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </div>
+                              </LockedControlField>
                             )}
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Label className="text-xs text-[#6b6b6b]">Show featured image</Label>
-                                <p className="text-[10px] text-[#6b6b6b]">Display the post's featured image in the header</p>
-                              </div>
-                              <Switch
-                                checked={effectiveConfig.featuredImage.show}
-                                onCheckedChange={(v) => updateLevelConfigPath("featuredImage.show", v)}
-                                disabled={locks.showFeaturedImage}
-                              />
-                            </div>
-                            {phImagePos !== "fullBleed" && (
-                              <>
-                                {showSideImageControls && (
-                                  <>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Image width</Label>
-                                      <div className="flex items-center gap-3">
-                                        <Slider
-                                          value={[effectiveConfig.featuredImage.imageWidthPercent]}
-                                          onValueChange={([v]) => updateLevelConfigPath("featuredImage.imageWidthPercent", v ?? 40)}
-                                          min={25}
-                                          max={60}
-                                          step={5}
-                                          className="flex-1"
-                                          disabled={locks.imageWidth || imageSettingsLocked}
-                                        />
-                                        <span className="text-xs text-[#6b6b6b] w-10 shrink-0">
-                                          {effectiveConfig.featuredImage.imageWidthPercent}%
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Image side padding</Label>
-                                      <div className="flex items-center gap-3">
-                                        <Slider
-                                          value={[((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)]}
-                                          onValueChange={([v]) => updateLevelConfigPath("postHeader.sideGap", v ?? 24)}
-                                          min={0}
-                                          max={150}
-                                          step={2}
-                                          className="flex-1"
-                                          disabled={locks.sideGap || imageSettingsLocked}
-                                        />
-                                        <span className="text-xs text-[#6b6b6b] w-12 shrink-0">
-                                          {((effectiveConfig as PostLevelConfig).postHeader?.sideGap ?? 24)}px
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
-                                      <Select
-                                        value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
-                                        onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="left">Left</SelectItem>
-                                          <SelectItem value="center">Center</SelectItem>
-                                          <SelectItem value="right">Right</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <Select
-                                        value={
-                                          (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
-                                        }
-                                        onValueChange={(v) =>
-                                          updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
-                                        }
-                                        disabled={locks.contentVerticalAlignment}
-                                      >
-                                        <SelectTrigger>
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="top">Top</SelectItem>
-                                          <SelectItem value="center">Center</SelectItem>
-                                          <SelectItem value="bottom">Bottom</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </>
-                                )}
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
-                                  <Select
-                                    value={effectiveConfig.featuredImage.aspectBehavior}
-                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
-                                    disabled={locks.aspectBehavior || imageSettingsLocked}
+                            {(((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "fullBleed") ||
+                              ((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo") ||
+                              ((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo")) && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Post info alignment</Label>
+                                <Select
+                                  value={(effectiveConfig as PostLevelConfig).postHeader?.contentAlignment ?? "left"}
+                                  onValueChange={(v) => updateLevelConfigPath("postHeader.contentAlignment", v)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="left">Left</SelectItem>
+                                    <SelectItem value="center">Center</SelectItem>
+                                    <SelectItem value="right">Right</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {((effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "leftOfInfo" ||
+                                  (effectiveConfig as PostLevelConfig).postHeader?.imagePosition === "rightOfInfo") && (
+                                  <LockedControlField
+                                    locked={isPostControlLocked("contentVerticalAlignment")}
+                                    label="Vertical post info alignment"
                                   >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="original">Original ratio</SelectItem>
-                                      <SelectItem value="cropped">Cropped</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  {effectiveConfig.featuredImage.aspectBehavior === "cropped" && (
                                     <Select
-                                      value={effectiveConfig.featuredImage.aspectRatio}
-                                      onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
-                                      disabled={locks.aspectRatio || imageSettingsLocked}
+                                      value={
+                                        (effectiveConfig as PostLevelConfig).postHeader?.contentVerticalAlignment ?? "top"
+                                      }
+                                      onValueChange={(v) =>
+                                        updateLevelConfigPath("postHeader.contentVerticalAlignment", v as PostHeaderContentVerticalAlignment)
+                                      }
                                     >
-                                      <SelectTrigger className="mt-1">
+                                      <SelectTrigger>
                                         <SelectValue />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="16:9">16:9</SelectItem>
-                                        <SelectItem value="4:3">4:3</SelectItem>
-                                        <SelectItem value="3:2">3:2</SelectItem>
-                                        <SelectItem value="2:3">2:3</SelectItem>
-                                        <SelectItem value="1:1">1:1</SelectItem>
+                                        <SelectItem value="top">Top</SelectItem>
+                                        <SelectItem value="center">Center</SelectItem>
+                                        <SelectItem value="bottom">Bottom</SelectItem>
                                       </SelectContent>
                                     </Select>
-                                  )}
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
-                                  <Select
-                                    value={effectiveConfig.featuredImage.roundedCorners}
-                                    onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
-                                    disabled={locks.roundedCorners || imageSettingsLocked}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="off">Off</SelectItem>
-                                      <SelectItem value="small">Small</SelectItem>
-                                      <SelectItem value="large">Large</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
-                                  <Switch
-                                    checked={effectiveConfig.featuredImage.shadow}
-                                    onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
-                                    disabled={locks.shadow || imageSettingsLocked}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
-                                  <Switch
-                                    checked={effectiveConfig.featuredImage.showCaption}
-                                    onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
-                                  />
-                                </div>
-                              </>
+                                  </LockedControlField>
+                                )}
+                              </div>
                             )}
                             <div className="flex items-center justify-between">
                               <div>
@@ -3777,48 +4509,99 @@ export default function Configure() {
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showBreadcrumbs", v)}
                               />
                             </div>
-                              <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Show Tags & Categories</Label>
-                              <p className="text-[10px] text-[#6b6b6b]">Display tags and categories after breadcrumbs, before the title</p>
-                              <div className="flex items-center gap-6">
-                                <label className={`flex items-center gap-2 ${locks.showTagsAndCategories ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
-                                  <Checkbox
-                                    checked={(effectiveConfig as PostLevelConfig).postHeader?.showTags ?? false}
-                                    onCheckedChange={(v) => updateLevelConfigPath("postHeader.showTags", Boolean(v))}
-                                    disabled={locks.showTagsAndCategories}
-                                  />
-                                  <span className="text-xs text-[#6b6b6b]">Tags</span>
-                                </label>
-                                <label className={`flex items-center gap-2 ${locks.showTagsAndCategories ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
-                                  <Checkbox
-                                    checked={(effectiveConfig as PostLevelConfig).postHeader?.showCategories ?? false}
-                                    onCheckedChange={(v) => updateLevelConfigPath("postHeader.showCategories", Boolean(v))}
-                                    disabled={locks.showTagsAndCategories}
-                                  />
-                                  <span className="text-xs text-[#6b6b6b]">Categories</span>
-                                </label>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <Label className="text-xs text-[#6b6b6b]">Show post byline</Label>
-                                <p className="text-[10px] text-[#6b6b6b]">Lead line from the excerpt after the title, before author and date</p>
-                              </div>
+                              <LockedControlField
+                                locked={isPostControlLocked("showTagsAndCategories")}
+                                label="Show Tags & Categories"
+                                description="Display tags and categories after breadcrumbs, before the title"
+                              >
+                                <div className="flex flex-wrap gap-6">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={(effectiveConfig as PostLevelConfig).postHeader?.showTags ?? false}
+                                      onCheckedChange={(v) => updateLevelConfigPath("postHeader.showTags", Boolean(v))}
+                                    />
+                                    <span className="text-xs text-[#6b6b6b]">Tags</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={(effectiveConfig as PostLevelConfig).postHeader?.showCategories ?? false}
+                                      onCheckedChange={(v) => updateLevelConfigPath("postHeader.showCategories", Boolean(v))}
+                                    />
+                                    <span className="text-xs text-[#6b6b6b]">Categories</span>
+                                  </label>
+                                </div>
+                              </LockedControlField>
+                            <LockedControlRow
+                              locked={isPostControlLocked("showByline")}
+                              label="Show post byline"
+                              description="Lead line from the excerpt after the title, before author and date"
+                            >
                               <Switch
                                 checked={(effectiveConfig as PostLevelConfig).postHeader?.showByline ?? false}
                                 onCheckedChange={(v) => updateLevelConfigPath("postHeader.showByline", v)}
-                                disabled={locks.showByline}
+                              />
+                            </LockedControlRow>
+                            <LockedControlRow
+                              locked={isPostControlLocked("showDecorativeAccentLine")}
+                              label="Show decorative accent line"
+                              description="Horizontal divider in the post header (placement varies by template)"
+                            >
+                              <Switch
+                                checked={(effectiveConfig as PostLevelConfig).postHeader?.showDecorativeAccentLine ?? false}
+                                onCheckedChange={(v) => updateLevelConfigPath("postHeader.showDecorativeAccentLine", v)}
+                              />
+                            </LockedControlRow>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-xs text-[#6b6b6b]">Social sharing links</Label>
+                                <p className="text-[10px] text-[#6b6b6b]">Show share buttons in the post header</p>
+                              </div>
+                              <Switch
+                                checked={effectiveConfig.socialMediaLinks.show}
+                                onCheckedChange={(v) => {
+                                  updateLevelConfigPath("socialMediaLinks", {
+                                    show: v,
+                                    platforms: v ? [...SOCIAL_PLATFORMS] : effectiveConfig.socialMediaLinks.platforms,
+                                  });
+                                }}
                               />
                             </div>
-                                </>
-                              );
-                            })()}
+                            {effectiveConfig.socialMediaLinks.show && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Platforms</Label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={effectiveConfig.socialMediaLinks.platforms.length === SOCIAL_PLATFORMS.length}
+                                    onCheckedChange={(v) => {
+                                      updateLevelConfigPath("socialMediaLinks.platforms", v ? [...SOCIAL_PLATFORMS] : []);
+                                    }}
+                                  />
+                                  <span className="text-sm">All</span>
+                                </label>
+                                {SOCIAL_PLATFORMS.map((p) => (
+                                  <label key={p} className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                      checked={effectiveConfig.socialMediaLinks.platforms.includes(p)}
+                                      onCheckedChange={(v) => {
+                                        const next = v
+                                          ? [...effectiveConfig.socialMediaLinks.platforms, p]
+                                          : effectiveConfig.socialMediaLinks.platforms.filter((x) => x !== p);
+                                        updateLevelConfigPath("socialMediaLinks.platforms", next);
+                                      }}
+                                    />
+                                    <span className="text-sm">
+                                      {p === "x" ? "X" : p === "whatsapp" ? "WhatsApp" : p.charAt(0).toUpperCase() + p.slice(1)}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
                     </div>
                     )}
-                    {selectedLevel === "collection" && (
+                    {selectedLevel === "collection" && !isCollectionControlLocked("featuredImage") && (
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Featured Image</span>
@@ -3866,8 +4649,10 @@ export default function Configure() {
                               </Select>
                             </div>
                             {(effectiveConfig.featuredImage.layoutMode === "leftJustified" || effectiveConfig.featuredImage.layoutMode === "rightJustified") && (
-                              <div className="space-y-2">
-                                <Label className="text-xs text-[#6b6b6b]">Image width</Label>
+                              <LockedControlField
+                                locked={isCollectionControlLocked("imageWidth")}
+                                label="Image width"
+                              >
                                 <div className="flex items-center gap-3">
                                   <Slider
                                     value={[effectiveConfig.featuredImage.imageWidthPercent]}
@@ -3881,12 +4666,14 @@ export default function Configure() {
                                     {effectiveConfig.featuredImage.imageWidthPercent}%
                                   </span>
                                 </div>
-                              </div>
+                              </LockedControlField>
                             )}
                             </>
                             )}
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Aspect behavior</Label>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("aspectBehavior")}
+                              label="Aspect behavior"
+                            >
                               <Select
                                 value={effectiveConfig.featuredImage.aspectBehavior}
                                 onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectBehavior", v)}
@@ -3899,7 +4686,7 @@ export default function Configure() {
                                   <SelectItem value="cropped">Cropped</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {effectiveConfig.featuredImage.aspectBehavior === "cropped" && (
+                              {effectiveConfig.featuredImage.aspectBehavior === "cropped" && !isCollectionControlLocked("aspectRatio") && (
                                 <Select
                                   value={effectiveConfig.featuredImage.aspectRatio}
                                   onValueChange={(v) => updateLevelConfigPath("featuredImage.aspectRatio", v)}
@@ -3916,9 +4703,11 @@ export default function Configure() {
                                   </SelectContent>
                                 </Select>
                               )}
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Rounded corners</Label>
+                            </LockedControlField>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("roundedCorners")}
+                              label="Rounded corners"
+                            >
                               <Select
                                 value={effectiveConfig.featuredImage.roundedCorners}
                                 onValueChange={(v) => updateLevelConfigPath("featuredImage.roundedCorners", v)}
@@ -3932,23 +4721,29 @@ export default function Configure() {
                                   <SelectItem value="large">Large</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs text-[#6b6b6b]">Shadow</Label>
+                            </LockedControlField>
+                            <LockedControlRow
+                              locked={isCollectionControlLocked("photoShadow")}
+                              label="Shadow"
+                            >
                               <Switch
                                 checked={effectiveConfig.featuredImage.shadow}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.shadow", v)}
                               />
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs text-[#6b6b6b]">Caption (if exists)</Label>
+                            </LockedControlRow>
+                            <LockedControlRow
+                              locked={isCollectionControlLocked("showCaption")}
+                              label="Caption (if exists)"
+                            >
                               <Switch
                                 checked={effectiveConfig.featuredImage.showCaption}
                                 onCheckedChange={(v) => updateLevelConfigPath("featuredImage.showCaption", v)}
                               />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Vertical spacing</Label>
+                            </LockedControlRow>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("verticalSpacing")}
+                              label="Vertical spacing"
+                            >
                               <Select
                                 value={effectiveConfig.featuredImage.verticalSpacing}
                                 onValueChange={(v) => updateLevelConfigPath("featuredImage.verticalSpacing", v)}
@@ -3962,7 +4757,7 @@ export default function Configure() {
                                   <SelectItem value="spacious">Spacious</SelectItem>
                                 </SelectContent>
                               </Select>
-                            </div>
+                            </LockedControlField>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
@@ -3984,8 +4779,10 @@ export default function Configure() {
                       <Collapsible open={sectionExpanded.headerContent}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-3">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Height</Label>
+                            <LockedControlField
+                              locked={isCollectionControlLocked("headerHeight")}
+                              label="Height"
+                            >
                               <div className="flex items-center gap-3">
                                 <Slider
                                   value={[effectiveConfig.headerContent.height]}
@@ -3997,7 +4794,7 @@ export default function Configure() {
                                 />
                                 <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.headerContent.height}px</span>
                               </div>
-                            </div>
+                            </LockedControlField>
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Modules</Label>
                               <p className="text-[10px] text-[#6b6b6b]">
@@ -4023,7 +4820,7 @@ export default function Configure() {
                                 const HEADER_LABELS: Record<string, string> = {
                                   filterByCategory: "Filter by Category",
                                   filterByTag: "Filter by Tag",
-                                  filterByTagsAndCategories: "Filter by Tags & Categories",
+                                  filterByTagsAndCategories: "Filter by Tags",
                                   searchPosts: "Search Posts",
                                   postSort: "Sort Posts",
                                 };
@@ -4107,101 +4904,6 @@ export default function Configure() {
                     </div>
                     )}
 
-                    {selectedLevel === "collection" && shouldShowViewerModeToggle && (
-                    <div className="border-b border-[#e5e4e0]">
-                      <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Paywall</span>
-                        <button
-                          type="button"
-                          onClick={() => setSectionExpanded((p) => ({ ...p, paywall: !p.paywall }))}
-                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
-                          aria-label={sectionExpanded.paywall ? "Collapse" : "Expand"}
-                        >
-                          {sectionExpanded.paywall ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      </div>
-                      <Collapsible open={sectionExpanded.paywall}>
-                        <CollapsibleContent>
-                          <div className="pb-4 space-y-4">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Subscribe URL (optional)</Label>
-                              <Input
-                                value={paywallForm.subscribeUrl}
-                                onChange={(e) => setPaywallForm((p) => ({ ...p, subscribeUrl: e.target.value }))}
-                                placeholder="https://…"
-                                className="text-sm"
-                              />
-                              <p className="text-[10px] text-[#6b6b6b] leading-snug">
-                                Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
-                              </p>
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Footer description (optional, max 160 characters)</Label>
-                              <Textarea
-                                value={paywallForm.footerDescription}
-                                onChange={(e) =>
-                                  setPaywallForm((p) => ({ ...p, footerDescription: e.target.value.slice(0, 160) }))
-                                }
-                                placeholder="Subscribe for full access to every story, the complete archive, and exclusive reading."
-                                rows={3}
-                                className="text-sm resize-y min-h-[72px]"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Feature checklist (optional, max 4)</Label>
-                              {paywallForm.featureItems.map((line, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                  <Input
-                                    value={line}
-                                    onChange={(e) =>
-                                      setPaywallForm((p) => {
-                                        const next = p.featureItems.slice();
-                                        next[idx] = e.target.value;
-                                        return { ...p, featureItems: next };
-                                      })
-                                    }
-                                    className="text-sm flex-1"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="p-2 rounded hover:bg-red-100 text-[#6b6b6b] shrink-0"
-                                    aria-label="Remove feature line"
-                                    onClick={() =>
-                                      setPaywallForm((p) => ({
-                                        ...p,
-                                        featureItems: p.featureItems.filter((_, i) => i !== idx),
-                                      }))
-                                    }
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              ))}
-                              {paywallForm.featureItems.length < 4 && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="gap-1"
-                                  onClick={() =>
-                                    setPaywallForm((p) =>
-                                      p.featureItems.length >= 4
-                                        ? p
-                                        : { ...p, featureItems: [...p.featureItems, ""] }
-                                    )
-                                  }
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add item
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
-                    )}
-
                     <div className="border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Footer Content</span>
@@ -4217,8 +4919,11 @@ export default function Configure() {
                       <Collapsible open={sectionExpanded.footerContent}>
                         <CollapsibleContent>
                           <div className="pb-4 space-y-3">
-                            <div className="space-y-2">
-                              <Label className="text-xs text-[#6b6b6b]">Top padding</Label>
+                            {selectedLevel === "collection" && (
+                            <LockedControlField
+                              locked={isCollectionControlLocked("footerTopPadding")}
+                              label="Top padding"
+                            >
                               <div className="flex items-center gap-3">
                                 <Slider
                                   value={[effectiveConfig.footerContent?.topPadding ?? 16]}
@@ -4230,17 +4935,34 @@ export default function Configure() {
                                 />
                                 <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{effectiveConfig.footerContent?.topPadding ?? 16}px</span>
                               </div>
-                            </div>
+                            </LockedControlField>
+                            )}
+                            {selectedLevel === "post" && !isWriterPostTemplate && (
+                              <div className="space-y-2">
+                                <Label className="text-xs text-[#6b6b6b]">Side margins</Label>
+                                <RadioGroup
+                                  value={effectiveConfig.footerContent?.sideMargins ?? "postBody"}
+                                  onValueChange={(v) => updateLevelConfigPath("footerContent.sideMargins", v as FooterSideMarginsMode)}
+                                  className="grid gap-2"
+                                >
+                                  <label htmlFor="footer-side-margins-post-body" className="flex items-center gap-2 cursor-pointer">
+                                    <RadioGroupItem value="postBody" id="footer-side-margins-post-body" />
+                                    <span className="text-xs text-[#6b6b6b]">Post Body</span>
+                                  </label>
+                                  <label htmlFor="footer-side-margins-full-screen" className="flex items-center gap-2 cursor-pointer">
+                                    <RadioGroupItem value="fullScreen" id="footer-side-margins-full-screen" />
+                                    <span className="text-xs text-[#6b6b6b]">Full Screen</span>
+                                  </label>
+                                </RadioGroup>
+                                <p className="text-[10px] text-[#6b6b6b]">
+                                  Post Body aligns footer content with the post text column. Full Screen uses the site&apos;s default content margins.
+                                </p>
+                              </div>
+                            )}
                             <div className="space-y-2">
                               <Label className="text-xs text-[#6b6b6b]">Module order</Label>
-                              <p className="text-[10px] text-[#6b6b6b]">
-                                {selectedLevel === "post" && postControlLocks.footerModuleReorder
-                                  ? "Module order is locked for this template. Remove a module to disable that feature."
-                                  : "Drag to reorder. Remove a module to disable that feature."}
-                              </p>
+                              <p className="text-[10px] text-[#6b6b6b]">Drag to reorder. Remove a module to disable that feature.</p>
                               {(() => {
-                                const footerReorderLocked =
-                                  selectedLevel === "post" && postControlLocks.footerModuleReorder;
                                 const footerDerived = selectedLevel === "collection"
                                   ? deriveCollectionModules(
                                       (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules,
@@ -4250,7 +4972,6 @@ export default function Configure() {
                                       effectiveConfig.footerContent?.moduleOrder ?? []
                                     ).footer
                                   : derivePostModules(
-                                      (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
                                       effectiveConfig as PostLevelConfig,
                                       effectiveConfig.headerContent.moduleOrder ?? [],
                                       effectiveConfig.leftSidebar.moduleOrder ?? [],
@@ -4266,7 +4987,6 @@ export default function Configure() {
                                   return [...fromOrder, ...remaining];
                                 })();
                                 const moveModule = (fromIdx: number, toIdx: number) => {
-                                  if (footerReorderLocked) return;
                                   const list = orderedFooter.slice();
                                   const [removed] = list.splice(fromIdx, 1);
                                   list.splice(toIdx, 0, removed);
@@ -4315,34 +5035,24 @@ export default function Configure() {
                                       orderedFooter.map((m, idx) => (
                                         <div
                                           key={`${m}-${idx}`}
-                                          draggable={!footerReorderLocked}
+                                          draggable
                                           onDragStart={(e) => {
-                                            if (footerReorderLocked) {
-                                              e.preventDefault();
-                                              return;
-                                            }
                                             e.dataTransfer.setData("text/plain", String(idx));
                                             e.dataTransfer.effectAllowed = "move";
                                           }}
                                           onDragOver={(e) => {
-                                            if (footerReorderLocked) return;
                                             e.preventDefault();
                                             e.dataTransfer.dropEffect = "move";
                                           }}
                                           onDrop={(e) => {
-                                            if (footerReorderLocked) return;
                                             e.preventDefault();
                                             const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                                             if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
                                           }}
                                           onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                          className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm ${
-                                            footerReorderLocked
-                                              ? "cursor-default opacity-80"
-                                              : "cursor-grab active:cursor-grabbing"
-                                          }`}
+                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
                                         >
-                                          <GripVertical className={`h-4 w-4 shrink-0 ${footerReorderLocked ? "text-[#c4c4c4]" : "text-[#6b6b6b]"}`} />
+                                          <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
                                           <span className="flex-1 min-w-0 truncate">{FOOTER_LABELS[m] ?? m}</span>
                                           <button
                                             type="button"
@@ -4367,8 +5077,8 @@ export default function Configure() {
                     {(() => {
                       const SIDEBAR_MODULE_LABELS: Record<string, string> = {
                         filterByCategory: "Filter by Category",
-                        filterByTag: "Filter by Tag",
-                        filterByTagsAndCategories: "Filter by Tags & Categories",
+                        filterByTag: "Filter by Tags",
+                        filterByTagsAndCategories: "Filter by Tags",
                         searchPosts: "Search Posts",
                         postSort: "Sort Posts",
                         recentPosts: "Recent Posts",
@@ -4390,7 +5100,6 @@ export default function Configure() {
                               effectiveConfig.footerContent?.moduleOrder ?? []
                             )
                           : derivePostModules(
-                              (effectiveConfig as PostLevelConfig).postModules ?? defaultPostModules,
                               effectiveConfig as PostLevelConfig,
                               effectiveConfig.headerContent.moduleOrder ?? [],
                               effectiveConfig.leftSidebar.moduleOrder ?? [],
@@ -4404,13 +5113,11 @@ export default function Configure() {
                         const expanded = side === "left" ? sectionExpanded.leftSidebar : sectionExpanded.rightSidebar;
                         const setExpanded = (v: boolean) => setSectionExpanded((p) => ({ ...p, [side === "left" ? "leftSidebar" : "rightSidebar"]: v }));
                         const subPath = side === "left" ? "leftSidebar" : "rightSidebar";
-                        const sidebarFullyLocked =
-                          selectedLevel === "post" &&
-                          (side === "left" ? postControlLocks.leftSidebar : postControlLocks.rightSidebar);
-                        const sidebarWidthLocked =
-                          sidebarFullyLocked ||
-                          (selectedLevel === "post" &&
-                            (side === "left" ? postControlLocks.leftSidebarWidth : postControlLocks.rightSidebarWidth));
+                        const sidebarLocked =
+                          selectedLevel === "post"
+                            ? isPostControlLocked(side === "left" ? "leftSidebar" : "rightSidebar")
+                            : isCollectionControlLocked(side === "left" ? "leftSidebar" : "rightSidebar");
+                        if (sidebarLocked) return null;
                         const orderedModules = (() => {
                           const cm = selectedLevel === "collection"
                             ? (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules
@@ -4418,52 +5125,57 @@ export default function Configure() {
                           const order = cm
                             ? normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm)
                             : (cfg.moduleOrder ?? []);
+                          const hideDigestSearchSort =
+                            selectedLevel === "collection" &&
+                            (effectiveConfig as CollectionLevelConfig).collectionLayout === "digest";
+                          const allowed = (m: string) =>
+                            !hideDigestSearchSort || !isDigestSidebarExcludedModule(m);
                           const set = new Set(modules);
-                          const fromOrder = order.filter((m) => set.has(m));
-                          const remaining = modules.filter((m) => !order.includes(m));
+                          const fromOrder = order.filter((m) => set.has(m) && allowed(m));
+                          const remaining = modules.filter((m) => !order.includes(m) && allowed(m));
                           return [...fromOrder, ...remaining];
                         })();
                         const moveModule = (fromIdx: number, toIdx: number) => {
-                          if (sidebarFullyLocked) return;
                           const list = orderedModules.slice();
                           const [removed] = list.splice(fromIdx, 1);
                           list.splice(toIdx, 0, removed);
                           updateLevelConfigPath(`${subPath}.moduleOrder`, list);
                         };
                         const handleDragOver = (e: React.DragEvent) => {
-                          if (sidebarFullyLocked) return;
                           e.preventDefault();
                           e.dataTransfer.dropEffect = "move";
                         };
                         const handleDrop = (e: React.DragEvent, toIdx: number) => {
-                          if (sidebarFullyLocked) return;
                           e.preventDefault();
                           const fromIdx = Number(e.dataTransfer.getData("text/plain"));
                           if (fromIdx !== toIdx && fromIdx >= 0) moveModule(fromIdx, toIdx);
                         };
                         const handleDragStart = (e: React.DragEvent, idx: number) => {
-                          if (sidebarFullyLocked) {
-                            e.preventDefault();
-                            return;
-                          }
                           e.dataTransfer.setData("text/plain", String(idx));
                           e.dataTransfer.effectAllowed = "move";
                         };
                         const handleRemove = (moduleId: string) => {
-                          if (sidebarFullyLocked) return;
                           const order = [...(cfg.moduleOrder ?? [])];
                           updateLevelConfigPath(`${subPath}.moduleOrder`, order.filter((m) => m !== moduleId));
                         };
                         const handleAddSidebar = (moduleId: string) => {
-                          if (sidebarFullyLocked) return;
                           const order = cfg.moduleOrder ?? [];
                           if (order.includes(moduleId)) return;
+                          if (
+                            selectedLevel === "collection" &&
+                            (effectiveConfig as CollectionLevelConfig).collectionLayout === "digest" &&
+                            isDigestSidebarExcludedModule(moduleId)
+                          ) {
+                            return;
+                          }
                           updateLevelConfigPath(`${subPath}.moduleOrder`, [...order, moduleId]);
                         };
                         return (
                           <div key={`${side}-sidebar-section`} className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
-                              <span className="font-medium">{side === "left" ? "Left Sidebar" : "Right Sidebar"}</span>
+                              <span className="font-medium">
+                                {side === "left" ? "Left Sidebar" : "Right Sidebar"}
+                              </span>
                               <button
                                 type="button"
                                 onClick={() => setExpanded(!expanded)}
@@ -4475,14 +5187,12 @@ export default function Configure() {
                             </div>
                             <Collapsible open={expanded}>
                               <CollapsibleContent>
-                                <div className={`pb-4 space-y-3${sidebarFullyLocked ? " opacity-70" : ""}`}>
-                                  {sidebarFullyLocked && (
-                                    <p className="text-[10px] text-[#6b6b6b]">
-                                      This sidebar is locked for the current post template.
-                                    </p>
-                                  )}
-                                  <div className="space-y-2">
-                                    <Label className="text-xs text-[#6b6b6b]">Width</Label>
+                                <div className="pb-4 space-y-3">
+                                  {selectedLevel === "collection" && (
+                                  <LockedControlField
+                                    locked={side === "right" && isCollectionControlLocked("rightSidebarWidth")}
+                                    label="Width"
+                                  >
                                     <div className="flex items-center gap-3">
                                       <Slider
                                         value={[cfg.width]}
@@ -4491,28 +5201,42 @@ export default function Configure() {
                                         max={400}
                                         step={20}
                                         className="flex-1"
-                                        disabled={sidebarWidthLocked}
                                       />
                                       <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.width}px</span>
                                     </div>
-                                  </div>
-                                  <div className="flex items-center justify-between">
+                                  </LockedControlField>
+                                  )}
+                                  {selectedLevel === "collection" && (
+                                  <LockedControlField
+                                    locked={isCollectionControlLocked(side === "left" ? "leftSidebarSpaceAbove" : "rightSidebarSpaceAbove")}
+                                    label="Space above"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Slider
+                                        value={[cfg.spaceAbove ?? 0]}
+                                        onValueChange={([v]) => updateLevelConfigPath(`${subPath}.spaceAbove`, v ?? 0)}
+                                        min={0}
+                                        max={64}
+                                        step={4}
+                                        className="flex-1"
+                                      />
+                                      <span className="text-xs text-[#6b6b6b] w-10 shrink-0">{cfg.spaceAbove ?? 0}px</span>
+                                    </div>
+                                  </LockedControlField>
+                                  )}
+                                  <div className="flex items-center justify-between gap-3">
                                     <Label className="text-xs text-[#6b6b6b]">Sticky (move with scroll)</Label>
                                     <Switch
                                       checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
-                                      disabled={sidebarFullyLocked}
                                     />
                                   </div>
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      {sidebarFullyLocked
-                                        ? "Modules are locked for this template."
-                                        : "Drag to reorder. Remove a module to disable that feature."}
+                                      Drag to reorder. Remove a module to disable that feature.
                                     </p>
                                     {(() => {
-                                      if (sidebarFullyLocked) return null;
                                       const cm = (effectiveConfig as CollectionLevelConfig).collectionModules ?? defaultCollectionModules;
                                       const order = normalizeCollectionFilterModuleOrder(cfg.moduleOrder ?? [], cm);
                                       const dualFilter = isDualFilterMode(cm);
@@ -4529,9 +5253,26 @@ export default function Configure() {
                                               const filterId = filterConfigToModuleId(cm.filter.filterByTags, cm.filter.filterByCategories);
                                               return m === filterId && !order.includes(filterId);
                                             }
+                                            if (
+                                              isDigestSidebarExcludedModule(m) &&
+                                              (effectiveConfig as CollectionLevelConfig).collectionLayout === "digest"
+                                            ) {
+                                              return false;
+                                            }
                                             return !order.includes(m);
                                           })
-                                        : [...POST_SIDEBAR_MODULES].filter((m) => !orderedModules.includes(m));
+                                        : [...POST_SIDEBAR_MODULES].filter((m) => {
+                                            if (m === "tableOfContents" && isStoryPostTemplate) return false;
+                                            if (m === "filterByTagsAndCategories") return false;
+                                            if (
+                                              m === "filterByTag" &&
+                                              (orderedModules.includes("filterByTag") ||
+                                                orderedModules.includes("filterByTagsAndCategories"))
+                                            ) {
+                                              return false;
+                                            }
+                                            return !orderedModules.includes(m);
+                                          });
                                       return available.length > 0 ? (
                                         <div className="flex items-center gap-2 mb-2">
                                           <Select value="" onValueChange={(v) => { if (v) handleAddSidebar(v); }}>
@@ -4552,24 +5293,19 @@ export default function Configure() {
                                         orderedModules.map((m, idx) => (
                                           <div
                                             key={`${m}-${idx}`}
-                                            draggable={!sidebarFullyLocked}
+                                            draggable
                                             onDragStart={(e) => handleDragStart(e, idx)}
                                             onDragOver={handleDragOver}
                                             onDrop={(e) => handleDrop(e, idx)}
                                             onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                            className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm ${
-                                              sidebarFullyLocked
-                                                ? "cursor-default"
-                                                : "cursor-grab active:cursor-grabbing"
-                                            }`}
+                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
                                           >
-                                            <GripVertical className={`h-4 w-4 shrink-0 ${sidebarFullyLocked ? "text-[#c4c4c4]" : "text-[#6b6b6b]"}`} />
+                                            <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
                                             <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m] ?? m}</span>
                                             <button
                                               type="button"
                                               onClick={(e) => { e.stopPropagation(); handleRemove(m); }}
-                                              disabled={sidebarFullyLocked}
-                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0 disabled:pointer-events-none disabled:opacity-40"
+                                              className="p-1 rounded hover:bg-red-100 text-[#6b6b6b] hover:text-red-600 shrink-0"
                                               aria-label={`Remove ${SIDEBAR_MODULE_LABELS[m] ?? m}`}
                                             >
                                               <X className="h-4 w-4" />
@@ -4609,13 +5345,13 @@ export default function Configure() {
                                           <>
                                             {renderFeatureLocationControl(
                                               "filterByCategory",
-                                              ["header", "leftSidebar", "rightSidebar"],
+                                              collectionFilterLocations,
                                               undefined,
                                               "Location (categories)"
                                             )}
                                             {renderFeatureLocationControl(
                                               "filterByTag",
-                                              ["header", "leftSidebar", "rightSidebar"],
+                                              collectionFilterLocations,
                                               undefined,
                                               "Location (tags)"
                                             )}
@@ -4627,7 +5363,7 @@ export default function Configure() {
                                           cm.filter.filterByTags,
                                           cm.filter.filterByCategories
                                         ),
-                                        ["header", "leftSidebar", "rightSidebar"]
+                                        collectionFilterLocations
                                       );
                                     })()}
                                     <Label className="text-xs text-[#6b6b6b]">Filter by</Label>
@@ -4651,26 +5387,28 @@ export default function Configure() {
                                   </div>
                                 }
                               />
+                              {!isCollectionControlLocked("popularPosts") && collectionPopularPostsLocations.length > 0 && (
                               <ModuleSettingSectionCollapseOnly
                                 title="Popular Posts"
                                 expanded={sectionExpanded.popularPosts}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
+                                    {renderFeatureLocationControl("popularPosts", collectionPopularPostsLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts.
                                     </p>
                                   </div>
                                 }
                               />
+                              )}
                               <ModuleSettingSectionCollapseOnly
                                 title="Email Capture"
                                 expanded={sectionExpanded.emailCapture}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("emailCapture", ["leftSidebar", "rightSidebar", "footer"])}
+                                    {renderFeatureLocationControl("emailCapture", collectionEmailCaptureLocations)}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -4704,7 +5442,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("leadMagnet", ["leftSidebar", "rightSidebar", "footer"])}
+                                    {renderFeatureLocationControl("leadMagnet", collectionLeadMagnetLocations)}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -4737,13 +5475,14 @@ export default function Configure() {
                           )}
                           {selectedLevel === "post" && (
                             <>
+                              {showPostTableOfContentsControls && (
                               <ModuleSettingSectionCollapseOnly
                                 title="Table of Contents"
                                 expanded={sectionExpanded.tableOfContents}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, tableOfContents: !p.tableOfContents }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("tableOfContents", ["header", "leftSidebar", "rightSidebar"], "tableOfContents")}
+                                    {renderFeatureLocationControl("tableOfContents", postFeatureSidebarLocations, "tableOfContents")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Style</Label>
                                       <Select
@@ -4766,13 +5505,14 @@ export default function Configure() {
                                   </div>
                                 }
                               />
+                              )}
                               <ModuleSettingSectionCollapseOnly
                                 title="Popular Posts"
                                 expanded={sectionExpanded.popularPosts}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, popularPosts: !p.popularPosts }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("popularPosts", ["leftSidebar", "rightSidebar"])}
+                                    {renderFeatureLocationControl("popularPosts", postFeatureSidebarLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Uses view counts when your blog is sorted by popularity or analytics provides them; otherwise shows most recent posts. Add the Popular Posts module to a sidebar under Left/Right Sidebar.
                                     </p>
@@ -4785,7 +5525,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, authorProfiles: !p.authorProfiles }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("authorProfiles", ["header", "leftSidebar", "rightSidebar", "footer"], "authorProfiles")}
+                                    {renderFeatureLocationControl("authorProfiles", postFeatureSidebarFooterLocations, "authorProfiles")}
                                   </div>
                                 }
                               />
@@ -4795,7 +5535,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, relevantPosts: !p.relevantPosts }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("relevantPosts", ["header", "leftSidebar", "rightSidebar", "footer"], "relevantPosts")}
+                                    {renderFeatureLocationControl("relevantPosts", postFeatureSidebarFooterLocations, "relevantPosts")}
                                   </div>
                                 }
                               />
@@ -4805,7 +5545,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("emailCapture", ["header", "leftSidebar", "rightSidebar", "footer"], "emailCapture")}
+                                    {renderFeatureLocationControl("emailCapture", postFeatureSidebarFooterLocations, "emailCapture")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Section header</Label>
                                       <Input
@@ -4839,7 +5579,7 @@ export default function Configure() {
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
                                   <div className="space-y-3">
-                                    {renderFeatureLocationControl("leadMagnet", ["header", "leftSidebar", "rightSidebar", "footer"], "leadMagnet")}
+                                    {renderFeatureLocationControl("leadMagnet", postFeatureSidebarFooterLocations, "leadMagnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -4870,6 +5610,7 @@ export default function Configure() {
                               />
                             </>
                           )}
+                          {selectedLevel === "collection" && !isCollectionControlLocked("socialSharing") && (
                           <div className="border-b border-[#e5e4e0]">
                             <div className="flex items-center justify-between py-3">
                               <span className="font-medium">Social Sharing</span>
@@ -4929,6 +5670,7 @@ export default function Configure() {
                               </CollapsibleContent>
                             </Collapsible>
                           </div>
+                          )}
                         </>
                       );
                     })()}
@@ -5091,6 +5833,7 @@ export default function Configure() {
               <AuthorImageUpload
                 value={newAuthorImageUrl}
                 onChange={setNewAuthorImageUrl}
+                siteKey={effectiveSiteKey}
                 authorName={newAuthorName}
               />
               <div className="space-y-2">
@@ -5170,145 +5913,24 @@ export default function Configure() {
           </DialogContent>
         </Dialog>
 
-        {/* Squarespace API Key Modal */}
-        <Dialog
-          open={squarespaceApiKeyModalOpen !== false}
-          onOpenChange={(open) => {
-            if (!open) {
-              setSquarespaceApiKeyModalOpen(false);
-              setCommentApiKeyInput("");
-              setCommentApiKeyStatus("unverified");
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {squarespaceApiKeyModalOpen === "setup" ? "Connect Squarespace API" : "Update Squarespace API Key"}
-              </DialogTitle>
-              <DialogDescription>
-                {squarespaceApiKeyModalOpen === "setup"
-                  ? "Connect your Squarespace API to verify subscriber emails for paywalled comment threads."
-                  : "Replace your Squarespace API key."}
-              </DialogDescription>
-            </DialogHeader>
-            {squarespaceApiKeyModalOpen === "edit" && (
-              <p className="text-sm text-[#6b6b6b] -mt-2">Required permission: Profiles (Read).</p>
-            )}
-            {squarespaceApiKeyModalOpen === "setup" && (
-              <div className="text-sm text-[#6b6b6b] space-y-2 -mt-2">
-                <p>To generate an API key:</p>
-                <ol className="list-decimal list-inside space-y-1 pl-1">
-                  <li>In Squarespace, go to Settings → Developer Tools → Developer API Keys (or Settings → Advanced → Developer API Keys)</li>
-                  <li>Generate a new API key</li>
-                  <li>Enable the <strong>Profiles (Read)</strong> permission</li>
-                  <li>Copy the key and paste it below</li>
-                </ol>
-              </div>
-            )}
-            <form
-              className="space-y-4 pt-2"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!effectiveSiteKey || !commentApiKeyInput.trim() || commentApiKeyStatus !== "verified") return;
-                setCommentSettingsSaving(true);
-                try {
-                  const res = await fetch("/api/dashboard/settings/comments", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify({
-                      siteKey: effectiveSiteKey,
-                      squarespaceApiKey: commentApiKeyInput.trim(),
-                      ...(squarespaceApiKeyModalOpen === "setup" ? { subscriberCommentsEnabled: true } : {}),
-                    }),
-                  });
-                  if (res.ok) {
-                    toast.success(squarespaceApiKeyModalOpen === "setup" ? "Squarespace API connected!" : "API key updated!");
-                    setCommentSettings((p) =>
-                      p ? { ...p, apiKeyVerified: true, subscriberCommentsEnabled: squarespaceApiKeyModalOpen === "setup" ? true : p.subscriberCommentsEnabled } : p
-                    );
-                    setSquarespaceApiKeyModalOpen(false);
-                    setCommentApiKeyInput("");
-                    setCommentApiKeyStatus("unverified");
-                  } else {
-                    const data = await res.json().catch(() => ({}));
-                    toast.error(data?.error ?? "Failed to save");
+        <SquarespaceApiKeyModal
+          mode={squarespaceApiKeyModalOpen}
+          onModeChange={setSquarespaceApiKeyModalOpen}
+          siteKey={effectiveSiteKey}
+          onSaved={({ enableSubscriberComments }) => {
+            setCommentSettings((p) =>
+              p
+                ? {
+                    ...p,
+                    apiKeyVerified: true,
+                    apiKeyInvalid: false,
+                    subscriberCommentsEnabled: enableSubscriberComments ? true : p.subscriberCommentsEnabled,
                   }
-                } finally {
-                  setCommentSettingsSaving(false);
-                }
-              }}
-            >
-              <div className="space-y-2">
-                <Label className="text-sm">Squarespace API Key</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="password"
-                    placeholder="Paste your Squarespace API key"
-                    value={commentApiKeyInput}
-                    onChange={(e) => {
-                      setCommentApiKeyInput(e.target.value);
-                      setCommentApiKeyStatus("unverified");
-                    }}
-                    className="flex-1 font-mono text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!commentApiKeyInput.trim() || commentApiKeyStatus === "verifying"}
-                    onClick={async () => {
-                      if (!effectiveSiteKey || !commentApiKeyInput.trim()) return;
-                      setCommentApiKeyStatus("verifying");
-                      const res = await fetch("/api/dashboard/settings/comments/verify-api-key", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        credentials: "include",
-                        body: JSON.stringify({ siteKey: effectiveSiteKey, apiKey: commentApiKeyInput.trim() }),
-                      });
-                      const data = await res.json();
-                      if (data?.valid) {
-                        setCommentApiKeyStatus("verified");
-                      } else if (data?.error === "MISSING_PERMISSION") {
-                        setCommentApiKeyStatus("missing_permission");
-                      } else {
-                        setCommentApiKeyStatus("invalid");
-                      }
-                    }}
-                  >
-                    {commentApiKeyStatus === "verifying" ? "Verifying…" : "Verify"}
-                  </Button>
-                </div>
-                <p className="text-xs">
-                  {commentApiKeyStatus === "verified" && <span className="text-green-600">Verified ✓</span>}
-                  {commentApiKeyStatus === "invalid" && <span className="text-red-600">Invalid key ✗</span>}
-                  {commentApiKeyStatus === "missing_permission" && <span className="text-red-600">Missing Profiles permission ✗</span>}
-                </p>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setSquarespaceApiKeyModalOpen(false);
-                    setCommentApiKeyInput("");
-                    setCommentApiKeyStatus("unverified");
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={commentApiKeyStatus !== "verified" || commentSettingsSaving}
-                >
-                  {commentSettingsSaving ? "Saving…" : squarespaceApiKeyModalOpen === "setup" ? "Connect" : "Save Key"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                : p
+            );
+            void revalidator.revalidate();
+          }}
+        />
       </aside>
 
       {/* Preview Area */}
@@ -5387,11 +6009,26 @@ export default function Configure() {
                     </div>
                   );
                 }
-                if (isSquarespaceUrl(previewUrl)) {
+                if (previewBlockedBy === "pending" && !isSquarespaceUrl(previewUrl)) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
+                      Loading preview…
+                    </div>
+                  );
+                }
+                if (isSquarespaceUrl(previewUrl) || previewBlockedBy !== null) {
                   return (
                     <div className="flex flex-col h-full">
                       <p className="text-xs text-[#6b6b6b] px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
-                        Squarespace blocks iframe embedding. Using a simplified preview.
+                        {previewBlockedBy === "x-frame-options" ? (
+                          <>
+                            Your site blocks embedding, so we're showing a simplified preview. For the full live
+                            preview, turn off Clickjack protection in Squarespace under Settings → Developer Tools →
+                            Website Protection.
+                          </>
+                        ) : (
+                          "Squarespace blocks iframe embedding. Using a simplified preview."
+                        )}
                       </p>
                       <div className="flex-1 min-h-0 overflow-y-auto">
                         <BlogPreviewRenderer

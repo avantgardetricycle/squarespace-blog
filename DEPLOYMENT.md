@@ -8,7 +8,7 @@
 | --------- | ---- |
 | **Vercel** | Express API (`api/index.ts`), SPA, `loader.js` / `renderer.js`, Stripe webhook |
 | **Vercel Queues** | Async Stripe jobs (`checkout.session.completed`, `customer.subscription.updated`) |
-| **Supabase** | Postgres for Prisma (`DATABASE_URL` pooler + `DIRECT_URL` for migrations) |
+| **Supabase** | Postgres for Prisma (`DATABASE_URL` pooler + `DIRECT_URL` for migrations) and Storage for author photos |
 
 There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers are `api/queues/*.ts`.
 
@@ -18,8 +18,13 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 2. In **Project Settings → Database**, copy:
    - **Transaction pooler** URI → `DATABASE_URL` (port `6543`, `?pgbouncer=true` for Prisma).
    - **Session / direct** URI → `DIRECT_URL` (port `5432`, for migrations).
-3. Migrate data from Heroku Postgres (dump/restore) before cutover.
-4. Optional: drop legacy `pgboss` schema on Supabase after cutover (no longer used).
+3. In **Storage**, create a **public** bucket named `author-photos` (public so Squarespace `<img>` tags work). Leave writes closed to anon; only the service role uploads. The API can also create this bucket on first upload if it is missing.
+4. Create a **private** bucket named `support-screenshots` for Support tab attachments (PNG/JPG/GIF, max 5MB). The API can also create this bucket on first upload if it is missing. Do not make it public — team views use signed URLs.
+4. In **Project Settings → API**, copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (server only; never expose as `VITE_`)
+5. Migrate data from Heroku Postgres (dump/restore) before cutover.
+6. Optional: drop legacy `pgboss` schema on Supabase after cutover (no longer used).
 
 ### Vercel setup
 
@@ -35,15 +40,21 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | -------- | ----------- |
 | `DATABASE_URL` | Supabase **transaction pooler** (`postgres.[ref]` @ `*.pooler.supabase.com:6543`, `?pgbouncer=true`) — see [docs/SUPABASE_CONNECTION.md](docs/SUPABASE_CONNECTION.md) |
 | `DIRECT_URL` | Supabase **session pooler** (`:5432`) or **direct** (`db.[ref].supabase.co:5432`) — for `prisma db push` / CI |
+| `SUPABASE_URL` | Supabase project URL (`https://<project-ref>.supabase.co`) — author photo Storage and support screenshot Storage |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase **service_role** key (server only) — author photo and support screenshot uploads |
 | `APP_URL` | `https://your-app.vercel.app` or custom domain |
 | `STRIPE_SECRET_KEY` | Stripe secret key |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `https://your-app.vercel.app/api/webhooks/stripe` |
 | `STRIPE_ENVIRONMENT` | `sandbox` (Preview / test key) or `live` (Production / live key). Aliases: `test`/`staging` → sandbox; `production`/`prod` → live. If unset, inferred from `STRIPE_SECRET_KEY` (`sk_test` / `sk_live`). |
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_MAIL_FROM` | Verified sender |
+| `SUPPORT_EMAIL` | Inbox for support portal and Support tab tickets (default `support@betterblog.xyz`) |
+| `ANTHROPIC_API_KEY` | Server-only key for the dashboard Support chatbot (`claude-sonnet-4-6`) |
+| `TEAM_SUPPORT_EMAILS` | Comma-separated emails allowed to open `/internal/support` and team support APIs |
 | `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
 | `HCAPTCHA_*` | hCaptcha keys |
 | `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA (checkout + Log in). Set per environment (e.g. `true` on Preview / staging, `false` on Production). Baked into the client at build time; `/api/health` overrides when reachable. |
+| `VITE_GA_MEASUREMENT_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`) for the marketing landing page. **Production only** — leave unset on Preview/staging. Analytics only loads on `betterblog.xyz` and `www.betterblog.xyz`. |
 
 6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
    Events: `checkout.session.completed`, `customer.subscription.updated`.
@@ -66,9 +77,41 @@ After changing `IS_BETTER_BLOG_LIVE`, **redeploy** the branch (env vars are appl
 
 Optional: disable Deployment Protection for Preview, or add `staging.betterblog.xyz` to the protection allowlist, if you want runtime `/api/health` to drive the UI.
 
-### Database seed (CI)
+### Google Analytics (marketing landing page)
 
-[.github/workflows/database-seed.yml](.github/workflows/database-seed.yml) keeps reference data aligned with code.
+GA4 tracks pricing engagement and the coming-soon email modal on the public landing page (`/`). It does **not** use the customer-blog server-side GA integration in `server/src/routes/analytics.ts`.
+
+**Setup (one-time):**
+
+1. In [Google Analytics](https://analytics.google.com/), create a GA4 property (e.g. "BetterBlog Marketing").
+2. Add a **Web** data stream for `https://betterblog.xyz`.
+3. Enable **Enhanced measurement** (scrolls, outbound clicks, etc.).
+4. Copy the **Measurement ID** (`G-XXXXXXXXXX`).
+5. In Vercel → **Production** environment only, set `VITE_GA_MEASUREMENT_ID` to that ID. Redeploy production after adding it.
+
+Analytics is gated in code: gtag loads only when the hostname is `betterblog.xyz` or `www.betterblog.xyz` **and** the env var is set. Staging (`staging.betterblog.xyz`), Preview, and localhost never send events.
+
+**Post-deploy GA4 admin (recommended):**
+
+1. **Realtime** — confirm events on `betterblog.xyz`; confirm zero hits from staging.
+2. **Admin → Custom definitions → Create custom dimensions** (Event scope): `trigger_source`, `tier`, `billing_period`.
+3. **Admin → Events** — mark `interest_modal_success` as a **Key event** (conversion).
+4. **Explore → Funnel exploration** — steps: `interest_modal_open` → `interest_modal_submit` → `interest_modal_success`, broken down by `trigger_source`.
+
+**Key custom events:**
+
+| Event | Purpose |
+| ----- | ------- |
+| `pricing_section_view` | User scrolled to pricing (≥50% visible) |
+| `pricing_tier_cta_click` | Tier card CTA clicked |
+| `interest_modal_open` | Coming-soon modal opened (param: `trigger_source`) |
+| `interest_modal_submit` | Email form submitted |
+| `interest_modal_success` | Email captured successfully |
+| `interest_modal_dismiss` | Modal closed without completing (param: `had_input`) |
+
+### Database sync (CI)
+
+[.github/workflows/database-seed.yml](.github/workflows/database-seed.yml) keeps the database schema and reference data aligned with code.
 
 Repository secrets:
 
@@ -79,11 +122,19 @@ Repository secrets:
 
 Behavior:
 
-- Pushes to `main` that touch seed-related files automatically run the staging seed.
-- Manual dispatch can run `staging`, `production`, or `both`.
+- Pushes to **`develop`** that touch seed- or schema-related files run **`prisma db push`**, apply `server/prisma/migrations/*.sql`, then seed **staging**.
+- Pushes to **`main`** with the same path filters run schema sync and seed **production**.
+- Manual dispatch can run `staging`, `production`, or `both` (each runs schema sync before seeding).
 - Production uses the `production` GitHub Environment, so configure environment protection if you want approval before it runs.
 - Production seeding updates reference data only: live Stripe plans and built-in templates. Demo fixtures are staging-only.
 - The optional **include_legacy_plan_migration** input updates old `starter` / `pro` / `agency` values in `subscriptions` and `checkout_sessions`; leave it off unless you are intentionally running that one-time cleanup.
+
+Local equivalent:
+
+```bash
+cd server
+npm run db:sync    # prisma db push + apply prisma/migrations/*.sql
+```
 
 ### Local development
 

@@ -19,7 +19,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "dependencies": {
     "@vercel/queue": "^0.2.0",

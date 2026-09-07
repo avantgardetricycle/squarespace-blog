@@ -4,12 +4,12 @@ import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Upload, X, Loader2 } from "lucide-react";
 
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export interface AuthorImageUploadProps {
   value: string | null;
   onChange: (url: string | null) => void;
+  siteKey: string | null;
   authorName?: string;
   disabled?: boolean;
 }
@@ -26,6 +26,7 @@ function getInitials(name?: string): string {
 export function AuthorImageUpload({
   value,
   onChange,
+  siteKey,
   authorName,
   disabled = false,
 }: AuthorImageUploadProps) {
@@ -33,18 +34,21 @@ export function AuthorImageUpload({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const hasCloudinary = Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET);
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !hasCloudinary) return;
+    if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select an image file (JPEG, PNG, etc.)");
+    if (!siteKey) {
+      setError("Site is not loaded yet. Try again in a moment.");
+      e.target.value = "";
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Image must be under 10MB");
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file (JPEG, PNG, WebP, or GIF)");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("Image must be under 4MB");
       return;
     }
 
@@ -54,24 +58,21 @@ export function AuthorImageUpload({
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET!);
+      formData.append("siteKey", siteKey);
+      if (value) formData.append("previousImageUrl", value);
 
-      const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const res = await fetch("/api/blog-authors/photo", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
 
+      const data = (await res.json().catch(() => ({}))) as { imageUrl?: string; error?: string };
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error?.message || `Upload failed: ${res.status}`);
+        throw new Error(data.error || `Upload failed: ${res.status}`);
       }
-
-      const data = (await res.json()) as { secure_url?: string };
-      if (data.secure_url) {
-        onChange(data.secure_url);
+      if (data.imageUrl) {
+        onChange(data.imageUrl);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -82,8 +83,18 @@ export function AuthorImageUpload({
   };
 
   const handleRemove = () => {
+    const previous = value;
     onChange(null);
     setError(null);
+    if (!previous || !siteKey) return;
+    void fetch("/api/blog-authors/photo", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteKey, imageUrl: previous }),
+    }).catch(() => {
+      /* best-effort */
+    });
   };
 
   return (
@@ -99,40 +110,36 @@ export function AuthorImageUpload({
           </AvatarFallback>
         </Avatar>
         <div className="flex flex-wrap items-center gap-1.5">
-          {hasCloudinary && (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-                disabled={disabled || uploading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || uploading}
-                className="h-8 text-xs"
-              >
-                {uploading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Upload className="h-3.5 w-3.5" />
-                )}
-                <span className="ml-1">{uploading ? "Uploading…" : "Upload"}</span>
-              </Button>
-            </>
-          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={handleFileChange}
+            disabled={disabled || uploading || !siteKey}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || uploading || !siteKey}
+            className="h-8 text-xs"
+          >
+            {uploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="h-3.5 w-3.5" />
+            )}
+            <span className="ml-1">{uploading ? "Uploading…" : "Upload"}</span>
+          </Button>
           {value && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={handleRemove}
-              disabled={disabled}
+              disabled={disabled || uploading}
               className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <X className="h-3.5 w-3.5" />

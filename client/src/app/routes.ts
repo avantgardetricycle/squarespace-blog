@@ -9,6 +9,9 @@ import Comments from "./pages/Comments";
 import Checkout from "./pages/Checkout";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Analytics from "./pages/Analytics";
+import Support from "./pages/Support";
+import SupportPortal from "./pages/SupportPortal";
+import InternalSupport from "./pages/InternalSupport";
 import { getDashboardMe } from "@/api/auth";
 
 const protectedLoader = async ({ request }: LoaderFunctionArgs) => {
@@ -17,7 +20,19 @@ const protectedLoader = async ({ request }: LoaderFunctionArgs) => {
     const u = new URL(request.url);
     return redirect("/login?returnTo=" + encodeURIComponent(u.pathname + u.search));
   }
-  return null;
+  return me;
+};
+
+const teamLoader = async ({ request }: LoaderFunctionArgs) => {
+  const me = await getDashboardMe();
+  if (!me) {
+    const u = new URL(request.url);
+    return redirect("/login?returnTo=" + encodeURIComponent(u.pathname + u.search));
+  }
+  if (!me.isSupportTeam) {
+    throw new Response("Not Found", { status: 404 });
+  }
+  return me;
 };
 
 const publicLoader = async () => {
@@ -47,7 +62,12 @@ export const router = createBrowserRouter([
     Component: CheckoutSuccess,
   },
   {
+    path: "/support",
+    Component: SupportPortal,
+  },
+  {
     path: "/dashboard",
+    id: "dashboard",
     Component: AppLayout,
     loader: protectedLoader,
     children: [
@@ -71,6 +91,15 @@ export const router = createBrowserRouter([
         path: "analytics",
         Component: Analytics,
       },
+      {
+        path: "support",
+        Component: Support,
+      },
     ],
+  },
+  {
+    path: "/internal/support",
+    Component: InternalSupport,
+    loader: teamLoader,
   },
 ]);

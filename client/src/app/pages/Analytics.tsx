@@ -73,6 +73,26 @@ interface AnalyticsData {
   readPercentDistribution: Array<{ range: string; count: number; color: string }>;
 }
 
+function timeRangeDays(range: string): number {
+  if (range === "7d") return 7;
+  if (range === "30d") return 30;
+  if (range === "90d") return 90;
+  return 365;
+}
+
+function emptyPageViewsSeries(range: string): AnalyticsData["pageViewsData"] {
+  const days = timeRangeDays(range);
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (days - 1 - i));
+    return {
+      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      views: 0,
+      uniqueVisitors: 0,
+    };
+  });
+}
+
 const emptyAnalytics: AnalyticsData = {
   keyMetrics: {
     totalPageViews: 0,
@@ -223,25 +243,23 @@ export default function Analytics() {
   return (
     <div className="min-h-screen bg-[#f7f6f3] p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
-          <p className="text-[#6b6b6b] font-light">
-            Track your blog's performance and reader engagement
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
+      <div>
+        <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
+        <p className="text-[#6b6b6b] font-light">
+          Track your blog's performance and reader engagement
+        </p>
+        <div className="flex items-center gap-3 flex-wrap mt-4">
           {me && me.sites.length > 1 && (
             <Select
               value={siteKey ?? undefined}
               onValueChange={(v) => setSearchParams({ siteKey: v })}
             >
-              <SelectTrigger className="w-[180px] bg-white border-[#e4e3de]">
+              <SelectTrigger className="w-[200px] h-10 bg-white border-[#e4e3de] text-base">
                 <SelectValue placeholder="Select blog" />
               </SelectTrigger>
               <SelectContent>
                 {me.sites.map((s) => (
-                  <SelectItem key={s.id} value={s.siteKey}>
+                  <SelectItem key={s.id} value={s.siteKey} className="text-base">
                     {s.name || s.url || "Unnamed blog"}
                   </SelectItem>
                 ))}
@@ -249,14 +267,14 @@ export default function Analytics() {
             </Select>
           )}
           <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[160px] bg-white border-[#e4e3de]">
+            <SelectTrigger className="w-[180px] h-10 bg-white border-[#e4e3de] text-base">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="12m">Last 12 months</SelectItem>
+              <SelectItem value="7d" className="text-base">Last 7 days</SelectItem>
+              <SelectItem value="30d" className="text-base">Last 30 days</SelectItem>
+              <SelectItem value="90d" className="text-base">Last 90 days</SelectItem>
+              <SelectItem value="12m" className="text-base">Last 12 months</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -506,19 +524,7 @@ export default function Analytics() {
             data={
               data.pageViewsData.length > 0
                 ? data.pageViewsData
-                : (() => {
-                    const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : timeRange === "90d" ? 90 : 365;
-                    const points = Math.min(days, 14);
-                    return Array.from({ length: points }, (_, i) => {
-                      const d = new Date();
-                      d.setDate(d.getDate() - (points - 1 - i));
-                      return {
-                        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-                        views: 0,
-                        uniqueVisitors: 0,
-                      };
-                    });
-                  })()
+                : emptyPageViewsSeries(timeRange)
             }
           >
             <defs>
@@ -536,8 +542,14 @@ export default function Analytics() {
               dataKey="date"
               stroke="#6b6b6b"
               style={{ fontSize: "12px" }}
+              minTickGap={24}
             />
-            <YAxis stroke="#6b6b6b" style={{ fontSize: "12px" }} />
+            <YAxis
+              stroke="#6b6b6b"
+              style={{ fontSize: "12px" }}
+              domain={[0, "auto"]}
+              allowDecimals={false}
+            />
             <Tooltip
               contentStyle={{
                 backgroundColor: "white",

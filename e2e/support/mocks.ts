@@ -30,6 +30,7 @@ const dashboardMe = {
       paywallDetectionSource: "json_probe",
       status: "active",
       verificationStatus: "verified",
+      squarespaceApiKeyInvalid: false,
       createdAt: "2025-01-01T00:00:00.000Z",
     },
   ],
@@ -42,7 +43,7 @@ const configResponse = {
     showAuthor: false,
     showReadingTime: false,
     postSort: "date",
-    pagination: { show: false, mode: "pages", postsPerPage: 10 },
+    pagination: { show: true, mode: "pages", postsPerPage: 10 },
     collectionLayout: "grid",
     gridColumns: 3,
     collectionModules: {
@@ -76,7 +77,7 @@ const configResponse = {
     showAuthor: false,
     showReadingTime: false,
     postSort: "date",
-    pagination: { show: false, mode: "pages", postsPerPage: 10 },
+    pagination: { show: true, mode: "pages", postsPerPage: 10 },
     collectionLayout: "grid",
     gridColumns: 3,
     postModules: {
@@ -184,9 +185,11 @@ function apiPath(url: URL): string {
 
 const commentSettingsResponse = {
   commentsEnabled: true,
+  allowNewComments: true,
   allowAnonymousComments: true,
   subscriberCommentsEnabled: false,
   apiKeyVerified: false,
+  apiKeyInvalid: false,
   requireApproval: false,
   autoCloseAfterDays: null,
   notifyEmail: true,
@@ -210,6 +213,9 @@ export async function setupApiMocks(page: Page): Promise<void> {
     }
 
     if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, dashboardMe);
+    if (method === "GET" && path === "/api/dashboard/paywall-reconcile") {
+      return json(route, 200, { mismatches: [] });
+    }
     if (method === "GET" && path === "/api/checkout/prices") return json(route, 200, checkoutPlanPrices);
     if (method === "GET" && path === "/api/health") return json(route, 200, { status: "ok", isLive: true });
     if (method === "GET" && path === `/api/config/${siteKey}`) return json(route, 200, configResponse);

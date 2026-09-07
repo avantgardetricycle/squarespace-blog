@@ -1,7 +1,8 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail } from '../emails/index.js'
-import { getAppUrl } from './url.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail } from '../emails/index.js'
+import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
+import { getAppUrl, getSupportPortalUrl } from './url.js'
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST ?? 'localhost',
@@ -14,7 +15,8 @@ const transporter = nodemailer.createTransport({
 })
 
 const appName = process.env.APP_NAME ?? 'BetterBlog'
-const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <no-reply@betterblog.xyz>'
+const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <support@betterblog.xyz>'
+const inviteEmailSubject = 'Your BetterBlog access link'
 
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
 export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
@@ -26,7 +28,7 @@ export async function sendInviteEmail(to: string, magicLink: string): Promise<vo
   await transporter.sendMail({
     from: mailFrom,
     to,
-    subject: `You're invited to ${appName}`,
+    subject: inviteEmailSubject,
     html: `
       <h1>Welcome to ${appName}</h1>
       <p>Click the link below to activate your account and get started:</p>
@@ -48,7 +50,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
 
   sgMail.setApiKey(apiKey)
 
-  const html = await renderInviteEmail(magicLink)
+  const html = await renderInviteEmail(magicLink, getSupportPortalUrl())
 
   const logoAttachment = {
     content: getLogoBase64(),
@@ -61,7 +63,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
   const msg = {
     to,
     from: mailFrom,
-    subject: `You're invited to ${appName}`,
+    subject: inviteEmailSubject,
     html,
     attachments: [logoAttachment],
     trackingSettings: { clickTracking: { enable: false } },
@@ -92,7 +94,7 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
 
   sgMail.setApiKey(apiKey)
 
-  const html = await renderMagicLinkEmail(magicLink)
+  const html = await renderMagicLinkEmail(magicLink, getSupportPortalUrl())
 
   const logoAttachment = {
     content: getLogoBase64(),
@@ -203,6 +205,23 @@ export async function sendNewLeadMagnetNotification(
   }
 }
 
+function dashboardCommentActionUrl(
+  base: string,
+  siteKey: string,
+  commentId: string,
+  action: CommentAction
+): string {
+  const token = signCommentActionToken(commentId, action)
+  const params = new URLSearchParams({ siteKey, token })
+  if (action === 'view') {
+    params.set('highlight', commentId)
+  } else {
+    params.set('moderate', action)
+    params.set('commentId', commentId)
+  }
+  return `${base}/dashboard/comments?${params.toString()}`
+}
+
 /** Send notification to blogger: new comment or comment approved */
 export async function sendCommentNotificationEmail(
   to: string,
@@ -220,25 +239,13 @@ export async function sendCommentNotificationEmail(
   }
 
   const base = getAppUrl().replace(/\/+$/, '')
-  const viewUrl = `${base}/dashboard/comments?${new URLSearchParams({
+  const viewUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'view')
+  const approveUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'approve')
+  const spamUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'spam')
+  const hideUrl = dashboardCommentActionUrl(base, siteKey, commentId, 'hide')
+  const commentSettingsUrl = `${base}/dashboard/comments?${new URLSearchParams({
     siteKey,
-    highlight: commentId,
-  }).toString()}`
-  const approveUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'approve',
-    commentId,
-  }).toString()}`
-  const spamUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'spam',
-    commentId,
-  }).toString()}`
-  const hideUrl = `${base}/dashboard/comments?${new URLSearchParams({
-    siteKey,
-    moderate: 'hide',
-    commentId,
-  }).toString()}`
+  }).toString()}#comment-settings`
 
   sgMail.setApiKey(apiKey)
 
@@ -247,21 +254,235 @@ export async function sendCommentNotificationEmail(
     postTitle,
     commentExcerpt,
     viewUrl,
+    commentSettingsUrl,
     commentStatus,
     approveUrl,
     spamUrl,
     hideUrl,
   })
 
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `New comment on "${postTitle}"`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[Comment] SendGrid error sending comment notification:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    }
+  }
+}
+
+export async function sendProfilesApiAlertEmail(
+  to: string[],
+  details: {
+    siteName: string
+    siteUrl: string | null
+    siteKey: string
+    status: number | null
+    reason: string
+    errorBodySnippet: string | null
+    emailDomain: string | null
+    emailHasPlus: boolean
+  }
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey || to.length === 0) {
+    console.log('[BetterBlog alert] SENDGRID_API_KEY missing or no recipients; skipping Profiles API alert email', {
+      siteKey: details.siteKey,
+      reason: details.reason,
+      recipientCount: to.length,
+    })
+    return
+  }
+
+  const base = getAppUrl().replace(/\/+$/, '')
+  const commentSettingsUrl = `${base}/dashboard/comments?${new URLSearchParams({
+    siteKey: details.siteKey,
+  }).toString()}#comment-settings`
+
+  sgMail.setApiKey(apiKey)
+  const html = await renderProfilesApiAlertEmail({
+    ...details,
+    commentSettingsUrl,
+  })
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `Squarespace API key failed for ${details.siteName}`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[BetterBlog alert] SendGrid error sending Profiles API alert:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+    }
+  }
+}
+
+export interface SupportRequestPayload {
+  name: string
+  email: string
+  mode: 'question' | 'problem'
+  subject: string
+  message: string
+  pageUrl?: string
+  screenshot?: {
+    filename: string
+    contentType: string
+    data: string
+  }
+}
+
+/** Forward a support portal form submission to the support inbox */
+export async function sendSupportRequestEmail(payload: SupportRequestPayload): Promise<void> {
+  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.xyz'
+  const modeLabel = payload.mode === 'problem' ? 'Problem report' : 'Question'
+  const subjectLine = `[BetterBlog Support] ${modeLabel}: ${payload.subject}`
+
+  const fields = [
+    ['From', `${payload.name} <${payload.email}>`],
+    ['Type', modeLabel],
+    ['Topic', payload.subject],
+    ...(payload.pageUrl ? [['Page URL', payload.pageUrl] as const] : []),
+    ['Message', payload.message],
+  ]
+
+  const html = `
+    <h2>New support request</h2>
+    ${fields
+      .map(
+        ([label, value]) =>
+          `<p><strong>${label}:</strong><br/>${value.replace(/\n/g, '<br/>')}</p>`
+      )
+      .join('\n')}
+  `
+
+  const text = fields.map(([label, value]) => `${label}: ${value}`).join('\n\n')
+
+  const attachments = payload.screenshot
+    ? [
+        {
+          content: payload.screenshot.data,
+          filename: payload.screenshot.filename,
+          type: payload.screenshot.contentType,
+          disposition: 'attachment' as const,
+        },
+      ]
+    : undefined
+
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[Support] SENDGRID_API_KEY not set. New ${modeLabel.toLowerCase()} from ${payload.email}:\n${text}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
   try {
     await sgMail.send({
-      to,
+      to: supportTo,
       from: mailFrom,
-      subject: `New comment on "${postTitle}"`,
+      replyTo: payload.email,
+      subject: subjectLine,
+      text,
+      html,
+      attachments,
+      trackingSettings: { clickTracking: { enable: false } },
+    })
+  } catch (err) {
+    console.error('[Support] SendGrid error:', err)
+    throw err
+  }
+}
+
+export interface SupportTicketEmailPayload {
+  ticketId: string
+  accountEmail: string
+  accountName: string | null
+  subject: string
+  description: string
+  blogUrl: string | null
+  conversationId: string | null
+  screenshotUrl?: string
+}
+
+/** Notify the support inbox of a dashboard Support tab ticket. */
+export async function sendSupportTicketEmail(payload: SupportTicketEmailPayload): Promise<void> {
+  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.xyz'
+  const subjectLine = `[BetterBlog Support] Ticket: ${payload.subject}`
+  const fields: Array<[string, string]> = [
+    ['Ticket ID', payload.ticketId],
+    ['From', payload.accountName ? `${payload.accountName} <${payload.accountEmail}>` : payload.accountEmail],
+    ['Subject', payload.subject],
+    ...(payload.blogUrl ? ([['Blog URL', payload.blogUrl]] as Array<[string, string]>) : []),
+    ...(payload.conversationId
+      ? ([['Conversation ID', payload.conversationId]] as Array<[string, string]>)
+      : []),
+    ...(payload.screenshotUrl ? ([['Screenshot', payload.screenshotUrl]] as Array<[string, string]>) : []),
+    ['Description', payload.description],
+  ]
+
+  const html = `
+    <h2>New support ticket</h2>
+    ${fields
+      .map(([label, value]) => `<p><strong>${label}:</strong><br/>${value.replace(/\n/g, '<br/>')}</p>`)
+      .join('\n')}
+  `
+  const text = fields.map(([label, value]) => `${label}: ${value}`).join('\n\n')
+
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(`[Support ticket] SENDGRID_API_KEY not set. Ticket ${payload.ticketId} from ${payload.accountEmail}:\n${text}`)
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+
+  try {
+    await sgMail.send({
+      to: supportTo,
+      from: mailFrom,
+      replyTo: payload.accountEmail,
+      subject: subjectLine,
+      text,
       html,
       trackingSettings: { clickTracking: { enable: false } },
     })
   } catch (err) {
-    console.error('[Comment] SendGrid error sending comment notification:', err)
+    console.error('[Support ticket] SendGrid error:', err)
+    throw err
   }
 }

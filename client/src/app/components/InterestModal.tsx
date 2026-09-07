@@ -10,13 +10,15 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { trackEvent, type InterestModalSource } from "@/lib/analytics";
 
 interface InterestModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  triggerSource: InterestModalSource | null;
 }
 
-export function InterestModal({ open, onOpenChange }: InterestModalProps) {
+export function InterestModal({ open, onOpenChange, triggerSource }: InterestModalProps) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -26,6 +28,10 @@ export function InterestModal({ open, onOpenChange }: InterestModalProps) {
     e.preventDefault();
     setStatus("submitting");
     setErrorMessage("");
+
+    if (triggerSource) {
+      trackEvent("interest_modal_submit", { trigger_source: triggerSource });
+    }
 
     try {
       const res = await fetch("/api/leads", {
@@ -38,20 +44,41 @@ export function InterestModal({ open, onOpenChange }: InterestModalProps) {
       if (!res.ok) {
         setStatus("error");
         setErrorMessage(data.error || "Something went wrong");
+        if (triggerSource) {
+          trackEvent("interest_modal_error", {
+            trigger_source: triggerSource,
+            error_type: typeof data.error === "string" ? data.error : "api_error",
+          });
+        }
         return;
       }
 
       setStatus("success");
+      if (triggerSource) {
+        trackEvent("interest_modal_success", { trigger_source: triggerSource });
+      }
       setEmail("");
       setName("");
     } catch {
       setStatus("error");
       setErrorMessage("Failed to submit. Please try again.");
+      if (triggerSource) {
+        trackEvent("interest_modal_error", {
+          trigger_source: triggerSource,
+          error_type: "network_error",
+        });
+      }
     }
   };
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
+      if (status !== "success" && triggerSource) {
+        trackEvent("interest_modal_dismiss", {
+          trigger_source: triggerSource,
+          had_input: email.trim().length > 0 || name.trim().length > 0,
+        });
+      }
       setStatus("idle");
       setErrorMessage("");
     }

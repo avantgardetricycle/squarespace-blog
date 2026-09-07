@@ -49,9 +49,17 @@ export function isSupabaseDatabase(): boolean {
   return url.includes('supabase.co') || direct.includes('supabase.co')
 }
 
-/** Local dev only — set `SUPABASE_SSL_NO_VERIFY=true` in server/.env */
+/** Set `SUPABASE_SSL_NO_VERIFY=true` in server/.env (local) or CI secrets. */
 export function isSupabaseSslNoVerify(): boolean {
-  return process.env.SUPABASE_SSL_NO_VERIFY === 'true'
+  return (process.env.SUPABASE_SSL_NO_VERIFY ?? '').trim().toLowerCase() === 'true'
+}
+
+/**
+ * Supabase pooler TLS often presents a chain Node/pg rejects (self-signed in chain).
+ * Relax verification locally (opt-in), on Vercel, and in GitHub Actions.
+ */
+export function shouldRelaxSupabaseTls(): boolean {
+  return isSupabaseSslNoVerify() || process.env.VERCEL === '1' || process.env.GITHUB_ACTIONS === 'true'
 }
 
 /**
@@ -60,8 +68,7 @@ export function isSupabaseSslNoVerify(): boolean {
 export function getSslConfig(): { rejectUnauthorized: boolean } | false {
   if (!isRemoteDatabase()) return false
   if (isSupabaseDatabase()) {
-    // Local: SUPABASE_SSL_NO_VERIFY. Vercel: pooler TLS often needs relaxed verify (same as local fix).
-    if (isSupabaseSslNoVerify() || process.env.VERCEL === '1') {
+    if (shouldRelaxSupabaseTls()) {
       return { rejectUnauthorized: false }
     }
     return { rejectUnauthorized: true }
@@ -70,11 +77,11 @@ export function getSslConfig(): { rejectUnauthorized: boolean } | false {
 }
 
 /**
- * Append Prisma-compatible sslmode for local Supabase TLS issues.
+ * Append Prisma-compatible sslmode for Supabase TLS issues.
  * Used by prisma.config.ts for CLI commands only.
  */
 export function applySupabaseSslModeForPrisma(url: string): string {
-  if (!isSupabaseSslNoVerify() || !url.includes('supabase.co')) return url
+  if (!shouldRelaxSupabaseTls() || !url.includes('supabase.co')) return url
   try {
     const parsed = new URL(url)
     if (!parsed.searchParams.has('sslmode')) {

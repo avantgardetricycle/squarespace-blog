@@ -7,6 +7,11 @@ import crypto from 'crypto'
 import prisma from '../db/index.js'
 import { decrypt } from '../lib/encryption.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
+import { markSquarespaceApiKeyInvalid } from '../lib/profiles-api-alert.js'
+import {
+  clampParentIdsForThreadDepth,
+  resolveParentIdForReply,
+} from '../lib/comment-thread-depth.js'
 import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
 
 const router = Router()
@@ -18,6 +23,34 @@ const MAX_BODY = 5000
 const MAX_EMAIL = 254
 
 const commentRateMap = new Map<string, number[]>()
+const ANON_RETRY_TTL_MS = 5 * 60 * 1000
+const anonymousRetryTokens = new Map<string, { siteId: string; expiresAt: number }>()
+
+function cleanupAnonymousRetryTokens(): void {
+  const now = Date.now()
+  for (const [token, entry] of anonymousRetryTokens.entries()) {
+    if (entry.expiresAt <= now) anonymousRetryTokens.delete(token)
+  }
+}
+
+function issueAnonymousRetryToken(siteId: string): string {
+  cleanupAnonymousRetryTokens()
+  const token = crypto.randomBytes(16).toString('hex')
+  anonymousRetryTokens.set(token, { siteId, expiresAt: Date.now() + ANON_RETRY_TTL_MS })
+  return token
+}
+
+function peekAnonymousRetryToken(token: string, siteId: string): boolean {
+  cleanupAnonymousRetryTokens()
+  const entry = anonymousRetryTokens.get(token)
+  return Boolean(entry && entry.siteId === siteId && entry.expiresAt > Date.now())
+}
+
+function consumeAnonymousRetryToken(token: string, siteId: string): boolean {
+  if (!peekAnonymousRetryToken(token, siteId)) return false
+  anonymousRetryTokens.delete(token)
+  return true
+}
 
 function cleanupCommentRateLimit(): void {
   const now = Date.now()
@@ -59,12 +92,14 @@ async function getSiteWithSubscription(siteToken: string) {
       id: true,
       userId: true,
       siteKey: true,
+      name: true,
       url: true,
       blogPassword: true,
       squarespaceApiKeyEnc: true,
       user: {
         select: {
           id: true,
+          email: true,
           subscriptions: {
             where: { status: { in: ['trialing', 'active'] } },
             orderBy: { updatedAt: 'desc' },
@@ -82,6 +117,7 @@ async function getSiteWithSubscription(siteToken: string) {
 
 type CommentSettingsRow = {
   commentsEnabled: boolean
+  allowNewComments: boolean
   allowAnonymousComments: boolean
   subscriberCommentsEnabled: boolean
   requireApproval: boolean
@@ -98,6 +134,7 @@ function effectiveCommentSettings(s: CommentSettingsRow | null) {
   if (!s) {
     return {
       commentsEnabled: true,
+      allowNewComments: true,
       allowAnonymousComments: true,
       subscriberCommentsEnabled: false,
       requireApproval: false,
@@ -136,6 +173,39 @@ function fingerprintHash(ip: string, userAgent: string): string {
   return crypto.createHash('sha256').update(`${ip}:${userAgent}`).digest('hex')
 }
 
+function emailLookupMeta(email: string | null) {
+  if (!email) return { hasEmail: false, emailHasPlus: false, emailDomain: null as string | null }
+  const at = email.lastIndexOf('@')
+  return {
+    hasEmail: true,
+    emailHasPlus: email.includes('+'),
+    emailDomain: at >= 0 ? email.slice(at + 1) : null,
+  }
+}
+
+function debugCommentsIngest(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>
+) {
+  // #region agent log
+  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'd05d9c' },
+    body: JSON.stringify({
+      sessionId: 'd05d9c',
+      runId: 'pre-fix',
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {})
+  // #endregion
+}
+
 // GET /api/comments?post_id=xxx&page=1&per_page=20
 router.get('/', async (req: Request, res: Response) => {
   const siteToken = getSiteToken(req)
@@ -161,12 +231,39 @@ router.get('/', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'post_id is required' })
     return
   }
+  const postUrl =
+    typeof req.query.post_url === 'string' && req.query.post_url.trim()
+      ? req.query.post_url.trim()
+      : null
 
   const page = Math.max(1, parseInt(String(req.query.page || 1), 10))
   const perPage = Math.min(50, Math.max(1, parseInt(String(req.query.per_page || 20), 10)))
 
+  const postIdSet = new Set<string>([postId])
+  if (postUrl) postIdSet.add(postUrl)
+  const cachedMatches = await prisma.cachedPost.findMany({
+    where: {
+      siteId: site.id,
+      OR: [
+        { externalPostId: postId },
+        { url: postId },
+        ...(postUrl ? [{ externalPostId: postUrl }, { url: postUrl }] : []),
+      ],
+    },
+    select: { externalPostId: true, url: true },
+  })
+  for (const row of cachedMatches) {
+    if (row.externalPostId) postIdSet.add(row.externalPostId)
+    if (row.url) postIdSet.add(row.url)
+  }
+  const postIds = [...postIdSet]
+
   const rawRows = await prisma.comment.findMany({
-    where: { siteId: site.id, postId, status: { in: ['approved', 'deleted'] } },
+    where: {
+      siteId: site.id,
+      postId: postIds.length === 1 ? postIds[0] : { in: postIds },
+      status: { in: ['approved', 'deleted'] },
+    },
     include: { _count: { select: { commentLikes: true } } },
   })
 
@@ -187,24 +284,63 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   const visibleRows = rawRows.filter((c) => keepIds.has(c.id))
-  const rowsForTree = visibleRows.map((c) => ({
-    ...c,
-    parentId: c.parentId !== null && keepIds.has(c.parentId) ? c.parentId : null,
-  }))
+  const visibleIdSet = new Set(visibleRows.map((c) => c.id))
+  const rowsForTree = clampParentIdsForThreadDepth(
+    visibleRows.map((c) => ({
+      ...c,
+      parentId: c.parentId !== null && visibleIdSet.has(c.parentId) ? c.parentId : null,
+    }))
+  )
 
   const byParent = new Map<string | null, typeof rowsForTree>()
   for (const c of rowsForTree) {
-    const k = c.parentId
+    const k = c.parentId ?? null
     if (!byParent.has(k)) byParent.set(k, [])
     byParent.get(k)!.push(c)
   }
 
+  const reachable = new Set<string>()
+  const visitReachable = (id: string) => {
+    if (reachable.has(id)) return
+    reachable.add(id)
+    for (const child of byParent.get(id) ?? []) visitReachable(child.id)
+  }
+  for (const r of byParent.get(null) ?? []) visitReachable(r.id)
+  const rootList = byParent.get(null) ?? []
+  for (const c of rowsForTree) {
+    if (reachable.has(c.id)) continue
+    if (c.parentId != null) {
+      const siblings = byParent.get(c.parentId)
+      if (siblings) {
+        const idx = siblings.findIndex((s) => s.id === c.id)
+        if (idx >= 0) siblings.splice(idx, 1)
+      }
+      c.parentId = null
+    }
+    if (!rootList.some((r) => r.id === c.id)) rootList.push(c)
+    visitReachable(c.id)
+  }
+  byParent.set(null, rootList)
+
+  const createdMs = (createdAt: Date | string) => {
+    const t = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime()
+    return Number.isNaN(t) ? 0 : t
+  }
+  const createdIso = (createdAt: Date | string) => {
+    if (createdAt instanceof Date && !Number.isNaN(createdAt.getTime())) return createdAt.toISOString()
+    const d = new Date(createdAt)
+    return Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString()
+  }
+
   const sortSiblings = (arr: typeof rowsForTree) => {
     arr.sort((a, b) => {
-      if (settings.sortOrder === 'oldest') return a.createdAt.getTime() - b.createdAt.getTime()
-      if (settings.sortOrder === 'most_liked')
-        return b._count.commentLikes - a._count.commentLikes
-      return b.createdAt.getTime() - a.createdAt.getTime()
+      if (settings.sortOrder === 'oldest') return createdMs(a.createdAt) - createdMs(b.createdAt)
+      if (settings.sortOrder === 'most_liked') {
+        const likesA = a._count?.commentLikes ?? 0
+        const likesB = b._count?.commentLikes ?? 0
+        return likesB - likesA
+      }
+      return createdMs(b.createdAt) - createdMs(a.createdAt)
     })
   }
 
@@ -213,8 +349,24 @@ router.get('/', async (req: Request, res: Response) => {
   const total = roots.length
   const pageRoots = roots.slice((page - 1) * perPage, (page - 1) * perPage + perPage)
 
-  const formatNode = (c: (typeof rowsForTree)[0]): Record<string, unknown> => {
-    const kids = byParent.get(c.id) ?? []
+  const formatNode = (
+    c: (typeof rowsForTree)[0],
+    seen: Set<string> = new Set()
+  ): Record<string, unknown> => {
+    if (seen.has(c.id)) {
+      return {
+        id: c.id,
+        display_name: c.displayName,
+        verified_subscriber: false,
+        body: c.body,
+        like_count: 0,
+        created_at: createdIso(c.createdAt),
+        replies: [],
+      }
+    }
+    const nextSeen = new Set(seen)
+    nextSeen.add(c.id)
+    const kids = (byParent.get(c.id) ?? []).filter((k) => !nextSeen.has(k.id))
     sortSiblings(kids)
     if (c.status === 'deleted') {
       return {
@@ -223,9 +375,9 @@ router.get('/', async (req: Request, res: Response) => {
         verified_subscriber: false,
         body: '[deleted]',
         like_count: 0,
-        created_at: c.createdAt.toISOString(),
+        created_at: createdIso(c.createdAt),
         comment_deleted: true,
-        replies: kids.map((k) => formatNode(k)),
+        replies: kids.map((k) => formatNode(k, nextSeen)),
       }
     }
     const ext = c.externalCommentId
@@ -234,9 +386,9 @@ router.get('/', async (req: Request, res: Response) => {
       display_name: c.displayName,
       verified_subscriber: c.verifiedSubscriber,
       body: c.body,
-      like_count: c._count.commentLikes,
-      created_at: c.createdAt.toISOString(),
-      replies: kids.map((k) => formatNode(k)),
+      like_count: c._count?.commentLikes ?? 0,
+      created_at: createdIso(c.createdAt),
+      replies: kids.map((k) => formatNode(k, nextSeen)),
     }
     const emailNorm = c.email && typeof c.email === 'string' ? c.email.trim() : ''
     if (emailNorm) out.email = emailNorm
@@ -245,8 +397,41 @@ router.get('/', async (req: Request, res: Response) => {
     return out
   }
 
+  const formatted = pageRoots.map((r) => formatNode(r))
+  const identityDebug: Array<{
+    id: unknown
+    display_name: unknown
+    verified_subscriber: unknown
+    hasEmail: boolean
+    email: unknown
+  }> = []
+  const walkIdentity = (nodes: Record<string, unknown>[]) => {
+    for (const n of nodes) {
+      identityDebug.push({
+        id: n.id,
+        display_name: n.display_name,
+        verified_subscriber: n.verified_subscriber,
+        hasEmail: Boolean(n.email),
+        email: n.email ?? null,
+      })
+      const replies = n.replies
+      if (Array.isArray(replies)) walkIdentity(replies as Record<string, unknown>[])
+    }
+  }
+  walkIdentity(formatted)
+  console.log('[comments] GET list', {
+    siteId: site.id,
+    siteKey: site.siteKey,
+    postId,
+    total,
+    page,
+    verifiedCount: identityDebug.filter((c) => c.verified_subscriber === true).length,
+    anonymousCount: identityDebug.filter((c) => c.verified_subscriber !== true).length,
+    comments: identityDebug,
+  })
+
   res.json({
-    comments: pageRoots.map((r) => formatNode(r)),
+    comments: formatted,
     total,
     page,
   })
@@ -274,15 +459,28 @@ router.post('/', async (req: Request, res: Response) => {
     siteId: site.id,
     siteKey: site.siteKey,
     postId: typeof req.body?.post_id === 'string' ? req.body.post_id : null,
+    allowAnonymousComments: settings.allowAnonymousComments,
     subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
     hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
     squarespaceApiKeySource: siteApiKey ? 'site' : legacyApiKey ? 'blogCommentSettings(legacy)' : 'none',
     hasSiteApiKeyRaw: Boolean(site.squarespaceApiKeyEnc),
     hasLegacyApiKeyRaw: Boolean(legacyApiKey),
     requireApproval: settings.requireApproval,
+    incomingHasEmail:
+      typeof req.body?.email === 'string' && Boolean(String(req.body.email).trim()),
+    incomingEmail:
+      typeof req.body?.email === 'string' ? String(req.body.email).trim().toLowerCase() : null,
+    incomingHasDisplayName:
+      typeof req.body?.display_name === 'string' && Boolean(String(req.body.display_name).trim()),
+    incomingDisplayName:
+      typeof req.body?.display_name === 'string' ? String(req.body.display_name).trim() : '',
   })
   if (!settings.commentsEnabled) {
     res.status(403).json({ error: 'Comments are disabled' })
+    return
+  }
+  if (!settings.allowNewComments) {
+    res.status(403).json({ error: 'New comments are disabled' })
     return
   }
 
@@ -303,6 +501,8 @@ router.post('/', async (req: Request, res: Response) => {
     squarespace_record_type?: number | string
     hcaptcha_token?: string
     verification_cookie_token?: string
+    post_as_anonymous?: boolean
+    anonymous_retry_token?: string
     post_title?: string
     post_published_at?: string
     post_url?: string
@@ -314,14 +514,21 @@ router.post('/', async (req: Request, res: Response) => {
     return
   }
 
+  const postAsAnonymous = body.post_as_anonymous === true
+  const anonymousRetryToken =
+    typeof body.anonymous_retry_token === 'string' ? body.anonymous_retry_token.trim() : ''
+  const skipCaptchaForAnonymousRetry =
+    postAsAnonymous && !!anonymousRetryToken && peekAnonymousRetryToken(anonymousRetryToken, site.id)
+
   const hcaptchaSecret = process.env.HCAPTCHA_SECRET_KEY
   const hcaptchaToken = typeof body.hcaptcha_token === 'string' ? body.hcaptcha_token.trim() : null
-  if (hcaptchaSecret && !hcaptchaToken) {
+  if (hcaptchaSecret && !hcaptchaToken && !skipCaptchaForAnonymousRetry) {
     res.status(400).json({ error: 'hcaptcha_token is required' })
     return
   }
 
-  const hcaptchaValid = hcaptchaSecret ? await verifyHCaptcha(hcaptchaToken!) : true
+  const hcaptchaValid =
+    hcaptchaSecret && !skipCaptchaForAnonymousRetry ? await verifyHCaptcha(hcaptchaToken!) : true
   if (!hcaptchaValid) {
     res.status(400).json({ error: 'Captcha verification failed' })
     return
@@ -341,6 +548,13 @@ router.post('/', async (req: Request, res: Response) => {
   }
   if (displayNameRaw.length > MAX_DISPLAY_NAME) {
     res.status(400).json({ error: 'display_name must be at most 100 characters' })
+    return
+  }
+  if (postAsAnonymous && !settings.allowAnonymousComments) {
+    res.status(403).json({
+      error:
+        'Anonymous comments are disabled. Sign in with your site member account and confirm your member email to comment.',
+    })
     return
   }
   if (!settings.allowAnonymousComments) {
@@ -398,6 +612,11 @@ router.post('/', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'Invalid parent comment' })
       return
     }
+    resolvedParentId = await resolveParentIdForReply(prisma, {
+      siteId: site.id,
+      postId,
+      requestedParentId: parent.id,
+    })
   }
 
   // Upsert cached post for auto-close check
@@ -448,13 +667,48 @@ router.post('/', async (req: Request, res: Response) => {
   let displayName = displayNameRaw.slice(0, MAX_DISPLAY_NAME)
   let verifiedSubscriber = false
   let squarespaceProfileId: string | null = null
+  const memberEmailAttempt = !postAsAnonymous && !displayNameRaw && !!email
+  const verifyDebug: Record<string, unknown> = {
+    ...emailLookupMeta(email),
+    memberEmailAttempt,
+    postAsAnonymous,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+    attempted: false,
+    skipReason: null,
+    profilesStatus: null,
+    profilesCount: null,
+    hasProfile: false,
+    hasAccount: null,
+    topLevelKeys: [],
+    verifiedSubscriber: false,
+    fallbackAnonymous: false,
+    verificationFailureReason: null,
+  }
+  console.log('[comments] identity incoming', {
+    siteId: site.id,
+    postId,
+    displayNameRaw: displayNameRaw || '',
+    email,
+    memberEmailAttempt,
+    postAsAnonymous,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+  })
 
-  // Subscriber verification for paywalled posts - spec says check if subscriber_comments_enabled
-  // For MVP we simplify: if they have API key and subscriber_comments_enabled, verify when email provided
-  if (settings.subscriberCommentsEnabled && email && effectiveSquarespaceApiKeyEnc) {
+  // Subscriber verification: if they have API key and subscriber_comments_enabled, verify when email provided
+  if (!postAsAnonymous && settings.subscriberCommentsEnabled && email && effectiveSquarespaceApiKeyEnc) {
+    verifyDebug.attempted = true
     try {
       const apiKey = decrypt(effectiveSquarespaceApiKeyEnc)
       const profilesUrl = `https://api.squarespace.com/1.0/profiles?filter=email,${encodeURIComponent(email)}`
+      debugCommentsIngest('H4', 'comments.ts:profiles-start', 'profiles verify start', {
+        ...emailLookupMeta(email),
+        hasApiKey: Boolean(apiKey),
+        filterUsesPlusEncoding: Boolean(email && email.includes('+')),
+      })
       console.log('[comments] Profiles verify start', {
         siteId: site.id,
         postId,
@@ -502,6 +756,10 @@ router.post('/', async (req: Request, res: Response) => {
             : null,
         })
         const profile = profiles[0]
+        const hasAccountRaw =
+          profile && typeof profile === 'object' ? (profile.hasAccount ?? null) : null
+        const hasAccountSnake =
+          profile && typeof profile === 'object' ? (profile.has_account ?? null) : null
         const hasAccount =
           profile && typeof profile === 'object'
             ? (profile.hasAccount ?? profile.has_account ?? true)
@@ -513,53 +771,220 @@ router.post('/', async (req: Request, res: Response) => {
             displayName = String(profile.firstName || profile.first_name)
           }
         }
+        verifyDebug.profilesStatus = resProfiles.status
+        verifyDebug.profilesCount = profiles.length
+        verifyDebug.hasProfile = Boolean(profile)
+        verifyDebug.hasAccount = hasAccount
+        verifyDebug.topLevelKeys =
+          data && typeof data === 'object' ? Object.keys(data).slice(0, 20) : []
+        verifyDebug.verifiedSubscriber = verifiedSubscriber
+        debugCommentsIngest('H2', 'comments.ts:profiles-decision', 'profiles verify decision', {
+          ...emailLookupMeta(email),
+          profilesStatus: resProfiles.status,
+          profilesCount: profiles.length,
+          hasProfile: Boolean(profile),
+          hasAccount,
+          hasAccountRaw,
+          hasAccountSnake,
+          verifiedSubscriber,
+          hasProfileId: Boolean(squarespaceProfileId),
+          displayNameSetFromProfile: Boolean(displayName),
+        })
+        console.log('[comments] Profiles verify decision', {
+          siteId: site.id,
+          postId,
+          email,
+          profilesCount: profiles.length,
+          hasProfile: Boolean(profile),
+          hasAccount,
+          hasAccountRaw,
+          hasAccountSnake,
+          verifiedSubscriber,
+          squarespaceProfileId,
+          displayNameAfterVerify: displayName || null,
+        })
+        if (!verifiedSubscriber) {
+          verifyDebug.verificationFailureReason = 'profile_not_found'
+        }
       } else {
         const errText = await resProfiles.text().catch(() => '')
+        const errSnippet = errText ? errText.slice(0, 300) : null
         console.error('[comments] Profiles API non-200', {
           status: resProfiles.status,
           statusText: resProfiles.statusText,
           requestId: sqReqId,
           body: errText ? errText.slice(0, 1000) : null,
         })
+        verifyDebug.profilesStatus = resProfiles.status
+        verifyDebug.skipReason = 'profiles-api-non-200'
+        verifyDebug.profilesErrorBody = errSnippet
+        verifyDebug.verificationFailureReason =
+          resProfiles.status === 401
+            ? 'profiles_unauthorized'
+            : resProfiles.status === 403
+              ? 'profiles_forbidden'
+              : 'profiles_http_error'
+        debugCommentsIngest('H6', 'comments.ts:profiles-non-200', 'profiles API non-200', {
+          ...emailLookupMeta(email),
+          status: resProfiles.status,
+          errorBodyLen: errText ? errText.length : 0,
+          errorBodySnippet: errSnippet,
+        })
+        console.log('[comments] Profiles verify decision', {
+          siteId: site.id,
+          postId,
+          email,
+          verifiedSubscriber: false,
+          reason: 'profiles-api-non-200',
+          status: resProfiles.status,
+        })
+        if (resProfiles.status === 401 || resProfiles.status === 403) {
+          markSquarespaceApiKeyInvalid({
+            siteId: site.id,
+            siteKey: site.siteKey,
+            siteName: site.name ?? null,
+            siteUrl: site.url ?? null,
+            status: resProfiles.status,
+            reason: resProfiles.status === 403 ? 'profiles_forbidden' : 'profiles_unauthorized',
+            errorBodySnippet: errSnippet,
+            ownerEmails: [site.user?.email, settings.notificationEmail],
+          }).catch((err) => console.error('[comments] Profiles API alert error:', err))
+        }
       }
     } catch (err) {
       console.error('[comments] Profiles API error:', err)
-      // Graceful degradation - continue as unverified
+      verifyDebug.skipReason = 'profiles-api-exception'
+      debugCommentsIngest('H3', 'comments.ts:profiles-exception', 'profiles API exception', {
+        ...emailLookupMeta(email),
+        errorType: err instanceof Error ? err.name : typeof err,
+      })
+      console.log('[comments] Profiles verify decision', {
+        siteId: site.id,
+        postId,
+        email,
+        verifiedSubscriber: false,
+        reason: 'profiles-api-exception',
+      })
+      // Graceful degradation - continue as unverified. Network/5xx is not a dead API key.
     }
   } else {
+    const skipReason = postAsAnonymous
+      ? 'post-as-anonymous'
+      : !settings.subscriberCommentsEnabled
+        ? 'subscriberCommentsEnabled=false'
+        : !email
+          ? 'no-email'
+          : !effectiveSquarespaceApiKeyEnc
+            ? 'no-squarespace-api-key'
+            : 'unknown'
+    verifyDebug.skipReason = skipReason
+    debugCommentsIngest('H4', 'comments.ts:profiles-skipped', 'profiles verify skipped', {
+      skipReason,
+      ...emailLookupMeta(email),
+      subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+      hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+      memberEmailAttempt,
+    })
     console.log('[comments] Profiles verify skipped', {
+      skipReason,
       subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
       hasEmail: Boolean(email),
-        hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
-        squarespaceApiKeySource: siteApiKey ? 'site' : legacyApiKey ? 'blogCommentSettings(legacy)' : 'none',
+      email,
+      hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+      squarespaceApiKeySource: siteApiKey ? 'site' : legacyApiKey ? 'blogCommentSettings(legacy)' : 'none',
+      allowAnonymousComments: settings.allowAnonymousComments,
+      memberEmailAttempt,
     })
   }
 
-  const memberEmailAttempt = !displayNameRaw && !!email
-  if (memberEmailAttempt && !settings.allowAnonymousComments) {
-    if (!settings.subscriberCommentsEnabled || !effectiveSquarespaceApiKeyEnc) {
+  if (memberEmailAttempt && !verifiedSubscriber) {
+    if (!settings.allowAnonymousComments) {
+      if (!settings.subscriberCommentsEnabled || !effectiveSquarespaceApiKeyEnc) {
+        console.log('[comments] member email rejected: verification not configured', {
+          siteId: site.id,
+          postId,
+          email,
+          subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+          hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+        })
+        res.status(400).json({
+          error:
+            'Member email verification is required to comment. Enable subscriber comments and connect your Squarespace API key, or turn on anonymous comments.',
+        })
+        return
+      }
+      console.log('[comments] member email rejected: profiles lookup did not verify', {
+        siteId: site.id,
+        postId,
+        email,
+        verifiedSubscriber,
+        squarespaceProfileId,
+      })
       res.status(400).json({
+        code: 'verification_failed',
         error:
-          'Member email verification is required to comment. Enable subscriber comments and connect your Squarespace API key, or turn on anonymous comments.',
+          'We could not verify a member account for that email. Use the address tied to your site membership, or ask the site owner for help.',
       })
       return
     }
-    if (!verifiedSubscriber) {
+    if (settings.subscriberCommentsEnabled) {
+      console.log('[comments] member email unverified: waiting for anonymous confirmation', {
+        siteId: site.id,
+        postId,
+        email,
+        verifiedSubscriber,
+        squarespaceProfileId,
+      })
       res.status(400).json({
+        code: 'verification_failed_anonymous_available',
         error:
-          'We could not verify a member account for that email. Use the address tied to your site membership, or ask the site owner for help.',
+          'We could not verify a member account for that email. Would you like to post this comment anonymously?',
+        anonymous_retry_token: issueAnonymousRetryToken(site.id),
       })
       return
     }
   }
 
   // Logged-in/member flow omits display_name; if verification fails and anonymous comments are allowed, post as Anonymous.
+  const displayNameBeforeFallback = displayName
   if (!displayName) {
     displayName = 'Anonymous'
   }
+  verifyDebug.verifiedSubscriber = verifiedSubscriber
+  verifyDebug.fallbackAnonymous = displayName === 'Anonymous' && !verifiedSubscriber
+  debugCommentsIngest('H5', 'comments.ts:identity-resolved', 'identity resolved', {
+    ...emailLookupMeta(email),
+    memberEmailAttempt,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    verifiedSubscriber,
+    fallbackAnonymous: verifyDebug.fallbackAnonymous,
+    displayNameIsAnonymous: displayName === 'Anonymous',
+    attempted: verifyDebug.attempted,
+    skipReason: verifyDebug.skipReason,
+    profilesCount: verifyDebug.profilesCount,
+    hasProfile: verifyDebug.hasProfile,
+    hasAccount: verifyDebug.hasAccount,
+  })
+  console.log('[comments] identity resolved', {
+    siteId: site.id,
+    postId,
+    email,
+    memberEmailAttempt,
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    verifiedSubscriber,
+    squarespaceProfileId,
+    displayNameBeforeFallback: displayNameBeforeFallback || null,
+    displayName,
+    fallbackAnonymous: displayName === 'Anonymous' && !verifiedSubscriber,
+  })
 
   const status = settings.requireApproval ? 'pending' : 'approved'
   const autoApproved = !settings.requireApproval
+
+  if (skipCaptchaForAnonymousRetry && anonymousRetryToken) {
+    consumeAnonymousRetryToken(anonymousRetryToken, site.id)
+  }
 
   const comment = await prisma.comment.create({
     data: {
@@ -585,6 +1010,8 @@ router.post('/', async (req: Request, res: Response) => {
     verifiedSubscriber: comment.verifiedSubscriber,
     displayName: comment.displayName,
     hasEmail: Boolean(comment.email),
+    email: comment.email,
+    squarespaceProfileId: comment.squarespaceProfileId,
   })
 
   if (settings.notifyEmail) {

@@ -21,6 +21,8 @@ interface RendererConfigOverrides {
   paywallSettings?: {
     subscribeUrl: string | null;
     footerDescription: string | null;
+    eyebrowText: string | null;
+    headlineText: string | null;
     featureItems: string[];
   } | null;
   /** Configure preview chrome: drives editorial mobile striping when the browser window is wider than the phone frame */

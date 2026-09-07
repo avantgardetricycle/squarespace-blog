@@ -12,6 +12,7 @@ import stripeWebhookRoutes from './routes/stripe-webhook.js'
 import blogAuthorsRoutes from './routes/blog-authors.js'
 import templatesRoutes from './routes/templates.js'
 import leadsRoutes from './routes/leads.js'
+import supportRoutes from './routes/support.js'
 import analyticsRoutes from './routes/analytics.js'
 import captureRoutes from './routes/capture.js'
 import commentsRoutes from './routes/comments.js'
@@ -73,6 +74,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use('/api/templates', templatesRoutes)
   app.use('/api/checkout', checkoutRoutes)
   app.use('/api/leads', leadsRoutes)
+  app.use('/api/support', supportRoutes)
 
   app.get('/api/health', (_req, res) => {
     const isBetterBlogLiveEnv = process.env.IS_BETTER_BLOG_LIVE
@@ -103,20 +105,16 @@ export function createApp(options: CreateAppOptions = {}): Express {
   const loaderPath = path.join(scriptBase, 'loader.js')
   if (fs.existsSync(rendererPath)) {
     app.get('/renderer.js', (_req, res) => {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-      res.setHeader('Surrogate-Control', 'no-store')
+      // Stable URL (pasted Header snippets). Short max-age so deploys land
+      // quickly; SWR lets repeat visitors reuse the previous file.
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400')
       res.type('application/javascript')
       res.sendFile(rendererPath)
     })
   }
   if (fs.existsSync(loaderPath)) {
     app.get('/loader.js', (_req, res) => {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-      res.setHeader('Pragma', 'no-cache')
-      res.setHeader('Expires', '0')
-      res.setHeader('Surrogate-Control', 'no-store')
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400')
       res.type('application/javascript')
       res.sendFile(loaderPath)
     })

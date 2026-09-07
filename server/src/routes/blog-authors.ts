@@ -1,8 +1,117 @@
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
+import multer from 'multer'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import {
+  AUTHOR_PHOTO_MAX_BYTES,
+  deleteAuthorPhotoIfOwned,
+  isAllowedAuthorPhotoType,
+  isAuthorPhotoStorageConfigured,
+  uploadAuthorPhoto
+} from '../lib/supabase-storage.js'
 
 const router = Router()
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: AUTHOR_PHOTO_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!isAllowedAuthorPhotoType(file.mimetype)) {
+      cb(new Error('Please select an image file (JPEG, PNG, WebP, or GIF)'))
+      return
+    }
+    cb(null, true)
+  }
+})
+
+function isFileTooLarge(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'LIMIT_FILE_SIZE')
+}
+
+function handlePhotoUpload(req: Request, res: Response, next: NextFunction): void {
+  const parse = photoUpload.single('file') as (
+    req: Request,
+    res: Response,
+    cb: (err?: unknown) => void
+  ) => void
+  parse(req, res, (err?: unknown) => {
+    if (isFileTooLarge(err)) {
+      res.status(400).json({ error: 'Image must be under 4MB' })
+      return
+    }
+    if (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : 'Upload failed' })
+      return
+    }
+    next()
+  })
+}
+
+// POST /api/blog-authors/photo - Upload author photo to Supabase Storage
+router.post('/photo', requireSession, handlePhotoUpload, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = typeof req.body?.siteKey === 'string' ? req.body.siteKey : ''
+  const previousImageUrl = typeof req.body?.previousImageUrl === 'string' ? req.body.previousImageUrl : null
+  const file = (req as Request & { file?: { buffer: Buffer } }).file
+
+  if (!isAuthorPhotoStorageConfigured()) {
+    res.status(503).json({ error: 'Author photo storage is not configured' })
+    return
+  }
+  if (!siteKey) {
+    res.status(400).json({ error: 'siteKey is required' })
+    return
+  }
+  if (!file?.buffer) {
+    res.status(400).json({ error: 'Image file is required' })
+    return
+  }
+
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id, deletedAt: null }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  try {
+    const imageUrl = await uploadAuthorPhoto(site.id, file.buffer)
+    if (previousImageUrl) {
+      await deleteAuthorPhotoIfOwned(previousImageUrl, site.id)
+    }
+    res.json({ imageUrl })
+  } catch (err) {
+    console.error('[blog-authors] photo upload failed', err)
+    res.status(500).json({ error: 'Upload failed' })
+  }
+})
+
+// DELETE /api/blog-authors/photo - Best-effort delete of a stored author photo
+router.delete('/photo', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const body = req.body as { siteKey?: string; imageUrl?: string }
+  const siteKey = typeof body.siteKey === 'string' ? body.siteKey : ''
+  const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl : ''
+
+  if (!siteKey || !imageUrl) {
+    res.status(400).json({ error: 'siteKey and imageUrl are required' })
+    return
+  }
+
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id, deletedAt: null }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  if (isAuthorPhotoStorageConfigured()) {
+    await deleteAuthorPhotoIfOwned(imageUrl, site.id)
+  }
+  res.json({ ok: true })
+})
 
 // GET /api/blog-authors/:siteKey - List authors for a site (requires auth, must own site)
 router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {

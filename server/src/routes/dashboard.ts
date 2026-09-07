@@ -13,12 +13,22 @@ import {
 import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
+import { isSupportTeamEmail } from '../lib/support-team.js'
+import { isActiveSubscriptionStatus } from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
+import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
+import {
+  buildBlogJsonUrl,
+  fetchSquarespaceBlogJson,
+  inferPaywallFromSquarespaceJson,
+  type PaywallDetectionState
+} from '../lib/squarespace-paywall-probe.js'
 
 const router = Router()
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
 type PaywallMode = (typeof PAYWALL_MODES)[number]
-type PaywallDetectionState = 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
+const PAYWALL_DETECTION_SOURCES = ['json_probe', 'manual'] as const
+type PaywallDetectionSource = (typeof PAYWALL_DETECTION_SOURCES)[number]
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -68,23 +78,17 @@ function normalizeSubscribeUrlInput(raw: unknown): string | null {
 function paywallSettingsJson(s: {
   subscribeUrl: string | null
   footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
   featureItems: string[]
 }) {
   return {
     subscribeUrl: s.subscribeUrl,
     footerDescription: s.footerDescription,
-    featureItems: s.featureItems
+    eyebrowText: s.eyebrowText,
+    headlineText: s.headlineText,
+    featureItems: Array.isArray(s.featureItems) ? s.featureItems : []
   }
-}
-
-/**
- * Build the blog JSON fetch URL from site url and blogPath.
- */
-function buildBlogJsonUrl(url: string, blogPath: string | null): string {
-  const parsed = new URL(url)
-  const hasPath = parsed.pathname && parsed.pathname !== '/'
-  const base = url.replace(/\/+$/, '')
-  return hasPath ? base + '?format=json' : parsed.origin + (blogPath || '/blog') + '?format=json'
 }
 
 /**
@@ -124,9 +128,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         where: { id: user.id },
         include: {
           subscriptions: {
-            where: { status: { in: ['trialing', 'active'] } },
-            orderBy: { createdAt: 'desc' },
-            take: 1
+            orderBy: { updatedAt: 'desc' },
+            take: 10
           },
           sites: {
             where: { status: 'active', deletedAt: null },
@@ -143,7 +146,11 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
       return
     }
 
-    const subscription = userWithRelations.subscriptions[0] ?? null
+    const subscription =
+      userWithRelations.subscriptions.find((s) => isActiveSubscriptionStatus(s.status)) ??
+      userWithRelations.subscriptions[0] ??
+      null
+    const subscriptionActive = isActiveSubscriptionStatus(subscription?.status)
     const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
 
     const stripeEnv = getStripeEnvironment()
@@ -207,20 +214,64 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
         paywallDetectionSource: s.paywallDetectionSource,
         status: s.status,
         verificationStatus: s.verificationStatus,
+        squarespaceApiKeyInvalid: Boolean(s.squarespaceApiKeyInvalidAt),
         createdAt: s.createdAt,
         paywallSettings: s.sitePaywallSettings
-          ? {
-              subscribeUrl: s.sitePaywallSettings.subscribeUrl,
-              footerDescription: s.sitePaywallSettings.footerDescription,
-              featureItems: s.sitePaywallSettings.featureItems
-            }
+          ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
-      canCreateSite: maxSites === null || siteCount < maxSites
+      canCreateSite: subscriptionActive && (maxSites === null || siteCount < maxSites),
+      isSupportTeam: isSupportTeamEmail(userWithRelations.email)
     })
   } catch (err) {
     console.error('Dashboard me error:', err)
     res.status(500).json({ error: 'Failed to load dashboard' })
+  }
+})
+
+// GET /api/dashboard/paywall-reconcile — probe live Squarespace JSON vs stored BB paywall state
+router.get('/paywall-reconcile', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+
+  try {
+    const sites = await prisma.site.findMany({
+      where: { userId: user.id, status: 'active', deletedAt: null },
+      select: {
+        id: true,
+        siteKey: true,
+        name: true,
+        url: true,
+        blogPath: true,
+        blogPassword: true,
+        paywallDetectionState: true
+      }
+    })
+
+    const mismatches = (
+      await Promise.all(
+        sites.map(async (site) => {
+          if (!site.url) return null
+          const json = await fetchSquarespaceBlogJson(site.url, site.blogPath, site.blogPassword)
+          const probed = inferPaywallFromSquarespaceJson(json)
+          if (probed.state === 'unknown') return null
+          const stored = (site.paywallDetectionState || 'unknown') as PaywallDetectionState
+          if (stored === probed.state) return null
+          return {
+            siteId: site.id,
+            siteKey: site.siteKey,
+            name: site.name,
+            storedState: stored,
+            probedState: probed.state,
+            signals: probed.signals
+          }
+        })
+      )
+    ).filter((row): row is NonNullable<typeof row> => row !== null)
+
+    res.json({ mismatches })
+  } catch (err) {
+    console.error('Paywall reconcile error:', err)
+    res.status(500).json({ error: 'Failed to reconcile paywall settings' })
   }
 })
 
@@ -290,6 +341,47 @@ router.post('/subscription/cancel', requireSession, async (req: Request, res: Re
   }
 })
 
+// POST /api/dashboard/subscription/resume - Undo scheduled cancellation
+router.post('/subscription/resume', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where: {
+        userId: user.id,
+        status: { in: ['trialing', 'active'] },
+        cancelAtPeriodEnd: true
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    if (!subscription?.stripeSubscriptionId) {
+      res.status(404).json({ error: 'No scheduled cancellation found' })
+      return
+    }
+
+    const stripe = getStripe()
+    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+      cancel_at_period_end: false
+    })
+
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { cancelAtPeriodEnd: false }
+    })
+
+    res.json({
+      success: true,
+      message: 'Your subscription will renew on your next billing date',
+      currentPeriodEnd: subscription.currentPeriodEnd
+    })
+  } catch (err) {
+    console.error('Subscription resume error:', err)
+    const message = err instanceof Error ? err.message : 'Failed to restore subscription'
+    res.status(500).json({ error: message })
+  }
+})
+
 // POST /api/dashboard/subscription/portal - Create Stripe Customer Portal session
 router.post('/subscription/portal', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
@@ -351,6 +443,11 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
 
+    if (!isActiveSubscriptionStatus(subscription?.status)) {
+      res.status(403).json({ error: 'Subscription required' })
+      return
+    }
+
     const maxSites = subscription?.maxSites ?? 1
     if (maxSites !== null && siteCount >= maxSites) {
       res.status(403).json({ error: 'Site limit reached for your plan' })
@@ -392,14 +489,19 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           status: activeSameUrl.status,
           verificationStatus: activeSameUrl.verificationStatus,
           createdAt: activeSameUrl.createdAt,
-          paywallSettings: pw
-            ? {
-                subscribeUrl: pw.subscribeUrl,
-                footerDescription: pw.footerDescription,
-                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
-              }
-            : null
+          paywallSettings: pw ? paywallSettingsJson(pw) : null
         }
+      })
+      return
+    }
+
+    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
+    const verified = await verifyBlogUrl(blogJsonUrl)
+    if (!verified) {
+      res.status(400).json({
+        error: 'blog_url_unreachable',
+        message:
+          "We couldn't reach your blog at the URL you provided. Make sure you entered the full URL (e.g. https://yoursite.squarespace.com/blog) and try again."
       })
       return
     }
@@ -457,13 +559,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           verificationStatus: deletedSameUrl.verificationStatus,
           createdAt: deletedSameUrl.createdAt,
           deletedAt: deletedSameUrl.deletedAt ? deletedSameUrl.deletedAt.toISOString() : null,
-          paywallSettings: pw
-            ? {
-                subscribeUrl: pw.subscribeUrl,
-                footerDescription: pw.footerDescription,
-                featureItems: Array.isArray(pw.featureItems) ? pw.featureItems : []
-              }
-            : null
+          paywallSettings: pw ? paywallSettingsJson(pw) : null
         }
       })
       return
@@ -490,16 +586,6 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
 
     const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
-    if (userPaywallState === 'detected_paywalled' && !subscribeNormalized) {
-      res.status(400).json({
-        error:
-          'Paywalled blogs need a valid signup or subscription page URL. Enter the full URL where visitors can become members.'
-      })
-      return
-    }
-
-    const blogJsonUrl = buildBlogJsonUrl(siteUrl, blogPath)
-    const verified = await verifyBlogUrl(blogJsonUrl)
 
     const updatedSite = await prisma.site.create({
       data: {
@@ -509,7 +595,7 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
         url: siteUrl,
         blogPath,
         status: 'active',
-        verificationStatus: verified ? 'verified' : 'needs_attention',
+        verificationStatus: 'verified',
         paywallMode: 'auto',
         paywallDetectionState: userPaywallState,
         paywallDetectionSource: userPaywallState !== 'unknown' ? 'manual' : null,
@@ -517,25 +603,60 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       }
     })
 
+    const [defaultPostTemplate, defaultCollectionTemplate] = await Promise.all([
+      resolveDefaultPostTemplate(),
+      resolveDefaultCollectionTemplate()
+    ])
+    const collectionCfg = defaultCollectionTemplate?.collectionConfig
+    const asObject = (value: unknown): object | undefined =>
+      value && typeof value === 'object' && !Array.isArray(value) ? (value as object) : undefined
+    const asBool = (value: unknown, fallback: boolean): boolean =>
+      typeof value === 'boolean' ? value : fallback
+    const templateProgressBar =
+      defaultPostTemplate?.postConfig?.progressBar &&
+      typeof defaultPostTemplate.postConfig.progressBar === 'object' &&
+      !Array.isArray(defaultPostTemplate.postConfig.progressBar)
+        ? (defaultPostTemplate.postConfig.progressBar as { show?: boolean })
+        : null
     await prisma.siteConfig.create({
       data: {
         siteId: updatedSite.id,
         version: 1,
-        showDate: true,
-        showAuthor: false,
-        showReadingTime: false,
-        progressBar: { show: false, position: null, thickness: 6, color: '#5B4FE8' },
+        showDate: asBool(collectionCfg?.showDate, true),
+        showAuthor: asBool(collectionCfg?.showAuthor, false),
+        showReadingTime: asBool(collectionCfg?.showReadingTime, false),
+        progressBar: {
+          show: Boolean(templateProgressBar?.show ?? false),
+          position: 'top',
+          thickness: 6,
+          color: '#5B4FE8'
+        },
         tableOfContents: { show: false, position: null },
         recentPostsSidebar: { show: false, position: null },
-        leftSidebar: { show: false, modules: [], width: 240 },
-        rightSidebar: { show: false, modules: [], width: 240 },
-        headerContent: { show: false, modules: [], height: 48 },
-        socialMediaLinks: { show: false, platforms: [] },
+        leftSidebar: asObject(collectionCfg?.leftSidebar) ?? { show: false, modules: [], width: 240 },
+        rightSidebar: asObject(collectionCfg?.rightSidebar) ?? { show: false, modules: [], width: 240 },
+        headerContent: asObject(collectionCfg?.headerContent) ?? { show: false, modules: [], height: 48 },
+        socialMediaLinks: asObject(collectionCfg?.socialMediaLinks) ?? { show: false, platforms: [] },
+        ...(asObject(collectionCfg?.featuredImage)
+          ? { featuredImage: asObject(collectionCfg?.featuredImage) }
+          : {}),
+        ...(defaultCollectionTemplate
+          ? {
+              collectionConfig: defaultCollectionTemplate.collectionConfig as object,
+              collectionTemplateId: defaultCollectionTemplate.id,
+            }
+          : {}),
+        ...(defaultPostTemplate
+          ? {
+              postConfig: defaultPostTemplate.postConfig as object,
+              postTemplateId: defaultPostTemplate.id,
+            }
+          : {}),
         isActive: true
       }
     })
 
-    let createdPaywall: { subscribeUrl: string | null; footerDescription: string | null; featureItems: string[] } | null =
+    let createdPaywall: ReturnType<typeof paywallSettingsJson> | null =
       null
     if (userPaywallState === 'detected_paywalled' && subscribeNormalized) {
       await prisma.sitePaywallSettings.create({
@@ -543,14 +664,18 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
           siteId: updatedSite.id,
           subscribeUrl: subscribeNormalized,
           footerDescription: null,
+          eyebrowText: null,
+          headlineText: null,
           featureItems: []
         }
       })
-      createdPaywall = {
+      createdPaywall = paywallSettingsJson({
         subscribeUrl: subscribeNormalized,
         footerDescription: null,
+        eyebrowText: null,
+        headlineText: null,
         featureItems: []
-      }
+      })
     }
 
     res.status(201).json({
@@ -600,6 +725,10 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       }),
       prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
+    if (!isActiveSubscriptionStatus(subscription?.status)) {
+      res.status(403).json({ error: 'Subscription required' })
+      return
+    }
     const maxSites = subscription?.maxSites ?? 1
     if (maxSites !== null && activeCount >= maxSites) {
       res.status(403).json({ error: 'Site limit reached for your plan' })
@@ -640,13 +769,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       status: restored.status,
       verificationStatus: restored.verificationStatus,
       createdAt: restored.createdAt,
-      paywallSettings: pw
-        ? paywallSettingsJson({
-            subscribeUrl: pw.subscribeUrl,
-            footerDescription: pw.footerDescription,
-            featureItems: pw.featureItems ?? []
-          })
-        : null
+      paywallSettings: pw ? paywallSettingsJson(pw) : null
     })
   } catch (err) {
     console.error('Restore site error:', err)
@@ -658,7 +781,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
 router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = Array.isArray(req.params.siteKey) ? req.params.siteKey[0] : req.params.siteKey ?? ''
-  const { blogPassword, paywallMode, paywallDetectionState, name } = req.body ?? {}
+  const { blogPassword, paywallMode, paywallDetectionState, paywallDetectionSource, name } = req.body ?? {}
 
   if (!siteKey) {
     res.status(400).json({ error: 'Site key required' })
@@ -679,16 +802,20 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
     let normalizedSubscribePatch: string | null | undefined
     if ('subscribeUrl' in req.body) {
       const su = (req.body as { subscribeUrl?: unknown }).subscribeUrl
-      if (typeof su !== 'string') {
+      if (su !== null && typeof su !== 'string') {
         res.status(400).json({ error: 'subscribeUrl must be a string' })
         return
       }
-      normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
-      if (su.trim() && normalizedSubscribePatch === null) {
-        res.status(400).json({
-          error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
-        })
-        return
+      if (su === null || (typeof su === 'string' && !su.trim())) {
+        normalizedSubscribePatch = null
+      } else {
+        normalizedSubscribePatch = normalizeSubscribeUrlInput(su)
+        if (normalizedSubscribePatch === null) {
+          res.status(400).json({
+            error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+          })
+          return
+        }
       }
     }
 
@@ -721,18 +848,11 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
       updates.paywallDetectionSource = 'manual'
     }
-
-    const transitioningToPaywalled =
-      'paywallDetectionState' in updates &&
-      updates.paywallDetectionState === 'detected_paywalled' &&
-      site.paywallDetectionState !== 'detected_paywalled'
-
-    if (transitioningToPaywalled && !normalizedSubscribePatch) {
-      res.status(400).json({
-        error:
-          'Enter the URL of your blog signup or subscription page (e.g. your Squarespace member pricing page).'
-      })
-      return
+    if (
+      typeof paywallDetectionSource === 'string' &&
+      PAYWALL_DETECTION_SOURCES.includes(paywallDetectionSource as PaywallDetectionSource)
+    ) {
+      updates.paywallDetectionSource = paywallDetectionSource as PaywallDetectionSource
     }
 
     if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {
@@ -754,22 +874,18 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 
     if (afterSite!.paywallDetectionState === 'detected_paywalled') {
       const existingPw = afterSite!.sitePaywallSettings
-      const effectiveUrl =
-        typeof normalizedSubscribePatch === 'string'
+      const nextSubscribeUrl =
+        normalizedSubscribePatch !== undefined
           ? normalizedSubscribePatch
-          : existingPw?.subscribeUrl || null
-      if (!effectiveUrl) {
-        res.status(400).json({
-          error: 'Paywalled blogs need a signup page URL where visitors can subscribe.'
+          : existingPw?.subscribeUrl ?? null
+      if (existingPw || normalizedSubscribePatch !== undefined) {
+        await prisma.sitePaywallSettings.upsert({
+          where: { siteId: site.id },
+          create: { siteId: site.id, subscribeUrl: nextSubscribeUrl, featureItems: [] },
+          update:
+            normalizedSubscribePatch !== undefined ? { subscribeUrl: normalizedSubscribePatch } : {}
         })
-        return
       }
-      await prisma.sitePaywallSettings.upsert({
-        where: { siteId: site.id },
-        create: { siteId: site.id, subscribeUrl: effectiveUrl, featureItems: [] },
-        update:
-          typeof normalizedSubscribePatch === 'string' ? { subscribeUrl: normalizedSubscribePatch } : {}
-      })
     }
 
     const updated = await prisma.site.findUnique({
@@ -791,11 +907,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       verificationStatus: updated!.verificationStatus,
       createdAt: updated!.createdAt,
       paywallSettings: updated!.sitePaywallSettings
-        ? paywallSettingsJson({
-            subscribeUrl: updated!.sitePaywallSettings.subscribeUrl,
-            footerDescription: updated!.sitePaywallSettings.footerDescription,
-            featureItems: updated!.sitePaywallSettings.featureItems
-          })
+        ? paywallSettingsJson(updated!.sitePaywallSettings)
         : null
     })
   } catch (err) {

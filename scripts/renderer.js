@@ -8,6 +8,10 @@
 (function() {
   'use strict';
 
+  var BB_POST_CONTENT_TOP_PADDING = 25;
+  /** Top-level comment is level 1; replies nest through this many levels. */
+  var BB_MAX_COMMENT_THREAD_LEVELS = 4;
+
   function getVisitorId() {
     try {
       var key = 'bb_visitor';
@@ -346,6 +350,65 @@
     return roots;
   }
 
+  /**
+   * Hoist replies past BB_MAX_COMMENT_THREAD_LEVELS so they render as siblings
+   * of the last allowed nested comment instead of nesting further.
+   */
+  function bbClampCommentTreeDepth(roots, maxLevels) {
+    var cap = typeof maxLevels === 'number' && maxLevels > 0 ? maxLevels : BB_MAX_COMMENT_THREAD_LEVELS;
+    function hoistAll(nodes, seen) {
+      var out = [];
+      seen = seen || {};
+      for (var i = 0; i < (nodes || []).length; i++) {
+        var src = nodes[i];
+        if (!src || typeof src !== 'object') continue;
+        var nid = src.id != null ? String(src.id) : '';
+        if (nid && seen[nid]) continue;
+        var nextSeen = Object.assign({}, seen);
+        if (nid) nextSeen[nid] = true;
+        var n = Object.assign({}, src);
+        var nested = Array.isArray(src.replies) ? src.replies : [];
+        n.replies = [];
+        out.push(n);
+        var more = hoistAll(nested, nextSeen);
+        for (var j = 0; j < more.length; j++) out.push(more[j]);
+      }
+      return out;
+    }
+    function cloneClamp(node, depth, seen) {
+      if (!node || typeof node !== 'object') return { node: { replies: [] }, hoist: [] };
+      seen = seen || {};
+      var nid = node.id != null ? String(node.id) : '';
+      if (nid && seen[nid]) {
+        var dup = Object.assign({}, node);
+        dup.replies = [];
+        return { node: dup, hoist: [] };
+      }
+      var nextSeen = Object.assign({}, seen);
+      if (nid) nextSeen[nid] = true;
+      var copy = Object.assign({}, node);
+      var rawReplies = Array.isArray(node.replies) ? node.replies : [];
+      if (depth >= cap - 1) {
+        copy.replies = [];
+        return { node: copy, hoist: hoistAll(rawReplies, nextSeen) };
+      }
+      var newReplies = [];
+      for (var i = 0; i < rawReplies.length; i++) {
+        var result = cloneClamp(rawReplies[i], depth + 1, nextSeen);
+        newReplies.push(result.node);
+        for (var h = 0; h < result.hoist.length; h++) newReplies.push(result.hoist[h]);
+      }
+      copy.replies = newReplies;
+      return { node: copy, hoist: [] };
+    }
+    var result = [];
+    for (var r = 0; r < (roots || []).length; r++) {
+      if (!roots[r]) continue;
+      result.push(cloneClamp(roots[r], 0, {}).node);
+    }
+    return result;
+  }
+
   function bbFetchSquarespaceCommentsForPost(post) {
     return new Promise(function(resolve) {
       var id = post && post.id !== undefined && post.id !== null ? String(post.id).trim() : '';
@@ -442,6 +505,9 @@
     _currentPageJsonIdentity: null,
     _currentPageAuthProbeUrl: null,
     _memberAccountsEnabledHint: false,
+    _paywallPriceLabel: null,
+    _paywallPricingPlansHydrated: false,
+    _paywallPricingPlansInflight: null,
     _lastBlogRoutePathname: null,
     _lastBlogRouteSearch: '',
     _lastBlogRouteHash: '',
@@ -525,10 +591,28 @@
       else console.log('[BlogOverlay][auth-debug] ' + label);
     },
 
+    /** Always-on comment identity logs so we can compare verified vs anonymous across browsers. */
+    _commentsLog: function(label, payload) {
+      try {
+        if (payload !== undefined) console.log('[BetterBlog comments] ' + label, payload);
+        else console.log('[BetterBlog comments] ' + label);
+      } catch (e) {}
+    },
+
     _paywallDebug: function(label, payload) {
       if (!this._isPaywallDebugEnabled()) return;
       if (payload !== undefined) console.log('[BlogOverlay][paywall-debug] ' + label, payload);
       else console.log('[BlogOverlay][paywall-debug] ' + label);
+    },
+
+    _bbPriceDebug: function(hypothesisId, message, data) {
+      var payload = data || {};
+      try {
+        console.log('[BB paywall price] ' + message, payload);
+      } catch (e0) {}
+      // #region agent log
+      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '50d457' }, body: JSON.stringify({ sessionId: '50d457', location: 'scripts/renderer.js:_bbPriceDebug', message: message, data: payload, timestamp: Date.now(), hypothesisId: hypothesisId }) }).catch(function() {});
+      // #endregion
     },
 
     /** Add ?bbTocDebug=1 to the page URL (or bbPreviewDebug=1) to log Table of Contents wiring. */
@@ -592,6 +676,7 @@
         isPaywalledSite: isPaywalled,
         paywallFullActive: paywallFullActive,
         paywallShowFooter: paywallShowFooter,
+        paywallHideFooterModules: Boolean(vs.paywallHideFooterModules),
         paywallReplaceCollectionTeaser: Boolean(vs.paywallReplaceCollectionTeaser),
         likelyCollectionIndex: this._isLikelyBlogCollectionIndexView(),
         hasSquarespacePostListing: this._hasSquarespacePostListing(),
@@ -898,20 +983,39 @@
     _initComments: function(container, post, cfg) {
       var self = this;
       var cs = (cfg && cfg.commentSettings) || {};
-      if (!cs.commentsEnabled) return;
+      if (!cs.commentsEnabled) {
+        this._commentsLog('init skipped', { reason: 'commentsEnabled=false' });
+        return;
+      }
       var vm = this._resolveViewerMode();
       if (
         vm !== 'loggedIn' &&
         this._isPaywalledSite() &&
         !this._isPaywallPublicPreviewPost(post)
       ) {
+        this._commentsLog('init skipped', {
+          reason: 'paywalled-and-not-logged-in',
+          viewerMode: vm,
+          isPaywalledSite: true,
+          publicPreviewPost: Boolean(this._isPaywallPublicPreviewPost(post))
+        });
         return;
       }
       var baseUrl = (cfg && cfg.baseUrl) || '';
       var siteKey = (cfg && cfg.siteKey) || '';
-      if (!baseUrl || !siteKey) return;
+      if (!baseUrl || !siteKey) {
+        this._commentsLog('init skipped', {
+          reason: 'missing-baseUrl-or-siteKey',
+          hasBaseUrl: Boolean(baseUrl),
+          hasSiteKey: Boolean(siteKey)
+        });
+        return;
+      }
       var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
-      if (!postId) return;
+      if (!postId) {
+        this._commentsLog('init skipped', { reason: 'missing-postId' });
+        return;
+      }
 
       var NAME_MAX = 100;
       var BODY_MAX = 5000;
@@ -977,10 +1081,49 @@
         return daysSince > closeAfterDays;
       }
       var commentsClosed = bbCommentsClosedForPost(post, cs.autoCloseAfterDays);
+      var allowNewComments = cs.allowNewComments !== false;
       var allowAnonymousComments = cs.allowAnonymousComments !== false;
       var subscriberCommentsEnabled = cs.subscriberCommentsEnabled === true;
       var loggedInOptionalEmail =
         allowAnonymousComments && !subscriberCommentsEnabled;
+      function bbCommentsLog(label, payload) {
+        if (self._commentsLog) self._commentsLog(label, payload);
+      }
+      function bbEmailDebug(email) {
+        var e = email ? String(email).trim() : '';
+        if (!e) return { hasEmail: false, email: null, domain: null };
+        var at = e.lastIndexOf('@');
+        return { hasEmail: true, email: e, domain: at >= 0 ? e.slice(at + 1) : null };
+      }
+      function bbCommentDebugSummary(c) {
+        return {
+          id: c && c.id != null ? String(c.id) : null,
+          display_name: c && c.display_name != null ? String(c.display_name) : null,
+          verified_subscriber: Boolean(c && c.verified_subscriber),
+          hasEmail: Boolean(c && c.email),
+          email: c && c.email ? String(c.email) : null,
+          status: c && c.status != null ? c.status : null,
+          bb_legacy_squarespace: Boolean(c && c.bb_legacy_squarespace),
+          replyCount: c && c.replies && c.replies.length ? c.replies.length : 0
+        };
+      }
+      function bbFlattenCommentDebug(list, acc) {
+        acc = acc || [];
+        (list || []).forEach(function(c) {
+          acc.push(bbCommentDebugSummary(c));
+          if (c && c.replies && c.replies.length) bbFlattenCommentDebug(c.replies, acc);
+        });
+        return acc;
+      }
+      function bbCountVerified(flat) {
+        var verified = 0;
+        var anonymous = 0;
+        for (var i = 0; i < (flat || []).length; i++) {
+          if (flat[i] && flat[i].verified_subscriber) verified++;
+          else anonymous++;
+        }
+        return { verified: verified, anonymous: anonymous, total: (flat || []).length };
+      }
       var mergedSqRootsForComments = [];
       var commentSortOrder =
         cs.sortOrder === 'oldest' || cs.sortOrder === 'most_liked' ? cs.sortOrder : 'newest';
@@ -1006,7 +1149,12 @@
           }
           return rootCreatedMs(b) - rootCreatedMs(a);
         });
-        return merged;
+        try {
+          return bbClampCommentTreeDepth(merged, BB_MAX_COMMENT_THREAD_LEVELS);
+        } catch (err) {
+          console.error('[BlogOverlay] comment depth clamp error', err);
+          return merged;
+        }
       }
       var refreshBetterBlogCommentsList = function() {};
       var verifiedCookieName = 'bb_verified_commenter_' + String(siteKey || 'site');
@@ -1017,41 +1165,122 @@
             var part = all[i].trim();
             if (part.indexOf(name + '=') === 0) return decodeURIComponent(part.slice(name.length + 1));
           }
-        } catch (e) {}
+        } catch (e) {
+          bbCommentsLog('cookie read failed', { name: name, error: String(e && e.message || e) });
+        }
         return null;
       }
       function bbWriteCookie(name, value, days) {
         try {
           var maxAge = Math.max(1, Math.floor((days || 30) * 24 * 60 * 60));
           document.cookie = name + '=' + encodeURIComponent(value) + '; Path=/; Max-Age=' + maxAge + '; SameSite=Lax';
-        } catch (e) {}
+          bbCommentsLog('cookie write', { name: name, maxAgeSeconds: maxAge, valueLen: String(value || '').length });
+        } catch (e) {
+          bbCommentsLog('cookie write failed', { name: name, error: String(e && e.message || e) });
+        }
       }
       function bbGetVerifiedIdentity() {
         try {
           var raw = bbReadCookie(verifiedCookieName);
           if (!raw) return null;
           var parsed = JSON.parse(raw);
-          if (!parsed || typeof parsed !== 'object') return null;
+          if (!parsed || typeof parsed !== 'object') {
+            bbCommentsLog('verified cookie parse skipped', { reason: 'not-an-object', rawLen: raw.length });
+            return null;
+          }
           var n = parsed.name ? String(parsed.name).trim() : '';
           var e = parsed.email ? String(parsed.email).trim() : '';
-          if (!n || !e) return null;
+          if (!n || !e) {
+            bbCommentsLog('verified cookie incomplete', { hasName: Boolean(n), hasEmail: Boolean(e) });
+            return null;
+          }
           return { name: n, email: e };
         } catch (e) {
+          bbCommentsLog('verified cookie parse failed', { error: String(e && e.message || e) });
           return null;
         }
       }
       function bbSetVerifiedIdentity(name, email) {
-        if (!name || !email) return;
+        if (!name || !email) {
+          bbCommentsLog('verified cookie NOT set', { reason: 'missing-name-or-email', hasName: Boolean(name), hasEmail: Boolean(email) });
+          return;
+        }
+        bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
       }
-      function bbPromptForEmail(initialValue, done) {
+      function bbCreateCommentModalShell() {
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
         var modal = document.createElement('div');
         modal.style.cssText = 'width:100%;max-width:420px;background:#fff;border-radius:10px;padding:18px 18px 14px;box-shadow:0 18px 40px rgba(0,0,0,.22);box-sizing:border-box';
+        overlay.appendChild(modal);
+        return { overlay: overlay, modal: modal };
+      }
+      function bbCommentModalButton(label, primary) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        btn.style.cssText = primary
+          ? 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer'
+          : 'padding:8px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#444;cursor:pointer';
+        if (primary) btn.style.background = 'var(--bb-accent, #5B4FE8)';
+        return btn;
+      }
+      function bbShowCommentMessageModal(opts, done) {
+        opts = opts || {};
+        var shell = bbCreateCommentModalShell();
+        var overlay = shell.overlay;
+        var modal = shell.modal;
+        var title = document.createElement('div');
+        title.textContent = opts.title || 'Notice';
+        title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:10px';
+        var body = document.createElement('div');
+        body.textContent = opts.message || '';
+        body.style.cssText = 'font-size:0.92rem;color:#333;line-height:1.45;margin-bottom:14px';
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        function close(choice) {
+          bbCommentsLog('comment message modal closed', { title: opts.title || null, choice: choice || null });
+          if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          if (typeof done === 'function') done(choice || null);
+        }
+        if (opts.secondaryLabel) {
+          var secondary = bbCommentModalButton(opts.secondaryLabel, false);
+          secondary.onclick = function() { close('secondary'); };
+          row.appendChild(secondary);
+        }
+        var primary = bbCommentModalButton(opts.primaryLabel || 'OK', true);
+        primary.onclick = function() { close('primary'); };
+        row.appendChild(primary);
+        overlay.onclick = function(ev) { if (ev.target === overlay) close(null); };
+        modal.appendChild(title);
+        modal.appendChild(body);
+        modal.appendChild(row);
+        document.body.appendChild(overlay);
+        try { primary.focus(); } catch (e) {}
+      }
+      function bbPromptForEmail(initialValue, opts, done) {
+        if (typeof opts === 'function') {
+          done = opts;
+          opts = {};
+        }
+        opts = opts || {};
+        var allowAnonymousChoice = opts.allowAnonymousChoice === true;
+        bbCommentsLog('email prompt shown', {
+          hasInitialValue: Boolean(initialValue),
+          allowAnonymousChoice: allowAnonymousChoice
+        });
+        var shell = bbCreateCommentModalShell();
+        var overlay = shell.overlay;
+        var modal = shell.modal;
         var title = document.createElement('div');
         title.textContent = 'Confirm your email';
-        title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:10px';
+        title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:8px';
+        var blurb = document.createElement('div');
+        blurb.textContent = allowAnonymousChoice
+          ? 'We’ll use this to verify your site membership. You can also comment anonymously.'
+          : 'We’ll use this to verify your site membership.';
+        blurb.style.cssText = 'font-size:0.88rem;color:#555;line-height:1.4;margin-bottom:10px';
         var input = document.createElement('input');
         input.type = 'email';
         input.name = 'email';
@@ -1066,17 +1295,13 @@
         var msg = document.createElement('div');
         msg.style.cssText = 'min-height:16px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
         var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end';
-        var cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.textContent = 'Cancel';
-        cancel.style.cssText = 'padding:8px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#444;cursor:pointer';
-        var ok = document.createElement('button');
-        ok.type = 'button';
-        ok.textContent = 'Continue';
-        ok.style.cssText = 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer';
-        ok.style.background = 'var(--bb-accent, #5B4FE8)';
+        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        var cancel = bbCommentModalButton('Cancel', false);
+        var ok = bbCommentModalButton('Continue', true);
         function close(ret) {
+          bbCommentsLog('email prompt closed', ret && ret.email
+            ? bbEmailDebug(ret.email)
+            : (ret && ret.anonymous ? { anonymous: true } : { cancelled: true }));
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
         }
@@ -1088,32 +1313,101 @@
             try { input.focus(); } catch (e) {}
             return;
           }
-          close(em);
+          close({ email: em });
         };
         overlay.onclick = function(ev) { if (ev.target === overlay) close(null); };
         row.appendChild(cancel);
+        if (allowAnonymousChoice) {
+          var anon = bbCommentModalButton('Comment anonymously', false);
+          anon.onclick = function() { close({ anonymous: true }); };
+          row.appendChild(anon);
+        }
         row.appendChild(ok);
         modal.appendChild(title);
+        modal.appendChild(blurb);
         modal.appendChild(input);
         modal.appendChild(msg);
         modal.appendChild(row);
-        overlay.appendChild(modal);
         document.body.appendChild(overlay);
         try { input.focus(); } catch (e) {}
       }
+      function bbHandleVerificationPostError(data, onRetryAnonymous) {
+        var code = data && data.code ? String(data.code) : '';
+        var err = (data && data.error) || 'Failed to post';
+        if (code === 'verification_failed_anonymous_available') {
+          bbShowCommentMessageModal({
+            title: 'Couldn’t verify membership',
+            message: err,
+            primaryLabel: 'Post anonymously',
+            secondaryLabel: 'Cancel'
+          }, function(choice) {
+            if (choice === 'primary' && typeof onRetryAnonymous === 'function') {
+              onRetryAnonymous(data && data.anonymous_retry_token ? String(data.anonymous_retry_token) : '');
+            }
+          });
+          return true;
+        }
+        if (code === 'verification_failed' || /could not verify a member account/i.test(err)) {
+          bbShowCommentMessageModal({
+            title: 'Couldn’t verify membership',
+            message: err,
+            primaryLabel: 'OK'
+          });
+          return true;
+        }
+        return false;
+      }
+
+      function currentCommentViewerMode() {
+        var mode = self._resolveViewerMode();
+        var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
+        if (id && id.loggedIn === true) mode = 'loggedIn';
+        return { mode: mode, identity: id };
+      }
+
+      bbCommentsLog('init', {
+        siteKey: siteKey,
+        postId: postId,
+        allowAnonymousComments: allowAnonymousComments,
+        subscriberCommentsEnabled: subscriberCommentsEnabled,
+        loggedInOptionalEmail: loggedInOptionalEmail,
+        commentsClosed: commentsClosed,
+        allowNewComments: allowNewComments,
+        viewerMode: currentCommentViewerMode().mode,
+        squarespaceIdentity: (function() {
+          var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
+          if (!id) return null;
+          return {
+            loggedIn: id.loggedIn,
+            name: id.name || null,
+            email: id.email || null
+          };
+        })(),
+        verifiedCookieName: verifiedCookieName,
+        verifiedIdentity: bbGetVerifiedIdentity()
+      });
 
       var renderComments = function(comments, total) {
         var listEl = bbDiv.querySelector('.bb-comments-list');
         if (!listEl) return;
+        var flat = bbFlattenCommentDebug(comments);
+        var counts = bbCountVerified(flat);
+        bbCommentsLog('render list', {
+          total: total,
+          counts: counts,
+          comments: flat
+        });
         listEl.innerHTML = '';
         var list = (comments || []).slice();
         var addComment = function(c, depth) {
+          if (!c || typeof c !== 'object') return;
           var depthLevel = typeof depth === 'number' && !isNaN(depth) ? depth : 0;
           var isDeletedStub = c.comment_deleted === true || c.comment_deleted === 1;
           var wrap = document.createElement('div');
           wrap.className = 'bb-comment' + (depthLevel > 0 ? ' bb-comment-reply' : '') + (isDeletedStub ? ' bb-comment-deleted' : '');
           wrap.style.marginBottom = depthLevel > 0 ? '12px' : '20px';
-          wrap.style.paddingLeft = depthLevel > 0 ? depthLevel * 22 + 'px' : '0';
+          var indentLevel = Math.min(depthLevel, BB_MAX_COMMENT_THREAD_LEVELS - 1);
+          wrap.style.paddingLeft = indentLevel > 0 ? indentLevel * 22 + 'px' : '0';
           var initials = isDeletedStub ? '—' : (c.display_name || '?').slice(0, 2).toUpperCase();
           var avatar = document.createElement('span');
           avatar.className = 'bb-comment-avatar';
@@ -1182,10 +1476,13 @@
           actions.style.color = '#999';
           var threadingOn = cs.allowThreadedReplies !== false;
           var replyMode = currentCommentViewerMode().mode;
+          var atMaxThreadDepth = depthLevel >= BB_MAX_COMMENT_THREAD_LEVELS - 1;
           var showReply =
+            allowNewComments &&
             !commentsClosed &&
             !isDeletedStub &&
             threadingOn &&
+            !atMaxThreadDepth &&
             c.id &&
             (allowAnonymousComments || replyMode === 'loggedIn');
           if (!isDeletedStub) {
@@ -1281,6 +1578,8 @@
             replyFormShell.appendChild(rRow);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
+            var replyPostAsAnonymous = false;
+            var replyAnonymousRetryToken = '';
             replyBtn.onclick = function() {
               var wasOpen = replyFormShell.style.display === 'block';
               var allInline = listEl.querySelectorAll('.bb-comment-inline-reply');
@@ -1312,10 +1611,29 @@
               if (!bd) { rBody.focus(); return; }
               var verifiedIdentity = bbGetVerifiedIdentity();
               var loggedInEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null);
-              if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail) {
-                bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', function(confirmedEmail) {
-                  if (!confirmedEmail) return;
-                  replyEmailOverride = confirmedEmail;
+              bbCommentsLog('reply submit start', {
+                mode: modeNow,
+                allowAnonymousComments: allowAnonymousComments,
+                subscriberCommentsEnabled: subscriberCommentsEnabled,
+                loggedInOptionalEmail: loggedInOptionalEmail,
+                displayName: modeNow === 'loggedIn' ? '' : nm,
+                verifiedCookie: verifiedIdentity,
+                emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none')),
+                email: bbEmailDebug(loggedInEmail)
+              });
+              if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
+                bbCommentsLog('reply submit waiting for email prompt', { mode: modeNow });
+                bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', {
+                  allowAnonymousChoice: allowAnonymousComments && subscriberCommentsEnabled
+                }, function(result) {
+                  if (!result) return;
+                  if (result.anonymous) {
+                    replyPostAsAnonymous = true;
+                    rSubmit.onclick();
+                    return;
+                  }
+                  if (!result.email) return;
+                  replyEmailOverride = result.email;
                   rSubmit.onclick();
                 });
                 return;
@@ -1334,8 +1652,18 @@
                 post_published_at: bbResolvePostPublishedAt(post),
                 post_url: (post && (post.fullUrl || post.url)) || null
               };
-              var rEm = modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim();
+              var rEm = replyPostAsAnonymous ? null : (modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim());
+              if (replyPostAsAnonymous) payload.post_as_anonymous = true;
+              if (replyPostAsAnonymous && replyAnonymousRetryToken) payload.anonymous_retry_token = replyAnonymousRetryToken;
               if (rEm) payload.email = rEm;
+              bbCommentsLog('reply POST payload', {
+                post_id: payload.post_id,
+                parent_id: payload.parent_id,
+                display_name: payload.display_name,
+                hasEmail: Boolean(payload.email),
+                email: payload.email || null,
+                postAsAnonymous: Boolean(replyPostAsAnonymous)
+              });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
                 payload.squarespace_record_type = post.recordType;
               }
@@ -1354,13 +1682,32 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                   rSubmit.textContent = 'Post reply';
+                  bbCommentsLog('reply POST response', {
+                    id: data && data.id ? data.id : null,
+                    error: data && data.error ? data.error : null,
+                    display_name: data && data.display_name ? data.display_name : null,
+                    verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+                    status: data && data.status ? data.status : null,
+                    hasEmail: Boolean(data && data.email),
+                    email: data && data.email ? data.email : null,
+                    willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && rEm)
+                  });
                   if (data && data.id) {
                     if (modeNow === 'loggedIn' && data.verified_subscriber && rEm) {
                       bbSetVerifiedIdentity(data.display_name || 'Member', rEm);
+                    } else if (modeNow === 'loggedIn') {
+                      bbCommentsLog('reply verified cookie NOT set', {
+                        reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
+                        display_name: data && data.display_name ? data.display_name : null,
+                        verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+                        hasEmail: Boolean(rEm)
+                      });
                     }
                     replyFormShell.style.display = 'none';
                     rBody.value = '';
                     rEmail.value = '';
+                    replyPostAsAnonymous = false;
+                    replyAnonymousRetryToken = '';
                     rReplySync();
                     if (data.status === 'pending') {
                       var pend = document.createElement('p');
@@ -1371,6 +1718,13 @@
                     } else {
                       refreshBetterBlogCommentsList();
                     }
+                  } else if (bbHandleVerificationPostError(data, function(retryToken) {
+                    replyPostAsAnonymous = true;
+                    replyAnonymousRetryToken = retryToken || '';
+                    rSubmit.onclick();
+                  })) {
+                    rSubmit.textContent = 'Post reply';
+                    rReplySync();
                   } else {
                     var err = (data && data.error) || 'Failed to post';
                     rSubmit.textContent = err;
@@ -1381,7 +1735,8 @@
                     rReplySync();
                   }
                 })
-                .catch(function() {
+                .catch(function(err) {
+                  bbCommentsLog('reply POST failed', { error: String(err && err.message || err) });
                   rSubmit.textContent = 'Post reply';
                   rReplySync();
                 });
@@ -1393,9 +1748,14 @@
             wrap.appendChild(actions);
           }
           listEl.appendChild(wrap);
-          (c.replies || []).forEach(function(r) { addComment(r, depthLevel + 1); });
+          (c.replies || []).forEach(function(r) {
+            if (!r) return;
+            try { addComment(r, depthLevel + 1); } catch (err) { console.error('[BlogOverlay] comment render error', err); }
+          });
         };
-        list.forEach(function(c) { addComment(c, 0); });
+        list.forEach(function(c) {
+          try { addComment(c, 0); } catch (err) { console.error('[BlogOverlay] comment render error', err); }
+        });
       };
 
       var listEl = document.createElement('div');
@@ -1403,22 +1763,54 @@
       listEl.style.marginBottom = '24px';
       bbDiv.appendChild(listEl);
 
-      var bbCommentsPromise = fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+      var postUrlForComments = (post && (post.fullUrl || post.url)) ? String(post.fullUrl || post.url) : '';
+      function bbCommentsListUrl() {
+        var url = apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey);
+        if (postUrlForComments) url += '&post_url=' + encodeURIComponent(postUrlForComments);
+        return url;
+      }
+      var latestBbCommentsData = { comments: [], total: 0 };
+      function applyMergedComments(sqRoots, data) {
+        if (sqRoots != null) mergedSqRootsForComments = sqRoots;
+        var payload = data || latestBbCommentsData;
+        if (data) latestBbCommentsData = payload;
+        try {
+          var bbFlat = bbFlattenCommentDebug((payload && payload.comments) || []);
+          var sqFlat = bbFlattenCommentDebug(mergedSqRootsForComments || []);
+          bbCommentsLog('merge lists', {
+            betterBlog: Object.assign({ comments: bbFlat }, bbCountVerified(bbFlat)),
+            squarespaceLegacy: Object.assign({ comments: sqFlat }, bbCountVerified(sqFlat))
+          });
+          var merged = mergeSqAndBbForRender(mergedSqRootsForComments, payload);
+          renderComments(merged, (payload && payload.total) || 0);
+        } catch (err) {
+          console.error('[BlogOverlay] comment merge error', err);
+        }
+      }
+      fetch(bbCommentsListUrl())
         .then(function(r) { return r.json(); })
-        .catch(function() { return { comments: [], total: 0 }; });
-      Promise.all([bbFetchSquarespaceCommentsForPost(post), bbCommentsPromise])
-        .then(function(pair) {
-          mergedSqRootsForComments = pair[0] || [];
-          var data = pair[1] || {};
-          var merged = mergeSqAndBbForRender(mergedSqRootsForComments, data);
-          renderComments(merged, (data && data.total) || 0);
+        .then(function(data) {
+          bbCommentsLog('list fetch', {
+            ok: true,
+            total: data && data.total != null ? data.total : null,
+            rootCount: data && data.comments ? data.comments.length : 0,
+            comments: bbFlattenCommentDebug((data && data.comments) || [])
+          });
+          applyMergedComments(null, data || { comments: [], total: 0 });
         })
-        .catch(function() {});
+        .catch(function(err) {
+          bbCommentsLog('list fetch failed', { error: String(err && err.message || err) });
+          applyMergedComments(null, { comments: [], total: 0 });
+        });
+      bbFetchSquarespaceCommentsForPost(post)
+        .then(function(sqRoots) { applyMergedComments(sqRoots || [], null); })
+        .catch(function() { applyMergedComments([], null); });
 
       var formWrap = document.createElement('div');
       formWrap.className = 'bb-comment-form-wrap';
       formWrap.style.marginTop = '16px';
 
+      if (allowNewComments) {
       var heading = document.createElement('h2');
       heading.className = 'bb-below-main-heading bb-comment-form-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
@@ -1498,19 +1890,23 @@
         submitBtn.style.cursor = ok ? 'pointer' : 'not-allowed';
       }
 
-      function currentCommentViewerMode() {
-        var mode = self._resolveViewerMode();
-        var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
-        if (id && id.loggedIn === true) mode = 'loggedIn';
-        return { mode: mode, identity: id };
-      }
-
       function applyCommentIdentityMode() {
         var resolved = currentCommentViewerMode();
         var mode = resolved.mode;
         var id = resolved.identity || null;
         var verifiedIdentity = bbGetVerifiedIdentity();
         var guestsMayPost = allowAnonymousComments || mode === 'loggedIn';
+        var formModePayload = {
+          mode: mode,
+          guestsMayPost: guestsMayPost,
+          allowAnonymousComments: allowAnonymousComments,
+          subscriberCommentsEnabled: subscriberCommentsEnabled,
+          loggedInOptionalEmail: loggedInOptionalEmail,
+          squarespaceIdentity: id ? { loggedIn: id.loggedIn, name: id.name || null, email: id.email || null } : null,
+          verifiedIdentity: verifiedIdentity,
+          nameInputVisible: null,
+          emailInputVisible: null
+        };
         if (!guestsMayPost) {
           heading.textContent = 'Sign in to comment';
           guestOnlyNote.style.display = 'block';
@@ -1556,6 +1952,15 @@
           loggedInIdentityLine.textContent = '';
         }
         mainFormSync();
+        formModePayload.nameInputVisible = nameInput.style.display !== 'none';
+        formModePayload.emailInputVisible = emailInput.style.display !== 'none';
+        formModePayload.loggedInIdentityLineVisible = loggedInIdentityLine.style.display !== 'none';
+        formModePayload.loggedInIdentityLineText = loggedInIdentityLine.textContent || '';
+        var formModeSig = JSON.stringify(formModePayload);
+        if (formModeSig !== self._lastCommentsFormModeLogSig) {
+          self._lastCommentsFormModeLogSig = formModeSig;
+          bbCommentsLog('form mode', formModePayload);
+        }
         self._emitAuthDebugSnapshot('comments.formMode');
         self._authDebug('comments.formMode.details', {
           mode: mode,
@@ -1580,17 +1985,22 @@
       }, 500);
 
       refreshBetterBlogCommentsList = function() {
-        return fetch(apiUrl + '?post_id=' + encodeURIComponent(postId) + '&siteKey=' + encodeURIComponent(siteKey))
+        return fetch(bbCommentsListUrl())
           .then(function(r) { return r.json(); })
           .then(function(d) {
-            var merged = mergeSqAndBbForRender(mergedSqRootsForComments, d);
-            renderComments(merged, (d && d.total) || 0);
+            bbCommentsLog('list refresh', {
+              total: d && d.total != null ? d.total : null,
+              comments: bbFlattenCommentDebug((d && d.comments) || [])
+            });
+            applyMergedComments(null, d || { comments: [], total: 0 });
           })
-          .catch(function() {});
+          .catch(function(err) {
+            bbCommentsLog('list refresh failed', { error: String(err && err.message || err) });
+          });
       };
 
       var mainEmailOverride = null;
-      function submitMainCommentWithEmail(modeNow, name, body, emailToUse) {
+      function submitMainCommentWithEmail(modeNow, name, body, emailToUse, postAsAnonymous, anonymousRetryToken) {
         submitBtn.disabled = true;
         submitBtn.style.opacity = '0.55';
         submitBtn.style.cursor = 'not-allowed';
@@ -1604,7 +2014,20 @@
           post_published_at: bbResolvePostPublishedAt(post),
           post_url: (post && (post.fullUrl || post.url)) || null
         };
-        if (emailToUse) payload.email = emailToUse;
+        if (postAsAnonymous) payload.post_as_anonymous = true;
+        if (postAsAnonymous && anonymousRetryToken) payload.anonymous_retry_token = anonymousRetryToken;
+        if (!postAsAnonymous && emailToUse) payload.email = emailToUse;
+        bbCommentsLog('main POST payload', {
+          mode: modeNow,
+          post_id: payload.post_id,
+          display_name: payload.display_name,
+          hasEmail: Boolean(payload.email),
+          email: payload.email || null,
+          allowAnonymousComments: allowAnonymousComments,
+          subscriberCommentsEnabled: subscriberCommentsEnabled,
+          loggedInOptionalEmail: loggedInOptionalEmail,
+          postAsAnonymous: Boolean(postAsAnonymous)
+        });
         if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
           try {
             var token = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
@@ -1620,9 +2043,29 @@
           .then(function(r) { return r.json(); })
           .then(function(data) {
             submitBtn.textContent = 'Post Comment';
+            bbCommentsLog('main POST response', {
+              id: data && data.id ? data.id : null,
+              error: data && data.error ? data.error : null,
+              display_name: data && data.display_name ? data.display_name : null,
+              verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+              status: data && data.status ? data.status : null,
+              hasEmail: Boolean(data && data.email),
+              email: data && data.email ? data.email : null,
+              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
+            });
+            // #region agent log
+            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'post-fix',hypothesisId:'H6',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous')},timestamp:Date.now()})}).catch(function(){});
+            // #endregion
             if (data && data.id) {
               if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse) {
                 bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
+              } else if (modeNow === 'loggedIn') {
+                bbCommentsLog('main verified cookie NOT set', {
+                  reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
+                  display_name: data && data.display_name ? data.display_name : null,
+                  verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
+                  hasEmail: Boolean(emailToUse)
+                });
               }
               bodyArea.value = '';
               if (data.status === 'pending') {
@@ -1641,6 +2084,11 @@
                 refreshBetterBlogCommentsList();
               }
               mainFormSync();
+            } else if (bbHandleVerificationPostError(data, function(retryToken) {
+              submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
+            })) {
+              submitBtn.textContent = 'Post Comment';
+              mainFormSync();
             } else {
               var err = (data && data.error) || 'Failed to post';
               submitBtn.textContent = err;
@@ -1651,7 +2099,8 @@
               mainFormSync();
             }
           })
-          .catch(function() {
+          .catch(function(err) {
+            bbCommentsLog('main POST failed', { error: String(err && err.message || err) });
             submitBtn.textContent = 'Post Comment';
             mainFormSync();
           });
@@ -1667,26 +2116,53 @@
           var verifiedIdentity = bbGetVerifiedIdentity();
           var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
           var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : mainEmailOverride;
+          bbCommentsLog('main submit start', {
+            mode: modeNow,
+            allowAnonymousComments: allowAnonymousComments,
+            subscriberCommentsEnabled: subscriberCommentsEnabled,
+            loggedInOptionalEmail: loggedInOptionalEmail,
+            verifiedCookie: verifiedIdentity,
+            typedEmail: typedEmail || null,
+            emailOverride: mainEmailOverride,
+            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (mainEmailOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
+            useEmail: useEmail || null
+          });
           if (loggedInOptionalEmail) {
             submitMainCommentWithEmail(modeNow, name, body, typedEmail || useEmail || null);
             return;
           }
           if (!useEmail) {
-            bbPromptForEmail(typedEmail || '', function(confirmedEmail) {
-              if (!confirmedEmail) return;
-              mainEmailOverride = confirmedEmail;
-              submitMainCommentWithEmail(modeNow, name, body, confirmedEmail);
+            bbCommentsLog('main submit waiting for email prompt', { mode: modeNow });
+            bbPromptForEmail(typedEmail || '', {
+              allowAnonymousChoice: allowAnonymousComments && subscriberCommentsEnabled
+            }, function(result) {
+              if (!result) return;
+              if (result.anonymous) {
+                submitMainCommentWithEmail(modeNow, name, body, null, true);
+                return;
+              }
+              if (!result.email) return;
+              mainEmailOverride = result.email;
+              submitMainCommentWithEmail(modeNow, name, body, result.email);
             });
             return;
           }
           submitMainCommentWithEmail(modeNow, name, body, useEmail);
           return;
         }
+        bbCommentsLog('main submit start', {
+          mode: modeNow,
+          allowAnonymousComments: allowAnonymousComments,
+          subscriberCommentsEnabled: subscriberCommentsEnabled,
+          displayName: name || null,
+          email: (emailInput.value || '').trim() || null
+        });
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      }
 
-      bbDiv.appendChild(formWrap);
+      if (allowNewComments) bbDiv.appendChild(formWrap);
 
       mountBbCommentsEl(bbDiv);
     },
@@ -1743,6 +2219,15 @@
       var bbPreview = this._hasBbPreviewParam();
       this._previewMode = previewMode;
       this._bbPreview = bbPreview;
+      var csInit = (this.config && this.config.commentSettings) || {};
+      this._commentsLog('renderer init comment settings', {
+        commentsEnabled: csInit.commentsEnabled,
+        allowAnonymousComments: csInit.allowAnonymousComments,
+        subscriberCommentsEnabled: csInit.subscriberCommentsEnabled,
+        allowNewComments: csInit.allowNewComments,
+        previewMode: previewMode,
+        bbPreview: bbPreview
+      });
 
       // #region agent log
       var _rendererDbg = {
@@ -1792,7 +2277,8 @@
         // #endregion
         if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
-          this._clearBootstrapLoading();
+          // Do not clear bb-loading-blog: another collection on this Squarespace
+          // site (or a loader that has not finished) may own the overlay.
           return;
         }
         // #region agent log
@@ -2504,14 +2990,47 @@
       var ps = this.config && this.config.paywallSettings;
       var custom = ps && typeof ps.subscribeUrl === 'string' ? ps.subscribeUrl.trim() : '';
       if (custom) return custom;
+      var collectionUrl = typeof this._buildBlogCollectionNavUrl === 'function'
+        ? this._buildBlogCollectionNavUrl()
+        : '';
+      if (collectionUrl) return collectionUrl;
       try {
-        var bp = (this.config && this.config.blogPath) || '/';
-        if (bp === '/' || bp === '') return window.location.origin + '/';
-        var path = bp.charAt(0) === '/' ? bp : '/' + bp;
-        return window.location.origin + path;
+        var bp = typeof this._getBlogCollectionPath === 'function'
+          ? this._getBlogCollectionPath()
+          : ((this.config && this.config.blogPath) || '/');
+        if (typeof window !== 'undefined' && window.location && window.location.origin) {
+          return window.location.origin + (bp === '/' ? '/' : bp);
+        }
+        return bp || '/';
       } catch (e2) {
         return typeof window !== 'undefined' ? window.location.pathname || '/' : '/';
       }
+    },
+
+    _paywallTrimmedSetting: function(key) {
+      var ps = this.config && this.config.paywallSettings;
+      var v = ps && ps[key];
+      return typeof v === 'string' ? v.trim() : '';
+    },
+
+    _resolvePaywallBlogTitle: function() {
+      var blogTitle = (this._blogMeta && this._blogMeta.blogName) ? this._blogMeta.blogName : 'this blog';
+      try {
+        var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
+        var st = ctx && ctx.website && ctx.website.siteTitle;
+        if (typeof st === 'string' && st.trim()) blogTitle = st.trim();
+      } catch (e) {}
+      return blogTitle;
+    },
+
+    _resolvePaywallEyebrowText: function() {
+      return this._paywallTrimmedSetting('eyebrowText') || 'MEMBER EXCLUSIVE';
+    },
+
+    _resolvePaywallHeadlineText: function(fallback) {
+      var custom = this._paywallTrimmedSetting('headlineText');
+      if (!custom) return fallback;
+      return custom.replace(/\{blogName\}/gi, this._resolvePaywallBlogTitle());
     },
 
     _bbReadCssVar: function(name, fallback) {
@@ -2524,30 +3043,434 @@
     },
 
     _bbPaywallFooterColors: function() {
-      var accent = this._bbReadCssVar('--tweak-accent-color', null)
+      var tokens = this._getCollectionStyleTokens();
+      var accent = (tokens && tokens.accent)
+        || this._bbReadCssVar('--tweak-accent-color', null)
         || this._bbReadCssVar('--siteAccentColor', null)
         || this._bbReadCssVar('--primaryButtonBackgroundColor', null)
         || '#e91e8c';
-      var bg = this._bbReadCssVar('--tweak-blog-site-background', null)
+      var bg = (tokens && tokens.surface)
+        || this._bbReadCssVar('--tweak-blog-site-background', null)
         || this._bbReadCssVar('--siteBackgroundColor', null)
         || '#ffffff';
-      var text = this._bbReadCssVar('--paragraphMediumColor', null)
-        || this._bbReadCssVar('--tweak-text-color', null)
-        || '#111111';
-      var secondary = this._bbReadCssVar('--paragraphSmallColor', null)
-        || this._bbReadCssVar('--tweak-secondary-text-color', null)
-        || '#666666';
+      var text = 'var(--paragraphLargeColor, var(--bb-body, #111111))';
+      var secondary = 'var(--bb-excerpt, #666666)';
       return { accent: accent, bg: bg, text: text, secondary: secondary };
     },
 
-    _extractPaywallPriceLabel: function() {
+    /**
+     * Paywall surfaces sit on a light (90% white) overlay. Body text must come from
+     * Squarespace --paragraphLargeColor (or --bb-body derived from it) — never from
+     * the computed color of a DOM node (Story headers and hidden paywalled <p>s go white).
+     */
+    _applyPaywallSurfaceTokens: function(el) {
+      if (!el || !el.style) return;
+      el.style.setProperty('--bb-body', 'var(--paragraphLargeColor, #111111)');
+      el.style.setProperty('--bb-excerpt', this._bodyColorMix(80));
+      el.style.setProperty('--bb-muted', this._bodyColorMix(60));
+    },
+
+    _createPaywallSubscribeButton: function() {
+      var subBtn = document.createElement('a');
+      subBtn.href = this._resolvePaywallSubscribeHref();
+      subBtn.className = 'sqs-button-element--primary bb-paywall-subscribe-btn';
+      subBtn.textContent = this._paywallSubscribeButtonLabel();
+      return subBtn;
+    },
+
+    _createPaywallSignInButton: function() {
+      var signBtn = document.createElement('a');
+      signBtn.href = this._resolvePaywallSignInHref();
+      signBtn.className = 'sqs-button-element--primary bb-paywall-signin-btn';
+      signBtn.textContent = 'Sign in';
+      signBtn.style.background = 'transparent';
+      signBtn.style.color = 'var(--bb-accent)';
+      signBtn.style.border = '2px solid var(--bb-accent)';
+      return signBtn;
+    },
+
+    _paywallCurrencySymbol: function(code) {
+      var c = String(code || 'USD').toUpperCase();
+      if (c === 'USD') return '$';
+      if (c === 'EUR') return '€';
+      if (c === 'GBP') return '£';
+      if (c === 'CAD' || c === 'AUD' || c === 'NZD') return '$';
+      return c + ' ';
+    },
+
+    _formatPaywallMonthlyPrice: function(value, currency) {
+      var n = Number(value);
+      if (!isFinite(n) || n <= 0) return null;
+      var rounded = Math.round(n * 100) / 100;
+      var num = (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(2);
+      return this._paywallCurrencySymbol(currency) + num + '/month';
+    },
+
+    _normalizePaywallMonthlyLabel: function(raw) {
+      if (!raw || typeof raw !== 'string') return null;
+      var text = raw.replace(/\s+/g, ' ').trim();
+      if (!text) return null;
+      var monthly = text.match(/([€£$]|[A-Z]{3}\s*)?\s*(\d+(?:\.\d+)?)\s*(?:\/|\s+every\s+|\s+per\s+)?\s*(month|mo)\b/i);
+      if (!monthly) return null;
+      var currency = /€/.test(monthly[1] || '') ? 'EUR' : (/£/.test(monthly[1] || '') ? 'GBP' : 'USD');
+      if (/^[A-Z]{3}/.test((monthly[1] || '').trim())) currency = (monthly[1] || '').trim().slice(0, 3);
+      return this._formatPaywallMonthlyPrice(monthly[2], currency);
+    },
+
+    /** Unique simple monthly price from Squarespace member-area pricingPlans, or null if ambiguous. */
+    _labelFromSquarespacePricingPlans: function(plans) {
+      if (!Array.isArray(plans) || plans.length === 0) return null;
+      var shape = [];
+      for (var si = 0; si < plans.length && si < 8; si++) {
+        var p = plans[si];
+        if (!p || typeof p !== 'object') continue;
+        var o = Array.isArray(p.pricingOptions) ? p.pricingOptions : [];
+        var optShapes = [];
+        for (var sj = 0; sj < o.length && sj < 4; sj++) {
+          var opt0 = o[sj];
+          if (!opt0 || typeof opt0 !== 'object') continue;
+          optShapes.push({
+            keys: Object.keys(opt0).slice(0, 16),
+            billingPeriod: opt0.billingPeriod || null,
+            numBillingCycles: opt0.numBillingCycles,
+            price: opt0.price && typeof opt0.price === 'object' ? opt0.price : null,
+            amount: opt0.amount != null ? opt0.amount : null
+          });
+        }
+        shape.push({
+          isActive: p.isActive,
+          isPaywall: p.isPaywall,
+          pricingType: p.pricingType,
+          hasMultiplePricingOptions: p.hasMultiplePricingOptions,
+          firstPricingOptionPriceAmount: p.firstPricingOptionPriceAmount || null,
+          firstPricingOptionPriceBillingPeriod: p.firstPricingOptionPriceBillingPeriod || null,
+          planKeys: Object.keys(p).slice(0, 20),
+          hasPlanPrice: Boolean(p.price && typeof p.price === 'object'),
+          planBillingPeriod: p.billingPeriod || null,
+          optCount: o.length,
+          opts: optShapes
+        });
+      }
+      this._bbPriceDebug('H3', 'pricingPlans raw shape', { planCount: plans.length, shape: shape });
+      var paidMonthly = [];
+      var hasFree = false;
+      var hasNonMonthlyPaid = false;
+      var scan = plans;
+      var paywallOnly = [];
+      for (var pi = 0; pi < plans.length; pi++) {
+        if (plans[pi] && plans[pi].isPaywall === true) paywallOnly.push(plans[pi]);
+      }
+      if (paywallOnly.length > 0) scan = paywallOnly;
+      this._bbPriceDebug('H3', 'pricingPlans scan set', {
+        planCount: plans.length,
+        paywallOnlyCount: paywallOnly.length,
+        scanCount: scan.length
+      });
+      for (var i = 0; i < scan.length; i++) {
+        var plan = scan[i];
+        if (!plan || typeof plan !== 'object') continue;
+        if (plan.isActive === false) continue;
+        var type = String(plan.pricingType || '').toUpperCase();
+        if (type === 'FREE') {
+          hasFree = true;
+          continue;
+        }
+        if (type === 'FIXED_AMOUNT' || type === 'FIXED' || type === 'ONE_TIME' || type === 'OTP') {
+          hasNonMonthlyPaid = true;
+          continue;
+        }
+        if (plan.hasMultiplePricingOptions === true) {
+          hasNonMonthlyPaid = true;
+          continue;
+        }
+        var opts = Array.isArray(plan.pricingOptions) ? plan.pricingOptions : [];
+        if (opts.length === 0 && plan.price && typeof plan.price === 'object') {
+          opts = [{ price: plan.price, billingPeriod: plan.billingPeriod || { value: 1, unit: 'MONTH' } }];
+        }
+        if (opts.length === 0) {
+          var firstAmt = typeof plan.firstPricingOptionPriceAmount === 'string' ? plan.firstPricingOptionPriceAmount.trim() : '';
+          var firstPeriod = typeof plan.firstPricingOptionPriceBillingPeriod === 'string' ? plan.firstPricingOptionPriceBillingPeriod.trim() : '';
+          var fromFirst = this._normalizePaywallMonthlyLabel((firstAmt + ' ' + firstPeriod).trim());
+          this._bbPriceDebug('H3', 'firstPricingOption fallback', {
+            firstAmt: firstAmt || null,
+            firstPeriod: firstPeriod || null,
+            fromFirst: fromFirst
+          });
+          if (fromFirst) paidMonthly.push(fromFirst);
+          else hasNonMonthlyPaid = true;
+          continue;
+        }
+        for (var oi = 0; oi < opts.length; oi++) {
+          var opt = opts[oi];
+          if (!opt || typeof opt !== 'object') continue;
+          var period = opt.billingPeriod && typeof opt.billingPeriod === 'object' ? opt.billingPeriod : null;
+          var unit = period && period.unit != null ? String(period.unit).toUpperCase() : '';
+          var freq = period && period.value != null ? Number(period.value) : 1;
+          var isMonthly = (unit === 'MONTH' || unit === 'MONTHS' || unit === 'MONTHLY') && (freq === 1 || !isFinite(freq));
+          if (opt.numBillingCycles != null && Number(opt.numBillingCycles) > 0) {
+            hasNonMonthlyPaid = true;
+            continue;
+          }
+          var priceObj = opt.price && typeof opt.price === 'object' ? opt.price : null;
+          var amount = priceObj ? (priceObj.value != null ? priceObj.value : priceObj.decimalValue) : null;
+          if (amount == null && opt.amount != null) amount = opt.amount;
+          if (!isMonthly) {
+            if (amount != null && Number(amount) > 0) hasNonMonthlyPaid = true;
+            continue;
+          }
+          var label = this._formatPaywallMonthlyPrice(amount, priceObj && priceObj.currency);
+          if (label) paidMonthly.push(label);
+        }
+      }
+      if (hasFree && paidMonthly.length > 0) {
+        this._bbPriceDebug('H3', 'pricingPlans parse rejected', {
+          reason: 'free-plus-paid',
+          hasFree: hasFree,
+          hasNonMonthlyPaid: hasNonMonthlyPaid,
+          paidMonthly: paidMonthly.slice(0, 6)
+        });
+        return null;
+      }
+      if (hasNonMonthlyPaid) {
+        this._bbPriceDebug('H3', 'pricingPlans parse rejected', {
+          reason: 'has-non-monthly-paid',
+          hasFree: hasFree,
+          hasNonMonthlyPaid: hasNonMonthlyPaid,
+          paidMonthly: paidMonthly.slice(0, 6)
+        });
+        return null;
+      }
+      var unique = [];
+      for (var u = 0; u < paidMonthly.length; u++) {
+        if (unique.indexOf(paidMonthly[u]) < 0) unique.push(paidMonthly[u]);
+      }
+      if (unique.length !== 1) {
+        this._bbPriceDebug('H3', 'pricingPlans parse rejected', {
+          reason: 'unique-count-' + unique.length,
+          hasFree: hasFree,
+          hasNonMonthlyPaid: hasNonMonthlyPaid,
+          paidMonthly: paidMonthly.slice(0, 6),
+          unique: unique
+        });
+        return null;
+      }
+      this._bbPriceDebug('H3', 'pricingPlans parse accepted', {
+        hasFree: hasFree,
+        hasNonMonthlyPaid: hasNonMonthlyPaid,
+        paidMonthly: paidMonthly.slice(0, 6),
+        unique: unique
+      });
+      return unique[0];
+    },
+
+    _pricingPlansFromBootstrapPayload: function(data) {
+      if (!data || typeof data !== 'object') return null;
+      if (Array.isArray(data.pricingPlans)) return data.pricingPlans;
+      if (data.bootstrapData && Array.isArray(data.bootstrapData.pricingPlans)) return data.bootstrapData.pricingPlans;
+      return null;
+    },
+
+    _pricingPlansFromHtml: function(html) {
+      if (!html || typeof html !== 'string') return null;
+      var match = html.match(/<script[^>]*id=["']bootstrap-data["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (!match) return null;
       try {
-        var priceEl = document.querySelector('.pricing-plan-price, [data-pricing-amount]');
-        if (!priceEl) return null;
-        var raw = (priceEl.textContent || '').trim().replace(/\s+/g, ' ');
-        var compact = raw.replace(/\s/g, '');
-        if (/^\$[\d.]+\/(month|mo)$/i.test(compact)) return raw;
+        return this._pricingPlansFromBootstrapPayload(JSON.parse(match[1]));
+      } catch (e) {
+        return null;
+      }
+    },
+
+    _pricingPlansFromDocument: function() {
+      try {
+        var el = document.getElementById('bootstrap-data');
+        if (el && el.textContent) {
+          return this._pricingPlansFromBootstrapPayload(JSON.parse(el.textContent));
+        }
+      } catch (e1) {}
+      return null;
+    },
+
+    _extractPaywallPriceFromDom: function() {
+      try {
+        var nodes = document.querySelectorAll(
+          '.pricing-plan-price-amount, .pricing-plan-price, .pricing-plan-product-price, [data-pricing-amount]'
+        );
+        var labels = [];
+        for (var i = 0; i < nodes.length; i++) {
+          var label = this._normalizePaywallMonthlyLabel((nodes[i].textContent || '').trim());
+          if (label && labels.indexOf(label) < 0) labels.push(label);
+        }
+        if (labels.length === 1) return labels[0];
       } catch (e) {}
+      return null;
+    },
+
+    _paywallSubscribeButtonLabel: function() {
+      var priceBit = this._extractPaywallPriceLabel();
+      return priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
+    },
+
+    _refreshPaywallSubscribeLabels: function() {
+      var label = this._paywallSubscribeButtonLabel();
+      var btnCount = 0;
+      try {
+        var nodes = document.querySelectorAll('.bb-paywall-subscribe-btn');
+        btnCount = nodes.length;
+        for (var i = 0; i < nodes.length; i++) nodes[i].textContent = label;
+      } catch (e) {}
+      this._bbPriceDebug('H5', 'refreshed subscribe labels', {
+        label: label,
+        cachedPriceLabel: this._paywallPriceLabel,
+        buttonCount: btnCount
+      });
+    },
+
+    _applyPaywallPricingPlans: function(plans, source) {
+      var label = this._labelFromSquarespacePricingPlans(plans);
+      if (label) this._paywallPriceLabel = label;
+      this._paywallDebug('pricingPlans', {
+        source: source || null,
+        planCount: Array.isArray(plans) ? plans.length : 0,
+        priceLabel: this._paywallPriceLabel
+      });
+      this._refreshPaywallSubscribeLabels();
+      return label;
+    },
+
+    _memberAccessUrlFromJson: function(json) {
+      var ctx = json && json.pagePreviewContext && typeof json.pagePreviewContext === 'object'
+        ? json.pagePreviewContext
+        : null;
+      var raw = ctx && typeof ctx.memberAccessUrl === 'string' ? ctx.memberAccessUrl.trim() : '';
+      if (!raw) return null;
+      try {
+        return new URL(raw, window.location.origin).toString();
+      } catch (e) {
+        return raw;
+      }
+    },
+
+    /**
+     * Blog ?format=json does not include plan prices. Squarespace puts them on the
+     * member-gate page (#bootstrap-data) linked from pagePreviewContext.memberAccessUrl.
+     */
+    _hydratePaywallPricingPlans: function(json) {
+      var memberAccessUrl = this._memberAccessUrlFromJson(json);
+      this._bbPriceDebug('H1', 'hydrate start', {
+        previewMode: Boolean(this._previewMode),
+        bbPreview: Boolean(this._bbPreview),
+        alreadyHasLabel: this._paywallPriceLabel,
+        hydrated: Boolean(this._paywallPricingPlansHydrated),
+        inflight: Boolean(this._paywallPricingPlansInflight),
+        isPaywalledSite: Boolean(this._isPaywalledSite()),
+        jsonHasPricingPlans: Boolean(json && Array.isArray(json.pricingPlans)),
+        jsonTopKeys: json && typeof json === 'object' ? Object.keys(json).slice(0, 24) : [],
+        memberAccessUrl: memberAccessUrl
+      });
+      if (this._previewMode) {
+        this._bbPriceDebug('H1', 'hydrate skipped: previewMode', {});
+        return;
+      }
+      if (this._paywallPriceLabel) return;
+      var fromDomPlans = this._pricingPlansFromDocument();
+      if (fromDomPlans) {
+        this._bbPriceDebug('H2', 'using document bootstrap-data plans', { planCount: fromDomPlans.length });
+        this._applyPaywallPricingPlans(fromDomPlans, 'document');
+        this._paywallPricingPlansHydrated = true;
+        return;
+      }
+      var fromDomPrice = this._extractPaywallPriceFromDom();
+      if (fromDomPrice) {
+        this._bbPriceDebug('H2', 'using DOM price text', { fromDomPrice: fromDomPrice });
+        this._paywallPriceLabel = fromDomPrice;
+        this._refreshPaywallSubscribeLabels();
+        this._paywallPricingPlansHydrated = true;
+        return;
+      }
+      var jsonPlans = this._pricingPlansFromBootstrapPayload(json)
+        || (json && Array.isArray(json.pricingPlans) ? json.pricingPlans : null);
+      if (jsonPlans) {
+        this._bbPriceDebug('H2', 'using page-json pricingPlans', { planCount: jsonPlans.length });
+        this._applyPaywallPricingPlans(jsonPlans, 'page-json');
+        this._paywallPricingPlansHydrated = true;
+        return;
+      }
+      if (this._paywallPricingPlansHydrated || this._paywallPricingPlansInflight) {
+        this._bbPriceDebug('H4', 'hydrate skipped: already hydrated or inflight', {
+          hydrated: Boolean(this._paywallPricingPlansHydrated),
+          inflight: Boolean(this._paywallPricingPlansInflight)
+        });
+        return;
+      }
+      if (!this._isPaywalledSite()) {
+        this._bbPriceDebug('H4', 'hydrate skipped: site not marked paywalled', {});
+        return;
+      }
+      var url = memberAccessUrl;
+      var urlSource = url ? 'memberAccessUrl' : null;
+      if (!url) {
+        try {
+          var path = this._currentBlogPathForRouteMatch() || window.location.pathname || '/';
+          url = new URL(path, window.location.origin).toString();
+          url += (url.indexOf('?') >= 0 ? '&' : '?') + 'requestAccess=true';
+          urlSource = 'requestAccess-fallback';
+        } catch (eUrl) {
+          this._bbPriceDebug('H2', 'hydrate aborted: could not build member URL', { message: String(eUrl && eUrl.message || eUrl) });
+          return;
+        }
+      }
+      var self = this;
+      this._bbPriceDebug('H2', 'fetching member-gate for pricingPlans', { url: url, urlSource: urlSource });
+      this._paywallPricingPlansInflight = fetch(url, { credentials: 'same-origin' })
+        .then(function(res) {
+          self._bbPriceDebug('H2', 'member-gate response', { ok: res.ok, status: res.status, contentType: res.headers.get('content-type') });
+          return res.text();
+        })
+        .then(function(text) {
+          self._paywallPricingPlansHydrated = true;
+          self._paywallPricingPlansInflight = null;
+          if (self._paywallPriceLabel) return;
+          var trimmed = (text || '').replace(/^\s+/, '');
+          var plans = null;
+          var parsePath = null;
+          try {
+            var parsed = JSON.parse(text);
+            plans = self._pricingPlansFromBootstrapPayload(parsed)
+              || (parsed && Array.isArray(parsed.pricingPlans) ? parsed.pricingPlans : null);
+            parsePath = plans ? 'json' : 'json-no-plans';
+          } catch (eJson) {
+            plans = self._pricingPlansFromHtml(text);
+            parsePath = plans ? 'html-bootstrap' : 'html-no-bootstrap';
+          }
+          self._bbPriceDebug('H2', 'member-gate body parsed', {
+            parsePath: parsePath,
+            textLen: (text || '').length,
+            looksLikeHtml: trimmed.charAt(0) === '<',
+            planCount: Array.isArray(plans) ? plans.length : 0
+          });
+          if (plans) self._applyPaywallPricingPlans(plans, 'memberAccessUrl');
+          else self._bbPriceDebug('H2', 'no pricingPlans extracted from member-gate', {});
+        })
+        .catch(function(err) {
+          self._bbPriceDebug('H2', 'member-gate fetch failed', { message: String(err && err.message || err) });
+          self._paywallPricingPlansHydrated = true;
+          self._paywallPricingPlansInflight = null;
+        });
+    },
+
+    _extractPaywallPriceLabel: function() {
+      if (this._paywallPriceLabel) return this._paywallPriceLabel;
+      var fromPlans = this._labelFromSquarespacePricingPlans(this._pricingPlansFromDocument());
+      if (fromPlans) {
+        this._paywallPriceLabel = fromPlans;
+        return fromPlans;
+      }
+      var fromDom = this._extractPaywallPriceFromDom();
+      if (fromDom) {
+        this._paywallPriceLabel = fromDom;
+        return fromDom;
+      }
       return null;
     },
 
@@ -2557,7 +3480,9 @@
     _isExplicitPaywallPublicPreviewPost: function(post) {
       if (!post || typeof post !== 'object') return false;
       if (post.bbPaywallPublicPreview === true || post.bbIsPublicPreview === true) return true;
-      return post.publicPreview === true;
+      if (post.publicPreview === true || post.isPublicPreview === true) return true;
+      if (post.memberAreaPublicPreview === true || post.enablePublicPreview === true) return true;
+      return false;
     },
 
     /**
@@ -2571,13 +3496,13 @@
       return plainBody.length >= 40;
     },
 
-    /** Logged-out single-post body gate: explicit public-preview flags only (not body-length heuristic). */
+    /** Logged-out single-post body gate: same public-preview test as collection cards. */
     _shouldGateSinglePostBody: function(post) {
       return (
         this._isPaywalledSite() &&
         this._resolveViewerMode() === 'loggedOut' &&
         post &&
-        !this._isExplicitPaywallPublicPreviewPost(post)
+        !this._isPaywallPublicPreviewPost(post)
       );
     },
 
@@ -2620,15 +3545,6 @@
     _createPaywallInlineCardWrap: function() {
       var wrap = document.createElement('div');
       wrap.className = 'bb-paywall-inline-card-wrap';
-      wrap.style.position = 'relative';
-      wrap.style.width = '50%';
-      wrap.style.minWidth = 'min(100%, 280px)';
-      wrap.style.maxWidth = '560px';
-      wrap.style.marginLeft = 'auto';
-      wrap.style.marginRight = 'auto';
-      wrap.style.zIndex = '2';
-      wrap.style.boxSizing = 'border-box';
-      wrap.style.pointerEvents = 'auto';
       wrap.appendChild(this._createPaywallInlineArticleCard());
       return wrap;
     },
@@ -2643,12 +3559,11 @@
       return true;
     },
 
-    /** Feature / Reporter / Publisher: strip top inset on body so first paragraph aligns with sidebar headers. */
+    /** Feature / Reporter / Publisher: zero first-block top margin so body text aligns with sidebar headers. */
     _normalizePostBodyTopForSidebarRow: function(bodyEl) {
       if (!bodyEl) return;
       bodyEl.classList.add('blog-overlay-post-body--sidebar-row');
       bodyEl.style.marginTop = '0';
-      bodyEl.style.paddingTop = '0';
       var blockTags = { P: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, BLOCKQUOTE: 1, UL: 1, OL: 1, FIGURE: 1, IMG: 1, TABLE: 1 };
       var el = bodyEl.firstElementChild;
       var depth = 0;
@@ -2659,6 +3574,21 @@
         if (!el.firstElementChild) break;
         el = el.firstElementChild;
         depth++;
+      }
+    },
+
+    /** Feature / Reporter / Publisher: remove default heading top margin so sidebar labels align with post body. */
+    _normalizeSidebarTopForSidebarRow: function(sidebarRailEl) {
+      if (!sidebarRailEl || !sidebarRailEl.querySelector) return;
+      sidebarRailEl.classList.add('blog-overlay-sidebar-rail--sidebar-row');
+      sidebarRailEl.style.marginTop = '0';
+      var section = sidebarRailEl.querySelector('.blog-overlay-sidebar-section');
+      if (!section) return;
+      section.style.marginTop = '0';
+      var header = section.querySelector('.bb-sidebar-header');
+      if (header && header.style) {
+        header.style.marginTop = '0';
+        header.style.paddingTop = '0';
       }
     },
 
@@ -2677,6 +3607,40 @@
         : 24;
       bodyEl.style.paddingLeft = sideGap + 'px';
       bodyEl.style.paddingRight = sideGap + 'px';
+    },
+
+    _getPostFooterSideMarginsMode: function(footerContentCfg) {
+      return footerContentCfg && footerContentCfg.sideMargins === 'fullScreen' ? 'fullScreen' : 'postBody';
+    },
+
+    /** Post footer horizontal inset: postBody matches post text; fullScreen uses site margins only. */
+    _applyPostFooterSideMargins: function(el, cfg, footerContentCfg) {
+      if (!el || !el.style || !cfg) return;
+      el.style.boxSizing = 'border-box';
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+        el.style.paddingLeft = '0';
+        el.style.paddingRight = '0';
+        return;
+      }
+      if (this._applyStoryPostHorizontalInset(el, cfg)) return;
+      if (
+        this._isReporterPostLayout(cfg) ||
+        this._isPublisherPostLayout(cfg) ||
+        this._isFeaturePostLayout(cfg)
+      ) {
+        el.style.paddingLeft = '0';
+        el.style.paddingRight = '0';
+        return;
+      }
+      this._applySinglePostBodyMargins(el, cfg);
+    },
+
+    _clearPostFooterZoneBleed: function(footerZoneEl) {
+      if (!footerZoneEl || !footerZoneEl.style) return;
+      footerZoneEl.style.width = '';
+      footerZoneEl.style.maxWidth = '';
+      footerZoneEl.style.marginLeft = '';
+      footerZoneEl.style.marginRight = '';
     },
 
     /**
@@ -2847,7 +3811,6 @@
 
     _appendPaywallFooter: function(footerZoneEl) {
       if (!footerZoneEl) return;
-      var colors = this._bbPaywallFooterColors();
       var ps = this.config && this.config.paywallSettings;
       var defaultDesc = 'Subscribe for full access to every story, the complete archive, and exclusive reading.';
       var desc = (ps && typeof ps.footerDescription === 'string' && ps.footerDescription.trim())
@@ -2856,100 +3819,33 @@
       var features = (ps && Array.isArray(ps.featureItems) && ps.featureItems.length)
         ? ps.featureItems.slice(0, 4)
         : ['Unlimited articles', 'Full archive access', 'Cancel anytime'];
-      var blogTitle = (this._blogMeta && this._blogMeta.blogName) ? this._blogMeta.blogName : 'this blog';
-      try {
-        var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
-        var st = ctx && ctx.website && ctx.website.siteTitle;
-        if (typeof st === 'string' && st.trim()) blogTitle = st.trim();
-      } catch (e) {}
-      var priceBit = this._extractPaywallPriceLabel();
-      var subLabel = priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
-      var borderAlpha = 'rgba(0,0,0,0.1)';
+      var blogTitle = this._resolvePaywallBlogTitle();
 
       var block = document.createElement('div');
       block.className = 'bb-paywall-footer';
-      block.style.width = '100%';
-      block.style.boxSizing = 'border-box';
-      block.style.marginTop = '32px';
-      block.style.padding = '40px 24px 48px';
-      block.style.background = colors.bg;
-      block.style.borderTop = '1px solid ' + borderAlpha;
-      block.style.textAlign = 'center';
+      this._applyPaywallSurfaceTokens(block);
 
       var inner = document.createElement('div');
-      inner.style.maxWidth = '640px';
-      inner.style.margin = '0 auto';
+      inner.className = 'bb-paywall-card';
 
       var eyebrow = document.createElement('div');
-      eyebrow.textContent = 'MEMBER EXCLUSIVE';
-      eyebrow.style.fontSize = '0.65rem';
-      eyebrow.style.fontWeight = '700';
-      eyebrow.style.letterSpacing = '0.2em';
-      eyebrow.style.textTransform = 'uppercase';
-      eyebrow.style.color = colors.accent;
-      eyebrow.style.marginBottom = '12px';
+      eyebrow.className = 'bb-paywall-label';
+      eyebrow.textContent = this._resolvePaywallEyebrowText();
 
-      var headline = document.createElement('h2');
-      headline.textContent = 'Unlock unlimited access to ' + blogTitle;
-      headline.style.margin = '0 0 12px';
-      headline.style.fontSize = 'clamp(1.25rem, 2.5vw, 1.75rem)';
-      headline.style.fontWeight = '700';
-      headline.style.lineHeight = '1.25';
-      headline.style.color = colors.text;
+      var headline = document.createElement('h3');
+      headline.className = 'bb-paywall-heading bb-paywall-heading--overlay';
+      headline.textContent = this._resolvePaywallHeadlineText('Unlock unlimited access to ' + blogTitle);
 
       var p = document.createElement('p');
+      p.className = 'bb-paywall-subtitle';
       p.textContent = desc;
-      p.style.margin = '0 auto 28px';
-      p.style.fontSize = '1rem';
-      p.style.lineHeight = '1.55';
-      p.style.color = colors.secondary;
-      p.style.maxWidth = '520px';
 
       var btnRow = document.createElement('div');
-      btnRow.style.display = 'flex';
-      btnRow.style.flexWrap = 'wrap';
-      btnRow.style.gap = '12px';
-      btnRow.style.justifyContent = 'center';
-      btnRow.style.marginBottom = '28px';
+      btnRow.className = 'bb-paywall-btn-row';
+      btnRow.appendChild(this._createPaywallSubscribeButton());
+      btnRow.appendChild(this._createPaywallSignInButton());
 
-      var subBtn = document.createElement('a');
-      subBtn.href = this._resolvePaywallSubscribeHref();
-      subBtn.textContent = subLabel;
-      subBtn.style.display = 'inline-flex';
-      subBtn.style.alignItems = 'center';
-      subBtn.style.justifyContent = 'center';
-      subBtn.style.padding = '12px 22px';
-      subBtn.style.borderRadius = '4px';
-      subBtn.style.background = colors.accent;
-      subBtn.style.color = '#fff';
-      subBtn.style.fontWeight = '600';
-      subBtn.style.textDecoration = 'none';
-      subBtn.style.fontSize = '0.95rem';
-
-      btnRow.appendChild(subBtn);
-
-      var list = document.createElement('div');
-      list.style.display = 'flex';
-      list.style.flexWrap = 'wrap';
-      list.style.gap = '10px 24px';
-      list.style.justifyContent = 'center';
-      list.style.fontSize = '0.9rem';
-      list.style.color = colors.secondary;
-      for (var fi = 0; fi < features.length; fi++) {
-        var row = document.createElement('div');
-        row.style.display = 'inline-flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '8px';
-        var check = document.createElement('span');
-        check.textContent = '✓';
-        check.style.color = colors.accent;
-        check.style.fontWeight = '700';
-        var tx = document.createElement('span');
-        tx.textContent = features[fi];
-        row.appendChild(check);
-        row.appendChild(tx);
-        list.appendChild(row);
-      }
+      var list = this._createPaywallBenefitList(features);
 
       inner.appendChild(eyebrow);
       inner.appendChild(headline);
@@ -2974,9 +3870,27 @@
       }
     },
 
-    /** Inline article gate (single post): card overlaid on faded second-paragraph teaser. */
+    _createPaywallBenefitList: function(features) {
+      var list = document.createElement('div');
+      list.className = 'bb-paywall-benefits';
+      var items = Array.isArray(features) ? features : [];
+      for (var fi = 0; fi < items.length; fi++) {
+        var row = document.createElement('div');
+        row.className = 'bb-paywall-benefit';
+        var check = document.createElement('span');
+        check.className = 'bb-paywall-benefit-check';
+        check.textContent = '✓';
+        var tx = document.createElement('span');
+        tx.textContent = items[fi];
+        row.appendChild(check);
+        row.appendChild(tx);
+        list.appendChild(row);
+      }
+      return list;
+    },
+
+    /** Inline article gate (single post): overlay card on faded second-paragraph teaser. */
     _createPaywallInlineArticleCard: function() {
-      var colors = this._bbPaywallFooterColors();
       var ps = this.config && this.config.paywallSettings;
       var defaultDesc = 'Subscribe for unlimited access to every article, the full archive, and ad-free reading.';
       var desc = (ps && typeof ps.inlineDescription === 'string' && ps.inlineDescription.trim())
@@ -2987,114 +3901,33 @@
       var features = (ps && Array.isArray(ps.featureItems) && ps.featureItems.length)
         ? ps.featureItems.slice(0, 4)
         : ['Unlimited articles', 'Full archive', 'Ad-free', 'Cancel anytime'];
-      var priceBit = this._extractPaywallPriceLabel();
-      var subLabel = priceBit ? ('Subscribe — ' + priceBit) : 'Subscribe';
 
       var card = document.createElement('div');
-      card.className = 'bb-paywall-inline-card';
-      card.style.width = '100%';
-      card.style.maxWidth = 'none';
-      card.style.margin = '0';
-      card.style.boxSizing = 'border-box';
-      card.style.background = '#fff';
-      card.style.border = '1px solid rgba(0,0,0,0.1)';
-      card.style.borderRadius = '8px';
-      card.style.padding = '24px 20px 20px';
-      card.style.textAlign = 'center';
-      card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.12)';
+      card.className = 'bb-paywall-inline-card bb-paywall-card';
+      this._applyPaywallSurfaceTokens(card);
 
       var eyebrow = document.createElement('div');
-      eyebrow.textContent = 'MEMBER EXCLUSIVE';
-      eyebrow.style.fontSize = '0.65rem';
-      eyebrow.style.fontWeight = '700';
-      eyebrow.style.letterSpacing = '0.2em';
-      eyebrow.style.textTransform = 'uppercase';
-      eyebrow.style.color = colors.accent;
-      eyebrow.style.marginBottom = '10px';
+      eyebrow.className = 'bb-paywall-label';
+      eyebrow.textContent = this._resolvePaywallEyebrowText();
 
-      var headline = document.createElement('h2');
-      headline.textContent = 'Continue reading with a membership';
-      headline.style.margin = '0 0 10px';
-      headline.style.fontSize = 'clamp(1.15rem, 3vw, 1.5rem)';
-      headline.style.fontWeight = '700';
-      headline.style.lineHeight = '1.25';
-      headline.style.color = colors.text;
+      var headline = document.createElement('h3');
+      headline.className = 'bb-paywall-heading bb-paywall-heading--overlay';
+      headline.textContent = this._resolvePaywallHeadlineText('Continue reading with a membership');
 
       var p = document.createElement('p');
+      p.className = 'bb-paywall-subtitle';
       p.textContent = desc;
-      p.style.margin = '0 auto 20px';
-      p.style.fontSize = '0.92rem';
-      p.style.lineHeight = '1.55';
-      p.style.color = colors.secondary;
-      p.style.maxWidth = '420px';
 
       var btnRow = document.createElement('div');
-      btnRow.style.display = 'flex';
-      btnRow.style.flexWrap = 'wrap';
-      btnRow.style.gap = '10px';
-      btnRow.style.justifyContent = 'center';
-      btnRow.style.marginBottom = '18px';
-
-      var subBtn = document.createElement('a');
-      subBtn.href = this._resolvePaywallSubscribeHref();
-      subBtn.textContent = subLabel;
-      subBtn.style.display = 'inline-flex';
-      subBtn.style.alignItems = 'center';
-      subBtn.style.justifyContent = 'center';
-      subBtn.style.padding = '10px 18px';
-      subBtn.style.borderRadius = '4px';
-      subBtn.style.background = colors.accent;
-      subBtn.style.color = '#fff';
-      subBtn.style.fontWeight = '600';
-      subBtn.style.textDecoration = 'none';
-      subBtn.style.fontSize = '0.9rem';
-
-      var signBtn = document.createElement('a');
-      signBtn.href = this._resolvePaywallSignInHref();
-      signBtn.textContent = 'Sign in';
-      signBtn.style.display = 'inline-flex';
-      signBtn.style.alignItems = 'center';
-      signBtn.style.justifyContent = 'center';
-      signBtn.style.padding = '10px 18px';
-      signBtn.style.borderRadius = '4px';
-      signBtn.style.background = '#fff';
-      signBtn.style.color = colors.text;
-      signBtn.style.border = '1px solid rgba(0,0,0,0.18)';
-      signBtn.style.fontWeight = '600';
-      signBtn.style.textDecoration = 'none';
-      signBtn.style.fontSize = '0.9rem';
-
-      btnRow.appendChild(subBtn);
-      btnRow.appendChild(signBtn);
-
-      var list = document.createElement('div');
-      list.style.display = 'flex';
-      list.style.flexWrap = 'wrap';
-      list.style.gap = '8px 18px';
-      list.style.justifyContent = 'center';
-      list.style.fontSize = '0.82rem';
-      list.style.color = colors.secondary;
-      for (var fi = 0; fi < features.length; fi++) {
-        var row = document.createElement('div');
-        row.style.display = 'inline-flex';
-        row.style.alignItems = 'center';
-        row.style.gap = '6px';
-        var check = document.createElement('span');
-        check.textContent = '✓';
-        check.style.color = colors.accent;
-        check.style.fontWeight = '700';
-        var tx = document.createElement('span');
-        tx.textContent = features[fi];
-        row.appendChild(check);
-        row.appendChild(tx);
-        list.appendChild(row);
-      }
+      btnRow.className = 'bb-paywall-btn-row';
+      btnRow.appendChild(this._createPaywallSubscribeButton());
+      btnRow.appendChild(this._createPaywallSignInButton());
 
       card.appendChild(eyebrow);
       card.appendChild(headline);
       card.appendChild(p);
       card.appendChild(btnRow);
-      card.appendChild(list);
+      card.appendChild(this._createPaywallBenefitList(features));
       return card;
     },
 
@@ -3226,8 +4059,7 @@
       if (variant === 'list') {
         card.classList.add('bb-sidebar-post-card');
       } else {
-        card.style.flexDirection = 'column';
-        card.style.gap = '10px';
+        card.classList.add('blog-overlay-more-to-read-card');
       }
       card.style.minWidth = '0';
 
@@ -3235,12 +4067,12 @@
       if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
       var imgWrap = document.createElement('div');
       imgWrap.style.position = 'relative';
-      imgWrap.style.borderRadius = '4px';
       imgWrap.style.overflow = 'hidden';
       if (variant === 'list') {
         imgWrap.className = 'bb-sidebar-post-thumb';
+        imgWrap.style.borderRadius = '4px';
       } else {
-        imgWrap.style.aspectRatio = '16 / 9';
+        imgWrap.className = 'blog-overlay-more-to-read-thumb';
       }
       imgWrap.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
       if (imgUrl) {
@@ -3251,6 +4083,7 @@
         im.style.height = '100%';
         im.style.objectFit = 'cover';
         im.style.display = 'block';
+        self._bindFeaturedImagePlaceholderFallback(im, imgWrap, imgUrl, placeholderMap, post, items);
         imgWrap.appendChild(im);
       }
       if (gated) self._appendPaywallCardImageLock(imgWrap);
@@ -3265,7 +4098,7 @@
         card.classList.add('bb-more-to-read-card');
         imgWrap.classList.add('bb-more-to-read-thumb');
         textHost = document.createElement('div');
-        textHost.className = 'bb-more-to-read-text';
+        textHost.className = 'bb-more-to-read-text blog-overlay-more-to-read-text';
         card.appendChild(textHost);
       }
 
@@ -3570,6 +4403,7 @@
         })
         .then(function(json) {
           if (!json || typeof json !== 'object') return null;
+          self._hydratePaywallPricingPlans(json);
           return self._updateJsonAuthSignals(json, 'currentPage');
         })
         .catch(function() { return null; });
@@ -3873,10 +4707,36 @@
       return Math.random() < rate;
     },
 
+    _hasBbPerfParam: function() {
+      try {
+        return new URLSearchParams(window.location.search || '').get('bbPerf') === '1';
+      } catch (e) {
+        return false;
+      }
+    },
+
     _perfOnVisible: function() {
       if (this._perfReported) return;
       this._perfReported = true;
-      if (!this._perfShouldSample()) return;
+      var forceLog = this._hasBbPerfParam();
+      var breakdown = {
+        loaderToConfig: this._perfDelta('configResponse', 'loaderEval'),
+        configFetch: this._perfDelta('configResponse', 'configRequest'),
+        rendererDownload: this._perfDelta('rendererLoaded', 'rendererRequest'),
+        configToRenderer: this._perfDelta('rendererInit', 'rendererRequest'),
+        rendererToJsonFirst: this._perfDelta('blogJsonFirstPage', 'rendererInit'),
+        jsonFirstToDom: this._perfDelta('renderDomCommitted', 'blogJsonFirstPage'),
+        domToVisible: this._perfDelta('visible', 'renderDomCommitted'),
+        totalToVisible: this._perfDelta('visible', 'loaderEval'),
+        blogJsonPages: this._blogJsonPageCount || 1,
+        postCount: this.items ? this.items.length : 0
+      };
+      if (forceLog) {
+        try {
+          console.info('[BetterBlog perf] ms from loader eval to overlay visible', breakdown);
+        } catch (eLog) { /* ignore */ }
+      }
+      if (!forceLog && !this._perfShouldSample()) return;
       var p = window.__bbPerf || {};
       var conn = null;
       try {
@@ -3904,6 +4764,8 @@
       } catch (eLay) { /* ignore */ }
       this._analyticsTrack('render_perf', {
         loaderToConfig: this._perfDelta('configResponse', 'loaderEval'),
+        configFetch: this._perfDelta('configResponse', 'configRequest'),
+        rendererDownload: this._perfDelta('rendererLoaded', 'rendererRequest'),
         configToRenderer: this._perfDelta('rendererInit', 'rendererRequest'),
         rendererToJsonFirst: this._perfDelta('blogJsonFirstPage', 'rendererInit'),
         jsonFirstToDom: this._perfDelta('renderDomCommitted', 'blogJsonFirstPage'),
@@ -4062,46 +4924,123 @@
       return mins;
     },
 
+    /** Substrings that identify Squarespace's default no-featured-image asset (incl. CDN redirects). */
+    _placeholderImageUrlMarkers: [
+      'configuration/no-image',
+      'no-image.png',
+      'no-image-',
+      'universal/images-v6/configuration/no-image',
+      'universal/images-v6/default/no-image'
+    ],
+    /**
+     * Squarespace JSON often returns a bare static URL (no filename) for posts
+     * without a featured image; it 302s to universal/images-v6/configuration/no-image.png.
+     * Real uploads use a /t/{assetId}/ segment in the same host pattern.
+     */
+    _isLikelySquarespaceStaticPlaceholderUrl: function(url) {
+      if (!url || typeof url !== 'string') return false;
+      var u = url.toLowerCase();
+      if (u.indexOf('static1.squarespace.com/static/') < 0 && u.indexOf('static.squarespace.com/static/') < 0) return false;
+      if (u.indexOf('/t/') >= 0) return false;
+      try {
+        var parsed = new URL(url);
+        var path = parsed.pathname.replace(/\/+$/, '');
+        var last = path.split('/').pop();
+        return /^\d+$/.test(last);
+      } catch (e) {
+        return false;
+      }
+    },
     /**
      * Returns true if url is Squarespace's no-image placeholder (should not be displayed).
      * Checks both the given url and, via fetch, the final URL after redirects.
      */
     _isPlaceholderImageUrl: function(url) {
       if (!url || typeof url !== 'string') return false;
+      if (this._isLikelySquarespaceStaticPlaceholderUrl(url)) return true;
       var u = url.toLowerCase();
-      return u.indexOf('no-image.png') >= 0 || u.indexOf('configuration/no-image') >= 0;
+      var markers = this._placeholderImageUrlMarkers;
+      for (var mi = 0; mi < markers.length; mi++) {
+        if (u.indexOf(markers[mi]) >= 0) return true;
+      }
+      return false;
     },
     _isPlaceholderWithMap: function(url, placeholderMap) {
       if (!url || typeof url !== 'string') return true;
-      if (placeholderMap === null) return false;
+      if (placeholderMap === null) return this._isPlaceholderImageUrl(url);
       if (placeholderMap && placeholderMap.hasOwnProperty(url)) return placeholderMap[url] === true;
       return this._isPlaceholderImageUrl(url);
     },
+    /** After load/error, swap Squarespace no-image graphics for the accent gradient placeholder. */
+    _bindFeaturedImagePlaceholderFallback: function(img, container, imgUrl, placeholderMap, post, items) {
+      var self = this;
+      if (!img || !container) return;
+      var swapIfPlaceholder = function(resolvedUrl) {
+        if (self._isPlaceholderWithMap(resolvedUrl || imgUrl, placeholderMap)) {
+          self._swapFeaturedImageForPlaceholder(container, placeholderMap, post, items);
+          return true;
+        }
+        return false;
+      };
+      img.onerror = function() {
+        self._swapFeaturedImageForPlaceholder(container, placeholderMap, post, items);
+      };
+      img.onload = function() {
+        swapIfPlaceholder(img.currentSrc || img.src || imgUrl);
+      };
+      if (img.complete) {
+        if (!img.naturalWidth) {
+          self._swapFeaturedImageForPlaceholder(container, placeholderMap, post, items);
+        } else {
+          swapIfPlaceholder(img.currentSrc || img.src || imgUrl);
+        }
+      }
+    },
 
-    /** Same gradient set as editorial cards when no usable featured image. */
-    _editorialImagePlaceholderGradients: [
-      'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      'linear-gradient(135deg, #2d1b69 0%, #11998e 100%)',
-      'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
-      'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)',
-      'linear-gradient(135deg, #4b1248 0%, #f10711 100%)',
-      'linear-gradient(135deg, #0d0d0d 0%, #4a4a4a 100%)'
-    ],
+    /** Accent gradient shown when a post has no usable featured image. */
+    _featuredImagePlaceholderBackground: function() {
+      var tokens = this._getCollectionStyleTokens();
+      var accent = (tokens && tokens.accent) || this._getSiteAccentColor() || '#5B4FE8';
+      return 'linear-gradient(135deg, ' + accent + ', color-mix(in srgb, ' + accent + ' 60%, black))';
+    },
     /**
-     * CSS `background` value for a featured/collection image area: cover photo or editorial-style gradient.
+     * CSS `background` value for a featured/collection image area: cover photo or accent gradient.
      */
     _featuredImageAreaBackground: function(imgUrl, placeholderMap, post, items) {
       if (imgUrl && typeof imgUrl === 'string' && !this._isPlaceholderWithMap(imgUrl, placeholderMap)) {
         return 'url(' + imgUrl + ') center/cover';
       }
-      var idx = 0;
-      if (post && items && Array.isArray(items)) {
-        var ix = this._postIndexInItems(items, post, this._itemIndexMap);
-        if (ix >= 0) idx = ix;
+      return this._featuredImagePlaceholderBackground();
+    },
+    /** Replace a broken featured `<img>` with the accent gradient placeholder. */
+    _swapFeaturedImageForPlaceholder: function(container, placeholderMap, post, items) {
+      if (!container) return;
+      var imgs = container.querySelectorAll('img');
+      for (var i = 0; i < imgs.length; i++) {
+        if (imgs[i].parentNode) imgs[i].parentNode.removeChild(imgs[i]);
       }
-      var g = this._editorialImagePlaceholderGradients;
-      var tokens = this._getCollectionStyleTokens();
-      return (tokens && tokens.placeholder) ? tokens.placeholder : g[idx % g.length];
+      container.style.background = this._featuredImageAreaBackground(null, placeholderMap, post, items);
+      container.style.backgroundSize = 'cover';
+      container.style.backgroundPosition = 'center';
+    },
+
+    _getApiBaseUrl: function() {
+      var cfg = this.config;
+      if (cfg && cfg.baseUrl && typeof cfg.baseUrl === 'string' && cfg.baseUrl.trim()) {
+        return cfg.baseUrl.replace(/\/+$/, '');
+      }
+      if (typeof document === 'undefined') return '';
+      try {
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+          var s = scripts[i];
+          if (!s.src || s.src.indexOf('loader.js') < 0) continue;
+          var attr = s.getAttribute('data-api-base');
+          if (attr && String(attr).trim()) return String(attr).trim().replace(/\/+$/, '');
+          try { return new URL(s.src).origin; } catch (eOrigin) { /* ignore */ }
+        }
+      } catch (eScripts) { /* ignore */ }
+      return '';
     },
 
     /**
@@ -4236,12 +5175,15 @@
 
     /**
      * Categories line above post title (Newsroom, Showcase, Masthead, Digest, Editorial). Small caps + accent; optional filter buttons.
-     * opts.onDark: accent pill badges on editorial imagery (like FEATURED); opts.compact: smaller badges on small editorial tiles.
+     * opts.onDark: labels on imagery; opts.overImage: white 78% + weight 700 (Editorial big tiles / Masthead hero);
+     * opts.compact: tighter spacing on small editorial tiles.
      */
     _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled, opts) {
       var self = this;
       opts = opts && typeof opts === 'object' ? opts : {};
       var onDark = opts.onDark === true;
+      var onDarkSolid = opts.onDarkSolid === true;
+      var overImage = opts.overImage === true;
       var compact = opts.compact === true;
       var cats = self._getPostCategories(post);
       if (cats.length === 0) return null;
@@ -4274,7 +5216,11 @@
           })(catName);
         }
         el.textContent = catName;
-        self._applyCategoryLabelStyle(el, { onImage: onDark });
+        self._applyCategoryLabelStyle(el, {
+          onImage: onDark && !onDarkSolid,
+          onDarkSolid: onDarkSolid,
+          overImage: overImage
+        });
         if (categoryFilterUiEnabled) {
           el.style.background = 'none';
           el.style.border = 'none';
@@ -4283,7 +5229,7 @@
         wrap.appendChild(el);
       }
 
-      if (onDark) {
+      if (onDark || onDarkSolid) {
         for (var di = 0; di < cats.length; di++) appendCategoryEl(cats[di]);
         return wrap;
       }
@@ -5084,7 +6030,7 @@
       wrap.style.width = (width || 200) + 'px';
       if (!noLabel) {
         var label = document.createElement('label');
-        label.textContent = 'Filter by Tags & Categories';
+        label.textContent = 'Filter by Tags';
         label.style.fontWeight = '600';
         label.style.fontSize = '0.9rem';
         label.style.marginBottom = '8px';
@@ -5274,45 +6220,7 @@
       var usePills = placement === 'header';
 
       if (placement === 'sidebar') {
-        var combinedWrap = document.createElement('div');
-        combinedWrap.style.width = '100%';
-        combinedWrap.style.boxSizing = 'border-box';
-        if (width) combinedWrap.style.maxWidth = width + 'px';
-        var badgeOpts = { clearOtherOnSelect: true };
-        if (categories.length > 0) {
-          combinedWrap.appendChild(self._createSidebarTopicBadgeList(categories, 'category', null, badgeOpts));
-        }
-        if (tags.length > 0) {
-          if (categories.length > 0) {
-            var tagSpacer = document.createElement('div');
-            tagSpacer.style.height = '16px';
-            combinedWrap.appendChild(tagSpacer);
-            var tagMiniHeader = document.createElement('div');
-            tagMiniHeader.textContent = 'Tags';
-            tagMiniHeader.style.fontSize = '0.7rem';
-            tagMiniHeader.style.fontWeight = '700';
-            tagMiniHeader.style.letterSpacing = '0.08em';
-            tagMiniHeader.style.textTransform = 'uppercase';
-            tagMiniHeader.style.color = '#111';
-            tagMiniHeader.style.marginBottom = '8px';
-            combinedWrap.appendChild(tagMiniHeader);
-            var tagBar = document.createElement('div');
-            tagBar.style.height = '2px';
-            tagBar.style.background = '#111';
-            tagBar.style.marginBottom = '12px';
-            combinedWrap.appendChild(tagBar);
-          }
-          combinedWrap.appendChild(self._createSidebarTopicBadgeList(tags, 'tag', null, badgeOpts));
-        }
-        if (categories.length === 0 && tags.length === 0) {
-          var noFilters = document.createElement('p');
-          noFilters.textContent = 'No filters available';
-          noFilters.style.fontSize = '0.8rem';
-          noFilters.style.color = '#888';
-          noFilters.style.margin = '0';
-          combinedWrap.appendChild(noFilters);
-        }
-        return combinedWrap;
+        return self._createFilterByTagModule(items, width, noLabel, 'sidebar');
       }
 
       if (usePills && (categories.length > 0 || tags.length > 0)) {
@@ -5398,7 +6306,7 @@
       wrap.style.width = (width || 200) + 'px';
       if (!noLabel) {
         var label = document.createElement('label');
-        label.textContent = 'Filter by Tags & Categories';
+        label.textContent = 'Filter by Tags';
         label.style.fontWeight = '600';
         label.style.fontSize = '0.9rem';
         label.style.marginBottom = '8px';
@@ -5878,14 +6786,19 @@
         var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
         var card = document.createElement('div');
         card.className = useLongBio ? 'blog-overlay-author-card blog-overlay-author-unit' : 'blog-overlay-author-unit';
-        card.style.marginBottom = useLongBio ? 0 : (i < authorIds.length - 1 ? '20px' : '0');
+        if (!useLongBio) {
+          card.style.marginBottom = i < authorIds.length - 1 ? '20px' : '0';
+        }
         var topRow = document.createElement('div');
         topRow.className = 'blog-overlay-author-card-row';
-        topRow.style.display = 'flex';
-        topRow.style.gap = '12px';
-        topRow.style.alignItems = 'flex-start';
-        topRow.style.marginBottom = useLongBio ? '0' : '8px';
-        if (useLongBio) topRow.style.width = '100%';
+        if (useLongBio) {
+          topRow.style.display = 'contents';
+        } else {
+          topRow.style.display = 'flex';
+          topRow.style.gap = '12px';
+          topRow.style.alignItems = 'flex-start';
+          topRow.style.marginBottom = '8px';
+        }
         var avatarWrap = document.createElement('div');
         avatarWrap.className = 'blog-overlay-author-card-avatar';
         avatarWrap.style.width = avatarPx + 'px';
@@ -5959,7 +6872,6 @@
       var w = 16; var h = 16;
       var svgs = {
         facebook: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-        instagram: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>',
         x: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
         reddit: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.88-7.004 4.88-3.874 0-7.004-2.186-7.004-4.88 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>',
         linkedin: '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
@@ -6041,7 +6953,6 @@
         var platform = platforms[p];
         var href = '';
         if (platform === 'facebook') href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodedShareUrl;
-        else if (platform === 'instagram') href = 'https://www.instagram.com/';
         else if (platform === 'x') href = 'https://twitter.com/intent/tweet?url=' + encodedShareUrl + '&text=' + encTitle;
         else if (platform === 'email') {
           href = 'mailto:?subject=' + encTitle + '&body=' + encodedShareUrl;
@@ -6330,7 +7241,6 @@
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
         if (!this._isOnEffectiveBlogRoute()) {
           console.log('[BlogOverlay] Skipping render: not on blog route');
-          this._clearBootstrapLoading();
           return;
         }
       }
@@ -6436,6 +7346,7 @@
           blogName: (collection && (collection.title || collection.navigationTitle)) ? String(collection.title || collection.navigationTitle) : 'Blog'
         };
         self._collection = collection;
+        self._hydratePaywallPricingPlans(json);
         if (self._featuredDebugEnabled()) {
           var collKeys = collection && typeof collection === 'object' ? Object.keys(collection) : [];
           console.warn('[BlogOverlay][featured-debug] collection keys (sample)', collKeys.slice(0, 100));
@@ -6498,7 +7409,11 @@
           firstJson = json;
           applyCollectionMetadata(json);
           self._perfMark('blogJsonFirstPage');
-          return paintFromCurrentItems(true);
+          // Collection index JSON is this page — skip a second ?format=json
+          // auth probe and the paywall hydration wait before first paint.
+          var probeCurrentPage = !self._isLikelyBlogCollectionIndexView()
+            && Boolean(self._currentPageJsonFetchUrl());
+          return paintFromCurrentItems(probeCurrentPage);
         })
         .then(
           function() {
@@ -6553,10 +7468,6 @@
           link.classList.toggle('blog-overlay-toc-active', isActive);
           link.classList.toggle('is-active', isActive);
           if (tocStyle === 'connectedDots') {
-            link.style.fontWeight = isActive ? '600' : '';
-            link.style.color = isActive ? '#333' : '';
-          }
-          if (tocStyle === 'connectedDots') {
             var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
             if (dot) dot.style.background = (idx <= activeIdx) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
           }
@@ -6605,10 +7516,6 @@
         link.classList.toggle('blog-overlay-toc-active', isActive);
         link.classList.toggle('is-active', isActive);
         if (tocStyle === 'connectedDots') {
-          link.style.fontWeight = isActive ? '600' : '';
-          link.style.color = isActive ? '#333' : '';
-        }
-        if (tocStyle === 'connectedDots') {
           var dot = link.parentElement && link.parentElement.querySelector('.blog-overlay-toc-dot');
           if (dot) dot.style.background = (idx <= activeIndex) ? 'var(--bb-accent, #5B4FE8)' : 'var(--bb-border, #e5e4e0)';
         }
@@ -6633,27 +7540,88 @@
       }
     },
 
+    /**
+     * Squarespace JSON (Static.SQUARESPACE_CONTEXT / tweakJSON) does not publish the
+     * rendered site-nav height — only logo/padding sliders. The engine writes computed
+     * CSS vars from those tweaks; use them when the header node is not in the DOM yet.
+     */
+    _readSquarespaceHeaderHeightHint: function() {
+      var names = [
+        '--header-first-section-padding-top',
+        '--header-height',
+        '--site-header-height',
+        '--siteHeaderHeight'
+      ];
+      for (var i = 0; i < names.length; i++) {
+        var raw = this._bbReadCssVar(names[i], null);
+        var px = this._parseCssLengthToPx(raw, typeof document !== 'undefined' ? document.documentElement : null);
+        if (px && px > 0 && px < 800) return Math.round(px);
+      }
+      try {
+        var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
+        var tweaks = ctx && (ctx.tweakJSON || ctx.tweakValues);
+        if (tweaks && typeof tweaks === 'object') {
+          var keys = ['header-height', 'tweak-header-height', 'headerHeight'];
+          for (var k = 0; k < keys.length; k++) {
+            var fromTweak = this._parseCssLengthToPx(tweaks[keys[k]], typeof document !== 'undefined' ? document.documentElement : null);
+            if (fromTweak && fromTweak > 0 && fromTweak < 800) return Math.round(fromTweak);
+          }
+        }
+      } catch (eCtx) { /* ignore */ }
+      return 0;
+    },
+
+    /** Visual bottom of site chrome (header + announcement bar) at the top of the viewport. */
+    _measureSiteNavHeightFromDom: function() {
+      var headerSelectors = [
+        'header', '.Header', '#header', '[data-section-type="header"]',
+        '.header-announcement-bar', '.Header-announcementBar',
+        '[data-nc-group="header"]', '.Index-nav', '.Index-header'
+      ];
+      var best = 0;
+      var seen = [];
+      for (var i = 0; i < headerSelectors.length; i++) {
+        try {
+          var nodes = document.querySelectorAll(headerSelectors[i]);
+          for (var n = 0; n < nodes.length; n++) {
+            var header = nodes[n];
+            if (!header || seen.indexOf(header) !== -1) continue;
+            seen.push(header);
+            if (header.closest && header.closest('#blog-overlay-list, .blog-overlay-wrapper')) continue;
+            var height = 0;
+            try {
+              var rect = header.getBoundingClientRect();
+              if (rect && rect.height > 0 && rect.top < 80) {
+                height = Math.round(rect.bottom);
+              }
+            } catch (eRect) { /* ignore */ }
+            if (!height) height = header.offsetHeight || 0;
+            if (height > best) best = height;
+          }
+        } catch (e) { /* invalid selector */ }
+      }
+      return best;
+    },
+
     _getNavbarOffset: function() {
       var root = this._root || document.getElementById('blogga-blogga-root');
       if (root) {
         var h = root.getAttribute('data-navbar-height');
         if (h) return parseInt(h, 10) || 0;
       }
-      var headerSelectors = [
-        'header', '.Header', '#header', '[data-section-type="header"]',
-        '.header-announcement-bar', '.Header-announcementBar',
-        '[data-nc-group="header"]', '.Index-nav', '.Index-header'
-      ];
-      for (var i = 0; i < headerSelectors.length; i++) {
-        try {
-          var header = document.querySelector(headerSelectors[i]);
-          if (header) {
-            var height = header.offsetHeight || 0;
-            if (height > 0) return height;
-          }
-        } catch (e) { /* invalid selector */ }
-      }
-      return 0;
+      var fromDom = this._measureSiteNavHeightFromDom();
+      if (fromDom > 0) return fromDom;
+      return this._readSquarespaceHeaderHeightHint();
+    },
+
+    _isFlushNavHeroLayout: function(cfg) {
+      return this._isStoryPostLayout(cfg) || this._isPublisherPostLayout(cfg);
+    },
+
+    _wrapperPadTopForNavbar: function(navbarOffset, flushNavHero) {
+      var nav = typeof navbarOffset === 'number' && isFinite(navbarOffset) ? Math.max(0, navbarOffset) : 0;
+      if (flushNavHero) return nav;
+      return nav > 0 ? nav + 16 : 16;
     },
 
     /** Sticky sidebar pin: a few px below the viewport top (fixed rail sync handles nav overlap). */
@@ -6772,6 +7740,75 @@
         el = el.parentElement;
       }
       return null;
+    },
+
+    /** Post body text node used for read-percent (not the article chrome / footer). */
+    _getAnalyticsPostBodyEl: function(scope) {
+      var root = scope || document.getElementById('blog-overlay-list') || document;
+      var body = root.querySelector ? root.querySelector('article .blog-overlay-body') : null;
+      if (body && (body.offsetHeight > 0 || (body.getBoundingClientRect && body.getBoundingClientRect().height > 0))) {
+        return body;
+      }
+      return null;
+    },
+
+    _getReadViewport: function() {
+      var viewportTop = 0;
+      var viewportBottom = (window.innerHeight || document.documentElement.clientHeight || 0);
+      var scrollTarget = this._getScrollContainer();
+      if (scrollTarget && scrollTarget !== window && scrollTarget.getBoundingClientRect) {
+        var crect = scrollTarget.getBoundingClientRect();
+        var winH = window.innerHeight || crect.height;
+        /* Ignore tall overflow:auto ancestors that are not the visible scrollport. */
+        if (crect.height > 40 && crect.height <= winH + 4) {
+          viewportTop = crect.top;
+          viewportBottom = crect.top + (scrollTarget.clientHeight || crect.height);
+        }
+      }
+      return { top: viewportTop, bottom: viewportBottom };
+    },
+
+    /** Bottom of the last real post block (skip trailing empty Squarespace spacers). */
+    _getPostBodyContentBottom: function(bodyEl) {
+      if (!bodyEl || !bodyEl.getBoundingClientRect) return 0;
+      var blocks = bodyEl.querySelectorAll(
+        'p, h1, h2, h3, h4, h5, h6, li, blockquote, figure, img, pre, table, iframe, video, .sqs-block, .sqs-html-content'
+      );
+      for (var i = blocks.length - 1; i >= 0; i--) {
+        var b = blocks[i];
+        var r;
+        try { r = b.getBoundingClientRect(); } catch (eR) { continue; }
+        if (!r || r.height <= 0) continue;
+        var tag = (b.tagName || '').toUpperCase();
+        var hasMedia = tag === 'IMG' || tag === 'IFRAME' || tag === 'VIDEO' || tag === 'FIGURE' || tag === 'TABLE';
+        var text = (b.textContent || '').replace(/\s+/g, '');
+        if (hasMedia || text.length > 0) return r.bottom;
+      }
+      try { return bodyEl.getBoundingClientRect().bottom; } catch (eB) { return 0; }
+    },
+
+    /**
+     * How far the reader has progressed through post text (0–1+).
+     * 1.0 when the last line of the body has reached the visible viewport —
+     * not when the page itself is fully scrolled.
+     */
+    _computePostReadRatio: function(bodyEl) {
+      if (!bodyEl || !bodyEl.getBoundingClientRect) return 0;
+      var rect;
+      try { rect = bodyEl.getBoundingClientRect(); } catch (eRect) { return 0; }
+      if (!rect) return 0;
+      var start = rect.top;
+      var end = this._getPostBodyContentBottom(bodyEl);
+      var span = end - start;
+      if (!(span > 0)) span = rect.height || bodyEl.offsetHeight || 0;
+      if (!(span > 0)) return 0;
+      var vp = this._getReadViewport();
+      if (vp.bottom <= vp.top) return 0;
+      var viewed = vp.bottom - start;
+      var ratio = viewed / span;
+      /* Last line of post text is on screen (subpixel / border slack). */
+      if (end <= vp.bottom + 16) ratio = Math.max(ratio, 1);
+      return Math.max(0, ratio);
     },
 
     /**
@@ -6984,8 +8021,8 @@
 
     _readBodyColorFromScope: function(scopeEl) {
       var varNames = [
-        '--paragraphMediumColor', '--paragraph-medium-color',
         '--paragraphLargeColor', '--paragraph-large-color',
+        '--paragraphMediumColor', '--paragraph-medium-color',
         '--tweak-text-color', '--text-color'
       ];
       var scope = scopeEl;
@@ -7067,6 +8104,36 @@
       return out;
     },
 
+    /** Squarespace P1 (paragraph) font-family and font-weight. */
+    _readParagraphTypographyFromScope: function(scopeEl) {
+      var out = {
+        fontFamily: this._walkScopeForCssValue(scopeEl, [
+          '--body-font-font-family', '--paragraph-font-font-family',
+          '--paragraph-1-font-font-family', '--primary-font-font-family'
+        ]),
+        fontWeight: this._walkScopeForCssValue(scopeEl, [
+          '--body-font-font-weight', '--paragraph-font-font-weight',
+          '--paragraph-1-font-font-weight', '--primary-font-font-weight'
+        ])
+      };
+      if (out.fontFamily && out.fontWeight) return out;
+      try {
+        var p = null;
+        if (scopeEl && scopeEl.querySelector) {
+          p = scopeEl.querySelector('p, .sqsrte-large, .sqsrte-medium, .sqs-block-content p');
+        }
+        if (!p && typeof document !== 'undefined') {
+          p = document.querySelector('section.page-section p, .sqsrte-large, p');
+        }
+        if (p) {
+          var cs = window.getComputedStyle(p);
+          if (!out.fontFamily && cs.fontFamily) out.fontFamily = cs.fontFamily;
+          if (!out.fontWeight && cs.fontWeight) out.fontWeight = cs.fontWeight;
+        }
+      } catch (e3b) { /* ignore */ }
+      return out;
+    },
+
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
         var prim = null;
@@ -7131,6 +8198,7 @@
       var body = this._readBodyColorFromScope(scope) || '#111111';
       var heading = this._readHeadingColorFromScope(scope) || body;
       var headingTypography = this._readHeadingTypographyFromScope(scope);
+      var paragraphTypography = this._readParagraphTypographyFromScope(scope);
       var buttonRadius = this._readPrimaryButtonRadius(scope);
       var formRadius = this._readFormFieldRadiusFromScope(scope);
       var buttonRadiusPx = this._firstPxValue(buttonRadius, 0);
@@ -7141,6 +8209,8 @@
         heading: heading,
         headingFontFamily: headingTypography.fontFamily || '',
         headingFontWeight: headingTypography.fontWeight || '',
+        p1FontFamily: paragraphTypography.fontFamily || '',
+        p1FontWeight: paragraphTypography.fontWeight || '',
         surface: this._bbReadCssVar('--tweak-blog-site-background', null)
           || this._bbReadCssVar('--siteBackgroundColor', null)
           || '#ffffff',
@@ -7175,6 +8245,8 @@
       el.style.setProperty('--bb-heading', tokens.heading);
       if (tokens.headingFontFamily) el.style.setProperty('--bb-heading-font-family', tokens.headingFontFamily);
       if (tokens.headingFontWeight) el.style.setProperty('--bb-heading-font-weight', tokens.headingFontWeight);
+      if (tokens.p1FontFamily) el.style.setProperty('--bb-p1-font-family', tokens.p1FontFamily);
+      if (tokens.p1FontWeight) el.style.setProperty('--bb-p1-font-weight', tokens.p1FontWeight);
       el.style.setProperty('--bb-surface', tokens.surface);
       /* Rule D — derived neutrals resolve from --bb-body via color-mix (see #bb-collection-styles). */
       el.style.setProperty('--bb-muted', tokens.muted);
@@ -7273,44 +8345,58 @@
           '--bb-body-60:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
           '--bb-extra-muted:color-mix(in srgb, var(--bb-body) 40%, transparent);' +
           '--bb-border:color-mix(in srgb, var(--bb-body) 15%, transparent);' +
+          '--bb-border-15:var(--bb-border);' +
           '--bb-placeholder:color-mix(in srgb, var(--bb-body) 5%, transparent);' +
+          '--bb-btn-font:var(--primary-button-font-font-family);' +
+          '--bb-btn-letter-spacing:var(--primary-button-font-letter-spacing);' +
+          '--bb-btn-transform:var(--primary-button-font-text-transform);' +
+          '--bb-btn-weight:var(--primary-button-font-font-weight);' +
+          '--bb-p1-font-family:var(--body-font-font-family,inherit);' +
+          '--bb-p1-font-weight:var(--body-font-font-weight,inherit);' +
         '}' +
         '#blog-overlay-list .bb-chrome-input{box-sizing:border-box;font-size:14px;padding:8px 12px;border:1px solid var(--bb-border,#e8e7e4);border-radius:var(--bb-chrome-radius,6px);background:#fff;color:var(--bb-body,inherit);}' +
         '#blog-overlay-list .bb-chrome-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
-        '#blog-overlay-list .bb-filter-btn{padding:6px 14px;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;color:var(--bb-muted,#888);white-space:nowrap;flex-shrink:0;font-family:inherit;line-height:1.3;text-decoration:none;}' +
+        '#blog-overlay-list .bb-filter-btn{padding:6px 14px;font-size:14px;font-weight:500;background:none;border:none;cursor:pointer;color:var(--bb-muted,#888);white-space:nowrap;flex-shrink:0;font-family:var(--bb-p1-font-family,inherit);line-height:1.3;text-decoration:none;}' +
         '#blog-overlay-list .bb-filter-btn--active{font-weight:700;color:var(--bb-body,#111);}' +
-        '#blog-overlay-list .bb-featured-badge{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);}' +
+        '#blog-overlay-list .bb-featured-badge{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-p1-font-family,inherit);}' +
         '#blog-overlay-list .bb-title--lg{font-size:36px;}' +
         '#blog-overlay-list .bb-title--std{font-size:24px;}' +
         '#blog-overlay-list .bb-title--masthead{font-size:28px;}' +
         '#blog-overlay-list .bb-title--compact{font-size:20px;}' +
         '#blog-overlay-list .bb-title--on-image{color:#fff;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-title--on-dark{color:var(--bb-on-dark-title,#fff);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-title--on-bg{color:var(--bb-heading,var(--bb-body,#111));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .blog-overlay-title a{color:inherit;font-family:inherit;font-weight:inherit;text-decoration:none;}' +
         '#blog-overlay-list .bb-meta--on-bg{font-size:13px;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-meta--on-image{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-meta--on-dark{font-size:13px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-excerpt--lg{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
         '#blog-overlay-list .bb-excerpt--std{font-size:16px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
-        '#blog-overlay-list .bb-category-label{font-size:13px;font-weight:normal;font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:inherit;line-height:1.35;cursor:inherit;}' +
+        '#blog-overlay-list .bb-category-label{font-size:13px;font-weight:var(--bb-p1-font-weight,inherit);font-variant:normal;letter-spacing:0.04em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);background:none;border:none;padding:0;margin:0;font-family:var(--bb-p1-font-family,inherit);line-height:1.35;cursor:inherit;}' +
         '#blog-overlay-list .blog-overlay-post-category--writer{text-align:center;margin-bottom:-8px;}' +
         '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
         '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-category-label--over-image{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-weight:700;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack{max-width:800px;margin-left:auto;margin-right:auto;box-sizing:border-box;gap:0;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-deck{max-width:700px;margin-left:auto;margin-right:auto;}' +
         '#blog-overlay-list .bb-title--post{font-size:40px;}' +
         '#blog-overlay-list .blog-overlay-post-deck{font-size:20px;line-height:1.4;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-post-deck--reporter{margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-deck--writer{font-style:italic;text-align:center;max-width:600px;margin-left:auto;margin-right:auto;}' +
         '#blog-overlay-list .blog-overlay-post-deck--feature{text-align:center;max-width:700px;margin-left:auto;margin-right:auto;}' +
         '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark-solid{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));}' +
         '#blog-overlay-list .bb-post-meta--on-bg{font-size:16px;color:var(--bb-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .bb-post-meta--on-image{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-post-meta--on-dark{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs{font-size:14px;line-height:1.4;color:var(--bb-muted,#888);}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark-solid{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
         '#blog-overlay-list .blog-overlay-share-row{display:flex;width:100%;margin-top:-5px;margin-bottom:40px;}' +
         '#blog-overlay-list .blog-overlay-share-row--story{margin-top:10px;}' +
         '#blog-overlay-list .blog-overlay-share-row--feature{margin-top:0;}' +
@@ -7321,8 +8407,11 @@
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
         '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
-        '#blog-overlay-list .blog-overlay-story-header-row{gap:40px;align-items:flex-start;margin-bottom:0;}' +
-        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;align-self:flex-start;display:flex;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-story-header-row{display:flex;align-items:stretch;gap:40px;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col{display:flex;flex-direction:column;justify-content:flex-start;min-width:0;align-self:stretch;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-post-breadcrumbs{flex-shrink:0;margin-bottom:24px;}' +
+        '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-story-info-panel{flex:1 1 auto;min-height:0;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;display:flex;margin:0;align-self:stretch;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-story-featured-image img{width:100%;height:100%;object-fit:cover;display:block;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel{background:transparent;padding:0;border-radius:0;box-sizing:border-box;gap:0;}' +
@@ -7331,18 +8420,24 @@
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-categories-line{margin-bottom:18px;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-title{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-deck--on-dark{margin-bottom:14px;}' +
-        '#blog-overlay-list .blog-overlay-reporter-meta-divider{border-top:1px solid var(--bb-border,#e8e7e4);margin-top:16px;padding-top:12px;width:100%;}' +
+        '#blog-overlay-list .blog-overlay-reporter-accent-rule{width:100%;height:1px;background:var(--bb-border,#e8e7e4);border:none;margin:16px 0 12px 0;}' +
         '#blog-overlay-list .blog-overlay-reporter-header-stack{gap:0;}' +
         '#blog-overlay-list .blog-overlay-reporter-accent-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0;}' +
         '#blog-overlay-list .bb-comment-form-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;}' +
+        '#blog-overlay-list .blog-overlay-relevant-posts--footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read-thumb{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:var(--bb-card-radius,20px);}' +
+        '#blog-overlay-list .blog-overlay-more-to-read-thumb img{width:100%;height:100%;object-fit:cover;display:block;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read-text{min-width:0;display:flex;flex-direction:column;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read-text .bb-category-label{font-size:13px;font-weight:var(--bb-p1-font-weight,inherit);font-family:var(--bb-p1-font-family,inherit);text-transform:uppercase;letter-spacing:0.04em;color:var(--bb-accent);margin-top:5px;margin-bottom:0;}' +
         '#blog-overlay-list .bb-comments-section{border-top:1px solid var(--bb-border,#e8e7e4);padding-top:24px;margin-top:32px;}' +
-        '#blog-overlay-list .bb-form-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:transparent;padding:8px 12px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);}' +
+        '#blog-overlay-list .bb-form-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:transparent;padding:8px 12px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);font-family:var(--bb-p1-font-family,inherit);}' +
         '#blog-overlay-list .bb-form-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
         '#blog-overlay-list .bb-comment-char-counter{width:100%;text-align:right;font-size:11px;color:var(--bb-muted,#888);margin:4px 0 0 0;}' +
-        '#blog-overlay-list .blog-overlay-author-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;margin:32px 0;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-author-card{display:flex;flex-direction:row;align-items:flex-start;gap:16px;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;margin:32px 0;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-author-card-avatar{width:64px;height:64px;flex-shrink:0;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bb-accent-15,rgba(91,79,232,0.15));color:var(--bb-accent,#5B4FE8);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,700);font-size:20px;}' +
         '#blog-overlay-list .blog-overlay-author-card-avatar img{width:100%;height:100%;object-fit:cover;}' +
         '#blog-overlay-list .blog-overlay-author-card-name{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;}' +
@@ -7351,27 +8446,36 @@
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .blog-overlay-prev-next{display:flex;flex-direction:row;width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);margin-top:32px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next{display:flex;flex-direction:row;width:100%;box-sizing:border-box;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);margin-top:32px;padding:16px;}' +
         '#blog-overlay-list .blog-overlay-prev-next-col{flex:1 1 50%;min-width:0;padding:20px 24px;box-sizing:border-box;text-decoration:none;color:inherit;display:flex;flex-direction:column;}' +
-        '#blog-overlay-list .blog-overlay-prev-next-col--next{border-left:1px solid var(--bb-border,#e5e4e0);align-items:flex-end;text-align:right;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col:first-child{padding-right:16px;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-col--next{border-left:1px solid var(--bb-border-15);padding-left:16px;align-items:flex-end;text-align:right;}' +
         '#blog-overlay-list .blog-overlay-prev-next-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-extra-muted,#888);margin-bottom:8px;}' +
         '#blog-overlay-list .blog-overlay-prev-next-category{margin-bottom:4px;}' +
-        '#blog-overlay-list .blog-overlay-prev-next-title{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
-        '#blog-overlay-list .bb-toc-item{display:block;font-size:16px;line-height:1.4;color:var(--bb-muted,#888);border-left:2px solid transparent;padding:8px 12px;text-decoration:none;box-sizing:border-box;}' +
-        '#blog-overlay-list .bb-toc-item.is-active,#blog-overlay-list .bb-toc-item.blog-overlay-toc-active{color:var(--bb-accent,#5B4FE8);border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));font-weight:600;}' +
+        '#blog-overlay-list .blog-overlay-prev-next-title{font-size:20px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+        '#blog-overlay-list .blog-overlay-toc .bb-toc-item{display:block;font-family:var(--bb-heading-font-family,inherit);font-size:16px;line-height:1.4;font-weight:400;color:var(--bb-muted,#888);text-decoration:none;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-toc .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc .bb-toc-item.blog-overlay-toc-active{color:var(--bb-accent,#5B4FE8);font-weight:600;}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="numbered"] .bb-toc-item{padding:8px 12px;border-left:none;background:transparent;}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item{border-left:2px solid transparent;padding:8px 12px;background:transparent;}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.blog-overlay-toc-active{border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));}' +
+        '#blog-overlay-list .blog-overlay-toc[data-toc-style="connectedDots"] .bb-toc-item{flex:1;min-width:0;padding:4px 0;border-left:none;background:transparent;}' +
+        '#blog-overlay-list .blog-overlay-toc-row{display:flex;align-items:center;gap:10px;margin-left:-18px;}' +
         '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
         '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
         '#blog-overlay-list .bb-pagination-btn{padding:6px 12px;font-size:14px;min-width:36px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-chrome-radius,6px);background:transparent;color:var(--bb-body,#333);cursor:pointer;font-family:inherit;}' +
         '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
-        '#blog-overlay-list .bb-load-more{padding:10px 24px;font-size:14px;font-weight:inherit;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
+        '#blog-overlay-list .bb-load-more,#blog-overlay-list .bb-load-more-btn{padding:10px 24px;font-size:14px;font-weight:var(--bb-btn-weight,inherit);border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-p1-font-family,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
         '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
-        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-bottom:8px;}' +
+        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
         '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
-        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row>:first-child{margin-top:0;padding-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row{margin-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child{margin-top:0;}' +
+        '#blog-overlay-list .blog-overlay-main-row .blog-overlay-sidebar-rail--sidebar-row .blog-overlay-sidebar-section:first-child .bb-sidebar-header{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
-        '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;}' +
+        '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:min(var(--bb-btn-radius),8px);overflow:hidden;position:relative;}' +
         '#blog-overlay-list .blog-overlay-featured-image > div{border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-hero > div{border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div{width:100%;max-height:600px;aspect-ratio:16/9;overflow:hidden;border-radius:4px;}' +
@@ -7379,14 +8483,33 @@
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div [role="img"]{width:100%;height:100%;object-fit:cover;display:block;}' +
         '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
-        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
-        '#blog-overlay-list .bb-more-to-read-title{font-size:0.95rem;line-height:1.35;color:var(--bb-body,#111);margin:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;margin-bottom:5px;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
+        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:600;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{margin-top:5px;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
-        '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:var(--bb-chrome-radius,6px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
+        '#blog-overlay-list .blog-overlay-topic-badges a,#blog-overlay-list .blog-overlay-topic-badges .bb-topic-badge{border-radius:min(var(--bb-btn-radius),8px);}' +
+        '#blog-overlay-list .bb-topic-badge{padding:6px 12px;font-size:13px;font-weight:400;line-height:1.2;border-radius:min(var(--bb-btn-radius),8px);cursor:pointer;font-family:inherit;border:1px solid var(--bb-border,#ddd);background:transparent;color:var(--bb-body,#111);}' +
         '#blog-overlay-list .bb-topic-badge--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);}' +
         '#blog-overlay-list .bb-newsletter-heading{font-size:15px;font-weight:600;color:var(--bb-body,#111);}' +
-        '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:inherit;}' +
-        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:8px;padding:16px 20px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .bb-newsletter-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-btn-font,inherit);font-weight:var(--bb-btn-weight,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
+        '#blog-overlay-list .bb-lead-magnet-heading{font-size:15px;font-family:inherit;font-weight:600;color:var(--bb-body);margin:0 0 8px 0;}' +
+        '#blog-overlay-list .bb-lead-magnet-desc{font-size:0.85rem;color:var(--bb-muted);margin:0 0 12px 0;}' +
+        '#blog-overlay-list .bb-lead-magnet-form{display:flex;flex-direction:column;gap:8px;}' +
+        '#blog-overlay-list .bb-lead-magnet-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body);background:#fff;padding:8px 12px;border:1px solid var(--bb-border);border-radius:6px;}' +
+        '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted);opacity:1;}' +
+        '#blog-overlay-list .bb-lead-magnet-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent);color:var(--bb-text-on-accent);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
+        '#blog-overlay-list .bb-lead-magnet-btn:hover{filter:brightness(0.92);}' +
+        '#blog-overlay-list .bb-lead-magnet-msg{font-size:0.85rem;margin-top:4px;}' +
+        '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;width:100%;}' +
+        '#blog-overlay-list .bb-newsletter-footer-copy{flex:1 1 200px;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form-stack{display:flex;flex-direction:column;align-items:stretch;gap:6px;flex:1 1 280px;min-width:min(100%,280px);}' +
+        '#blog-overlay-list .bb-newsletter-footer-form{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:flex-end;gap:8px;width:100%;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .bb-form-input{display:block;box-sizing:border-box;width:auto;flex:1 1 auto;min-width:0;}' +
+        '#blog-overlay-list .bb-newsletter-footer-form .sqs-button-element--primary{flex:0 0 auto;width:auto;max-width:none;display:inline-flex;align-items:center;white-space:nowrap;}' +
+        '#blog-overlay-list .bb-newsletter-footer-msg{font-size:0.85rem;width:100%;text-align:right;}' +
+        '@media (max-width:1449px){#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-row{flex-direction:column;flex-wrap:nowrap;align-items:stretch;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-copy,#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form-stack{flex:0 0 auto;width:100%;max-width:100%;min-width:0;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form{flex-wrap:nowrap;justify-content:flex-start;}#blog-overlay-list .blog-overlay-email-capture-footer--story .bb-newsletter-footer-form .bb-form-input{flex:1 1 auto;width:auto;min-width:0;}}' +
         '#blog-overlay-list .blog-overlay-list-rows-row{border-bottom:1px solid var(--bb-border,#e8e7e4);}' +
         '#blog-overlay-list .blog-overlay-list-rows-row--last{border-bottom:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroller{position:relative;width:100%;min-width:0;box-sizing:border-box;}' +
@@ -7432,7 +8555,196 @@
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form .bb-form-input,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form button{width:100%;flex:0 0 auto;max-width:none;}' +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
-        this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]');
+        this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]') +
+        '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
+        '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
+        '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
+        '#blog-overlay-list .bb-paywall-card{width:100%;box-sizing:border-box;background:color-mix(in srgb,var(--siteBackgroundColor,white),white 90%);border:none;border-radius:var(--bb-card-radius,20px);padding:40px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.10);}' +
+        '#blog-overlay-list .bb-paywall-label{font-family:var(--bb-heading-font-family,inherit);font-size:12px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);margin:0 0 14px 0;}' +
+        '#blog-overlay-list .bb-paywall-heading{font-family:var(--bb-heading-font-family,inherit);font-size:24px;font-weight:700;line-height:1.2;color:var(--paragraphLargeColor,var(--bb-body,#111));margin:0 0 14px 0;}' +
+        '#blog-overlay-list .bb-paywall-heading--overlay{font-size:32px;}' +
+        '#blog-overlay-list .bb-paywall-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 28px 0;}' +
+        '#blog-overlay-list .bb-paywall-btn-row{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-bottom:28px;}' +
+        '#blog-overlay-list .bb-paywall-subscribe-btn,#blog-overlay-list .bb-paywall-signin-btn{text-decoration:none;}' +
+        '#blog-overlay-list .bb-paywall-signin-btn.sqs-button-element--primary{background:transparent;color:var(--bb-accent,#5B4FE8);border:2px solid var(--bb-accent,#5B4FE8);}' +
+        '#blog-overlay-list .bb-paywall-benefits{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 18px;font-size:14px;font-weight:inherit;line-height:1.2;color:var(--bb-muted,#888);}' +
+        '#blog-overlay-list .bb-paywall-benefit{display:inline-flex;align-items:center;gap:6px;}' +
+        '#blog-overlay-list .bb-paywall-benefit-check{color:var(--bb-accent,#5B4FE8);font-weight:700;}' +
+        '#blog-overlay-list .blog-overlay-showcase-image>.bb-featured-badge{display:none;}' +
+        '#blog-overlay-list .blog-overlay-digest-featured-article .blog-overlay-featured-image>.bb-featured-badge{display:none;}' +
+        '#blog-overlay-list .blog-overlay-digest-featured-rule{display:none;border:none;height:0;}' +
+        '@media (max-width:767px){' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"]){margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) + 16px)!important;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .blog-overlay-header-filter-row{padding-left:0!important;margin-bottom:10px;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .bb-filter-btn:first-child{padding-left:0;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .bb-filter-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:500;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .bb-filter-btn--active{font-weight:700;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .blog-overlay-header-search-toggle{margin-left:-11px;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) select.bb-chrome-input{' +
+            '-webkit-appearance:none!important;appearance:none!important;' +
+            'padding-right:32px!important;' +
+            'background-color:var(--bb-surface)!important;' +
+            'background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%228%22 viewBox=%220 0 12 8%22%3E%3Cpath fill=%22%23666%22 d=%22M1.41.59 6 5.17 10.59.59 12 2 6 8 0 2z%22/%3E%3C/svg%3E")!important;' +
+            'background-repeat:no-repeat!important;' +
+            'background-position:right 12px center!important;' +
+            'color:var(--bb-body)!important;' +
+            'border-color:var(--bb-border)!important;' +
+            'border-radius:var(--bb-btn-radius)!important;' +
+            'font-family:var(--bb-p1-font-family,inherit)!important;' +
+            'font-weight:var(--bb-p1-font-weight,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"]) .blog-overlay-header-zone{padding-top:0!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"]) .blog-overlay-header-content{margin-bottom:24px!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card{margin-bottom:20px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-image{position:relative;border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-body>.bb-featured-badge{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-image>.bb-featured-badge{' +
+            'display:inline-flex!important;position:absolute;top:8px;left:8px;z-index:2;' +
+            'font-size:15px;padding:12px 8px;font-weight:800;letter-spacing:1px;' +
+            'font-family:var(--bb-p1-font-family,inherit);margin-bottom:0;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-title{font-size:22px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-meta-row{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-right .blog-overlay-showcase-body{padding-left:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-left .blog-overlay-showcase-image{margin-right:12px;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-right .blog-overlay-showcase-image{margin-left:12px;}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-featured-image{' +
+            'width:80px!important;height:80px!important;max-width:80px!important;flex:0 0 80px!important;' +
+            'overflow:hidden;box-sizing:border-box;' +
+            'border-radius:min(var(--bb-btn-radius,0px),calc(80px * 0.08))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-featured-image>div{' +
+            'aspect-ratio:auto!important;max-height:none!important;width:100%!important;height:100%!important;' +
+            'border-radius:min(var(--bb-btn-radius,0px),calc(80px * 0.08))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-featured-image img{' +
+            'object-fit:cover!important;width:100%!important;height:100%!important;display:block;' +
+            'border-radius:min(var(--bb-btn-radius,0px),calc(80px * 0.08))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-title{font-size:18px!important;line-height:1.25!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-meta-row{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;width:100vw!important;max-width:100vw!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero img{border-radius:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-category-label--on-image{font-size:13px!important;margin-bottom:8px!important;font-weight:700!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-title--on-image{font-size:28px!important;line-height:1.15!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-meta--on-image{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image img{' +
+            'border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image{overflow:hidden;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-title{font-size:18px!important;line-height:1.2!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-row{flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:10px!important;width:100%!important;max-width:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-copy,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form-stack,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form{width:100%!important;max-width:none!important;flex:0 0 auto!important;min-width:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form{flex-direction:column!important;justify-content:flex-start!important;gap:10px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;padding:12px 14px!important;font-size:16px!important;font-family:var(--bb-p1-font-family,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .sqs-button-element--primary{width:100%!important;max-width:none!important;flex:0 0 auto!important;text-align:center!important;justify-content:center!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-zone{padding-top:0!important;padding-bottom:4px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-content{margin-bottom:0!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
+            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:2px!important;' +
+            'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
+            'border-radius:0!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image img{border-radius:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-headline-stack>.bb-featured-badge{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>.bb-featured-badge{' +
+            'display:inline-flex!important;position:absolute;top:8px;left:8px;z-index:2;' +
+            'font-size:15px;padding:12px 8px;font-weight:800;letter-spacing:1px;' +
+            'font-family:var(--bb-p1-font-family,inherit);margin-bottom:0;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-title{font-size:28px!important;line-height:1.15!important;font-weight:var(--bb-heading-font-weight,inherit)!important;margin-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-meta-row{font-family:var(--bb-p1-font-family,inherit);font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;margin-bottom:14px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-excerpt--lg{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);font-size:14px!important;line-height:1.5!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-headline-stack{gap:2px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-intro{gap:4px!important;margin-bottom:0!important;padding-top:0!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-rule{display:block;border:none;border-top:1px solid var(--bb-border);margin:16px 0 20px 0;width:100%;height:0;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article){padding-left:0!important;padding-right:0!important;margin-bottom:4px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-title{font-size:18px!important;line-height:1.2!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image img{' +
+            'border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image{overflow:hidden;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-profiles,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-email-capture,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-popular-posts,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-topic-badges-wrap{width:100%!important;max-width:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-card-avatar{border-radius:50%!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-card-name{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-main-row .blog-overlay-pagination-zone{margin-top:-50px!important;margin-bottom:16px!important;width:100%;max-width:100%;box-sizing:border-box;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more,#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"]{margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) - 4px)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-row{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;margin-top:-20px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card{' +
+            'position:relative!important;overflow:hidden!important;' +
+            'border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair) .blog-overlay-title{' +
+            'font-size:22px!important;line-height:1.2!important;text-align:left!important;' +
+            'font-weight:var(--bb-heading-font-weight,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card.blog-overlay-editorial-card-mobile-pair .blog-overlay-title{' +
+            'font-size:18px!important;line-height:1.2!important;text-align:left!important;' +
+            'font-weight:var(--bb-heading-font-weight,inherit)!important;' +
+            'max-width:100%!important;width:100%!important;box-sizing:border-box;' +
+            'word-wrap:break-word;overflow-wrap:break-word;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-post-categories-line,' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-category-label{' +
+            'font-family:var(--bb-p1-font-family,inherit)!important;font-size:13px!important;font-weight:700!important;' +
+            'letter-spacing:0.04em!important;text-transform:uppercase!important;' +
+            'color:rgba(255,255,255,0.78)!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important;' +
+            'background:transparent!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair) .blog-overlay-post-categories-line{margin-bottom:2px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card-meta{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] a:has(.bb-featured-badge) .blog-overlay-editorial-card-meta{' +
+            'display:block!important;font-size:14px!important;' +
+            'font-family:var(--bb-heading-font-family,inherit)!important;' +
+            'font-weight:var(--bb-heading-font-weight,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card-above-title{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card.blog-overlay-editorial-card-mobile-pair .blog-overlay-editorial-card-title-block{' +
+            'position:absolute!important;inset:auto 12px 12px 12px!important;padding:0!important;height:auto!important;' +
+            'text-align:left!important;box-sizing:border-box;max-width:calc(100% - 24px);' +
+            'right:12px;left:12px;width:auto;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair)>.blog-overlay-editorial-card-content,' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair)>:has(.blog-overlay-title){' +
+            'position:absolute!important;top:auto!important;bottom:16px!important;left:16px!important;right:16px!important;' +
+            'inset:auto 16px 16px 16px!important;padding:0!important;height:auto!important;margin:0!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-featured-badge{' +
+            'position:absolute!important;top:8px!important;left:8px!important;z-index:3!important;' +
+            'font-size:15px!important;padding:12px 8px!important;font-weight:800!important;letter-spacing:1px!important;' +
+            'font-family:var(--bb-p1-font-family,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more,' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+        '}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
@@ -7477,7 +8789,11 @@
         : opts.size === 'post' ? 'bb-title--post'
         : 'bb-title--std';
       el.classList.add(sizeClass);
-      el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
+      if (opts.onDarkSolid) {
+        el.classList.add('bb-title--on-dark');
+      } else {
+        el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
+      }
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -7487,7 +8803,11 @@
     _applyMetaStyle: function(el, opts) {
       if (!el || !opts) return;
       var base = opts.variant === 'post' ? 'bb-post-meta' : 'bb-meta';
-      el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
+      if (opts.onDarkSolid) {
+        el.classList.add(base + '--on-dark');
+      } else {
+        el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
+      }
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
       if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
@@ -7502,7 +8822,9 @@
       if (!el) return;
       opts = opts && typeof opts === 'object' ? opts : {};
       el.classList.add('bb-category-label');
-      if (opts.onImage) el.classList.add('bb-category-label--on-image');
+      if (opts.onDarkSolid) el.classList.add('bb-category-label--on-dark');
+      else if (opts.onImage) el.classList.add('bb-category-label--on-image');
+      if (opts.overImage) el.classList.add('bb-category-label--over-image');
       if (opts.modifier) el.classList.add(opts.modifier);
     },
 
@@ -7638,6 +8960,28 @@
     /** Spec: all featured images and thumbnails use 4px radius (avatars stay 50% circle). */
     _applyFeaturedImageRadius: function(el) {
       if (el && el.style) el.style.borderRadius = '4px';
+    },
+
+    /** Mobile showcase: min(button radius, shortest side × 0.08) on image boxes ≥40px. */
+    _applyShowcaseImageRadiusVars: function(rootEl) {
+      var scope = rootEl || (typeof document !== 'undefined' ? document : null);
+      if (!scope || !scope.querySelectorAll) return;
+      var tokens = this._getCollectionStyleTokens();
+      var btnR = this._firstPxValue(tokens && tokens.buttonRadius, 0);
+      var nodes = scope.querySelectorAll(
+        '.blog-overlay-showcase-image, [data-bb-collection-layout="grid"] article .blog-overlay-featured-image, [data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image, [data-bb-collection-layout="editorial"] .blog-overlay-editorial-card'
+      );
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        var w = el.clientWidth || 0;
+        var h = el.clientHeight || 0;
+        var shortest = Math.min(w, h);
+        if (shortest < 40) {
+          el.style.removeProperty('--bb-img-radius');
+          continue;
+        }
+        el.style.setProperty('--bb-img-radius', Math.min(btnR, shortest * 0.08) + 'px');
+      }
     },
 
     /** Squarespace page-padding token for single-post wrapper calc(var(--pagePadding) + buffer). */
@@ -7813,10 +9157,18 @@
       if (!wrapper || !wrapper.style) return;
       var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
       wrapper.style.setProperty('--bb-wrapper-pad-top', padT + 'px');
+      var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+      var navH = 0;
+      try {
+        navH = this._getNavbarOffset() || 0;
+      } catch (eNavTok) {
+        navH = flushNav ? padT : Math.max(0, padT - 16);
+      }
+      wrapper.style.setProperty('--bb-nav-height', navH + 'px');
       wrapper.style.paddingTop = padT + 'px';
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
-      wrapper.style.marginTop = '16px';
+      wrapper.style.marginTop = flushNav ? '0' : '16px';
       wrapper.style.marginBottom = '16px';
 
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
@@ -8153,21 +9505,22 @@
       }
     },
 
-    /** The Story post template: split header (image left), no sidebars. */
+    /** The Story post template: split header (image left or right), no sidebars. */
     _isStoryPostLayout: function(cfg) {
       if (!cfg || typeof cfg !== 'object') return false;
       var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
-      if (!ph || ph.imagePosition !== 'leftOfInfo') return false;
+      if (!ph || (ph.imagePosition !== 'leftOfInfo' && ph.imagePosition !== 'rightOfInfo')) return false;
       var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
       var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
       return !leftOn && !rightOn;
     },
 
-    /** The Reporter post template: split header (image right), body row with right sidebar. */
+    /** The Reporter post template: split header (image left or right), body row with right sidebar. */
     _isReporterPostLayout: function(cfg) {
       if (!cfg || typeof cfg !== 'object') return false;
       var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
-      return !!(ph && ph.imagePosition === 'rightOfInfo');
+      if (!ph || (ph.imagePosition !== 'leftOfInfo' && ph.imagePosition !== 'rightOfInfo')) return false;
+      return !!(cfg.rightSidebar && cfg.rightSidebar.show === true);
     },
 
     /** The Feature post template: centered stacked full-bleed header with dual sidebars. */
@@ -8180,11 +9533,11 @@
       return leftOn && rightOn;
     },
 
-    /** The Publisher post template: full-bleed header (left aligned), single right sidebar. */
+    /** The Publisher post template: full-bleed header, single right sidebar. */
     _isPublisherPostLayout: function(cfg) {
       if (!cfg || typeof cfg !== 'object') return false;
       var ph = cfg.postHeader && typeof cfg.postHeader === 'object' ? cfg.postHeader : null;
-      if (!ph || ph.imagePosition !== 'fullBleed' || ph.contentAlignment !== 'left') return false;
+      if (!ph || ph.imagePosition !== 'fullBleed') return false;
       var leftOn = cfg.leftSidebar && cfg.leftSidebar.show === true;
       var rightOn = cfg.rightSidebar && cfg.rightSidebar.show === true;
       return !leftOn && rightOn;
@@ -8218,6 +9571,14 @@
       var raw = postHeaderCfg && typeof postHeaderCfg.backgroundColor === 'string' ? postHeaderCfg.backgroundColor.trim() : '';
       if (/^#[0-9a-fA-F]{3}$/.test(raw) || /^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
       return '#000000';
+    },
+
+    /** Reporter post header: full-width decorative rule above meta row. */
+    _createReporterPostHeaderDivider: function() {
+      var hr = document.createElement('hr');
+      hr.className = 'blog-overlay-reporter-accent-rule';
+      hr.setAttribute('aria-hidden', 'true');
+      return hr;
     },
 
     /** Story post header (on-dark): full-width decorative rule between deck and meta. */
@@ -8606,9 +9967,10 @@
         });
       }
       var paginationCfg = cfgForSort && cfgForSort.pagination && typeof cfgForSort.pagination === 'object' ? cfgForSort.pagination : null;
-      var usePagination = !isSinglePostForCfg && paginationCfg && paginationCfg.show === true;
-      var paginationMode = usePagination && (paginationCfg.mode === 'infiniteScroll') ? 'infiniteScroll' : 'pages';
-      var postsPerPage = usePagination ? Math.max(1, parseInt(paginationCfg.postsPerPage, 10) || 10) : 0;
+      /** Collection pages always paginate so long lists remain navigable. */
+      var usePagination = !isSinglePostForCfg;
+      var paginationMode = usePagination && paginationCfg && paginationCfg.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages';
+      var postsPerPage = usePagination ? Math.max(1, parseInt(paginationCfg && paginationCfg.postsPerPage, 10) || 10) : 0;
       var totalFiltered = sortedItems.length;
       var totalPages = usePagination && postsPerPage > 0 && paginationMode === 'pages' ? Math.max(1, Math.ceil(totalFiltered / postsPerPage)) : 1;
       var currentPage = Math.min(Math.max(1, this._currentPage || 1), totalPages);
@@ -8664,6 +10026,10 @@
       }
       var paywalledLoggedOut = self._isPaywalledSite() && viewerMode === 'loggedOut';
       var paywallFullActiveForRender = paywalledLoggedOut && self._isSquarespaceFullPaywallActive();
+      /** Public-preview posts stay fully readable, including configured footer modules. */
+      var paywallHideFooterModules = paywalledLoggedOut && !(
+        isSinglePost && displayItems[0] && self._isPaywallPublicPreviewPost(displayItems[0])
+      );
       if (self._isTocDebugEnabled()) {
         try {
           var pmToc = cfg.postModules && cfg.postModules.tableOfContents ? cfg.postModules.tableOfContents : null;
@@ -8715,7 +10081,20 @@
       var showDate = Boolean(cfg.showDate);
       var showAuthor = Boolean(cfg.showAuthor);
       var showReadingTime = Boolean(cfg.showReadingTime);
-      if (viewerMode === 'loggedOut' && !isSinglePost) showReadingTime = false;
+      /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
+      var showPostExcerpt = cfg.showPostExcerpt !== false;
+      /** Paywalled logged-out collection JSON often lacks full post body, so reading time cannot be calculated. */
+      if (viewerMode === 'loggedOut' && !isSinglePost && self._isPaywalledSite()) showReadingTime = false;
+      var pbCfg = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
+      var showProgressBar = Boolean(pbCfg.show != null ? pbCfg.show : cfg.showProgressBar);
+      /** Logged-out paywalled readers may see a gated post body — scroll progress is misleading. */
+      if (
+        viewerMode === 'loggedOut' &&
+        isSinglePost &&
+        self._isPaywalledSite() &&
+        displayItems[0] &&
+        self._shouldGateSinglePostBody(displayItems[0])
+      ) showProgressBar = false;
       var fiCfg = cfg.featuredImage && typeof cfg.featuredImage === 'object' ? cfg.featuredImage : {};
       var faCfg = cfg.featuredArticle && typeof cfg.featuredArticle === 'object' ? cfg.featuredArticle : null;
 
@@ -8779,6 +10158,7 @@
           selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
           paywallFullActive: paywallFullActiveForRender,
           paywallShowFooter: paywalledLoggedOut && !isSinglePost,
+          paywallHideFooterModules: paywallHideFooterModules,
           paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && self._shouldGateSinglePostBody(selectedPostForLog),
           paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
           paywallDetectionState: rawCfg.paywallDetectionState || null,
@@ -8834,6 +10214,8 @@
         showDate: showDate,
         showAuthor: showAuthor,
         showReadingTime: showReadingTime,
+        showProgressBar: showProgressBar,
+        showPostExcerpt: showPostExcerpt,
         fiCfg: fiCfg,
         faCfg: faCfg,
         collectionLayout: collectionLayout,
@@ -8849,6 +10231,7 @@
         categoryFilterUiEnabled: self._collectionCategoryFilterUiEnabled(baseCfg),
         paywallFullActive: paywallFullActiveForRender,
         paywallShowFooter: paywalledLoggedOut && !isSinglePost,
+        paywallHideFooterModules: paywallHideFooterModules,
         paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && displayItems[0] && self._shouldGateSinglePostBody(displayItems[0]),
         paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
       };
@@ -8857,7 +10240,7 @@
     _fetchPlaceholderImageMap: async function(featuredPost, displayItemsForLoop) {
       var self = this;
       var placeholderMap = {};
-      var baseUrl = self.config && self.config.baseUrl;
+      var baseUrl = self._getApiBaseUrl();
       var urlsToCheck = [];
       function addImgUrl(u) {
         if (u && typeof u === 'string' && u.trim() && (u.indexOf('http://') === 0 || u.indexOf('https://') === 0) && urlsToCheck.indexOf(u) < 0) urlsToCheck.push(u);
@@ -8908,8 +10291,7 @@
 
     _schedulePlaceholderMapFollowUp: function(featuredPost, displayItemsForLoop, renderSeq) {
       var self = this;
-      if (self._previewMode || self._bbPreview) return;
-      var baseUrl = self.config && self.config.baseUrl;
+      var baseUrl = self._getApiBaseUrl();
       if (!baseUrl) return;
       var fetchKey = self._placeholderImageUrlsKey(featuredPost, displayItemsForLoop);
       if (!fetchKey) return;
@@ -8987,7 +10369,7 @@
           if (self._infiniteScrollLoaded < totalFiltered) {
             var loadMoreBtn = document.createElement('button');
             loadMoreBtn.type = 'button';
-            loadMoreBtn.className = 'bb-load-more';
+            loadMoreBtn.className = 'bb-load-more bb-load-more-btn';
             loadMoreBtn.textContent = 'Load more';
             loadMoreBtn.onmouseover = function() { loadMoreBtn.style.filter = 'brightness(0.92)'; };
             loadMoreBtn.onmouseout = function() { loadMoreBtn.style.filter = ''; };
@@ -9089,6 +10471,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var showPostExcerpt = vs.showPostExcerpt !== false;
       var hasAnyFilter = vs.hasAnyFilter;
       var categoryFilterUiEnabled = vs.categoryFilterUiEnabled;
       var siteAccentForPostCats = self._getSiteAccentColor();
@@ -9121,14 +10504,18 @@
       var phShowBreadcrumbs = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showBreadcrumbs);
       var phShowCategories = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showCategories);
       var phShowByline = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showByline);
+      var phShowDecorativeAccentLine = isSinglePost && postHeaderCfg && Boolean(postHeaderCfg.showDecorativeAccentLine);
       var writerPostLayout = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayout = isSinglePost && self._isStoryPostLayout(cfg);
+      var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
+      var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
+      var reporterPostLayout = isSinglePost && self._isReporterPostLayout(cfg);
       var sidebarRowPostLayout = isSinglePost && (
         self._isFeaturePostLayout(cfg) ||
         self._isReporterPostLayout(cfg) ||
-        self._isPublisherPostLayout(cfg)
+        publisherPostLayout
       );
-      var postHeaderAccentDividerLayout = writerPostLayout || storyPostLayout;
+      var postHeaderAccentDividerLayout = phShowDecorativeAccentLine && (writerPostLayout || storyPostLayout);
       for (var j = 0; j < displayItemsForLoop.length; j++) {
         var post = displayItemsForLoop[j];
         var gatedCard = paywallReplaceCollectionTeaser && !self._isPaywallPublicPreviewPost(post);
@@ -9143,6 +10530,9 @@
         var imgUrl = post.assetUrl || post.thumbnailUrl || (post.assets && post.assets[0] && post.assets[0].assetUrl) || null;
         if (imgUrl && self._isPlaceholderWithMap(imgUrl, placeholderMap)) imgUrl = null;
         var showFiPlaceholder = !isSinglePost && fiShow && !imgUrl;
+        var showSinglePostFiPlaceholder = isSinglePost && fiShow && !imgUrl && (
+          writerPostLayout || storyPostLayout || publisherPostLayout || featurePostLayout || reporterPostLayout
+        );
         if (isSinglePost) {
           fiLayout = phImagePos === 'fullBleed' ? 'fullBleed' : phImagePos === 'rightOfInfo' ? 'rightJustified' : 'leftJustified';
           if (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') fiImageWidth = fiImageWidth;
@@ -9155,21 +10545,20 @@
         var fiAspect = fiCfg.aspectBehavior === 'cropped' ? 'cropped' : 'original';
         var fiRatio = (fiCfg.aspectRatio === '4:3' ? '4:3' : fiCfg.aspectRatio === '3:2' ? '3:2' : fiCfg.aspectRatio === '2:3' ? '2:3' : fiCfg.aspectRatio === '1:1' ? '1:1' : fiCfg.aspectRatio === '21:9' ? '21:9' : fiCfg.aspectRatio === '21:8' ? '21:8' : '16:9');
         if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout) fiRatio = '21:9';
-        /** Reporter (rightOfInfo header): always cover crop regardless of saved aspectBehavior. */
-        var reporterPostHeaderLayout = isSinglePost && phImagePos === 'rightOfInfo';
-        var reporterPostHeaderCrop = reporterPostHeaderLayout && fiShow;
-        if (reporterPostHeaderCrop) {
-          fiAspect = 'cropped';
+        /** Reporter (split header): 3:2 cover crop regardless of saved aspectBehavior. */
+        var reporterPostHeaderLayout = reporterPostLayout;
+        var reporterPostHeaderImage = reporterPostHeaderLayout && fiShow;
+        if (reporterPostHeaderImage) {
           fiRatio = '3:2';
         }
-        /** Story (leftOfInfo header): cover crop at 4:3 (spec). */
-        var storyPostHeaderCrop = isSinglePost && self._isStoryPostLayout(cfg) && phImagePos === 'leftOfInfo' && fiShow;
+        /** Story (split header): cover crop at 4:3 (spec). */
+        var storyPostHeaderCrop = isSinglePost && storyPostLayout && fiShow;
         if (storyPostHeaderCrop) {
           fiAspect = 'cropped';
           fiRatio = '4:3';
         }
         /** Feature (stacked fullBleed header): cover crop at 16:9 (spec). */
-        var featureStackedHeaderCrop = isSinglePost && self._isFeaturePostLayout(cfg) && phImagePos === 'fullBleed' && postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked' && fiShow;
+        var featureStackedHeaderCrop = isSinglePost && featurePostLayout && phImagePos === 'fullBleed' && postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked' && fiShow;
         if (featureStackedHeaderCrop) {
           fiAspect = 'cropped';
           fiRatio = '16:9';
@@ -9273,7 +10662,7 @@
         var imgCaption = (post.asset && post.asset.caption) ? post.asset.caption : (post.caption || null);
         var isSideBySide = !isSinglePost && (collectionLayout !== 'listRows' || imgUrl || showFiPlaceholder) && (fiLayout === 'leftJustified' || fiLayout === 'rightJustified') && fiShow && (imgUrl || showFiPlaceholder);
         if (isSinglePost && (phImagePos === 'belowInfo' || phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) isSideBySide = false;
-        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || showFiPlaceholder)) isSideBySide = true;
+        if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && fiShow && (imgUrl || ((storyPostLayout || reporterPostLayout) && !imgUrl))) isSideBySide = true;
         var rowEl = null;
         var contentEl = null;
         if (isSideBySide) {
@@ -9283,15 +10672,15 @@
           if (storyPostLayout) {
             rowEl.classList.add('blog-overlay-story-header-row');
             rowEl.style.gap = '40px';
-            rowEl.style.alignItems = 'flex-start';
+            rowEl.style.alignItems = 'stretch';
             rowEl.style.marginBottom = '0';
           } else {
             rowEl.style.gap = (collectionLayout === 'listRows' && listRowsMobileCompact)
               ? '10px'
               : (isSinglePost && phSideImageGapPx > 0 ? (phSideImageGapPx + 'px') : '20px');
             rowEl.style.alignItems =
-              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo') && phShowBreadcrumbs)
-                ? 'flex-start'
+              (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo'))
+                ? 'stretch'
                 : ((!isSinglePost && collectionLayout === 'listRows')
                     ? 'center'
                     : (isSinglePost ? phVerticalAlignItems : 'flex-start'));
@@ -9304,8 +10693,15 @@
             rowEl.classList.add('blog-overlay-reporter-header-row');
             contentEl.classList.add('blog-overlay-reporter-header-copy');
           }
-          contentEl.style.flex = reporterPostHeaderLayout ? '1 1 0%' : '1';
+          contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
           contentEl.style.minWidth = '0';
+          if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
+            if (storyPostLayout) contentEl.classList.add('blog-overlay-story-info-col');
+            contentEl.style.display = 'flex';
+            contentEl.style.flexDirection = 'column';
+            contentEl.style.justifyContent = 'flex-start';
+            contentEl.style.alignSelf = 'stretch';
+          }
           if (!isSinglePost && collectionLayout === 'listRows') {
             contentEl.style.display = 'flex';
             contentEl.style.flexDirection = 'column';
@@ -9316,11 +10712,11 @@
           }
         }
         var appendTo = isSideBySide ? contentEl : article;
-        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && !!imgUrl;
+        var hasFullBleedImg = isSinglePost && phImagePos === 'fullBleed' && fiShow && (!!imgUrl || publisherPostLayout || featurePostLayout);
         var fullBleedLayoutStacked = postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked';
         var singlePostFullBleedStacked = hasFullBleedImg && fullBleedLayoutStacked;
         var singlePostFullBleedHero = hasFullBleedImg && !fullBleedLayoutStacked;
-        var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && !!imgUrl;
+        var singlePostBelowInfo = isSinglePost && phImagePos === 'belowInfo' && fiShow && (!!imgUrl || writerPostLayout);
         var fullBleedHeaderBlock = null;
         var stackedFullBleedWrap = null;
         var stackedHeaderBlock = null;
@@ -9376,7 +10772,7 @@
           }
         }
         if (singlePostFullBleedStacked) {
-          var featureStackedHero = isSinglePost && self._isFeaturePostLayout(cfg);
+          var featureStackedHero = isSinglePost && featurePostLayout;
           stackedFullBleedWrap = document.createElement('div');
           stackedFullBleedWrap.className = 'blog-overlay-featured-image blog-overlay-featured-image-stacked-fullbleed';
           if (featureStackedHero) {
@@ -9403,7 +10799,7 @@
             stackImg.style.display = 'block';
             stackImg.style.objectFit = (fiFixedAspectCrop || featureStackedHero) ? 'cover' : 'contain';
             stackImg.style.objectPosition = 'center';
-            stackImg.onerror = function() { if (stackedFullBleedWrap) stackedFullBleedWrap.style.display = 'none'; };
+            self._bindFeaturedImagePlaceholderFallback(stackImg, stackFiInner, imgUrl, placeholderMap, post, items);
             stackFiInner.appendChild(stackImg);
           } else {
             var stackPh = document.createElement('div');
@@ -9431,7 +10827,7 @@
             stackedFullBleedWrap.appendChild(stackCap);
           }
         }
-        if (fiShow && (imgUrl || showFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
+        if (fiShow && (imgUrl || showFiPlaceholder || showSinglePostFiPlaceholder) && !singlePostFullBleedHero && !singlePostFullBleedStacked) {
           var fiWrap = document.createElement('div');
           fiWrap.className = 'blog-overlay-featured-image';
           if (fiLayout === 'fullBleed') {
@@ -9474,8 +10870,8 @@
               fiWrap.style.flex = '0 0 ' + fiImageWidth + '%';
             }
             fiWrap.style.minWidth = '0';
-            fiWrap.style.alignSelf = storyPostLayout
-              ? 'flex-start'
+            fiWrap.style.alignSelf = storyPostLayout || (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo'))
+              ? 'stretch'
               : ((!isSinglePost && collectionLayout === 'listRows') ? 'center' : 'flex-start');
           }
           var fiInner = document.createElement('div');
@@ -9484,7 +10880,10 @@
           var digestFeaturedViewportBleed = collectionLayout === 'digest' && isFeaturedInLayout && digestMobileFullBleed;
           self._applyFeaturedImageRadius(fiInner);
           if (fiShadow && !digestFeaturedViewportBleed) fiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-          if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
+          if (reporterPostHeaderImage) {
+            fiInner.style.aspectRatio = '3 / 2';
+            fiInner.style.width = '100%';
+          } else if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
             fiInner.style.aspectRatio = (collectionLayout === 'listRows' && listRowsMobileCompact)
               ? '4 / 3'
               : fiRatio.replace(':', ' / ');
@@ -9500,9 +10899,9 @@
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.display = 'block';
-            img.style.objectFit = (fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
+            img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
             img.style.objectPosition = 'center';
-            img.onerror = function() { fiWrap.style.display = 'none'; };
+            self._bindFeaturedImagePlaceholderFallback(img, fiInner, imgUrl, placeholderMap, post, items);
             fiInner.appendChild(img);
           } else {
             fiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
@@ -9561,6 +10960,11 @@
             postInfoWrap.classList.add('blog-overlay-story-info-panel');
             postInfoWrap.style.gap = '0';
           }
+          if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
+            postInfoWrap.style.flex = '1 1 auto';
+            postInfoWrap.style.minHeight = '0';
+            postInfoWrap.style.justifyContent = phVertical === 'center' ? 'center' : phVertical === 'bottom' ? 'flex-end' : 'flex-start';
+          }
           if (reporterPostHeaderLayout) {
             postInfoWrap.classList.add('blog-overlay-reporter-header-stack');
           }
@@ -9571,7 +10975,10 @@
           postBreadcrumbNav = document.createElement('nav');
           postBreadcrumbNav.setAttribute('aria-label', 'Breadcrumb');
           var bcNav = postBreadcrumbNav;
-          bcNav.className = 'blog-overlay-post-breadcrumbs' + ((singlePostFullBleedHero || storyPostLayout) ? ' blog-overlay-post-breadcrumbs--on-dark' : '');
+          bcNav.className = 'blog-overlay-post-breadcrumbs' + (
+            storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
+              : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
+          );
           bcNav.style.setProperty('display', 'flex', 'important');
           bcNav.style.setProperty('flex-direction', 'row', 'important');
           bcNav.style.flexWrap = 'wrap';
@@ -9634,7 +11041,6 @@
           else { var sp = document.createElement('span'); sp.textContent = pt; bcNav.appendChild(sp); }
         }
 
-        var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
         var featurePostLayoutForCat = isSinglePost && self._isFeaturePostLayout(cfg);
         /** Publisher ribbon is template-locked; other templates respect postHeader.showCategories. */
         var postHeaderCategoryLayout = isSinglePost && (
@@ -9647,7 +11053,8 @@
             : storyPostLayout ? 'blog-overlay-post-category--story'
             : 'blog-overlay-post-category--feature';
           var postHeaderCatsLine = self._createCollectionPostCategoriesLine(post, siteAccentForPostCats, false, {
-            onDark: singlePostFullBleedHero || storyPostLayout
+            onDark: singlePostFullBleedHero,
+            onDarkSolid: storyPostLayout
           });
           if (postHeaderCatsLine) {
             postHeaderCatsLine.classList.add('blog-overlay-post-header-categories');
@@ -9678,7 +11085,11 @@
         titleEl.style.margin = storyPostLayout ? '0 0 24px 0' : '0 0 8px 0';
         if (isSinglePost) {
           titleEl.classList.add('blog-overlay-post-title');
-          self._applyTitleStyle(titleEl, { size: 'post', onImage: singlePostFullBleedHero || storyPostLayout });
+          self._applyTitleStyle(titleEl, {
+            size: 'post',
+            onImage: singlePostFullBleedHero,
+            onDarkSolid: storyPostLayout
+          });
         } else if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
           titleEl.style.fontSize = '1.05rem';
           titleEl.style.lineHeight = '1.2';
@@ -9763,6 +11174,11 @@
           featuredHeadlineStack.style.width = '100%';
           var featuredBadge = self._createFeaturedBadge();
           featuredHeadlineStack.appendChild(featuredBadge);
+          if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && typeof fiWrap !== 'undefined' && fiWrap) {
+            var digestBadgeOverlay = self._createFeaturedBadge();
+            digestBadgeOverlay.setAttribute('aria-hidden', 'true');
+            fiWrap.appendChild(digestBadgeOverlay);
+          }
           if (appendCategoriesToHeadline) {
             featuredHeadlineStack.appendChild(postCategoriesLine);
           }
@@ -9806,26 +11222,10 @@
           headlineMount.appendChild(moDigestLbl);
         }
 
-        var singlePostDeckText = null;
-        if (isSinglePost && postInfoWrap && !phShowByline && !postHeaderAccentDividerLayout && !publisherPostLayout) {
-          var deckSourceText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
-          var deckSourceSentences = deckSourceText ? deckSourceText.match(/[^.!?]*[.!?]/g) : null;
-          singlePostDeckText = deckSourceSentences && deckSourceSentences.length > 0 ? deckSourceSentences[0].trim() : '';
-          if (!singlePostDeckText) singlePostDeckText = self._truncateText(post.excerpt || post.body || '', 200);
-          if (singlePostDeckText) singlePostDeckText = self._stripLeadingSquarespaceSectionMarkers(singlePostDeckText);
-          if (!singlePostDeckText) singlePostDeckText = null;
-        }
-        if (featurePostLayoutForCat && singlePostDeckText && postInfoWrap) {
-          var featureDeckEl = document.createElement('p');
-          featureDeckEl.className = 'blog-overlay-post-deck blog-overlay-post-deck--feature';
-          featureDeckEl.textContent = singlePostDeckText;
-          postInfoWrap.appendChild(featureDeckEl);
-        }
-
         var pendingWriterMetaRow = null;
         var pendingWriterShareRow = null;
 
-        if (phShowByline && postInfoWrap && !postHeaderAccentDividerLayout && !publisherPostLayout) {
+        if (phShowByline && postInfoWrap && !publisherPostLayout) {
           var bylineDeckText = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
           var bylineSentences = bylineDeckText ? bylineDeckText.match(/[^.!?]*[.!?]/g) : null;
           var bylineText = bylineSentences && bylineSentences.length > 0 ? bylineSentences[0].trim() : '';
@@ -9833,7 +11233,7 @@
           if (bylineText) bylineText = self._stripLeadingSquarespaceSectionMarkers(bylineText);
           if (bylineText) {
             var bylineEl = document.createElement('p');
-            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : '');
+            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : storyPostLayout ? ' blog-overlay-post-deck--on-dark-solid' : featurePostLayoutForCat ? ' blog-overlay-post-deck--feature' : '');
             bylineEl.textContent = bylineText;
             postInfoWrap.appendChild(bylineEl);
           }
@@ -9887,16 +11287,15 @@
           if (!isSinglePost && collectionLayout === 'listRows' && listRowsMobileCompact) {
             metaRow.style.marginTop = '0';
           }
-          if (isSinglePost && phImagePos === 'rightOfInfo') {
-            metaRow.classList.add('blog-overlay-reporter-meta-divider');
-          }
           var meta = document.createElement('div');
           meta.className = 'blog-overlay-meta';
           meta.textContent = metaParts.join(' · ');
-          if (singlePostFullBleedHero || storyPostLayout) {
+          if (singlePostFullBleedHero) {
             self._applyMetaStyle(meta, { onImage: true, variant: isSinglePost ? 'post' : null });
-            if (singlePostFullBleedHero) meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+            meta.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
             metaRow.style.color = 'var(--bb-meta-on-image,rgba(255,255,255,0.78))';
+          } else if (storyPostLayout) {
+            self._applyMetaStyle(meta, { onDarkSolid: true, variant: isSinglePost ? 'post' : null });
           } else {
             self._applyMetaStyle(meta, { onImage: false, variant: isSinglePost ? 'post' : null });
           }
@@ -9918,6 +11317,9 @@
           if (postHeaderAccentDividerLayout) {
             pendingWriterMetaRow = metaRow;
             metaRow.style.marginBottom = '0';
+          } else if (isSinglePost && reporterPostHeaderLayout && phShowDecorativeAccentLine) {
+            headlineMount.appendChild(self._createReporterPostHeaderDivider());
+            headlineMount.appendChild(metaRow);
           } else {
             headlineMount.appendChild(metaRow);
           }
@@ -9926,7 +11328,8 @@
           postCategoriesLine.style.marginBottom = '0';
         }
         var smCfg = cfg.socialMediaLinks && typeof cfg.socialMediaLinks === 'object' ? cfg.socialMediaLinks : null;
-        var showShare = smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
+        /** Social sharing is post-only; collection pages never render share links. */
+        var showShare = isSinglePost && smCfg && smCfg.show && Array.isArray(smCfg.platforms) && smCfg.platforms.length > 0;
         var shareUrl = self._getPostUrl(post);
         if (!shareUrl && typeof window !== 'undefined') {
           shareUrl = window.location.origin + window.location.pathname + (window.location.search || '') + '#post-' + postIndex;
@@ -9968,17 +11371,6 @@
         }
 
         if (postHeaderAccentDividerLayout && postInfoWrap) {
-          var accentExcerptSource = self._plainTextFromBlogHtml(post.excerpt || post.body || '');
-          var accentExcerptSentences = accentExcerptSource ? accentExcerptSource.match(/[^.!?]*[.!?]/g) : null;
-          var accentExcerptText = accentExcerptSentences && accentExcerptSentences.length > 0 ? accentExcerptSentences[0].trim() : '';
-          if (!accentExcerptText) accentExcerptText = self._truncateText(post.excerpt || post.body || '', 200);
-          if (accentExcerptText) accentExcerptText = self._stripLeadingSquarespaceSectionMarkers(accentExcerptText);
-          if (accentExcerptText) {
-            var accentExcerptEl = document.createElement('p');
-            accentExcerptEl.className = 'blog-overlay-post-deck' + (writerPostLayout ? ' blog-overlay-post-deck--writer' : ' blog-overlay-post-deck--on-dark');
-            accentExcerptEl.textContent = accentExcerptText;
-            postInfoWrap.appendChild(accentExcerptEl);
-          }
           postInfoWrap.appendChild(storyPostLayout ? self._createStoryPostHeaderDivider() : self._createWriterPostHeaderDivider(phAlign));
           if (pendingWriterMetaRow) postInfoWrap.appendChild(pendingWriterMetaRow);
           if (pendingWriterShareRow) postInfoWrap.appendChild(pendingWriterShareRow);
@@ -10000,14 +11392,6 @@
         }
 
         if (isSinglePost && postInfoWrap) {
-          if (singlePostDeckText && !featurePostLayoutForCat && !singlePostFullBleedStacked && !phShowByline && !postHeaderAccentDividerLayout && !publisherPostLayout) {
-            var deckEl = document.createElement('p');
-            var deckModifier = singlePostFullBleedHero ? ' blog-overlay-post-deck--on-dark' : '';
-            if (reporterPostHeaderLayout) deckModifier += ' blog-overlay-post-deck--reporter';
-            deckEl.className = 'blog-overlay-post-deck' + deckModifier;
-            deckEl.textContent = singlePostDeckText;
-            postInfoWrap.appendChild(deckEl);
-          }
           var useDedicatedSinglePostHeaderZone = isSinglePost && !singlePostFullBleedHero && !singlePostFullBleedStacked;
           var postInfoTarget = useDedicatedSinglePostHeaderZone
             ? (isSideBySide ? appendTo : ensureSinglePostHeaderInnerEl())
@@ -10062,7 +11446,7 @@
             belowImg.style.display = 'block';
             belowImg.style.objectFit = fiAspect === 'cropped' ? 'cover' : 'contain';
             belowImg.style.objectPosition = 'center';
-            belowImg.onerror = function() { belowFiWrap.style.display = 'none'; };
+            self._bindFeaturedImagePlaceholderFallback(belowImg, belowFiInner, imgUrl, placeholderMap, post, items);
             belowFiInner.appendChild(belowImg);
           } else {
             belowFiInner.style.background = self._featuredImageAreaBackground(null, placeholderMap, post, items);
@@ -10121,9 +11505,6 @@
             } else {
               fullBleedHeaderBlock.insertBefore(postBreadcrumbNav, fullBleedHeaderBlock.firstChild);
             }
-          } else if (storyPostLayout && postInfoWrap) {
-            postBreadcrumbNav.style.justifyContent = bcJustify;
-            postInfoWrap.insertBefore(postBreadcrumbNav, postInfoWrap.firstChild);
           } else if (
             isSideBySide &&
             isSinglePost &&
@@ -10131,7 +11512,7 @@
             contentEl
           ) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
-            postBreadcrumbNav.style.marginBottom = '8px';
+            if (!storyPostLayout) postBreadcrumbNav.style.marginBottom = '8px';
             contentEl.insertBefore(postBreadcrumbNav, contentEl.firstChild);
           } else if (singlePostBelowInfo && postInfoWrap && postInfoWrap.parentNode) {
             postBreadcrumbNav.style.justifyContent = bcJustify;
@@ -10172,15 +11553,18 @@
           }
         } else if (gatedCard) {
           /* Label + optional CTA live in layout-specific slots above; keep teaser column empty */
-        } else if (collectionLayout === 'listRows' || collectionLayout === 'digest') {
-          if (collectionLayout === 'digest' && isFeaturedInLayout && !gatedCard) {
+        } else if (collectionLayout === 'digest') {
+          /** Digest: excerpt only on the featured article; grid cards stay title/meta/image only. */
+          if (isFeaturedInLayout) {
             var digestFeaturedExcerpt = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (digestFeaturedExcerpt) {
               body.textContent = digestFeaturedExcerpt;
               self._applyExcerptStyle(body, 'lg');
               if (digestMobileNarrow) body.style.textAlign = 'left';
             }
-          } else if (collectionLayout === 'listRows' && !listRowsMobileCompact) {
+          }
+        } else if (showPostExcerpt && collectionLayout === 'listRows') {
+          if (!listRowsMobileCompact) {
             var excerptText = self._truncateText(post.excerpt || post.body || '', 120);
             if (excerptText) {
               body.textContent = excerptText;
@@ -10188,13 +11572,20 @@
               body.style.marginTop = '0';
             }
           }
-          // digest, non-featured cards: no excerpt (body left empty; omitted below)
-        } else {
-          // grid layout — short teaser on desktop; hidden on narrow viewports (Masthead mobile)
+        } else if (showPostExcerpt && collectionLayout === 'grid') {
+          // Masthead grid — short teaser on desktop; hidden on narrow viewports
           if (!gridMobileNarrow) {
             var gridExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
             if (gridExcerptText) {
               body.textContent = gridExcerptText;
+              self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
+            }
+          }
+        } else if (showPostExcerpt && collectionLayout === 'editorial') {
+          if (!gridMobileNarrow) {
+            var editorialExcerptText = self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+            if (editorialExcerptText) {
+              body.textContent = editorialExcerptText;
               self._applyExcerptStyle(body, isFeaturedInLayout ? 'lg' : 'std');
             }
           }
@@ -10212,6 +11603,7 @@
             self._applyStoryPostHorizontalInset(body, cfg);
             if (sidebarRowPostLayout) self._normalizePostBodyTopForSidebarRow(body);
           }
+          body.style.paddingTop = BB_POST_CONTENT_TOP_PADDING + 'px';
         }
         var bodyAppendTo = (isSinglePost && isSideBySide) ? article : appendTo;
         if (isSideBySide) {
@@ -10246,8 +11638,19 @@
         var omitDigestNonFeaturedBody = !isSinglePost && collectionLayout === 'digest' && !isFeaturedInLayout;
         if (!omitDigestNonFeaturedBody) {
           bodyAppendTo.appendChild(body);
+          if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && body.textContent) {
+            var digestRule = document.createElement('hr');
+            digestRule.className = 'blog-overlay-digest-featured-rule';
+            digestRule.setAttribute('aria-hidden', 'true');
+            bodyAppendTo.appendChild(digestRule);
+          }
         }
         mainEl.appendChild(article);
+      }
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { self._applyShowcaseImageRadiusVars(mainEl); });
+      } else {
+        self._applyShowcaseImageRadiusVars(mainEl);
       }
     },
 
@@ -10264,6 +11667,7 @@
       var showDate = vs.showDate;
       var showAuthor = vs.showAuthor;
       var showReadingTime = vs.showReadingTime;
+      var showPostExcerpt = vs.showPostExcerpt !== false;
       var hasAnyFilter = vs.hasAnyFilter;
       var hasSearchQuery = vs.hasSearchQuery;
       var searchQuery = vs.searchQuery;
@@ -10310,7 +11714,9 @@
           }
         }
         var card = document.createElement('div');
-        card.className = 'blog-overlay-showcase-card' + (showcaseMobile ? ' blog-overlay-showcase-card-mobile' : '');
+        card.className = 'blog-overlay-showcase-card' +
+          (showcaseMobile ? ' blog-overlay-showcase-card-mobile' : '') +
+          (imgLeft ? ' blog-overlay-showcase-card--img-left' : ' blog-overlay-showcase-card--img-right');
         card.style.display = 'grid';
         card.style.gap = '0';
         card.style.marginTop = j === 0 ? '0' : (showcaseMobile ? '20px' : '7.5%');
@@ -10323,17 +11729,19 @@
         if (navbarOffset > 0) card.style.scrollMarginTop = (navbarOffset + 8) + 'px';
         if (displayIdx >= 0) card.setAttribute('data-display-index', String(displayIdx));
         var bodyCol = document.createElement('div');
+        bodyCol.className = 'blog-overlay-showcase-body';
         bodyCol.style.display = 'flex';
         bodyCol.style.flexDirection = 'column';
         bodyCol.style.justifyContent = 'center';
         bodyCol.style.alignSelf = 'center';
         bodyCol.style.padding = showcaseMobile ? '10px 8px' : '24px 0';
         bodyCol.style.minWidth = '0';
+        var shBadge = null;
         if (!isSinglePost && faCfg && faCfg.show && faCfg.position === 'inLayout' && featuredPost) {
           var shFpK = displayPostKey(featuredPost);
           var shPk = displayPostKey(post);
           if (post === featuredPost || (shFpK && shPk === shFpK)) {
-            var shBadge = self._createFeaturedBadge({ marginBottom: showcaseMobile ? '4px' : '6px' });
+            shBadge = self._createFeaturedBadge({ marginBottom: showcaseMobile ? '4px' : '6px' });
             shBadge.style.boxSizing = 'border-box';
             bodyCol.appendChild(shBadge);
           }
@@ -10369,7 +11777,7 @@
         setShowcasePostAnalytics(titleLink);
         wireShowcaseNavLink(titleLink);
         titleEl.appendChild(titleLink);
-        var excerptText = showcaseMobile ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
+        var excerptText = (!showPostExcerpt || showcaseMobile) ? '' : self._extractFirstNSentences(post.excerpt || post.body || '', 2);
         var bodyEl = null;
         if (!showcaseMobile) {
           bodyEl = document.createElement('div');
@@ -10446,6 +11854,7 @@
         var showcaseHasImage = imgUrlValid && !self._isPlaceholderWithMap(imgUrl, placeholderMap);
         card.style.alignItems = 'center';
         var imgCol = document.createElement('div');
+        imgCol.className = 'blog-overlay-showcase-image';
         imgCol.style.overflow = 'hidden';
         imgCol.style.borderRadius = '4px';
         imgCol.style.aspectRatio = showcaseMobile ? '1 / 1' : '3 / 2';
@@ -10488,6 +11897,11 @@
           imgLink.appendChild(phEl);
         }
         imgCol.appendChild(imgLink);
+        if (shBadge) {
+          var shBadgeOverlay = self._createFeaturedBadge();
+          shBadgeOverlay.setAttribute('aria-hidden', 'true');
+          imgCol.appendChild(shBadgeOverlay);
+        }
         if (showcaseMobile) {
           card.style.gridTemplateColumns = imgLeft ? '55% 45%' : '45% 55%';
           bodyCol.style.padding = '10px 8px';
@@ -10509,6 +11923,11 @@
         card.onmouseover = function() { showcaseHoverTarget.style.transform = 'scale(1.03)'; };
         card.onmouseout = function() { showcaseHoverTarget.style.transform = 'scale(1)'; };
         mainEl.appendChild(card);
+      }
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { self._applyShowcaseImageRadiusVars(mainEl); });
+      } else {
+        self._applyShowcaseImageRadiusVars(mainEl);
       }
     },
 
@@ -10553,7 +11972,15 @@
         pagZone.style.boxSizing = 'border-box';
         pagZone.style.position = 'relative';
         pagZone.style.zIndex = '1';
-        wrapper.appendChild(pagZone);
+        var refreshMainRow = document.querySelector('#blog-overlay-list .blog-overlay-main-row');
+        if (vs.collectionLayout === 'digest' && self._isNarrowCollectionViewport() && refreshMainRow) {
+          var refreshAnchor = refreshMainRow.querySelector('.blog-overlay-sidebar-anchor');
+          pagZone.style.order = '1';
+          if (refreshAnchor) refreshMainRow.insertBefore(pagZone, refreshAnchor);
+          else refreshMainRow.appendChild(pagZone);
+        } else {
+          wrapper.appendChild(pagZone);
+        }
       }
 
       var placeholderMap = null;
@@ -10761,7 +12188,8 @@
         siteContentInsetsSource: this._siteContentInsetsSource || null,
         leftSidebarModules: cfg.leftSidebar && Array.isArray(cfg.leftSidebar.modules) ? cfg.leftSidebar.modules.slice() : [],
         rightSidebarModules: cfg.rightSidebar && Array.isArray(cfg.rightSidebar.modules) ? cfg.rightSidebar.modules.slice() : [],
-        footerModules: cfg.footerContent && Array.isArray(cfg.footerContent.modules) ? cfg.footerContent.modules.slice() : []
+        footerModules: cfg.footerContent && Array.isArray(cfg.footerContent.modules) ? cfg.footerContent.modules.slice() : [],
+        paywallHideFooterModules: Boolean(vs.paywallHideFooterModules)
       });
       var recentPostsCount = vs.recentPostsCount;
       var leftSidebarCfg = vs.leftSidebarCfg;
@@ -10769,6 +12197,7 @@
       var headerContentCfg = vs.headerContentCfg;
       var footerContentCfg = vs.footerContentCfg;
       var paywallShowFooter = Boolean(vs.paywallShowFooter);
+      var paywallHideFooterModules = Boolean(vs.paywallHideFooterModules);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
@@ -10834,8 +12263,19 @@
       if (isSinglePost && self._isReporterPostLayout(cfg)) wrapper.setAttribute('data-bb-reporter-layout', '1');
       else wrapper.removeAttribute('data-bb-reporter-layout');
       self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
+      if (!isSinglePost && collectionLayout) {
+        wrapper.setAttribute('data-bb-collection-layout', collectionLayout);
+      } else {
+        wrapper.removeAttribute('data-bb-collection-layout');
+      }
       var navbarOffset = this._getNavbarOffset();
-      var wrapperPadTop = navbarOffset > 0 ? navbarOffset + 16 : 16;
+      var flushNavHero = isSinglePost && self._isFlushNavHeroLayout(cfg);
+      if (flushNavHero) {
+        wrapper.setAttribute('data-bb-flush-nav-hero', '1');
+      } else {
+        wrapper.removeAttribute('data-bb-flush-nav-hero');
+      }
+      var wrapperPadTop = self._wrapperPadTopForNavbar(navbarOffset, flushNavHero);
       if (isSinglePost) {
         wrapper.setAttribute('data-bb-spec-horizontal-padding', '1');
         if (self._isWriterPostLayout(cfg)) {
@@ -11014,12 +12454,11 @@
       }
 
       var progressTrackForPreview = null;
-      var pb = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
-      var showProgressBar = Boolean(pb.show != null ? pb.show : cfg.showProgressBar);
+      var showProgressBar = Boolean(vs.showProgressBar);
       var progressBarPosition = 'top';
       var progressBarThickness = 6;
       var progressBarColor = self._resolveProgressBarColor(cfg);
-      if (isSinglePost && showProgressBar && (this._resolveViewerMode() === 'loggedIn' || paywallGateSinglePostBody)) {
+      if (isSinglePost && showProgressBar) {
         var progressTrack = document.createElement('div');
         progressTrack.id = 'blog-overlay-progress';
         progressTrack.style.height = progressBarThickness + 'px';
@@ -11070,7 +12509,7 @@
           scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
         }
         /** Fixed top-positioned bar overlays the wrapper; reserve its height so content doesn't sit under it. */
-        if (progressBarPosition === 'top' && !this._previewMode) {
+        if (progressBarPosition === 'top' && !this._previewMode && !flushNavHero) {
           self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop + progressBarThickness);
         }
       }
@@ -11138,6 +12577,7 @@
             heroImg.style.height = '100%';
             heroImg.style.objectFit = 'cover';
             heroImg.style.display = 'block';
+            self._bindFeaturedImagePlaceholderFallback(heroImg, heroInner, heroImgUrl, placeholderMap, featuredPost, items);
             heroInner.appendChild(heroImg);
           }
 
@@ -11173,7 +12613,6 @@
           }
 
           var heroMuted = 'rgba(255,255,255,0.78)';
-          var heroBody = 'rgba(255,255,255,0.9)';
 
           var heroBadge = self._createFeaturedBadge({
             text: 'Featured',
@@ -11192,7 +12631,7 @@
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
             heroCat.textContent = heroCats[0];
-            self._applyCategoryLabelStyle(heroCat, { onImage: true });
+            self._applyCategoryLabelStyle(heroCat, { onImage: true, overImage: true });
             heroCat.style.marginBottom = '8px';
             if (mastheadHeroMobile) heroCat.style.fontSize = '22px';
             heroContent.appendChild(heroCat);
@@ -11205,22 +12644,7 @@
             heroTitle.style.fontSize = 'clamp(1.5rem, 4vw, 2.25rem)';
           }
           heroContent.appendChild(heroTitle);
-          var heroSrc = featuredPost.excerpt || featuredPost.body || '';
-          var heroDeck = self._extractFirstNSentences(heroSrc, 2);
-          if (!heroDeck.trim()) {
-            heroDeck = self._truncateText(heroSrc, 200);
-          } else if (heroDeck.length > 400) {
-            heroDeck = self._truncateText(heroSrc, 280);
-          }
-          if (heroDeck && !mastheadHeroMobile) {
-            var heroDeckEl = document.createElement('div');
-            heroDeckEl.textContent = heroDeck;
-            self._applyExcerptStyle(heroDeckEl, 'lg');
-            heroDeckEl.style.color = heroBody;
-            heroDeckEl.style.marginBottom = '14px';
-            heroDeckEl.style.maxWidth = '560px';
-            heroContent.appendChild(heroDeckEl);
-          }
+          /* Masthead hero has no excerpt per collection template spec. */
           var heroMetaParts = [];
           if (showDate) {
             var heroDateStr = self._getDate(featuredPost);
@@ -11264,6 +12688,9 @@
         section.style.marginBottom = '20px';
         var header = document.createElement('h3');
         header.className = 'bb-sidebar-header';
+        header.style.marginTop = '0';
+        header.style.paddingTop = '0';
+        header.style.marginBottom = '8px';
         header.textContent = headerText;
         section.appendChild(header);
         var bar = document.createElement('hr');
@@ -11354,45 +12781,32 @@
                   var active = other === link;
                   other.classList.toggle('blog-overlay-toc-active', active);
                   other.classList.toggle('is-active', active);
-                  if (tocStyle === 'connectedDots') other.style.fontWeight = active ? '700' : '';
                 }
               } catch (e2) {}
               smoothScrollToTocTarget(href.slice(1));
             };
           }
-          link.style.display = 'block';
-          link.style.textDecoration = 'none';
+          link.classList.add('bb-toc-item');
           if (tocStyle === 'numbered') {
-            link.classList.add('bb-toc-item');
             link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
             if (prefix) link.textContent = prefix + ' ' + (link.textContent || '');
           } else if (tocStyle === 'connectedDots') {
-            link.style.fontSize = level <= 2 ? '0.85rem' : '0.8rem';
-            link.style.lineHeight = '1.3';
-            link.style.color = '#333';
             var row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.alignItems = 'center';
-            row.style.gap = '10px';
-            row.style.marginLeft = '-18px';
+            row.className = 'blog-overlay-toc-row';
             var dot = document.createElement('div');
             dot.style.width = '8px';
             dot.style.height = '8px';
             dot.style.borderRadius = '50%';
-            dot.style.background = '#e5e4e0';
+            dot.style.background = 'var(--bb-border, #e5e4e0)';
             dot.style.flexShrink = '0';
             dot.style.position = 'relative';
             dot.style.zIndex = '1';
             dot.className = 'blog-overlay-toc-dot';
             row.appendChild(dot);
             row.appendChild(link);
-            link.style.padding = '4px 0';
-            link.style.flex = '1';
-            link.style.minWidth = '0';
             el.appendChild(row);
             return;
           } else if (tocStyle === 'bookmark') {
-            link.classList.add('bb-toc-item');
             if (level > 1) link.style.paddingLeft = (12 + (level - 1) * 8) + 'px';
           }
           el.appendChild(link);
@@ -11753,6 +13167,9 @@
           var headerText = ecCfg.header || 'Subscribe to our newsletter';
           var outer = document.createElement('div');
           outer.className = 'blog-overlay-email-capture blog-overlay-email-capture-footer bb-footer-card';
+          if (self._isStoryPostLayout(cfg)) {
+            outer.classList.add('blog-overlay-email-capture-footer--story');
+          }
           outer.style.width = '100%';
           var footerWidth = typeof width === 'number' ? width : parseInt(width, 10);
           outer.style.maxWidth = (footerWidth && footerWidth > 0) ? footerWidth + 'px' : '100%';
@@ -11761,19 +13178,11 @@
           outer.style.gap = '10px';
 
           var row = document.createElement('div');
-          row.className = 'bb-email-capture-footer-row bb-newsletter-footer-row';
-          row.style.display = 'flex';
-          row.style.flexWrap = 'wrap';
-          row.style.alignItems = 'center';
-          row.style.justifyContent = 'space-between';
-          row.style.gap = '16px';
-          row.style.width = '100%';
+          row.className = 'bb-newsletter-footer-row bb-email-capture-footer-row';
 
           var leftCol = document.createElement('div');
-          leftCol.className = 'bb-email-capture-footer-copy';
-          leftCol.style.flex = '1 1 200px';
-          leftCol.style.minWidth = '0';
-          var titleFooter = document.createElement('div');
+          leftCol.className = 'bb-newsletter-footer-copy bb-email-capture-footer-copy';
+          var titleFooter = document.createElement('h3');
           titleFooter.className = 'bb-newsletter-heading';
           titleFooter.textContent = headerText;
           titleFooter.style.lineHeight = '1.3';
@@ -11790,15 +13199,7 @@
           row.appendChild(leftCol);
 
           var rightCol = document.createElement('div');
-          rightCol.className = 'bb-email-capture-footer-form';
-          rightCol.style.display = 'flex';
-          rightCol.style.flexDirection = 'row';
-          rightCol.style.alignItems = 'center';
-          rightCol.style.justifyContent = 'flex-end';
-          rightCol.style.flexWrap = 'wrap';
-          rightCol.style.gap = '8px';
-          rightCol.style.flex = '1 1 260px';
-          rightCol.style.minWidth = '0';
+          rightCol.className = 'bb-newsletter-footer-form bb-email-capture-footer-form';
 
           var emailInputF = document.createElement('input');
           emailInputF.type = 'email';
@@ -11807,28 +13208,23 @@
           emailInputF.setAttribute('autocomplete', 'section-newsletter email');
           emailInputF.placeholder = 'you@example.com';
           emailInputF.setAttribute('aria-label', 'Email address');
-          self._applyChromeInputStyle(emailInputF);
-          emailInputF.style.flex = '1 1 160px';
-          emailInputF.style.minWidth = '140px';
-          emailInputF.style.maxWidth = '320px';
+          emailInputF.className = 'bb-form-input';
           var btnF = document.createElement('button');
           btnF.textContent = ecCfg.buttonText || 'Subscribe';
           btnF.type = 'button';
-          btnF.className = 'bb-newsletter-btn';
+          btnF.className = 'sqs-button-element--primary bb-newsletter-btn';
           btnF.style.flexShrink = '0';
-          btnF.onmouseover = function() { btnF.style.filter = 'brightness(0.92)'; };
-          btnF.onmouseout = function() { btnF.style.filter = ''; };
           rightCol.appendChild(emailInputF);
           rightCol.appendChild(btnF);
-          row.appendChild(rightCol);
+          var msgFooter = document.createElement('div');
+          msgFooter.className = 'bb-newsletter-footer-msg';
+          var formStack = document.createElement('div');
+          formStack.className = 'bb-newsletter-footer-form-stack';
+          formStack.appendChild(rightCol);
+          formStack.appendChild(msgFooter);
+          row.appendChild(formStack);
 
           outer.appendChild(row);
-
-          var msgFooter = document.createElement('div');
-          msgFooter.style.fontSize = '0.85rem';
-          msgFooter.style.textAlign = 'right';
-          msgFooter.style.width = '100%';
-          outer.appendChild(msgFooter);
 
           wireEmailCaptureSubmit(emailInputF, btnF, msgFooter);
           return outer;
@@ -11881,33 +13277,25 @@
         wireEmailCaptureSubmit(emailInput, btn, msgEl);
         return wrap;
       }
-      function createLeadMagnetForm(lmCfg, width, hideHeader) {
+      function createLeadMagnetForm(lmCfg, width) {
         if (!lmCfg) return null;
         var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
-        if (!hideHeader) {
-          var titleEl = document.createElement('div');
-          titleEl.textContent = resourceTitle;
-          titleEl.style.fontSize = '0.95rem';
-          titleEl.style.fontWeight = '600';
-          titleEl.style.marginBottom = '8px';
-          wrap.appendChild(titleEl);
-        }
+        var titleEl = document.createElement('div');
+        titleEl.className = 'bb-lead-magnet-heading';
+        titleEl.textContent = resourceTitle;
+        wrap.appendChild(titleEl);
         if (lmCfg.description && lmCfg.description.trim()) {
           var descEl = document.createElement('div');
+          descEl.className = 'bb-lead-magnet-desc';
           descEl.textContent = lmCfg.description;
-          descEl.style.fontSize = '0.85rem';
-          descEl.style.color = '#666';
-          descEl.style.marginBottom = '12px';
           wrap.appendChild(descEl);
         }
         var form = document.createElement('div');
-        form.style.display = 'flex';
-        form.style.flexDirection = 'column';
-        form.style.gap = '8px';
+        form.className = 'bb-lead-magnet-form';
         var emailInput = document.createElement('input');
         emailInput.type = 'email';
         emailInput.name = 'bb-lead-magnet-email';
@@ -11915,29 +13303,14 @@
         emailInput.setAttribute('autocomplete', 'section-lead-magnet email');
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.padding = '8px 12px';
-        emailInput.style.fontSize = '0.9rem';
-        emailInput.style.border = '1px solid #ddd';
-        emailInput.style.borderRadius = '6px';
-        emailInput.style.outline = 'none';
-        emailInput.style.boxSizing = 'border-box';
+        emailInput.className = 'bb-lead-magnet-input';
         form.appendChild(emailInput);
         var btn = document.createElement('button');
         btn.textContent = lmCfg.buttonText || 'Get it free';
         btn.type = 'button';
-        btn.style.padding = '8px 16px';
-        btn.style.fontSize = '0.9rem';
-        btn.style.fontWeight = '500';
-        btn.style.background = siteAccentUi;
-        btn.style.color = 'white';
-        btn.style.border = 'none';
-        btn.style.borderRadius = '6px';
-        btn.style.cursor = 'pointer';
-        btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
-        btn.onmouseout = function() { btn.style.filter = ''; };
+        btn.className = 'sqs-button-element--primary bb-lead-magnet-btn';
         var msgEl = document.createElement('div');
-        msgEl.style.fontSize = '0.85rem';
-        msgEl.style.marginTop = '4px';
+        msgEl.className = 'bb-lead-magnet-msg';
         form.appendChild(btn);
         form.appendChild(msgEl);
         wrap.appendChild(form);
@@ -12203,6 +13576,14 @@
         for (var m = 0; m < moduleIds.length; m++) {
           var mod = moduleIds[m];
           if (hideRecentPostsInBbPreview && mod === 'recentPosts') continue;
+          if (mod === 'tableOfContents' && isSinglePost && self._isStoryPostLayout(cfg)) continue;
+          if (
+            !isSinglePost &&
+            collectionLayout === 'digest' &&
+            (mod === 'searchPosts' || mod === 'postSearch' || mod === 'postSort')
+          ) {
+            continue;
+          }
           var el = null;
           if (mod === 'tableOfContents') {
             el = createTocModule(width);
@@ -12273,8 +13654,14 @@
             var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);
             el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm, isSinglePost) : null;
           } else if (mod === 'leadMagnet' && lmCfg) {
-            var lmForm = createLeadMagnetForm(lmCfg, width, isSinglePost);
-            el = lmForm ? createSidebarSection(lmCfg.resourceTitle || 'Lead Magnet', lmForm, isSinglePost) : null;
+            var lmForm = createLeadMagnetForm(lmCfg, width);
+            if (lmForm) {
+              var lmSection = document.createElement('div');
+              lmSection.className = 'blog-overlay-sidebar-section';
+              lmSection.style.marginBottom = '20px';
+              lmSection.appendChild(lmForm);
+              el = lmSection;
+            }
           }
           if (el) {
             if (!el.getAttribute('data-bb-module')) tagZoneModule(el, mod, 'sidebar');
@@ -12340,6 +13727,7 @@
             link.style.gridRow = '1 / -1';
             link.className = 'blog-overlay-editorial-card blog-overlay-editorial-card-mobile-pair';
           } else {
+            link.className = 'blog-overlay-editorial-card' + (isLarge ? ' blog-overlay-editorial-card-large' : '');
             link.style.display = 'block';
           }
           var bg = document.createElement('div');
@@ -12401,7 +13789,7 @@
             p,
             siteAccentForPostCats,
             categoryFilterUiEnabled,
-            { onDark: true, compact: !isLarge }
+            { onDark: true, compact: !isLarge, overImage: isLarge }
           );
           if (mobilePairCard) {
             var edSpacer = document.createElement('div');
@@ -12423,7 +13811,6 @@
             edAboveTitle.style.alignSelf = 'start';
             if (edCategoriesLine) {
               edCategoriesLine.style.marginBottom = '0';
-              edAboveTitle.appendChild(edCategoriesLine);
             }
 
             title.style.margin = '0';
@@ -12446,6 +13833,7 @@
             edTitleBlock.style.boxSizing = 'border-box';
             edTitleBlock.style.width = '100%';
             edTitleBlock.style.minHeight = '0';
+            if (edCategoriesLine) edTitleBlock.appendChild(edCategoriesLine);
             edTitleBlock.appendChild(title);
             edTitleBlock.appendChild(meta);
 
@@ -12457,6 +13845,7 @@
             link.appendChild(edTitleBlock);
           } else {
             var content = document.createElement('div');
+            content.className = 'blog-overlay-editorial-card-content';
             content.style.position = 'absolute';
             content.style.bottom = '0';
             content.style.left = '0';
@@ -12585,6 +13974,11 @@
             main.appendChild(row);
           }
         }
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(function() { self._applyShowcaseImageRadiusVars(main); });
+        } else {
+          self._applyShowcaseImageRadiusVars(main);
+        }
       } else if (collectionLayout === 'showcase') {
         this._renderShowcasePostsIntoMain(main, items, vs, placeholderMap, navbarOffset);
       } else {
@@ -12610,8 +14004,12 @@
             leftSidebarWidth = 300;
             rightSidebarWidth = 300;
           }
-          var leftSpaceAbove = 0;
-          var rightSpaceAbove = 0;
+          var leftSpaceAbove = isSinglePost
+            ? BB_POST_CONTENT_TOP_PADDING
+            : (leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.max(0, leftSidebarCfg.spaceAbove) : 0);
+          var rightSpaceAbove = isSinglePost
+            ? BB_POST_CONTENT_TOP_PADDING
+            : (rightSidebarCfg && typeof rightSidebarCfg.spaceAbove === 'number' ? Math.max(0, rightSidebarCfg.spaceAbove) : 0);
           var leftSticky = leftSidebarCfg && leftSidebarCfg.sticky === true;
           var rightSticky = rightSidebarCfg && rightSidebarCfg.sticky === true;
           var stickySidebarTopPx = self._getSidebarStickyTopPx();
@@ -12629,7 +14027,7 @@
           if (leftSticky) {
             leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
             leftSidebarEl.style.position = 'relative';
-            leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+            leftSidebarEl.style.paddingTop = (stickySidebarPadTop + leftPadTop) + 'px';
           } else {
             leftSidebarEl.style.position = 'static';
             if (leftPadTop > 0) leftSidebarEl.style.paddingTop = leftPadTop + 'px';
@@ -12654,7 +14052,7 @@
           if (rightSticky) {
             rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
             rightSidebarEl.style.position = 'relative';
-            rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+            rightSidebarEl.style.paddingTop = (stickySidebarPadTop + rightPadTop) + 'px';
           } else {
             rightSidebarEl.style.position = 'static';
             if (rightPadTop > 0) rightSidebarEl.style.paddingTop = rightPadTop + 'px';
@@ -12757,7 +14155,7 @@
                   leftSidebarEl.setAttribute('data-bb-sticky-rail', '1');
                   leftSidebarEl.style.position = 'relative';
                   leftSidebarEl.style.top = '';
-                  leftSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+                  leftSidebarEl.style.paddingTop = (stickySidebarPadTop + leftPadTop) + 'px';
                 } else {
                   leftSidebarEl.removeAttribute('data-bb-sticky-rail');
                   leftSidebarEl.style.position = 'static';
@@ -12776,7 +14174,7 @@
                   rightSidebarEl.setAttribute('data-bb-sticky-rail', '1');
                   rightSidebarEl.style.position = 'relative';
                   rightSidebarEl.style.top = '';
-                  rightSidebarEl.style.paddingTop = stickySidebarPadTop + 'px';
+                  rightSidebarEl.style.paddingTop = (stickySidebarPadTop + rightPadTop) + 'px';
                 } else {
                   rightSidebarEl.removeAttribute('data-bb-sticky-rail');
                   rightSidebarEl.style.position = 'static';
@@ -13169,13 +14567,22 @@
             headerModulesHostEl.style.marginTop = '0';
           }
 
-          if (footerContentCfg && footerContentCfg.show) {
-            var fcModules = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+          if (footerContentCfg && !paywallHideFooterModules) {
+            var fcAvail = Array.isArray(footerContentCfg.modules) ? footerContentCfg.modules : [];
+            var fcOrder = Array.isArray(footerContentCfg.moduleOrder) ? footerContentCfg.moduleOrder : [];
+            /* Prefer moduleOrder (Configure source of truth). An empty modules list with a
+               non-empty moduleOrder must still render — same as sidebar TOC. */
+            var fcModules = (fcOrder.length > 0) ? fcOrder.slice() : fcAvail.slice();
             self._warnDuplicateValues('footer', fcModules);
-            if (fcModules.length > 0) {
+            if ((footerContentCfg.show || fcModules.length > 0) && fcModules.length > 0) {
               var footerHeight = Math.min(120, Math.max(32, parseInt(footerContentCfg.height, 10) || 48));
-              featureFooterLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
-              featureFooterRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              if (isSinglePost) {
+                featureFooterLeftPad = 0;
+                featureFooterRightPad = 0;
+              } else {
+                featureFooterLeftPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.leftPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+                featureFooterRightPad = Math.min(80, Math.max(0, parseInt(footerContentCfg.rightPadding, 10) ?? parseInt(footerContentCfg.sideMargin, 10) ?? 0));
+              }
               var footerTopPadRaw = footerContentCfg.topPadding;
               var footerTopPadParsed = typeof footerTopPadRaw === 'number' ? footerTopPadRaw : parseInt(footerTopPadRaw, 10);
               featureFooterTopPad = Math.min(120, Math.max(0, isFinite(footerTopPadParsed) ? footerTopPadParsed : 16));
@@ -13188,7 +14595,7 @@
               footerEl.style.paddingLeft = footerLeftPad + 'px';
               footerEl.style.paddingRight = footerRightPad + 'px';
               footerEl.style.paddingTop = footerTopPad + 'px';
-              if (isSinglePost && !featurePostLayout) self._applyStoryPostHorizontalInset(footerEl, cfg);
+              if (isSinglePost) self._applyPostFooterSideMargins(footerEl, cfg, footerContentCfg);
               footerEl.style.display = 'flex';
               footerEl.style.flexDirection = 'column';
               footerEl.style.gap = '24px';
@@ -13265,7 +14672,7 @@
                   }
                 }
               }
-              if (!featurePostLayout && footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
+              if (footerEl.childNodes.length > 0) footerZoneEl.appendChild(footerEl);
             }
           }
           if (paywallShowFooter && !featurePostLayout) {
@@ -13288,9 +14695,14 @@
             }
           }
           if (leftSidebarWrapEl.childNodes.length) mainRowEl.appendChild(leftSidebarWrapEl);
-          if (isSinglePost && (leftSidebarWrapEl.childNodes.length || rightSidebarWrapEl.childNodes.length)) {
-            var mainColPadTop = Math.max(leftPadTop, rightPadTop);
-            main.style.paddingTop = mainColPadTop > 0 ? (mainColPadTop + 'px') : '0';
+          var sidebarRowPostLayoutActive = isSinglePost && (
+            self._isFeaturePostLayout(cfg) ||
+            self._isReporterPostLayout(cfg) ||
+            self._isPublisherPostLayout(cfg)
+          );
+          if (sidebarRowPostLayoutActive) {
+            if (leftSidebarEl.childNodes.length) self._normalizeSidebarTopForSidebarRow(leftSidebarEl);
+            if (rightSidebarEl.childNodes.length) self._normalizeSidebarTopForSidebarRow(rightSidebarEl);
           }
           mainRowEl.appendChild(main);
           if (rightSidebarWrapEl.childNodes.length) mainRowEl.appendChild(rightSidebarWrapEl);
@@ -13321,7 +14733,14 @@
             paginationZoneEl.style.position = 'relative';
             paginationZoneEl.style.zIndex = '1';
             paginationZoneEl.appendChild(collectionPaginationEl);
-            wrapper.appendChild(paginationZoneEl);
+            if (!isSinglePost && collectionLayout === 'digest' && self._isNarrowCollectionViewport()) {
+              var pagSidebarAnchor = mainRowEl.querySelector('.blog-overlay-sidebar-anchor');
+              paginationZoneEl.style.order = '1';
+              if (pagSidebarAnchor) mainRowEl.insertBefore(paginationZoneEl, pagSidebarAnchor);
+              else mainRowEl.appendChild(paginationZoneEl);
+            } else {
+              wrapper.appendChild(paginationZoneEl);
+            }
           }
 
           var commentCfg = cfg && cfg.commentSettings;
@@ -13363,8 +14782,12 @@
               section.className = 'blog-overlay-feature-below-row-section';
               section.style.width = '100%';
               section.style.boxSizing = 'border-box';
-              section.style.paddingLeft = featureFooterLeftPad + 'px';
-              section.style.paddingRight = featureFooterRightPad + 'px';
+              if (isSinglePost) {
+                self._applyPostFooterSideMargins(section, cfg, footerContentCfg);
+              } else {
+                section.style.paddingLeft = featureFooterLeftPad + 'px';
+                section.style.paddingRight = featureFooterRightPad + 'px';
+              }
               var modId = el.getAttribute && el.getAttribute('data-bb-module');
               if (modId) tagZoneModule(section, modId, 'footer');
               section.appendChild(el);
@@ -13376,14 +14799,23 @@
               featureCommentsSectionEl.className = 'blog-overlay-feature-below-row-section blog-overlay-feature-comments-section';
               featureCommentsSectionEl.style.width = '100%';
               featureCommentsSectionEl.style.boxSizing = 'border-box';
-              featureCommentsSectionEl.style.paddingLeft = featureFooterLeftPad + 'px';
-              featureCommentsSectionEl.style.paddingRight = featureFooterRightPad + 'px';
+              if (isSinglePost) {
+                self._applyPostFooterSideMargins(featureCommentsSectionEl, cfg, footerContentCfg);
+              } else {
+                featureCommentsSectionEl.style.paddingLeft = featureFooterLeftPad + 'px';
+                featureCommentsSectionEl.style.paddingRight = featureFooterRightPad + 'px';
+              }
               featureBelowRowHost.appendChild(featureCommentsSectionEl);
             }
             appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
             appendFeatureBelowRowSection(featureBelowRowLeadMagnetEl);
             if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
-            wrapper.appendChild(featureBelowRowHost);
+            var featureFooterSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
+            if (featureFooterSideMarginsMode === 'postBody') {
+              main.appendChild(featureBelowRowHost);
+            } else {
+              wrapper.appendChild(featureBelowRowHost);
+            }
           }
           if (
             isSinglePost &&
@@ -13405,10 +14837,20 @@
             footerZoneEl.style.boxSizing = 'border-box';
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
+            self._clearPostFooterZoneBleed(footerZoneEl);
+            var footerSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
+            var publisherPostLayoutForFooter = isSinglePost && self._isPublisherPostLayout(cfg);
+            var sidebarSpanFooterLayout = reporterPostLayout || publisherPostLayoutForFooter;
+            var postBodyFooterInMainColumn =
+              isSinglePost &&
+              footerSideMarginsMode === 'postBody' &&
+              sidebarSpanFooterLayout;
             if (featurePostLayout) {
               wrapper.appendChild(footerZoneEl);
-            } else if (isSinglePost && !reporterPostLayout) {
+            } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
               main.appendChild(footerZoneEl);
+            } else if (isSinglePost) {
+              wrapper.appendChild(footerZoneEl);
             } else {
               wrapper.appendChild(footerZoneEl);
             }
@@ -13472,7 +14914,7 @@
         root.insertBefore(progressTrackForPreview, root.firstChild);
       }
 
-      if (isSinglePost && showProgressBar && self._resolveViewerMode() === 'loggedIn') {
+      if (isSinglePost && showProgressBar) {
         requestAnimationFrame(function() {
           self._updateProgressBar();
         });
@@ -13483,7 +14925,8 @@
       var applyNavbarOffset = function(offset) {
         if (offset <= 0 || !wrapper.parentNode) return;
         lastAppliedOffset = offset;
-        self._applySiteContentInsetsToWrapper(wrapper, offset + 16);
+        var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+        self._applySiteContentInsetsToWrapper(wrapper, self._wrapperPadTopForNavbar(offset, flushNav));
         var progressTrack = document.getElementById('blog-overlay-progress');
         if (progressTrack && progressTrack.style.position === 'fixed') {
           progressTrack.style.top = offset + 'px';
@@ -13496,7 +14939,12 @@
       var scheduleRecheck = function() {
         if (!wrapper.parentNode) return;
         var newOffset = self._getNavbarOffset();
-        if (newOffset > lastAppliedOffset) applyNavbarOffset(newOffset);
+        var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+        if (flushNav) {
+          if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
+        } else if (newOffset > lastAppliedOffset) {
+          applyNavbarOffset(newOffset);
+        }
       };
       requestAnimationFrame(function() {
         requestAnimationFrame(scheduleRecheck);
@@ -13550,28 +14998,24 @@
       });
 
       if (isSinglePost && selectedIndex >= 0) {
-        var postBody = main.querySelector('article .blog-overlay-body, article [class*="body"], article .post-body, article');
+        var postBody = self._getAnalyticsPostBodyEl(main);
         if (postBody) {
           var depthsSent = {};
           var checkDepth = function() {
-            var scrollTarget = self._getScrollContainer() || window;
-            var scrollTop = scrollTarget === window ? (window.scrollY || document.documentElement.scrollTop) : scrollTarget.scrollTop;
-            var viewportHeight = scrollTarget === window ? window.innerHeight : scrollTarget.clientHeight;
-            var elTop = postBody.getBoundingClientRect().top + (scrollTarget === window ? scrollTop : scrollTarget.scrollTop);
-            var elHeight = postBody.offsetHeight;
-            if (elHeight <= 0) return;
-            var scrollBottom = scrollTop + viewportHeight;
-            var readRatio = (scrollBottom - elTop) / elHeight;
-            var depth = readRatio >= 1 ? 100 : readRatio >= 0.75 ? 75 : readRatio >= 0.5 ? 50 : readRatio >= 0.25 ? 25 : 0;
+            var readRatio = self._computePostReadRatio(postBody);
+            var depth = readRatio >= 0.98 ? 100 : readRatio >= 0.75 ? 75 : readRatio >= 0.5 ? 50 : readRatio >= 0.25 ? 25 : 0;
             if (depth > 0 && !depthsSent[depth]) {
               depthsSent[depth] = true;
               var post = items[selectedIndex];
               self._analyticsTrack('scroll_depth', { depth: depth }, post ? post.id : null, selectedIndex);
             }
           };
-          var scrollTarget = self._getScrollContainer() || window;
           var onScroll = function() { checkDepth(); };
-          scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+          var scrollTarget = self._getScrollContainer();
+          if (scrollTarget && scrollTarget !== window) {
+            scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+          }
+          window.addEventListener('scroll', onScroll, { passive: true });
           setTimeout(checkDepth, 500);
         }
       }

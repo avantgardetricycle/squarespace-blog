@@ -7,6 +7,7 @@ import {
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 
@@ -26,21 +27,26 @@ function isRecord (value: unknown): value is Record<string, unknown> {
 }
 
 /** Optional payload with POST /api/config to upsert site_paywall_settings. */
+function optionalTrimmedString (raw: unknown, maxLen: number): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim().slice(0, maxLen)
+  return trimmed.length > 0 ? trimmed : null
+}
+
 function normalizePaywallSettingsPayload (raw: unknown): {
   subscribeUrl: string | null
   footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
   featureItems: string[]
 } | null {
   if (raw === undefined) return null
   if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
     const o = raw as Record<string, unknown>
-    const su = o.subscribeUrl
-    const subscribeUrl =
-      typeof su === 'string' && su.trim() ? su.trim().slice(0, 2048) : null
-    const fdRaw = o.footerDescription
-    const footerDescriptionRaw = typeof fdRaw === 'string' ? fdRaw.trim().slice(0, 160) : null
-    const footerDescription =
-      footerDescriptionRaw && footerDescriptionRaw.length > 0 ? footerDescriptionRaw : null
+    const subscribeUrl = optionalTrimmedString(o.subscribeUrl, 2048)
+    const footerDescription = optionalTrimmedString(o.footerDescription, 160)
+    const eyebrowText = optionalTrimmedString(o.eyebrowText, 80)
+    const headlineText = optionalTrimmedString(o.headlineText, 160)
     const featureItems: string[] = []
     if (Array.isArray(o.featureItems)) {
       for (const it of o.featureItems) {
@@ -50,7 +56,7 @@ function normalizePaywallSettingsPayload (raw: unknown): {
         if (featureItems.length >= 4) break
       }
     }
-    return { subscribeUrl, footerDescription, featureItems }
+    return { subscribeUrl, footerDescription, eyebrowText, headlineText, featureItems }
   }
   return null
 }
@@ -106,6 +112,35 @@ function pickProgressBarFromPostConfig (postRaw: unknown, existing: ProgressBarP
     position: 'top',
     thickness: 6,
     color: '#5B4FE8'
+  }
+}
+
+/** Ensure postConfig always carries progressBar for the renderer and Configure UI. */
+function mergeProgressBarIntoPostConfig (
+  postConfig: Record<string, unknown>,
+  fallback: { show?: boolean; position?: string | null; thickness?: number; color?: string }
+): Record<string, unknown> {
+  const raw = postConfig.progressBar
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const pb = raw as Record<string, unknown>
+    return {
+      ...postConfig,
+      progressBar: {
+        show: Boolean(pb.show ?? fallback.show ?? false),
+        position: typeof pb.position === 'string' ? pb.position : fallback.position ?? 'top',
+        thickness: typeof pb.thickness === 'number' ? pb.thickness : fallback.thickness ?? 6,
+        color: typeof pb.color === 'string' ? pb.color : fallback.color ?? '#5B4FE8'
+      }
+    }
+  }
+  return {
+    ...postConfig,
+    progressBar: {
+      show: Boolean(fallback.show ?? false),
+      position: fallback.position ?? 'top',
+      thickness: fallback.thickness ?? 6,
+      color: fallback.color ?? '#5B4FE8'
+    }
   }
 }
 
@@ -367,6 +402,71 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   }
 })
 
+/**
+ * Detects headers that stop a browser from framing the site. Squarespace exposes this as
+ * Settings > Developer Tools > Website Protection > Clickjack protection, which sends
+ * X-Frame-Options: SAMEORIGIN and breaks the Configure live-preview iframe.
+ */
+function frameBlockReason (headers: Headers, ownOrigin: string): 'x-frame-options' | 'frame-ancestors' | null {
+  const xfo = headers.get('x-frame-options')
+  if (xfo && /deny|sameorigin/i.test(xfo)) return 'x-frame-options'
+
+  const csp = headers.get('content-security-policy')
+  if (csp) {
+    const directive = csp
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => /^frame-ancestors\b/i.test(part))
+    if (directive) {
+      const sources = directive.split(/\s+/).slice(1)
+      const allowsUs = sources.some((src) => src === '*' || (ownOrigin !== '' && src.includes(new URL(ownOrigin).hostname)))
+      if (!allowsUs) return 'frame-ancestors'
+    }
+  }
+  return null
+}
+
+// GET /api/config/preview-embeddable/:siteKey - Can the blog page be shown in the preview iframe?
+router.get('/preview-embeddable/:siteKey', async (req: Request, res: Response) => {
+  const siteKey = req.params.siteKey as string
+
+  const site = await getSiteBySiteKey(siteKey)
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  if (!site.url) {
+    res.status(400).json({ error: 'Site has no URL configured' })
+    return
+  }
+
+  let pageUrl: string
+  try {
+    const parsed = new URL(site.url)
+    const hasPath = parsed.pathname && parsed.pathname !== '/'
+    pageUrl = hasPath ? site.url.replace(/\/$/, '') : parsed.origin + (site.blogPath || '/blog')
+  } catch {
+    res.status(400).json({ error: 'Site URL is invalid' })
+    return
+  }
+
+  const ownOrigin = `${req.protocol}://${req.get('host') ?? ''}`
+
+  try {
+    const probe = await fetch(appendPasswordToUrl(pageUrl, site.blogPassword), {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000)
+    })
+    const blockedBy = frameBlockReason(probe.headers, ownOrigin)
+    res.json({ embeddable: blockedBy === null, blockedBy, status: probe.status })
+  } catch (err) {
+    console.error('Preview embeddability probe error:', err)
+    // Unknown means "let the iframe try" — never downgrade a working preview because a probe failed.
+    res.json({ embeddable: true, blockedBy: null, status: null })
+  }
+})
+
 // GET /api/config/share/:siteKey/:postIndex - Share redirect with OG meta for link previews
 router.get('/share/:siteKey/:postIndex', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
@@ -461,10 +561,28 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
     return
   }
   const placeholders: Record<string, boolean> = {}
-  const PLACEHOLDER_MARKERS = ['no-image.png', 'configuration/no-image']
+  const PLACEHOLDER_MARKERS = [
+    'configuration/no-image',
+    'no-image.png',
+    'no-image-',
+    'universal/images-v6/configuration/no-image',
+    'universal/images-v6/default/no-image',
+  ]
 
   function isPlaceholderUrl (url: string): boolean {
     const u = url.toLowerCase()
+    if (
+      (u.includes('static1.squarespace.com/static/') || u.includes('static.squarespace.com/static/'))
+      && !u.includes('/t/')
+    ) {
+      try {
+        const path = new URL(url).pathname.replace(/\/+$/, '')
+        const last = path.split('/').pop() ?? ''
+        if (/^\d+$/.test(last)) return true
+      } catch {
+        /* fall through to marker checks */
+      }
+    }
     return PLACEHOLDER_MARKERS.some((m) => u.includes(m))
   }
 
@@ -659,11 +777,11 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         ...ccLevelRaw,
         pagination: ccPagination && typeof ccPagination === 'object'
           ? {
-              show: ccPagination.show ?? false,
+              show: true,
               mode: ccPagination.mode === 'infiniteScroll' ? 'infiniteScroll' : 'pages',
               postsPerPage: [5, 10, 20].includes(Number(ccPagination.postsPerPage)) ? ccPagination.postsPerPage : 10
             }
-          : { show: false, mode: 'pages', postsPerPage: 10 }
+          : { show: true, mode: 'pages', postsPerPage: 10 }
       }
     }
     const primaryCollection = resolvePrimaryBucket(collectionConfig) ?? legacyCollectionFallback
@@ -691,6 +809,21 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     }
 
     const siteConfigTyped = siteConfig as { collectionTemplateId?: string | null; postTemplateId?: string | null }
+    let postTemplateId: string | null =
+      typeof siteConfigTyped.postTemplateId === 'string' ? siteConfigTyped.postTemplateId : null
+    let resolvedPostConfig: Record<string, unknown> = pc as Record<string, unknown>
+    // Post configs are always tied to a template; default missing assignments to Reporter.
+    if (!postTemplateId) {
+      const defaultPostTemplate = await resolveDefaultPostTemplate()
+      if (defaultPostTemplate) {
+        postTemplateId = defaultPostTemplate.id
+        // Only replace synthesized empty defaults — keep existing customized post configs.
+        if (!(primaryPost && isRecord(primaryPost))) {
+          resolvedPostConfig = defaultPostTemplate.postConfig
+        }
+      }
+    }
+    resolvedPostConfig = mergeProgressBarIntoPostConfig(resolvedPostConfig, progressBar)
     const cs = site.blogCommentSettings
     const commentsTurnedOff = cs != null && cs.commentsEnabled === false
     const sortOrder =
@@ -699,6 +832,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ? { commentsEnabled: false }
       : {
           commentsEnabled: true,
+          allowNewComments: cs?.allowNewComments ?? true,
           allowAnonymousComments: cs?.allowAnonymousComments ?? true,
           subscriberCommentsEnabled: cs?.subscriberCommentsEnabled ?? false,
           requireApproval: cs?.requireApproval ?? false,
@@ -714,6 +848,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       ? {
           subscribeUrl: pw.subscribeUrl,
           footerDescription: pw.footerDescription,
+          eyebrowText: pw.eyebrowText,
+          headlineText: pw.headlineText,
           featureItems: pw.featureItems
         }
       : null
@@ -728,21 +864,26 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       authorMap,
       authorProfiles,
       collectionConfig: cc,
-      postConfig: pc,
+      postConfig: resolvedPostConfig,
       paywallMode: site.paywallMode,
       paywallDetectionState: site.paywallDetectionState,
       paywallDetectionSource: site.paywallDetectionSource ?? null,
       paywallSettings,
       ...(viewerMode ? { viewerMode } : {}),
       collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
-      postTemplateId: siteConfigTyped.postTemplateId ?? null,
+      postTemplateId,
       recentPostsCount: 3,
       baseUrl,
       commentSettings,
       ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
     }
 
-    console.log(`[config] GET ${siteKey} ok (${reqId})`)
+    console.log(`[config] GET ${siteKey} ok (${reqId})`, {
+      allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
+      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
+      commentsEnabled: commentSettings.commentsEnabled,
+      allowNewComments: 'allowNewComments' in commentSettings ? commentSettings.allowNewComments : null,
+    })
     res.json(configData)
   } catch (err) {
     console.error(`[config] GET ${siteKey} error (${reqId}):`, err)
@@ -854,11 +995,15 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
           siteId: site.id,
           subscribeUrl: paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
+          eyebrowText: paywallNorm.eyebrowText,
+          headlineText: paywallNorm.headlineText,
           featureItems: paywallNorm.featureItems
         },
         update: {
           subscribeUrl: paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
+          eyebrowText: paywallNorm.eyebrowText,
+          headlineText: paywallNorm.headlineText,
           featureItems: paywallNorm.featureItems
         }
       })
