@@ -82,7 +82,7 @@ On the Post tab, sharing is controlled in **Post Header → Social sharing links
 
 ## Footer modules
 
-**Footer Content** sits below the post body (and comments, when comments are shown).
+**Footer Content** sits below the post body (and comments, when comments are shown). On phones, the stack is article body → comments → footer modules → sidebar modules.
 
 **Side margins** — **Post Body** (align with the text column) or **Full Screen** (site default margins). Hidden on Writer.
 

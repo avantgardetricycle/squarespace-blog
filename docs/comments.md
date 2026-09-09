@@ -33,6 +33,8 @@ When Show Comments is on, these options appear:
 
 If you have more than one blog, use **Select blog** at the top of the Comments page.
 
+On desktop, comments sit below the post body and sidebars. On phones, comments sit directly under the article, then footer modules, then any sidebar modules. Turn a sidebar module off to confirm this order; default templates often duplicate author or related posts in the sidebar and footer.
+
 ---
 
 ## Anonymous vs verified subscriber comments

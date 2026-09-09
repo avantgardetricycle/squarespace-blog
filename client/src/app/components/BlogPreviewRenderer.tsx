@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-09-07-reporter-mobile";
+const RENDERER_VERSION = "2026-09-09-prev-next-footer";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {

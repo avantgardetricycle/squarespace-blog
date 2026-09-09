@@ -3592,6 +3592,273 @@
       }
     },
 
+    _reorderFeatureBelowRow: function(host, commentsFirst) {
+      if (!host) return;
+      var commentsHost = host.querySelector('.blog-overlay-feature-comments-section');
+      var i;
+      var kid;
+      for (i = 0; i < host.children.length; i++) {
+        kid = host.children[i];
+        if (!kid || !kid.style) continue;
+        if (commentsFirst) {
+          kid.style.order = (kid.classList && kid.classList.contains('blog-overlay-feature-comments-section')) ? '0' : '1';
+        } else {
+          kid.style.order = '';
+        }
+      }
+      if (!commentsHost) return;
+      if (commentsFirst) {
+        if (host.firstElementChild !== commentsHost) host.insertBefore(commentsHost, host.firstElementChild);
+        return;
+      }
+      var authorSection = host.querySelector('.blog-overlay-feature-below-row-section[data-bb-module="authorProfiles"]');
+      if (authorSection && authorSection !== commentsHost && authorSection.nextElementSibling !== commentsHost) {
+        host.insertBefore(commentsHost, authorSection.nextSibling);
+      }
+    },
+
+    /**
+     * Feature has two `.blog-overlay-sidebar-anchor` nodes in the main row:
+     * the left TOC rail (hidden on mobile: display:none, height 0) and the
+     * live right rail (author / related). Pick the painted one by height > 0 —
+     * not by index, and not by assuming only one anchor exists.
+     */
+    _isPaintedSidebarAnchor: function(el) {
+      if (!el || !el.classList || !el.classList.contains('blog-overlay-sidebar-anchor')) return false;
+      var h = 0;
+      try {
+        h = el.offsetHeight || 0;
+        if (!h && el.getBoundingClientRect) h = Math.round(el.getBoundingClientRect().height) || 0;
+      } catch (ePainted) {}
+      return h > 0;
+    },
+
+    _restorePostSidebarAnchorsToMainRow: function(mainRowEl, main, leftWrap, rightWrap) {
+      if (!mainRowEl || !main) return;
+      if (leftWrap && leftWrap.parentNode) {
+        if (leftWrap.nextSibling !== main) mainRowEl.insertBefore(leftWrap, main);
+      }
+      if (main.parentNode !== mainRowEl) mainRowEl.appendChild(main);
+      if (rightWrap && rightWrap.parentNode) {
+        if (main.nextSibling !== rightWrap) {
+          if (main.nextSibling) mainRowEl.insertBefore(rightWrap, main.nextSibling);
+          else mainRowEl.appendChild(rightWrap);
+        }
+      }
+    },
+
+    /**
+     * Move painted sidebar rails to immediately after `host`. CSS `order` cannot
+     * do this: the live Feature rail lives in `.blog-overlay-main-row`, while
+     * comments/footer live in `.blog-overlay-feature-below-row`.
+     */
+    _movePaintedSidebarAnchorsAfter: function(host, mainRowEl) {
+      if (!host || !host.parentNode || !mainRowEl) return;
+      var candidates = [];
+      var i;
+      var el;
+      for (i = 0; i < mainRowEl.children.length; i++) {
+        el = mainRowEl.children[i];
+        if (el.classList && el.classList.contains('blog-overlay-sidebar-anchor')) candidates.push(el);
+      }
+      el = host.nextSibling;
+      while (el) {
+        if (el.nodeType === 1 && el.classList && el.classList.contains('blog-overlay-sidebar-anchor')) {
+          candidates.push(el);
+        }
+        el = el.nextSibling;
+      }
+      var live = [];
+      var seen = [];
+      for (i = 0; i < candidates.length; i++) {
+        el = candidates[i];
+        if (seen.indexOf(el) !== -1) continue;
+        seen.push(el);
+        if (!this._isPaintedSidebarAnchor(el)) continue;
+        live.push(el);
+      }
+      var insertAfter = host;
+      for (i = 0; i < live.length; i++) {
+        el = live[i];
+        if (insertAfter.nextSibling !== el) insertAfter.parentNode.insertBefore(el, insertAfter.nextSibling);
+        insertAfter = el;
+      }
+    },
+
+    /**
+     * Mobile Feature: keep comments as a sibling, but put every footer module
+     * (author, related, lead magnet, email capture, …) in one flex column so a
+     * single gap can space whichever modules are enabled.
+     */
+    _syncFeatureFooterModulePack: function(host, footerZoneEl, pack) {
+      if (!host) return;
+      var packClass = 'blog-overlay-feature-footer-modules';
+      var existing = null;
+      var i;
+      for (i = 0; i < host.children.length; i++) {
+        if (host.children[i].classList && host.children[i].classList.contains(packClass)) {
+          existing = host.children[i];
+          break;
+        }
+      }
+
+      function isComments(el) {
+        return !!(el && el.classList && el.classList.contains('blog-overlay-feature-comments-section'));
+      }
+      function isPackEl(el) {
+        return !!(el && el.classList && el.classList.contains(packClass));
+      }
+      function zeroModuleMargins(el) {
+        if (!el || !el.style) return;
+        el.style.margin = '0';
+        el.style.marginTop = '0';
+        el.style.marginBottom = '0';
+      }
+
+      if (!pack) {
+        if (existing) {
+          while (existing.firstChild) host.insertBefore(existing.firstChild, existing);
+          if (existing.parentNode) existing.parentNode.removeChild(existing);
+        }
+        return;
+      }
+
+      if (!existing) {
+        existing = document.createElement('div');
+        existing.className = packClass;
+      }
+      existing.style.display = 'flex';
+      existing.style.flexDirection = 'column';
+      existing.style.gap = '56px';
+      existing.style.width = '100%';
+      existing.style.maxWidth = '100%';
+      existing.style.boxSizing = 'border-box';
+      existing.style.margin = '0';
+        existing.style.padding = '0';
+        existing.style.alignItems = 'stretch';
+        existing.style.order = '1';
+
+      var hostKids = Array.prototype.slice.call(host.children);
+      for (i = 0; i < hostKids.length; i++) {
+        var kid = hostKids[i];
+        if (kid === existing || isComments(kid) || isPackEl(kid)) continue;
+        zeroModuleMargins(kid);
+        if (kid.firstElementChild) zeroModuleMargins(kid.firstElementChild);
+        existing.appendChild(kid);
+      }
+
+      if (footerZoneEl && footerZoneEl.childNodes.length) {
+        var footerContent = footerZoneEl.querySelector('.blog-overlay-footer-content');
+        var sources = [];
+        if (footerContent) sources.push(footerContent);
+        sources.push(footerZoneEl);
+        for (var s = 0; s < sources.length; s++) {
+          var srcKids = Array.prototype.slice.call(sources[s].children);
+          for (i = 0; i < srcKids.length; i++) {
+            var fkid = srcKids[i];
+            if (fkid.nodeType !== 1) continue;
+            if (fkid.classList && fkid.classList.contains('blog-overlay-footer-content')) continue;
+            zeroModuleMargins(fkid);
+            if (fkid.classList && fkid.classList.contains('blog-overlay-feature-below-row-section')) {
+              existing.appendChild(fkid);
+              continue;
+            }
+            var section = document.createElement('div');
+            section.className = 'blog-overlay-feature-below-row-section';
+            section.style.width = '100%';
+            section.style.boxSizing = 'border-box';
+            section.style.margin = '0';
+            var modId = fkid.getAttribute && fkid.getAttribute('data-bb-module');
+            if (modId) {
+              section.setAttribute('data-bb-module', modId);
+              section.setAttribute('data-bb-zone', 'footer');
+            }
+            section.appendChild(fkid);
+            existing.appendChild(section);
+          }
+        }
+        if (footerContent && footerContent.childNodes.length === 0 && footerContent.parentNode) {
+          footerContent.parentNode.removeChild(footerContent);
+        }
+        while (footerZoneEl.firstChild) footerZoneEl.removeChild(footerZoneEl.firstChild);
+      }
+
+      if (!existing.childNodes.length) {
+        if (existing.parentNode) existing.parentNode.removeChild(existing);
+        return;
+      }
+
+      var commentsHost = null;
+      for (i = 0; i < host.children.length; i++) {
+        if (host.children[i].classList && host.children[i].classList.contains('blog-overlay-feature-comments-section')) {
+          commentsHost = host.children[i];
+          break;
+        }
+      }
+      if (commentsHost) {
+        if (commentsHost.nextSibling !== existing) host.insertBefore(existing, commentsHost.nextSibling);
+      } else if (existing.parentNode !== host || host.lastElementChild !== existing) {
+        host.appendChild(existing);
+      }
+    },
+
+    /**
+     * Mobile posts: article → comments → footer modules → sidebar rails.
+     * Desktop Feature keeps the full-width below-row after the main row.
+     */
+    _applyMobilePostAfterBodyOrder: function(opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var wrapper = opts.wrapper;
+      var main = opts.main;
+      var mainRowEl = opts.mainRowEl;
+      var footerZoneEl = opts.footerZoneEl;
+      var featureBelowRowHost = opts.featureBelowRowHost;
+      var featurePostLayout = !!opts.featurePostLayout;
+      var leftSidebarWrapEl = opts.leftSidebarWrapEl;
+      var rightSidebarWrapEl = opts.rightSidebarWrapEl;
+      var cfg = opts.cfg;
+      if (!wrapper || !main) return;
+      var narrow = this._isNarrowCollectionViewport();
+      var commentsEl = wrapper.querySelector('#bb-comments');
+      var footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+      var belowHasContent = !!(featureBelowRowHost && featureBelowRowHost.childNodes.length);
+
+      if (narrow) {
+        if (belowHasContent) {
+          if (featurePostLayout) this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, true);
+          this._reorderFeatureBelowRow(featureBelowRowHost, true);
+          main.appendChild(featureBelowRowHost);
+          if (featurePostLayout) this._movePaintedSidebarAnchorsAfter(featureBelowRowHost, mainRowEl);
+        } else if (commentsEl) {
+          main.appendChild(commentsEl);
+        }
+        footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+        if (footerHasContent) main.appendChild(footerZoneEl);
+        return;
+      }
+
+      this._restorePostSidebarAnchorsToMainRow(mainRowEl, main, leftSidebarWrapEl, rightSidebarWrapEl);
+      if (belowHasContent && featurePostLayout && mainRowEl) {
+        this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, false);
+        this._reorderFeatureBelowRow(featureBelowRowHost, false);
+        if (mainRowEl.nextSibling !== featureBelowRowHost) {
+          wrapper.insertBefore(featureBelowRowHost, mainRowEl.nextSibling);
+        }
+      }
+      footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+      if (footerHasContent) {
+        var footerMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
+        var sidebarSpan = this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg);
+        if (featurePostLayout) {
+          wrapper.appendChild(footerZoneEl);
+        } else if ((footerMode === 'postBody' && sidebarSpan) || !sidebarSpan) {
+          main.appendChild(footerZoneEl);
+        } else {
+          wrapper.appendChild(footerZoneEl);
+        }
+      }
+    },
+
     /** Match single-post body horizontal inset to the post header column. */
     _applySinglePostBodyMargins: function(bodyEl, cfg) {
       if (!bodyEl || !bodyEl.style) return;
@@ -7571,6 +7838,61 @@
       return 0;
     },
 
+    /**
+     * Rendered Squarespace header height (not first-section padding).
+     * Measures `.header`, `#header`, and `header:not([class*="blog-overlay"])`.
+     */
+    _measureRenderedSiteHeaderHeight: function() {
+      if (typeof document === 'undefined') return 0;
+      var selectors = ['.header', '#header', 'header:not([class*="blog-overlay"])'];
+      var best = 0;
+      var seen = [];
+      for (var i = 0; i < selectors.length; i++) {
+        var nodes;
+        try {
+          nodes = document.querySelectorAll(selectors[i]);
+        } catch (eSel) {
+          continue;
+        }
+        for (var n = 0; n < nodes.length; n++) {
+          var header = nodes[n];
+          if (!header || seen.indexOf(header) !== -1) continue;
+          seen.push(header);
+          if (header.closest && header.closest('#blog-overlay-list, .blog-overlay-wrapper')) continue;
+          var height = 0;
+          try {
+            var rect = header.getBoundingClientRect();
+            if (rect && rect.height > 0) height = Math.round(rect.height);
+          } catch (eRect) { /* ignore */ }
+          if (!height) height = Math.round(header.offsetHeight || 0);
+          if (height > best && height < 800) best = height;
+        }
+      }
+      return best;
+    },
+
+    _isMobilePostWrapper: function(wrapper) {
+      return !!(
+        wrapper &&
+        wrapper.getAttribute &&
+        wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1' &&
+        this._isNarrowCollectionViewport()
+      );
+    },
+
+    _topProgressBarReservePx: function(wrapper) {
+      if (!wrapper || wrapper.getAttribute('data-bb-flush-nav-hero') === '1') return 0;
+      if (this._previewMode) return 0;
+      var track = typeof document !== 'undefined' ? document.getElementById('blog-overlay-progress') : null;
+      if (!track || !track.style || track.style.position !== 'fixed') return 0;
+      if (track.style.bottom && track.style.bottom !== 'auto') return 0;
+      return Math.max(0, Math.round(track.offsetHeight || 0));
+    },
+
+    _mobilePostWrapperPadTop: function() {
+      return this._measureRenderedSiteHeaderHeight() + 5;
+    },
+
     /** Visual bottom of site chrome (header + announcement bar) at the top of the viewport. */
     _measureSiteNavHeightFromDom: function() {
       var headerSelectors = [
@@ -8265,10 +8587,57 @@
       el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
     },
 
+    /** Mobile post sidebars: section spacing from rail gap, not per-section margins. */
+    _mobilePostSidebarRailCss: function(s) {
+      var rail = s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail';
+      return (
+        rail + '{gap:28px!important;}' +
+        rail + '>.blog-overlay-sidebar-section{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /** Feature mobile: all footer modules share one column so gap works for any enabled set. */
+    _mobileFeatureFooterCss: function(s) {
+      var pack = s + ' .blog-overlay-feature-footer-modules';
+      var below = s + ' .blog-overlay-feature-below-row';
+      return (
+        below + '{display:flex;flex-direction:column;}' +
+        below + '>*{order:1;}' +
+        below + '>.blog-overlay-feature-comments-section{order:0;}' +
+        pack + '{display:flex;flex-direction:column;gap:56px;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:0;align-items:stretch;order:1;}' +
+        pack + '>.blog-overlay-feature-below-row-section,' +
+        pack + '>.blog-overlay-footer-module,' +
+        pack + ' .blog-overlay-footer-module{margin:0!important;}' +
+        pack + '>.blog-overlay-feature-below-row-section>*{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /**
+     * Mobile author cards (<768). Applies to every .blog-overlay-author-unit
+     * (sidebar + footer, all post templates). Inline footer styles (64px avatar,
+     * flex text column) lose to these !important rules.
+     */
+    _mobileAuthorCardCss: function(s) {
+      return (
+        s + ' .blog-overlay-author-profiles{width:100%!important;max-width:none!important;}' +
+        s + ' .blog-overlay-author-card{display:flex;flex-direction:column;align-items:stretch;width:100%;box-sizing:border-box;}' +
+        s + ' .blog-overlay-author-unit{display:flex;flex-direction:column;gap:12px;width:100%;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-author-profiles>.blog-overlay-author-unit+.blog-overlay-author-unit{margin-top:20px!important;}' +
+        s + ' .blog-overlay-author-card-text{display:contents!important;}' +
+        s + ' .blog-overlay-author-card-row{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:12px!important;margin-bottom:0!important;width:100%;}' +
+        s + ' .blog-overlay-author-card-avatar{width:44px!important;height:44px!important;flex:0 0 44px!important;order:0;font-size:14px;}' +
+        s + ' .blog-overlay-author-card-name{order:1;flex:1 1 0%!important;min-width:0;font-size:16px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.2;}' +
+        s + ' .blog-overlay-author-card-bio{order:2;flex:0 0 100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin-top:0!important;}' +
+        s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
+        s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
+        s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
+      );
+    },
+
     /** Reporter mobile (<768). `s` is a root selector, e.g. #blog-overlay-list[data-bb-reporter-layout="1"]. */
     _reporterMobileCss: function(s) {
       return (
-        s + '{padding-top:0!important;margin-top:calc(16px + var(--bb-wrapper-pad-top,16px) - 30px)!important;}' +
+        s + '{margin-top:0!important;}' +
         s + ' .blog-overlay-single-post-header-zone{padding-top:0!important;}' +
         s + ' .blog-overlay-single-post-header-inner{padding-top:0!important;margin-top:0!important;gap:0!important;}' +
         s + ' .blog-overlay-reporter-header-row{flex-direction:column!important;flex-wrap:nowrap;align-items:stretch!important;gap:0!important;margin-bottom:0!important;width:100%;}' +
@@ -8293,16 +8662,6 @@
         s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
         s + ' .bb-comment-form-rule{display:block;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
-        s + ' .blog-overlay-author-profiles{width:100%!important;max-width:none!important;}' +
-        s + ' .blog-overlay-author-unit{display:flex;flex-direction:column;gap:12px;width:100%;}' +
-        s + ' .blog-overlay-author-card-row{display:flex;flex-direction:row;align-items:center!important;gap:12px;margin-bottom:0!important;width:100%;}' +
-        s + ' .blog-overlay-author-card-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;}' +
-        s + ' .blog-overlay-author-card-avatar{width:44px!important;height:44px!important;flex-shrink:0;font-size:14px;}' +
-        s + ' .blog-overlay-author-card-name{font-size:16px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.2;}' +
-        s + ' .blog-overlay-author-card-bio{font-size:13px!important;line-height:1.5;margin-top:0!important;}' +
-        s + ' .blog-overlay-author-card-social{display:flex;flex-direction:row;flex-wrap:wrap;gap:12px!important;}' +
-        s + ' .blog-overlay-author-card-social a{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
-        s + ' .blog-overlay-author-card-social svg{width:18px;height:18px;display:block;}' +
         s + ' aside.blog-overlay-relevant-posts{width:100%!important;max-width:none!important;flex-shrink:1;}' +
         s + ' aside.blog-overlay-relevant-posts>div{width:100%!important;max-width:none!important;}' +
         s + ' .bb-sidebar-post-card{width:100%;gap:12px;}' +
@@ -8312,7 +8671,7 @@
         s + ' .bb-newsletter-footer-row,' +
         s + ' .bb-email-capture-footer-row{border:none;padding:0;border-radius:0;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;}' +
         s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
-        s + ' .bb-email-capture-footer-form{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;}' +
+        s + ' .bb-email-capture-footer-form{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;flex:0 0 auto;}' +
         s + ' .blog-overlay-email-capture-footer .bb-chrome-input,' +
         s + ' .blog-overlay-email-capture-footer .bb-form-input{font-size:14px;font-family:inherit;background:var(--bb-surface,#fff);color:var(--bb-body,#111);border:1px solid var(--bb-border);border-radius:6px;padding:8px 12px;width:100%!important;max-width:none!important;box-sizing:border-box;}' +
         s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
@@ -8426,7 +8785,7 @@
         '#blog-overlay-list .bb-comment-form-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;border-top:1px solid var(--bb-border,#e5e4e0);margin-top:48px;padding-top:24px;}' +
         '#blog-overlay-list .blog-overlay-relevant-posts--footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;max-width:100%;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-thumb{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:var(--bb-card-radius,20px);}' +
@@ -8466,7 +8825,7 @@
         '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
         '#blog-overlay-list .bb-load-more,#blog-overlay-list .bb-load-more-btn{padding:10px 24px;font-size:14px;font-weight:var(--bb-btn-weight,inherit);border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-p1-font-family,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
         '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
-        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
+        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
         '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;}' +
@@ -8495,10 +8854,17 @@
         '#blog-overlay-list .bb-lead-magnet-heading{font-size:15px;font-family:inherit;font-weight:600;color:var(--bb-body);margin:0 0 8px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-desc{font-size:0.85rem;color:var(--bb-muted);margin:0 0 12px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-form{display:flex;flex-direction:column;gap:8px;}' +
+        '#blog-overlay-list .bb-lead-magnet-footer-form .bb-form-input{flex:1 1 240px;min-width:0;}' +
         '#blog-overlay-list .bb-lead-magnet-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body);background:#fff;padding:8px 12px;border:1px solid var(--bb-border);border-radius:6px;}' +
         '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted);opacity:1;}' +
         '#blog-overlay-list .bb-lead-magnet-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent);color:var(--bb-text-on-accent);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
         '#blog-overlay-list .bb-lead-magnet-btn:hover{filter:brightness(0.92);}' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-heading,' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-header{display:none;}' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary{padding:8px 16px!important;box-sizing:border-box;}' +
+        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary{padding:8px 16px!important;box-sizing:border-box;}}' +
         '#blog-overlay-list .bb-lead-magnet-msg{font-size:0.85rem;margin-top:4px;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
@@ -8521,7 +8887,7 @@
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
         /* Mobile (<768): hide footer duplicates of sidebar modules; restyle footer-only to sidebar chrome. */
         '#blog-overlay-list .bb-mobile-sidebar-chrome{display:none;}' +
-        '#blog-overlay-list .bb-footer-sidebar-alt{display:none;}' +
+        '#blog-overlay-list .bb-footer-sidebar-alt{display:none!important;}' +
         '#blog-overlay-list .bb-mobile-duplicate-hidden,' +
         '#blog-overlay-list .bb-mobile-toc-hidden,' +
         '#blog-overlay-list .bb-mobile-rail-hidden,' +
@@ -8536,26 +8902,40 @@
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-mobile-sidebar-chrome{display:block;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-below-main-heading{display:none;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-more-to-read{border-top:none;margin-top:0;padding-top:0;padding-bottom:0;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-relevant-posts--footer{display:none;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-footer-sidebar-alt{display:block;width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-relevant-posts--footer,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-relevant-posts--footer{display:flex;flex-direction:column;gap:24px;width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-footer-sidebar-alt{display:none!important;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card{border:none;padding:0;margin:0;border-radius:0;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card-avatar{width:48px;height:48px;font-size:16px;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card-name{font-size:15px;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card-bio{font-size:14px;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer.bb-footer-card,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-card{border:none;padding:0;border-radius:0;background:transparent;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-row{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form{flex-direction:column;align-items:stretch;justify-content:flex-start;flex:1 1 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-copy,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form-stack,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form{flex:0 0 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form{flex-direction:column;align-items:stretch;justify-content:flex-start;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-chrome-input,' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-newsletter-btn{max-width:none;width:100%;flex:0 0 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-form-input,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-newsletter-btn,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form .bb-form-input{max-width:none;width:100%;flex:0 0 auto;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-header{display:none;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-subtitle{font-size:0.85rem;line-height:1.45;margin:0 0 12px 0;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form{flex-direction:column;align-items:stretch;gap:8px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form{flex-direction:column;align-items:stretch;gap:8px;flex:0 0 auto;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form .bb-form-input,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form button{width:100%;flex:0 0 auto;max-width:none;}' +
+        '@media (max-width: 767px){' +
+          '#blog-overlay-list[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+          this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+        '}' +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+        this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
+        this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
         this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]') +
+        '@media (max-width: 767px){' + this._mobileFeatureFooterCss('#blog-overlay-list[data-bb-feature-layout="1"]') + '}' +
+        this._mobileFeatureFooterCss('#blog-overlay-list.bb-narrow-viewport[data-bb-feature-layout="1"]') +
         '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
         '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
         '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
@@ -9155,20 +9535,32 @@
 
     _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
       if (!wrapper || !wrapper.style) return;
-      var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      var mobilePost = this._isMobilePostWrapper(wrapper);
+      var headerH = 0;
+      var padT;
+      if (mobilePost) {
+        headerH = this._measureRenderedSiteHeaderHeight();
+        padT = headerH + 5;
+      } else {
+        padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      }
+      if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        wrapper.classList.toggle('bb-narrow-viewport', mobilePost);
+      }
       wrapper.style.setProperty('--bb-wrapper-pad-top', padT + 'px');
+      wrapper.style.setProperty('--bb-site-header-height', headerH + 'px');
       var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
       var navH = 0;
       try {
-        navH = this._getNavbarOffset() || 0;
+        navH = mobilePost ? headerH : (this._getNavbarOffset() || 0);
       } catch (eNavTok) {
-        navH = flushNav ? padT : Math.max(0, padT - 16);
+        navH = mobilePost ? headerH : (flushNav ? padT : Math.max(0, padT - 16));
       }
       wrapper.style.setProperty('--bb-nav-height', navH + 'px');
       wrapper.style.paddingTop = padT + 'px';
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
-      wrapper.style.marginTop = flushNav ? '0' : '16px';
+      wrapper.style.marginTop = (mobilePost || flushNav) ? '0' : '16px';
       wrapper.style.marginBottom = '16px';
 
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
@@ -9211,11 +9603,19 @@
       var wrapper = this._blogOverlayWrapperEl;
       var root = this._blogOverlayInsetRoot || this._root;
       if (!wrapper || !wrapper.parentNode) return;
-      var padTop = 16;
-      try {
-        var parsed = parseInt(wrapper.style.paddingTop, 10);
-        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
-      } catch (ePad) { /* ignore */ }
+      var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+      var padTop;
+      if (this._isMobilePostWrapper(wrapper)) {
+        padTop = this._mobilePostWrapperPadTop();
+      } else if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        padTop = this._wrapperPadTopForNavbar(this._getNavbarOffset(), flushNav) + this._topProgressBarReservePx(wrapper);
+      } else {
+        padTop = 16;
+        try {
+          var parsed = parseInt(wrapper.style.paddingTop, 10);
+          if (isFinite(parsed) && parsed >= 0) padTop = parsed;
+        } catch (ePad) { /* ignore */ }
+      }
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
         this._applySiteContentInsetsToWrapper(wrapper, padTop);
         return;
@@ -9620,7 +10020,6 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
-      var reporterLayout = wrapper.getAttribute('data-bb-reporter-layout') === '1';
       var pairIds = [
         'authorProfiles',
         'emailCapture',
@@ -9645,13 +10044,15 @@
           for (var c = 0; c < chromes.length; c++) {
             chromes[c].setAttribute('aria-hidden', showTreatment ? 'false' : 'true');
           }
-          var altList = footerNodes[f].querySelector('.bb-footer-sidebar-alt');
-          var footerGrid = footerNodes[f].querySelector('.blog-overlay-relevant-posts--footer');
-          var footerHeading = footerNodes[f].querySelector('.bb-below-main-heading');
-          var reporterStackedRelated = reporterLayout && id === 'relevantPosts' && showTreatment;
-          if (altList) altList.setAttribute('aria-hidden', (showTreatment && !reporterStackedRelated) ? 'false' : 'true');
-          if (footerGrid) footerGrid.setAttribute('aria-hidden', (showTreatment && !reporterStackedRelated) ? 'true' : 'false');
-          if (footerHeading) footerHeading.setAttribute('aria-hidden', showTreatment ? 'true' : 'false');
+          if (id === 'relevantPosts') {
+            var altList = footerNodes[f].querySelector('.bb-footer-sidebar-alt');
+            var footerGrid = footerNodes[f].querySelector('.blog-overlay-relevant-posts--footer');
+            var footerHeading = footerNodes[f].querySelector('.bb-below-main-heading');
+            /* Compact list is sidebar-only. Footer always keeps the card grid. */
+            if (altList) altList.setAttribute('aria-hidden', 'true');
+            if (footerGrid) footerGrid.setAttribute('aria-hidden', 'false');
+            if (footerHeading) footerHeading.setAttribute('aria-hidden', showTreatment ? 'true' : 'false');
+          }
         }
       }
       var hideFeatureToc = narrow && opts.featurePostLayout === true;
@@ -9667,6 +10068,8 @@
         if (hideFeatureToc) {
           var tocInRail = rail.querySelector('[data-bb-module="tableOfContents"]');
           var otherMods = rail.querySelectorAll('[data-bb-module]:not([data-bb-module="tableOfContents"])');
+          /* Feature left rail is TOC-only; hide that whole anchor on mobile.
+             The right rail (author/related) stays painted. Two anchors, one height. */
           hideRail = !!tocInRail && otherMods.length === 0;
         }
         rail.classList.toggle('bb-mobile-rail-hidden', hideRail);
@@ -9689,11 +10092,148 @@
         footerContent.classList.toggle('bb-mobile-empty-hidden', narrow && !hasVisible);
       }
       this._applyReporterMobileLayout(wrapper, narrow);
+      this._applyMobileAuthorCardLayout(wrapper, narrow);
+    },
+
+    _snapshotInlineStyles: function(el, props) {
+      if (!el || el._bbAuthorStyleSnap) return;
+      var snap = {};
+      for (var i = 0; i < props.length; i++) snap[props[i]] = el.style[props[i]] || '';
+      el._bbAuthorStyleSnap = snap;
+    },
+
+    _restoreInlineStyles: function(el) {
+      if (!el || !el._bbAuthorStyleSnap) return;
+      var snap = el._bbAuthorStyleSnap;
+      for (var k in snap) {
+        if (Object.prototype.hasOwnProperty.call(snap, k)) el.style[k] = snap[k];
+      }
+      el._bbAuthorStyleSnap = null;
+    },
+
+    /** Keep bio/social inside the text column so display:contents can promote them into the row. */
+    _restoreAuthorCardDom: function(card) {
+      if (!card) return;
+      var textCol = card.querySelector('.blog-overlay-author-card-text');
+      if (!textCol) return;
+      var nameEl = textCol.querySelector('.blog-overlay-author-card-name') || card.querySelector('.blog-overlay-author-card-name');
+      var social = card.querySelector('.blog-overlay-author-card-social');
+      var bio = card.querySelector('.blog-overlay-author-card-bio');
+      if (social && social.parentNode !== textCol) {
+        if (nameEl && nameEl.parentNode === textCol && nameEl.nextSibling) textCol.insertBefore(social, nameEl.nextSibling);
+        else textCol.appendChild(social);
+      }
+      if (bio && bio.parentNode !== textCol) textCol.appendChild(bio);
     },
 
     /**
-     * Reporter mobile: lift breadcrumbs onto the header inner, and flatten
-     * author cards so bio/social sit under the avatar+name row.
+     * Mobile author layout for EVERY .blog-overlay-author-unit (sidebar + footer).
+     * querySelector on the wrapper would style only the first author.
+     */
+    _applyMobileAuthorCardLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var units = wrapper.querySelectorAll('.blog-overlay-author-unit');
+      var i;
+      for (i = 0; i < units.length; i++) {
+        this._restoreAuthorCardDom(units[i]);
+        this._styleMobileAuthorUnit(units[i], !!narrow);
+      }
+    },
+
+    _styleMobileAuthorUnit: function(card, apply) {
+      if (!card) return;
+      var row = card.querySelector('.blog-overlay-author-card-row');
+      var textCol = card.querySelector('.blog-overlay-author-card-text');
+      var avatar = card.querySelector('.blog-overlay-author-card-avatar');
+      var nameEl = card.querySelector('.blog-overlay-author-card-name');
+      var bio = card.querySelector('.blog-overlay-author-card-bio');
+      var social = card.querySelector('.blog-overlay-author-card-social');
+      var socialLinks = social ? social.querySelectorAll('a') : [];
+      var socialIcons = social ? social.querySelectorAll('svg') : [];
+      var prev = card.previousElementSibling;
+      var afterFirst = !!(prev && prev.classList && prev.classList.contains('blog-overlay-author-unit'));
+      var j;
+
+      if (!apply) {
+        this._restoreInlineStyles(card);
+        this._restoreInlineStyles(row);
+        this._restoreInlineStyles(textCol);
+        this._restoreInlineStyles(avatar);
+        this._restoreInlineStyles(nameEl);
+        this._restoreInlineStyles(bio);
+        this._restoreInlineStyles(social);
+        for (j = 0; j < socialLinks.length; j++) this._restoreInlineStyles(socialLinks[j]);
+        for (j = 0; j < socialIcons.length; j++) this._restoreInlineStyles(socialIcons[j]);
+        return;
+      }
+
+      this._snapshotInlineStyles(card, ['marginTop', 'marginBottom']);
+      this._snapshotInlineStyles(row, ['display', 'flexWrap', 'alignItems', 'gap', 'marginBottom']);
+      this._snapshotInlineStyles(textCol, ['display', 'flex', 'flexDirection', 'gap', 'minWidth', 'minHeight', 'justifyContent']);
+      this._snapshotInlineStyles(avatar, ['width', 'height', 'flex', 'flexShrink', 'order', 'fontSize']);
+      this._snapshotInlineStyles(nameEl, ['order', 'flex', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight']);
+      this._snapshotInlineStyles(bio, ['order', 'flex', 'fontSize', 'lineHeight', 'marginTop']);
+      this._snapshotInlineStyles(social, ['order', 'flex', 'display', 'flexWrap', 'alignItems', 'gap']);
+
+      card.style.marginTop = afterFirst ? '20px' : '0';
+      card.style.marginBottom = '0';
+      if (textCol) textCol.style.display = 'contents';
+      if (row) {
+        row.style.display = 'flex';
+        row.style.flexWrap = 'wrap';
+        row.style.alignItems = 'center';
+        row.style.gap = '12px';
+        row.style.marginBottom = '0';
+      }
+      if (avatar) {
+        avatar.style.width = '44px';
+        avatar.style.height = '44px';
+        avatar.style.flex = '0 0 44px';
+        avatar.style.flexShrink = '0';
+        avatar.style.order = '0';
+        avatar.style.fontSize = '14px';
+      }
+      if (nameEl) {
+        nameEl.style.order = '1';
+        nameEl.style.flex = '1 1 0';
+        nameEl.style.fontSize = '16px';
+        nameEl.style.fontFamily = 'var(--bb-heading-font-family, inherit)';
+        nameEl.style.fontWeight = 'var(--bb-heading-font-weight, inherit)';
+      }
+      if (bio) {
+        bio.style.order = '2';
+        bio.style.flex = '0 0 100%';
+        bio.style.fontSize = '13px';
+        bio.style.lineHeight = '1.5';
+        bio.style.marginTop = '0';
+      }
+      if (social) {
+        social.style.order = '3';
+        social.style.flex = '0 0 100%';
+        social.style.display = 'flex';
+        social.style.flexWrap = 'wrap';
+        social.style.alignItems = 'center';
+        social.style.gap = '12px';
+      }
+      for (j = 0; j < socialLinks.length; j++) {
+        this._snapshotInlineStyles(socialLinks[j], ['width', 'height', 'display', 'alignItems', 'justifyContent', 'flexShrink']);
+        socialLinks[j].style.width = '20px';
+        socialLinks[j].style.height = '20px';
+        socialLinks[j].style.display = 'inline-flex';
+        socialLinks[j].style.alignItems = 'center';
+        socialLinks[j].style.justifyContent = 'center';
+        socialLinks[j].style.flexShrink = '0';
+      }
+      for (j = 0; j < socialIcons.length; j++) {
+        this._snapshotInlineStyles(socialIcons[j], ['width', 'height', 'display']);
+        socialIcons[j].style.width = '18px';
+        socialIcons[j].style.height = '18px';
+        socialIcons[j].style.display = 'block';
+      }
+    },
+
+    /**
+     * Reporter mobile: lift breadcrumbs onto the header inner.
      */
     _applyReporterMobileLayout: function(wrapper, narrow) {
       if (!wrapper) return;
@@ -9720,25 +10260,6 @@
           }
           bc.style.order = '';
           bc._bbReporterBcHome = null;
-        }
-      }
-      var units = wrapper.querySelectorAll('.blog-overlay-author-unit');
-      for (var i = 0; i < units.length; i++) {
-        var card = units[i];
-        var textCol = card.querySelector('.blog-overlay-author-card-text');
-        var bio = card.querySelector('.blog-overlay-author-card-bio');
-        var social = card.querySelector('.blog-overlay-author-card-social');
-        if (!textCol) continue;
-        if (apply) {
-          if (bio && bio.parentNode !== card) card.appendChild(bio);
-          if (social && social.parentNode !== card) card.appendChild(social);
-        } else {
-          if (social && social.parentNode === card) {
-            var nameEl = textCol.querySelector('.blog-overlay-author-card-name');
-            if (nameEl && nameEl.nextSibling) textCol.insertBefore(social, nameEl.nextSibling);
-            else textCol.appendChild(social);
-          }
-          if (bio && bio.parentNode === card) textCol.appendChild(bio);
         }
       }
     },
@@ -12202,9 +12723,7 @@
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
-      var featureBelowRowAuthorEl = null;
-      var featureBelowRowMoreToReadEl = null;
-      var featureBelowRowLeadMagnetEl = null;
+      var featureBelowRowMods = [];
       var featureBelowRowHost = null;
       var featureCommentsSectionEl = null;
       var featureFooterLeftPad = 0;
@@ -13018,9 +13537,6 @@
         if (isFooter) {
           var grid = document.createElement('div');
           grid.className = 'blog-overlay-relevant-posts blog-overlay-relevant-posts--footer';
-          grid.style.display = 'grid';
-          grid.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
-          grid.style.gap = '20px';
           grid.style.width = '100%';
           grid.style.maxWidth = '100%';
           grid.style.boxSizing = 'border-box';
@@ -13041,23 +13557,14 @@
             });
             if (card) grid.appendChild(card);
           }
-          var footSection = document.createElement('div');
-          footSection.className = 'blog-overlay-sidebar-section blog-overlay-more-to-read';
-          footSection.style.borderTop = '1px solid var(--bb-border, #e5e4e0)';
-          footSection.style.marginTop = '48px';
-          footSection.style.paddingTop = '24px';
+          var footWrap = document.createElement('div');
+          footWrap.className = 'blog-overlay-more-to-read';
           var footHead = document.createElement('h2');
           footHead.className = 'bb-below-main-heading';
           footHead.textContent = 'More to Read';
-          footSection.appendChild(footHead);
-          footSection.appendChild(grid);
-          var listAlt = buildRelevantPostsList(true);
-          if (listAlt) {
-            listAlt.classList.add('bb-footer-sidebar-alt');
-            listAlt.setAttribute('aria-hidden', 'true');
-            footSection.appendChild(listAlt);
-          }
-          return footSection;
+          footWrap.appendChild(footHead);
+          footWrap.appendChild(grid);
+          return footWrap;
         }
 
         var el = buildRelevantPostsList(false);
@@ -13277,17 +13784,19 @@
         wireEmailCaptureSubmit(emailInput, btn, msgEl);
         return wrap;
       }
-      function createLeadMagnetForm(lmCfg, width) {
+      function createLeadMagnetForm(lmCfg, width, hideHeader) {
         if (!lmCfg) return null;
         var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
-        var titleEl = document.createElement('div');
-        titleEl.className = 'bb-lead-magnet-heading';
-        titleEl.textContent = resourceTitle;
-        wrap.appendChild(titleEl);
+        if (!hideHeader) {
+          var titleEl = document.createElement('div');
+          titleEl.className = 'bb-lead-magnet-heading';
+          titleEl.textContent = resourceTitle;
+          wrap.appendChild(titleEl);
+        }
         if (lmCfg.description && lmCfg.description.trim()) {
           var descEl = document.createElement('div');
           descEl.className = 'bb-lead-magnet-desc';
@@ -13392,7 +13901,6 @@
         emailInput.className = 'bb-form-input';
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.flex = '1 1 240px';
         emailInput.style.minWidth = '0';
         formRow.appendChild(emailInput);
 
@@ -13654,14 +14162,11 @@
             var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);
             el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm, isSinglePost) : null;
           } else if (mod === 'leadMagnet' && lmCfg) {
-            var lmForm = createLeadMagnetForm(lmCfg, width);
-            if (lmForm) {
-              var lmSection = document.createElement('div');
-              lmSection.className = 'blog-overlay-sidebar-section';
-              lmSection.style.marginBottom = '20px';
-              lmSection.appendChild(lmForm);
-              el = lmSection;
-            }
+            var lmForm = createLeadMagnetForm(lmCfg, width, true);
+            el = lmForm ? createSidebarSection(
+              (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet',
+              lmForm
+            ) : null;
           }
           if (el) {
             if (!el.getAttribute('data-bb-module')) tagZoneModule(el, mod, 'sidebar');
@@ -14068,6 +14573,21 @@
           if (rightSidebarEl.childNodes.length) rightSidebarWrapEl.appendChild(rightSidebarEl);
 
           var BB_SIDEBAR_MIN_MAIN = 300;
+          function syncPostAfterBodyOrder() {
+            if (!isSinglePost) return;
+            self._applyMobilePostAfterBodyOrder({
+              wrapper: wrapper,
+              main: main,
+              mainRowEl: mainRowEl,
+              footerZoneEl: footerZoneEl,
+              featureBelowRowHost: featureBelowRowHost,
+              featurePostLayout: featurePostLayout,
+              cfg: cfg,
+              footerContentCfg: footerContentCfg,
+              leftSidebarWrapEl: leftSidebarWrapEl,
+              rightSidebarWrapEl: rightSidebarWrapEl
+            });
+          }
           function applySidebarResponsiveLayout() {
             var leftHas = leftSidebarWrapEl.childNodes.length > 0;
             var rightHas = rightSidebarWrapEl.childNodes.length > 0;
@@ -14079,6 +14599,7 @@
               main.style.flex = '1';
               main.style.minWidth = '0';
               self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout });
+              syncPostAfterBodyOrder();
               return;
             }
             var cw = wrapper.clientWidth;
@@ -14191,6 +14712,14 @@
               self._syncDigestMobileFeaturedImageBleed(wrapper);
             }
             self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout });
+            var mobilePostRail = isSinglePost && (stack || self._isNarrowCollectionViewport());
+            if (leftHas) {
+              leftSidebarEl.style.gap = (mobilePostRail && !leftSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';
+            }
+            if (rightHas) {
+              rightSidebarEl.style.gap = (mobilePostRail && !rightSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';
+            }
+            syncPostAfterBodyOrder();
           }
 
           if (headerContentCfg && headerContentCfg.show) {
@@ -14614,10 +15143,6 @@
                 if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
                   continue;
                 }
-                /** Prev/next navigation is Writer-only. */
-                if (fmod === 'prevNextArticle' && !writerPostLayoutForFooter) {
-                  continue;
-                }
                 var footerAuthorHeader = null;
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
@@ -14652,6 +15177,7 @@
                 } else if (fmod === 'prevNextArticle') {
                   fmodEl = createPrevNextArticleModule();
                   if (fmodEl) {
+                    tagZoneModule(fmodEl, 'prevNextArticle', 'footer');
                     fmodEl.style.width = '100%';
                     fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
@@ -14661,12 +15187,8 @@
                   fmodEl = wrapFooterPairModule(fmodEl, fmod, footerChromeTitle(fmod, { authorHeader: footerAuthorHeader }));
                 }
                 if (fmodEl) {
-                  if (featurePostLayout && fmod === 'authorProfiles') {
-                    featureBelowRowAuthorEl = fmodEl;
-                  } else if (featurePostLayout && fmod === 'relevantPosts') {
-                    featureBelowRowMoreToReadEl = fmodEl;
-                  } else if (featurePostLayout && fmod === 'leadMagnet') {
-                    featureBelowRowLeadMagnetEl = fmodEl;
+                  if (featurePostLayout) {
+                    featureBelowRowMods.push({ id: fmod, el: fmodEl });
                   } else {
                     footerEl.appendChild(fmodEl);
                   }
@@ -14793,6 +15315,15 @@
               section.appendChild(el);
               featureBelowRowHost.appendChild(section);
             };
+            var featureBelowRowAuthorEl = null;
+            var featureBelowRowRestEls = [];
+            for (var fbi = 0; fbi < featureBelowRowMods.length; fbi++) {
+              if (featureBelowRowMods[fbi].id === 'authorProfiles' && !featureBelowRowAuthorEl) {
+                featureBelowRowAuthorEl = featureBelowRowMods[fbi].el;
+              } else {
+                featureBelowRowRestEls.push(featureBelowRowMods[fbi].el);
+              }
+            }
             appendFeatureBelowRowSection(featureBelowRowAuthorEl);
             if (featureCommentsWillMount) {
               featureCommentsSectionEl = document.createElement('div');
@@ -14807,15 +15338,10 @@
               }
               featureBelowRowHost.appendChild(featureCommentsSectionEl);
             }
-            appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
-            appendFeatureBelowRowSection(featureBelowRowLeadMagnetEl);
-            if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
-            var featureFooterSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
-            if (featureFooterSideMarginsMode === 'postBody') {
-              main.appendChild(featureBelowRowHost);
-            } else {
-              wrapper.appendChild(featureBelowRowHost);
+            for (var frb = 0; frb < featureBelowRowRestEls.length; frb++) {
+              appendFeatureBelowRowSection(featureBelowRowRestEls[frb]);
             }
+            if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
           }
           if (
             isSinglePost &&
@@ -14838,23 +15364,9 @@
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
             self._clearPostFooterZoneBleed(footerZoneEl);
-            var footerSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
-            var publisherPostLayoutForFooter = isSinglePost && self._isPublisherPostLayout(cfg);
-            var sidebarSpanFooterLayout = reporterPostLayout || publisherPostLayoutForFooter;
-            var postBodyFooterInMainColumn =
-              isSinglePost &&
-              footerSideMarginsMode === 'postBody' &&
-              sidebarSpanFooterLayout;
-            if (featurePostLayout) {
-              wrapper.appendChild(footerZoneEl);
-            } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
-              main.appendChild(footerZoneEl);
-            } else if (isSinglePost) {
-              wrapper.appendChild(footerZoneEl);
-            } else {
-              wrapper.appendChild(footerZoneEl);
-            }
+            if (!isSinglePost) wrapper.appendChild(footerZoneEl);
           }
+          syncPostAfterBodyOrder();
 
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
           if (deferOverlayCommit) {
@@ -14922,22 +15434,36 @@
 
       // Deferred navbar re-measure: header may load asynchronously (race condition)
       var lastAppliedOffset = navbarOffset;
+      var lastAppliedHeaderH = -1;
       var applyNavbarOffset = function(offset) {
-        if (offset <= 0 || !wrapper.parentNode) return;
+        if (!wrapper.parentNode) return;
+        var mobilePost = self._isMobilePostWrapper(wrapper);
+        if (!mobilePost && offset <= 0) return;
+        var headerH = mobilePost ? self._measureRenderedSiteHeaderHeight() : 0;
         lastAppliedOffset = offset;
+        lastAppliedHeaderH = headerH;
         var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
-        self._applySiteContentInsetsToWrapper(wrapper, self._wrapperPadTopForNavbar(offset, flushNav));
+        var pad = mobilePost
+          ? self._mobilePostWrapperPadTop()
+          : self._wrapperPadTopForNavbar(offset, flushNav);
+        self._applySiteContentInsetsToWrapper(wrapper, pad);
+        var navTop = mobilePost ? headerH : offset;
         var progressTrack = document.getElementById('blog-overlay-progress');
         if (progressTrack && progressTrack.style.position === 'fixed') {
-          progressTrack.style.top = offset + 'px';
+          progressTrack.style.top = navTop + 'px';
         }
         var articles = wrapper.querySelectorAll('article');
         for (var a = 0; a < articles.length; a++) {
-          articles[a].style.scrollMarginTop = (offset + 8) + 'px';
+          articles[a].style.scrollMarginTop = (navTop + 8) + 'px';
         }
       };
       var scheduleRecheck = function() {
         if (!wrapper.parentNode) return;
+        if (self._isMobilePostWrapper(wrapper)) {
+          var headerH = self._measureRenderedSiteHeaderHeight();
+          if (Math.abs(headerH - lastAppliedHeaderH) >= 1) applyNavbarOffset(headerH);
+          return;
+        }
         var newOffset = self._getNavbarOffset();
         var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
         if (flushNav) {
@@ -14956,8 +15482,8 @@
         var ro = new ResizeObserver(function() {
           scheduleRecheck();
         });
-        var roTargets = document.querySelectorAll('header, .Header, #header, .header-announcement-bar, .Header-announcementBar, [data-section-type="header"]');
-        for (var t = 0; t < roTargets.length && t < 5; t++) {
+        var roTargets = document.querySelectorAll('.header, #header, header:not([class*="blog-overlay"]), .header-announcement-bar, .Header-announcementBar, [data-section-type="header"]');
+        for (var t = 0; t < roTargets.length && t < 8; t++) {
           try { ro.observe(roTargets[t]); } catch (e) { /* ignore */ }
         }
       }

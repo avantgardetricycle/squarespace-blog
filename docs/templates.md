@@ -143,6 +143,8 @@ Best for: personal blogs, writing-focused publications, readers who expect a cla
 
 Post templates control how individual blog posts are displayed — the header layout, whether sidebars appear, which footer modules are included, and features like the progress bar and table of contents.
 
+On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer.
+
 ---
 
 ### The Reporter
@@ -170,6 +172,8 @@ Best for: journalism-style blogs, news posts, content where byline and metadata 
 **Centered header, full-bleed hero**
 
 The Feature is the default post template. The featured image fills the full width of the viewport with the post title overlaid on top. Below the image, the post body sits in a centered column flanked by two sidebars — the table of contents on the left, and an author/related posts module on the right. Social sharing is on by default.
+
+On phones the table of contents is hidden. The stack is article body, then comments, then footer modules, then the remaining sidebar modules. Footer modules share one column with a 56px gap, so spacing stays even if you turn a module off. Comments paint before footer modules via flex `order` (0 vs 1). The live sidebar rail is moved to after that below-row; Feature’s hidden TOC rail stays in the main row and is not used for placement.
 
 Best for: long-form writing, essays, feature articles where the reading experience is the priority.
 
