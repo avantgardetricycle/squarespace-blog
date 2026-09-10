@@ -131,6 +131,8 @@ Best for: personal blogs, writing-focused publications, readers who expect a cla
 - Featured article position (in-layout)
 - Numbered pagination
 
+On phones the sidebar category filter is hidden. Header Search and Sort stay.
+
 **What you can customize:**
 - Show Date, Reading Time, Author, Excerpt toggles
 - Sidebar width and sticky behavior
@@ -143,7 +145,7 @@ Best for: personal blogs, writing-focused publications, readers who expect a cla
 
 Post templates control how individual blog posts are displayed — the header layout, whether sidebars appear, which footer modules are included, and features like the progress bar and table of contents.
 
-On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer.
+On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off.
 
 ---
 
@@ -173,7 +175,7 @@ Best for: journalism-style blogs, news posts, content where byline and metadata 
 
 The Feature is the default post template. The featured image fills the full width of the viewport with the post title overlaid on top. Below the image, the post body sits in a centered column flanked by two sidebars — the table of contents on the left, and an author/related posts module on the right. Social sharing is on by default.
 
-On phones the table of contents is hidden. The stack is article body, then comments, then footer modules, then the remaining sidebar modules. Footer modules share one column with a 56px gap, so spacing stays even if you turn a module off. Comments paint before footer modules via flex `order` (0 vs 1). The live sidebar rail is moved to after that below-row; Feature’s hidden TOC rail stays in the main row and is not used for placement.
+On phones the table of contents is hidden. The stack is article body, then comments, then footer modules, then the remaining sidebar modules. Footer modules share one column with a 56px gap, so spacing stays even if you turn a module off. Comments paint before footer modules via flex `order` (0 vs 1). The live sidebar rail is moved to after that below-row; Feature’s hidden TOC rail stays in the main row and is not used for placement. The header stays a centered stack: 28px title, 14px deck, 13px meta, and a full-bleed image pulled in with −15px / −50px vertical margins. Author cards use CSS `display: contents` on the text column (no DOM move) so the avatar sits beside the name with bio and social full-width below. Sidebar Related and Popular posts use 80×80 thumbs; footer More to Read is a 16:10 card with date/read-time instead of a deck. Newsletter and lead magnet keep the native mobile chrome header (no second injected heading) and collapse empty copy/message slots.
 
 Best for: long-form writing, essays, feature articles where the reading experience is the priority.
 
@@ -245,6 +247,8 @@ Best for: multi-author blogs, content-heavy sites, posts that are part of a larg
 - Full-bleed hero with title overlay at bottom
 - Right sidebar: popular posts, related posts, category filter
 - Author profiles and related posts in footer
+
+On phones the sidebar category filter is hidden. Popular and related posts in that rail still stack after the footer.
 
 **What you can customize:**
 - Show Date, Reading Time, Author toggles

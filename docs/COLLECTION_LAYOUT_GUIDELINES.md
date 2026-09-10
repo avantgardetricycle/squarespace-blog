@@ -59,6 +59,7 @@
   - Footer is **not** Masthead-only; Editorial and Showcase intentionally expose the same opt-in footer zone
   - Templates without sidebars (Masthead, Editorial, Showcase) place Email Capture / Lead Magnet in Footer only; Filtering stays Header-only; Popular Posts is unavailable
   - Digest: Search and Sort are header-only and must not render in the sidebar
+  - Sidebar Tags and Categories (Filter by Category / Tag / Tags & Categories) are hidden on mobile even when enabled. Header filter pills stay. This inverts the usual sidebar-wins pairing used on posts.
 
 ## What must never happen
 - Sidebars must not use top: 0 when sticky — offset must equal header height

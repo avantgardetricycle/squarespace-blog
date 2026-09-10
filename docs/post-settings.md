@@ -68,6 +68,8 @@ A sidebar appears when you add modules to **Left Sidebar** or **Right Sidebar**.
 
 Post sidebar modules: Table of Contents, Author Profiles, Popular Posts, Related Posts, Filter by Category, Filter by Tags & Categories, Email Capture, Lead Magnet.
 
+On phones, sidebar Tags and Categories sections are hidden even if they are enabled. Other sidebar modules still stack after footer modules. If the same filter also exists in the footer, the footer copy is shown instead (this inverts the usual sidebar-wins rule).
+
 Reporter, Writer, Feature, and Story lock the left sidebar. Writer, Feature, and Story also lock the right sidebar. If the section is missing, the template does not use that sidebar.
 
 If a sticky sidebar overlaps your Squarespace header, turn sticky off. See [Troubleshooting](troubleshooting.md).
@@ -82,7 +84,7 @@ On the Post tab, sharing is controlled in **Post Header → Social sharing links
 
 ## Footer modules
 
-**Footer Content** sits below the post body (and comments, when comments are shown). On phones, the stack is article body → comments → footer modules → sidebar modules.
+**Footer Content** sits below the post body (and comments, when comments are shown). On phones, the stack is article body → comments → footer modules → sidebar modules. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off.
 
 **Side margins** — **Post Body** (align with the text column) or **Full Screen** (site default margins). Hidden on Writer.
 

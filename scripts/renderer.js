@@ -3689,6 +3689,9 @@
      * Mobile Feature: keep comments as a sibling, but put every footer module
      * (author, related, lead magnet, email capture, …) in one flex column so a
      * single gap can space whichever modules are enabled.
+     * Newsletter can render in `.blog-overlay-footer-zone` while the other
+     * modules sit in `.blog-overlay-feature-below-row` — merge that zone into
+     * the pack before measuring, or the 56px gap cannot reach it.
      */
     _syncFeatureFooterModulePack: function(host, footerZoneEl, pack) {
       if (!host) return;
@@ -4416,6 +4419,9 @@
         deckEl.style.overflow = 'hidden';
         if (deckEl.textContent) textHost.appendChild(deckEl);
       }
+      if (variant === 'footer') {
+        self._appendModulePostCardFooterMeta(textHost, post, cardCfg);
+      }
       return card;
     },
 
@@ -4885,6 +4891,24 @@
       var metaWrap = document.createElement('div');
       metaWrap.className = 'bb-sidebar-post-meta';
       metaWrap.textContent = metaLines.join(' · ');
+      textHost.appendChild(metaWrap);
+    },
+
+    /** Footer More to Read: date + read time (desktop-hidden; Feature mobile shows this instead of the deck). */
+    _appendModulePostCardFooterMeta: function(textHost, post, cardCfg) {
+      var lines = [];
+      if (cardCfg && cardCfg.showDate) {
+        var dateStr = this._getDate(post);
+        if (dateStr) lines.push(dateStr);
+      }
+      if (cardCfg && cardCfg.showReadingTime) {
+        var mins = this._getReadingTimeMinutes(post.body);
+        lines.push(mins === 1 ? '1 min read' : mins + ' min read');
+      }
+      if (lines.length === 0) return;
+      var metaWrap = document.createElement('div');
+      metaWrap.className = 'bb-more-to-read-meta bb-sidebar-post-meta';
+      metaWrap.textContent = lines.join(' · ');
       textHost.appendChild(metaWrap);
     },
 
@@ -8596,15 +8620,98 @@
       );
     },
 
-    /** Feature mobile: all footer modules share one column so gap works for any enabled set. */
-    _mobileFeatureFooterCss: function(s) {
+    /**
+     * Mobile post footers (<768): spacing is the container gap, not per-module
+     * margins. Newsletter +40 / lead-magnet +20 (and more-to-read / prev-next
+     * / author-card margins) break when a neighbor module is toggled off.
+     */
+    _mobilePostFooterGapCss: function(s) {
+      return (
+        s + ' .blog-overlay-footer-content{display:flex;flex-direction:column;gap:56px!important;}' +
+        s + ' .blog-overlay-feature-below-row,' +
+        s + ' .blog-overlay-feature-footer-modules{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module,' +
+        s + ' .blog-overlay-feature-below-row-section,' +
+        s + ' .blog-overlay-email-capture-footer,' +
+        s + ' .blog-overlay-lead-magnet-footer,' +
+        s + ' .bb-lead-magnet-card,' +
+        s + ' .bb-footer-card,' +
+        s + ' .blog-overlay-more-to-read,' +
+        s + ' .blog-overlay-prev-next,' +
+        s + ' .blog-overlay-footer-content .blog-overlay-author-card,' +
+        s + ' .blog-overlay-feature-below-row .blog-overlay-author-card,' +
+        s + ' [data-bb-zone="footer"] .blog-overlay-author-card{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /**
+     * Feature mobile (<768): header type/spacing + footer pack.
+     * Author cards stay CSS-only (see _mobileAuthorCardCss); Feature rebuilds
+     * the author block, so JS must not appendChild/restructure the DOM.
+     */
+    _mobileFeatureCss: function(s) {
       var pack = s + ' .blog-overlay-feature-footer-modules';
       var below = s + ' .blog-overlay-feature-below-row';
+      var stack = s + ' .blog-overlay-feature-header-stack';
       return (
-        below + '{display:flex;flex-direction:column;}' +
+        s + ' .blog-overlay-featured-image-stacked-fullbleed--feature{margin-top:-15px!important;margin-bottom:-50px!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin-bottom:8px!important;justify-content:center!important;text-align:center;width:100%;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-category--feature{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);text-align:center;margin-bottom:0!important;}' +
+        stack + ' .blog-overlay-post-title,' +
+        stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;}' +
+        stack + ' .blog-overlay-post-deck,' +
+        stack + ' .blog-overlay-post-deck--feature{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);text-align:center;}' +
+        stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
+        stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:-80px!important;}' +
+        s + ' aside.blog-overlay-relevant-posts,' +
+        s + ' .blog-overlay-popular-posts{width:100%!important;max-width:none!important;}' +
+        s + ' aside.blog-overlay-relevant-posts>div,' +
+        s + ' .blog-overlay-popular-posts>div{width:100%!important;max-width:none!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
+        s + ' .bb-more-to-read-card,' +
+        s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
+        s + ' .bb-more-to-read-thumb,' +
+        s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
+        s + ' .bb-more-to-read-category,' +
+        s + ' .bb-more-to-read-category.bb-category-label{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8)!important;background:transparent!important;padding:0!important;}' +
+        s + ' .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.25;}' +
+        s + ' .bb-more-to-read-deck{display:none!important;}' +
+        s + ' .bb-more-to-read-meta{display:block!important;}' +
+        s + ' .blog-overlay-email-capture-footer{border:none!important;padding:0!important;border-radius:0!important;gap:0!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading,' +
+        s + ' .bb-lead-magnet-header{display:none!important;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)){display:none!important;}' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}' +
+        s + ' .bb-newsletter-footer-row,' +
+        s + ' .bb-email-capture-footer-row{flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;border:none;padding:0;}' +
+        s + ' .bb-email-capture-footer-form,' +
+        s + ' .bb-newsletter-footer-form,' +
+        s + ' .bb-lead-magnet-footer-form{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;flex:0 0 auto;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-form-input,' +
+        s + ' .bb-lead-magnet-footer-form .bb-form-input{font-size:14px;font-family:var(--bb-p1-font-family,inherit);background:var(--bb-surface,#fff);color:var(--bb-body,#111);border:1px solid var(--bb-border);border-radius:6px;padding:8px 12px;width:100%!important;max-width:none!important;box-sizing:border-box;flex:0 0 auto;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-lead-magnet-footer-form button,' +
+        s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .bb-lead-magnet-subtitle{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-form-wrap{padding-top:25px;margin-top:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-form-rule{display:block!important;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .bb-comments-list{margin-top:15px;}' +
+        s + ' .bb-comment-submit{width:100%;padding:8px 16px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        below + '{display:flex;flex-direction:column;gap:56px!important;}' +
         below + '>*{order:1;}' +
         below + '>.blog-overlay-feature-comments-section{order:0;}' +
-        pack + '{display:flex;flex-direction:column;gap:56px;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:0;align-items:stretch;order:1;}' +
+        pack + '{display:flex;flex-direction:column;gap:56px!important;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:0;align-items:stretch;order:1;}' +
         pack + '>.blog-overlay-feature-below-row-section,' +
         pack + '>.blog-overlay-footer-module,' +
         pack + ' .blog-overlay-footer-module{margin:0!important;}' +
@@ -8614,8 +8721,11 @@
 
     /**
      * Mobile author cards (<768). Applies to every .blog-overlay-author-unit
-     * (sidebar + footer, all post templates). Inline footer styles (64px avatar,
-     * flex text column) lose to these !important rules.
+     * (sidebar + footer, all post templates). display:contents on the text
+     * column is the key: bio/social participate in the row wrap without a DOM
+     * move. Feature must not JS-restructure — the author block is rebuilt
+     * before measuring code runs, which reverts appendChild. Inline footer
+     * styles (64px avatar, flex text column) lose to these !important rules.
      */
     _mobileAuthorCardCss: function(s) {
       return (
@@ -8677,7 +8787,7 @@
         s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="emailCapture"] .bb-sidebar-header{margin:0 0 8px 0;font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="emailCapture"] .bb-sidebar-divider{margin:0 0 8px 0;height:1px;background:var(--bb-border);border:none;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-more-to-read{border-top:none!important;padding-top:0!important;margin-top:24px!important;width:100%;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-more-to-read{border-top:none!important;padding-top:0!important;margin-top:0!important;margin-bottom:0!important;width:100%;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-below-main-heading{display:none;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-header{margin:0 0 8px 0;font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-divider{margin:0 0 20px 0;height:1px;background:var(--bb-border);border:none;}' +
@@ -8784,6 +8894,7 @@
         '#blog-overlay-list .blog-overlay-reporter-accent-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0;}' +
         '#blog-overlay-list .bb-comment-form-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0 0 16px 0;}' +
         '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
+        '#blog-overlay-list .bb-more-to-read-meta{display:none;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;border-top:1px solid var(--bb-border,#e5e4e0);margin-top:48px;padding-top:24px;}' +
         '#blog-overlay-list .blog-overlay-relevant-posts--footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;max-width:100%;box-sizing:border-box;}' +
@@ -8890,6 +9001,7 @@
         '#blog-overlay-list .bb-footer-sidebar-alt{display:none!important;}' +
         '#blog-overlay-list .bb-mobile-duplicate-hidden,' +
         '#blog-overlay-list .bb-mobile-toc-hidden,' +
+        '#blog-overlay-list .bb-mobile-sidebar-filter-hidden,' +
         '#blog-overlay-list .bb-mobile-rail-hidden,' +
         '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
@@ -8927,15 +9039,17 @@
         '@media (max-width: 767px){' +
           '#blog-overlay-list[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
           this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobilePostFooterGapCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
         '}' +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
         this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobilePostFooterGapCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
         this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
         this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]') +
-        '@media (max-width: 767px){' + this._mobileFeatureFooterCss('#blog-overlay-list[data-bb-feature-layout="1"]') + '}' +
-        this._mobileFeatureFooterCss('#blog-overlay-list.bb-narrow-viewport[data-bb-feature-layout="1"]') +
+        '@media (max-width: 767px){' + this._mobileFeatureCss('#blog-overlay-list[data-bb-feature-layout="1"]') + '}' +
+        this._mobileFeatureCss('#blog-overlay-list.bb-narrow-viewport[data-bb-feature-layout="1"]') +
         '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
         '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
         '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
@@ -10012,7 +10126,9 @@
 
     /**
      * Mobile (<768): if a pairable module is in the sidebar and duplicated in the footer,
-     * hide the footer copy. Footer-only modules keep rendering but get sidebar chrome.
+     * hide the footer copy (sidebar-wins). Footer-only modules keep rendering but get
+     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always hidden
+     * on mobile, even when enabled; a footer copy (if any) is shown instead.
      * Feature template: hide Table of Contents. Comments are footer-only and exempt.
      */
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
@@ -10020,6 +10136,11 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      var filterIds = {
+        filterByCategory: true,
+        filterByTag: true,
+        filterByTagsAndCategories: true
+      };
       var pairIds = [
         'authorProfiles',
         'emailCapture',
@@ -10033,11 +10154,13 @@
       var i;
       for (i = 0; i < pairIds.length; i++) {
         var id = pairIds[i];
+        var isFilter = !!filterIds[id];
         var sidebarHas = !!wrapper.querySelector('[data-bb-zone="sidebar"][data-bb-module="' + id + '"]');
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {
-          var hideDup = narrow && sidebarHas;
-          var showTreatment = narrow && !sidebarHas;
+          /* Sidebar-wins, except Tags/Categories: keep the footer copy. */
+          var hideDup = narrow && sidebarHas && !isFilter;
+          var showTreatment = narrow && (!sidebarHas || isFilter);
           footerNodes[f].classList.toggle('bb-mobile-duplicate-hidden', hideDup);
           footerNodes[f].classList.toggle('bb-mobile-sidebar-treatment', showTreatment);
           var chromes = footerNodes[f].querySelectorAll('.bb-mobile-sidebar-chrome');
@@ -10055,6 +10178,15 @@
           }
         }
       }
+      var sidebarFilterNodes = wrapper.querySelectorAll(
+        '[data-bb-zone="sidebar"][data-bb-module="filterByCategory"],' +
+        '[data-bb-zone="sidebar"][data-bb-module="filterByTag"],' +
+        '[data-bb-zone="sidebar"][data-bb-module="filterByTagsAndCategories"]'
+      );
+      for (i = 0; i < sidebarFilterNodes.length; i++) {
+        sidebarFilterNodes[i].classList.toggle('bb-mobile-sidebar-filter-hidden', narrow);
+        sidebarFilterNodes[i].setAttribute('aria-hidden', narrow ? 'true' : 'false');
+      }
       var hideFeatureToc = narrow && opts.featurePostLayout === true;
       var tocNodes = wrapper.querySelectorAll('[data-bb-module="tableOfContents"]');
       for (i = 0; i < tocNodes.length; i++) {
@@ -10064,13 +10196,19 @@
       var rails = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
       for (i = 0; i < rails.length; i++) {
         var rail = rails[i];
+        var railMods = rail.querySelectorAll('[data-bb-module]');
         var hideRail = false;
-        if (hideFeatureToc) {
-          var tocInRail = rail.querySelector('[data-bb-module="tableOfContents"]');
-          var otherMods = rail.querySelectorAll('[data-bb-module]:not([data-bb-module="tableOfContents"])');
-          /* Feature left rail is TOC-only; hide that whole anchor on mobile.
-             The right rail (author/related) stays painted. Two anchors, one height. */
-          hideRail = !!tocInRail && otherMods.length === 0;
+        if (narrow && railMods.length > 0) {
+          hideRail = true;
+          for (var rm = 0; rm < railMods.length; rm++) {
+            var modId = railMods[rm].getAttribute('data-bb-module');
+            var filterHidden = !!filterIds[modId];
+            var tocHidden = hideFeatureToc && modId === 'tableOfContents';
+            if (!filterHidden && !tocHidden) {
+              hideRail = false;
+              break;
+            }
+          }
         }
         rail.classList.toggle('bb-mobile-rail-hidden', hideRail);
       }
@@ -10092,7 +10230,10 @@
         footerContent.classList.toggle('bb-mobile-empty-hidden', narrow && !hasVisible);
       }
       this._applyReporterMobileLayout(wrapper, narrow);
-      this._applyMobileAuthorCardLayout(wrapper, narrow);
+      /* Feature rebuilds author cards; appendChild does not stick. CSS-only. */
+      if (!opts.featurePostLayout) {
+        this._applyMobileAuthorCardLayout(wrapper, narrow);
+      }
     },
 
     _snapshotInlineStyles: function(el, props) {
@@ -11500,11 +11641,16 @@
             storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
               : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
           );
-          bcNav.style.setProperty('display', 'flex', 'important');
-          bcNav.style.setProperty('flex-direction', 'row', 'important');
-          bcNav.style.flexWrap = 'wrap';
-          bcNav.style.alignItems = 'center';
-          bcNav.style.gap = '0';
+          /* Feature: keep default block + inline children so crumbs wrap as
+             text. display:flex !important cannot be overridden by the mobile
+             stylesheet, and flex items wrap far too early. */
+          if (!featurePostLayout) {
+            bcNav.style.setProperty('display', 'flex', 'important');
+            bcNav.style.setProperty('flex-direction', 'row', 'important');
+            bcNav.style.flexWrap = 'wrap';
+            bcNav.style.alignItems = 'center';
+            bcNav.style.gap = '0';
+          }
           bcNav.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           var meta = self._blogMeta || {};
           var siteTitle = meta.siteTitle || '';

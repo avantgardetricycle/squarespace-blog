@@ -83,6 +83,8 @@ Most collection templates lock one or both sidebars. If the sidebar section is m
 
 On **The Digest**, Search and Sort stay in the header. They cannot be added to the sidebar.
 
+On phones, sidebar Tags and Categories sections are hidden even when enabled. Put filters in the **header** if readers should still filter on mobile.
+
 If a sticky sidebar overlaps your Squarespace site header, increase **Space above** or turn sticky off. See [Troubleshooting](troubleshooting.md).
 
 ---
@@ -111,7 +113,7 @@ Some templates only allow these modules in the footer (not in sidebars).
 
 **Filter by** — Categories, Tags, or both.
 
-**Location** — Header, Left Sidebar, or Right Sidebar. Header-only templates (Masthead, Showcase, Editorial) do not offer sidebar filter locations. You cannot place a filter in a sidebar the template has locked.
+**Location** — Header, Left Sidebar, or Right Sidebar. Header-only templates (Masthead, Showcase, Editorial) do not offer sidebar filter locations. You cannot place a filter in a sidebar the template has locked. Sidebar filters are hidden on phones; header filters are not.
 
 ---
 

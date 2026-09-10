@@ -9,7 +9,7 @@
 4. Footer
 5. Progress bar (out of flow — see below)
 
-Feature’s comments and footer modules sit in a full-width `.blog-overlay-feature-below-row` immediately after the main row. Desktop order is author, comments, then the remaining footer modules (more to read, email capture, lead magnet, and any others). On mobile, comments use `order: 0` and footer modules use `order: 1` so comments paint first even when the author card is earlier in the DOM. Footer modules share one `.blog-overlay-feature-footer-modules` column (`gap: 56px`, no module margins). Feature’s main row has two `.blog-overlay-sidebar-anchor` nodes — a TOC-only rail hidden on mobile (`.bb-mobile-rail-hidden`, height 0) and the live author/related rail. The painted rail (height > 0) is moved to immediately after the below-row; CSS `order` cannot do that because the rail and the below-row are not siblings.
+Feature’s comments and footer modules sit in a full-width `.blog-overlay-feature-below-row` immediately after the main row. Desktop order is author, comments, then the remaining footer modules (more to read, email capture, lead magnet, and any others). On mobile, comments use `order: 0` and footer modules use `order: 1` so comments paint first even when the author card is earlier in the DOM. Footer modules share one `.blog-overlay-feature-footer-modules` column. Mobile spacing between footer modules is the container `gap: 56px` (also on `.blog-overlay-footer-content` for the other post templates) — never per-module margins. Feature’s newsletter can start in the footer zone; `_syncFeatureFooterModulePack` must merge it into that column first or the gap cannot reach it. Feature’s main row has two `.blog-overlay-sidebar-anchor` nodes — a TOC-only rail hidden on mobile (`.bb-mobile-rail-hidden`, height 0) and the live author/related rail. The painted rail (height > 0) is moved to immediately after the below-row; CSS `order` cannot do that because the rail and the below-row are not siblings.
 
 ### Mobile (<768px, including Configure’s phone preview)
 When the main row stacks, order is:
@@ -24,7 +24,13 @@ Comments and footer modules render inside `.blog-overlay-posts` so they stay wit
 
 Verify this order with a **sidebar module turned off**. Default Feature/Reporter configs duplicate author/related posts in the sidebar and footer; the footer copy is hidden on mobile, which can hide an ordering bug.
 
-On mobile, every `.blog-overlay-author-unit` in a module gets the same wrap layout (44px avatar beside the name, bio and social on full-width rows below). Style **all** author units — `querySelector` only hits the first, and single-author posts hide that bug. Include a multi-author post in QA for remaining templates.
+On mobile, if a module exists in both the sidebar and the footer, the **sidebar copy is shown** and the footer copy is hidden (sidebar-wins). **Tags and Categories are the exception:** sidebar Filter by Category / Filter by Tag / Filter by Tags & Categories sections are always hidden on phones, even when enabled in settings. If a footer copy exists, that one is shown instead.
+
+On mobile, every `.blog-overlay-author-unit` in a module gets the same wrap layout (44px avatar beside the name, bio and social on full-width rows below). `.blog-overlay-author-card-text{display:contents}` is the key so bio and social participate in the row wrap. Feature is CSS-only — do not `appendChild` or otherwise restructure the author DOM; Feature rebuilds the block before measuring code runs. Style **all** author units — `querySelector` only hits the first, and single-author posts hide that bug. Include a multi-author post in QA for remaining templates.
+
+Feature mobile header (BB sets font sizes only; family/weight inherit customer tokens unless noted): full-bleed image `margin-top: -15px` / `margin-bottom: -50px`; breadcrumbs 13px P1, body 60%, centered, width 100%, child `a`/`span` `display: inline`; category line 11px P1 700 uppercase 0.08em accent, centered, `margin-bottom: 8px`; title 28px / 1.15, centered; deck 14px P1 / 1.4, centered; meta 13px P1 with H1 weight, centered, inner `.blog-overlay-meta` 13px H1; article `margin-bottom: -80px`. No meta reorder and no column override — Feature already stacks.
+
+Feature mobile modules: sidebar Related and Popular share compact cards (100% width, 80×80 thumbs, 12px gap). Footer More to Read uses full-width 16:10 cards; hide `.bb-more-to-read-deck` and show date/read-time meta instead. Footer newsletter and lead magnet use the existing `.bb-mobile-sidebar-chrome` header — do not inject a second one; collapse empty `.bb-newsletter-footer-copy` / `.bb-newsletter-footer-msg`. Comment form wrap uses `padding-top: 25px` (not margin) with a 12px uppercase heading and full-width submit.
 
 ## Per-zone rules
 
@@ -62,6 +68,7 @@ On mobile, every `.blog-overlay-author-unit` in a module gets the same wrap layo
 - Full-width block, normal flow
 - Desktop: always after comments
 - Mobile: after comments and before stacked sidebar modules
+- Mobile spacing between modules is container `gap: 56px` on `.blog-overlay-footer-content` (and Feature `.blog-overlay-feature-below-row` / `.blog-overlay-feature-footer-modules`). Zero top/bottom margins on `.blog-overlay-footer-module` and the newsletter / lead-magnet cards — do not add extra `margin-top` on those modules
 - Never position: fixed or absolute
 - z-index: 10
 
