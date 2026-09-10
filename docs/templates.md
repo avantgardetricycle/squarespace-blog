@@ -145,7 +145,7 @@ On phones the sidebar category filter is hidden. Header Search and Sort stay.
 
 Post templates control how individual blog posts are displayed — the header layout, whether sidebars appear, which footer modules are included, and features like the progress bar and table of contents.
 
-On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off.
+On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off. Previous/Next is two columns in one bordered box with a single divider; the category line is hidden so each side stays readable. In-article headings are capped at 85% of the post title (24px on most templates, 29px on Writer) so they cannot outsize the headline; smaller headings are left alone.
 
 ---
 
@@ -198,6 +198,8 @@ Best for: long-form writing, essays, feature articles where the reading experien
 **Centered header, no image**
 
 The Writer strips everything back to just the words. No featured image, no sidebars, no decorative elements — just a clean, centered column with the post title, byline, and body. Author profiles and previous/next navigation appear in the footer. It's the most minimal post template.
+
+On phones the reading column uses the same 18.75px side padding as other post templates (the desktop Writer inset is wider). The header zone has no extra horizontal padding, so title and body share one width. Type is a centered stack: 13px muted breadcrumbs, 11px accent category, 34px title (larger because there is no image), 14px deck, a 40px centered rule, then 13px meta. Footer modules keep the 56px container gap.
 
 Best for: essays, personal writing, newsletters where the image is not important.
 

@@ -90,7 +90,7 @@ On the Post tab, sharing is controlled in **Post Header → Social sharing links
 
 **Add module…** — **Related Posts**, **Author Profiles**, **Previous/Next Article**, **Email Capture**, **Lead Magnet**. Drag to reorder; remove a module to turn it off.
 
-**Previous/Next Article** has no separate settings section — add it from Footer Content.
+**Previous/Next Article** has no separate settings section — add it from Footer Content. On phones it is two equal columns in one bordered box, with the category line hidden.
 
 **Related Posts**, **Author Profiles**, **Email Capture**, and **Lead Magnet** also have location and copy controls under Navigation & Discovery. Related Posts can live in a sidebar or the footer.
 

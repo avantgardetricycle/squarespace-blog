@@ -32,6 +32,10 @@ Feature mobile header (BB sets font sizes only; family/weight inherit customer t
 
 Feature mobile modules: sidebar Related and Popular share compact cards (100% width, 80×80 thumbs, 12px gap). Footer More to Read uses full-width 16:10 cards; hide `.bb-more-to-read-deck` and show date/read-time meta instead. Footer newsletter and lead magnet use the existing `.bb-mobile-sidebar-chrome` header — do not inject a second one; collapse empty `.bb-newsletter-footer-copy` / `.bb-newsletter-footer-msg`. Comment form wrap uses `padding-top: 25px` (not margin) with a 12px uppercase heading and full-width submit.
 
+Writer mobile (BB sets font sizes only; family/weight inherit customer tokens unless noted): wrapper horizontal padding `18.75px` (not the desktop `8vw` literary inset); header zone horizontal padding `0`; `padding-top` is site header height + 5px, `margin-top: 0`. Breadcrumbs 13px P1, `--bb-muted`, `display: block`, width 100%, child `a`/`span` `display: inline`. Category 11px P1 700 uppercase 0.08em accent, `margin-bottom: 10px`. Title 34px / 1.15, `margin: 0 0 12px` (larger than other templates — no featured image). Deck 14px P1 / 1.4, `--bb-excerpt`, `margin: 0 0 24px`. Writer rule stays a 40px centered divider with `margin: 0 auto 24px`. Meta 13px P1; inner `.blog-overlay-meta` 13px heading family. `.blog-overlay-body` `margin-bottom: -80px`. Footer modules use container `gap: 56px` with module margins 0.
+
+On mobile, cap `h1–h6` inside `.blog-overlay-body` at post-title × 0.85 (line-height 1.25) so customer heading scales cannot exceed the headline. Cap only — never enlarge. Reporter / Feature / Publisher / Story (28px title) → 24px; Writer (34px title) → 29px.
+
 ## Per-zone rules
 
 **BetterBlog overlay root**
@@ -69,6 +73,7 @@ Feature mobile modules: sidebar Related and Popular share compact cards (100% wi
 - Desktop: always after comments
 - Mobile: after comments and before stacked sidebar modules
 - Mobile spacing between modules is container `gap: 56px` on `.blog-overlay-footer-content` (and Feature `.blog-overlay-feature-below-row` / `.blog-overlay-feature-footer-modules`). Zero top/bottom margins on `.blog-overlay-footer-module` and the newsletter / lead-magnet cards — do not add extra `margin-top` on those modules
+- Mobile Previous/Next is one bordered `nav.blog-overlay-prev-next` grid (`1fr 1fr`, gap 0, padding 0). Columns pad 16px; the first has `border-right` as the only divider. Hide `.blog-overlay-prev-next-category`. Radius is `min(var(--bb-btn-radius), shortest-side × 0.08)` with no 20px card cap.
 - Never position: fixed or absolute
 - z-index: 10
 

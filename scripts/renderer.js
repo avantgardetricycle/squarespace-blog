@@ -8645,6 +8645,25 @@
     },
 
     /**
+     * Mobile prev/next (<768): one bordered box, two equal columns, a single
+     * vertical divider. Radius is min(button radius, shortest side × 0.08) —
+     * not the 20px card cap, so a pill button radius can lozenge the box.
+     */
+    _mobilePrevNextCss: function(s) {
+      var nav = s + ' .blog-overlay-prev-next';
+      var col = nav + ' .blog-overlay-prev-next-col';
+      return (
+        nav + '{display:grid!important;grid-template-columns:1fr 1fr;gap:0!important;padding:0!important;width:100%;box-sizing:border-box;border:1px solid var(--bb-border,#e5e4e0);overflow:hidden;border-radius:var(--bb-prev-next-radius,min(var(--bb-btn-radius,0px),8%));}' +
+        col + '{display:flex;flex-direction:column;gap:6px;padding:16px!important;border:none!important;min-width:0;box-sizing:border-box;text-decoration:none;color:inherit;}' +
+        col + ':first-child{border-right:1px solid var(--bb-border,#e5e4e0)!important;}' +
+        nav + ' .blog-overlay-prev-next-col--next{text-align:right;align-items:flex-end;border-left:none!important;}' +
+        nav + ' .blog-overlay-prev-next-label{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-extra-muted,#888);margin:0!important;}' +
+        nav + ' .blog-overlay-prev-next-title{font-size:15px!important;font-family:var(--bb-heading-font-family,inherit);line-height:1.3;color:var(--bb-body,#111);display:-webkit-box;-webkit-line-clamp:4;line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}' +
+        nav + ' .blog-overlay-prev-next-category{display:none!important;}'
+      );
+    },
+
+    /**
      * Feature mobile (<768): header type/spacing + footer pack.
      * Author cards stay CSS-only (see _mobileAuthorCardCss); Feature rebuilds
      * the author block, so JS must not appendChild/restructure the DOM.
@@ -8741,6 +8760,37 @@
         s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
         s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
         s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
+      );
+    },
+
+    /**
+     * Writer mobile (<768). Wider than the desktop 8vw literary inset: wrapper
+     * padding matches other post templates (pagePadding + 2vw → 18.75px at
+     * 375). Header zone extra 24px pad is removed so title/body share one
+     * column. Title is 34px because Writer has no featured image.
+     */
+    _writerMobileCss: function(s) {
+      return (
+        s + '{padding-left:18.75px!important;padding-right:18.75px!important;margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+        s + ' .blog-overlay-header-zone,' +
+        s + ' .blog-overlay-single-post-header-zone{padding-left:0!important;padding-right:0!important;}' +
+        s + ' .blog-overlay-single-post-header-inner{padding-top:0!important;margin-top:0!important;gap:0!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-muted,#888);}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin-bottom:10px!important;justify-content:center!important;text-align:center;width:100%;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-category--writer{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:34px!important;line-height:1.15;margin:0 0 12px 0!important;}' +
+        s + ' .blog-overlay-post-deck,' +
+        s + ' .blog-overlay-post-deck--writer{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-excerpt,#666);margin:0 0 24px 0!important;}' +
+        s + ' .blog-overlay-writer-rule{width:40px;height:1px;margin:0 auto 24px auto!important;}' +
+        s + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .blog-overlay-body{margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-footer-content{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
       );
     },
 
@@ -9040,16 +9090,20 @@
           '#blog-overlay-list[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
           this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobilePostFooterGapCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobilePrevNextCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
         '}' +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
         this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePostFooterGapCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobilePrevNextCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
         this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
         this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]') +
         '@media (max-width: 767px){' + this._mobileFeatureCss('#blog-overlay-list[data-bb-feature-layout="1"]') + '}' +
         this._mobileFeatureCss('#blog-overlay-list.bb-narrow-viewport[data-bb-feature-layout="1"]') +
+        '@media (max-width: 767px){' + this._writerMobileCss('#blog-overlay-list[data-bb-writer-layout="1"]') + '}' +
+        this._writerMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-writer-layout="1"]') +
         '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
         '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
         '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
@@ -9680,7 +9734,7 @@
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
         var pagePad = this._resolvePagePaddingCssValue();
         wrapper.style.setProperty('--pagePadding', pagePad);
-        var bbBuffer = wrapper.getAttribute('data-bb-writer-layout') === '1' ? '8vw' : '2vw';
+        var bbBuffer = (wrapper.getAttribute('data-bb-writer-layout') === '1' && !mobilePost) ? '8vw' : '2vw';
         var horizPad = 'calc(var(--pagePadding, 3vw) + ' + bbBuffer + ')';
         wrapper.style.paddingLeft = horizPad;
         wrapper.style.paddingRight = horizPad;
@@ -10229,11 +10283,87 @@
         }
         footerContent.classList.toggle('bb-mobile-empty-hidden', narrow && !hasVisible);
       }
+      this._applyPrevNextRadiusVars(wrapper, narrow);
+      this._capMobileBodyHeadings(wrapper, narrow);
       this._applyReporterMobileLayout(wrapper, narrow);
       /* Feature rebuilds author cards; appendChild does not stick. CSS-only. */
       if (!opts.featurePostLayout) {
         this._applyMobileAuthorCardLayout(wrapper, narrow);
       }
+    },
+
+    /**
+     * Mobile (<768): cap in-article h1–h6 at post-title × 0.85 so customer
+     * heading scales cannot exceed the headline. Cap only — never enlarge.
+     * Writer title is 34px → 29px; other post templates 28px → 24px.
+     */
+    _capMobileBodyHeadings: function(wrapper, narrow) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var titlePx = wrapper.getAttribute('data-bb-writer-layout') === '1' ? 34 : 28;
+      var capPx = Math.round(titlePx * 0.85);
+      var headings = wrapper.querySelectorAll('.blog-overlay-body h1, .blog-overlay-body h2, .blog-overlay-body h3, .blog-overlay-body h4, .blog-overlay-body h5, .blog-overlay-body h6');
+      for (var i = 0; i < headings.length; i++) {
+        this._restoreMobileBodyHeadingCap(headings[i]);
+        if (!narrow) continue;
+        var computed = parseFloat(window.getComputedStyle(headings[i]).fontSize);
+        if (!isFinite(computed) || computed <= capPx) continue;
+        this._snapshotMobileBodyHeadingInline(headings[i]);
+        headings[i].style.setProperty('font-size', capPx + 'px', 'important');
+        headings[i].style.setProperty('line-height', '1.25', 'important');
+        headings[i].setAttribute('data-bb-heading-capped', '1');
+      }
+    },
+
+    _snapshotMobileBodyHeadingInline: function(el) {
+      if (!el || el._bbHeadingInlineSnap) return;
+      el._bbHeadingInlineSnap = {
+        fs: el.style.getPropertyValue('font-size'),
+        fsp: el.style.getPropertyPriority('font-size'),
+        lh: el.style.getPropertyValue('line-height'),
+        lhp: el.style.getPropertyPriority('line-height')
+      };
+    },
+
+    _restoreMobileBodyHeadingCap: function(el) {
+      if (!el || el.getAttribute('data-bb-heading-capped') !== '1') return;
+      el.style.removeProperty('font-size');
+      el.style.removeProperty('line-height');
+      var snap = el._bbHeadingInlineSnap;
+      if (snap) {
+        if (snap.fs) el.style.setProperty('font-size', snap.fs, snap.fsp);
+        if (snap.lh) el.style.setProperty('line-height', snap.lh, snap.lhp);
+      }
+      el.removeAttribute('data-bb-heading-capped');
+    },
+
+    /**
+     * Mobile prev/next radius: min(button radius, shortest side × 0.08).
+     * Uncapped vs the 20px card token — a pill button radius can lozenge the box.
+     */
+    _applyPrevNextRadiusVars: function(wrapper, narrow) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var nodes = wrapper.querySelectorAll('.blog-overlay-prev-next');
+      if (!nodes.length) return;
+      var self = this;
+      function apply() {
+        var tokens = self._getCollectionStyleTokens();
+        var btnR = self._firstPxValue(tokens && tokens.buttonRadius, 0);
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i];
+          if (!narrow) {
+            el.style.removeProperty('--bb-prev-next-radius');
+            continue;
+          }
+          var shortest = Math.min(el.clientWidth || 0, el.clientHeight || 0);
+          if (shortest < 1) {
+            el.style.removeProperty('--bb-prev-next-radius');
+            continue;
+          }
+          el.style.setProperty('--bb-prev-next-radius', Math.min(btnR, shortest * 0.08) + 'px');
+        }
+      }
+      apply();
+      if (narrow && typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
     },
 
     _snapshotInlineStyles: function(el, props) {
@@ -11641,10 +11771,10 @@
             storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
               : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
           );
-          /* Feature: keep default block + inline children so crumbs wrap as
-             text. display:flex !important cannot be overridden by the mobile
+          /* Feature/Writer: keep default block + inline children so crumbs wrap
+             as text. display:flex !important cannot be overridden by the mobile
              stylesheet, and flex items wrap far too early. */
-          if (!featurePostLayout) {
+          if (!featurePostLayout && !writerPostLayout) {
             bcNav.style.setProperty('display', 'flex', 'important');
             bcNav.style.setProperty('flex-direction', 'row', 'important');
             bcNav.style.flexWrap = 'wrap';
@@ -11900,7 +12030,7 @@
           if (bylineText) bylineText = self._stripLeadingSquarespaceSectionMarkers(bylineText);
           if (bylineText) {
             var bylineEl = document.createElement('p');
-            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : storyPostLayout ? ' blog-overlay-post-deck--on-dark-solid' : featurePostLayoutForCat ? ' blog-overlay-post-deck--feature' : '');
+            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : storyPostLayout ? ' blog-overlay-post-deck--on-dark-solid' : featurePostLayoutForCat ? ' blog-overlay-post-deck--feature' : writerPostLayout ? ' blog-overlay-post-deck--writer' : '');
             bylineEl.textContent = bylineText;
             postInfoWrap.appendChild(bylineEl);
           }
