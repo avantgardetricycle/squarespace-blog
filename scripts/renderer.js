@@ -8289,6 +8289,18 @@
       return lum > 0.5 ? '#000' : '#fff';
     },
 
+    /**
+     * Story header ink (Rule E): derived from the header zone background, not
+     * hardcoded white. lum = (0.2126R + 0.7152G + 0.0722B) / 255.
+     * Under 0.5 → white ink; otherwise black. Category stays accent.
+     */
+    _storyHeaderInkFromBackground: function(bgColor) {
+      var ch = this._parseColorChannels(bgColor);
+      if (!ch) return 'rgb(255,255,255)';
+      var lum = (0.2126 * ch.r + 0.7152 * ch.g + 0.0722 * ch.b) / 255;
+      return lum < 0.5 ? 'rgb(255,255,255)' : 'rgb(0,0,0)';
+    },
+
     _walkScopeForCssVar: function(scopeEl, names) {
       if (!scopeEl || !names || !names.length) return '';
       var el = scopeEl;
@@ -8794,6 +8806,90 @@
       );
     },
 
+    /**
+     * Story mobile (<768). Stacks the desktop 2-col header, full-bleeds the
+     * customer header background, and colors header text from that background
+     * (Rule E). Share stays visible — 32×32 targets / 18×18 icons (WCAG 2.5.8).
+     */
+    _storyMobileCss: function(s) {
+      var pad = 'calc(var(--pagePadding, 3vw) + 2vw)';
+      var zone = s + ' .blog-overlay-header-zone,' +
+        s + ' .blog-overlay-single-post-header-zone,' +
+        s + ' .blog-overlay-single-post-header-zone--story';
+      var ink = 'var(--bb-story-ink)';
+      var ink80 = 'color-mix(in srgb,' + ink + ' 80%,transparent)';
+      var ink60 = 'color-mix(in srgb,' + ink + ' 60%,transparent)';
+      var ink15 = 'color-mix(in srgb,' + ink + ' 15%,transparent)';
+      return (
+        zone + '{--bb-story-ink:rgb(255,255,255);width:auto!important;max-width:none!important;box-sizing:border-box;margin-left:calc(-1 * ' + pad + ')!important;margin-right:calc(-1 * ' + pad + ')!important;padding:24px ' + pad + '!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-single-post-header-inner{display:flex;flex-direction:column;padding-top:0!important;margin-top:0!important;gap:20px!important;}' +
+        s + ' .blog-overlay-story-header-row{display:flex!important;flex-direction:column!important;flex-wrap:nowrap;align-items:stretch!important;gap:20px!important;width:100%!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-story-featured-image,' +
+        s + ' .blog-overlay-story-info-col{width:100%!important;max-width:100%!important;flex:0 0 auto!important;margin:0!important;min-width:0!important;}' +
+        s + ' .blog-overlay-story-featured-image>div{aspect-ratio:16/10!important;width:100%!important;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs,' +
+        s + ' .blog-overlay-post-breadcrumbs--on-dark-solid{display:block!important;width:100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);line-height:1.4;color:' + ink60 + '!important;text-shadow:none!important;margin:0!important;text-align:left;}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;color:inherit;text-shadow:none!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin:0 0 8px 0!important;justify-content:flex-start!important;text-align:left;width:100%;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-category--story,' +
+        s + ' .bb-category-label--on-dark{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8)!important;margin:0!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-story-info-panel .blog-overlay-post-title,' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post,' +
+        s + ' .bb-title--on-dark{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:' + ink + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-post-deck,' +
+        s + ' .blog-overlay-post-deck--on-dark-solid{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);margin:0 0 16px 0!important;color:' + ink80 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-story-rule{width:100%;height:0;border:none;border-top:1px solid ' + ink15 + ';background:none!important;margin:12px 0!important;}' +
+        s + ' .blog-overlay-meta-row,' +
+        s + ' .bb-post-meta--on-dark{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:' + ink60 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);color:inherit;}' +
+        s + ' .blog-overlay-share-row,' +
+        s + ' .blog-overlay-share-row--story{display:flex!important;gap:0!important;margin:12px 0 0 0!important;justify-content:flex-start!important;width:100%;}' +
+        s + ' .blog-overlay-share-links,' +
+        s + ' .blog-overlay-share-links--on-dark{display:flex!important;gap:0!important;align-items:center;}' +
+        s + ' .blog-overlay-share-link{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;color:' + ink60 + '!important;}' +
+        s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;fill:currentColor;}' +
+        s + ' .blog-overlay-share-link svg[fill="none"]{fill:none;}' +
+        s + ' .blog-overlay-body{margin-top:-24px!important;margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-footer-content{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /**
+     * Publisher mobile (<768). Hero stays 375×500 full-bleed. Ribbon uses a
+     * real line-height (desktop line-height:0 + 18px pad sits high at 11px).
+     * Header type is Rule E on-image (white + text-shadow). TOC hidden.
+     */
+    _publisherMobileCss: function(s) {
+      var ribbon = s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-category--ribbon';
+      return (
+        s + '{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+        s + ' .blog-overlay-post-header-fullbleed,' +
+        s + ' .blog-overlay-post-header-fullbleed--publisher{margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-categories-line,' +
+        s + ' .blog-overlay-post-header-categories{display:block!important;line-height:1;margin:0 0 10px 0!important;width:100%;}' +
+        ribbon + '{display:inline-flex!important;align-items:center;justify-content:center;line-height:1;padding:7px 12px!important;font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin:0!important;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);width:fit-content;max-width:100%;}' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post,' +
+        s + ' .bb-title--on-image{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:#fff!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .blog-overlay-meta-row,' +
+        s + ' .bb-post-meta--on-image{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-meta-on-image,rgba(255,255,255,0.78))!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .blog-overlay-post-deck,' +
+        s + ' .blog-overlay-post-breadcrumbs,' +
+        s + ' .blog-overlay-share-row{display:none!important;}' +
+        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail{gap:28px!important;}' +
+        s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail>.blog-overlay-sidebar-section{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-footer-content{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
     /** Reporter mobile (<768). `s` is a root selector, e.g. #blog-overlay-list[data-bb-reporter-layout="1"]. */
     _reporterMobileCss: function(s) {
       return (
@@ -9104,6 +9200,10 @@
         this._mobileFeatureCss('#blog-overlay-list.bb-narrow-viewport[data-bb-feature-layout="1"]') +
         '@media (max-width: 767px){' + this._writerMobileCss('#blog-overlay-list[data-bb-writer-layout="1"]') + '}' +
         this._writerMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-writer-layout="1"]') +
+        '@media (max-width: 767px){' + this._storyMobileCss('#blog-overlay-list[data-bb-story-layout="1"]') + '}' +
+        this._storyMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-story-layout="1"]') +
+        '@media (max-width: 767px){' + this._publisherMobileCss('#blog-overlay-list[data-bb-publisher-layout="1"]') + '}' +
+        this._publisherMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-publisher-layout="1"]') +
         '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
         '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
         '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
@@ -10183,7 +10283,7 @@
      * hide the footer copy (sidebar-wins). Footer-only modules keep rendering but get
      * sidebar chrome. Tags/Categories invert that: the sidebar copy is always hidden
      * on mobile, even when enabled; a footer copy (if any) is shown instead.
-     * Feature template: hide Table of Contents. Comments are footer-only and exempt.
+     * Feature and Publisher: hide Table of Contents. Comments are footer-only and exempt.
      */
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
@@ -10241,11 +10341,11 @@
         sidebarFilterNodes[i].classList.toggle('bb-mobile-sidebar-filter-hidden', narrow);
         sidebarFilterNodes[i].setAttribute('aria-hidden', narrow ? 'true' : 'false');
       }
-      var hideFeatureToc = narrow && opts.featurePostLayout === true;
+      var hideMobileToc = narrow && (opts.featurePostLayout === true || opts.publisherPostLayout === true);
       var tocNodes = wrapper.querySelectorAll('[data-bb-module="tableOfContents"]');
       for (i = 0; i < tocNodes.length; i++) {
-        tocNodes[i].classList.toggle('bb-mobile-toc-hidden', hideFeatureToc);
-        tocNodes[i].setAttribute('aria-hidden', hideFeatureToc ? 'true' : 'false');
+        tocNodes[i].classList.toggle('bb-mobile-toc-hidden', hideMobileToc);
+        tocNodes[i].setAttribute('aria-hidden', hideMobileToc ? 'true' : 'false');
       }
       var rails = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
       for (i = 0; i < rails.length; i++) {
@@ -10257,7 +10357,7 @@
           for (var rm = 0; rm < railMods.length; rm++) {
             var modId = railMods[rm].getAttribute('data-bb-module');
             var filterHidden = !!filterIds[modId];
-            var tocHidden = hideFeatureToc && modId === 'tableOfContents';
+            var tocHidden = hideMobileToc && modId === 'tableOfContents';
             if (!filterHidden && !tocHidden) {
               hideRail = false;
               break;
@@ -10286,6 +10386,7 @@
       this._applyPrevNextRadiusVars(wrapper, narrow);
       this._capMobileBodyHeadings(wrapper, narrow);
       this._applyReporterMobileLayout(wrapper, narrow);
+      this._applyStoryMobileLayout(wrapper, narrow);
       /* Feature rebuilds author cards; appendChild does not stick. CSS-only. */
       if (!opts.featurePostLayout) {
         this._applyMobileAuthorCardLayout(wrapper, narrow);
@@ -10531,6 +10632,56 @@
           }
           bc.style.order = '';
           bc._bbReporterBcHome = null;
+        }
+      }
+    },
+
+    /**
+     * Story mobile: lift breadcrumbs above the image row and set header ink
+     * from the computed header-zone background (Rule E).
+     */
+    _applyStoryMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-story-layout') === '1' && !!narrow;
+      var inner = wrapper.querySelector('.blog-overlay-single-post-header-inner');
+      var row = wrapper.querySelector('.blog-overlay-story-header-row');
+      var bc = wrapper.querySelector('.blog-overlay-post-breadcrumbs');
+      if (bc) {
+        if (apply && inner && row) {
+          if (!bc._bbStoryBcHome) {
+            bc._bbStoryBcHome = { parent: bc.parentNode, next: bc.nextSibling };
+          }
+          if (bc.parentNode !== inner || bc.nextElementSibling !== row) {
+            inner.insertBefore(bc, row);
+          }
+        } else if (bc._bbStoryBcHome) {
+          var home = bc._bbStoryBcHome;
+          if (home.parent) {
+            if (home.next && home.next.parentNode === home.parent) {
+              home.parent.insertBefore(bc, home.next);
+            } else {
+              home.parent.appendChild(bc);
+            }
+          }
+          bc._bbStoryBcHome = null;
+        }
+      }
+      var zone = wrapper.querySelector('.blog-overlay-single-post-header-zone--story') ||
+        wrapper.querySelector('.blog-overlay-header-zone');
+      if (zone) {
+        if (apply) {
+          zone.style.width = '';
+          zone.style.maxWidth = '';
+          zone.style.marginLeft = '';
+          zone.style.marginRight = '';
+          var bg = '';
+          try { bg = window.getComputedStyle(zone).backgroundColor; } catch (eBg) { bg = ''; }
+          if (!this._isValidCssColorValue(bg)) {
+            bg = zone.style.background || zone.style.backgroundColor || '#000000';
+          }
+          zone.style.setProperty('--bb-story-ink', this._storyHeaderInkFromBackground(bg));
+        } else {
+          zone.style.removeProperty('--bb-story-ink');
         }
       }
     },
@@ -11771,10 +11922,10 @@
             storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
               : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
           );
-          /* Feature/Writer: keep default block + inline children so crumbs wrap
+          /* Feature/Writer/Story/Publisher: keep default block + inline children so crumbs wrap
              as text. display:flex !important cannot be overridden by the mobile
-             stylesheet, and flex items wrap far too early. */
-          if (!featurePostLayout && !writerPostLayout) {
+             stylesheet, and flex items wrap far too early. Publisher also hides crumbs. */
+          if (!featurePostLayout && !writerPostLayout && !storyPostLayout && !publisherPostLayout) {
             bcNav.style.setProperty('display', 'flex', 'important');
             bcNav.style.setProperty('flex-direction', 'row', 'important');
             bcNav.style.flexWrap = 'wrap';
@@ -12997,6 +13148,7 @@
       var paywallHideFooterModules = Boolean(vs.paywallHideFooterModules);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
+      var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
       var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowMods = [];
@@ -13078,9 +13230,21 @@
         } else {
           wrapper.removeAttribute('data-bb-writer-layout');
         }
+        if (self._isStoryPostLayout(cfg)) {
+          wrapper.setAttribute('data-bb-story-layout', '1');
+        } else {
+          wrapper.removeAttribute('data-bb-story-layout');
+        }
+        if (self._isPublisherPostLayout(cfg)) {
+          wrapper.setAttribute('data-bb-publisher-layout', '1');
+        } else {
+          wrapper.removeAttribute('data-bb-publisher-layout');
+        }
       } else {
         wrapper.removeAttribute('data-bb-spec-horizontal-padding');
         wrapper.removeAttribute('data-bb-writer-layout');
+        wrapper.removeAttribute('data-bb-story-layout');
+        wrapper.removeAttribute('data-bb-publisher-layout');
       }
       self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
@@ -13157,8 +13321,8 @@
           } else {
             singlePostHeaderZoneEl.style.marginLeft = '';
             singlePostHeaderZoneEl.style.marginRight = '';
-            singlePostHeaderZoneEl.style.width = '100%';
-            singlePostHeaderZoneEl.style.maxWidth = '100%';
+            singlePostHeaderZoneEl.style.width = '';
+            singlePostHeaderZoneEl.style.maxWidth = '';
           }
         } else {
           singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
@@ -14874,7 +15038,7 @@
               main.style.order = '';
               main.style.flex = '1';
               main.style.minWidth = '0';
-              self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout });
+              self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout, publisherPostLayout: publisherPostLayout });
               syncPostAfterBodyOrder();
               return;
             }
@@ -14987,7 +15151,7 @@
             if (collectionLayout === 'digest' && digestMobileNarrow) {
               self._syncDigestMobileFeaturedImageBleed(wrapper);
             }
-            self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout });
+            self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout, publisherPostLayout: publisherPostLayout });
             var mobilePostRail = isSinglePost && (stack || self._isNarrowCollectionViewport());
             if (leftHas) {
               leftSidebarEl.style.gap = (mobilePostRail && !leftSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';

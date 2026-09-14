@@ -236,6 +236,8 @@ Best for: literary blogs, opinion writing, posts that open with an image worth s
 - Social sharing platforms
 - Email Capture and Lead Magnet in footer
 
+On phones the split header stacks to one column: breadcrumbs, then a 16:10 image, then title and meta. The header background goes edge to edge. Title and supporting header text switch between white and black from that background so a light header never paints dark-on-dark; the category line stays the accent color. Share icons stay in the header with 32×32 tap targets. There is no sidebar. Footer modules keep the 56px container gap.
+
 ---
 
 ### The Publisher
@@ -250,7 +252,7 @@ Best for: multi-author blogs, content-heavy sites, posts that are part of a larg
 - Right sidebar: popular posts, related posts, category filter
 - Author profiles and related posts in footer
 
-On phones the sidebar category filter is hidden. Popular and related posts in that rail still stack after the footer.
+On phones the sidebar category filter is hidden. Popular and related posts in that rail still stack after the footer. The table of contents is hidden on phones even if you enable it in the sidebar. The hero stays a 375×500 full-bleed overlay: 11px accent category ribbon, 28px white title, 13px meta, with a light text-shadow so the type reads on the photo. There is no deck, breadcrumb trail, or share row. Footer modules keep the 56px container gap.
 
 **What you can customize:**
 - Show Date, Reading Time, Author toggles
