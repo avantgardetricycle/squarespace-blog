@@ -145,7 +145,7 @@ On phones the sidebar category filter is hidden. Header Search and Sort stay.
 
 Post templates control how individual blog posts are displayed — the header layout, whether sidebars appear, which footer modules are included, and features like the progress bar and table of contents.
 
-On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off. Previous/Next is two columns in one bordered box with a single divider; the category line is hidden so each side stays readable. In-article headings are capped at 85% of the post title (24px on most templates, 29px on Writer) so they cannot outsize the headline; smaller headings are left alone.
+On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. The Table of Contents is hidden on phones even when it is enabled. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off. Previous/Next is two columns in one bordered box with a single divider; the category line is hidden so each side stays readable. In-article headings are capped at 85% of the post title (24px on most templates, 29px on Writer) so they cannot outsize the headline; smaller headings are left alone.
 
 ---
 
@@ -153,6 +153,8 @@ On phones, posts stack in this order: article body, comments, footer modules, th
 **Title beside image, right sidebar**
 
 The Reporter places the post title and metadata to the left of the featured image in the header, then drops into a single-column body with a right sidebar. The progress bar is on by default. The right sidebar includes author profiles and related posts. A lead magnet appears in the footer.
+
+On phones the table of contents is hidden even if it is enabled. Breadcrumb links stay on one wrapping line (child `a`/`span` are inline) with 12px below the trail. About 24px separates the last line of article text from the comments block, including when there are no comments yet; an empty comments list takes no space. About 24px also separates the comments list from the Leave a Comment form. Author profiles still render when the module is enabled.
 
 Best for: journalism-style blogs, news posts, content where byline and metadata matter.
 

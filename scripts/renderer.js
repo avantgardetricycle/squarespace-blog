@@ -1399,6 +1399,15 @@
         });
         listEl.innerHTML = '';
         var list = (comments || []).slice();
+        if (!list.length) {
+          listEl.style.display = 'none';
+          listEl.style.marginTop = '0';
+          listEl.style.marginBottom = '0';
+        } else {
+          listEl.style.display = '';
+          listEl.style.marginTop = '';
+          listEl.style.marginBottom = '24px';
+        }
         var addComment = function(c, depth) {
           if (!c || typeof c !== 'object') return;
           var depthLevel = typeof depth === 'number' && !isNaN(depth) ? depth : 0;
@@ -1756,11 +1765,16 @@
         list.forEach(function(c) {
           try { addComment(c, 0); } catch (err) { console.error('[BlogOverlay] comment render error', err); }
         });
+        try {
+          var gapWrap = bbDiv.closest ? bbDiv.closest('#blog-overlay-list') : null;
+          if (gapWrap) self._syncReporterMobileArticleGap(gapWrap, self._isNarrowCollectionViewport());
+        } catch (eGap) {}
       };
 
       var listEl = document.createElement('div');
       listEl.className = 'bb-comments-list';
-      listEl.style.marginBottom = '24px';
+      listEl.style.display = 'none';
+      listEl.style.marginBottom = '0';
       bbDiv.appendChild(listEl);
 
       var postUrlForComments = (post && (post.fullUrl || post.url)) ? String(post.fullUrl || post.url) : '';
@@ -5191,14 +5205,98 @@
     },
 
     /**
-     * Get author IDs for a post (for author profiles module)
+     * Match a post's Squarespace author name(s) to configured profile / map ids.
+     */
+    _matchPostAuthorProfileIds: function(post, profiles, authorMap) {
+      var names = [];
+      var addName = function(n) {
+        if (n && typeof n === 'string' && n.trim() && names.indexOf(n.trim().toLowerCase()) < 0) {
+          names.push(n.trim().toLowerCase());
+        }
+      };
+      if (post) {
+        if (post.author) addName(post.author.displayName || post.author.fullName);
+        var arr = post.authors || post.contributors;
+        if (Array.isArray(arr)) {
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i]) addName(arr[i].displayName || arr[i].fullName);
+          }
+        }
+      }
+      if (!names.length) return [];
+      var keys = {};
+      var k;
+      if (profiles) {
+        for (k in profiles) {
+          if (Object.prototype.hasOwnProperty.call(profiles, k)) keys[k] = true;
+        }
+      }
+      if (authorMap) {
+        for (k in authorMap) {
+          if (Object.prototype.hasOwnProperty.call(authorMap, k)) keys[k] = true;
+        }
+      }
+      var matched = [];
+      for (k in keys) {
+        if (!Object.prototype.hasOwnProperty.call(keys, k)) continue;
+        var pname = ((profiles && profiles[k] && profiles[k].name) || (authorMap && authorMap[k]) || '').trim().toLowerCase();
+        if (pname && names.indexOf(pname) >= 0 && matched.indexOf(k) < 0) matched.push(k);
+      }
+      return matched;
+    },
+
+    _displayNameForAuthorId: function(post, id) {
+      if (!post || id == null) return null;
+      if (String(id) === '__bb-post-author__') return this._getAuthor(post);
+      var a = post.author;
+      if (a && a.id != null && String(a.id) === String(id)) {
+        var n = (a.displayName || a.fullName || '').trim();
+        if (n) return n;
+      }
+      var arr = post.authors || post.contributors;
+      if (Array.isArray(arr)) {
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i] && arr[i].id != null && String(arr[i].id) === String(id)) {
+            var dn = (arr[i].displayName || arr[i].fullName || '').trim();
+            if (dn) return dn;
+          }
+        }
+      }
+      return null;
+    },
+
+    /**
+     * Get author IDs for a post (for author profiles module).
+     * Falls back to name-matched profiles, then configured profiles, then the
+     * post's Squarespace author so an enabled module still renders.
      */
     _getAuthorIdsForPost: function(post, cfg) {
       var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
-      var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object') ? cfg.postAuthorOverrides : {};
-      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds) ? cfg.defaultAuthorIds : [];
-      var ids = (postId && postId in overrides) ? overrides[postId] : (defaultIds.length > 0 ? defaultIds : null);
-      return Array.isArray(ids) ? ids : [];
+      var root = this.config || {};
+      var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object')
+        ? cfg.postAuthorOverrides
+        : (root.postAuthorOverrides && typeof root.postAuthorOverrides === 'object' ? root.postAuthorOverrides : {});
+      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds)
+        ? cfg.defaultAuthorIds
+        : (Array.isArray(root.defaultAuthorIds) ? root.defaultAuthorIds : []);
+      if (postId && Object.prototype.hasOwnProperty.call(overrides, postId)) {
+        return Array.isArray(overrides[postId]) ? overrides[postId].slice() : [];
+      }
+      if (defaultIds.length > 0) return defaultIds.slice();
+      var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object')
+        ? cfg.authorProfiles
+        : ((root.authorProfiles && typeof root.authorProfiles === 'object') ? root.authorProfiles : {});
+      var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object')
+        ? cfg.authorMap
+        : ((root.authorMap && typeof root.authorMap === 'object') ? root.authorMap : {});
+      var matched = this._matchPostAuthorProfileIds(post, profiles, authorMap);
+      if (matched.length) return matched;
+      var profileKeys = Object.keys(profiles);
+      if (profileKeys.length) return profileKeys;
+      var mapKeys = Object.keys(authorMap);
+      if (mapKeys.length) return mapKeys;
+      if (this._getAuthor(post)) return ['__bb-post-author__'];
+      return [];
     },
 
     /**
@@ -7039,6 +7137,9 @@
       var useLongBio = opts && opts.useLongBio === true;
       var authorIds = this._getAuthorIdsForPost(post, cfg);
       var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object') ? cfg.authorProfiles : {};
+      if (!Object.keys(profiles).length && this.config && this.config.authorProfiles && typeof this.config.authorProfiles === 'object') {
+        profiles = this.config.authorProfiles;
+      }
       if (authorIds.length === 0) return null;
       var headerText = authorIds.length > 1 ? 'About the Authors' : 'About the Author';
       var content = document.createElement('div');
@@ -7070,7 +7171,7 @@
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
         var p = profiles[id];
-        var name = (p && p.name) || (cfg.authorMap && cfg.authorMap[id]) || 'Author';
+        var name = (p && p.name) || (cfg.authorMap && cfg.authorMap[id]) || this._displayNameForAuthorId(post, id) || 'Author';
         var imageUrl = (p && p.imageUrl) || null;
         var bio = useLongBio && (p && p.bioLong) ? (p.bioLong) : ((p && p.bio) || null);
         var email = (p && p.email) || null;
@@ -8901,7 +9002,9 @@
         s + ' .blog-overlay-reporter-featured-image,' +
         s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image{width:100%!important;max-width:100%!important;flex:0 0 auto!important;height:auto!important;margin-top:-10px;margin-bottom:15px;}' +
         s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image>div{width:100%!important;height:auto!important;aspect-ratio:16/10!important;max-height:none!important;}' +
-        s + ' .blog-overlay-post-breadcrumbs{order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:5px!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%;order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
         s + ' .blog-overlay-post-title,' +
         s + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         s + ' .blog-overlay-post-deck--reporter{font-size:14px!important;line-height:1.4;font-family:inherit;margin-top:-5px!important;margin-bottom:0!important;}' +
@@ -8910,10 +9013,12 @@
         s + ' .bb-post-meta--on-bg{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.4;}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
         s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
-        s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:-80px!important;}' +
-        s + ' .bb-comments-section{padding-top:calc(24px - 30px);}' +
-        s + ' .bb-comments-list{margin-top:15px;}' +
-        s + ' .bb-comment-form-wrap{padding-top:25px;margin-top:0!important;}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
+        s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:0;}' +
+        s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
+        s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
+        s + ' .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
+        s + ' .bb-comment-form-wrap{padding-top:0!important;margin-top:0!important;}' +
         s + ' .bb-comment-form-heading,' +
         s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
         s + ' .bb-comment-form-rule{display:block;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
@@ -9145,6 +9250,7 @@
         /* Mobile (<768): hide footer duplicates of sidebar modules; restyle footer-only to sidebar chrome. */
         '#blog-overlay-list .bb-mobile-sidebar-chrome{display:none;}' +
         '#blog-overlay-list .bb-footer-sidebar-alt{display:none!important;}' +
+        '#blog-overlay-list .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
         '#blog-overlay-list .bb-mobile-duplicate-hidden,' +
         '#blog-overlay-list .bb-mobile-toc-hidden,' +
         '#blog-overlay-list .bb-mobile-sidebar-filter-hidden,' +
@@ -10283,7 +10389,8 @@
      * hide the footer copy (sidebar-wins). Footer-only modules keep rendering but get
      * sidebar chrome. Tags/Categories invert that: the sidebar copy is always hidden
      * on mobile, even when enabled; a footer copy (if any) is shown instead.
-     * Feature and Publisher: hide Table of Contents. Comments are footer-only and exempt.
+     * Hide Table of Contents on mobile for every post template (Feature,
+     * Publisher, Reporter, and any other sidebar TOC). Comments are footer-only and exempt.
      */
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
@@ -10341,7 +10448,7 @@
         sidebarFilterNodes[i].classList.toggle('bb-mobile-sidebar-filter-hidden', narrow);
         sidebarFilterNodes[i].setAttribute('aria-hidden', narrow ? 'true' : 'false');
       }
-      var hideMobileToc = narrow && (opts.featurePostLayout === true || opts.publisherPostLayout === true);
+      var hideMobileToc = narrow;
       var tocNodes = wrapper.querySelectorAll('[data-bb-module="tableOfContents"]');
       for (i = 0; i < tocNodes.length; i++) {
         tocNodes[i].classList.toggle('bb-mobile-toc-hidden', hideMobileToc);
@@ -10634,6 +10741,100 @@
           bc._bbReporterBcHome = null;
         }
       }
+      this._syncReporterMobileArticleGap(wrapper, apply);
+      if (apply && typeof requestAnimationFrame === 'function') {
+        var self = this;
+        requestAnimationFrame(function() {
+          self._syncReporterMobileArticleGap(wrapper, true);
+        });
+      }
+    },
+
+    /** Bottom of the last visible text line inside `root` (Range rects, not the container box). */
+    _lastTextLineBottom: function(root) {
+      if (!root) return 0;
+      var best = 0;
+      try {
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+          acceptNode: function(node) {
+            if (!node || !String(node.nodeValue || '').replace(/\s+/g, '')) return NodeFilter.FILTER_REJECT;
+            var el = node.parentElement;
+            if (!el) return NodeFilter.FILTER_REJECT;
+            var tag = el.tagName;
+            if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        });
+        var range = document.createRange();
+        var node;
+        while ((node = walker.nextNode())) {
+          range.selectNodeContents(node);
+          var rects = range.getClientRects();
+          if (!rects || !rects.length) continue;
+          var b = rects[rects.length - 1].bottom;
+          if (b > best) best = b;
+        }
+      } catch (eLastText) {}
+      if (!best && root.getBoundingClientRect) best = root.getBoundingClientRect().bottom;
+      return best;
+    },
+
+    _isReporterGapTarget: function(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.classList && (
+        el.classList.contains('bb-mobile-duplicate-hidden') ||
+        el.classList.contains('bb-mobile-toc-hidden') ||
+        el.classList.contains('bb-mobile-rail-hidden') ||
+        el.classList.contains('bb-mobile-empty-hidden')
+      )) return false;
+      try {
+        var cs = window.getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      } catch (eCs) {}
+      return true;
+    },
+
+    /**
+     * Reporter mobile: set article margin-bottom so ~24px separates the last
+     * line of body text from the comments block (or the next visible block
+     * when comments are off). Extra space below the last glyph inside
+     * `.blog-overlay-body` is post-dependent — do not use a fixed margin.
+     */
+    _syncReporterMobileArticleGap: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var article = wrapper.querySelector('.blog-overlay-post-article--sidebar-row');
+      if (!article || !article.style) return;
+      if (wrapper.getAttribute('data-bb-reporter-layout') !== '1' || !narrow) {
+        article.style.removeProperty('--bb-reporter-article-mb');
+        return;
+      }
+      var body = article.querySelector('.blog-overlay-body') || article;
+      var lastText = this._lastTextLineBottom(body);
+      if (!lastText) return;
+      var next = wrapper.querySelector('#bb-comments');
+      if (next && !this._isReporterGapTarget(next)) next = null;
+      if (!next) {
+        next = article.nextElementSibling;
+        while (next && !this._isReporterGapTarget(next)) next = next.nextElementSibling;
+      }
+      if (!next || !next.getBoundingClientRect) return;
+      var nextTop = next.getBoundingClientRect().top;
+      var gap = nextTop - lastText;
+      var current = 0;
+      try {
+        current = parseFloat(window.getComputedStyle(article).marginBottom) || 0;
+      } catch (eMb) {
+        current = 0;
+      }
+      if (Math.abs(gap - 24) < 1.5) return;
+      var nextMb = current + (24 - gap);
+      if (!isFinite(nextMb)) return;
+      if (nextMb < -240) nextMb = -240;
+      if (nextMb > 80) nextMb = 80;
+      var rounded = Math.round(nextMb);
+      var prev = article.style.getPropertyValue('--bb-reporter-article-mb');
+      if (prev === rounded + 'px') return;
+      article.style.setProperty('--bb-reporter-article-mb', rounded + 'px');
     },
 
     /**
@@ -11922,10 +12123,11 @@
             storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
               : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
           );
-          /* Feature/Writer/Story/Publisher: keep default block + inline children so crumbs wrap
-             as text. display:flex !important cannot be overridden by the mobile
-             stylesheet, and flex items wrap far too early. Publisher also hides crumbs. */
-          if (!featurePostLayout && !writerPostLayout && !storyPostLayout && !publisherPostLayout) {
+          /* Feature/Writer/Story/Publisher/Reporter: keep default block + inline
+             children so crumbs wrap as text. display:flex !important cannot be
+             overridden by the mobile stylesheet, and flex items wrap far too
+             early. Publisher also hides crumbs. */
+          if (!featurePostLayout && !writerPostLayout && !storyPostLayout && !publisherPostLayout && !reporterPostHeaderLayout) {
             bcNav.style.setProperty('display', 'flex', 'important');
             bcNav.style.setProperty('flex-direction', 'row', 'important');
             bcNav.style.flexWrap = 'wrap';

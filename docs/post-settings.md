@@ -68,7 +68,7 @@ A sidebar appears when you add modules to **Left Sidebar** or **Right Sidebar**.
 
 Post sidebar modules: Table of Contents, Author Profiles, Popular Posts, Related Posts, Filter by Category, Filter by Tags & Categories, Email Capture, Lead Magnet.
 
-On phones, sidebar Tags and Categories sections are hidden even if they are enabled. On Feature and Publisher, the Table of Contents is also hidden on phones even when it is enabled in a sidebar. Other sidebar modules still stack after footer modules. If the same filter also exists in the footer, the footer copy is shown instead (this inverts the usual sidebar-wins rule).
+On phones, sidebar Tags and Categories sections are hidden even if they are enabled. The Table of Contents is also hidden on phones even when it is enabled in a sidebar (Reporter, Feature, Publisher, and any other post template). Other sidebar modules still stack after footer modules. If the same filter also exists in the footer, the footer copy is shown instead (this inverts the usual sidebar-wins rule).
 
 Reporter, Writer, Feature, and Story lock the left sidebar. Writer, Feature, and Story also lock the right sidebar. If the section is missing, the template does not use that sidebar.
 
@@ -115,6 +115,8 @@ Authors are managed from **Show Author(s)** on either the Collection or Post tab
 - **Default author** checkbox — also add to site defaults
 
 **Edit Author Profiles** opens the editor for an author already on the current list. Removing a chip from Default Author(s) or Post Author(s) removes that author from the list; it does not delete the author record.
+
+If Author Profiles is enabled as a sidebar or footer module, it still renders when no default authors are selected: it uses a matching author profile, then any configured profiles, then the post’s Squarespace byline.
 
 ---
 
