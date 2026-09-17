@@ -5169,14 +5169,20 @@
     _getAuthor: function(item) {
       if (!item) return null;
       var a = item.author;
-      if (a && a.displayName && typeof a.displayName === 'string') return a.displayName.trim();
+      if (a) {
+        var fromAuthor = (a.displayName || a.fullName || a.name || '').trim();
+        if (fromAuthor) return fromAuthor;
+      }
       var arr = item.authors || item.contributors;
       if (Array.isArray(arr) && arr.length > 0) {
         var first = arr[0];
-        if (first && (first.displayName || first.fullName)) {
-          var name = (first.displayName || first.fullName || '').trim();
+        if (first && (first.displayName || first.fullName || first.name)) {
+          var name = (first.displayName || first.fullName || first.name || '').trim();
           if (name) return name;
         }
+      }
+      if (item.authorName && typeof item.authorName === 'string' && item.authorName.trim()) {
+        return item.authorName.trim();
       }
       return null;
     },
@@ -5215,7 +5221,8 @@
         }
       };
       if (post) {
-        if (post.author) addName(post.author.displayName || post.author.fullName);
+        if (post.author) addName(post.author.displayName || post.author.fullName || post.author.name);
+        addName(post.authorName);
         var arr = post.authors || post.contributors;
         if (Array.isArray(arr)) {
           for (var i = 0; i < arr.length; i++) {
@@ -5266,6 +5273,28 @@
     },
 
     /**
+     * True profile records (id -> {name, bio, ...}), not the postModules
+     * toggle `{enabled, position}` that can land on the merged post cfg.
+     */
+    _isAuthorProfilesMap: function(obj) {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+      var keys = Object.keys(obj);
+      if (!keys.length) return false;
+      var i;
+      for (i = 0; i < keys.length; i++) {
+        if (keys[i] !== 'enabled' && keys[i] !== 'position') return true;
+      }
+      return false;
+    },
+
+    _resolveAuthorProfilesMap: function(cfg) {
+      var root = this.config || {};
+      if (this._isAuthorProfilesMap(cfg && cfg.authorProfiles)) return cfg.authorProfiles;
+      if (this._isAuthorProfilesMap(root.authorProfiles)) return root.authorProfiles;
+      return {};
+    },
+
+    /**
      * Get author IDs for a post (for author profiles module).
      * Falls back to name-matched profiles, then configured profiles, then the
      * post's Squarespace author so an enabled module still renders.
@@ -5276,17 +5305,16 @@
       var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object')
         ? cfg.postAuthorOverrides
         : (root.postAuthorOverrides && typeof root.postAuthorOverrides === 'object' ? root.postAuthorOverrides : {});
-      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds)
+      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds) && cfg.defaultAuthorIds.length
         ? cfg.defaultAuthorIds
         : (Array.isArray(root.defaultAuthorIds) ? root.defaultAuthorIds : []);
       if (postId && Object.prototype.hasOwnProperty.call(overrides, postId)) {
-        return Array.isArray(overrides[postId]) ? overrides[postId].slice() : [];
+        var overrideIds = Array.isArray(overrides[postId]) ? overrides[postId].slice() : [];
+        if (overrideIds.length) return overrideIds;
       }
       if (defaultIds.length > 0) return defaultIds.slice();
-      var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object')
-        ? cfg.authorProfiles
-        : ((root.authorProfiles && typeof root.authorProfiles === 'object') ? root.authorProfiles : {});
-      var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object')
+      var profiles = this._resolveAuthorProfilesMap(cfg);
+      var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object' && Object.keys(cfg.authorMap).length)
         ? cfg.authorMap
         : ((root.authorMap && typeof root.authorMap === 'object') ? root.authorMap : {});
       var matched = this._matchPostAuthorProfileIds(post, profiles, authorMap);
@@ -5295,7 +5323,7 @@
       if (profileKeys.length) return profileKeys;
       var mapKeys = Object.keys(authorMap);
       if (mapKeys.length) return mapKeys;
-      if (this._getAuthor(post)) return ['__bb-post-author__'];
+      if (post) return ['__bb-post-author__'];
       return [];
     },
 
@@ -7136,11 +7164,11 @@
       var self = this;
       var useLongBio = opts && opts.useLongBio === true;
       var authorIds = this._getAuthorIdsForPost(post, cfg);
-      var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object') ? cfg.authorProfiles : {};
-      if (!Object.keys(profiles).length && this.config && this.config.authorProfiles && typeof this.config.authorProfiles === 'object') {
-        profiles = this.config.authorProfiles;
+      var profiles = this._resolveAuthorProfilesMap(cfg);
+      if (authorIds.length === 0) {
+        if (post) authorIds = ['__bb-post-author__'];
+        else return null;
       }
-      if (authorIds.length === 0) return null;
       var headerText = authorIds.length > 1 ? 'About the Authors' : 'About the Author';
       var content = document.createElement('div');
       content.className = 'blog-overlay-author-profiles';
@@ -7171,7 +7199,12 @@
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
         var p = profiles[id];
-        var name = (p && p.name) || (cfg.authorMap && cfg.authorMap[id]) || this._displayNameForAuthorId(post, id) || 'Author';
+        var name = (p && p.name)
+          || (cfg && cfg.authorMap && cfg.authorMap[id])
+          || (this.config && this.config.authorMap && this.config.authorMap[id])
+          || this._displayNameForAuthorId(post, id)
+          || this._getAuthor(post)
+          || 'Author';
         var imageUrl = (p && p.imageUrl) || null;
         var bio = useLongBio && (p && p.bioLong) ? (p.bioLong) : ((p && p.bio) || null);
         var email = (p && p.email) || null;
@@ -8734,11 +8767,37 @@
     },
 
     /**
+     * Mobile sidebar Related + Popular cards (<768): 80×80 thumbs, 12px gap.
+     * Shared by every template with a sidebar (Reporter, Publisher, Feature,
+     * Digest Collection) so desktop 60×60 / 10px cannot linger per-template.
+     */
+    _mobileSidebarPostCardCss: function(s) {
+      return (
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px!important;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}'
+      );
+    },
+
+    /**
      * Mobile post footers (<768): spacing is the container gap, not per-module
      * margins. Newsletter +40 / lead-magnet +20 (and more-to-read / prev-next
      * / author-card margins) break when a neighbor module is toggled off.
+     * Footer primary buttons share the sidebar compact scale (8px 16px /
+     * 14px) and stay inline-block so text-align:center works. Comment
+     * submit is centred flex (justify-content:center) so Squarespace
+     * .sqs-button-element--primary justify-content:normal cannot left-align
+     * the label.
      */
     _mobilePostFooterGapCss: function(s) {
+      var btn = s + ' .blog-overlay-footer-module .sqs-button-element--primary,' +
+        s + ' .blog-overlay-footer-module .bb-newsletter-btn,' +
+        s + ' .blog-overlay-footer-module .bb-lead-magnet-btn,' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-newsletter-footer-form .sqs-button-element--primary,' +
+        s + ' .bb-lead-magnet-footer-form button,' +
+        s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary';
       return (
         s + ' .blog-overlay-footer-content{display:flex;flex-direction:column;gap:56px!important;}' +
         s + ' .blog-overlay-feature-below-row,' +
@@ -8753,7 +8812,16 @@
         s + ' .blog-overlay-prev-next,' +
         s + ' .blog-overlay-footer-content .blog-overlay-author-card,' +
         s + ' .blog-overlay-feature-below-row .blog-overlay-author-card,' +
-        s + ' [data-bb-zone="footer"] .blog-overlay-author-card{margin-top:0!important;margin-bottom:0!important;}'
+        s + ' [data-bb-zone="footer"] .blog-overlay-author-card{margin-top:0!important;margin-bottom:0!important;}' +
+        btn + '{display:inline-block!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' h2.bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading,' +
+        s + ' .bb-comment-form-wrap h2.bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:flex!important;align-items:center;justify-content:center!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)),' +
+        s + ' .bb-newsletter-footer-copy:empty,' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}'
       );
     },
 
@@ -8778,29 +8846,41 @@
 
     /**
      * Feature mobile (<768): header type/spacing + footer pack.
-     * Author cards stay CSS-only (see _mobileAuthorCardCss); Feature rebuilds
-     * the author block, so JS must not appendChild/restructure the DOM.
+     * Image mb is 0 (not −50px) so body padding-top:20px paints a 20px gap
+     * to the first line. Author cards stay CSS-only (see _mobileAuthorCardCss);
+     * Feature rebuilds the author block, so JS must not appendChild/restructure.
      */
     _mobileFeatureCss: function(s) {
       var pack = s + ' .blog-overlay-feature-footer-modules';
       var below = s + ' .blog-overlay-feature-below-row';
       var stack = s + ' .blog-overlay-feature-header-stack';
+      var kicker = s + ' .blog-overlay-post-header-categories,' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-header-categories span,' +
+        s + ' .blog-overlay-post-category--feature';
       return (
-        s + ' .blog-overlay-featured-image-stacked-fullbleed--feature{margin-top:-15px!important;margin-bottom:-50px!important;}' +
+        s + ' .blog-overlay-featured-image-stacked-fullbleed--feature{margin-top:-15px!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-header-stacked{margin-bottom:0!important;}' +
         s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
         s + ' .blog-overlay-post-header-categories{margin-bottom:8px!important;justify-content:center!important;text-align:center;width:100%;}' +
+        kicker + '{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit)!important;font-weight:700!important;letter-spacing:0.08em!important;text-transform:uppercase!important;color:var(--bb-accent,#5B4FE8)!important;text-align:center;}' +
         s + ' .blog-overlay-post-header-categories .bb-category-label,' +
-        s + ' .blog-overlay-post-category--feature{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);text-align:center;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-header-categories span,' +
+        s + ' .blog-overlay-post-category--feature{margin-bottom:0!important;}' +
         stack + ' .blog-overlay-post-title,' +
-        stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;}' +
+        stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
         stack + ' .blog-overlay-post-deck,' +
         stack + ' .blog-overlay-post-deck--feature{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);text-align:center;}' +
         stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
         stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
-        s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-share-row--feature .blog-overlay-share-link,' +
+        s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
+        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
         s + ' aside.blog-overlay-relevant-posts,' +
         s + ' .blog-overlay-popular-posts{width:100%!important;max-width:none!important;}' +
         s + ' aside.blog-overlay-relevant-posts>div,' +
@@ -8834,12 +8914,14 @@
         s + ' .bb-lead-magnet-footer-form button,' +
         s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .bb-lead-magnet-subtitle{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin:0 0 8px 0!important;}' +
-        s + ' .bb-comment-form-wrap{padding-top:25px;margin-top:0!important;}' +
+        s + ' .bb-comments-section{margin-top:0!important;padding-top:0;}' +
+        s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
+        s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
+        s + ' .bb-comment-form-wrap{padding-top:0!important;margin-top:0!important;}' +
         s + ' .bb-comment-form-heading,' +
         s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
         s + ' .bb-comment-form-rule{display:block!important;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
-        s + ' .bb-comments-list{margin-top:15px;}' +
-        s + ' .bb-comment-submit{width:100%;padding:8px 16px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px!important;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         below + '{display:flex;flex-direction:column;gap:56px!important;}' +
         below + '>*{order:1;}' +
         below + '>.blog-overlay-feature-comments-section{order:0;}' +
@@ -8903,7 +8985,17 @@
         s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
         s + ' .blog-overlay-body{margin-bottom:-80px!important;}' +
         s + ' .blog-overlay-footer-content{gap:56px!important;}' +
-        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)),' +
+        s + ' .bb-newsletter-footer-copy:empty,' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-newsletter-footer-form .sqs-button-element--primary,' +
+        s + ' .bb-newsletter-footer-form .bb-newsletter-btn{display:inline-block!important;width:100%;padding:8px 16px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:inline-block!important;width:100%!important;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}'
       );
     },
 
@@ -8986,8 +9078,17 @@
         s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
         s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail{gap:28px!important;}' +
         s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail>.blog-overlay-sidebar-section{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px!important;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
         s + ' .blog-overlay-footer-content{gap:56px!important;}' +
-        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' h2.bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading,' +
+        s + ' .bb-comment-form-wrap h2.bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:flex!important;align-items:center;justify-content:center!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}'
       );
     },
 
@@ -9225,8 +9326,12 @@
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-header{display:none;}' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,' +
-        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary{padding:8px 16px!important;box-sizing:border-box;}' +
-        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary{padding:8px 16px!important;box-sizing:border-box;}}' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,' +
+        '#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,' +
+        '#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}' +
+        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}}' +
         '#blog-overlay-list .bb-lead-magnet-msg{font-size:0.85rem;margin-top:4px;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
@@ -9272,7 +9377,7 @@
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card{border:none;padding:0;margin:0;border-radius:0;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer.bb-footer-card,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-card{border:none;padding:0;border-radius:0;background:transparent;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-row{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-copy,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form-stack,' +
@@ -9293,11 +9398,13 @@
           this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobilePostFooterGapCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobilePrevNextCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobileSidebarPostCardCss('#blog-overlay-list') +
         '}' +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
         this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePostFooterGapCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePrevNextCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobileSidebarPostCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
         this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
