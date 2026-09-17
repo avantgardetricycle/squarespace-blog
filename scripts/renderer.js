@@ -1767,7 +1767,11 @@
         });
         try {
           var gapWrap = bbDiv.closest ? bbDiv.closest('#blog-overlay-list') : null;
-          if (gapWrap) self._syncReporterMobileArticleGap(gapWrap, self._isNarrowCollectionViewport());
+          if (gapWrap) {
+            var gapNarrow = self._isNarrowCollectionViewport();
+            self._syncReporterMobileArticleGap(gapWrap, gapNarrow);
+            self._syncFeatureMobileArticleGap(gapWrap, gapNarrow);
+          }
         } catch (eGap) {}
       };
 
@@ -3851,6 +3855,7 @@
         }
         footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
         if (footerHasContent) main.appendChild(footerZoneEl);
+        if (featurePostLayout) this._syncFeatureMobileArticleGap(wrapper, true);
         return;
       }
 
@@ -8847,7 +8852,8 @@
     /**
      * Feature mobile (<768): header type/spacing + footer pack.
      * Image mb is 0 (not −50px) so body padding-top:20px paints a 20px gap
-     * to the first line. Author cards stay CSS-only (see _mobileAuthorCardCss);
+     * to the first line. Body mb is --bb-feature-article-mb (measured; do
+     * not use −80px). Author cards stay CSS-only (see _mobileAuthorCardCss);
      * Feature rebuilds the author block, so JS must not appendChild/restructure.
      */
     _mobileFeatureCss: function(s) {
@@ -8880,7 +8886,7 @@
         s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
-        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:var(--bb-feature-article-mb,0px)!important;}' +
         s + ' aside.blog-overlay-relevant-posts,' +
         s + ' .blog-overlay-popular-posts{width:100%!important;max-width:none!important;}' +
         s + ' aside.blog-overlay-relevant-posts>div,' +
@@ -10606,6 +10612,7 @@
       this._applyPrevNextRadiusVars(wrapper, narrow);
       this._capMobileBodyHeadings(wrapper, narrow);
       this._applyReporterMobileLayout(wrapper, narrow);
+      this._applyFeatureMobileLayout(wrapper, narrow);
       this._applyStoryMobileLayout(wrapper, narrow);
       /* Feature rebuilds author cards; appendChild does not stick. CSS-only. */
       if (!opts.featurePostLayout) {
@@ -10863,6 +10870,23 @@
       }
     },
 
+    /**
+     * Feature mobile: measure article→comments gap after the below-row is
+     * stacked under the body. Extra space below the last glyph is
+     * post-dependent — do not use a fixed margin.
+     */
+    _applyFeatureMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-feature-layout') === '1' && !!narrow;
+      this._syncFeatureMobileArticleGap(wrapper, apply);
+      if (apply && typeof requestAnimationFrame === 'function') {
+        var self = this;
+        requestAnimationFrame(function() {
+          self._syncFeatureMobileArticleGap(wrapper, true);
+        });
+      }
+    },
+
     /** Bottom of the last visible text line inside `root` (Range rects, not the container box). */
     _lastTextLineBottom: function(root) {
       if (!root) return 0;
@@ -10908,26 +10932,26 @@
     },
 
     /**
-     * Reporter mobile: set article margin-bottom so ~24px separates the last
-     * line of body text from the comments block (or the next visible block
-     * when comments are off). Extra space below the last glyph inside
-     * `.blog-overlay-body` is post-dependent — do not use a fixed margin.
+     * Mobile article→comments gap: last line of body text (Range rects) to
+     * `#bb-comments` (or the next visible block when comments are off) must
+     * be ~24px. Extra space below the last glyph is post-dependent — do not
+     * swap in another fixed negative margin.
      */
-    _syncReporterMobileArticleGap: function(wrapper, narrow) {
-      if (!wrapper) return;
-      var article = wrapper.querySelector('.blog-overlay-post-article--sidebar-row');
-      if (!article || !article.style) return;
-      if (wrapper.getAttribute('data-bb-reporter-layout') !== '1' || !narrow) {
-        article.style.removeProperty('--bb-reporter-article-mb');
+    _syncMobileArticleCommentsGap: function(wrapper, narrow, spec) {
+      if (!wrapper || !spec) return;
+      var box = wrapper.querySelector(spec.boxSelector);
+      if (!box || !box.style) return;
+      if ((spec.layoutAttr && wrapper.getAttribute(spec.layoutAttr) !== '1') || !narrow) {
+        box.style.removeProperty(spec.cssVar);
         return;
       }
-      var body = article.querySelector('.blog-overlay-body') || article;
+      var body = spec.bodySelector ? (box.querySelector(spec.bodySelector) || box) : box;
       var lastText = this._lastTextLineBottom(body);
       if (!lastText) return;
       var next = wrapper.querySelector('#bb-comments');
       if (next && !this._isReporterGapTarget(next)) next = null;
       if (!next) {
-        next = article.nextElementSibling;
+        next = spec.nextFromBody ? body.nextElementSibling : box.nextElementSibling;
         while (next && !this._isReporterGapTarget(next)) next = next.nextElementSibling;
       }
       if (!next || !next.getBoundingClientRect) return;
@@ -10935,7 +10959,7 @@
       var gap = nextTop - lastText;
       var current = 0;
       try {
-        current = parseFloat(window.getComputedStyle(article).marginBottom) || 0;
+        current = parseFloat(window.getComputedStyle(box).marginBottom) || 0;
       } catch (eMb) {
         current = 0;
       }
@@ -10945,9 +10969,27 @@
       if (nextMb < -240) nextMb = -240;
       if (nextMb > 80) nextMb = 80;
       var rounded = Math.round(nextMb);
-      var prev = article.style.getPropertyValue('--bb-reporter-article-mb');
+      var prev = box.style.getPropertyValue(spec.cssVar);
       if (prev === rounded + 'px') return;
-      article.style.setProperty('--bb-reporter-article-mb', rounded + 'px');
+      box.style.setProperty(spec.cssVar, rounded + 'px');
+    },
+
+    _syncReporterMobileArticleGap: function(wrapper, narrow) {
+      this._syncMobileArticleCommentsGap(wrapper, narrow, {
+        layoutAttr: 'data-bb-reporter-layout',
+        cssVar: '--bb-reporter-article-mb',
+        boxSelector: '.blog-overlay-post-article--sidebar-row',
+        bodySelector: '.blog-overlay-body'
+      });
+    },
+
+    _syncFeatureMobileArticleGap: function(wrapper, narrow) {
+      this._syncMobileArticleCommentsGap(wrapper, narrow, {
+        layoutAttr: 'data-bb-feature-layout',
+        cssVar: '--bb-feature-article-mb',
+        boxSelector: '.blog-overlay-body',
+        nextFromBody: true
+      });
     },
 
     /**
@@ -13464,7 +13506,6 @@
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
-      var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowMods = [];
       var featureBelowRowHost = null;
@@ -15890,12 +15931,8 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
-                /** Writer/Story: no "More to Read" grid (spec module order). */
-                if (fmod === 'relevantPosts' && (writerPostLayoutForFooter || storyPostLayoutForFooter)) {
-                  continue;
-                }
-                /** Writer: lead magnet is skipped entirely; prev/next replaces it instead. */
-                if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
+                /** Story: no "More to Read" grid (spec module order). */
+                if (fmod === 'relevantPosts' && storyPostLayoutForFooter) {
                   continue;
                 }
                 var footerAuthorHeader = null;
