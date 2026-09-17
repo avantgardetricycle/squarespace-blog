@@ -10,7 +10,7 @@ import {
   getStripePriceDisplayForPriceId,
   loadPublicPlanPrices
 } from '../lib/stripePlanPrices.js'
-import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
+import { DEFAULT_PLAN_KEY, isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
