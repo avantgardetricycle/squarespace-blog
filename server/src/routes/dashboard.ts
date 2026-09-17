@@ -14,7 +14,7 @@ import { DEFAULT_PLAN_KEY, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
-import { isActiveSubscriptionStatus } from '../lib/subscriptionStatus.js'
+import { isActiveSubscriptionStatus, isResubscribableStatus } from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 import {
@@ -416,6 +416,130 @@ router.post('/subscription/portal', requireSession, async (req: Request, res: Re
   } catch (err) {
     console.error('Portal session error:', err)
     const message = err instanceof Error ? err.message : 'Failed to create portal session'
+    res.status(500).json({ error: message })
+  }
+})
+
+// POST /api/dashboard/subscription/checkout - Start Stripe Checkout to resubscribe
+router.post('/subscription/checkout', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const { planKey, cadence } = req.body ?? {}
+
+  if (!planKey || !cadence) {
+    res.status(400).json({ error: 'planKey and cadence are required' })
+    return
+  }
+
+  const validCadences = ['monthly', 'annual']
+  if (!isRecognizedPlanKeyInput(planKey) || !validCadences.includes(cadence)) {
+    res.status(400).json({ error: 'Invalid planKey or cadence' })
+    return
+  }
+
+  const normalizedPlanKey = normalizePlanKey(planKey)
+  const stripeEnv = getStripeEnvironment()
+
+  try {
+    const [dbUser, subscription] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, email: true, name: true, stripeCustomerId: true }
+      }),
+      prisma.subscription.findFirst({
+        where: { userId: user.id },
+        orderBy: { updatedAt: 'desc' }
+      })
+    ])
+
+    if (!dbUser) {
+      res.status(404).json({ error: 'User not found' })
+      return
+    }
+
+    if (!isResubscribableStatus(subscription?.status)) {
+      if (isActiveSubscriptionStatus(subscription?.status)) {
+        res.status(409).json({ error: 'You already have an active subscription.' })
+        return
+      }
+      res.status(409).json({
+        error: 'Update your payment method to continue this subscription.'
+      })
+      return
+    }
+
+    const plan = await prisma.plan.findUnique({
+      where: {
+        planKey_cadence_stripeEnvironment: {
+          planKey: normalizedPlanKey,
+          cadence,
+          stripeEnvironment: stripeEnv
+        }
+      }
+    })
+    if (!plan) {
+      res.status(404).json({ error: 'Plan not found' })
+      return
+    }
+
+    const stripe = getStripe()
+    let stripeCustomerId = subscription?.stripeCustomerId ?? dbUser.stripeCustomerId
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: dbUser.email,
+        ...(dbUser.name ? { name: dbUser.name } : {}),
+        metadata: { user_id: String(dbUser.id) }
+      })
+      stripeCustomerId = customer.id
+      await prisma.user.update({
+        where: { id: dbUser.id },
+        data: { stripeCustomerId }
+      })
+    }
+
+    const appUrl = getAppUrl()
+    const metadata: Record<string, string> = {
+      plan_key: normalizedPlanKey,
+      cadence,
+      stripe_price_label: plan.stripePriceLabel,
+      resubscribe: 'true'
+    }
+    if (dbUser.name) {
+      metadata.customer_name = dbUser.name
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: stripeCustomerId,
+      customer_update: { name: 'auto' },
+      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+      subscription_data: { metadata },
+      metadata,
+      success_url: `${appUrl}/dashboard/account?checkout=success`,
+      cancel_url: `${appUrl}/dashboard/account`
+    })
+
+    await prisma.checkoutSession.create({
+      data: {
+        stripeCheckoutSessionId: session.id,
+        userId: dbUser.id,
+        email: dbUser.email,
+        plan: normalizedPlanKey,
+        stripePriceId: plan.stripePriceId,
+        status: 'created',
+        metadataJson: JSON.stringify({
+          cadence,
+          stripePriceLabel: plan.stripePriceLabel,
+          maxSites: plan.maxSites,
+          resubscribe: true,
+          customerName: dbUser.name ?? undefined
+        })
+      }
+    })
+
+    res.json({ url: session.url })
+  } catch (err) {
+    console.error('Resubscribe checkout error:', err)
+    const message = err instanceof Error ? err.message : 'Failed to start checkout'
     res.status(500).json({ error: message })
   }
 })

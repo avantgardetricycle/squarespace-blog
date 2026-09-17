@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,10 +24,13 @@ import { Label } from "@/app/components/ui/label";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { getDashboardMe, updateProfile, cancelSubscription, resumeSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
+import { ResubscribePlanModal } from "@/app/components/ResubscribePlanModal";
 import { getPlanDisplayName } from "@/lib/planLabels";
-import { formatSubscriptionDate, hasActiveSubscription } from "@/lib/subscription";
+import { formatSubscriptionDate, hasActiveSubscription, isResubscribableStatus } from "@/lib/subscription";
 
 export default function Account() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const checkoutSuccessToastShown = useRef(false);
   const [me, setMe] = useState<DashboardMe | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -34,8 +38,9 @@ export default function Account() {
   const [canceling, setCanceling] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showResubscribeModal, setShowResubscribeModal] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | "restore" | null>(null);
+  const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | null>(null);
 
   useEffect(() => {
     getDashboardMe().then((data) => {
@@ -46,6 +51,16 @@ export default function Account() {
       setLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (checkoutSuccessToastShown.current) return;
+    if (searchParams.get("checkout") !== "success") return;
+    checkoutSuccessToastShown.current = true;
+    toast.success("Checkout complete. Your subscription will activate in a moment.");
+    const next = new URLSearchParams(searchParams);
+    next.delete("checkout");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleCancelSubscription = async () => {
     setCanceling(true);
@@ -71,27 +86,6 @@ export default function Account() {
   };
 
   const handleRestoreSubscription = async () => {
-    if (!hasActiveSubscription(me?.subscription)) {
-      setRestoring(true);
-      setPortalLoading(true);
-      setPortalLoadingButton("restore");
-      try {
-        const { url, error } = await createPortalSession();
-        if (url) {
-          window.location.href = url;
-          return;
-        }
-        toast.error(error ?? "Failed to open billing portal");
-      } catch {
-        toast.error("Failed to open billing portal");
-      } finally {
-        setRestoring(false);
-        setPortalLoading(false);
-        setPortalLoadingButton(null);
-      }
-      return;
-    }
-
     setRestoring(true);
     try {
       const result = await resumeSubscription();
@@ -174,6 +168,7 @@ export default function Account() {
   const currentPeriodEnd = formatSubscriptionDate(me.subscription?.currentPeriodEnd) ?? "—";
   const scheduledCancel = Boolean(subscriptionActive && me.subscription?.cancelAtPeriodEnd);
   const subscriptionExpired = !subscriptionActive;
+  const canResubscribe = subscriptionExpired && isResubscribableStatus(me.subscription?.status);
 
   return (
     <div className="space-y-6">
@@ -226,7 +221,9 @@ export default function Account() {
             <CardTitle>Current Plan</CardTitle>
             <CardDescription>
               {subscriptionExpired
-                ? `Your ${planDisplay} plan has been canceled.`
+                ? canResubscribe
+                  ? `Your ${planDisplay} plan has been canceled.`
+                  : `Your ${planDisplay} plan needs a payment update.`
                 : `You are currently subscribed to the ${planDisplay} plan.`}
             </CardDescription>
           </CardHeader>
@@ -258,12 +255,16 @@ export default function Account() {
                   <>
                     Your subscription ended on{" "}
                     <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
-                    Restore your subscription to continue using BetterBlog.
+                    {canResubscribe
+                      ? " Resubscribe to continue using BetterBlog."
+                      : " Update your payment method to continue using BetterBlog."}
                   </>
                 ) : (
                   <>
-                    Your subscription has ended. Restore your subscription to continue using
-                    BetterBlog.
+                    Your subscription has ended.
+                    {canResubscribe
+                      ? " Resubscribe to continue using BetterBlog."
+                      : " Update your payment method to continue using BetterBlog."}
                   </>
                 )
               ) : scheduledCancel ? (
@@ -283,9 +284,11 @@ export default function Account() {
           <CardFooter className="flex justify-between border-t pt-6">
             {subscriptionExpired || scheduledCancel ? (
               <p className="text-sm text-amber-600">
-                {subscriptionExpired
-                  ? "Subscription canceled"
-                  : "Cancellation scheduled for end of period"}
+                {scheduledCancel
+                  ? "Cancellation scheduled for end of period"
+                  : canResubscribe
+                    ? "Subscription canceled"
+                    : "Payment past due"}
               </p>
             ) : (
               <>
@@ -323,20 +326,23 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            {subscriptionExpired || scheduledCancel ? (
+            {scheduledCancel ? (
               <Button
                 onClick={() => void handleRestoreSubscription()}
                 disabled={restoring || portalLoading}
               >
-                {portalLoadingButton === "restore"
-                  ? "Opening…"
-                  : restoring
-                    ? "Restoring…"
-                    : "Restore Subscription"}
+                {restoring ? "Restoring…" : "Restore Subscription"}
+              </Button>
+            ) : canResubscribe ? (
+              <Button
+                onClick={() => setShowResubscribeModal(true)}
+                disabled={portalLoading}
+              >
+                Resubscribe
               </Button>
             ) : (
               <Button
-                variant="outline"
+                variant={subscriptionExpired ? "default" : "outline"}
                 onClick={handleOpenPortal("updatePayment")}
                 disabled={portalLoading || restoring || !me.subscription}
               >
@@ -346,6 +352,12 @@ export default function Account() {
           </CardFooter>
         </Card>
       </div>
+      <ResubscribePlanModal
+        open={showResubscribeModal}
+        onOpenChange={setShowResubscribeModal}
+        defaultPlanKey={me.subscription?.plan}
+        defaultCadence={me.subscription?.cadence}
+      />
     </div>
   );
 }

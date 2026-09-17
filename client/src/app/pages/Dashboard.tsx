@@ -1075,7 +1075,7 @@ export default function Dashboard() {
               ) : subscriptionActive ? (
                 <p>You&apos;ve reached your site limit.</p>
               ) : (
-                <p>Restore your subscription to add blogs.</p>
+                <p>Resubscribe from Account to add blogs.</p>
               )}
             </div>
           )}
