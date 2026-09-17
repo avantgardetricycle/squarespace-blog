@@ -9,7 +9,7 @@
 4. Footer
 5. Progress bar (out of flow — see below)
 
-Feature’s comments and footer modules sit in a full-width `.blog-overlay-feature-below-row` immediately after the main row. Desktop order is author, comments, then the remaining footer modules (more to read, email capture, lead magnet, and any others). On mobile, comments use `order: 0` and footer modules use `order: 1` so comments paint first even when the author card is earlier in the DOM. Footer modules share one `.blog-overlay-feature-footer-modules` column. Mobile spacing between footer modules is the container `gap: 56px` (also on `.blog-overlay-footer-content` for the other post templates) — never per-module margins. Feature’s newsletter can start in the footer zone; `_syncFeatureFooterModulePack` must merge it into that column first or the gap cannot reach it. Feature’s main row has two `.blog-overlay-sidebar-anchor` nodes — a TOC-only rail hidden on mobile (`.bb-mobile-rail-hidden`, height 0) and the live author/related rail. The painted rail (height > 0) is moved to immediately after the below-row; CSS `order` cannot do that because the rail and the below-row are not siblings.
+Feature’s comments and footer modules sit in a full-width `.blog-overlay-feature-below-row` immediately after the main row. Desktop order is author, comments, then the remaining footer modules (more to read, email capture, lead magnet, and any others). On mobile, comments use `order: 0` and footer modules use `order: 1` so comments paint first even when the author card is earlier in the DOM. Footer modules share one `.blog-overlay-feature-footer-modules` column. Mobile spacing between footer modules is the container `gap: 56px` (also on `.blog-overlay-footer-content` for the other post templates) — never per-module margins. Feature’s newsletter can start in the footer zone; `_syncFeatureFooterModulePack` must merge it into that column first or the gap cannot reach it. Feature’s main row has two `.blog-overlay-sidebar-anchor` nodes — a left rail (always hidden on mobile) and the live right rail (author / related). The painted right rail (height > 0) is moved to immediately after the below-row; CSS `order` cannot do that because the rail and the below-row are not siblings.
 
 ### Mobile (<768px, including Configure’s phone preview)
 When the main row stacks, order is:
@@ -18,13 +18,13 @@ When the main row stacks, order is:
 2. Article body
 3. Comments
 4. Footer modules
-5. Sidebar modules (visible rails only)
+5. Sidebar modules (visible right rails only)
 
-Comments and footer modules render inside `.blog-overlay-posts` so they stay with the article. Sidebar rails come after that column. Feature’s left TOC rail is hidden on mobile (`.bb-mobile-rail-hidden`, height 0) and is not part of this stack — the live right rail is selected by height > 0 and moved after the below-row.
+Comments and footer modules render inside `.blog-overlay-posts` so they stay with the article. Sidebar rails come after that column. Every left sidebar is hidden on mobile (`[data-bb-sidebar-side="left"]` / `.bb-mobile-rail-hidden`) on every template — post and collection. The painted right rail (height > 0) is selected and moved after the below-row.
 
 Verify this order with a **sidebar module turned off**. Default Feature/Reporter configs duplicate author/related posts in the sidebar and footer; the footer copy is hidden on mobile, which can hide an ordering bug.
 
-On mobile, if a module exists in both the sidebar and the footer, the **sidebar copy is shown** and the footer copy is hidden (sidebar-wins). **Tags and Categories are the exception:** sidebar Filter by Category / Filter by Tag / Filter by Tags & Categories sections are always hidden on phones, even when enabled in settings. If a footer copy exists, that one is shown instead.
+On mobile, if a module exists in both the **right** sidebar and the footer, the **sidebar copy is shown** and the footer copy is hidden (sidebar-wins). Left-sidebar copies do not count: a footer copy of a left-only module is shown. **Tags and Categories are the exception:** sidebar Filter by Category / Filter by Tag / Filter by Tags & Categories sections are always hidden on phones, even when enabled in settings. If a footer copy exists, that one is shown instead.
 
 On mobile, every `.blog-overlay-author-unit` in a module gets the same wrap layout (44px avatar beside the name, bio and social on full-width rows below). `.blog-overlay-author-card-text{display:contents}` is the key so bio and social participate in the row wrap. Feature is CSS-only — do not `appendChild` or otherwise restructure the author DOM; Feature rebuilds the block before measuring code runs. Style **all** author units — `querySelector` only hits the first, and single-author posts hide that bug. Include a multi-author post in QA for remaining templates. If Author Profiles is enabled, `.blog-overlay-author-profiles` must be in the DOM (sidebar and/or footer). Empty `defaultAuthorIds` is not a reason to skip the module — fall back to name-matched profiles, then configured profile keys, then the post’s Squarespace author.
 

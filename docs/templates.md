@@ -131,7 +131,7 @@ Best for: personal blogs, writing-focused publications, readers who expect a cla
 - Featured article position (in-layout)
 - Numbered pagination
 
-On phones the sidebar category filter is hidden. Header Search and Sort stay.
+On phones the left sidebar is hidden. The sidebar category filter is hidden. Header Search and Sort stay.
 
 **What you can customize:**
 - Show Date, Reading Time, Author, Excerpt toggles
@@ -145,7 +145,7 @@ On phones the sidebar category filter is hidden. Header Search and Sort stay.
 
 Post templates control how individual blog posts are displayed — the header layout, whether sidebars appear, which footer modules are included, and features like the progress bar and table of contents.
 
-On phones, posts stack in this order: article body, comments, footer modules, then sidebar modules. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. The Table of Contents is hidden on phones even when it is enabled. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off. Previous/Next is two columns in one bordered box with a single divider; the category line is hidden so each side stays readable. In-article headings are capped at 85% of the post title (24px on most templates, 29px on Writer) so they cannot outsize the headline; smaller headings are left alone.
+On phones, posts stack in this order: article body, comments, footer modules, then right-sidebar modules. Left sidebar content is hidden on every template. Turn a sidebar module off to confirm it — default templates often duplicate author or related posts in the sidebar and footer. Sidebar Tags and Categories are always hidden on phones; if those filters also exist in the footer, the footer copy is shown instead. The Table of Contents is hidden on phones even when it is enabled. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off. Previous/Next is two columns in one bordered box with a single divider; the category line is hidden so each side stays readable. In-article headings are capped at 85% of the post title (24px on most templates, 29px on Writer) so they cannot outsize the headline; smaller headings are left alone.
 
 ---
 
@@ -154,7 +154,7 @@ On phones, posts stack in this order: article body, comments, footer modules, th
 
 The Reporter places the post title and metadata to the left of the featured image in the header, then drops into a single-column body with a right sidebar. The progress bar is on by default. The right sidebar includes author profiles and related posts. A lead magnet appears in the footer.
 
-On phones the table of contents is hidden even if it is enabled. Breadcrumb links stay on one wrapping line (child `a`/`span` are inline) with 12px below the trail. About 24px separates the last line of article text from the comments block, including when there are no comments yet; an empty comments list takes no space. About 24px also separates the comments list from the Leave a Comment form. Author profiles still render when the module is enabled.
+On phones the left sidebar is hidden, including the table of contents even if it is enabled. Breadcrumb links stay on one wrapping line (child `a`/`span` are inline) with 12px below the trail. About 24px separates the last line of article text from the comments block, including when there are no comments yet; an empty comments list takes no space. About 24px also separates the comments list from the Leave a Comment form. Author profiles still render when the module is enabled.
 
 Best for: journalism-style blogs, news posts, content where byline and metadata matter.
 
@@ -177,7 +177,7 @@ Best for: journalism-style blogs, news posts, content where byline and metadata 
 
 The Feature is the default post template. The featured image fills the full width of the viewport with the post title overlaid on top. Below the image, the post body sits in a centered column flanked by two sidebars — the table of contents on the left, and an author/related posts module on the right. Social sharing is on by default.
 
-On phones the table of contents is hidden. The stack is article body, then comments, then footer modules, then the remaining sidebar modules. Footer modules share one column with a 56px gap, so spacing stays even if you turn a module off. Comments paint before footer modules via flex `order` (0 vs 1). The live sidebar rail is moved to after that below-row; Feature’s hidden TOC rail stays in the main row and is not used for placement. About 24px separates the last line of article text from the comments block, including when there are no comments yet — that gap is measured per post, not a fixed −80px. The header stays a centered stack: 28px title, 14px deck, 13px meta, and a full-bleed image pulled in with a −15px top margin and a 20px gap to the first line of article text. Author cards use CSS `display: contents` on the text column (no DOM move) so the avatar sits beside the name with bio and social full-width below. Sidebar Related and Popular posts use 80×80 thumbs; footer More to Read is a 16:10 card with date/read-time instead of a deck. Newsletter and lead magnet keep the native mobile chrome header (no second injected heading) and collapse empty copy/message slots.
+On phones the left sidebar is hidden, including the table of contents. The stack is article body, then comments, then footer modules, then the remaining right-sidebar modules. Footer modules share one column with a 56px gap, so spacing stays even if you turn a module off. Comments paint before footer modules via flex `order` (0 vs 1). The live sidebar rail is moved to after that below-row; Feature’s hidden TOC rail stays in the main row and is not used for placement. About 24px separates the last line of article text from the comments block, including when there are no comments yet — that gap is measured per post, not a fixed −80px. The header stays a centered stack: 28px title, 14px deck, 13px meta, and a full-bleed image pulled in with a −15px top margin and a 20px gap to the first line of article text. Author cards use CSS `display: contents` on the text column (no DOM move) so the avatar sits beside the name with bio and social full-width below. Sidebar Related and Popular posts use 80×80 thumbs; footer More to Read is a 16:10 card with date/read-time instead of a deck. Newsletter and lead magnet keep the native mobile chrome header (no second injected heading) and collapse empty copy/message slots.
 
 Best for: long-form writing, essays, feature articles where the reading experience is the priority.
 
@@ -254,7 +254,7 @@ Best for: multi-author blogs, content-heavy sites, posts that are part of a larg
 - Right sidebar: popular posts, related posts, category filter
 - Author profiles and related posts in footer
 
-On phones the sidebar category filter is hidden. Popular and related posts in that rail still stack after the footer, using the same 80×80 compact cards as Reporter, Feature, and Digest Collection. The table of contents is hidden on phones even if you enable it in the sidebar. The hero stays a 375×500 full-bleed overlay: 11px accent category ribbon, 28px white title, 13px meta, with a light text-shadow so the type reads on the photo. There is no deck, breadcrumb trail, or share row. Footer modules keep the 56px container gap. Leave a Comment is a 12px uppercase heading with a full-width 14px centred-flex submit.
+On phones the left sidebar is hidden. The sidebar category filter is hidden. Popular and related posts in the right rail still stack after the footer, using the same 80×80 compact cards as Reporter, Feature, and Digest Collection. The table of contents is hidden on phones even if you enable it in the sidebar. The hero stays a 375×500 full-bleed overlay: 11px accent category ribbon, 28px white title, 13px meta, with a light text-shadow so the type reads on the photo. There is no deck, breadcrumb trail, or share row. Footer modules keep the 56px container gap. Leave a Comment is a 12px uppercase heading with a full-width 14px centred-flex submit.
 
 **What you can customize:**
 - Show Date, Reading Time, Author toggles

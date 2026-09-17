@@ -60,6 +60,7 @@
   - Templates without sidebars (Masthead, Editorial, Showcase) place Email Capture / Lead Magnet in Footer only; Filtering stays Header-only; Popular Posts is unavailable
   - Digest: Search and Sort are header-only and must not render in the sidebar
   - Sidebar Tags and Categories (Filter by Category / Tag / Tags & Categories) are hidden on mobile even when enabled. Header filter pills stay. This inverts the usual sidebar-wins pairing used on posts.
+  - On mobile, hide any left sidebar content (`[data-bb-sidebar-side="left"]`). Desktop left rails stay. A footer copy of a left-only module is shown (left rails do not count for sidebar-wins).
 
 ## What must never happen
 - Sidebars must not use top: 0 when sticky — offset must equal header height

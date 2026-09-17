@@ -3637,12 +3637,14 @@
 
     /**
      * Feature has two `.blog-overlay-sidebar-anchor` nodes in the main row:
-     * the left TOC rail (hidden on mobile: display:none, height 0) and the
-     * live right rail (author / related). Pick the painted one by height > 0 —
-     * not by index, and not by assuming only one anchor exists.
+     * the left rail (always hidden on mobile) and the live right rail
+     * (author / related). Pick the painted one by height > 0 — not by
+     * index, and not by assuming only one anchor exists. Left rails are
+     * never moved into the mobile stack.
      */
     _isPaintedSidebarAnchor: function(el) {
       if (!el || !el.classList || !el.classList.contains('blog-overlay-sidebar-anchor')) return false;
+      if (el.getAttribute && el.getAttribute('data-bb-sidebar-side') === 'left') return false;
       var h = 0;
       try {
         h = el.offsetHeight || 0;
@@ -9367,6 +9369,8 @@
         '#blog-overlay-list .bb-mobile-sidebar-filter-hidden,' +
         '#blog-overlay-list .bb-mobile-rail-hidden,' +
         '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
+        '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"]{display:none!important;}}' +
+        '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"]{display:none!important;}' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
@@ -10504,12 +10508,14 @@
     },
 
     /**
-     * Mobile (<768): if a pairable module is in the sidebar and duplicated in the footer,
-     * hide the footer copy (sidebar-wins). Footer-only modules keep rendering but get
-     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always hidden
-     * on mobile, even when enabled; a footer copy (if any) is shown instead.
-     * Hide Table of Contents on mobile for every post template (Feature,
-     * Publisher, Reporter, and any other sidebar TOC). Comments are footer-only and exempt.
+     * Mobile (<768): hide every left sidebar rail. If a pairable module is in
+     * the right sidebar and duplicated in the footer, hide the footer copy
+     * (sidebar-wins). Left-sidebar copies do not count — a footer copy of a
+     * left-only module is shown. Footer-only modules keep rendering but get
+     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always
+     * hidden on mobile, even when enabled; a footer copy (if any) is shown
+     * instead. Hide Table of Contents on mobile for every post template.
+     * Comments are footer-only and exempt.
      */
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
@@ -10535,7 +10541,9 @@
       for (i = 0; i < pairIds.length; i++) {
         var id = pairIds[i];
         var isFilter = !!filterIds[id];
-        var sidebarHas = !!wrapper.querySelector('[data-bb-zone="sidebar"][data-bb-module="' + id + '"]');
+        var sidebarHas = !!wrapper.querySelector(
+          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+        );
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {
           /* Sidebar-wins, except Tags/Categories: keep the footer copy. */
@@ -10578,7 +10586,10 @@
         var rail = rails[i];
         var railMods = rail.querySelectorAll('[data-bb-module]');
         var hideRail = false;
-        if (narrow && railMods.length > 0) {
+        var isLeftRail = rail.getAttribute('data-bb-sidebar-side') === 'left';
+        if (narrow && isLeftRail) {
+          hideRail = true;
+        } else if (narrow && railMods.length > 0) {
           hideRail = true;
           for (var rm = 0; rm < railMods.length; rm++) {
             var modId = railMods[rm].getAttribute('data-bb-module');
@@ -10591,6 +10602,7 @@
           }
         }
         rail.classList.toggle('bb-mobile-rail-hidden', hideRail);
+        if (isLeftRail) rail.setAttribute('aria-hidden', hideRail ? 'true' : 'false');
       }
       var footerContent = wrapper.querySelector('.blog-overlay-footer-content');
       if (footerContent) {
@@ -15336,6 +15348,7 @@
           for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
           var leftSidebarWrapEl = document.createElement('div');
           leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          leftSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'left');
           leftSidebarWrapEl.style.flexShrink = '0';
           leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
           leftSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -15361,6 +15374,7 @@
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
           var rightSidebarWrapEl = document.createElement('div');
           rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          rightSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'right');
           rightSidebarWrapEl.style.flexShrink = '0';
           rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
           rightSidebarWrapEl.style.alignSelf = 'flex-start';
