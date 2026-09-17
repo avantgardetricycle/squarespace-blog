@@ -8757,7 +8757,7 @@
       el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
     },
 
-    /** Mobile post sidebars: section spacing from rail gap, not per-section margins. */
+    /** Mobile sidebars: section spacing from rail gap, not per-section margins. */
     _mobilePostSidebarRailCss: function(s) {
       var rail = s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail';
       return (
@@ -9556,6 +9556,9 @@
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-card-name{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-main-row .blog-overlay-pagination-zone{margin-top:-50px!important;margin-bottom:16px!important;width:100%;max-width:100%;box-sizing:border-box;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more,#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+          this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-collection-layout="digest"]') +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"]{margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) - 4px)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-row{padding-left:0!important;padding-right:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;margin-top:-20px!important;}' +
@@ -9605,7 +9608,10 @@
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more,' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
-        '}';
+        '}' +
+        this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"]') +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
@@ -15461,7 +15467,7 @@
               self._syncDigestMobileFeaturedImageBleed(wrapper);
             }
             self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout, publisherPostLayout: publisherPostLayout });
-            var mobilePostRail = isSinglePost && (stack || self._isNarrowCollectionViewport());
+            var mobilePostRail = (isSinglePost || collectionLayout === 'digest') && (stack || self._isNarrowCollectionViewport());
             if (leftHas) {
               leftSidebarEl.style.gap = (mobilePostRail && !leftSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';
             }
