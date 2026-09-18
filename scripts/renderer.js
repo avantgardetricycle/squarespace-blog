@@ -4915,7 +4915,7 @@
       textHost.appendChild(metaWrap);
     },
 
-    /** Footer More to Read: date + read time (desktop-hidden; Feature mobile shows this instead of the deck). */
+    /** Footer More to Read: date + read time (hidden on desktop and, for now, mobile). */
     _appendModulePostCardFooterMeta: function(textHost, post, cardCfg) {
       var lines = [];
       if (cardCfg && cardCfg.showDate) {
@@ -8788,6 +8788,27 @@
     },
 
     /**
+     * Mobile footer More to Read (<768). Shared by every post template so
+     * desktop 600 / calc(1em + 5px) titles, 13px P1 categories, and the
+     * excerpt deck cannot linger. `.bb-more-to-read-meta` stays hidden
+     * (base overlay rule) — do not force it visible here.
+     */
+    _mobileMoreToReadCss: function(s) {
+      var cat = s + ' .bb-more-to-read-category,' +
+        s + ' .bb-more-to-read-category.bb-category-label,' +
+        s + ' .blog-overlay-more-to-read-text .bb-category-label';
+      return (
+        s + ' .bb-more-to-read-card,' +
+        s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
+        s + ' .bb-more-to-read-thumb,' +
+        s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
+        cat + '{font-family:var(--bb-p1-font-family,inherit)!important;color:var(--bb-accent,#5B4FE8)!important;font-size:var(--bb-label-size,11px)!important;font-weight:var(--bb-label-weight,700)!important;letter-spacing:var(--bb-label-tracking,0.08em)!important;text-transform:uppercase!important;background:transparent!important;padding:0!important;}' +
+        s + ' .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit)!important;line-height:1.25;}' +
+        s + ' .bb-more-to-read-deck{display:none!important;}'
+      );
+    },
+
+    /**
      * Mobile post footers (<768): spacing is the container gap, not per-module
      * margins. Newsletter +40 / lead-magnet +20 (and more-to-read / prev-next
      * / author-card margins) break when a neighbor module is toggled off.
@@ -8897,15 +8918,6 @@
         s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
         s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
         s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
-        s + ' .bb-more-to-read-card,' +
-        s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
-        s + ' .bb-more-to-read-thumb,' +
-        s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
-        s + ' .bb-more-to-read-category,' +
-        s + ' .bb-more-to-read-category.bb-category-label{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8)!important;background:transparent!important;padding:0!important;}' +
-        s + ' .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.25;}' +
-        s + ' .bb-more-to-read-deck{display:none!important;}' +
-        s + ' .bb-more-to-read-meta{display:block!important;}' +
         s + ' .blog-overlay-email-capture-footer{border:none!important;padding:0!important;border-radius:0!important;gap:0!important;}' +
         s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading,' +
         s + ' .bb-lead-magnet-header{display:none!important;}' +
@@ -9153,13 +9165,7 @@
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-divider{margin:0 0 20px 0;height:1px;background:var(--bb-border);border:none;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-footer-sidebar-alt{display:none!important;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-relevant-posts--footer{display:flex!important;flex-direction:column;gap:24px!important;width:100%;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-thumb{width:100%;aspect-ratio:16/10!important;border-radius:4px;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-text{display:flex;flex-direction:column;gap:4px;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-category,' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-category-label{font-size:11px!important;font-family:inherit;font-weight:700!important;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent)!important;background:none!important;padding:0!important;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.25;}' +
-        s + ' .bb-more-to-read-deck{display:none!important;}'
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-text{display:flex;flex-direction:column;gap:4px;}'
       );
     },
 
@@ -9314,7 +9320,7 @@
         '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;margin-bottom:5px;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
-        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:600;}' +
+        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{margin-top:5px;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
         '#blog-overlay-list .blog-overlay-topic-badges a,#blog-overlay-list .blog-overlay-topic-badges .bb-topic-badge{border-radius:min(var(--bb-btn-radius),8px);}' +
@@ -9409,12 +9415,14 @@
           this._mobilePostFooterGapCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobilePrevNextCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobileSidebarPostCardCss('#blog-overlay-list') +
+          this._mobileMoreToReadCss('#blog-overlay-list') +
         '}' +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
         this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePostFooterGapCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePrevNextCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobileSidebarPostCardCss('#blog-overlay-list.bb-narrow-viewport') +
+        this._mobileMoreToReadCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
         this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
