@@ -8809,6 +8809,29 @@
     },
 
     /**
+     * Collection mobile (<768) newsletter / lead-magnet CTAs. Desktop footer
+     * forms keep input + button on one row (`width:auto` / inline-flex).
+     * Squarespace `.sqs-button-element--primary` uses `justify-content:normal`,
+     * which left-aligns the label once the button stretches. Same classes as
+     * the post-footer fix; scoped to [data-bb-collection-layout] so desktop
+     * and post templates stay put. Stack the form so width:100% can paint.
+     */
+    _mobileCollectionModuleCtaCss: function(s) {
+      var c = s + '[data-bb-collection-layout]';
+      var btn = c + ' .bb-newsletter-btn,' +
+        c + ' .bb-lead-magnet-btn';
+      return (
+        c + ' .bb-newsletter-footer-row,' +
+        c + ' .bb-email-capture-footer-row{flex-direction:column!important;align-items:stretch!important;}' +
+        c + ' .bb-newsletter-footer-form,' +
+        c + ' .bb-email-capture-footer-form,' +
+        c + ' .bb-lead-magnet-footer-form{flex-direction:column!important;align-items:stretch!important;width:100%;}' +
+        c + ' .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;}' +
+        btn + '{width:100%!important;max-width:none;display:flex!important;align-items:center;justify-content:center!important;text-align:center;box-sizing:border-box;}'
+      );
+    },
+
+    /**
      * Mobile post footers (<768): spacing is the container gap, not per-module
      * margins. Newsletter +40 / lead-magnet +20 (and more-to-read / prev-next
      * / author-card margins) break when a neighbor module is toggled off.
@@ -9626,7 +9649,9 @@
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more,' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+          this._mobileCollectionModuleCtaCss('#blog-overlay-list') +
         '}' +
+        this._mobileCollectionModuleCtaCss('#blog-overlay-list.bb-narrow-viewport') +
         this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"]') +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}';
