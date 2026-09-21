@@ -2613,17 +2613,6 @@ export default function Configure() {
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
-  // #region agent log
-  useEffect(() => {
-    const a = config.postConfig?.footerContent;
-    const b = savedConfig.postConfig?.footerContent;
-    const aOrd = a?.moduleOrder ?? [];
-    const bOrd = b?.moduleOrder ?? [];
-    const aMod = a?.modules ?? [];
-    const bMod = b?.modules ?? [];
-    fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c32b28'},body:JSON.stringify({sessionId:'c32b28',runId:'pre-fix',hypothesisId:'H1',location:'Configure.tsx:isDirty',message:'dirty-state after config change',data:{selectedLevel,isDirty,configsEqual:configsEqual(config,savedConfig),commentSettingsDirty:!!commentSettingsDirty,paywallFormDirty,aOrd,bOrd,aMod,bMod,aOrdLen:aOrd.length,bOrdLen:bOrd.length,moduleOrderEvery:aOrd.every((m,i)=>m===bOrd[i]),moduleOrderLenEq:aOrd.length===bOrd.length,modulesEq:aMod.length===bMod.length&&aMod.every((m,i)=>m===bMod[i]),pmRelA:config.postConfig?.postModules?.relevantPosts,pmRelB:savedConfig.postConfig?.postModules?.relevantPosts,hasSaveChrome:isDirty},timestamp:Date.now()})}).catch(()=>{});
-  }, [config, savedConfig, isDirty, selectedLevel, commentSettingsDirty, paywallFormDirty]);
-  // #endregion
 
   useEffect(() => {
     if (!me || me.sites.length === 0) return;
@@ -2810,11 +2799,6 @@ export default function Configure() {
   ]);
   const pathPrefix = selectedLevel === "collection" ? "collectionConfig" : "postConfig";
   const updateLevelConfigPath = (subPath: string, value: unknown) => {
-    // #region agent log
-    if (subPath.includes("footerContent") || subPath.includes("relevantPosts")) {
-      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c32b28'},body:JSON.stringify({sessionId:'c32b28',runId:'pre-fix',hypothesisId:'H4',location:'Configure.tsx:updateLevelConfigPath',message:'footer/relevantPosts path update',data:{subPath,value,selectedLevel,postLocked:selectedLevel==="post"&&isPostTemplatePathLocked(subPath,postTemplateLocks),collectionLocked:selectedLevel==="collection"&&isCollectionTemplatePathLocked(subPath,collectionTemplateLocks)},timestamp:Date.now()})}).catch(()=>{});
-    }
-    // #endregion
     if (
       selectedLevel === "post" &&
       isPostTemplatePathLocked(subPath, postTemplateLocks)
@@ -3400,13 +3384,7 @@ export default function Configure() {
     if (path === "headerContent.moduleOrder") return { ...cfg, headerContent: { ...cfg.headerContent, moduleOrder: value as string[] } };
     if (path === "footerContent.topPadding") return { ...cfg, footerContent: { ...cfg.footerContent, topPadding: value as number } };
     if (path === "footerContent.sideMargins") return { ...cfg, footerContent: { ...cfg.footerContent, sideMargins: value as FooterSideMarginsMode } };
-    if (path === "footerContent.moduleOrder") {
-      const nextFc = { ...cfg.footerContent, moduleOrder: value as string[] };
-      // #region agent log
-      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c32b28'},body:JSON.stringify({sessionId:'c32b28',runId:'pre-fix',hypothesisId:'H2',location:'Configure.tsx:updateLevelConfig',message:'wrote footerContent.moduleOrder',data:{prevOrder:cfg.footerContent?.moduleOrder??[],nextOrder:value,prevModules:cfg.footerContent?.modules??[],nextModules:nextFc.modules??[],sameRef:cfg.footerContent===nextFc},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      return { ...cfg, footerContent: nextFc };
-    }
+    if (path === "footerContent.moduleOrder") return { ...cfg, footerContent: { ...cfg.footerContent, moduleOrder: value as string[] } };
     if (path === "socialMediaLinks") return { ...cfg, socialMediaLinks: value as { show: boolean; platforms: SocialPlatform[] } };
     if (path === "socialMediaLinks.show") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, show: value as boolean } };
     if (path === "socialMediaLinks.platforms") return { ...cfg, socialMediaLinks: { ...cfg.socialMediaLinks, platforms: value as SocialPlatform[] } };
@@ -5016,20 +4994,12 @@ export default function Configure() {
                                 };
                                 const handleRemoveFooter = (moduleId: string) => {
                                   const order = effectiveConfig.footerContent?.moduleOrder ?? [];
-                                  const nextOrder = order.filter((m) => m !== moduleId);
-                                  // #region agent log
-                                  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c32b28'},body:JSON.stringify({sessionId:'c32b28',runId:'pre-fix',hypothesisId:'H2',location:'Configure.tsx:handleRemoveFooter',message:'remove footer module',data:{moduleId,selectedLevel,order,nextOrder,modules:effectiveConfig.footerContent?.modules??[],pmRel:(effectiveConfig as PostLevelConfig).postModules?.relevantPosts},timestamp:Date.now()})}).catch(()=>{});
-                                  // #endregion
-                                  updateLevelConfigPath("footerContent.moduleOrder", nextOrder);
+                                  updateLevelConfigPath("footerContent.moduleOrder", order.filter((m) => m !== moduleId));
                                 };
                                 const handleAddFooter = (moduleId: string) => {
                                   const order = effectiveConfig.footerContent?.moduleOrder ?? [];
                                   if (order.includes(moduleId)) return;
-                                  const nextOrder = [...order, moduleId];
-                                  // #region agent log
-                                  fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c32b28'},body:JSON.stringify({sessionId:'c32b28',runId:'pre-fix',hypothesisId:'H2',location:'Configure.tsx:handleAddFooter',message:'add footer module',data:{moduleId,selectedLevel,order,nextOrder,modules:effectiveConfig.footerContent?.modules??[],pmRel:(effectiveConfig as PostLevelConfig).postModules?.relevantPosts},timestamp:Date.now()})}).catch(()=>{});
-                                  // #endregion
-                                  updateLevelConfigPath("footerContent.moduleOrder", nextOrder);
+                                  updateLevelConfigPath("footerContent.moduleOrder", [...order, moduleId]);
                                 };
                                 const FOOTER_LABELS: Record<string, string> = {
                                   relevantPosts: "Related Posts",

@@ -9552,12 +9552,12 @@
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form{flex-direction:column!important;justify-content:flex-start!important;gap:10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;padding:12px 14px!important;font-size:16px!important;font-family:var(--bb-p1-font-family,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .sqs-button-element--primary{width:100%!important;max-width:none!important;flex:0 0 auto!important;text-align:center!important;justify-content:center!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-zone{padding-top:0!important;padding-bottom:4px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-zone{padding-top:0!important;padding-bottom:24px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-content{margin-bottom:0!important;padding-bottom:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
-            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:2px!important;' +
+            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:12px!important;' +
             'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
             'border-radius:0!important;' +
           '}' +
