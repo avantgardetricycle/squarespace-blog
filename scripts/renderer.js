@@ -8789,19 +8789,26 @@
      * Mobile footer More to Read (<768). Shared by every post template so
      * desktop 600 / calc(1em + 5px) titles, 13px P1 categories, and the
      * excerpt deck cannot linger. `.bb-more-to-read-meta` stays hidden
-     * (base overlay rule) — do not force it visible here.
+     * (base overlay rule) — do not force it visible here. Title margin 0
+     * beats desktop −4px; text column gap 4px; footer grid drops to one
+     * column (`grid-template-columns:none`). Sidebar Related is a different
+     * module (`.bb-sidebar-post-*`) — do not restyle it here.
      */
     _mobileMoreToReadCss: function(s) {
       var cat = s + ' .bb-more-to-read-category,' +
         s + ' .bb-more-to-read-category.bb-category-label,' +
         s + ' .blog-overlay-more-to-read-text .bb-category-label';
       return (
+        s + ' .blog-overlay-relevant-posts--footer{grid-template-columns:none!important;}' +
         s + ' .bb-more-to-read-card,' +
         s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
         s + ' .bb-more-to-read-thumb,' +
         s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
+        s + ' .bb-more-to-read-text,' +
+        s + ' .blog-overlay-more-to-read-text{display:flex;flex-direction:column;gap:4px;}' +
         cat + '{font-family:var(--bb-p1-font-family,inherit)!important;color:var(--bb-accent,#5B4FE8)!important;font-size:var(--bb-label-size,11px)!important;font-weight:var(--bb-label-weight,700)!important;letter-spacing:var(--bb-label-tracking,0.08em)!important;text-transform:uppercase!important;background:transparent!important;padding:0!important;}' +
-        s + ' .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit)!important;line-height:1.25;}' +
+        s + ' .bb-more-to-read-title,' +
+        s + ' .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit)!important;line-height:1.25;margin:0!important;}' +
         s + ' .bb-more-to-read-deck{display:none!important;}'
       );
     },
