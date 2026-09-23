@@ -33,9 +33,9 @@
 - Sidebars:
   - Width: user-configured value (not hardcoded)
   - Sticky toggle (user setting):
-    - ON: position: sticky, top: [current header height]px, align-self: flex-start
+    - ON: stays in flow (`position: relative`) until the row scrolls under the pin, then the rail is fixed a few pixels below the viewport top. The offset is never 0, so the rail does not sit flush with the viewport edge.
     - OFF: position: relative, scrolls with page
-  - Always IN FLOW — never position: absolute or fixed
+  - At rest the rail is in flow — not `position: absolute` or `fixed`
 - Post collection: flex: 1, fills remaining horizontal space
   - Layout style (grid, list, showcase, etc.) is user-configured
   - Never overlaps sidebars or header
@@ -64,7 +64,7 @@
   - On mobile, `.bb-newsletter-btn` and `.bb-lead-magnet-btn` are full-width flex, label centered (`justify-content: center`) — same footer-form flex bug as posts. Desktop keeps the input + button row.
 
 ## What must never happen
-- Sidebars must not use top: 0 when sticky — offset must equal header height
+- Sidebars must not use top: 0 when sticky — the pinned offset stays a few pixels below the viewport top
 - Pagination must not be laid out as a grid cell inside the post collection when a dedicated full-width pagination zone is used — it belongs in the pagination zone below the main row
 - Footer must not use position: fixed or absolute
 - Header modules must not render outside the header zone regardless of

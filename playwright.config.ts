@@ -18,8 +18,27 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: "**/renderer/**",
       use: {
         ...devices["Desktop Chrome"],
+        ...(isCI ? {} : { channel: "chrome" }),
+      },
+    },
+    {
+      name: "renderer-desktop",
+      testDir: "./e2e/renderer",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 900 },
+        ...(isCI ? {} : { channel: "chrome" }),
+      },
+    },
+    {
+      name: "renderer-mobile",
+      testDir: "./e2e/renderer",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 375, height: 812 },
         ...(isCI ? {} : { channel: "chrome" }),
       },
     },

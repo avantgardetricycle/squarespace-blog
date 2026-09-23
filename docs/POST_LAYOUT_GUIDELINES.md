@@ -65,9 +65,9 @@ On mobile, cap `h1–h6` inside `.blog-overlay-body` at post-title × 0.85 (line
 - Sidebars:
   - Width: user-configured value (not hardcoded to 240px)
   - Sticky toggle (user setting):
-    - ON: position: sticky, top: [current header height]px, align-self: flex-start
+    - ON: stays in flow (`position: relative`) until the row scrolls under the pin, then the rail is fixed a few pixels below the viewport top. The offset is never 0, so the rail does not sit flush with the viewport edge.
     - OFF: position: relative, scrolls with page
-  - Always IN FLOW — never position: absolute or fixed
+  - At rest the rail is in flow — not `position: absolute` or `fixed`
 - Content: flex: 1, fills remaining horizontal space
 
 **Comments**
@@ -97,9 +97,9 @@ On mobile, cap `h1–h6` inside `.blog-overlay-body` at post-title × 0.85 (line
   surrounding zones must not shift to accommodate it
 
 ## What must never happen
-- Sidebars must not use top: 0 when sticky — their sticky offset
-  must always equal the current header height, or they will
-  overlap the header zone
+- Sidebars must not use top: 0 when sticky — the pinned offset
+  stays a few pixels below the viewport top so the rail does not
+  cover the site header
 - Footer must not use position: fixed or absolute
 - Comments must not be placed inside the desktop three-column main row
 - On mobile, comments and footer must not appear after stacked sidebar modules

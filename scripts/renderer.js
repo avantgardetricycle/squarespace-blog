@@ -3870,6 +3870,17 @@
         }
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+      /* Desktop comments and footer are siblings after the main row, not cells in it. */
+      if (!featurePostLayout && mainRowEl) {
+        if (commentsEl) {
+          if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+        }
+        if (footerHasContent) {
+          var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
+          if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
+        }
+        return;
+      }
       if (footerHasContent) {
         var footerMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
         var sidebarSpan = this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg);
@@ -14923,7 +14934,6 @@
         }
         self._warnDuplicateValues('sidebar', moduleIds);
         var width = Math.min(400, Math.max(160, sidebarCfg.width || (isSinglePost ? 300 : 240)));
-        if (featurePostLayout) width = 300;
         var mods = [];
         var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
         for (var m = 0; m < moduleIds.length; m++) {
@@ -15350,10 +15360,6 @@
           var sidebarWidthDefault = isSinglePost ? 300 : 240;
           var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : sidebarWidthDefault;
           var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : sidebarWidthDefault;
-          if (featurePostLayout) {
-            leftSidebarWidth = 300;
-            rightSidebarWidth = 300;
-          }
           var leftSpaceAbove = isSinglePost
             ? BB_POST_CONTENT_TOP_PADDING
             : (leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.max(0, leftSidebarCfg.spaceAbove) : 0);
@@ -16017,6 +16023,19 @@
                     fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
+                } else if (fmod === 'filterByCategory') {
+                  var catFooter = self._createFilterByCategoryModule(items, 220, true, 'footer');
+                  fmodEl = catFooter ? createSidebarSection('Categories', catFooter) : null;
+                } else if (fmod === 'filterByTag') {
+                  var tagFooter = self._createFilterByTagModule(items, 220, true, 'footer');
+                  fmodEl = tagFooter ? createSidebarSection('Tags', tagFooter) : null;
+                } else if (fmod === 'filterByTagsAndCategories') {
+                  var bothCat = self._createFilterByCategoryModule(items, 220, true, 'footer');
+                  var bothTag = self._createFilterByTagModule(items, 220, true, 'footer');
+                  fmodEl = document.createElement('div');
+                  if (bothCat) fmodEl.appendChild(createSidebarSection('Categories', bothCat));
+                  if (bothTag) fmodEl.appendChild(createSidebarSection('Tags', bothTag));
+                  if (!fmodEl.childNodes.length) fmodEl = null;
                 } else if (fmod === 'prevNextArticle') {
                   fmodEl = createPrevNextArticleModule();
                   if (fmodEl) {
@@ -16098,14 +16117,7 @@
             paginationZoneEl.style.position = 'relative';
             paginationZoneEl.style.zIndex = '1';
             paginationZoneEl.appendChild(collectionPaginationEl);
-            if (!isSinglePost && collectionLayout === 'digest' && self._isNarrowCollectionViewport()) {
-              var pagSidebarAnchor = mainRowEl.querySelector('.blog-overlay-sidebar-anchor');
-              paginationZoneEl.style.order = '1';
-              if (pagSidebarAnchor) mainRowEl.insertBefore(paginationZoneEl, pagSidebarAnchor);
-              else mainRowEl.appendChild(paginationZoneEl);
-            } else {
-              wrapper.appendChild(paginationZoneEl);
-            }
+            wrapper.appendChild(paginationZoneEl);
           }
 
           var commentCfg = cfg && cfg.commentSettings;
