@@ -733,6 +733,14 @@ export default function Comments() {
   ) => {
     if (!siteKey || !settings) return;
     const next = { ...settings, [key]: value };
+    if (
+      (key === "allowAnonymousComments" || key === "subscriberCommentsEnabled") &&
+      value === false &&
+      !next.allowAnonymousComments &&
+      !next.subscriberCommentsEnabled
+    ) {
+      next.allowNewComments = false;
+    }
     setSettings(next);
     setSettingsSaving(true);
     const payload = {
