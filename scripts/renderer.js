@@ -1399,6 +1399,15 @@
         });
         listEl.innerHTML = '';
         var list = (comments || []).slice();
+        if (!list.length) {
+          listEl.style.display = 'none';
+          listEl.style.marginTop = '0';
+          listEl.style.marginBottom = '0';
+        } else {
+          listEl.style.display = '';
+          listEl.style.marginTop = '';
+          listEl.style.marginBottom = '24px';
+        }
         var addComment = function(c, depth) {
           if (!c || typeof c !== 'object') return;
           var depthLevel = typeof depth === 'number' && !isNaN(depth) ? depth : 0;
@@ -1756,11 +1765,20 @@
         list.forEach(function(c) {
           try { addComment(c, 0); } catch (err) { console.error('[BlogOverlay] comment render error', err); }
         });
+        try {
+          var gapWrap = bbDiv.closest ? bbDiv.closest('#blog-overlay-list') : null;
+          if (gapWrap) {
+            var gapNarrow = self._isNarrowCollectionViewport();
+            self._syncReporterMobileArticleGap(gapWrap, gapNarrow);
+            self._syncFeatureMobileArticleGap(gapWrap, gapNarrow);
+          }
+        } catch (eGap) {}
       };
 
       var listEl = document.createElement('div');
       listEl.className = 'bb-comments-list';
-      listEl.style.marginBottom = '24px';
+      listEl.style.display = 'none';
+      listEl.style.marginBottom = '0';
       bbDiv.appendChild(listEl);
 
       var postUrlForComments = (post && (post.fullUrl || post.url)) ? String(post.fullUrl || post.url) : '';
@@ -1812,9 +1830,13 @@
 
       if (allowNewComments) {
       var heading = document.createElement('h2');
-      heading.className = 'bb-below-main-heading';
+      heading.className = 'bb-below-main-heading bb-comment-form-heading';
       heading.textContent = commentsClosed ? 'Comments are closed' : 'Leave a comment';
       formWrap.appendChild(heading);
+      var formRule = document.createElement('hr');
+      formRule.className = 'bb-comment-form-rule';
+      formRule.setAttribute('aria-hidden', 'true');
+      formWrap.appendChild(formRule);
       var guestOnlyNote = document.createElement('p');
       guestOnlyNote.style.cssText =
         'display:none;margin:0 0 12px 0;color:#666;font-size:0.92rem;max-width:520px;line-height:1.45';
@@ -1871,7 +1893,7 @@
       var submitBtn = document.createElement('button');
       submitBtn.type = 'button';
       submitBtn.textContent = 'Post Comment';
-      submitBtn.className = 'sqs-button-element--primary';
+      submitBtn.className = 'sqs-button-element--primary bb-comment-submit';
       submitBtn.style.cssText = 'margin-top:4px;cursor:not-allowed;opacity:0.55';
       submitBtn.disabled = true;
       function mainFormSync() {
@@ -1923,7 +1945,7 @@
           emailInput.placeholder = 'Email (optional)';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
-          submitBtn.style.display = 'inline-block';
+          submitBtn.style.display = '';
           identityNote.style.display = 'none';
           identityNote.textContent = '';
           if (verifiedIdentity) {
@@ -1942,7 +1964,7 @@
           emailInput.placeholder = 'Email (optional)';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
-          submitBtn.style.display = 'inline-block';
+          submitBtn.style.display = '';
           identityNote.style.display = 'none';
           loggedInIdentityLine.style.display = 'none';
           loggedInIdentityLine.textContent = '';
@@ -3588,6 +3610,290 @@
       }
     },
 
+    _reorderFeatureBelowRow: function(host, commentsFirst) {
+      if (!host) return;
+      var commentsHost = host.querySelector('.blog-overlay-feature-comments-section');
+      var i;
+      var kid;
+      for (i = 0; i < host.children.length; i++) {
+        kid = host.children[i];
+        if (!kid || !kid.style) continue;
+        if (commentsFirst) {
+          kid.style.order = (kid.classList && kid.classList.contains('blog-overlay-feature-comments-section')) ? '0' : '1';
+        } else {
+          kid.style.order = '';
+        }
+      }
+      if (!commentsHost) return;
+      if (commentsFirst) {
+        if (host.firstElementChild !== commentsHost) host.insertBefore(commentsHost, host.firstElementChild);
+        return;
+      }
+      var authorSection = host.querySelector('.blog-overlay-feature-below-row-section[data-bb-module="authorProfiles"]');
+      if (authorSection && authorSection !== commentsHost && authorSection.nextElementSibling !== commentsHost) {
+        host.insertBefore(commentsHost, authorSection.nextSibling);
+      }
+    },
+
+    /**
+     * Feature has two `.blog-overlay-sidebar-anchor` nodes in the main row:
+     * the left rail (always hidden on mobile) and the live right rail
+     * (author / related). Pick the painted one by height > 0 — not by
+     * index, and not by assuming only one anchor exists. Left rails are
+     * never moved into the mobile stack.
+     */
+    _isPaintedSidebarAnchor: function(el) {
+      if (!el || !el.classList || !el.classList.contains('blog-overlay-sidebar-anchor')) return false;
+      if (el.getAttribute && el.getAttribute('data-bb-sidebar-side') === 'left') return false;
+      var h = 0;
+      try {
+        h = el.offsetHeight || 0;
+        if (!h && el.getBoundingClientRect) h = Math.round(el.getBoundingClientRect().height) || 0;
+      } catch (ePainted) {}
+      return h > 0;
+    },
+
+    _restorePostSidebarAnchorsToMainRow: function(mainRowEl, main, leftWrap, rightWrap) {
+      if (!mainRowEl || !main) return;
+      if (leftWrap && leftWrap.parentNode) {
+        if (leftWrap.nextSibling !== main) mainRowEl.insertBefore(leftWrap, main);
+      }
+      if (main.parentNode !== mainRowEl) mainRowEl.appendChild(main);
+      if (rightWrap && rightWrap.parentNode) {
+        if (main.nextSibling !== rightWrap) {
+          if (main.nextSibling) mainRowEl.insertBefore(rightWrap, main.nextSibling);
+          else mainRowEl.appendChild(rightWrap);
+        }
+      }
+    },
+
+    /**
+     * Move painted sidebar rails to immediately after `host`. CSS `order` cannot
+     * do this: the live Feature rail lives in `.blog-overlay-main-row`, while
+     * comments/footer live in `.blog-overlay-feature-below-row`.
+     */
+    _movePaintedSidebarAnchorsAfter: function(host, mainRowEl) {
+      if (!host || !host.parentNode || !mainRowEl) return;
+      var candidates = [];
+      var i;
+      var el;
+      for (i = 0; i < mainRowEl.children.length; i++) {
+        el = mainRowEl.children[i];
+        if (el.classList && el.classList.contains('blog-overlay-sidebar-anchor')) candidates.push(el);
+      }
+      el = host.nextSibling;
+      while (el) {
+        if (el.nodeType === 1 && el.classList && el.classList.contains('blog-overlay-sidebar-anchor')) {
+          candidates.push(el);
+        }
+        el = el.nextSibling;
+      }
+      var live = [];
+      var seen = [];
+      for (i = 0; i < candidates.length; i++) {
+        el = candidates[i];
+        if (seen.indexOf(el) !== -1) continue;
+        seen.push(el);
+        if (!this._isPaintedSidebarAnchor(el)) continue;
+        live.push(el);
+      }
+      var insertAfter = host;
+      for (i = 0; i < live.length; i++) {
+        el = live[i];
+        if (insertAfter.nextSibling !== el) insertAfter.parentNode.insertBefore(el, insertAfter.nextSibling);
+        insertAfter = el;
+      }
+    },
+
+    /**
+     * Mobile Feature: keep comments as a sibling, but put every footer module
+     * (author, related, lead magnet, email capture, …) in one flex column so a
+     * single gap can space whichever modules are enabled.
+     * Newsletter can render in `.blog-overlay-footer-zone` while the other
+     * modules sit in `.blog-overlay-feature-below-row` — merge that zone into
+     * the pack before measuring, or the 56px gap cannot reach it.
+     */
+    _syncFeatureFooterModulePack: function(host, footerZoneEl, pack) {
+      if (!host) return;
+      var packClass = 'blog-overlay-feature-footer-modules';
+      var existing = null;
+      var i;
+      for (i = 0; i < host.children.length; i++) {
+        if (host.children[i].classList && host.children[i].classList.contains(packClass)) {
+          existing = host.children[i];
+          break;
+        }
+      }
+
+      function isComments(el) {
+        return !!(el && el.classList && el.classList.contains('blog-overlay-feature-comments-section'));
+      }
+      function isPackEl(el) {
+        return !!(el && el.classList && el.classList.contains(packClass));
+      }
+      function zeroModuleMargins(el) {
+        if (!el || !el.style) return;
+        el.style.margin = '0';
+        el.style.marginTop = '0';
+        el.style.marginBottom = '0';
+      }
+
+      if (!pack) {
+        if (existing) {
+          while (existing.firstChild) host.insertBefore(existing.firstChild, existing);
+          if (existing.parentNode) existing.parentNode.removeChild(existing);
+        }
+        return;
+      }
+
+      if (!existing) {
+        existing = document.createElement('div');
+        existing.className = packClass;
+      }
+      existing.style.display = 'flex';
+      existing.style.flexDirection = 'column';
+      existing.style.gap = '56px';
+      existing.style.width = '100%';
+      existing.style.maxWidth = '100%';
+      existing.style.boxSizing = 'border-box';
+      existing.style.margin = '0';
+        existing.style.padding = '0';
+        existing.style.alignItems = 'stretch';
+        existing.style.order = '1';
+
+      var hostKids = Array.prototype.slice.call(host.children);
+      for (i = 0; i < hostKids.length; i++) {
+        var kid = hostKids[i];
+        if (kid === existing || isComments(kid) || isPackEl(kid)) continue;
+        zeroModuleMargins(kid);
+        if (kid.firstElementChild) zeroModuleMargins(kid.firstElementChild);
+        existing.appendChild(kid);
+      }
+
+      if (footerZoneEl && footerZoneEl.childNodes.length) {
+        var footerContent = footerZoneEl.querySelector('.blog-overlay-footer-content');
+        var sources = [];
+        if (footerContent) sources.push(footerContent);
+        sources.push(footerZoneEl);
+        for (var s = 0; s < sources.length; s++) {
+          var srcKids = Array.prototype.slice.call(sources[s].children);
+          for (i = 0; i < srcKids.length; i++) {
+            var fkid = srcKids[i];
+            if (fkid.nodeType !== 1) continue;
+            if (fkid.classList && fkid.classList.contains('blog-overlay-footer-content')) continue;
+            zeroModuleMargins(fkid);
+            if (fkid.classList && fkid.classList.contains('blog-overlay-feature-below-row-section')) {
+              existing.appendChild(fkid);
+              continue;
+            }
+            var section = document.createElement('div');
+            section.className = 'blog-overlay-feature-below-row-section';
+            section.style.width = '100%';
+            section.style.boxSizing = 'border-box';
+            section.style.margin = '0';
+            var modId = fkid.getAttribute && fkid.getAttribute('data-bb-module');
+            if (modId) {
+              section.setAttribute('data-bb-module', modId);
+              section.setAttribute('data-bb-zone', 'footer');
+            }
+            section.appendChild(fkid);
+            existing.appendChild(section);
+          }
+        }
+        if (footerContent && footerContent.childNodes.length === 0 && footerContent.parentNode) {
+          footerContent.parentNode.removeChild(footerContent);
+        }
+        while (footerZoneEl.firstChild) footerZoneEl.removeChild(footerZoneEl.firstChild);
+      }
+
+      if (!existing.childNodes.length) {
+        if (existing.parentNode) existing.parentNode.removeChild(existing);
+        return;
+      }
+
+      var commentsHost = null;
+      for (i = 0; i < host.children.length; i++) {
+        if (host.children[i].classList && host.children[i].classList.contains('blog-overlay-feature-comments-section')) {
+          commentsHost = host.children[i];
+          break;
+        }
+      }
+      if (commentsHost) {
+        if (commentsHost.nextSibling !== existing) host.insertBefore(existing, commentsHost.nextSibling);
+      } else if (existing.parentNode !== host || host.lastElementChild !== existing) {
+        host.appendChild(existing);
+      }
+    },
+
+    /**
+     * Mobile posts: article → comments → footer modules → sidebar rails.
+     * Desktop Feature keeps the full-width below-row after the main row.
+     */
+    _applyMobilePostAfterBodyOrder: function(opts) {
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var wrapper = opts.wrapper;
+      var main = opts.main;
+      var mainRowEl = opts.mainRowEl;
+      var footerZoneEl = opts.footerZoneEl;
+      var featureBelowRowHost = opts.featureBelowRowHost;
+      var featurePostLayout = !!opts.featurePostLayout;
+      var leftSidebarWrapEl = opts.leftSidebarWrapEl;
+      var rightSidebarWrapEl = opts.rightSidebarWrapEl;
+      var cfg = opts.cfg;
+      if (!wrapper || !main) return;
+      var narrow = this._isNarrowCollectionViewport();
+      var commentsEl = wrapper.querySelector('#bb-comments');
+      var footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+      var belowHasContent = !!(featureBelowRowHost && featureBelowRowHost.childNodes.length);
+
+      if (narrow) {
+        if (belowHasContent) {
+          if (featurePostLayout) this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, true);
+          this._reorderFeatureBelowRow(featureBelowRowHost, true);
+          main.appendChild(featureBelowRowHost);
+          if (featurePostLayout) this._movePaintedSidebarAnchorsAfter(featureBelowRowHost, mainRowEl);
+        } else if (commentsEl) {
+          main.appendChild(commentsEl);
+        }
+        footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+        if (footerHasContent) main.appendChild(footerZoneEl);
+        if (featurePostLayout) this._syncFeatureMobileArticleGap(wrapper, true);
+        return;
+      }
+
+      this._restorePostSidebarAnchorsToMainRow(mainRowEl, main, leftSidebarWrapEl, rightSidebarWrapEl);
+      if (belowHasContent && featurePostLayout && mainRowEl) {
+        this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, false);
+        this._reorderFeatureBelowRow(featureBelowRowHost, false);
+        if (mainRowEl.nextSibling !== featureBelowRowHost) {
+          wrapper.insertBefore(featureBelowRowHost, mainRowEl.nextSibling);
+        }
+      }
+      footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+      /* Desktop comments and footer are siblings after the main row, not cells in it. */
+      if (!featurePostLayout && mainRowEl) {
+        if (commentsEl) {
+          if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+        }
+        if (footerHasContent) {
+          var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
+          if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
+        }
+        return;
+      }
+      if (footerHasContent) {
+        var footerMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
+        var sidebarSpan = this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg);
+        if (featurePostLayout) {
+          wrapper.appendChild(footerZoneEl);
+        } else if ((footerMode === 'postBody' && sidebarSpan) || !sidebarSpan) {
+          main.appendChild(footerZoneEl);
+        } else {
+          wrapper.appendChild(footerZoneEl);
+        }
+      }
+    },
+
     /** Match single-post body horizontal inset to the post header column. */
     _applySinglePostBodyMargins: function(bodyEl, cfg) {
       if (!bodyEl || !bodyEl.style) return;
@@ -4091,14 +4397,17 @@
         textHost.className = 'bb-sidebar-post-text';
         card.appendChild(textHost);
       } else {
+        card.classList.add('bb-more-to-read-card');
+        imgWrap.classList.add('bb-more-to-read-thumb');
         textHost = document.createElement('div');
-        textHost.className = 'blog-overlay-more-to-read-text';
+        textHost.className = 'bb-more-to-read-text blog-overlay-more-to-read-text';
         card.appendChild(textHost);
       }
 
       var cats = self._getPostCategories(post);
       if (variant === 'footer' && cats.length > 0) {
         var catEl = document.createElement('div');
+        catEl.className = 'bb-more-to-read-category';
         catEl.textContent = cats[0];
         self._applyCategoryLabelStyle(catEl);
         textHost.appendChild(catEl);
@@ -4133,6 +4442,7 @@
           }
           if (!deckEl.textContent) deckEl.textContent = self._truncateText(deckSrc, 160);
         }
+        deckEl.className = 'bb-more-to-read-deck';
         deckEl.style.fontSize = '0.85rem';
         deckEl.style.color = '#555';
         deckEl.style.lineHeight = '1.45';
@@ -4140,6 +4450,9 @@
         deckEl.style.textOverflow = 'ellipsis';
         deckEl.style.overflow = 'hidden';
         if (deckEl.textContent) textHost.appendChild(deckEl);
+      }
+      if (variant === 'footer') {
+        self._appendModulePostCardFooterMeta(textHost, post, cardCfg);
       }
       return card;
     },
@@ -4613,6 +4926,24 @@
       textHost.appendChild(metaWrap);
     },
 
+    /** Footer More to Read: date + read time (hidden on desktop and, for now, mobile). */
+    _appendModulePostCardFooterMeta: function(textHost, post, cardCfg) {
+      var lines = [];
+      if (cardCfg && cardCfg.showDate) {
+        var dateStr = this._getDate(post);
+        if (dateStr) lines.push(dateStr);
+      }
+      if (cardCfg && cardCfg.showReadingTime) {
+        var mins = this._getReadingTimeMinutes(post.body);
+        lines.push(mins === 1 ? '1 min read' : mins + ' min read');
+      }
+      if (lines.length === 0) return;
+      var metaWrap = document.createElement('div');
+      metaWrap.className = 'bb-more-to-read-meta bb-sidebar-post-meta';
+      metaWrap.textContent = lines.join(' · ');
+      textHost.appendChild(metaWrap);
+    },
+
     _mergeContextBucketLevelConfig: function(prev, next, nestedKeys) {
       var prevFlat = this._isContextBucket(prev)
         ? (this._resolveLevelConfigForViewerMode(prev, this._resolveViewerMode()).active || {})
@@ -4856,14 +5187,20 @@
     _getAuthor: function(item) {
       if (!item) return null;
       var a = item.author;
-      if (a && a.displayName && typeof a.displayName === 'string') return a.displayName.trim();
+      if (a) {
+        var fromAuthor = (a.displayName || a.fullName || a.name || '').trim();
+        if (fromAuthor) return fromAuthor;
+      }
       var arr = item.authors || item.contributors;
       if (Array.isArray(arr) && arr.length > 0) {
         var first = arr[0];
-        if (first && (first.displayName || first.fullName)) {
-          var name = (first.displayName || first.fullName || '').trim();
+        if (first && (first.displayName || first.fullName || first.name)) {
+          var name = (first.displayName || first.fullName || first.name || '').trim();
           if (name) return name;
         }
+      }
+      if (item.authorName && typeof item.authorName === 'string' && item.authorName.trim()) {
+        return item.authorName.trim();
       }
       return null;
     },
@@ -4892,14 +5229,120 @@
     },
 
     /**
-     * Get author IDs for a post (for author profiles module)
+     * Match a post's Squarespace author name(s) to configured profile / map ids.
+     */
+    _matchPostAuthorProfileIds: function(post, profiles, authorMap) {
+      var names = [];
+      var addName = function(n) {
+        if (n && typeof n === 'string' && n.trim() && names.indexOf(n.trim().toLowerCase()) < 0) {
+          names.push(n.trim().toLowerCase());
+        }
+      };
+      if (post) {
+        if (post.author) addName(post.author.displayName || post.author.fullName || post.author.name);
+        addName(post.authorName);
+        var arr = post.authors || post.contributors;
+        if (Array.isArray(arr)) {
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i]) addName(arr[i].displayName || arr[i].fullName);
+          }
+        }
+      }
+      if (!names.length) return [];
+      var keys = {};
+      var k;
+      if (profiles) {
+        for (k in profiles) {
+          if (Object.prototype.hasOwnProperty.call(profiles, k)) keys[k] = true;
+        }
+      }
+      if (authorMap) {
+        for (k in authorMap) {
+          if (Object.prototype.hasOwnProperty.call(authorMap, k)) keys[k] = true;
+        }
+      }
+      var matched = [];
+      for (k in keys) {
+        if (!Object.prototype.hasOwnProperty.call(keys, k)) continue;
+        var pname = ((profiles && profiles[k] && profiles[k].name) || (authorMap && authorMap[k]) || '').trim().toLowerCase();
+        if (pname && names.indexOf(pname) >= 0 && matched.indexOf(k) < 0) matched.push(k);
+      }
+      return matched;
+    },
+
+    _displayNameForAuthorId: function(post, id) {
+      if (!post || id == null) return null;
+      if (String(id) === '__bb-post-author__') return this._getAuthor(post);
+      var a = post.author;
+      if (a && a.id != null && String(a.id) === String(id)) {
+        var n = (a.displayName || a.fullName || '').trim();
+        if (n) return n;
+      }
+      var arr = post.authors || post.contributors;
+      if (Array.isArray(arr)) {
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i] && arr[i].id != null && String(arr[i].id) === String(id)) {
+            var dn = (arr[i].displayName || arr[i].fullName || '').trim();
+            if (dn) return dn;
+          }
+        }
+      }
+      return null;
+    },
+
+    /**
+     * True profile records (id -> {name, bio, ...}), not the postModules
+     * toggle `{enabled, position}` that can land on the merged post cfg.
+     */
+    _isAuthorProfilesMap: function(obj) {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+      var keys = Object.keys(obj);
+      if (!keys.length) return false;
+      var i;
+      for (i = 0; i < keys.length; i++) {
+        if (keys[i] !== 'enabled' && keys[i] !== 'position') return true;
+      }
+      return false;
+    },
+
+    _resolveAuthorProfilesMap: function(cfg) {
+      var root = this.config || {};
+      if (this._isAuthorProfilesMap(cfg && cfg.authorProfiles)) return cfg.authorProfiles;
+      if (this._isAuthorProfilesMap(root.authorProfiles)) return root.authorProfiles;
+      return {};
+    },
+
+    /**
+     * Get author IDs for a post (for author profiles module).
+     * Falls back to name-matched profiles, then configured profiles, then the
+     * post's Squarespace author so an enabled module still renders.
      */
     _getAuthorIdsForPost: function(post, cfg) {
       var postId = (post && (post.id || post.fullUrl || post.title)) ? String(post.id || post.fullUrl || post.title) : null;
-      var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object') ? cfg.postAuthorOverrides : {};
-      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds) ? cfg.defaultAuthorIds : [];
-      var ids = (postId && postId in overrides) ? overrides[postId] : (defaultIds.length > 0 ? defaultIds : null);
-      return Array.isArray(ids) ? ids : [];
+      var root = this.config || {};
+      var overrides = (cfg && cfg.postAuthorOverrides && typeof cfg.postAuthorOverrides === 'object')
+        ? cfg.postAuthorOverrides
+        : (root.postAuthorOverrides && typeof root.postAuthorOverrides === 'object' ? root.postAuthorOverrides : {});
+      var defaultIds = Array.isArray(cfg && cfg.defaultAuthorIds) && cfg.defaultAuthorIds.length
+        ? cfg.defaultAuthorIds
+        : (Array.isArray(root.defaultAuthorIds) ? root.defaultAuthorIds : []);
+      if (postId && Object.prototype.hasOwnProperty.call(overrides, postId)) {
+        var overrideIds = Array.isArray(overrides[postId]) ? overrides[postId].slice() : [];
+        if (overrideIds.length) return overrideIds;
+      }
+      if (defaultIds.length > 0) return defaultIds.slice();
+      var profiles = this._resolveAuthorProfilesMap(cfg);
+      var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object' && Object.keys(cfg.authorMap).length)
+        ? cfg.authorMap
+        : ((root.authorMap && typeof root.authorMap === 'object') ? root.authorMap : {});
+      var matched = this._matchPostAuthorProfileIds(post, profiles, authorMap);
+      if (matched.length) return matched;
+      var profileKeys = Object.keys(profiles);
+      if (profileKeys.length) return profileKeys;
+      var mapKeys = Object.keys(authorMap);
+      if (mapKeys.length) return mapKeys;
+      if (post) return ['__bb-post-author__'];
+      return [];
     },
 
     /**
@@ -5167,7 +5610,7 @@
 
     /**
      * Categories line above post title (Newsroom, Showcase, Masthead, Digest, Editorial). Small caps + accent; optional filter buttons.
-     * opts.onDark: labels on imagery; opts.overImage: white 78% + weight 700 (Editorial big tiles / Masthead hero);
+     * opts.onDark: labels on imagery (.bb-category-label--on-image: white 78% / 700 / text-shadow);
      * opts.compact: tighter spacing on small editorial tiles.
      */
     _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled, opts) {
@@ -5175,7 +5618,6 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var onDark = opts.onDark === true;
       var onDarkSolid = opts.onDarkSolid === true;
-      var overImage = opts.overImage === true;
       var compact = opts.compact === true;
       var cats = self._getPostCategories(post);
       if (cats.length === 0) return null;
@@ -5210,8 +5652,7 @@
         el.textContent = catName;
         self._applyCategoryLabelStyle(el, {
           onImage: onDark && !onDarkSolid,
-          onDarkSolid: onDarkSolid,
-          overImage: overImage
+          onDarkSolid: onDarkSolid
         });
         if (categoryFilterUiEnabled) {
           el.style.background = 'none';
@@ -6739,8 +7180,11 @@
       var self = this;
       var useLongBio = opts && opts.useLongBio === true;
       var authorIds = this._getAuthorIdsForPost(post, cfg);
-      var profiles = (cfg && cfg.authorProfiles && typeof cfg.authorProfiles === 'object') ? cfg.authorProfiles : {};
-      if (authorIds.length === 0) return null;
+      var profiles = this._resolveAuthorProfilesMap(cfg);
+      if (authorIds.length === 0) {
+        if (post) authorIds = ['__bb-post-author__'];
+        else return null;
+      }
       var headerText = authorIds.length > 1 ? 'About the Authors' : 'About the Author';
       var content = document.createElement('div');
       content.className = 'blog-overlay-author-profiles';
@@ -6771,17 +7215,23 @@
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
         var p = profiles[id];
-        var name = (p && p.name) || (cfg.authorMap && cfg.authorMap[id]) || 'Author';
+        var name = (p && p.name)
+          || (cfg && cfg.authorMap && cfg.authorMap[id])
+          || (this.config && this.config.authorMap && this.config.authorMap[id])
+          || this._displayNameForAuthorId(post, id)
+          || this._getAuthor(post)
+          || 'Author';
         var imageUrl = (p && p.imageUrl) || null;
         var bio = useLongBio && (p && p.bioLong) ? (p.bioLong) : ((p && p.bio) || null);
         var email = (p && p.email) || null;
         var socialLinks = (p && p.socialLinks && typeof p.socialLinks === 'object') ? p.socialLinks : {};
         var card = document.createElement('div');
-        if (useLongBio) card.className = 'blog-overlay-author-card';
+        card.className = useLongBio ? 'blog-overlay-author-card blog-overlay-author-unit' : 'blog-overlay-author-unit';
         if (!useLongBio) {
           card.style.marginBottom = i < authorIds.length - 1 ? '20px' : '0';
         }
         var topRow = document.createElement('div');
+        topRow.className = 'blog-overlay-author-card-row';
         if (useLongBio) {
           topRow.style.display = 'contents';
         } else {
@@ -6805,6 +7255,7 @@
         }
         topRow.appendChild(avatarWrap);
         var rightCol = document.createElement('div');
+        rightCol.className = 'blog-overlay-author-card-text';
         rightCol.style.flex = '1';
         rightCol.style.minWidth = '0';
         rightCol.style.display = 'flex';
@@ -7561,6 +8012,61 @@
       return 0;
     },
 
+    /**
+     * Rendered Squarespace header height (not first-section padding).
+     * Measures `.header`, `#header`, and `header:not([class*="blog-overlay"])`.
+     */
+    _measureRenderedSiteHeaderHeight: function() {
+      if (typeof document === 'undefined') return 0;
+      var selectors = ['.header', '#header', 'header:not([class*="blog-overlay"])'];
+      var best = 0;
+      var seen = [];
+      for (var i = 0; i < selectors.length; i++) {
+        var nodes;
+        try {
+          nodes = document.querySelectorAll(selectors[i]);
+        } catch (eSel) {
+          continue;
+        }
+        for (var n = 0; n < nodes.length; n++) {
+          var header = nodes[n];
+          if (!header || seen.indexOf(header) !== -1) continue;
+          seen.push(header);
+          if (header.closest && header.closest('#blog-overlay-list, .blog-overlay-wrapper')) continue;
+          var height = 0;
+          try {
+            var rect = header.getBoundingClientRect();
+            if (rect && rect.height > 0) height = Math.round(rect.height);
+          } catch (eRect) { /* ignore */ }
+          if (!height) height = Math.round(header.offsetHeight || 0);
+          if (height > best && height < 800) best = height;
+        }
+      }
+      return best;
+    },
+
+    _isMobilePostWrapper: function(wrapper) {
+      return !!(
+        wrapper &&
+        wrapper.getAttribute &&
+        wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1' &&
+        this._isNarrowCollectionViewport()
+      );
+    },
+
+    _topProgressBarReservePx: function(wrapper) {
+      if (!wrapper || wrapper.getAttribute('data-bb-flush-nav-hero') === '1') return 0;
+      if (this._previewMode) return 0;
+      var track = typeof document !== 'undefined' ? document.getElementById('blog-overlay-progress') : null;
+      if (!track || !track.style || track.style.position !== 'fixed') return 0;
+      if (track.style.bottom && track.style.bottom !== 'auto') return 0;
+      return Math.max(0, Math.round(track.offsetHeight || 0));
+    },
+
+    _mobilePostWrapperPadTop: function() {
+      return this._measureRenderedSiteHeaderHeight() + 5;
+    },
+
     /** Visual bottom of site chrome (header + announcement bar) at the top of the viewport. */
     _measureSiteNavHeightFromDom: function() {
       var headerSelectors = [
@@ -7933,6 +8439,18 @@
       return lum > 0.5 ? '#000' : '#fff';
     },
 
+    /**
+     * Story header ink (Rule E): derived from the header zone background, not
+     * hardcoded white. lum = (0.2126R + 0.7152G + 0.0722B) / 255.
+     * Under 0.5 → white ink; otherwise black. Category stays accent.
+     */
+    _storyHeaderInkFromBackground: function(bgColor) {
+      var ch = this._parseColorChannels(bgColor);
+      if (!ch) return 'rgb(255,255,255)';
+      var lum = (0.2126 * ch.r + 0.7152 * ch.g + 0.0722 * ch.b) / 255;
+      return lum < 0.5 ? 'rgb(255,255,255)' : 'rgb(0,0,0)';
+    },
+
     _walkScopeForCssVar: function(scopeEl, names) {
       if (!scopeEl || !names || !names.length) return '';
       var el = scopeEl;
@@ -8255,6 +8773,441 @@
       el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
     },
 
+    /** Mobile sidebars: section spacing from rail gap, not per-section margins. */
+    _mobilePostSidebarRailCss: function(s) {
+      var rail = s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail';
+      return (
+        rail + '{gap:28px!important;}' +
+        rail + '>.blog-overlay-sidebar-section{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /**
+     * Mobile sidebar Related + Popular cards (<768): 80×80 thumbs, 12px gap.
+     * Shared by every template with a sidebar (Reporter, Publisher, Feature,
+     * Digest Collection) so desktop 60×60 / 10px cannot linger per-template.
+     */
+    _mobileSidebarPostCardCss: function(s) {
+      return (
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px!important;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}'
+      );
+    },
+
+    /**
+     * Mobile footer More to Read (<768). Shared by every post template so
+     * desktop 600 / calc(1em + 5px) titles, 13px P1 categories, and the
+     * excerpt deck cannot linger. `.bb-more-to-read-meta` stays hidden
+     * (base overlay rule) — do not force it visible here. Title margin 0
+     * beats desktop −4px; text column gap 4px; footer grid drops to one
+     * column (`grid-template-columns:none`). Sidebar Related is a different
+     * module (`.bb-sidebar-post-*`) — do not restyle it here.
+     */
+    _mobileMoreToReadCss: function(s) {
+      var cat = s + ' .bb-more-to-read-category,' +
+        s + ' .bb-more-to-read-category.bb-category-label,' +
+        s + ' .blog-overlay-more-to-read-text .bb-category-label';
+      return (
+        s + ' .blog-overlay-relevant-posts--footer{grid-template-columns:none!important;}' +
+        s + ' .bb-more-to-read-card,' +
+        s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
+        s + ' .bb-more-to-read-thumb,' +
+        s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
+        s + ' .bb-more-to-read-text,' +
+        s + ' .blog-overlay-more-to-read-text{display:flex;flex-direction:column;gap:4px;}' +
+        cat + '{font-family:var(--bb-p1-font-family,inherit)!important;color:var(--bb-accent,#5B4FE8)!important;font-size:var(--bb-label-size,11px)!important;font-weight:var(--bb-label-weight,700)!important;letter-spacing:var(--bb-label-tracking,0.08em)!important;text-transform:uppercase!important;background:transparent!important;padding:0!important;}' +
+        s + ' .bb-more-to-read-title,' +
+        s + ' .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit)!important;line-height:1.25;margin:0!important;}' +
+        s + ' .bb-more-to-read-deck{display:none!important;}'
+      );
+    },
+
+    /**
+     * Collection mobile (<768) newsletter / lead-magnet CTAs. Desktop footer
+     * forms keep input + button on one row (`width:auto` / inline-flex).
+     * Squarespace `.sqs-button-element--primary` uses `justify-content:normal`,
+     * which left-aligns the label once the button stretches. Same classes as
+     * the post-footer fix; scoped to [data-bb-collection-layout] so desktop
+     * and post templates stay put. Stack the form so width:100% can paint.
+     */
+    _mobileCollectionModuleCtaCss: function(s) {
+      var c = s + '[data-bb-collection-layout]';
+      var btn = c + ' .bb-newsletter-btn,' +
+        c + ' .bb-lead-magnet-btn';
+      return (
+        c + ' .bb-newsletter-footer-row,' +
+        c + ' .bb-email-capture-footer-row{flex-direction:column!important;align-items:stretch!important;}' +
+        c + ' .bb-newsletter-footer-form,' +
+        c + ' .bb-email-capture-footer-form,' +
+        c + ' .bb-lead-magnet-footer-form{flex-direction:column!important;align-items:stretch!important;width:100%;}' +
+        c + ' .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;}' +
+        btn + '{width:100%!important;max-width:none;display:flex!important;align-items:center;justify-content:center!important;text-align:center;box-sizing:border-box;}'
+      );
+    },
+
+    /**
+     * Mobile post footers (<768): spacing is the container gap, not per-module
+     * margins. Newsletter +40 / lead-magnet +20 (and more-to-read / prev-next
+     * / author-card margins) break when a neighbor module is toggled off.
+     * Footer primary buttons share the sidebar compact scale (8px 16px /
+     * 14px) and stay inline-block so text-align:center works. Comment
+     * submit is centred flex (justify-content:center) so Squarespace
+     * .sqs-button-element--primary justify-content:normal cannot left-align
+     * the label.
+     */
+    _mobilePostFooterGapCss: function(s) {
+      var btn = s + ' .blog-overlay-footer-module .sqs-button-element--primary,' +
+        s + ' .blog-overlay-footer-module .bb-newsletter-btn,' +
+        s + ' .blog-overlay-footer-module .bb-lead-magnet-btn,' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-newsletter-footer-form .sqs-button-element--primary,' +
+        s + ' .bb-lead-magnet-footer-form button,' +
+        s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary';
+      return (
+        s + ' .blog-overlay-footer-content{display:flex;flex-direction:column;gap:56px!important;}' +
+        s + ' .blog-overlay-feature-below-row,' +
+        s + ' .blog-overlay-feature-footer-modules{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module,' +
+        s + ' .blog-overlay-feature-below-row-section,' +
+        s + ' .blog-overlay-email-capture-footer,' +
+        s + ' .blog-overlay-lead-magnet-footer,' +
+        s + ' .bb-lead-magnet-card,' +
+        s + ' .bb-footer-card,' +
+        s + ' .blog-overlay-more-to-read,' +
+        s + ' .blog-overlay-prev-next,' +
+        s + ' .blog-overlay-footer-content .blog-overlay-author-card,' +
+        s + ' .blog-overlay-feature-below-row .blog-overlay-author-card,' +
+        s + ' [data-bb-zone="footer"] .blog-overlay-author-card{margin-top:0!important;margin-bottom:0!important;}' +
+        btn + '{display:inline-block!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' h2.bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading,' +
+        s + ' .bb-comment-form-wrap h2.bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:flex!important;align-items:center;justify-content:center!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)),' +
+        s + ' .bb-newsletter-footer-copy:empty,' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}'
+      );
+    },
+
+    /**
+     * Mobile prev/next (<768): one bordered box, two equal columns, a single
+     * vertical divider. Radius is min(button radius, shortest side × 0.08) —
+     * not the 20px card cap, so a pill button radius can lozenge the box.
+     */
+    _mobilePrevNextCss: function(s) {
+      var nav = s + ' .blog-overlay-prev-next';
+      var col = nav + ' .blog-overlay-prev-next-col';
+      return (
+        nav + '{display:grid!important;grid-template-columns:1fr 1fr;gap:0!important;padding:0!important;width:100%;box-sizing:border-box;border:1px solid var(--bb-border,#e5e4e0);overflow:hidden;border-radius:var(--bb-prev-next-radius,min(var(--bb-btn-radius,0px),8%));}' +
+        col + '{display:flex;flex-direction:column;gap:6px;padding:16px!important;border:none!important;min-width:0;box-sizing:border-box;text-decoration:none;color:inherit;}' +
+        col + ':first-child{border-right:1px solid var(--bb-border,#e5e4e0)!important;}' +
+        nav + ' .blog-overlay-prev-next-col--next{text-align:right;align-items:flex-end;border-left:none!important;}' +
+        nav + ' .blog-overlay-prev-next-label{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-extra-muted,#888);margin:0!important;}' +
+        nav + ' .blog-overlay-prev-next-title{font-size:15px!important;font-family:var(--bb-heading-font-family,inherit);line-height:1.3;color:var(--bb-body,#111);display:-webkit-box;-webkit-line-clamp:4;line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}' +
+        nav + ' .blog-overlay-prev-next-category{display:none!important;}'
+      );
+    },
+
+    /**
+     * Feature mobile (<768): header type/spacing + footer pack.
+     * Image mb is 0 (not −50px) so body padding-top:20px paints a 20px gap
+     * to the first line. Body mb is --bb-feature-article-mb (measured; do
+     * not use −80px). Author cards stay CSS-only (see _mobileAuthorCardCss);
+     * Feature rebuilds the author block, so JS must not appendChild/restructure.
+     */
+    _mobileFeatureCss: function(s) {
+      var pack = s + ' .blog-overlay-feature-footer-modules';
+      var below = s + ' .blog-overlay-feature-below-row';
+      var stack = s + ' .blog-overlay-feature-header-stack';
+      var kicker = s + ' .blog-overlay-post-header-categories,' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label:not(.bb-category-label--on-image),' +
+        s + ' .blog-overlay-post-header-categories span:not(.bb-category-label--on-image),' +
+        s + ' .blog-overlay-post-category--feature';
+      return (
+        s + ' .blog-overlay-featured-image-stacked-fullbleed--feature{margin-top:-15px!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-header-stacked{margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin-bottom:8px!important;justify-content:center!important;text-align:center;width:100%;}' +
+        kicker + '{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit)!important;font-weight:700!important;letter-spacing:0.08em!important;text-transform:uppercase!important;color:var(--bb-accent,#5B4FE8)!important;text-align:center;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-header-categories span,' +
+        s + ' .blog-overlay-post-category--feature{margin-bottom:0!important;}' +
+        stack + ' .blog-overlay-post-title,' +
+        stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
+        stack + ' .blog-overlay-post-deck,' +
+        stack + ' .blog-overlay-post-deck--feature{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);text-align:center;}' +
+        stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
+        stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
+        s + ' .blog-overlay-share-row--feature .blog-overlay-share-link,' +
+        s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
+        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:var(--bb-feature-article-mb,0px)!important;}' +
+        s + ' aside.blog-overlay-relevant-posts,' +
+        s + ' .blog-overlay-popular-posts{width:100%!important;max-width:none!important;}' +
+        s + ' aside.blog-overlay-relevant-posts>div,' +
+        s + ' .blog-overlay-popular-posts>div{width:100%!important;max-width:none!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-email-capture-footer{border:none!important;padding:0!important;border-radius:0!important;gap:0!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading,' +
+        s + ' .bb-lead-magnet-header{display:none!important;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)){display:none!important;}' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}' +
+        s + ' .bb-newsletter-footer-row,' +
+        s + ' .bb-email-capture-footer-row{flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;border:none;padding:0;}' +
+        s + ' .bb-email-capture-footer-form,' +
+        s + ' .bb-newsletter-footer-form,' +
+        s + ' .bb-lead-magnet-footer-form{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;flex:0 0 auto;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-form-input,' +
+        s + ' .bb-lead-magnet-footer-form .bb-form-input{font-size:14px;font-family:var(--bb-p1-font-family,inherit);background:var(--bb-surface,#fff);color:var(--bb-body,#111);border:1px solid var(--bb-border);border-radius:6px;padding:8px 12px;width:100%!important;max-width:none!important;box-sizing:border-box;flex:0 0 auto;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-lead-magnet-footer-form button,' +
+        s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .bb-lead-magnet-subtitle{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin:0 0 8px 0!important;}' +
+        s + ' .bb-comments-section{margin-top:0!important;padding-top:24px;}' +
+        s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
+        s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
+        s + ' .bb-comment-form-wrap{padding-top:0!important;margin-top:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-form-rule{display:block!important;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px!important;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        below + '{display:flex;flex-direction:column;gap:56px!important;}' +
+        below + '>*{order:1;}' +
+        below + '>.blog-overlay-feature-comments-section{order:0;}' +
+        pack + '{display:flex;flex-direction:column;gap:56px!important;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:0;align-items:stretch;order:1;}' +
+        pack + '>.blog-overlay-feature-below-row-section,' +
+        pack + '>.blog-overlay-footer-module,' +
+        pack + ' .blog-overlay-footer-module{margin:0!important;}' +
+        pack + '>.blog-overlay-feature-below-row-section>*{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /**
+     * Mobile author cards (<768). Applies to every .blog-overlay-author-unit
+     * (sidebar + footer, all post templates). display:contents on the text
+     * column is the key: bio/social participate in the row wrap without a DOM
+     * move. Feature must not JS-restructure — the author block is rebuilt
+     * before measuring code runs, which reverts appendChild. Inline footer
+     * styles (64px avatar, flex text column) lose to these !important rules.
+     */
+    _mobileAuthorCardCss: function(s) {
+      return (
+        s + ' .blog-overlay-author-profiles{width:100%!important;max-width:none!important;}' +
+        s + ' .blog-overlay-author-card{display:flex;flex-direction:column;align-items:stretch;width:100%;box-sizing:border-box;}' +
+        s + ' .blog-overlay-author-unit{display:flex;flex-direction:column;gap:12px;width:100%;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-author-profiles>.blog-overlay-author-unit+.blog-overlay-author-unit{margin-top:20px!important;}' +
+        s + ' .blog-overlay-author-card-text{display:contents!important;}' +
+        s + ' .blog-overlay-author-card-row{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:12px!important;margin-bottom:0!important;width:100%;}' +
+        s + ' .blog-overlay-author-card-avatar{width:44px!important;height:44px!important;flex:0 0 44px!important;order:0;font-size:14px;}' +
+        s + ' .blog-overlay-author-card-name{order:1;flex:1 1 0%!important;min-width:0;font-size:16px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.2;}' +
+        s + ' .blog-overlay-author-card-bio{order:2;flex:0 0 100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin-top:0!important;}' +
+        s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
+        s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
+        s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
+      );
+    },
+
+    /**
+     * Writer mobile (<768). Wider than the desktop 8vw literary inset: wrapper
+     * padding matches other post templates (pagePadding + 2vw → 18.75px at
+     * 375). Header zone extra 24px pad is removed so title/body share one
+     * column. Title is 34px because Writer has no featured image.
+     */
+    _writerMobileCss: function(s) {
+      return (
+        s + '{padding-left:18.75px!important;padding-right:18.75px!important;margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+        s + ' .blog-overlay-header-zone,' +
+        s + ' .blog-overlay-single-post-header-zone{padding-left:0!important;padding-right:0!important;}' +
+        s + ' .blog-overlay-single-post-header-inner{padding-top:0!important;margin-top:0!important;gap:0!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-muted,#888);}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin-bottom:10px!important;justify-content:center!important;text-align:center;width:100%;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-category--writer{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:34px!important;line-height:1.15;margin:0 0 12px 0!important;}' +
+        s + ' .blog-overlay-post-deck,' +
+        s + ' .blog-overlay-post-deck--writer{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-excerpt,#666);margin:0 0 24px 0!important;}' +
+        s + ' .blog-overlay-writer-rule{width:40px;height:1px;margin:0 auto 24px auto!important;}' +
+        s + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .blog-overlay-body{margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-footer-content{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)),' +
+        s + ' .bb-newsletter-footer-copy:empty,' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-newsletter-footer-form .sqs-button-element--primary,' +
+        s + ' .bb-newsletter-footer-form .bb-newsletter-btn{display:inline-block!important;width:100%;padding:8px 16px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:inline-block!important;width:100%!important;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}'
+      );
+    },
+
+    /**
+     * Story mobile (<768). Stacks the desktop 2-col header, full-bleeds the
+     * customer header background, and colors header text from that background
+     * (Rule E). Share stays visible — 32×32 targets / 18×18 icons (WCAG 2.5.8).
+     */
+    _storyMobileCss: function(s) {
+      var pad = 'calc(var(--pagePadding, 3vw) + 2vw)';
+      var zone = s + ' .blog-overlay-header-zone,' +
+        s + ' .blog-overlay-single-post-header-zone,' +
+        s + ' .blog-overlay-single-post-header-zone--story';
+      var ink = 'var(--bb-story-ink)';
+      var ink80 = 'color-mix(in srgb,' + ink + ' 80%,transparent)';
+      var ink60 = 'color-mix(in srgb,' + ink + ' 60%,transparent)';
+      var ink15 = 'color-mix(in srgb,' + ink + ' 15%,transparent)';
+      return (
+        zone + '{--bb-story-ink:rgb(255,255,255);width:auto!important;max-width:none!important;box-sizing:border-box;margin-left:calc(-1 * ' + pad + ')!important;margin-right:calc(-1 * ' + pad + ')!important;padding:24px ' + pad + '!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-single-post-header-inner{display:flex;flex-direction:column;padding-top:0!important;margin-top:0!important;gap:20px!important;}' +
+        s + ' .blog-overlay-story-header-row{display:flex!important;flex-direction:column!important;flex-wrap:nowrap;align-items:stretch!important;gap:20px!important;width:100%!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-story-featured-image,' +
+        s + ' .blog-overlay-story-info-col{width:100%!important;max-width:100%!important;flex:0 0 auto!important;margin:0!important;min-width:0!important;}' +
+        s + ' .blog-overlay-story-featured-image>div{aspect-ratio:16/10!important;width:100%!important;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs,' +
+        s + ' .blog-overlay-post-breadcrumbs--on-dark-solid{display:block!important;width:100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);line-height:1.4;color:' + ink60 + '!important;text-shadow:none!important;margin:0!important;text-align:left;}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;color:inherit;text-shadow:none!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin:0 0 8px 0!important;justify-content:flex-start!important;text-align:left;width:100%;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label:not(.bb-category-label--on-image),' +
+        s + ' .blog-overlay-post-category--story,' +
+        s + ' .bb-category-label--on-dark{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8)!important;margin:0!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-story-info-panel .blog-overlay-post-title,' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post,' +
+        s + ' .bb-title--on-dark{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:' + ink + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-post-deck,' +
+        s + ' .blog-overlay-post-deck--on-dark-solid{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);margin:0 0 16px 0!important;color:' + ink80 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-story-rule{width:100%;height:0;border:none;border-top:1px solid ' + ink15 + ';background:none!important;margin:12px 0!important;}' +
+        s + ' .blog-overlay-meta-row,' +
+        s + ' .bb-post-meta--on-dark{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:' + ink60 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);color:inherit;}' +
+        s + ' .blog-overlay-share-row,' +
+        s + ' .blog-overlay-share-row--story{display:flex!important;gap:0!important;margin:12px 0 0 0!important;justify-content:flex-start!important;width:100%;}' +
+        s + ' .blog-overlay-share-links,' +
+        s + ' .blog-overlay-share-links--on-dark{display:flex!important;gap:0!important;align-items:center;}' +
+        s + ' .blog-overlay-share-link{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;color:' + ink60 + '!important;}' +
+        s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;fill:currentColor;}' +
+        s + ' .blog-overlay-share-link svg[fill="none"]{fill:none;}' +
+        s + ' .blog-overlay-body{margin-top:-24px!important;margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-footer-content{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+      );
+    },
+
+    /**
+     * Publisher mobile (<768). Hero stays 375×500 full-bleed. Ribbon uses a
+     * real line-height (desktop line-height:0 + 18px pad sits high at 11px).
+     * Header type is Rule E on-image (white + text-shadow). TOC hidden.
+     */
+    _publisherMobileCss: function(s) {
+      var ribbon = s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-category--ribbon';
+      return (
+        s + '{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+        s + ' .blog-overlay-post-header-fullbleed,' +
+        s + ' .blog-overlay-post-header-fullbleed--publisher{margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-categories-line,' +
+        s + ' .blog-overlay-post-header-categories{display:block!important;line-height:1;margin:0 0 10px 0!important;width:100%;}' +
+        ribbon + '{display:inline-flex!important;align-items:center;justify-content:center;line-height:1;padding:7px 12px!important;font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin:0!important;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);width:fit-content;max-width:100%;}' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post,' +
+        s + ' .bb-title--on-image{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:#fff!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .blog-overlay-meta-row,' +
+        s + ' .bb-post-meta--on-image{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-meta-on-image,rgba(255,255,255,0.78))!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .blog-overlay-post-deck,' +
+        s + ' .blog-overlay-post-breadcrumbs,' +
+        s + ' .blog-overlay-share-row{display:none!important;}' +
+        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
+        s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail{gap:28px!important;}' +
+        s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail>.blog-overlay-sidebar-section{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px!important;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-footer-content{gap:56px!important;}' +
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' h2.bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading,' +
+        s + ' .bb-comment-form-wrap h2.bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:flex!important;align-items:center;justify-content:center!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}'
+      );
+    },
+
+    /** Reporter mobile (<768). `s` is a root selector, e.g. #blog-overlay-list[data-bb-reporter-layout="1"]. */
+    _reporterMobileCss: function(s) {
+      return (
+        s + '{margin-top:0!important;}' +
+        s + ' .blog-overlay-single-post-header-zone{padding-top:0!important;}' +
+        s + ' .blog-overlay-single-post-header-inner{padding-top:0!important;margin-top:0!important;gap:0!important;}' +
+        s + ' .blog-overlay-reporter-header-row{flex-direction:column!important;flex-wrap:nowrap;align-items:stretch!important;gap:0!important;margin-bottom:0!important;width:100%;}' +
+        s + ' .blog-overlay-reporter-header-row>*{flex:0 0 auto!important;width:100%!important;max-width:100%!important;height:auto!important;min-width:0!important;}' +
+        s + ' .blog-overlay-reporter-featured-image,' +
+        s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image{width:100%!important;max-width:100%!important;flex:0 0 auto!important;height:auto!important;margin-top:-10px;margin-bottom:15px;}' +
+        s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image>div{width:100%!important;height:auto!important;aspect-ratio:16/10!important;max-height:none!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%;order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
+        s + ' .blog-overlay-post-title,' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        s + ' .blog-overlay-post-deck--reporter{font-size:14px!important;line-height:1.4;font-family:inherit;margin-top:-5px!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-meta-row{font-size:13px;line-height:1.4;font-family:inherit;font-weight:var(--bb-heading-font-weight,inherit);margin-top:8px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-meta,' +
+        s + ' .bb-post-meta--on-bg{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.4;}' +
+        s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
+        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
+        s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:24px;}' +
+        s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
+        s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
+        s + ' .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
+        s + ' .bb-comment-form-wrap{padding-top:0!important;margin-top:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-form-rule{display:block;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' aside.blog-overlay-relevant-posts{width:100%!important;max-width:none!important;flex-shrink:1;}' +
+        s + ' aside.blog-overlay-relevant-posts>div{width:100%!important;max-width:none!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-email-capture-footer{border:none!important;padding:0!important;border-radius:0!important;}' +
+        s + ' .bb-newsletter-footer-row,' +
+        s + ' .bb-email-capture-footer-row{border:none;padding:0;border-radius:0;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
+        s + ' .bb-email-capture-footer-form{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:100%;flex:0 0 auto;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-chrome-input,' +
+        s + ' .blog-overlay-email-capture-footer .bb-form-input{font-size:14px;font-family:inherit;background:var(--bb-surface,#fff);color:var(--bb-body,#111);border:1px solid var(--bb-border);border-radius:6px;padding:8px 12px;width:100%!important;max-width:none!important;box-sizing:border-box;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="emailCapture"] .bb-sidebar-header{margin:0 0 8px 0;font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="emailCapture"] .bb-sidebar-divider{margin:0 0 8px 0;height:1px;background:var(--bb-border);border:none;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-more-to-read{border-top:none!important;padding-top:0!important;margin-top:0!important;margin-bottom:0!important;width:100%;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-below-main-heading{display:none;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-header{margin:0 0 8px 0;font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-divider{margin:0 0 20px 0;height:1px;background:var(--bb-border);border:none;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-footer-sidebar-alt{display:none!important;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-relevant-posts--footer{display:flex!important;flex-direction:column;gap:24px!important;width:100%;}' +
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-text{display:flex;flex-direction:column;gap:4px;}'
+      );
+    },
+
     _ensureCollectionStylesheet: function() {
       if (typeof document === 'undefined') return;
       var style = document.getElementById('bb-collection-styles');
@@ -8263,6 +9216,7 @@
           '--bb-chrome-radius:6px;' +
           '--bb-excerpt:color-mix(in srgb, var(--bb-body) 80%, transparent);' +
           '--bb-muted:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
+          '--bb-body-60:color-mix(in srgb, var(--bb-body) 60%, transparent);' +
           '--bb-extra-muted:color-mix(in srgb, var(--bb-body) 40%, transparent);' +
           '--bb-border:color-mix(in srgb, var(--bb-body) 15%, transparent);' +
           '--bb-border-15:var(--bb-border);' +
@@ -8297,8 +9251,8 @@
         '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
         '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
-        '#blog-overlay-list .bb-category-label--over-image{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-weight:700;}' +
+        '#blog-overlay-list .bb-category-label.bb-category-label--on-image:not(.blog-overlay-post-category--ribbon),' +
+        '#blog-overlay-list .bb-category-label.bb-category-label--over-image:not(.blog-overlay-post-category--ribbon){color:rgba(255,255,255,0.78)!important;font-weight:700!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack{max-width:800px;margin-left:auto;margin-right:auto;box-sizing:border-box;gap:0;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
@@ -8342,8 +9296,12 @@
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-deck--on-dark{margin-bottom:14px;}' +
         '#blog-overlay-list .blog-overlay-reporter-accent-rule{width:100%;height:1px;background:var(--bb-border,#e8e7e4);border:none;margin:16px 0 12px 0;}' +
         '#blog-overlay-list .blog-overlay-reporter-header-stack{gap:0;}' +
+        '#blog-overlay-list .blog-overlay-reporter-accent-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0;}' +
+        '#blog-overlay-list .bb-comment-form-rule{display:none;border:none;height:1px;width:100%;background:var(--bb-border,#e8e7e4);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
+        '#blog-overlay-list .bb-more-to-read-meta{display:none;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;border-top:1px solid var(--bb-border,#e5e4e0);margin-top:48px;padding-top:24px;}' +
         '#blog-overlay-list .blog-overlay-relevant-posts--footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;max-width:100%;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-thumb{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:var(--bb-card-radius,20px);}' +
@@ -8351,7 +9309,7 @@
         '#blog-overlay-list .blog-overlay-more-to-read-text{min-width:0;display:flex;flex-direction:column;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-text .bb-category-label{font-size:13px;font-weight:var(--bb-p1-font-weight,inherit);font-family:var(--bb-p1-font-family,inherit);text-transform:uppercase;letter-spacing:0.04em;color:var(--bb-accent);margin-top:5px;margin-bottom:0;}' +
         '#blog-overlay-list .bb-comments-section{border-top:1px solid var(--bb-border,#e8e7e4);padding-top:24px;margin-top:32px;}' +
-        '#blog-overlay-list .bb-form-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:transparent;padding:8px 12px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);}' +
+        '#blog-overlay-list .bb-form-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body,#111);background:transparent;padding:8px 12px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);font-family:var(--bb-p1-font-family,inherit);}' +
         '#blog-overlay-list .bb-form-input::placeholder{color:var(--bb-muted,#888);opacity:1;}' +
         '#blog-overlay-list .bb-comment-char-counter{width:100%;text-align:right;font-size:11px;color:var(--bb-muted,#888);margin:4px 0 0 0;}' +
         '#blog-overlay-list .blog-overlay-author-card{display:flex;flex-direction:row;align-items:flex-start;gap:16px;background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;margin:32px 0;box-sizing:border-box;}' +
@@ -8383,7 +9341,7 @@
         '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
         '#blog-overlay-list .bb-load-more,#blog-overlay-list .bb-load-more-btn{padding:10px 24px;font-size:14px;font-weight:var(--bb-btn-weight,inherit);border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-p1-font-family,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
         '#blog-overlay-list .bb-pagination-status{margin:0;font-size:13px;color:var(--bb-muted,#666);text-align:center;}' +
-        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
+        '#blog-overlay-list .bb-sidebar-header{font-size:12px;font-family:var(--bb-heading-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-body,#111);margin-top:0;padding-top:0;margin-bottom:8px;line-height:1.2;}' +
         '#blog-overlay-list .bb-sidebar-divider{height:1px;background:var(--bb-border,#ddd);border:none;margin:0 0 12px 0;width:100%;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-article--sidebar-row{margin-top:0;padding-top:0;}' +
         '#blog-overlay-list .blog-overlay-main-row .blog-overlay-post-body--sidebar-row{margin-top:0;}' +
@@ -8401,7 +9359,7 @@
         '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;margin-bottom:5px;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
-        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:600;}' +
+        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{margin-top:5px;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
         '#blog-overlay-list .blog-overlay-topic-badges a,#blog-overlay-list .blog-overlay-topic-badges .bb-topic-badge{border-radius:min(var(--bb-btn-radius),8px);}' +
@@ -8412,10 +9370,21 @@
         '#blog-overlay-list .bb-lead-magnet-heading{font-size:15px;font-family:inherit;font-weight:600;color:var(--bb-body);margin:0 0 8px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-desc{font-size:0.85rem;color:var(--bb-muted);margin:0 0 12px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-form{display:flex;flex-direction:column;gap:8px;}' +
+        '#blog-overlay-list .bb-lead-magnet-footer-form .bb-form-input{flex:1 1 240px;min-width:0;}' +
         '#blog-overlay-list .bb-lead-magnet-input{display:block;box-sizing:border-box;width:100%;font-size:14px;color:var(--bb-body);background:#fff;padding:8px 12px;border:1px solid var(--bb-border);border-radius:6px;}' +
         '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted);opacity:1;}' +
         '#blog-overlay-list .bb-lead-magnet-btn{padding:8px 16px;font-size:14px;border:none;cursor:pointer;background:var(--bb-accent);color:var(--bb-text-on-accent);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
         '#blog-overlay-list .bb-lead-magnet-btn:hover{filter:brightness(0.92);}' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-heading,' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-header{display:none;}' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,' +
+        '#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,' +
+        '#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}' +
+        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}}' +
         '#blog-overlay-list .bb-lead-magnet-msg{font-size:0.85rem;margin-top:4px;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
@@ -8436,6 +9405,75 @@
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret-glyph{display:block;color:var(--bb-muted,#888);font-size:16px;line-height:1;font-weight:500;font-family:inherit;transform:translateY(-1px);pointer-events:none;}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--left{left:0;justify-content:flex-start;padding-left:2px;background:linear-gradient(to right,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
         '#blog-overlay-list .blog-overlay-header-filter-scroll-caret--right{right:0;justify-content:flex-end;padding-right:2px;background:linear-gradient(to left,var(--bb-surface,#fff) 0%,var(--bb-surface,#fff) 38%,color-mix(in srgb,var(--bb-surface,#fff) 72%,transparent) 62%,transparent 100%);}' +
+        /* Mobile (<768): hide footer duplicates of sidebar modules; restyle footer-only to sidebar chrome. */
+        '#blog-overlay-list .bb-mobile-sidebar-chrome{display:none;}' +
+        '#blog-overlay-list .bb-footer-sidebar-alt{display:none!important;}' +
+        '#blog-overlay-list .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
+        '#blog-overlay-list .bb-mobile-duplicate-hidden,' +
+        '#blog-overlay-list .bb-mobile-toc-hidden,' +
+        '#blog-overlay-list .bb-mobile-sidebar-filter-hidden,' +
+        '#blog-overlay-list .bb-mobile-rail-hidden,' +
+        '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
+        '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"]{display:none!important;}}' +
+        '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"]{display:none!important;}' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>.blog-overlay-author-profiles,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>.blog-overlay-email-capture,' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>.blog-overlay-lead-magnet{width:100%!important;max-width:100%!important;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment{width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-mobile-sidebar-chrome{display:block;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-below-main-heading{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-more-to-read{border-top:none;margin-top:0;padding-top:0;padding-bottom:0;}' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-relevant-posts--footer,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-relevant-posts--footer{display:flex;flex-direction:column;gap:24px;width:100%;max-width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-footer-sidebar-alt{display:none!important;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card{border:none;padding:0;margin:0;border-radius:0;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer.bb-footer-card,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-card{border:none;padding:0;border-radius:0;background:transparent;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-row{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-copy,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form-stack,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form{flex:0 0 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form{flex-direction:column;align-items:stretch;justify-content:flex-start;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-chrome-input,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-form-input,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-form .bb-newsletter-btn,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form .bb-form-input{max-width:none;width:100%;flex:0 0 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-header{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-subtitle{font-size:0.85rem;line-height:1.45;margin:0 0 12px 0;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form{flex-direction:column;align-items:stretch;gap:8px;flex:0 0 auto;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form .bb-form-input,' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-footer-form button{width:100%;flex:0 0 auto;max-width:none;}' +
+        '@media (max-width: 767px){' +
+          '#blog-overlay-list[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+          this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobilePostFooterGapCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobilePrevNextCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobileSidebarPostCardCss('#blog-overlay-list') +
+          this._mobileMoreToReadCss('#blog-overlay-list') +
+        '}' +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
+        this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobilePostFooterGapCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobilePrevNextCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobileSidebarPostCardCss('#blog-overlay-list.bb-narrow-viewport') +
+        this._mobileMoreToReadCss('#blog-overlay-list.bb-narrow-viewport') +
+        '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
+        this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
+        '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
+        this._reporterMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-reporter-layout="1"]') +
+        '@media (max-width: 767px){' + this._mobileFeatureCss('#blog-overlay-list[data-bb-feature-layout="1"]') + '}' +
+        this._mobileFeatureCss('#blog-overlay-list.bb-narrow-viewport[data-bb-feature-layout="1"]') +
+        '@media (max-width: 767px){' + this._writerMobileCss('#blog-overlay-list[data-bb-writer-layout="1"]') + '}' +
+        this._writerMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-writer-layout="1"]') +
+        '@media (max-width: 767px){' + this._storyMobileCss('#blog-overlay-list[data-bb-story-layout="1"]') + '}' +
+        this._storyMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-story-layout="1"]') +
+        '@media (max-width: 767px){' + this._publisherMobileCss('#blog-overlay-list[data-bb-publisher-layout="1"]') + '}' +
+        this._publisherMobileCss('#blog-overlay-list.bb-narrow-viewport[data-bb-publisher-layout="1"]') +
         '#blog-overlay-list .bb-paywall-footer{width:100%;box-sizing:border-box;margin-top:32px;display:flex;justify-content:center;}' +
         '#blog-overlay-list .bb-paywall-inline-card-wrap{position:relative;left:50%;transform:translateX(-50%);width:min(70vw,600px);max-width:min(70vw,600px);z-index:2;box-sizing:border-box;pointer-events:auto;}' +
         '#blog-overlay-list .bb-paywall-footer .bb-paywall-card{width:min(70vw,600px);}' +
@@ -8451,14 +9489,16 @@
         '#blog-overlay-list .bb-paywall-benefit{display:inline-flex;align-items:center;gap:6px;}' +
         '#blog-overlay-list .bb-paywall-benefit-check{color:var(--bb-accent,#5B4FE8);font-weight:700;}' +
         '#blog-overlay-list .blog-overlay-showcase-image>.bb-featured-badge{display:none;}' +
+        '#blog-overlay-list .blog-overlay-digest-featured-article .blog-overlay-featured-image>.bb-featured-badge{display:none;}' +
+        '#blog-overlay-list .blog-overlay-digest-featured-rule{display:none;border:none;height:0;}' +
         '@media (max-width:767px){' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]){margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) + 16px)!important;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .blog-overlay-header-filter-row{padding-left:0!important;margin-bottom:10px;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .bb-filter-btn:first-child{padding-left:0;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .bb-filter-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:500;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .bb-filter-btn--active{font-weight:700;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .blog-overlay-header-search-toggle{margin-left:-11px;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) select.bb-chrome-input{' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"]){margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) + 16px)!important;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .blog-overlay-header-filter-row{padding-left:0!important;margin-bottom:10px;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .bb-filter-btn:first-child{padding-left:0;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .bb-filter-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:500;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .bb-filter-btn--active{font-weight:700;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) .blog-overlay-header-search-toggle{margin-left:-11px;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"],[data-bb-collection-layout="digest"],[data-bb-collection-layout="editorial"]) select.bb-chrome-input{' +
             '-webkit-appearance:none!important;appearance:none!important;' +
             'padding-right:32px!important;' +
             'background-color:var(--bb-surface)!important;' +
@@ -8471,8 +9511,8 @@
             'font-family:var(--bb-p1-font-family,inherit)!important;' +
             'font-weight:var(--bb-p1-font-weight,inherit)!important;' +
           '}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .blog-overlay-header-zone{padding-top:0!important;padding-bottom:0!important;}' +
-          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"]) .blog-overlay-header-content{margin-bottom:24px!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"]) .blog-overlay-header-zone{padding-top:0!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list:is([data-bb-collection-layout="showcase"],[data-bb-collection-layout="listRows"],[data-bb-collection-layout="grid"]) .blog-overlay-header-content{margin-bottom:24px!important;padding-bottom:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card{margin-bottom:20px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-image{position:relative;border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-body>.bb-featured-badge{display:none!important;}' +
@@ -8484,7 +9524,7 @@
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link{display:none!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-title{font-size:22px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-meta-row{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
-          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-right .blog-overlay-showcase-body{padding-left:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-left .blog-overlay-showcase-image{margin-right:12px;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-right .blog-overlay-showcase-image{margin-left:12px;}' +
@@ -8504,8 +9544,133 @@
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-title{font-size:18px!important;line-height:1.25!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-meta-row{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
-        '}';
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;width:100vw!important;max-width:100vw!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero img{border-radius:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-category-label--on-image{font-size:13px!important;margin-bottom:8px!important;color:rgba(255,255,255,0.78)!important;font-weight:700!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-title--on-image{font-size:28px!important;line-height:1.15!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-meta--on-image{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image img{' +
+            'border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image{overflow:hidden;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-title{font-size:18px!important;line-height:1.2!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-row{flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:10px!important;width:100%!important;max-width:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-copy,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form-stack,' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form{width:100%!important;max-width:none!important;flex:0 0 auto!important;min-width:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form{flex-direction:column!important;justify-content:flex-start!important;gap:10px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;padding:12px 14px!important;font-size:16px!important;font-family:var(--bb-p1-font-family,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .sqs-button-element--primary{width:100%!important;max-width:none!important;flex:0 0 auto!important;text-align:center!important;justify-content:center!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-zone{padding-top:0!important;padding-bottom:24px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-content{margin-bottom:0!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
+            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:12px!important;' +
+            'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
+            'border-radius:0!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image img{border-radius:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-headline-stack>.bb-featured-badge{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>.bb-featured-badge{' +
+            'display:inline-flex!important;position:absolute;top:8px;left:8px;z-index:2;' +
+            'font-size:15px;padding:12px 8px;font-weight:800;letter-spacing:1px;' +
+            'font-family:var(--bb-p1-font-family,inherit);margin-bottom:0;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-title{font-size:28px!important;line-height:1.15!important;font-weight:var(--bb-heading-font-weight,inherit)!important;margin-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-meta-row{font-family:var(--bb-p1-font-family,inherit);font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;margin-bottom:14px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-excerpt--lg{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);font-size:14px!important;line-height:1.5!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-headline-stack{gap:2px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-intro{gap:4px!important;margin-bottom:0!important;padding-top:0!important;padding-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-rule{display:block;border:none;border-top:1px solid var(--bb-border);margin:16px 0 20px 0;width:100%;height:0;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article){padding-left:0!important;padding-right:0!important;margin-bottom:4px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-title{font-size:18px!important;line-height:1.2!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image>div,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image img{' +
+            'border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image{overflow:hidden;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-profiles,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-email-capture,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-popular-posts,' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-topic-badges-wrap{width:100%!important;max-width:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-card-avatar{border-radius:50%!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-card-name{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-main-row .blog-overlay-pagination-zone{margin-top:-50px!important;margin-bottom:16px!important;width:100%;max-width:100%;box-sizing:border-box;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more,#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+          this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-collection-layout="digest"]') +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"]{margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) - 4px)!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-row{padding-left:0!important;padding-right:0!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;margin-top:-20px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card{' +
+            'position:relative!important;overflow:hidden!important;' +
+            'border-radius:var(--bb-img-radius,min(var(--bb-btn-radius,0px),8%))!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair) .blog-overlay-title{' +
+            'font-size:22px!important;line-height:1.2!important;text-align:left!important;' +
+            'font-weight:var(--bb-heading-font-weight,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card.blog-overlay-editorial-card-mobile-pair .blog-overlay-title{' +
+            'font-size:18px!important;line-height:1.2!important;text-align:left!important;' +
+            'font-weight:var(--bb-heading-font-weight,inherit)!important;' +
+            'max-width:100%!important;width:100%!important;box-sizing:border-box;' +
+            'word-wrap:break-word;overflow-wrap:break-word;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-post-categories-line,' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-category-label{' +
+            'font-family:var(--bb-p1-font-family,inherit)!important;font-size:13px!important;font-weight:700!important;' +
+            'letter-spacing:0.04em!important;text-transform:uppercase!important;' +
+            'color:rgba(255,255,255,0.78)!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important;' +
+            'background:transparent!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair) .blog-overlay-post-categories-line{margin-bottom:2px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card-meta{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] a:has(.bb-featured-badge) .blog-overlay-editorial-card-meta{' +
+            'display:block!important;font-size:14px!important;' +
+            'font-family:var(--bb-heading-font-family,inherit)!important;' +
+            'font-weight:var(--bb-heading-font-weight,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card-above-title{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card.blog-overlay-editorial-card-mobile-pair .blog-overlay-editorial-card-title-block{' +
+            'position:absolute!important;inset:auto 12px 12px 12px!important;padding:0!important;height:auto!important;' +
+            'text-align:left!important;box-sizing:border-box;max-width:calc(100% - 24px);' +
+            'right:12px;left:12px;width:auto;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair)>.blog-overlay-editorial-card-content,' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-card:not(.blog-overlay-editorial-card-mobile-pair)>:has(.blog-overlay-title){' +
+            'position:absolute!important;top:auto!important;bottom:16px!important;left:16px!important;right:16px!important;' +
+            'inset:auto 16px 16px 16px!important;padding:0!important;height:auto!important;margin:0!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-featured-badge{' +
+            'position:absolute!important;top:8px!important;left:8px!important;z-index:3!important;' +
+            'font-size:15px!important;padding:12px 8px!important;font-weight:800!important;letter-spacing:1px!important;' +
+            'font-family:var(--bb-p1-font-family,inherit)!important;' +
+          '}' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more,' +
+          '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+          this._mobileCollectionModuleCtaCss('#blog-overlay-list') +
+        '}' +
+        this._mobileCollectionModuleCtaCss('#blog-overlay-list.bb-narrow-viewport') +
+        this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"]') +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
@@ -8585,7 +9750,6 @@
       el.classList.add('bb-category-label');
       if (opts.onDarkSolid) el.classList.add('bb-category-label--on-dark');
       else if (opts.onImage) el.classList.add('bb-category-label--on-image');
-      if (opts.overImage) el.classList.add('bb-category-label--over-image');
       if (opts.modifier) el.classList.add(opts.modifier);
     },
 
@@ -8729,7 +9893,9 @@
       if (!scope || !scope.querySelectorAll) return;
       var tokens = this._getCollectionStyleTokens();
       var btnR = this._firstPxValue(tokens && tokens.buttonRadius, 0);
-      var nodes = scope.querySelectorAll('.blog-overlay-showcase-image');
+      var nodes = scope.querySelectorAll(
+        '.blog-overlay-showcase-image, [data-bb-collection-layout="grid"] article .blog-overlay-featured-image, [data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image, [data-bb-collection-layout="editorial"] .blog-overlay-editorial-card'
+      );
       for (var i = 0; i < nodes.length; i++) {
         var el = nodes[i];
         var w = el.clientWidth || 0;
@@ -8914,25 +10080,38 @@
 
     _applySiteContentInsetsToWrapper: function(wrapper, padTopPx) {
       if (!wrapper || !wrapper.style) return;
-      var padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      var mobilePost = this._isMobilePostWrapper(wrapper);
+      var headerH = 0;
+      var padT;
+      if (mobilePost) {
+        headerH = this._measureRenderedSiteHeaderHeight();
+        padT = headerH + 5;
+      } else {
+        padT = typeof padTopPx === 'number' && isFinite(padTopPx) ? padTopPx : 16;
+      }
+      if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        wrapper.classList.toggle('bb-narrow-viewport', mobilePost);
+      }
+      wrapper.style.setProperty('--bb-wrapper-pad-top', padT + 'px');
+      wrapper.style.setProperty('--bb-site-header-height', headerH + 'px');
       var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
       var navH = 0;
       try {
-        navH = this._getNavbarOffset() || 0;
+        navH = mobilePost ? headerH : (this._getNavbarOffset() || 0);
       } catch (eNavTok) {
-        navH = flushNav ? padT : Math.max(0, padT - 16);
+        navH = mobilePost ? headerH : (flushNav ? padT : Math.max(0, padT - 16));
       }
       wrapper.style.setProperty('--bb-nav-height', navH + 'px');
       wrapper.style.paddingTop = padT + 'px';
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
-      wrapper.style.marginTop = flushNav ? '0' : '16px';
+      wrapper.style.marginTop = (mobilePost || flushNav) ? '0' : '16px';
       wrapper.style.marginBottom = '16px';
 
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
         var pagePad = this._resolvePagePaddingCssValue();
         wrapper.style.setProperty('--pagePadding', pagePad);
-        var bbBuffer = wrapper.getAttribute('data-bb-writer-layout') === '1' ? '8vw' : '2vw';
+        var bbBuffer = (wrapper.getAttribute('data-bb-writer-layout') === '1' && !mobilePost) ? '8vw' : '2vw';
         var horizPad = 'calc(var(--pagePadding, 3vw) + ' + bbBuffer + ')';
         wrapper.style.paddingLeft = horizPad;
         wrapper.style.paddingRight = horizPad;
@@ -8969,11 +10148,19 @@
       var wrapper = this._blogOverlayWrapperEl;
       var root = this._blogOverlayInsetRoot || this._root;
       if (!wrapper || !wrapper.parentNode) return;
-      var padTop = 16;
-      try {
-        var parsed = parseInt(wrapper.style.paddingTop, 10);
-        if (isFinite(parsed) && parsed >= 0) padTop = parsed;
-      } catch (ePad) { /* ignore */ }
+      var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+      var padTop;
+      if (this._isMobilePostWrapper(wrapper)) {
+        padTop = this._mobilePostWrapperPadTop();
+      } else if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
+        padTop = this._wrapperPadTopForNavbar(this._getNavbarOffset(), flushNav) + this._topProgressBarReservePx(wrapper);
+      } else {
+        padTop = 16;
+        try {
+          var parsed = parseInt(wrapper.style.paddingTop, 10);
+          if (isFinite(parsed) && parsed >= 0) padTop = parsed;
+        } catch (ePad) { /* ignore */ }
+      }
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
         this._applySiteContentInsetsToWrapper(wrapper, padTop);
         return;
@@ -9365,6 +10552,553 @@
         return narrowByViewport || previewDeviceMobile || (overlayW > 0 && overlayW <= 767);
       } catch (eNarrowVp) {
         return typeof window !== 'undefined' && window.innerWidth <= 767;
+      }
+    },
+
+    /**
+     * Mobile (<768): hide every left sidebar rail. If a pairable module is in
+     * the right sidebar and duplicated in the footer, hide the footer copy
+     * (sidebar-wins). Left-sidebar copies do not count — a footer copy of a
+     * left-only module is shown. Footer-only modules keep rendering but get
+     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always
+     * hidden on mobile, even when enabled; a footer copy (if any) is shown
+     * instead. Hide Table of Contents on mobile for every post template.
+     * Comments are footer-only and exempt.
+     */
+    _applyMobileSidebarFooterRule: function(wrapper, opts) {
+      if (!wrapper) return;
+      opts = opts && typeof opts === 'object' ? opts : {};
+      var narrow = this._isNarrowCollectionViewport();
+      wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      var filterIds = {
+        filterByCategory: true,
+        filterByTag: true,
+        filterByTagsAndCategories: true
+      };
+      var pairIds = [
+        'authorProfiles',
+        'emailCapture',
+        'leadMagnet',
+        'relevantPosts',
+        'popularPosts',
+        'filterByCategory',
+        'filterByTag',
+        'filterByTagsAndCategories'
+      ];
+      var i;
+      for (i = 0; i < pairIds.length; i++) {
+        var id = pairIds[i];
+        var isFilter = !!filterIds[id];
+        var sidebarHas = !!wrapper.querySelector(
+          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+        );
+        var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
+        for (var f = 0; f < footerNodes.length; f++) {
+          /* Sidebar-wins, except Tags/Categories: keep the footer copy. */
+          var hideDup = narrow && sidebarHas && !isFilter;
+          var showTreatment = narrow && (!sidebarHas || isFilter);
+          footerNodes[f].classList.toggle('bb-mobile-duplicate-hidden', hideDup);
+          footerNodes[f].classList.toggle('bb-mobile-sidebar-treatment', showTreatment);
+          var chromes = footerNodes[f].querySelectorAll('.bb-mobile-sidebar-chrome');
+          for (var c = 0; c < chromes.length; c++) {
+            chromes[c].setAttribute('aria-hidden', showTreatment ? 'false' : 'true');
+          }
+          if (id === 'relevantPosts') {
+            var altList = footerNodes[f].querySelector('.bb-footer-sidebar-alt');
+            var footerGrid = footerNodes[f].querySelector('.blog-overlay-relevant-posts--footer');
+            var footerHeading = footerNodes[f].querySelector('.bb-below-main-heading');
+            /* Compact list is sidebar-only. Footer always keeps the card grid. */
+            if (altList) altList.setAttribute('aria-hidden', 'true');
+            if (footerGrid) footerGrid.setAttribute('aria-hidden', 'false');
+            if (footerHeading) footerHeading.setAttribute('aria-hidden', showTreatment ? 'true' : 'false');
+          }
+        }
+      }
+      var sidebarFilterNodes = wrapper.querySelectorAll(
+        '[data-bb-zone="sidebar"][data-bb-module="filterByCategory"],' +
+        '[data-bb-zone="sidebar"][data-bb-module="filterByTag"],' +
+        '[data-bb-zone="sidebar"][data-bb-module="filterByTagsAndCategories"]'
+      );
+      for (i = 0; i < sidebarFilterNodes.length; i++) {
+        sidebarFilterNodes[i].classList.toggle('bb-mobile-sidebar-filter-hidden', narrow);
+        sidebarFilterNodes[i].setAttribute('aria-hidden', narrow ? 'true' : 'false');
+      }
+      var hideMobileToc = narrow;
+      var tocNodes = wrapper.querySelectorAll('[data-bb-module="tableOfContents"]');
+      for (i = 0; i < tocNodes.length; i++) {
+        tocNodes[i].classList.toggle('bb-mobile-toc-hidden', hideMobileToc);
+        tocNodes[i].setAttribute('aria-hidden', hideMobileToc ? 'true' : 'false');
+      }
+      var rails = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
+      for (i = 0; i < rails.length; i++) {
+        var rail = rails[i];
+        var railMods = rail.querySelectorAll('[data-bb-module]');
+        var hideRail = false;
+        var isLeftRail = rail.getAttribute('data-bb-sidebar-side') === 'left';
+        if (narrow && isLeftRail) {
+          hideRail = true;
+        } else if (narrow && railMods.length > 0) {
+          hideRail = true;
+          for (var rm = 0; rm < railMods.length; rm++) {
+            var modId = railMods[rm].getAttribute('data-bb-module');
+            var filterHidden = !!filterIds[modId];
+            var tocHidden = hideMobileToc && modId === 'tableOfContents';
+            if (!filterHidden && !tocHidden) {
+              hideRail = false;
+              break;
+            }
+          }
+        }
+        rail.classList.toggle('bb-mobile-rail-hidden', hideRail);
+        if (isLeftRail) rail.setAttribute('aria-hidden', hideRail ? 'true' : 'false');
+      }
+      var footerContent = wrapper.querySelector('.blog-overlay-footer-content');
+      if (footerContent) {
+        var child = footerContent.firstChild;
+        var hasVisible = false;
+        while (child) {
+          if (
+            child.nodeType === 1 &&
+            !child.classList.contains('bb-mobile-duplicate-hidden') &&
+            !child.classList.contains('bb-mobile-toc-hidden')
+          ) {
+            hasVisible = true;
+            break;
+          }
+          child = child.nextSibling;
+        }
+        footerContent.classList.toggle('bb-mobile-empty-hidden', narrow && !hasVisible);
+      }
+      this._applyPrevNextRadiusVars(wrapper, narrow);
+      this._capMobileBodyHeadings(wrapper, narrow);
+      this._applyReporterMobileLayout(wrapper, narrow);
+      this._applyFeatureMobileLayout(wrapper, narrow);
+      this._applyStoryMobileLayout(wrapper, narrow);
+      /* Feature rebuilds author cards; appendChild does not stick. CSS-only. */
+      if (!opts.featurePostLayout) {
+        this._applyMobileAuthorCardLayout(wrapper, narrow);
+      }
+    },
+
+    /**
+     * Mobile (<768): cap in-article h1–h6 at post-title × 0.85 so customer
+     * heading scales cannot exceed the headline. Cap only — never enlarge.
+     * Writer title is 34px → 29px; other post templates 28px → 24px.
+     */
+    _capMobileBodyHeadings: function(wrapper, narrow) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var titlePx = wrapper.getAttribute('data-bb-writer-layout') === '1' ? 34 : 28;
+      var capPx = Math.round(titlePx * 0.85);
+      var headings = wrapper.querySelectorAll('.blog-overlay-body h1, .blog-overlay-body h2, .blog-overlay-body h3, .blog-overlay-body h4, .blog-overlay-body h5, .blog-overlay-body h6');
+      for (var i = 0; i < headings.length; i++) {
+        this._restoreMobileBodyHeadingCap(headings[i]);
+        if (!narrow) continue;
+        var computed = parseFloat(window.getComputedStyle(headings[i]).fontSize);
+        if (!isFinite(computed) || computed <= capPx) continue;
+        this._snapshotMobileBodyHeadingInline(headings[i]);
+        headings[i].style.setProperty('font-size', capPx + 'px', 'important');
+        headings[i].style.setProperty('line-height', '1.25', 'important');
+        headings[i].setAttribute('data-bb-heading-capped', '1');
+      }
+    },
+
+    _snapshotMobileBodyHeadingInline: function(el) {
+      if (!el || el._bbHeadingInlineSnap) return;
+      el._bbHeadingInlineSnap = {
+        fs: el.style.getPropertyValue('font-size'),
+        fsp: el.style.getPropertyPriority('font-size'),
+        lh: el.style.getPropertyValue('line-height'),
+        lhp: el.style.getPropertyPriority('line-height')
+      };
+    },
+
+    _restoreMobileBodyHeadingCap: function(el) {
+      if (!el || el.getAttribute('data-bb-heading-capped') !== '1') return;
+      el.style.removeProperty('font-size');
+      el.style.removeProperty('line-height');
+      var snap = el._bbHeadingInlineSnap;
+      if (snap) {
+        if (snap.fs) el.style.setProperty('font-size', snap.fs, snap.fsp);
+        if (snap.lh) el.style.setProperty('line-height', snap.lh, snap.lhp);
+      }
+      el.removeAttribute('data-bb-heading-capped');
+    },
+
+    /**
+     * Mobile prev/next radius: min(button radius, shortest side × 0.08).
+     * Uncapped vs the 20px card token — a pill button radius can lozenge the box.
+     */
+    _applyPrevNextRadiusVars: function(wrapper, narrow) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var nodes = wrapper.querySelectorAll('.blog-overlay-prev-next');
+      if (!nodes.length) return;
+      var self = this;
+      function apply() {
+        var tokens = self._getCollectionStyleTokens();
+        var btnR = self._firstPxValue(tokens && tokens.buttonRadius, 0);
+        for (var i = 0; i < nodes.length; i++) {
+          var el = nodes[i];
+          if (!narrow) {
+            el.style.removeProperty('--bb-prev-next-radius');
+            continue;
+          }
+          var shortest = Math.min(el.clientWidth || 0, el.clientHeight || 0);
+          if (shortest < 1) {
+            el.style.removeProperty('--bb-prev-next-radius');
+            continue;
+          }
+          el.style.setProperty('--bb-prev-next-radius', Math.min(btnR, shortest * 0.08) + 'px');
+        }
+      }
+      apply();
+      if (narrow && typeof requestAnimationFrame === 'function') requestAnimationFrame(apply);
+    },
+
+    _snapshotInlineStyles: function(el, props) {
+      if (!el || el._bbAuthorStyleSnap) return;
+      var snap = {};
+      for (var i = 0; i < props.length; i++) snap[props[i]] = el.style[props[i]] || '';
+      el._bbAuthorStyleSnap = snap;
+    },
+
+    _restoreInlineStyles: function(el) {
+      if (!el || !el._bbAuthorStyleSnap) return;
+      var snap = el._bbAuthorStyleSnap;
+      for (var k in snap) {
+        if (Object.prototype.hasOwnProperty.call(snap, k)) el.style[k] = snap[k];
+      }
+      el._bbAuthorStyleSnap = null;
+    },
+
+    /** Keep bio/social inside the text column so display:contents can promote them into the row. */
+    _restoreAuthorCardDom: function(card) {
+      if (!card) return;
+      var textCol = card.querySelector('.blog-overlay-author-card-text');
+      if (!textCol) return;
+      var nameEl = textCol.querySelector('.blog-overlay-author-card-name') || card.querySelector('.blog-overlay-author-card-name');
+      var social = card.querySelector('.blog-overlay-author-card-social');
+      var bio = card.querySelector('.blog-overlay-author-card-bio');
+      if (social && social.parentNode !== textCol) {
+        if (nameEl && nameEl.parentNode === textCol && nameEl.nextSibling) textCol.insertBefore(social, nameEl.nextSibling);
+        else textCol.appendChild(social);
+      }
+      if (bio && bio.parentNode !== textCol) textCol.appendChild(bio);
+    },
+
+    /**
+     * Mobile author layout for EVERY .blog-overlay-author-unit (sidebar + footer).
+     * querySelector on the wrapper would style only the first author.
+     */
+    _applyMobileAuthorCardLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var units = wrapper.querySelectorAll('.blog-overlay-author-unit');
+      var i;
+      for (i = 0; i < units.length; i++) {
+        this._restoreAuthorCardDom(units[i]);
+        this._styleMobileAuthorUnit(units[i], !!narrow);
+      }
+    },
+
+    _styleMobileAuthorUnit: function(card, apply) {
+      if (!card) return;
+      var row = card.querySelector('.blog-overlay-author-card-row');
+      var textCol = card.querySelector('.blog-overlay-author-card-text');
+      var avatar = card.querySelector('.blog-overlay-author-card-avatar');
+      var nameEl = card.querySelector('.blog-overlay-author-card-name');
+      var bio = card.querySelector('.blog-overlay-author-card-bio');
+      var social = card.querySelector('.blog-overlay-author-card-social');
+      var socialLinks = social ? social.querySelectorAll('a') : [];
+      var socialIcons = social ? social.querySelectorAll('svg') : [];
+      var prev = card.previousElementSibling;
+      var afterFirst = !!(prev && prev.classList && prev.classList.contains('blog-overlay-author-unit'));
+      var j;
+
+      if (!apply) {
+        this._restoreInlineStyles(card);
+        this._restoreInlineStyles(row);
+        this._restoreInlineStyles(textCol);
+        this._restoreInlineStyles(avatar);
+        this._restoreInlineStyles(nameEl);
+        this._restoreInlineStyles(bio);
+        this._restoreInlineStyles(social);
+        for (j = 0; j < socialLinks.length; j++) this._restoreInlineStyles(socialLinks[j]);
+        for (j = 0; j < socialIcons.length; j++) this._restoreInlineStyles(socialIcons[j]);
+        return;
+      }
+
+      this._snapshotInlineStyles(card, ['marginTop', 'marginBottom']);
+      this._snapshotInlineStyles(row, ['display', 'flexWrap', 'alignItems', 'gap', 'marginBottom']);
+      this._snapshotInlineStyles(textCol, ['display', 'flex', 'flexDirection', 'gap', 'minWidth', 'minHeight', 'justifyContent']);
+      this._snapshotInlineStyles(avatar, ['width', 'height', 'flex', 'flexShrink', 'order', 'fontSize']);
+      this._snapshotInlineStyles(nameEl, ['order', 'flex', 'fontSize', 'fontFamily', 'fontWeight', 'lineHeight']);
+      this._snapshotInlineStyles(bio, ['order', 'flex', 'fontSize', 'lineHeight', 'marginTop']);
+      this._snapshotInlineStyles(social, ['order', 'flex', 'display', 'flexWrap', 'alignItems', 'gap']);
+
+      card.style.marginTop = afterFirst ? '20px' : '0';
+      card.style.marginBottom = '0';
+      if (textCol) textCol.style.display = 'contents';
+      if (row) {
+        row.style.display = 'flex';
+        row.style.flexWrap = 'wrap';
+        row.style.alignItems = 'center';
+        row.style.gap = '12px';
+        row.style.marginBottom = '0';
+      }
+      if (avatar) {
+        avatar.style.width = '44px';
+        avatar.style.height = '44px';
+        avatar.style.flex = '0 0 44px';
+        avatar.style.flexShrink = '0';
+        avatar.style.order = '0';
+        avatar.style.fontSize = '14px';
+      }
+      if (nameEl) {
+        nameEl.style.order = '1';
+        nameEl.style.flex = '1 1 0';
+        nameEl.style.fontSize = '16px';
+        nameEl.style.fontFamily = 'var(--bb-heading-font-family, inherit)';
+        nameEl.style.fontWeight = 'var(--bb-heading-font-weight, inherit)';
+      }
+      if (bio) {
+        bio.style.order = '2';
+        bio.style.flex = '0 0 100%';
+        bio.style.fontSize = '13px';
+        bio.style.lineHeight = '1.5';
+        bio.style.marginTop = '0';
+      }
+      if (social) {
+        social.style.order = '3';
+        social.style.flex = '0 0 100%';
+        social.style.display = 'flex';
+        social.style.flexWrap = 'wrap';
+        social.style.alignItems = 'center';
+        social.style.gap = '12px';
+      }
+      for (j = 0; j < socialLinks.length; j++) {
+        this._snapshotInlineStyles(socialLinks[j], ['width', 'height', 'display', 'alignItems', 'justifyContent', 'flexShrink']);
+        socialLinks[j].style.width = '20px';
+        socialLinks[j].style.height = '20px';
+        socialLinks[j].style.display = 'inline-flex';
+        socialLinks[j].style.alignItems = 'center';
+        socialLinks[j].style.justifyContent = 'center';
+        socialLinks[j].style.flexShrink = '0';
+      }
+      for (j = 0; j < socialIcons.length; j++) {
+        this._snapshotInlineStyles(socialIcons[j], ['width', 'height', 'display']);
+        socialIcons[j].style.width = '18px';
+        socialIcons[j].style.height = '18px';
+        socialIcons[j].style.display = 'block';
+      }
+    },
+
+    /**
+     * Reporter mobile: lift breadcrumbs onto the header inner.
+     */
+    _applyReporterMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-reporter-layout') === '1' && !!narrow;
+      var inner = wrapper.querySelector('.blog-overlay-single-post-header-inner');
+      var bc = wrapper.querySelector('.blog-overlay-post-breadcrumbs');
+      if (bc) {
+        if (apply && inner) {
+          if (!bc._bbReporterBcHome) {
+            bc._bbReporterBcHome = { parent: bc.parentNode, next: bc.nextSibling };
+          }
+          if (bc.parentNode !== inner || inner.firstChild !== bc) {
+            inner.insertBefore(bc, inner.firstChild);
+          }
+          bc.style.order = '-1';
+        } else if (bc._bbReporterBcHome) {
+          var home = bc._bbReporterBcHome;
+          if (home.parent) {
+            if (home.next && home.next.parentNode === home.parent) {
+              home.parent.insertBefore(bc, home.next);
+            } else {
+              home.parent.appendChild(bc);
+            }
+          }
+          bc.style.order = '';
+          bc._bbReporterBcHome = null;
+        }
+      }
+      this._syncReporterMobileArticleGap(wrapper, apply);
+      if (apply && typeof requestAnimationFrame === 'function') {
+        var self = this;
+        requestAnimationFrame(function() {
+          self._syncReporterMobileArticleGap(wrapper, true);
+        });
+      }
+    },
+
+    /**
+     * Feature mobile: measure article→comments gap after the below-row is
+     * stacked under the body. Extra space below the last glyph is
+     * post-dependent — do not use a fixed margin.
+     */
+    _applyFeatureMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-feature-layout') === '1' && !!narrow;
+      this._syncFeatureMobileArticleGap(wrapper, apply);
+      if (apply && typeof requestAnimationFrame === 'function') {
+        var self = this;
+        requestAnimationFrame(function() {
+          self._syncFeatureMobileArticleGap(wrapper, true);
+        });
+      }
+    },
+
+    /** Bottom of the last visible text line inside `root` (Range rects, not the container box). */
+    _lastTextLineBottom: function(root) {
+      if (!root) return 0;
+      var best = 0;
+      try {
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+          acceptNode: function(node) {
+            if (!node || !String(node.nodeValue || '').replace(/\s+/g, '')) return NodeFilter.FILTER_REJECT;
+            var el = node.parentElement;
+            if (!el) return NodeFilter.FILTER_REJECT;
+            var tag = el.tagName;
+            if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        });
+        var range = document.createRange();
+        var node;
+        while ((node = walker.nextNode())) {
+          range.selectNodeContents(node);
+          var rects = range.getClientRects();
+          if (!rects || !rects.length) continue;
+          var b = rects[rects.length - 1].bottom;
+          if (b > best) best = b;
+        }
+      } catch (eLastText) {}
+      if (!best && root.getBoundingClientRect) best = root.getBoundingClientRect().bottom;
+      return best;
+    },
+
+    _isReporterGapTarget: function(el) {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.classList && (
+        el.classList.contains('bb-mobile-duplicate-hidden') ||
+        el.classList.contains('bb-mobile-toc-hidden') ||
+        el.classList.contains('bb-mobile-rail-hidden') ||
+        el.classList.contains('bb-mobile-empty-hidden')
+      )) return false;
+      try {
+        var cs = window.getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      } catch (eCs) {}
+      return true;
+    },
+
+    /**
+     * Mobile article→comments gap: last line of body text (Range rects) to
+     * `#bb-comments` (or the next visible block when comments are off) must
+     * be ~24px. Extra space below the last glyph is post-dependent — do not
+     * swap in another fixed negative margin.
+     */
+    _syncMobileArticleCommentsGap: function(wrapper, narrow, spec) {
+      if (!wrapper || !spec) return;
+      var box = wrapper.querySelector(spec.boxSelector);
+      if (!box || !box.style) return;
+      if ((spec.layoutAttr && wrapper.getAttribute(spec.layoutAttr) !== '1') || !narrow) {
+        box.style.removeProperty(spec.cssVar);
+        return;
+      }
+      var body = spec.bodySelector ? (box.querySelector(spec.bodySelector) || box) : box;
+      var lastText = this._lastTextLineBottom(body);
+      if (!lastText) return;
+      var next = wrapper.querySelector('#bb-comments');
+      if (next && !this._isReporterGapTarget(next)) next = null;
+      if (!next) {
+        next = spec.nextFromBody ? body.nextElementSibling : box.nextElementSibling;
+        while (next && !this._isReporterGapTarget(next)) next = next.nextElementSibling;
+      }
+      if (!next || !next.getBoundingClientRect) return;
+      var nextTop = next.getBoundingClientRect().top;
+      var gap = nextTop - lastText;
+      var current = 0;
+      try {
+        current = parseFloat(window.getComputedStyle(box).marginBottom) || 0;
+      } catch (eMb) {
+        current = 0;
+      }
+      if (Math.abs(gap - 24) < 1.5) return;
+      var nextMb = current + (24 - gap);
+      if (!isFinite(nextMb)) return;
+      if (nextMb < -240) nextMb = -240;
+      if (nextMb > 80) nextMb = 80;
+      var rounded = Math.round(nextMb);
+      var prev = box.style.getPropertyValue(spec.cssVar);
+      if (prev === rounded + 'px') return;
+      box.style.setProperty(spec.cssVar, rounded + 'px');
+    },
+
+    _syncReporterMobileArticleGap: function(wrapper, narrow) {
+      this._syncMobileArticleCommentsGap(wrapper, narrow, {
+        layoutAttr: 'data-bb-reporter-layout',
+        cssVar: '--bb-reporter-article-mb',
+        boxSelector: '.blog-overlay-post-article--sidebar-row',
+        bodySelector: '.blog-overlay-body'
+      });
+    },
+
+    _syncFeatureMobileArticleGap: function(wrapper, narrow) {
+      this._syncMobileArticleCommentsGap(wrapper, narrow, {
+        layoutAttr: 'data-bb-feature-layout',
+        cssVar: '--bb-feature-article-mb',
+        boxSelector: '.blog-overlay-body',
+        nextFromBody: true
+      });
+    },
+
+    /**
+     * Story mobile: lift breadcrumbs above the image row and set header ink
+     * from the computed header-zone background (Rule E).
+     */
+    _applyStoryMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-story-layout') === '1' && !!narrow;
+      var inner = wrapper.querySelector('.blog-overlay-single-post-header-inner');
+      var row = wrapper.querySelector('.blog-overlay-story-header-row');
+      var bc = wrapper.querySelector('.blog-overlay-post-breadcrumbs');
+      if (bc) {
+        if (apply && inner && row) {
+          if (!bc._bbStoryBcHome) {
+            bc._bbStoryBcHome = { parent: bc.parentNode, next: bc.nextSibling };
+          }
+          if (bc.parentNode !== inner || bc.nextElementSibling !== row) {
+            inner.insertBefore(bc, row);
+          }
+        } else if (bc._bbStoryBcHome) {
+          var home = bc._bbStoryBcHome;
+          if (home.parent) {
+            if (home.next && home.next.parentNode === home.parent) {
+              home.parent.insertBefore(bc, home.next);
+            } else {
+              home.parent.appendChild(bc);
+            }
+          }
+          bc._bbStoryBcHome = null;
+        }
+      }
+      var zone = wrapper.querySelector('.blog-overlay-single-post-header-zone--story') ||
+        wrapper.querySelector('.blog-overlay-header-zone');
+      if (zone) {
+        if (apply) {
+          zone.style.width = '';
+          zone.style.maxWidth = '';
+          zone.style.marginLeft = '';
+          zone.style.marginRight = '';
+          var bg = '';
+          try { bg = window.getComputedStyle(zone).backgroundColor; } catch (eBg) { bg = ''; }
+          if (!this._isValidCssColorValue(bg)) {
+            bg = zone.style.background || zone.style.backgroundColor || '#000000';
+          }
+          zone.style.setProperty('--bb-story-ink', this._storyHeaderInkFromBackground(bg));
+        } else {
+          zone.style.removeProperty('--bb-story-ink');
+        }
       }
     },
 
@@ -10193,7 +11927,9 @@
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
         var fiShadow = Boolean(fiCfg.shadow);
         var fiCaption = Boolean(fiCfg.showCaption !== false);
-        var fiSpacing = (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
+        var fiSpacing = isSinglePost
+          ? 'normal'
+          : (fiCfg.verticalSpacing === 'tight' ? 'tight' : fiCfg.verticalSpacing === 'spacious' ? 'spacious' : 'normal');
         var phFullBleedOverlay = isSinglePost && phImagePos === 'fullBleed' && fiShow && !(postHeaderCfg && postHeaderCfg.fullBleedLayout === 'stacked');
         var phVertRaw = postHeaderCfg && postHeaderCfg.contentVerticalAlignment;
         var phVertical = (phVertRaw === 'center' || phVertRaw === 'bottom' || phVertRaw === 'top') ? phVertRaw : (phFullBleedOverlay ? 'bottom' : 'top');
@@ -10312,6 +12048,10 @@
               : (fiSpacing === 'tight' ? '12px' : fiSpacing === 'spacious' ? '28px' : '20px');
           }
           contentEl = document.createElement('div');
+          if (reporterPostHeaderLayout) {
+            rowEl.classList.add('blog-overlay-reporter-header-row');
+            contentEl.classList.add('blog-overlay-reporter-header-copy');
+          }
           contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
           contentEl.style.minWidth = '0';
           if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
@@ -10479,6 +12219,7 @@
               fiWrap.classList.add('blog-overlay-story-featured-image');
               fiWrap.style.flex = '0 0 58%';
             } else if (reporterPostHeaderLayout) {
+              fiWrap.classList.add('blog-overlay-reporter-featured-image');
               fiWrap.style.flex = '0 0 60%';
             } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
@@ -10597,11 +12338,17 @@
             storyPostLayout ? ' blog-overlay-post-breadcrumbs--on-dark-solid'
               : singlePostFullBleedHero ? ' blog-overlay-post-breadcrumbs--on-dark' : ''
           );
-          bcNav.style.setProperty('display', 'flex', 'important');
-          bcNav.style.setProperty('flex-direction', 'row', 'important');
-          bcNav.style.flexWrap = 'wrap';
-          bcNav.style.alignItems = 'center';
-          bcNav.style.gap = '0';
+          /* Feature/Writer/Story/Publisher/Reporter: keep default block + inline
+             children so crumbs wrap as text. display:flex !important cannot be
+             overridden by the mobile stylesheet, and flex items wrap far too
+             early. Publisher also hides crumbs. */
+          if (!featurePostLayout && !writerPostLayout && !storyPostLayout && !publisherPostLayout && !reporterPostHeaderLayout) {
+            bcNav.style.setProperty('display', 'flex', 'important');
+            bcNav.style.setProperty('flex-direction', 'row', 'important');
+            bcNav.style.flexWrap = 'wrap';
+            bcNav.style.alignItems = 'center';
+            bcNav.style.gap = '0';
+          }
           bcNav.style.justifyContent = alignStyle === 'flex-end' ? 'flex-end' : alignStyle === 'center' ? 'center' : 'flex-start';
           var meta = self._blogMeta || {};
           var siteTitle = meta.siteTitle || '';
@@ -10792,6 +12539,11 @@
           featuredHeadlineStack.style.width = '100%';
           var featuredBadge = self._createFeaturedBadge();
           featuredHeadlineStack.appendChild(featuredBadge);
+          if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && typeof fiWrap !== 'undefined' && fiWrap) {
+            var digestBadgeOverlay = self._createFeaturedBadge();
+            digestBadgeOverlay.setAttribute('aria-hidden', 'true');
+            fiWrap.appendChild(digestBadgeOverlay);
+          }
           if (appendCategoriesToHeadline) {
             featuredHeadlineStack.appendChild(postCategoriesLine);
           }
@@ -10846,7 +12598,7 @@
           if (bylineText) bylineText = self._stripLeadingSquarespaceSectionMarkers(bylineText);
           if (bylineText) {
             var bylineEl = document.createElement('p');
-            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : storyPostLayout ? ' blog-overlay-post-deck--on-dark-solid' : featurePostLayoutForCat ? ' blog-overlay-post-deck--feature' : '');
+            bylineEl.className = 'blog-overlay-post-deck' + (reporterPostHeaderLayout ? ' blog-overlay-post-deck--reporter' : storyPostLayout ? ' blog-overlay-post-deck--on-dark-solid' : featurePostLayoutForCat ? ' blog-overlay-post-deck--feature' : writerPostLayout ? ' blog-overlay-post-deck--writer' : '');
             bylineEl.textContent = bylineText;
             postInfoWrap.appendChild(bylineEl);
           }
@@ -10963,6 +12715,23 @@
             pendingWriterShareRow = shareRow;
           } else {
             headlineMount.appendChild(shareRow);
+          }
+        }
+
+        if (reporterPostHeaderLayout && postInfoWrap) {
+          var reporterAccent = document.createElement('hr');
+          reporterAccent.className = 'blog-overlay-reporter-accent-rule';
+          reporterAccent.setAttribute('aria-hidden', 'true');
+          var reporterMetaRow = postInfoWrap.querySelector('.blog-overlay-meta-row');
+          var reporterShareRow = postInfoWrap.querySelector('.blog-overlay-share-row');
+          if (reporterMetaRow && reporterMetaRow.nextSibling) {
+            postInfoWrap.insertBefore(reporterAccent, reporterMetaRow.nextSibling);
+          } else if (reporterMetaRow) {
+            postInfoWrap.appendChild(reporterAccent);
+          } else if (reporterShareRow) {
+            postInfoWrap.insertBefore(reporterAccent, reporterShareRow);
+          } else {
+            postInfoWrap.appendChild(reporterAccent);
           }
         }
 
@@ -11234,8 +13003,19 @@
         var omitDigestNonFeaturedBody = !isSinglePost && collectionLayout === 'digest' && !isFeaturedInLayout;
         if (!omitDigestNonFeaturedBody) {
           bodyAppendTo.appendChild(body);
+          if (!isSinglePost && collectionLayout === 'digest' && isFeaturedInLayout && body.textContent) {
+            var digestRule = document.createElement('hr');
+            digestRule.className = 'blog-overlay-digest-featured-rule';
+            digestRule.setAttribute('aria-hidden', 'true');
+            bodyAppendTo.appendChild(digestRule);
+          }
         }
         mainEl.appendChild(article);
+      }
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { self._applyShowcaseImageRadiusVars(mainEl); });
+      } else {
+        self._applyShowcaseImageRadiusVars(mainEl);
       }
     },
 
@@ -11557,7 +13337,15 @@
         pagZone.style.boxSizing = 'border-box';
         pagZone.style.position = 'relative';
         pagZone.style.zIndex = '1';
-        wrapper.appendChild(pagZone);
+        var refreshMainRow = document.querySelector('#blog-overlay-list .blog-overlay-main-row');
+        if (vs.collectionLayout === 'digest' && self._isNarrowCollectionViewport() && refreshMainRow) {
+          var refreshAnchor = refreshMainRow.querySelector('.blog-overlay-sidebar-anchor');
+          pagZone.style.order = '1';
+          if (refreshAnchor) refreshMainRow.insertBefore(pagZone, refreshAnchor);
+          else refreshMainRow.appendChild(pagZone);
+        } else {
+          wrapper.appendChild(pagZone);
+        }
       }
 
       var placeholderMap = null;
@@ -11777,9 +13565,9 @@
       var paywallHideFooterModules = Boolean(vs.paywallHideFooterModules);
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
-      var featureBelowRowAuthorEl = null;
-      var featureBelowRowMoreToReadEl = null;
-      var featureBelowRowLeadMagnetEl = null;
+      var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
+      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
+      var featureBelowRowMods = [];
       var featureBelowRowHost = null;
       var featureCommentsSectionEl = null;
       var featureFooterLeftPad = 0;
@@ -11834,6 +13622,9 @@
       wrapper.id = 'blog-overlay-list';
       wrapper.className = 'blog-overlay-wrapper';
       wrapper.style.display = 'block';
+      if (featurePostLayout) wrapper.setAttribute('data-bb-feature-layout', '1');
+      if (isSinglePost && self._isReporterPostLayout(cfg)) wrapper.setAttribute('data-bb-reporter-layout', '1');
+      else wrapper.removeAttribute('data-bb-reporter-layout');
       self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
       if (!isSinglePost && collectionLayout) {
         wrapper.setAttribute('data-bb-collection-layout', collectionLayout);
@@ -11855,9 +13646,21 @@
         } else {
           wrapper.removeAttribute('data-bb-writer-layout');
         }
+        if (self._isStoryPostLayout(cfg)) {
+          wrapper.setAttribute('data-bb-story-layout', '1');
+        } else {
+          wrapper.removeAttribute('data-bb-story-layout');
+        }
+        if (self._isPublisherPostLayout(cfg)) {
+          wrapper.setAttribute('data-bb-publisher-layout', '1');
+        } else {
+          wrapper.removeAttribute('data-bb-publisher-layout');
+        }
       } else {
         wrapper.removeAttribute('data-bb-spec-horizontal-padding');
         wrapper.removeAttribute('data-bb-writer-layout');
+        wrapper.removeAttribute('data-bb-story-layout');
+        wrapper.removeAttribute('data-bb-publisher-layout');
       }
       self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
@@ -11934,8 +13737,8 @@
           } else {
             singlePostHeaderZoneEl.style.marginLeft = '';
             singlePostHeaderZoneEl.style.marginRight = '';
-            singlePostHeaderZoneEl.style.width = '100%';
-            singlePostHeaderZoneEl.style.maxWidth = '100%';
+            singlePostHeaderZoneEl.style.width = '';
+            singlePostHeaderZoneEl.style.maxWidth = '';
           }
         } else {
           singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
@@ -12203,7 +14006,7 @@
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
             heroCat.textContent = heroCats[0];
-            self._applyCategoryLabelStyle(heroCat, { onImage: true, overImage: true });
+            self._applyCategoryLabelStyle(heroCat, { onImage: true });
             heroCat.style.marginBottom = '8px';
             if (mastheadHeroMobile) heroCat.style.fontSize = '22px';
             heroContent.appendChild(heroCat);
@@ -12557,12 +14360,39 @@
         var relevantItems = pool.slice(0, limit);
         if (relevantItems.length === 0) return null;
 
+        function buildRelevantPostsList(fullWidth) {
+          var listEl = document.createElement('aside');
+          listEl.className = 'blog-overlay-relevant-posts';
+          listEl.style.flexShrink = '0';
+          listEl.style.width = fullWidth ? '100%' : ((sidebarWidth || 220) + 'px');
+          listEl.style.maxWidth = '100%';
+          listEl.style.boxSizing = 'border-box';
+          for (var r = 0; r < relevantItems.length; r++) {
+            var rpIdx = self._postIndexInItems(items, relevantItems[r], itemIndexMap);
+            if (rpIdx < 0) continue;
+            var rpPost = relevantItems[r];
+            var rpCard = self._createModulePostCard(rpPost, {
+              variant: 'list',
+              items: items,
+              itemIndexMap: itemIndexMap,
+              placeholderMap: placeholderMap,
+              postIndex: rpIdx,
+              analyticsElement: 'relevantPosts',
+              cfg: cfg,
+              onSinglePostView: isSinglePost
+            });
+            if (!rpCard) continue;
+            var rpEntry = document.createElement('div');
+            rpEntry.style.marginBottom = '14px';
+            rpEntry.appendChild(rpCard);
+            listEl.appendChild(rpEntry);
+          }
+          return listEl.childNodes.length ? listEl : null;
+        }
+
         if (isFooter) {
           var grid = document.createElement('div');
           grid.className = 'blog-overlay-relevant-posts blog-overlay-relevant-posts--footer';
-          grid.style.display = 'grid';
-          grid.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
-          grid.style.gap = '20px';
           grid.style.width = '100%';
           grid.style.maxWidth = '100%';
           grid.style.boxSizing = 'border-box';
@@ -12583,44 +14413,18 @@
             });
             if (card) grid.appendChild(card);
           }
-          var footSection = document.createElement('div');
-          footSection.className = 'blog-overlay-sidebar-section blog-overlay-more-to-read';
-          footSection.style.borderTop = '1px solid var(--bb-border, #e5e4e0)';
-          footSection.style.marginTop = '48px';
-          footSection.style.paddingTop = '24px';
+          var footWrap = document.createElement('div');
+          footWrap.className = 'blog-overlay-more-to-read';
           var footHead = document.createElement('h2');
           footHead.className = 'bb-below-main-heading';
           footHead.textContent = 'More to Read';
-          footSection.appendChild(footHead);
-          footSection.appendChild(grid);
-          return footSection;
+          footWrap.appendChild(footHead);
+          footWrap.appendChild(grid);
+          return footWrap;
         }
 
-        var el = document.createElement('aside');
-        el.className = 'blog-overlay-relevant-posts';
-        el.style.flexShrink = '0';
-        el.style.width = (sidebarWidth || 220) + 'px';
-        for (var r = 0; r < relevantItems.length; r++) {
-          var rpIdx = self._postIndexInItems(items, relevantItems[r], itemIndexMap);
-          if (rpIdx < 0) continue;
-          var rpPost = relevantItems[r];
-          var rpCard = self._createModulePostCard(rpPost, {
-            variant: 'list',
-            items: items,
-            itemIndexMap: itemIndexMap,
-            placeholderMap: placeholderMap,
-            postIndex: rpIdx,
-            analyticsElement: 'relevantPosts',
-            cfg: cfg,
-            onSinglePostView: isSinglePost
-          });
-          if (!rpCard) continue;
-          var rpEntry = document.createElement('div');
-          rpEntry.style.marginBottom = '14px';
-          rpEntry.appendChild(rpCard);
-          el.appendChild(rpEntry);
-        }
-        return createSidebarSection('Related Posts', el, isSinglePost);
+        var el = buildRelevantPostsList(false);
+        return el ? createSidebarSection('Related Posts', el, isSinglePost) : null;
       }
       function createPrevNextArticleModule() {
         var activeIdx = -1;
@@ -12737,10 +14541,10 @@
           outer.style.gap = '10px';
 
           var row = document.createElement('div');
-          row.className = 'bb-newsletter-footer-row';
+          row.className = 'bb-newsletter-footer-row bb-email-capture-footer-row';
 
           var leftCol = document.createElement('div');
-          leftCol.className = 'bb-newsletter-footer-copy';
+          leftCol.className = 'bb-newsletter-footer-copy bb-email-capture-footer-copy';
           var titleFooter = document.createElement('h3');
           titleFooter.className = 'bb-newsletter-heading';
           titleFooter.textContent = headerText;
@@ -12758,7 +14562,7 @@
           row.appendChild(leftCol);
 
           var rightCol = document.createElement('div');
-          rightCol.className = 'bb-newsletter-footer-form';
+          rightCol.className = 'bb-newsletter-footer-form bb-email-capture-footer-form';
 
           var emailInputF = document.createElement('input');
           emailInputF.type = 'email';
@@ -12771,7 +14575,7 @@
           var btnF = document.createElement('button');
           btnF.textContent = ecCfg.buttonText || 'Subscribe';
           btnF.type = 'button';
-          btnF.className = 'sqs-button-element--primary';
+          btnF.className = 'sqs-button-element--primary bb-newsletter-btn';
           btnF.style.flexShrink = '0';
           rightCol.appendChild(emailInputF);
           rightCol.appendChild(btnF);
@@ -12836,17 +14640,19 @@
         wireEmailCaptureSubmit(emailInput, btn, msgEl);
         return wrap;
       }
-      function createLeadMagnetForm(lmCfg, width) {
+      function createLeadMagnetForm(lmCfg, width, hideHeader) {
         if (!lmCfg) return null;
         var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
         wrap.style.maxWidth = (width || 280) + 'px';
-        var titleEl = document.createElement('div');
-        titleEl.className = 'bb-lead-magnet-heading';
-        titleEl.textContent = resourceTitle;
-        wrap.appendChild(titleEl);
+        if (!hideHeader) {
+          var titleEl = document.createElement('div');
+          titleEl.className = 'bb-lead-magnet-heading';
+          titleEl.textContent = resourceTitle;
+          wrap.appendChild(titleEl);
+        }
         if (lmCfg.description && lmCfg.description.trim()) {
           var descEl = document.createElement('div');
           descEl.className = 'bb-lead-magnet-desc';
@@ -12938,6 +14744,7 @@
         }
 
         var formRow = document.createElement('div');
+        formRow.className = 'bb-lead-magnet-footer-form';
         formRow.style.display = 'flex';
         formRow.style.gap = '12px';
         formRow.style.alignItems = 'center';
@@ -12950,7 +14757,6 @@
         emailInput.className = 'bb-form-input';
         emailInput.placeholder = 'you@example.com';
         emailInput.setAttribute('aria-label', 'Email address');
-        emailInput.style.flex = '1 1 240px';
         emailInput.style.minWidth = '0';
         formRow.appendChild(emailInput);
 
@@ -13016,6 +14822,58 @@
       var lmCfg = isSinglePost
         ? ((cfg.postModules && cfg.postModules.leadMagnet) || (cfg.collectionModules && cfg.collectionModules.leadMagnet))
         : ((cfg.collectionModules && cfg.collectionModules.leadMagnet) || (cfg.postModules && cfg.postModules.leadMagnet));
+      var BB_SIDEBAR_FOOTER_PAIR_MODULES = {
+        authorProfiles: true,
+        emailCapture: true,
+        leadMagnet: true,
+        relevantPosts: true,
+        popularPosts: true,
+        filterByCategory: true,
+        filterByTag: true,
+        filterByTagsAndCategories: true
+      };
+      function tagZoneModule(el, moduleId, zone) {
+        if (!el || !moduleId) return el;
+        el.setAttribute('data-bb-module', moduleId);
+        el.setAttribute('data-bb-zone', zone);
+        return el;
+      }
+      function wrapFooterPairModule(el, moduleId, chromeTitle) {
+        if (!el || !BB_SIDEBAR_FOOTER_PAIR_MODULES[moduleId]) return el;
+        if (el.getAttribute && el.getAttribute('data-bb-zone') === 'footer') {
+          el.setAttribute('data-bb-module', moduleId);
+          return el;
+        }
+        var wrap = document.createElement('div');
+        wrap.className = 'blog-overlay-footer-module';
+        tagZoneModule(wrap, moduleId, 'footer');
+        if (chromeTitle) {
+          var chrome = document.createElement('div');
+          chrome.className = 'bb-mobile-sidebar-chrome';
+          var chromeHead = document.createElement('h3');
+          chromeHead.className = 'bb-sidebar-header';
+          chromeHead.textContent = chromeTitle;
+          var chromeBar = document.createElement('hr');
+          chromeBar.className = 'bb-sidebar-divider';
+          chrome.appendChild(chromeHead);
+          chrome.appendChild(chromeBar);
+          chrome.setAttribute('aria-hidden', 'true');
+          wrap.appendChild(chrome);
+        }
+        wrap.appendChild(el);
+        return wrap;
+      }
+      function footerChromeTitle(fmod, extra) {
+        if (fmod === 'authorProfiles') return (extra && extra.authorHeader) || 'About the Author';
+        if (fmod === 'emailCapture') return (ecCfg && ecCfg.header) || 'Subscribe to our newsletter';
+        if (fmod === 'leadMagnet') return (lmCfg && lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet';
+        if (fmod === 'relevantPosts') return 'More to Read';
+        if (fmod === 'popularPosts') return 'Popular Posts';
+        if (fmod === 'filterByCategory') return 'Categories';
+        if (fmod === 'filterByTag') return 'Tags';
+        if (fmod === 'filterByTagsAndCategories') return 'Categories';
+        return '';
+      }
       function buildSidebarModules(sidebarCfg, zoneLabel) {
         if (zoneLabel == null) zoneLabel = '';
         if (!sidebarCfg || !sidebarCfg.show) {
@@ -13076,7 +14934,6 @@
         }
         self._warnDuplicateValues('sidebar', moduleIds);
         var width = Math.min(400, Math.max(160, sidebarCfg.width || (isSinglePost ? 300 : 240)));
-        if (featurePostLayout) width = 300;
         var mods = [];
         var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
         for (var m = 0; m < moduleIds.length; m++) {
@@ -13141,7 +14998,15 @@
           } else if (mod === 'filterByTag') {
             el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
           } else if (mod === 'filterByTagsAndCategories') {
-            el = createSidebarSection('Tags', self._createFilterByTagModule(items, width || 200, true, 'sidebar'));
+            var legacyCatEl = self._createFilterByCategoryModule(items, width || 200, true, 'sidebar');
+            if (legacyCatEl) {
+              mods.push(tagZoneModule(createSidebarSection('Categories', legacyCatEl), 'filterByCategory', 'sidebar'));
+            }
+            var legacyTagEl = self._createFilterByTagModule(items, width || 200, true, 'sidebar');
+            el = legacyTagEl ? createSidebarSection('Tags', legacyTagEl) : null;
+            if (el) {
+              tagZoneModule(el, 'filterByTag', 'sidebar');
+            }
           } else if (mod === 'postSort') {
             el = createSidebarSection('Sort Posts', self._createPostSortModule(cfg, width || 200, true));
           } else if (mod === 'authorProfiles') {
@@ -13152,16 +15017,16 @@
             var ecForm = createEmailCaptureForm(ecCfg, width, isSinglePost);
             el = ecForm ? createSidebarSection(ecCfg.header || 'Email Capture', ecForm, isSinglePost) : null;
           } else if (mod === 'leadMagnet' && lmCfg) {
-            var lmForm = createLeadMagnetForm(lmCfg, width);
-            if (lmForm) {
-              var lmSection = document.createElement('div');
-              lmSection.className = 'blog-overlay-sidebar-section';
-              lmSection.style.marginBottom = '20px';
-              lmSection.appendChild(lmForm);
-              el = lmSection;
-            }
+            var lmForm = createLeadMagnetForm(lmCfg, width, true);
+            el = lmForm ? createSidebarSection(
+              (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet',
+              lmForm
+            ) : null;
           }
-          if (el) mods.push(el);
+          if (el) {
+            if (!el.getAttribute('data-bb-module')) tagZoneModule(el, mod, 'sidebar');
+            mods.push(el);
+          }
         }
         return mods;
       }
@@ -13222,6 +15087,7 @@
             link.style.gridRow = '1 / -1';
             link.className = 'blog-overlay-editorial-card blog-overlay-editorial-card-mobile-pair';
           } else {
+            link.className = 'blog-overlay-editorial-card' + (isLarge ? ' blog-overlay-editorial-card-large' : '');
             link.style.display = 'block';
           }
           var bg = document.createElement('div');
@@ -13283,7 +15149,7 @@
             p,
             siteAccentForPostCats,
             categoryFilterUiEnabled,
-            { onDark: true, compact: !isLarge, overImage: isLarge }
+            { onDark: true, compact: !isLarge }
           );
           if (mobilePairCard) {
             var edSpacer = document.createElement('div');
@@ -13305,7 +15171,6 @@
             edAboveTitle.style.alignSelf = 'start';
             if (edCategoriesLine) {
               edCategoriesLine.style.marginBottom = '0';
-              edAboveTitle.appendChild(edCategoriesLine);
             }
 
             title.style.margin = '0';
@@ -13328,6 +15193,7 @@
             edTitleBlock.style.boxSizing = 'border-box';
             edTitleBlock.style.width = '100%';
             edTitleBlock.style.minHeight = '0';
+            if (edCategoriesLine) edTitleBlock.appendChild(edCategoriesLine);
             edTitleBlock.appendChild(title);
             edTitleBlock.appendChild(meta);
 
@@ -13339,6 +15205,7 @@
             link.appendChild(edTitleBlock);
           } else {
             var content = document.createElement('div');
+            content.className = 'blog-overlay-editorial-card-content';
             content.style.position = 'absolute';
             content.style.bottom = '0';
             content.style.left = '0';
@@ -13467,6 +15334,11 @@
             main.appendChild(row);
           }
         }
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(function() { self._applyShowcaseImageRadiusVars(main); });
+        } else {
+          self._applyShowcaseImageRadiusVars(main);
+        }
       } else if (collectionLayout === 'showcase') {
         this._renderShowcasePostsIntoMain(main, items, vs, placeholderMap, navbarOffset);
       } else {
@@ -13488,10 +15360,6 @@
           var sidebarWidthDefault = isSinglePost ? 300 : 240;
           var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : sidebarWidthDefault;
           var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : sidebarWidthDefault;
-          if (featurePostLayout) {
-            leftSidebarWidth = 300;
-            rightSidebarWidth = 300;
-          }
           var leftSpaceAbove = isSinglePost
             ? BB_POST_CONTENT_TOP_PADDING
             : (leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.max(0, leftSidebarCfg.spaceAbove) : 0);
@@ -13523,6 +15391,7 @@
           for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
           var leftSidebarWrapEl = document.createElement('div');
           leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          leftSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'left');
           leftSidebarWrapEl.style.flexShrink = '0';
           leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
           leftSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -13548,6 +15417,7 @@
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
           var rightSidebarWrapEl = document.createElement('div');
           rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          rightSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'right');
           rightSidebarWrapEl.style.flexShrink = '0';
           rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
           rightSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -13556,6 +15426,21 @@
           if (rightSidebarEl.childNodes.length) rightSidebarWrapEl.appendChild(rightSidebarEl);
 
           var BB_SIDEBAR_MIN_MAIN = 300;
+          function syncPostAfterBodyOrder() {
+            if (!isSinglePost) return;
+            self._applyMobilePostAfterBodyOrder({
+              wrapper: wrapper,
+              main: main,
+              mainRowEl: mainRowEl,
+              footerZoneEl: footerZoneEl,
+              featureBelowRowHost: featureBelowRowHost,
+              featurePostLayout: featurePostLayout,
+              cfg: cfg,
+              footerContentCfg: footerContentCfg,
+              leftSidebarWrapEl: leftSidebarWrapEl,
+              rightSidebarWrapEl: rightSidebarWrapEl
+            });
+          }
           function applySidebarResponsiveLayout() {
             var leftHas = leftSidebarWrapEl.childNodes.length > 0;
             var rightHas = rightSidebarWrapEl.childNodes.length > 0;
@@ -13566,6 +15451,8 @@
               main.style.order = '';
               main.style.flex = '1';
               main.style.minWidth = '0';
+              self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout, publisherPostLayout: publisherPostLayout });
+              syncPostAfterBodyOrder();
               return;
             }
             var cw = wrapper.clientWidth;
@@ -13677,6 +15564,15 @@
             if (collectionLayout === 'digest' && digestMobileNarrow) {
               self._syncDigestMobileFeaturedImageBleed(wrapper);
             }
+            self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout, publisherPostLayout: publisherPostLayout });
+            var mobilePostRail = (isSinglePost || collectionLayout === 'digest') && (stack || self._isNarrowCollectionViewport());
+            if (leftHas) {
+              leftSidebarEl.style.gap = (mobilePostRail && !leftSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';
+            }
+            if (rightHas) {
+              rightSidebarEl.style.gap = (mobilePostRail && !rightSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';
+            }
+            syncPostAfterBodyOrder();
           }
 
           if (headerContentCfg && headerContentCfg.show) {
@@ -14092,6 +15988,11 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
+                /** Story: no "More to Read" grid (spec module order). */
+                if (fmod === 'relevantPosts' && storyPostLayoutForFooter) {
+                  continue;
+                }
+                var footerAuthorHeader = null;
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });
                   if (fmodEl) {
@@ -14102,6 +16003,7 @@
                 } else if (fmod === 'authorProfiles' && isSinglePost && displayItems.length > 0) {
                   var authorResult = self._createAuthorProfilesModule(displayItems[0], cfg, 220, { useLongBio: true });
                   fmodEl = authorResult ? authorResult.content : null;
+                  footerAuthorHeader = authorResult ? authorResult.header : null;
                   if (fmodEl) {
                     fmodEl.style.width = '100%';
                     fmodEl.style.maxWidth = '100%';
@@ -14121,21 +16023,34 @@
                     fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
+                } else if (fmod === 'filterByCategory') {
+                  var catFooter = self._createFilterByCategoryModule(items, 220, true, 'footer');
+                  fmodEl = catFooter ? createSidebarSection('Categories', catFooter) : null;
+                } else if (fmod === 'filterByTag') {
+                  var tagFooter = self._createFilterByTagModule(items, 220, true, 'footer');
+                  fmodEl = tagFooter ? createSidebarSection('Tags', tagFooter) : null;
+                } else if (fmod === 'filterByTagsAndCategories') {
+                  var bothCat = self._createFilterByCategoryModule(items, 220, true, 'footer');
+                  var bothTag = self._createFilterByTagModule(items, 220, true, 'footer');
+                  fmodEl = document.createElement('div');
+                  if (bothCat) fmodEl.appendChild(createSidebarSection('Categories', bothCat));
+                  if (bothTag) fmodEl.appendChild(createSidebarSection('Tags', bothTag));
+                  if (!fmodEl.childNodes.length) fmodEl = null;
                 } else if (fmod === 'prevNextArticle') {
                   fmodEl = createPrevNextArticleModule();
                   if (fmodEl) {
+                    tagZoneModule(fmodEl, 'prevNextArticle', 'footer');
                     fmodEl.style.width = '100%';
                     fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
                 }
+                if (fmodEl && BB_SIDEBAR_FOOTER_PAIR_MODULES[fmod]) {
+                  fmodEl = wrapFooterPairModule(fmodEl, fmod, footerChromeTitle(fmod, { authorHeader: footerAuthorHeader }));
+                }
                 if (fmodEl) {
-                  if (featurePostLayout && fmod === 'authorProfiles') {
-                    featureBelowRowAuthorEl = fmodEl;
-                  } else if (featurePostLayout && fmod === 'relevantPosts') {
-                    featureBelowRowMoreToReadEl = fmodEl;
-                  } else if (featurePostLayout && fmod === 'leadMagnet') {
-                    featureBelowRowLeadMagnetEl = fmodEl;
+                  if (featurePostLayout) {
+                    featureBelowRowMods.push({ id: fmod, el: fmodEl });
                   } else {
                     footerEl.appendChild(fmodEl);
                   }
@@ -14250,9 +16165,20 @@
                 section.style.paddingLeft = featureFooterLeftPad + 'px';
                 section.style.paddingRight = featureFooterRightPad + 'px';
               }
+              var modId = el.getAttribute && el.getAttribute('data-bb-module');
+              if (modId) tagZoneModule(section, modId, 'footer');
               section.appendChild(el);
               featureBelowRowHost.appendChild(section);
             };
+            var featureBelowRowAuthorEl = null;
+            var featureBelowRowRestEls = [];
+            for (var fbi = 0; fbi < featureBelowRowMods.length; fbi++) {
+              if (featureBelowRowMods[fbi].id === 'authorProfiles' && !featureBelowRowAuthorEl) {
+                featureBelowRowAuthorEl = featureBelowRowMods[fbi].el;
+              } else {
+                featureBelowRowRestEls.push(featureBelowRowMods[fbi].el);
+              }
+            }
             appendFeatureBelowRowSection(featureBelowRowAuthorEl);
             if (featureCommentsWillMount) {
               featureCommentsSectionEl = document.createElement('div');
@@ -14267,15 +16193,10 @@
               }
               featureBelowRowHost.appendChild(featureCommentsSectionEl);
             }
-            appendFeatureBelowRowSection(featureBelowRowMoreToReadEl);
-            appendFeatureBelowRowSection(featureBelowRowLeadMagnetEl);
-            if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
-            var featureFooterSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
-            if (featureFooterSideMarginsMode === 'postBody') {
-              main.appendChild(featureBelowRowHost);
-            } else {
-              wrapper.appendChild(featureBelowRowHost);
+            for (var frb = 0; frb < featureBelowRowRestEls.length; frb++) {
+              appendFeatureBelowRowSection(featureBelowRowRestEls[frb]);
             }
+            if (paywallShowFooter) self._appendPaywallFooter(featureBelowRowHost);
           }
           if (
             isSinglePost &&
@@ -14298,23 +16219,9 @@
             footerZoneEl.style.width = '100%';
             footerZoneEl.style.maxWidth = '100%';
             self._clearPostFooterZoneBleed(footerZoneEl);
-            var footerSideMarginsMode = self._getPostFooterSideMarginsMode(footerContentCfg);
-            var publisherPostLayoutForFooter = isSinglePost && self._isPublisherPostLayout(cfg);
-            var sidebarSpanFooterLayout = reporterPostLayout || publisherPostLayoutForFooter;
-            var postBodyFooterInMainColumn =
-              isSinglePost &&
-              footerSideMarginsMode === 'postBody' &&
-              sidebarSpanFooterLayout;
-            if (featurePostLayout) {
-              wrapper.appendChild(footerZoneEl);
-            } else if (postBodyFooterInMainColumn || (isSinglePost && !sidebarSpanFooterLayout)) {
-              main.appendChild(footerZoneEl);
-            } else if (isSinglePost) {
-              wrapper.appendChild(footerZoneEl);
-            } else {
-              wrapper.appendChild(footerZoneEl);
-            }
+            if (!isSinglePost) wrapper.appendChild(footerZoneEl);
           }
+          syncPostAfterBodyOrder();
 
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
           if (deferOverlayCommit) {
@@ -14382,22 +16289,36 @@
 
       // Deferred navbar re-measure: header may load asynchronously (race condition)
       var lastAppliedOffset = navbarOffset;
+      var lastAppliedHeaderH = -1;
       var applyNavbarOffset = function(offset) {
-        if (offset <= 0 || !wrapper.parentNode) return;
+        if (!wrapper.parentNode) return;
+        var mobilePost = self._isMobilePostWrapper(wrapper);
+        if (!mobilePost && offset <= 0) return;
+        var headerH = mobilePost ? self._measureRenderedSiteHeaderHeight() : 0;
         lastAppliedOffset = offset;
+        lastAppliedHeaderH = headerH;
         var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
-        self._applySiteContentInsetsToWrapper(wrapper, self._wrapperPadTopForNavbar(offset, flushNav));
+        var pad = mobilePost
+          ? self._mobilePostWrapperPadTop()
+          : self._wrapperPadTopForNavbar(offset, flushNav);
+        self._applySiteContentInsetsToWrapper(wrapper, pad);
+        var navTop = mobilePost ? headerH : offset;
         var progressTrack = document.getElementById('blog-overlay-progress');
         if (progressTrack && progressTrack.style.position === 'fixed') {
-          progressTrack.style.top = offset + 'px';
+          progressTrack.style.top = navTop + 'px';
         }
         var articles = wrapper.querySelectorAll('article');
         for (var a = 0; a < articles.length; a++) {
-          articles[a].style.scrollMarginTop = (offset + 8) + 'px';
+          articles[a].style.scrollMarginTop = (navTop + 8) + 'px';
         }
       };
       var scheduleRecheck = function() {
         if (!wrapper.parentNode) return;
+        if (self._isMobilePostWrapper(wrapper)) {
+          var headerH = self._measureRenderedSiteHeaderHeight();
+          if (Math.abs(headerH - lastAppliedHeaderH) >= 1) applyNavbarOffset(headerH);
+          return;
+        }
         var newOffset = self._getNavbarOffset();
         var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
         if (flushNav) {
@@ -14416,8 +16337,8 @@
         var ro = new ResizeObserver(function() {
           scheduleRecheck();
         });
-        var roTargets = document.querySelectorAll('header, .Header, #header, .header-announcement-bar, .Header-announcementBar, [data-section-type="header"]');
-        for (var t = 0; t < roTargets.length && t < 5; t++) {
+        var roTargets = document.querySelectorAll('.header, #header, header:not([class*="blog-overlay"]), .header-announcement-bar, .Header-announcementBar, [data-section-type="header"]');
+        for (var t = 0; t < roTargets.length && t < 8; t++) {
           try { ro.observe(roTargets[t]); } catch (e) { /* ignore */ }
         }
       }

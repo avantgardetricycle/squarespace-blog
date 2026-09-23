@@ -17,6 +17,7 @@ import {
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
 import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
+import { PUBLIC_PRICING_TIERS, annualSavingsPercent } from "@/lib/pricingTiers";
 import {
   billingPeriod,
   INTEREST_MODAL_SOURCES,
@@ -124,11 +125,7 @@ export default function LandingPage() {
   const annualSavePercentProfessional = useMemo(() => {
     const tier = stripePrices?.plans?.professional;
     if (!tier) return null;
-    const m = tier.monthly.perMonth;
-    const y = tier.annual.perYear;
-    if (m <= 0) return null;
-    const pct = Math.round((1 - y / (m * 12)) * 100);
-    return pct > 0 ? pct : null;
+    return annualSavingsPercent(tier.monthly.perMonth, tier.annual.perYear);
   }, [stripePrices]);
 
   const containerVariants = {
@@ -150,58 +147,7 @@ export default function LandingPage() {
     }
   };
 
-  const pricingTiers = [
-    {
-      name: "Essentials",
-      tier: "Essentials",
-      planKey: "essentials" as const,
-      description: "Fix the basics. Everything Squarespace should have included from day one.",
-      features: [
-        "1 sidebar",
-        "Numbered pagination",
-        "Table of contents",
-        "Post thumbnail banners",
-        "Related posts",
-        "Social sharing buttons"
-      ],
-      highlight: false
-    },
-    {
-      name: "Professional",
-      tier: "Professional",
-      planKey: "professional" as const,
-      description: "A real blog. Discoverable, navigable, and genuinely readable.",
-      features: [
-        "Everything in Essentials, plus",
-        "2 sidebars",
-        "Breadcrumb navigation",
-        "Post filtering & search",
-        "Reading time and scroll progress bar",
-        "Featured & pinned posts",
-        "Advanced post sorting",
-        "Rich author profiles"
-      ],
-      highlight: true
-    },
-    {
-      name: "Publication",
-      tier: "Publication",
-      planKey: "publication" as const,
-      description: "A serious publication. Beautiful, branded, fully under your control.",
-      features: [
-        "Everything in Professional, plus",
-        "Custom designed templates",
-        "Expanded post banner layouts",
-        "Multiple authors",
-        "Per-collection layouts & formatting",
-        "Image style options per collection",
-        "Advanced filtering & tag search",
-        "Saved post templates",
-        "Priority support"
-      ],
-      highlight: false
-    }
-  ];
+  const pricingTiers = PUBLIC_PRICING_TIERS;
 
   const studioTier = {
     name: "BetterBlog Studio",

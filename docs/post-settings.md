@@ -44,7 +44,7 @@ Settings a template owns are hidden. If a control is missing, your current post 
 
 **Social sharing links** — Share buttons in the post header. Choose **All** or specific platforms: Facebook, X, Email, Reddit, LinkedIn, Pinterest, WhatsApp.
 
-**Background color** — Available on the Story template for the full-width header zone.
+**Background color** — Available on the Story template for the full-width header zone. On phones, title and supporting header text switch between white and black from that color so they stay readable; the category line stays the accent color.
 
 ---
 
@@ -68,6 +68,8 @@ A sidebar appears when you add modules to **Left Sidebar** or **Right Sidebar**.
 
 Post sidebar modules: Table of Contents, Author Profiles, Popular Posts, Related Posts, Filter by Category, Filter by Tags & Categories, Email Capture, Lead Magnet.
 
+On phones, sidebar Tags and Categories sections are hidden even if they are enabled. The Table of Contents is also hidden on phones even when it is enabled in a sidebar (Reporter, Feature, Publisher, and any other post template). Other sidebar modules still stack after footer modules. If the same filter also exists in the footer, the footer copy is shown instead (this inverts the usual sidebar-wins rule).
+
 Reporter, Writer, Feature, and Story lock the left sidebar. Writer, Feature, and Story also lock the right sidebar. If the section is missing, the template does not use that sidebar.
 
 If a sticky sidebar overlaps your Squarespace header, turn sticky off. See [Troubleshooting](troubleshooting.md).
@@ -82,13 +84,13 @@ On the Post tab, sharing is controlled in **Post Header → Social sharing links
 
 ## Footer modules
 
-**Footer Content** sits below the post body (and comments, when comments are shown).
+**Footer Content** sits below the post body (and comments, when comments are shown). On phones, the stack is article body → comments → footer modules → sidebar modules. Spacing between footer modules is a 56px container gap, not per-module margins, so it stays even if you turn a module off.
 
 **Side margins** — **Post Body** (align with the text column) or **Full Screen** (site default margins). Hidden on Writer.
 
 **Add module…** — **Related Posts**, **Author Profiles**, **Previous/Next Article**, **Email Capture**, **Lead Magnet**. Drag to reorder; remove a module to turn it off.
 
-**Previous/Next Article** has no separate settings section — add it from Footer Content.
+**Previous/Next Article** has no separate settings section — add it from Footer Content. On phones it is two equal columns in one bordered box, with the category line hidden.
 
 **Related Posts**, **Author Profiles**, **Email Capture**, and **Lead Magnet** also have location and copy controls under Navigation & Discovery. Related Posts can live in a sidebar or the footer.
 
@@ -113,6 +115,8 @@ Authors are managed from **Show Author(s)** on either the Collection or Post tab
 - **Default author** checkbox — also add to site defaults
 
 **Edit Author Profiles** opens the editor for an author already on the current list. Removing a chip from Default Author(s) or Post Author(s) removes that author from the list; it does not delete the author record.
+
+If Author Profiles is enabled as a sidebar or footer module, it still renders when no default authors are selected: it uses a matching author profile, then any configured profiles, then the post’s Squarespace byline.
 
 ---
 

@@ -2,7 +2,7 @@ import type { Page, Route } from "@playwright/test";
 
 const siteKey = "e2e-site";
 
-const dashboardMe = {
+export const dashboardMe = {
   user: {
     id: 1,
     email: "e2e@example.com",
@@ -36,6 +36,19 @@ const dashboardMe = {
   ],
   canCreateSite: true,
 };
+
+export function dashboardMeWithCanceledSubscription(): typeof dashboardMe {
+  return {
+    ...dashboardMe,
+    canCreateSite: false,
+    subscription: {
+      ...dashboardMe.subscription,
+      status: "canceled",
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: "2026-08-01T00:00:00.000Z",
+    },
+  } as typeof dashboardMe;
+}
 
 const configResponse = {
   collectionConfig: {
@@ -199,7 +212,17 @@ const commentSettingsResponse = {
   sortOrder: "newest",
 };
 
-export async function setupApiMocks(page: Page): Promise<void> {
+type ApiMockOptions = {
+  dashboardMe?: typeof dashboardMe;
+  extraRoutes?: (args: {
+    method: string;
+    path: string;
+    route: Route;
+  }) => Promise<boolean>;
+};
+
+export async function setupApiMocks(page: Page, options?: ApiMockOptions): Promise<void> {
+  const me = options?.dashboardMe ?? dashboardMe;
   await page.route("**/api/**", async (route) => {
     const req = route.request();
     const method = req.method();
@@ -212,7 +235,9 @@ export async function setupApiMocks(page: Page): Promise<void> {
       return;
     }
 
-    if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, dashboardMe);
+    if (options?.extraRoutes && (await options.extraRoutes({ method, path, route }))) return;
+
+    if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, me);
     if (method === "GET" && path === "/api/dashboard/paywall-reconcile") {
       return json(route, 200, { mismatches: [] });
     }
