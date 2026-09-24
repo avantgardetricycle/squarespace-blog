@@ -10,6 +10,13 @@ export function isMobileProject(testInfo: TestInfo): boolean {
   return testInfo.project.name === "renderer-mobile";
 }
 
+type CommentSettings = {
+  commentsEnabled?: boolean;
+  allowAnonymousComments?: boolean;
+  allowNewComments?: boolean;
+  subscriberCommentsEnabled?: boolean;
+};
+
 type MountOptions = {
   collectionConfig?: Record<string, unknown>;
   postConfig?: Record<string, unknown>;
@@ -18,6 +25,11 @@ type MountOptions = {
   previewDevice?: "desktop" | "tablet" | "mobile";
   /** Constrain the mount root. Used for Configure's phone frame on a wide window. */
   rootWidth?: number;
+  commentSettings?: CommentSettings;
+  /** Squarespace member account. When set, the comment form treats the reader as logged in. */
+  loggedInAccount?: { displayName: string; email: string; id: string };
+  /** Node-side handler for POST /api/comments. Defaults to an empty 200. */
+  commentPostResponse?: () => { status: number; json: unknown };
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
@@ -39,7 +51,14 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   });
   await page.route("**/api/comments**", async (route) => {
     if (route.request().method() !== "GET") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+      const payload = options.commentPostResponse
+        ? options.commentPostResponse()
+        : { status: 200, json: {} };
+      await route.fulfill({
+        status: payload.status,
+        contentType: "application/json",
+        body: JSON.stringify(payload.json),
+      });
       return;
     }
     await route.fulfill({
@@ -73,10 +92,23 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   await page.addScriptTag({ path: RENDERER_PATH });
 
   await page.evaluate(
-    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice }) => {
+    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount }) => {
       const w = window as unknown as {
         BlogOverlayRenderer: { init: (config: Record<string, unknown>) => void };
+        Static?: { SQUARESPACE_CONTEXT: Record<string, unknown> };
       };
+      if (loggedInAccount) {
+        w.Static = {
+          SQUARESPACE_CONTEXT: {
+            authenticatedAccount: {
+              authenticated: true,
+              displayName: loggedInAccount.displayName,
+              email: loggedInAccount.email,
+              id: loggedInAccount.id,
+            },
+          },
+        };
+      }
       const root = document.getElementById("root");
       w.BlogOverlayRenderer.init({
         previewMode: true,
@@ -112,6 +144,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
           allowAnonymousComments: true,
           allowNewComments: true,
           subscriberCommentsEnabled: false,
+          ...commentSettings,
         },
       });
     },
@@ -120,6 +153,8 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       postConfig: options.postConfig,
       previewSelectedPostIndex,
       previewDevice: options.previewDevice,
+      commentSettings: options.commentSettings,
+      loggedInAccount: options.loggedInAccount,
     },
   );
 

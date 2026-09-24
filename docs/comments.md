@@ -49,14 +49,14 @@ The two toggles are independent and can be combined. Reader experience:
 
 - Logged-out readers can still read comments, but the comment form is hidden. They need to sign in to comment.
 - Logged-in readers confirm their member email. If the Profiles API finds that email, the comment posts as verified.
-- If the email is not in your member list, the reader sees a modal explaining they could not be verified. The comment is not posted.
+- If the email is not in your member list, the comment is not posted. A modal explains that membership could not be verified, and the same message stays under the comment button: site accent color, italic, regular weight, slightly smaller than the button. The button stays visible. The message remains until a later attempt verifies and the comment posts. Clicking the comment button again opens the email confirmation modal so they can try another address.
 
 **Verify subscriber comments on, anonymous on**
 
 - Logged-out readers see the comment form with an optional email field and can post as a guest.
 - Logged-in readers confirm their member email. They can also choose **Comment anonymously** in that modal before submitting.
 - If the Profiles API finds the email, the comment posts as verified.
-- If the email is not in your member list, a modal asks whether they want to post anonymously. The comment is only stored as a guest after they confirm.
+- If the email is not in your member list, a modal asks whether they want to post anonymously. The same message stays under the comment button — site accent color, italic, regular weight, slightly smaller than the button — and the button stays visible. The message remains until a comment posts. Clicking the comment button again opens the email confirmation modal. The comment is only stored as a guest after they confirm.
 
 On paywalled posts, logged-out readers do not see the comment section unless the post is a public preview. That paywall rule is separate from the form behavior above.
 

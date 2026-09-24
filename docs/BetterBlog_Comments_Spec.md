@@ -18,7 +18,7 @@ This document specifies the design and implementation of comment support for Bet
 | Squarespace native comments | **Preserved read-only** above BetterBlog comments. Native comment form suppressed via CSS; existing comments displayed in a distinct "Earlier comments" block. New comments go to BetterBlog only. |
 | Non-paywalled commenting | Anonymous guest — name required, email optional. Matches Squarespace's native behavior. |
 | Paywalled commenting | Email required when **Verify subscriber comments** is on. Verified against Squarespace Profiles API if API key is configured. Failure handling depends on whether anonymous comments are also enabled (see §5.3). |
-| Email verification failure | Shown in a modal. If anonymous comments are off, the comment is rejected. If anonymous comments are on, the reader must confirm posting as a guest — no silent fallback. |
+| Email verification failure | Shown in a modal, and the same message stays inline under the comment button until a comment posts. The button stays visible. The next click opens the email modal again. If anonymous comments are off, the comment is rejected. If anonymous comments are on, the reader must confirm posting as a guest — no silent fallback. |
 | Notifications | **Email only** (matches Squarespace). No dashboard badge. |
 | Dashboard replies | Replies written in the dashboard appear **publicly on the blog**. |
 | Cookie expiry / new device | **Prompt for email again** (re-verify). No silent fallback. |
@@ -249,7 +249,10 @@ On paywalled posts that are not a public preview, logged-out readers still do no
 3b. Profile not found OR API key not configured OR Profiles API error:
     - Do not create the comment
     - Return 400 { code: "verification_failed", error: "We could not verify a member account…" }
-    - Overlay shows the error in a modal (not inline under the comment box)
+    - Overlay shows the error in a modal and inline under the comment button
+    - The inline message uses the site accent color, italic, font-weight 400, 12px. The button label stays "Post Comment" (or "Post reply")
+    - The message stays until a comment posts successfully
+    - The email from the failed attempt is discarded, so the next click opens the Confirm your email modal again
 ```
 
 **Verified comments on, anonymous comments on**
@@ -275,9 +278,11 @@ On paywalled posts that are not a public preview, logged-out readers still do no
     - Do not create the comment
     - Return 400 { code: "verification_failed_anonymous_available", error: "…Would you like to post this comment anonymously?" }
     - Overlay shows a confirmation modal. If the reader confirms, the client resubmits with post_as_anonymous = true
+    - The same error stays inline under the comment button (accent, italic, 12px, regular weight) until a comment posts. The button stays visible
+    - If the reader cancels, the next click opens the Confirm your email modal again
 ```
 
-If a valid verification cookie exists (§5.4), the email modal is skipped and the stored email is sent automatically.
+If a valid verification cookie exists (§5.4), the email modal is skipped and the stored email is sent automatically. A failed verification does not write that cookie, and the email entered for that attempt is not reused.
 
 ### 5.4 Verification Cookie
 
@@ -374,8 +379,8 @@ Submit a new comment.
 **Response:** `201 Created` with the comment object (status will be `pending` or `approved` depending on settings).
 
 **Verification errors:**
-- `400 { code: "verification_failed" }` — email not found and anonymous comments are off. Overlay shows a modal.
-- `400 { code: "verification_failed_anonymous_available", anonymous_retry_token }` — email not found and anonymous comments are on. Overlay asks the reader to confirm posting as a guest.
+- `400 { code: "verification_failed" }` — email not found and anonymous comments are off. Overlay shows a modal and keeps the error inline under the comment button until a comment posts. The next submit opens the email modal again.
+- `400 { code: "verification_failed_anonymous_available", anonymous_retry_token }` — email not found and anonymous comments are on. Overlay asks the reader to confirm posting as a guest, and keeps the error inline under the button until a comment posts.
 
 #### `POST /api/comments/:id/like`
 Toggle a like on a comment. Keyed by fingerprint server-side.
@@ -620,7 +625,7 @@ Comments are automatically closed based on `auto_close_after_days` relative to `
 | Post has no Squarespace native comments | Legacy "Earlier comments" block is hidden entirely. No empty heading shown. BetterBlog comment section renders at normal position. |
 | Reader submits comment on a post that just passed its close window (race condition) | API returns `403 comments_closed`. UI shows: "Comments on this post are now closed." |
 | Threaded reply submitted to a deleted parent comment | Reply is stored but rendered flat (orphaned) with no parent reference shown. |
-| Profiles API rate limit hit | Log server-side. Treat as verification failure (§5.3, step 3b). Do not surface the API error to the reader — they see the same verification modal as "not found". |
+| Profiles API rate limit hit | Log server-side. Treat as verification failure (§5.3, step 3b). Do not surface the API error to the reader — they see the same verification modal and inline message as "not found". |
 | `auto_close_after_days` changed after comments are already closed | Reopens or closes comments retroactively across all posts. This is intentional — the setting is blog-level, not per-post. |
 
 ---
