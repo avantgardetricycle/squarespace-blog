@@ -1331,6 +1331,30 @@
         document.body.appendChild(overlay);
         try { input.focus(); } catch (e) {}
       }
+      function bbIsVerificationPostFailure(data) {
+        var code = data && data.code ? String(data.code) : '';
+        var err = (data && data.error) || '';
+        return code === 'verification_failed'
+          || code === 'verification_failed_anonymous_available'
+          || /verif/i.test(err);
+      }
+      function bbCreateCommentErrorEl() {
+        var el = document.createElement('div');
+        el.className = 'bb-comment-form-error';
+        el.setAttribute('role', 'status');
+        el.style.cssText = 'display:none;margin:8px 0 0;padding:0;background:none;border:none;color:var(--bb-accent,#5B4FE8);font-style:italic;font-weight:400;font-size:12px;line-height:1.4;max-width:560px';
+        return el;
+      }
+      function bbSetCommentError(el, message) {
+        if (!el) return;
+        if (!message) {
+          el.style.display = 'none';
+          el.textContent = '';
+          return;
+        }
+        el.textContent = message;
+        el.style.display = 'block';
+      }
       function bbHandleVerificationPostError(data, onRetryAnonymous) {
         var code = data && data.code ? String(data.code) : '';
         var err = (data && data.error) || 'Failed to post';
@@ -1585,6 +1609,8 @@
             rRow.appendChild(rSubmit);
             rRow.appendChild(rCancel);
             replyFormShell.appendChild(rRow);
+            var rError = bbCreateCommentErrorEl();
+            replyFormShell.appendChild(rError);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
             var replyPostAsAnonymous = false;
@@ -1712,6 +1738,7 @@
                         hasEmail: Boolean(rEm)
                       });
                     }
+                    bbSetCommentError(rError, '');
                     replyFormShell.style.display = 'none';
                     rBody.value = '';
                     rEmail.value = '';
@@ -1732,15 +1759,15 @@
                     replyAnonymousRetryToken = retryToken || '';
                     rSubmit.onclick();
                   })) {
+                    if (bbIsVerificationPostFailure(data)) replyEmailOverride = null;
+                    bbSetCommentError(rError, (data && data.error) || 'Failed to post');
                     rSubmit.textContent = 'Post reply';
                     rReplySync();
                   } else {
                     var err = (data && data.error) || 'Failed to post';
-                    rSubmit.textContent = err;
-                    setTimeout(function() {
-                      rSubmit.textContent = 'Post reply';
-                      rReplySync();
-                    }, 3500);
+                    if (bbIsVerificationPostFailure(data)) replyEmailOverride = null;
+                    bbSetCommentError(rError, err);
+                    rSubmit.textContent = 'Post reply';
                     rReplySync();
                   }
                 })
@@ -2085,6 +2112,7 @@
                   hasEmail: Boolean(emailToUse)
                 });
               }
+              bbSetCommentError(mainCommentError, '');
               bodyArea.value = '';
               if (data.status === 'pending') {
                 var msg = document.createElement('p');
@@ -2105,15 +2133,15 @@
             } else if (bbHandleVerificationPostError(data, function(retryToken) {
               submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
             })) {
+              if (bbIsVerificationPostFailure(data)) mainEmailOverride = null;
+              bbSetCommentError(mainCommentError, (data && data.error) || 'Failed to post');
               submitBtn.textContent = 'Post Comment';
               mainFormSync();
             } else {
               var err = (data && data.error) || 'Failed to post';
-              submitBtn.textContent = err;
-              setTimeout(function() {
-                submitBtn.textContent = 'Post Comment';
-                mainFormSync();
-              }, 3000);
+              if (bbIsVerificationPostFailure(data)) mainEmailOverride = null;
+              bbSetCommentError(mainCommentError, err);
+              submitBtn.textContent = 'Post Comment';
               mainFormSync();
             }
           })
@@ -2178,6 +2206,8 @@
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      var mainCommentError = bbCreateCommentErrorEl();
+      formWrap.appendChild(mainCommentError);
       }
 
       if (allowNewComments) bbDiv.appendChild(formWrap);
