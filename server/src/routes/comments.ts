@@ -909,7 +909,7 @@ router.post('/', async (req: Request, res: Response) => {
         })
         res.status(400).json({
           error:
-            'Member email verification is required to comment. Enable subscriber comments and connect your Squarespace API key, or turn on anonymous comments.',
+            'Email verification failed. Please try again.',
         })
         return
       }
