@@ -3877,6 +3877,7 @@
       var belowHasContent = !!(featureBelowRowHost && featureBelowRowHost.childNodes.length);
 
       if (narrow) {
+        if (featureBelowRowHost) this._clearFeatureArticleColumnFooter(featureBelowRowHost);
         if (belowHasContent) {
           if (featurePostLayout) this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, true);
           this._reorderFeatureBelowRow(featureBelowRowHost, true);
@@ -3898,11 +3899,10 @@
         if (mainRowEl.nextSibling !== featureBelowRowHost) {
           wrapper.insertBefore(featureBelowRowHost, mainRowEl.nextSibling);
         }
-        var featureFooterPack = featureBelowRowHost.querySelector('.blog-overlay-feature-footer-modules');
-        if (featureFooterPack && this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'fullScreen') {
-          this._scheduleFullScreenFooterBleed(featureFooterPack);
-        } else if (featureFooterPack) {
-          this._clearPostFooterZoneBleed(featureFooterPack);
+        if (this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'postBody') {
+          this._scheduleFeatureArticleColumnFooter(featureBelowRowHost, main);
+        } else {
+          this._clearFeatureArticleColumnFooter(featureBelowRowHost);
         }
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
@@ -4029,6 +4029,59 @@
       function apply() {
         if (self._renderSeq !== seq) return;
         self._applyFullScreenFooterBleed(footerZoneEl);
+      }
+      apply();
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { requestAnimationFrame(apply); });
+      }
+    },
+
+    /** Drop the article-column inset so full-width and mobile can span the row. */
+    _clearFeatureArticleColumnFooter: function(el) {
+      if (!el || !el.style) return;
+      el.style.marginLeft = '';
+      el.style.marginRight = '';
+      el.style.width = '100%';
+      el.style.maxWidth = '100%';
+    },
+
+    /**
+     * Article-width Feature: the below-row sits outside the main row, so pin
+     * it to `.blog-overlay-posts` (same box Reporter's footer gets by living
+     * inside that column).
+     */
+    _applyFeatureArticleColumnFooter: function(belowRow, articleCol) {
+      if (!belowRow || !belowRow.style) return;
+      if (!articleCol || !articleCol.getBoundingClientRect || this._isNarrowCollectionViewport()) {
+        this._clearFeatureArticleColumnFooter(belowRow);
+        return;
+      }
+      var parent = belowRow.parentElement;
+      if (!parent || !parent.getBoundingClientRect || !window.getComputedStyle) {
+        this._clearFeatureArticleColumnFooter(belowRow);
+        return;
+      }
+      var colBox = articleCol.getBoundingClientRect();
+      if (colBox.width < 1) return;
+      var parentBox = parent.getBoundingClientRect();
+      var cs = window.getComputedStyle(parent);
+      var padL = parseFloat(cs.paddingLeft) || 0;
+      var borderL = parseFloat(cs.borderLeftWidth) || 0;
+      var left = Math.round(colBox.left - parentBox.left - borderL - padL);
+      var width = Math.round(colBox.width);
+      belowRow.style.boxSizing = 'border-box';
+      belowRow.style.marginLeft = left + 'px';
+      belowRow.style.marginRight = '0';
+      belowRow.style.width = width + 'px';
+      belowRow.style.maxWidth = width + 'px';
+    },
+
+    _scheduleFeatureArticleColumnFooter: function(belowRow, articleCol) {
+      var self = this;
+      var seq = self._renderSeq;
+      function apply() {
+        if (self._renderSeq !== seq) return;
+        self._applyFeatureArticleColumnFooter(belowRow, articleCol);
       }
       apply();
       if (typeof requestAnimationFrame === 'function') {
