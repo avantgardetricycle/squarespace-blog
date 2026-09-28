@@ -919,7 +919,7 @@ export function FeatureGrid() {
             <h2 className="fg-h2">
               {numberWord(F.length)} features.
               <br />
-              <em>All included.</em>
+              <em>One extension.</em>
             </h2>
           </div>
           <div className="stamp">
