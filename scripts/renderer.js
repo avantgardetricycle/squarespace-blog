@@ -5350,22 +5350,7 @@
     _getAuthor: function(item) {
       if (!item) return null;
       var a = item.author;
-<<<<<<< HEAD
       if (a && typeof a === 'string' && a.trim()) return a.trim();
-      if (a && (a.displayName || a.fullName)) {
-        var fromAuthor = String(a.displayName || a.fullName || '').trim();
-        if (fromAuthor) return fromAuthor;
-      }
-      if (item.authorName && typeof item.authorName === 'string' && item.authorName.trim()) {
-        return item.authorName.trim();
-      }
-      var arr = item.authors || item.contributors;
-      if (Array.isArray(arr) && arr.length > 0) {
-        var first = arr[0];
-        if (typeof first === 'string' && first.trim()) return first.trim();
-        if (first && (first.displayName || first.fullName)) {
-          var name = (first.displayName || first.fullName || '').trim();
-=======
       if (a) {
         var fromAuthor = (a.displayName || a.fullName || a.name || '').trim();
         if (fromAuthor) return fromAuthor;
@@ -5373,9 +5358,9 @@
       var arr = item.authors || item.contributors;
       if (Array.isArray(arr) && arr.length > 0) {
         var first = arr[0];
+        if (typeof first === 'string' && first.trim()) return first.trim();
         if (first && (first.displayName || first.fullName || first.name)) {
           var name = (first.displayName || first.fullName || first.name || '').trim();
->>>>>>> origin/main
           if (name) return name;
         }
       }
@@ -5471,21 +5456,9 @@
     },
 
     /**
-<<<<<<< HEAD
-     * Profile map vs postModules.authorProfiles `{enabled, position}`.
-     * Empty `{}` is not a map — fall through to root config.
-     */
-    _isAuthorProfileDictionary: function(obj) {
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
-      for (var k in obj) {
-        if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
-        if (k === 'enabled' || k === 'position') continue;
-        var p = obj[k];
-        if (typeof p === 'string' && p.trim()) return true;
-        if (p && typeof p === 'object' && !Array.isArray(p)) return true;
-=======
      * True profile records (id -> {name, bio, ...}), not the postModules
      * toggle `{enabled, position}` that can land on the merged post cfg.
+     * Empty `{}` is not a map — fall through to root config.
      */
     _isAuthorProfilesMap: function(obj) {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
@@ -5494,31 +5467,14 @@
       var i;
       for (i = 0; i < keys.length; i++) {
         if (keys[i] !== 'enabled' && keys[i] !== 'position') return true;
->>>>>>> origin/main
       }
       return false;
     },
 
-<<<<<<< HEAD
-    _authorProfileDictionary: function(cfg) {
-      var root = this.config || {};
-      if (this._isAuthorProfileDictionary(cfg && cfg.authorProfiles)) return cfg.authorProfiles;
-      if (this._isAuthorProfileDictionary(root.authorProfiles)) return root.authorProfiles;
-      return {};
-    },
-
-    _authorMapDictionary: function(cfg) {
-      var root = this.config || {};
-      var fromCfg = cfg && cfg.authorMap;
-      if (fromCfg && typeof fromCfg === 'object' && !Array.isArray(fromCfg) && Object.keys(fromCfg).length) return fromCfg;
-      var fromRoot = root.authorMap;
-      if (fromRoot && typeof fromRoot === 'object' && !Array.isArray(fromRoot) && Object.keys(fromRoot).length) return fromRoot;
-=======
     _resolveAuthorProfilesMap: function(cfg) {
       var root = this.config || {};
       if (this._isAuthorProfilesMap(cfg && cfg.authorProfiles)) return cfg.authorProfiles;
       if (this._isAuthorProfilesMap(root.authorProfiles)) return root.authorProfiles;
->>>>>>> origin/main
       return {};
     },
 
@@ -5541,27 +5497,18 @@
         if (overrideIds.length) return overrideIds;
       }
       if (defaultIds.length > 0) return defaultIds.slice();
-<<<<<<< HEAD
-      var profiles = this._authorProfileDictionary(cfg);
-      var authorMap = this._authorMapDictionary(cfg);
-=======
       var profiles = this._resolveAuthorProfilesMap(cfg);
       var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object' && Object.keys(cfg.authorMap).length)
         ? cfg.authorMap
         : ((root.authorMap && typeof root.authorMap === 'object') ? root.authorMap : {});
->>>>>>> origin/main
       var matched = this._matchPostAuthorProfileIds(post, profiles, authorMap);
       if (matched.length) return matched;
       var profileKeys = Object.keys(profiles);
       if (profileKeys.length) return profileKeys;
       var mapKeys = Object.keys(authorMap);
       if (mapKeys.length) return mapKeys;
-<<<<<<< HEAD
-      return ['__bb-post-author__'];
-=======
       if (post) return ['__bb-post-author__'];
       return [];
->>>>>>> origin/main
     },
 
     /**
@@ -7399,16 +7346,11 @@
       var self = this;
       var useLongBio = opts && opts.useLongBio === true;
       var authorIds = this._getAuthorIdsForPost(post, cfg);
-<<<<<<< HEAD
-      var profiles = this._authorProfileDictionary(cfg);
-      if (authorIds.length === 0) return null;
-=======
       var profiles = this._resolveAuthorProfilesMap(cfg);
       if (authorIds.length === 0) {
         if (post) authorIds = ['__bb-post-author__'];
         else return null;
       }
->>>>>>> origin/main
       var headerText = authorIds.length > 1 ? 'About the Authors' : 'About the Author';
       var content = document.createElement('div');
       content.className = 'blog-overlay-author-profiles';
@@ -7439,16 +7381,12 @@
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
         var p = profiles[id];
-<<<<<<< HEAD
-        var name = (p && p.name) || this._authorMapDictionary(cfg)[id] || this._displayNameForAuthorId(post, id) || 'Author';
-=======
         var name = (p && p.name)
           || (cfg && cfg.authorMap && cfg.authorMap[id])
           || (this.config && this.config.authorMap && this.config.authorMap[id])
           || this._displayNameForAuthorId(post, id)
           || this._getAuthor(post)
           || 'Author';
->>>>>>> origin/main
         var imageUrl = (p && p.imageUrl) || null;
         var bio = useLongBio && (p && p.bioLong) ? (p.bioLong) : ((p && p.bio) || null);
         var email = (p && p.email) || null;
@@ -9156,17 +9094,6 @@
         s + ' .blog-overlay-post-category--feature';
       return (
         s + ' .blog-overlay-featured-image-stacked-fullbleed--feature{margin-top:-15px!important;margin-bottom:0!important;}' +
-<<<<<<< HEAD
-        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
-        s + ' .blog-overlay-post-breadcrumbs a,' +
-        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
-        s + ' .blog-overlay-post-header-categories{margin-bottom:8px!important;justify-content:center!important;text-align:center;width:100%;font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700!important;letter-spacing:0.08em!important;text-transform:uppercase!important;color:var(--bb-accent,#5B4FE8)!important;}' +
-        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
-        s + ' .blog-overlay-post-header-categories span,' +
-        s + ' .blog-overlay-post-header-categories a,' +
-        s + ' .blog-overlay-post-header-categories button,' +
-        s + ' .blog-overlay-post-category--feature{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700!important;letter-spacing:0.08em!important;text-transform:uppercase!important;color:var(--bb-accent,#5B4FE8)!important;text-align:center;margin-bottom:0!important;background:none!important;padding:0!important;}' +
-=======
         s + ' .blog-overlay-post-header-stacked{margin-bottom:0!important;}' +
         s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
         s + ' .blog-overlay-post-breadcrumbs a,' +
@@ -9176,7 +9103,6 @@
         s + ' .blog-overlay-post-header-categories .bb-category-label,' +
         s + ' .blog-overlay-post-header-categories span,' +
         s + ' .blog-overlay-post-category--feature{margin-bottom:0!important;}' +
->>>>>>> origin/main
         stack + ' .blog-overlay-post-title,' +
         stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
         stack + ' .blog-overlay-post-deck,' +
@@ -9184,22 +9110,11 @@
         stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
         stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
-<<<<<<< HEAD
-        s + ' .blog-overlay-share-row,' +
-        s + ' .blog-overlay-share-row--feature{display:flex!important;gap:0!important;justify-content:center;width:100%;}' +
-        s + ' .blog-overlay-share-links{display:flex!important;gap:0!important;align-items:center;}' +
-        s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
-        s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;fill:currentColor;}' +
-        s + ' .blog-overlay-share-link svg[fill="none"]{fill:none;}' +
-        s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
-        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
-=======
         s + ' .blog-overlay-share-row--feature .blog-overlay-share-link,' +
         s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
         s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:var(--bb-feature-article-mb,0px)!important;}' +
->>>>>>> origin/main
         s + ' aside.blog-overlay-relevant-posts,' +
         s + ' .blog-overlay-popular-posts{width:100%!important;max-width:none!important;}' +
         s + ' aside.blog-overlay-relevant-posts>div,' +
@@ -9224,25 +9139,15 @@
         s + ' .bb-lead-magnet-footer-form button,' +
         s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .bb-lead-magnet-subtitle{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin:0 0 8px 0!important;}' +
-<<<<<<< HEAD
-        s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
-        s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
-        s + ' .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
-=======
         s + ' .bb-comments-section{margin-top:0!important;padding-top:24px;}' +
         s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
         s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
->>>>>>> origin/main
         s + ' .bb-comment-form-wrap{padding-top:0!important;margin-top:0!important;}' +
         s + ' .bb-comment-form-heading,' +
         s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
         s + ' .bb-comment-form-rule{display:block!important;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px!important;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
-<<<<<<< HEAD
-        below + '{display:flex;flex-direction:column;gap:56px!important;margin-top:0!important;padding-top:0!important;}' +
-=======
         below + '{display:flex;flex-direction:column;gap:56px!important;}' +
->>>>>>> origin/main
         below + '>*{order:1;}' +
         below + '>.blog-overlay-feature-comments-section{order:0;}' +
         pack + '{display:flex;flex-direction:column;gap:56px!important;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:0;align-items:stretch;order:1;}' +
