@@ -3730,6 +3730,23 @@
       return wrap;
     },
 
+    /**
+     * Story desktop comments use the footer side-margin setting.
+     * postBody keeps the article inset; fullScreen matches the footer bleed.
+     * Mobile returns before this runs.
+     */
+    _syncStoryCommentsToFooterWidth: function(commentsEl, cfg, footerContentCfg) {
+      if (!commentsEl || !commentsEl.style) return;
+      if (this._isNarrowCollectionViewport() || !this._isStoryPostLayout(cfg)) return;
+      this._applyPostFooterSideMargins(commentsEl, cfg, footerContentCfg);
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+        this._clearFeatureArticleColumnFooter(commentsEl);
+        this._scheduleFullScreenFooterBleed(commentsEl);
+        return;
+      }
+      this._clearPostFooterZoneBleed(commentsEl);
+    },
+
     /** Story desktop: wide horizontal inset shared by post body and footer. */
     _applyStoryPostHorizontalInset: function(el, cfg) {
       if (!el || !el.style || !cfg) return false;
@@ -4040,18 +4057,27 @@
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
       /* Desktop comments and footer are siblings after the main row.
-         postBody stays in that column. fullScreen bleeds to the page-section
-         content box (site margins), not the article column. */
+         Reporter/Publisher postBody is pinned to the article column.
+         fullScreen spans the row and bleeds to the page-section content box. */
       if (!featurePostLayout && mainRowEl) {
         if (commentsEl) {
           if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+          this._syncStoryCommentsToFooterWidth(commentsEl, cfg, opts.footerContentCfg);
         }
         if (footerHasContent) {
           var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
           if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
-          if (this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'fullScreen') {
+          var desktopFooterMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
+          var articleColumnFooter = (this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg)) &&
+            desktopFooterMode === 'postBody';
+          if (articleColumnFooter) {
+            this._clearPostFooterZoneBleed(footerZoneEl);
+            this._scheduleFeatureArticleColumnFooter(footerZoneEl, main);
+          } else if (desktopFooterMode === 'fullScreen') {
+            this._clearFeatureArticleColumnFooter(footerZoneEl);
             this._scheduleFullScreenFooterBleed(footerZoneEl);
           } else {
+            this._clearFeatureArticleColumnFooter(footerZoneEl);
             this._clearPostFooterZoneBleed(footerZoneEl);
           }
         }
@@ -9584,8 +9610,7 @@
         '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
         '#blog-overlay-list .bb-more-to-read-meta{display:none;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;border-top:1px solid var(--bb-border,#e5e4e0);margin-top:48px;padding-top:24px;}' +
-        '#blog-overlay-list[data-bb-reporter-layout="1"] .blog-overlay-more-to-read{border-top:none;margin-top:0;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;padding-top:24px;}' +
         '#blog-overlay-list .bb-more-to-read-deck{display:none;}' +
         '#blog-overlay-list .blog-overlay-relevant-posts--footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;max-width:100%;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
@@ -9661,6 +9686,7 @@
         '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted);opacity:1;}' +
         '#blog-overlay-list .bb-lead-magnet-btn{border:none;cursor:pointer;background:var(--bb-accent);color:var(--bb-text-on-accent);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
         '#blog-overlay-list .bb-lead-magnet-btn:hover{filter:brightness(0.92);}' +
+        '@media (min-width:768px){#blog-overlay-list:not(.bb-narrow-viewport) .blog-overlay-sidebar-section .bb-newsletter-btn,#blog-overlay-list:not(.bb-narrow-viewport) .blog-overlay-sidebar-section .bb-lead-magnet-btn{padding:8px 16px!important;width:100%;box-sizing:border-box;}}' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-heading,' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-header{display:none;}' +
         '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,#blog-overlay-list .bb-newsletter-btn,#blog-overlay-list .bb-lead-magnet-btn,#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}}' +
@@ -13845,7 +13871,6 @@
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
-      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowMods = [];
       var featureBelowRowHost = null;
       var featureCommentsSectionEl = null;
@@ -14907,7 +14932,7 @@
         var btn = document.createElement('button');
         btn.textContent = ecCfg.buttonText || 'Subscribe';
         btn.type = 'button';
-        btn.className = 'bb-newsletter-btn';
+        btn.className = 'sqs-button-element--primary bb-newsletter-btn';
         btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
         btn.onmouseout = function() { btn.style.filter = ''; };
         var msgEl = document.createElement('div');
@@ -16267,10 +16292,6 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
-                /** Story: no "More to Read" grid (spec module order). */
-                if (fmod === 'relevantPosts' && storyPostLayoutForFooter) {
-                  continue;
-                }
                 var footerAuthorHeader = null;
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });

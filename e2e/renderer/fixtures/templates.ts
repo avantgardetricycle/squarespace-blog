@@ -142,8 +142,8 @@ export const postTemplates = {
     headerContent: { show: false, modules: [], moduleOrder: [], height: 56 },
     footerContent: {
       show: true,
-      modules: ["authorProfiles", "emailCapture", "prevNextArticle"],
-      moduleOrder: ["authorProfiles", "emailCapture", "prevNextArticle"],
+      modules: ["authorProfiles", "relevantPosts", "emailCapture", "prevNextArticle"],
+      moduleOrder: ["authorProfiles", "relevantPosts", "emailCapture", "prevNextArticle"],
       topPadding: 16,
       sideMargins: "postBody",
     },
@@ -152,6 +152,7 @@ export const postTemplates = {
     postModules: {
       breadcrumbs: { enabled: true, position: "none" },
       authorProfiles: { enabled: true, position: "footer" },
+      relevantPosts: { enabled: true, position: "footer" },
       emailCapture: { enabled: true, position: "footer", header: "Subscribe to our newsletter", buttonText: "Subscribe" },
       leadMagnet: { enabled: false, position: "none", resourceTitle: "Free resource", description: "A guide.", buttonText: "Get it free" },
     },
