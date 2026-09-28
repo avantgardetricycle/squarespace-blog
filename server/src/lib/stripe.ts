@@ -2,7 +2,7 @@ import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { normalizePlanKey } from './planKeys.js'
 import { getStripeEnvironment } from './stripeEnvironment.js'
-import { isActiveSubscriptionStatus } from './subscriptionStatus.js'
+import { isActiveSubscriptionStatus, isBetaCustomerId, isBetaSubscription, usableStripeCustomerId } from './subscriptionStatus.js'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -29,7 +29,7 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
     include: {
       subscriptions: {
         orderBy: { updatedAt: 'desc' },
-        take: 1
+        take: 10
       }
     }
   })
@@ -39,8 +39,19 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
     return
   }
 
-  const existingSub = user.subscriptions[0] ?? null
-  const stripeCustomerId = existingSub?.stripeCustomerId ?? user.stripeCustomerId ?? null
+  const stripeBackedSub =
+    user.subscriptions.find(
+      (sub) => !isBetaSubscription(sub) && !isBetaCustomerId(sub.stripeCustomerId)
+    ) ?? null
+  const existingSub = stripeBackedSub ?? user.subscriptions[0] ?? null
+  if (!stripeBackedSub && (isBetaSubscription(existingSub) || isBetaCustomerId(existingSub?.stripeCustomerId))) {
+    console.log('[syncSubscriptionFromStripe] SKIP: beta grant')
+    return
+  }
+  const stripeCustomerId =
+    usableStripeCustomerId(existingSub?.stripeCustomerId) ??
+    usableStripeCustomerId(user.stripeCustomerId) ??
+    null
 
   console.log('[syncSubscriptionFromStripe] user lookup', {
     userId,

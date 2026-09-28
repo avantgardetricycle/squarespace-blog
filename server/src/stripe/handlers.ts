@@ -5,6 +5,7 @@ import { sendInviteEmailViaSendGrid } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
 import { normalizePlanKey } from '../lib/planKeys.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
+import { isActiveSubscriptionStatus } from '../lib/subscriptionStatus.js'
 
 const TOKEN_EXPIRY_HOURS = 24
 
@@ -170,7 +171,8 @@ export async function handleCheckoutSessionCompleted(
         plan: planKey,
         status,
         maxSites,
-        currentPeriodEnd
+        currentPeriodEnd,
+        source: 'stripe'
       },
       update: {
         stripeSubscriptionId: subscription.id,
@@ -179,9 +181,17 @@ export async function handleCheckoutSessionCompleted(
         status,
         maxSites,
         currentPeriodEnd,
-        cancelAtPeriodEnd: false
+        cancelAtPeriodEnd: false,
+        source: 'stripe'
       }
     })
+
+    if (isActiveSubscriptionStatus(status)) {
+      await prisma.subscription.updateMany({
+        where: { userId: user.id, source: 'beta' },
+        data: { status: 'canceled' }
+      })
+    }
 
     const shouldSendInvite =
       (status === 'trialing' || status === 'active') && !existingUser

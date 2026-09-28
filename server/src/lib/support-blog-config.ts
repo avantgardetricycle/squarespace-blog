@@ -1,4 +1,5 @@
 import prisma from '../db/index.js'
+import { isEntitledSubscription } from './subscriptionStatus.js'
 
 function truncate(value: string | null | undefined, max: number): string | null {
   if (!value) return null
@@ -52,11 +53,14 @@ export async function buildBlogConfigSummary(
       where: { siteId: site.id, isActive: true },
       orderBy: { version: 'desc' },
     }),
-    prisma.subscription.findFirst({
+    prisma.subscription.findMany({
       where: { userId, status: { in: ['trialing', 'active'] } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
     }),
   ])
+
+  const entitledSubscription = subscription.find((sub) => isEntitledSubscription(sub)) ?? null
 
   const collection = asRecord(config?.collectionConfig)
   const post = asRecord(config?.postConfig)
@@ -71,8 +75,8 @@ export async function buildBlogConfigSummary(
     blogName: site.name,
     blogUrl: site.url,
     verificationStatus: site.verificationStatus,
-    plan: subscription?.plan ?? null,
-    subscriptionStatus: subscription?.status ?? null,
+    plan: entitledSubscription?.plan ?? null,
+    subscriptionStatus: entitledSubscription?.status ?? null,
     collectionTemplateId: config?.collectionTemplateId ?? null,
     postTemplateId: config?.postTemplateId ?? null,
     showDate: config?.showDate,
