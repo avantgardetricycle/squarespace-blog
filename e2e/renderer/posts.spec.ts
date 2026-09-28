@@ -286,7 +286,10 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
       expect(crumbsAbove).toBe(true);
     } else {
       expect(direction).toBe("row");
+      await expect(page.locator(".blog-overlay-more-to-read")).toBeVisible();
     }
+    expect(await page.locator(".blog-overlay-relevant-posts--footer").count()).toBeGreaterThan(0);
+    await assertMoreToReadAndThumbs(page, mobile);
   }
 
   if (name === "publisher") {
