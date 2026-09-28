@@ -66,6 +66,8 @@ If you canceled by mistake, click **Restore Subscription** before the period end
 
 ## What happens when a subscription expires
 
-After the period ends (or a past-due invoice is not paid), BetterBlog stops rendering on your live blog. Your Squarespace content is unchanged. Customization, analytics, and leads remain in your BetterBlog account. Re-subscribe from Account / Stripe to restore the overlay.
+After the period ends (or a past-due invoice is not paid), BetterBlog stops rendering on your live blog. Your Squarespace content is unchanged. Customization, analytics, and leads remain in your BetterBlog account.
+
+Click **Resubscribe** on Account, choose a plan, and complete Stripe Checkout. You are billed at checkout — the 7-day trial is for new signups only. Past-due invoices should be paid from **Update Payment Method** instead of starting a new subscription.
 
 Removing the snippet from Squarespace Code Injection also reverts the live blog immediately, even if the subscription is still active. See [Installation](installation.md).

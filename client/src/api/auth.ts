@@ -223,6 +223,23 @@ export async function resumeSubscription(): Promise<{ success: boolean; error?: 
   return { success: true, currentPeriodEnd: data.currentPeriodEnd }
 }
 
+export async function createResubscribeCheckoutSession(
+  planKey: string,
+  cadence: string
+): Promise<{ url?: string; error?: string }> {
+  const res = await fetch(`${API}/dashboard/subscription/checkout`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planKey, cadence })
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { error: data?.error ?? 'Failed to start checkout' }
+  }
+  return { url: data.url }
+}
+
 /** Response body from PATCH /dashboard/sites/by-key/:siteKey */
 export type SitePatchResponse = {
   id: string

@@ -13,6 +13,7 @@ import {
   resolveParentIdForReply,
 } from '../lib/comment-thread-depth.js'
 import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
+import { decideAnonymousCommentIdentity, finalizeCommentIdentity } from '../lib/anonymous-comment-identity.js'
 
 const router = Router()
 
@@ -21,7 +22,6 @@ const RATE_LIMIT_COMMENTS_PER_IP = 5
 const MAX_DISPLAY_NAME = 100
 const MAX_BODY = 5000
 const MAX_EMAIL = 254
-const ANONYMOUS_HANDLE_RE = /^Anonymous\d{4}$/
 
 const commentRateMap = new Map<string, number[]>()
 const ANON_RETRY_TTL_MS = 5 * 60 * 1000
@@ -669,21 +669,14 @@ router.post('/', async (req: Request, res: Response) => {
   let displayName = displayNameRaw.slice(0, MAX_DISPLAY_NAME)
   let verifiedSubscriber = false
   let squarespaceProfileId: string | null = null
-  const anonymousHandleBody =
-    typeof body.anonymous_handle === 'string' ? body.anonymous_handle.trim() : ''
-  const generatedHandle = !settings.allowAnonymousComments
-    ? null
-    : ANONYMOUS_HANDLE_RE.test(anonymousHandleBody)
-      ? anonymousHandleBody
-      : ANONYMOUS_HANDLE_RE.test(displayNameRaw)
-        ? displayNameRaw
-        : null
-  // Anonymous comments with verification off never keep a caller-chosen name or email.
-  // A generated Anonymous#### handle also skips member verification.
-  const useAnonymousIdentity =
-    settings.allowAnonymousComments &&
-    (!settings.subscriberCommentsEnabled || generatedHandle != null)
-  const memberEmailAttempt = !useAnonymousIdentity && !postAsAnonymous && !displayNameRaw && !!email
+  const { generatedHandle, useAnonymousIdentity, memberEmailAttempt } = decideAnonymousCommentIdentity({
+    allowAnonymousComments: settings.allowAnonymousComments,
+    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+    displayNameRaw,
+    anonymousHandleRaw: typeof body.anonymous_handle === 'string' ? body.anonymous_handle : '',
+    email,
+    postAsAnonymous,
+  })
   const verifyDebug: Record<string, unknown> = {
     ...emailLookupMeta(email),
     memberEmailAttempt,
@@ -977,17 +970,18 @@ router.post('/', async (req: Request, res: Response) => {
   // Unverified comments never keep a caller-chosen name or email. Generated handles
   // (Anonymous1234) are the only custom anonymous identity. Verified members keep both.
   const displayNameBeforeFallback = displayName
-  if (useAnonymousIdentity) {
-    displayName = generatedHandle || 'Anonymous'
-    email = null
-    verifiedSubscriber = false
-    squarespaceProfileId = null
-  } else if (!verifiedSubscriber) {
-    displayName = 'Anonymous'
-    email = null
-  } else if (!displayName) {
-    displayName = 'Anonymous'
-  }
+  const finalizedIdentity = finalizeCommentIdentity({
+    useAnonymousIdentity,
+    generatedHandle,
+    displayName,
+    email,
+    verifiedSubscriber,
+    squarespaceProfileId,
+  })
+  displayName = finalizedIdentity.displayName
+  email = finalizedIdentity.email
+  verifiedSubscriber = finalizedIdentity.verifiedSubscriber
+  squarespaceProfileId = finalizedIdentity.squarespaceProfileId
   verifyDebug.verifiedSubscriber = verifiedSubscriber
   verifyDebug.fallbackAnonymous = displayName === 'Anonymous' && !verifiedSubscriber
   debugCommentsIngest('H5', 'comments.ts:identity-resolved', 'identity resolved', {

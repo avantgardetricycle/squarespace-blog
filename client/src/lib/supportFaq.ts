@@ -100,7 +100,11 @@ export const SUPPORT_FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What happens if I cancel?",
-        a: "Your features stay live until the end of your current billing period. After that, BetterBlog stops rendering on your site, but your underlying Squarespace content is never touched.",
+        a: "Your features stay live until the end of your current billing period. After that, BetterBlog stops rendering on your site, but your underlying Squarespace content is never touched. Click Restore Subscription on Account if you change your mind before the period ends.",
+      },
+      {
+        q: "How do I resubscribe after my plan ends?",
+        a: "Go to Account and click Resubscribe. Choose a plan (monthly or annual) and complete Stripe Checkout. Your existing blogs and settings are kept. The 7-day trial is for new signups only.",
       },
       {
         q: "Can I get an invoice for my records?",

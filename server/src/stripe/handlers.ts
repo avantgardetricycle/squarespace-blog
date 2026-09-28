@@ -134,6 +134,10 @@ export async function handleCheckoutSessionCompleted(
     const currentPeriodEnd =
       typeof periodEnd === 'number' ? new Date(periodEnd * 1000) : null
 
+    const existingUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail }
+    })
+
     const upsertPayload = {
       create: { email: normalizedEmail, name: customerName, stripeCustomerId },
       update: {
@@ -174,11 +178,13 @@ export async function handleCheckoutSessionCompleted(
         plan: planKey,
         status,
         maxSites,
-        currentPeriodEnd
+        currentPeriodEnd,
+        cancelAtPeriodEnd: false
       }
     })
 
-    const shouldSendInvite = status === 'trialing' || status === 'active'
+    const shouldSendInvite =
+      (status === 'trialing' || status === 'active') && !existingUser
     if (shouldSendInvite) {
       const rawToken = generateToken()
       const tokenHash = hashToken(rawToken)

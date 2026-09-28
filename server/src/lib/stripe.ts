@@ -2,6 +2,7 @@ import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { normalizePlanKey } from './planKeys.js'
 import { getStripeEnvironment } from './stripeEnvironment.js'
+import { isActiveSubscriptionStatus } from './subscriptionStatus.js'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -74,15 +75,21 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
     }
   }
 
-  if (!stripeSubscription) {
+  if (!stripeSubscription || !isActiveSubscriptionStatus(stripeSubscription.status)) {
     const list = await stripe.subscriptions.list({
       customer: stripeCustomerId,
       status: 'all',
       limit: 10,
       expand: ['data.items.data.price']
     })
-    stripeSubscription = list.data[0] ?? null
-    source = stripeSubscription ? 'list' : 'none'
+    const active = list.data.find((s) => isActiveSubscriptionStatus(s.status))
+    if (active) {
+      stripeSubscription = active
+      source = 'list-active'
+    } else if (!stripeSubscription) {
+      stripeSubscription = list.data[0] ?? null
+      source = stripeSubscription ? 'list' : 'none'
+    }
   }
 
   if (!stripeSubscription) {

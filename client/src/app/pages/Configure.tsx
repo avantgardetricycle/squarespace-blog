@@ -4197,7 +4197,14 @@ export default function Configure() {
                                 <Label className="text-sm">Allow Anonymous Comments</Label>
                                 <Switch
                                   checked={commentSettings.allowAnonymousComments}
-                                  onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowAnonymousComments: v } : p)}
+                                  onCheckedChange={(v) =>
+                                    setCommentSettings((p) => {
+                                      if (!p) return p;
+                                      const next = { ...p, allowAnonymousComments: v };
+                                      if (!v && !p.subscriberCommentsEnabled) next.allowNewComments = false;
+                                      return next;
+                                    })
+                                  }
                                 />
                               </div>
                               <p className="text-xs text-[#6b6b6b]">Readers post as a session username such as Anonymous1234. They cannot enter their own name or email. When verification is also on, logged-out readers still see a sign-in link.</p>
@@ -4209,11 +4216,12 @@ export default function Configure() {
                                   checked={commentSettings.subscriberCommentsEnabled}
                                   onCheckedChange={(v) => {
                                     if (!commentSettings.apiKeyVerified) return;
-                                    if (v) {
-                                      setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: true } : p);
-                                    } else {
-                                      setCommentSettings((p) => p ? { ...p, subscriberCommentsEnabled: false } : p);
-                                    }
+                                    setCommentSettings((p) => {
+                                      if (!p) return p;
+                                      const next = { ...p, subscriberCommentsEnabled: v };
+                                      if (!v && !p.allowAnonymousComments) next.allowNewComments = false;
+                                      return next;
+                                    });
                                   }}
                                   disabled={!commentSettings.apiKeyVerified}
                                 />

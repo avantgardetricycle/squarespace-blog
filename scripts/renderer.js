@@ -1376,6 +1376,30 @@
         document.body.appendChild(overlay);
         try { input.focus(); } catch (e) {}
       }
+      function bbIsVerificationPostFailure(data) {
+        var code = data && data.code ? String(data.code) : '';
+        var err = (data && data.error) || '';
+        return code === 'verification_failed'
+          || code === 'verification_failed_anonymous_available'
+          || /verif/i.test(err);
+      }
+      function bbCreateCommentErrorEl() {
+        var el = document.createElement('div');
+        el.className = 'bb-comment-form-error';
+        el.setAttribute('role', 'status');
+        el.style.cssText = 'display:none;margin:8px 0 0;padding:0;background:none;border:none;color:var(--bb-accent,#5B4FE8);font-style:italic;font-weight:400;font-size:12px;line-height:1.4;max-width:560px';
+        return el;
+      }
+      function bbSetCommentError(el, message) {
+        if (!el) return;
+        if (!message) {
+          el.style.display = 'none';
+          el.textContent = '';
+          return;
+        }
+        el.textContent = message;
+        el.style.display = 'block';
+      }
       function bbHandleVerificationPostError(data, onRetryAnonymous) {
         var code = data && data.code ? String(data.code) : '';
         var err = (data && data.error) || 'Failed to post';
@@ -1633,6 +1657,8 @@
             rRow.appendChild(rSubmit);
             rRow.appendChild(rCancel);
             replyFormShell.appendChild(rRow);
+            var rError = bbCreateCommentErrorEl();
+            replyFormShell.appendChild(rError);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
             var replyPostAsAnonymous = false;
@@ -1776,6 +1802,7 @@
                         hasEmail: Boolean(rEm)
                       });
                     }
+                    bbSetCommentError(rError, '');
                     replyFormShell.style.display = 'none';
                     rBody.value = '';
                     rEmail.value = '';
@@ -1796,15 +1823,15 @@
                     replyAnonymousRetryToken = retryToken || '';
                     rSubmit.onclick();
                   })) {
+                    if (bbIsVerificationPostFailure(data)) replyEmailOverride = null;
+                    bbSetCommentError(rError, (data && data.error) || 'Failed to post');
                     rSubmit.textContent = 'Post reply';
                     rReplySync();
                   } else {
                     var err = (data && data.error) || 'Failed to post';
-                    rSubmit.textContent = err;
-                    setTimeout(function() {
-                      rSubmit.textContent = 'Post reply';
-                      rReplySync();
-                    }, 3500);
+                    if (bbIsVerificationPostFailure(data)) replyEmailOverride = null;
+                    bbSetCommentError(rError, err);
+                    rSubmit.textContent = 'Post reply';
                     rReplySync();
                   }
                 })
@@ -1831,7 +1858,11 @@
         });
         try {
           var gapWrap = bbDiv.closest ? bbDiv.closest('#blog-overlay-list') : null;
-          if (gapWrap) self._syncReporterMobileArticleGap(gapWrap, self._isNarrowCollectionViewport());
+          if (gapWrap) {
+            var gapNarrow = self._isNarrowCollectionViewport();
+            self._syncReporterMobileArticleGap(gapWrap, gapNarrow);
+            self._syncFeatureMobileArticleGap(gapWrap, gapNarrow);
+          }
         } catch (eGap) {}
       };
 
@@ -2201,6 +2232,7 @@
                   hasEmail: Boolean(emailToUse)
                 });
               }
+              bbSetCommentError(mainCommentError, '');
               bodyArea.value = '';
               if (data.status === 'pending') {
                 var msg = document.createElement('p');
@@ -2221,15 +2253,15 @@
             } else if (bbHandleVerificationPostError(data, function(retryToken) {
               submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
             })) {
+              if (bbIsVerificationPostFailure(data)) mainEmailOverride = null;
+              bbSetCommentError(mainCommentError, (data && data.error) || 'Failed to post');
               submitBtn.textContent = 'Post Comment';
               mainFormSync();
             } else {
               var err = (data && data.error) || 'Failed to post';
-              submitBtn.textContent = err;
-              setTimeout(function() {
-                submitBtn.textContent = 'Post Comment';
-                mainFormSync();
-              }, 3000);
+              if (bbIsVerificationPostFailure(data)) mainEmailOverride = null;
+              bbSetCommentError(mainCommentError, err);
+              submitBtn.textContent = 'Post Comment';
               mainFormSync();
             }
           })
@@ -2307,6 +2339,8 @@
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      var mainCommentError = bbCreateCommentErrorEl();
+      formWrap.appendChild(mainCommentError);
       }
 
       if (allowNewComments) bbDiv.appendChild(formWrap);
@@ -3766,12 +3800,14 @@
 
     /**
      * Feature has two `.blog-overlay-sidebar-anchor` nodes in the main row:
-     * the left TOC rail (hidden on mobile: display:none, height 0) and the
-     * live right rail (author / related). Pick the painted one by height > 0 —
-     * not by index, and not by assuming only one anchor exists.
+     * the left rail (always hidden on mobile) and the live right rail
+     * (author / related). Pick the painted one by height > 0 — not by
+     * index, and not by assuming only one anchor exists. Left rails are
+     * never moved into the mobile stack.
      */
     _isPaintedSidebarAnchor: function(el) {
       if (!el || !el.classList || !el.classList.contains('blog-overlay-sidebar-anchor')) return false;
+      if (el.getAttribute && el.getAttribute('data-bb-sidebar-side') === 'left') return false;
       var h = 0;
       try {
         h = el.offsetHeight || 0;
@@ -3984,6 +4020,7 @@
         }
         footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
         if (footerHasContent) main.appendChild(footerZoneEl);
+        if (featurePostLayout) this._syncFeatureMobileArticleGap(wrapper, true);
         return;
       }
 
@@ -3996,6 +4033,17 @@
         }
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
+      /* Desktop comments and footer are siblings after the main row, not cells in it. */
+      if (!featurePostLayout && mainRowEl) {
+        if (commentsEl) {
+          if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+        }
+        if (footerHasContent) {
+          var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
+          if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
+        }
+        return;
+      }
       if (footerHasContent) {
         var footerMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
         var sidebarSpan = this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg);
@@ -5041,7 +5089,7 @@
       textHost.appendChild(metaWrap);
     },
 
-    /** Footer More to Read: date + read time (desktop-hidden; Feature mobile shows this instead of the deck). */
+    /** Footer More to Read: date + read time (hidden on desktop and, for now, mobile). */
     _appendModulePostCardFooterMeta: function(textHost, post, cardCfg) {
       var lines = [];
       if (cardCfg && cardCfg.showDate) {
@@ -5302,6 +5350,7 @@
     _getAuthor: function(item) {
       if (!item) return null;
       var a = item.author;
+<<<<<<< HEAD
       if (a && typeof a === 'string' && a.trim()) return a.trim();
       if (a && (a.displayName || a.fullName)) {
         var fromAuthor = String(a.displayName || a.fullName || '').trim();
@@ -5316,8 +5365,22 @@
         if (typeof first === 'string' && first.trim()) return first.trim();
         if (first && (first.displayName || first.fullName)) {
           var name = (first.displayName || first.fullName || '').trim();
+=======
+      if (a) {
+        var fromAuthor = (a.displayName || a.fullName || a.name || '').trim();
+        if (fromAuthor) return fromAuthor;
+      }
+      var arr = item.authors || item.contributors;
+      if (Array.isArray(arr) && arr.length > 0) {
+        var first = arr[0];
+        if (first && (first.displayName || first.fullName || first.name)) {
+          var name = (first.displayName || first.fullName || first.name || '').trim();
+>>>>>>> origin/main
           if (name) return name;
         }
+      }
+      if (item.authorName && typeof item.authorName === 'string' && item.authorName.trim()) {
+        return item.authorName.trim();
       }
       return null;
     },
@@ -5356,7 +5419,8 @@
         }
       };
       if (post) {
-        if (post.author) addName(post.author.displayName || post.author.fullName);
+        if (post.author) addName(post.author.displayName || post.author.fullName || post.author.name);
+        addName(post.authorName);
         var arr = post.authors || post.contributors;
         if (Array.isArray(arr)) {
           for (var i = 0; i < arr.length; i++) {
@@ -5407,6 +5471,7 @@
     },
 
     /**
+<<<<<<< HEAD
      * Profile map vs postModules.authorProfiles `{enabled, position}`.
      * Empty `{}` is not a map — fall through to root config.
      */
@@ -5418,10 +5483,23 @@
         var p = obj[k];
         if (typeof p === 'string' && p.trim()) return true;
         if (p && typeof p === 'object' && !Array.isArray(p)) return true;
+=======
+     * True profile records (id -> {name, bio, ...}), not the postModules
+     * toggle `{enabled, position}` that can land on the merged post cfg.
+     */
+    _isAuthorProfilesMap: function(obj) {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+      var keys = Object.keys(obj);
+      if (!keys.length) return false;
+      var i;
+      for (i = 0; i < keys.length; i++) {
+        if (keys[i] !== 'enabled' && keys[i] !== 'position') return true;
+>>>>>>> origin/main
       }
       return false;
     },
 
+<<<<<<< HEAD
     _authorProfileDictionary: function(cfg) {
       var root = this.config || {};
       if (this._isAuthorProfileDictionary(cfg && cfg.authorProfiles)) return cfg.authorProfiles;
@@ -5435,6 +5513,12 @@
       if (fromCfg && typeof fromCfg === 'object' && !Array.isArray(fromCfg) && Object.keys(fromCfg).length) return fromCfg;
       var fromRoot = root.authorMap;
       if (fromRoot && typeof fromRoot === 'object' && !Array.isArray(fromRoot) && Object.keys(fromRoot).length) return fromRoot;
+=======
+    _resolveAuthorProfilesMap: function(cfg) {
+      var root = this.config || {};
+      if (this._isAuthorProfilesMap(cfg && cfg.authorProfiles)) return cfg.authorProfiles;
+      if (this._isAuthorProfilesMap(root.authorProfiles)) return root.authorProfiles;
+>>>>>>> origin/main
       return {};
     },
 
@@ -5453,18 +5537,31 @@
         ? cfg.defaultAuthorIds
         : (Array.isArray(root.defaultAuthorIds) ? root.defaultAuthorIds : []);
       if (postId && Object.prototype.hasOwnProperty.call(overrides, postId)) {
-        return Array.isArray(overrides[postId]) ? overrides[postId].slice() : [];
+        var overrideIds = Array.isArray(overrides[postId]) ? overrides[postId].slice() : [];
+        if (overrideIds.length) return overrideIds;
       }
       if (defaultIds.length > 0) return defaultIds.slice();
+<<<<<<< HEAD
       var profiles = this._authorProfileDictionary(cfg);
       var authorMap = this._authorMapDictionary(cfg);
+=======
+      var profiles = this._resolveAuthorProfilesMap(cfg);
+      var authorMap = (cfg && cfg.authorMap && typeof cfg.authorMap === 'object' && Object.keys(cfg.authorMap).length)
+        ? cfg.authorMap
+        : ((root.authorMap && typeof root.authorMap === 'object') ? root.authorMap : {});
+>>>>>>> origin/main
       var matched = this._matchPostAuthorProfileIds(post, profiles, authorMap);
       if (matched.length) return matched;
       var profileKeys = Object.keys(profiles);
       if (profileKeys.length) return profileKeys;
       var mapKeys = Object.keys(authorMap);
       if (mapKeys.length) return mapKeys;
+<<<<<<< HEAD
       return ['__bb-post-author__'];
+=======
+      if (post) return ['__bb-post-author__'];
+      return [];
+>>>>>>> origin/main
     },
 
     /**
@@ -5732,7 +5829,7 @@
 
     /**
      * Categories line above post title (Newsroom, Showcase, Masthead, Digest, Editorial). Small caps + accent; optional filter buttons.
-     * opts.onDark: labels on imagery; opts.overImage: white 78% + weight 700 (Editorial big tiles / Masthead hero);
+     * opts.onDark: labels on imagery (.bb-category-label--on-image: white 78% / 700 / text-shadow);
      * opts.compact: tighter spacing on small editorial tiles.
      */
     _createCollectionPostCategoriesLine: function(post, siteAccent, categoryFilterUiEnabled, opts) {
@@ -5740,7 +5837,6 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var onDark = opts.onDark === true;
       var onDarkSolid = opts.onDarkSolid === true;
-      var overImage = opts.overImage === true;
       var compact = opts.compact === true;
       var cats = self._getPostCategories(post);
       if (cats.length === 0) return null;
@@ -5775,8 +5871,7 @@
         el.textContent = catName;
         self._applyCategoryLabelStyle(el, {
           onImage: onDark && !onDarkSolid,
-          onDarkSolid: onDarkSolid,
-          overImage: overImage
+          onDarkSolid: onDarkSolid
         });
         if (categoryFilterUiEnabled) {
           el.style.background = 'none';
@@ -7304,8 +7399,16 @@
       var self = this;
       var useLongBio = opts && opts.useLongBio === true;
       var authorIds = this._getAuthorIdsForPost(post, cfg);
+<<<<<<< HEAD
       var profiles = this._authorProfileDictionary(cfg);
       if (authorIds.length === 0) return null;
+=======
+      var profiles = this._resolveAuthorProfilesMap(cfg);
+      if (authorIds.length === 0) {
+        if (post) authorIds = ['__bb-post-author__'];
+        else return null;
+      }
+>>>>>>> origin/main
       var headerText = authorIds.length > 1 ? 'About the Authors' : 'About the Author';
       var content = document.createElement('div');
       content.className = 'blog-overlay-author-profiles';
@@ -7336,7 +7439,16 @@
       for (var i = 0; i < authorIds.length; i++) {
         var id = authorIds[i];
         var p = profiles[id];
+<<<<<<< HEAD
         var name = (p && p.name) || this._authorMapDictionary(cfg)[id] || this._displayNameForAuthorId(post, id) || 'Author';
+=======
+        var name = (p && p.name)
+          || (cfg && cfg.authorMap && cfg.authorMap[id])
+          || (this.config && this.config.authorMap && this.config.authorMap[id])
+          || this._displayNameForAuthorId(post, id)
+          || this._getAuthor(post)
+          || 'Author';
+>>>>>>> origin/main
         var imageUrl = (p && p.imageUrl) || null;
         var bio = useLongBio && (p && p.bioLong) ? (p.bioLong) : ((p && p.bio) || null);
         var email = (p && p.email) || null;
@@ -8889,7 +9001,7 @@
       el.style.setProperty('--bb-on-dark-deck', tokens.onDarkDeck);
     },
 
-    /** Mobile post sidebars: section spacing from rail gap, not per-section margins. */
+    /** Mobile sidebars: section spacing from rail gap, not per-section margins. */
     _mobilePostSidebarRailCss: function(s) {
       var rail = s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail';
       return (
@@ -8899,11 +9011,88 @@
     },
 
     /**
+     * Mobile sidebar Related + Popular cards (<768): 80×80 thumbs, 12px gap.
+     * Shared by every template with a sidebar (Reporter, Publisher, Feature,
+     * Digest Collection) so desktop 60×60 / 10px cannot linger per-template.
+     */
+    _mobileSidebarPostCardCss: function(s) {
+      return (
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px!important;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}'
+      );
+    },
+
+    /**
+     * Mobile footer More to Read (<768). Shared by every post template so
+     * desktop 600 / calc(1em + 5px) titles, 13px P1 categories, and the
+     * excerpt deck cannot linger. `.bb-more-to-read-meta` stays hidden
+     * (base overlay rule) — do not force it visible here. Title margin 0
+     * beats desktop −4px; text column gap 4px; footer grid drops to one
+     * column (`grid-template-columns:none`). Sidebar Related is a different
+     * module (`.bb-sidebar-post-*`) — do not restyle it here.
+     */
+    _mobileMoreToReadCss: function(s) {
+      var cat = s + ' .bb-more-to-read-category,' +
+        s + ' .bb-more-to-read-category.bb-category-label,' +
+        s + ' .blog-overlay-more-to-read-text .bb-category-label';
+      return (
+        s + ' .blog-overlay-relevant-posts--footer{grid-template-columns:none!important;}' +
+        s + ' .bb-more-to-read-card,' +
+        s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
+        s + ' .bb-more-to-read-thumb,' +
+        s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
+        s + ' .bb-more-to-read-text,' +
+        s + ' .blog-overlay-more-to-read-text{display:flex;flex-direction:column;gap:4px;}' +
+        cat + '{font-family:var(--bb-p1-font-family,inherit)!important;color:var(--bb-accent,#5B4FE8)!important;font-size:var(--bb-label-size,11px)!important;font-weight:var(--bb-label-weight,700)!important;letter-spacing:var(--bb-label-tracking,0.08em)!important;text-transform:uppercase!important;background:transparent!important;padding:0!important;}' +
+        s + ' .bb-more-to-read-title,' +
+        s + ' .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit)!important;line-height:1.25;margin:0!important;}' +
+        s + ' .bb-more-to-read-deck{display:none!important;}'
+      );
+    },
+
+    /**
+     * Collection mobile (<768) newsletter / lead-magnet CTAs. Desktop footer
+     * forms keep input + button on one row (`width:auto` / inline-flex).
+     * Squarespace `.sqs-button-element--primary` uses `justify-content:normal`,
+     * which left-aligns the label once the button stretches. Same classes as
+     * the post-footer fix; scoped to [data-bb-collection-layout] so desktop
+     * and post templates stay put. Stack the form so width:100% can paint.
+     */
+    _mobileCollectionModuleCtaCss: function(s) {
+      var c = s + '[data-bb-collection-layout]';
+      var btn = c + ' .bb-newsletter-btn,' +
+        c + ' .bb-lead-magnet-btn';
+      return (
+        c + ' .bb-newsletter-footer-row,' +
+        c + ' .bb-email-capture-footer-row{flex-direction:column!important;align-items:stretch!important;}' +
+        c + ' .bb-newsletter-footer-form,' +
+        c + ' .bb-email-capture-footer-form,' +
+        c + ' .bb-lead-magnet-footer-form{flex-direction:column!important;align-items:stretch!important;width:100%;}' +
+        c + ' .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;}' +
+        btn + '{width:100%!important;max-width:none;display:flex!important;align-items:center;justify-content:center!important;text-align:center;box-sizing:border-box;}'
+      );
+    },
+
+    /**
      * Mobile post footers (<768): spacing is the container gap, not per-module
      * margins. Newsletter +40 / lead-magnet +20 (and more-to-read / prev-next
      * / author-card margins) break when a neighbor module is toggled off.
+     * Footer primary buttons share the sidebar compact scale (8px 16px /
+     * 14px) and stay inline-block so text-align:center works. Comment
+     * submit is centred flex (justify-content:center) so Squarespace
+     * .sqs-button-element--primary justify-content:normal cannot left-align
+     * the label.
      */
     _mobilePostFooterGapCss: function(s) {
+      var btn = s + ' .blog-overlay-footer-module .sqs-button-element--primary,' +
+        s + ' .blog-overlay-footer-module .bb-newsletter-btn,' +
+        s + ' .blog-overlay-footer-module .bb-lead-magnet-btn,' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-newsletter-footer-form .sqs-button-element--primary,' +
+        s + ' .bb-lead-magnet-footer-form button,' +
+        s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary';
       return (
         s + ' .blog-overlay-footer-content{display:flex;flex-direction:column;gap:56px!important;}' +
         s + ' .blog-overlay-feature-below-row,' +
@@ -8918,7 +9107,16 @@
         s + ' .blog-overlay-prev-next,' +
         s + ' .blog-overlay-footer-content .blog-overlay-author-card,' +
         s + ' .blog-overlay-feature-below-row .blog-overlay-author-card,' +
-        s + ' [data-bb-zone="footer"] .blog-overlay-author-card{margin-top:0!important;margin-bottom:0!important;}'
+        s + ' [data-bb-zone="footer"] .blog-overlay-author-card{margin-top:0!important;margin-bottom:0!important;}' +
+        btn + '{display:inline-block!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' h2.bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading,' +
+        s + ' .bb-comment-form-wrap h2.bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:flex!important;align-items:center;justify-content:center!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)),' +
+        s + ' .bb-newsletter-footer-copy:empty,' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}'
       );
     },
 
@@ -8943,15 +9141,22 @@
 
     /**
      * Feature mobile (<768): header type/spacing + footer pack.
-     * Author cards stay CSS-only (see _mobileAuthorCardCss); Feature rebuilds
-     * the author block, so JS must not appendChild/restructure the DOM.
+     * Image mb is 0 (not −50px) so body padding-top:20px paints a 20px gap
+     * to the first line. Body mb is --bb-feature-article-mb (measured; do
+     * not use −80px). Author cards stay CSS-only (see _mobileAuthorCardCss);
+     * Feature rebuilds the author block, so JS must not appendChild/restructure.
      */
     _mobileFeatureCss: function(s) {
       var pack = s + ' .blog-overlay-feature-footer-modules';
       var below = s + ' .blog-overlay-feature-below-row';
       var stack = s + ' .blog-overlay-feature-header-stack';
+      var kicker = s + ' .blog-overlay-post-header-categories,' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label:not(.bb-category-label--on-image),' +
+        s + ' .blog-overlay-post-header-categories span:not(.bb-category-label--on-image),' +
+        s + ' .blog-overlay-post-category--feature';
       return (
         s + ' .blog-overlay-featured-image-stacked-fullbleed--feature{margin-top:-15px!important;margin-bottom:0!important;}' +
+<<<<<<< HEAD
         s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
@@ -8961,6 +9166,17 @@
         s + ' .blog-overlay-post-header-categories a,' +
         s + ' .blog-overlay-post-header-categories button,' +
         s + ' .blog-overlay-post-category--feature{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700!important;letter-spacing:0.08em!important;text-transform:uppercase!important;color:var(--bb-accent,#5B4FE8)!important;text-align:center;margin-bottom:0!important;background:none!important;padding:0!important;}' +
+=======
+        s + ' .blog-overlay-post-header-stacked{margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%!important;text-align:center;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);color:var(--bb-body-60,rgba(0,0,0,0.6));}' +
+        s + ' .blog-overlay-post-breadcrumbs a,' +
+        s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
+        s + ' .blog-overlay-post-header-categories{margin-bottom:8px!important;justify-content:center!important;text-align:center;width:100%;}' +
+        kicker + '{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit)!important;font-weight:700!important;letter-spacing:0.08em!important;text-transform:uppercase!important;color:var(--bb-accent,#5B4FE8)!important;text-align:center;}' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-header-categories span,' +
+        s + ' .blog-overlay-post-category--feature{margin-bottom:0!important;}' +
+>>>>>>> origin/main
         stack + ' .blog-overlay-post-title,' +
         stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
         stack + ' .blog-overlay-post-deck,' +
@@ -8968,6 +9184,7 @@
         stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
         stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
+<<<<<<< HEAD
         s + ' .blog-overlay-share-row,' +
         s + ' .blog-overlay-share-row--feature{display:flex!important;gap:0!important;justify-content:center;width:100%;}' +
         s + ' .blog-overlay-share-links{display:flex!important;gap:0!important;align-items:center;}' +
@@ -8976,6 +9193,13 @@
         s + ' .blog-overlay-share-link svg[fill="none"]{fill:none;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
         s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
+=======
+        s + ' .blog-overlay-share-row--feature .blog-overlay-share-link,' +
+        s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
+        s + ' .blog-overlay-post-article--sidebar-row{margin-bottom:0!important;padding-bottom:0!important;}' +
+        s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:var(--bb-feature-article-mb,0px)!important;}' +
+>>>>>>> origin/main
         s + ' aside.blog-overlay-relevant-posts,' +
         s + ' .blog-overlay-popular-posts{width:100%!important;max-width:none!important;}' +
         s + ' aside.blog-overlay-relevant-posts>div,' +
@@ -8984,15 +9208,6 @@
         s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
         s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
         s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
-        s + ' .bb-more-to-read-card,' +
-        s + ' .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
-        s + ' .bb-more-to-read-thumb,' +
-        s + ' .blog-overlay-more-to-read-thumb{width:100%!important;aspect-ratio:16/10!important;border-radius:4px!important;}' +
-        s + ' .bb-more-to-read-category,' +
-        s + ' .bb-more-to-read-category.bb-category-label{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8)!important;background:transparent!important;padding:0!important;}' +
-        s + ' .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.25;}' +
-        s + ' .bb-more-to-read-deck{display:none!important;}' +
-        s + ' .bb-more-to-read-meta{display:block!important;}' +
         s + ' .blog-overlay-email-capture-footer{border:none!important;padding:0!important;border-radius:0!important;gap:0!important;}' +
         s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading,' +
         s + ' .bb-lead-magnet-header{display:none!important;}' +
@@ -9009,15 +9224,25 @@
         s + ' .bb-lead-magnet-footer-form button,' +
         s + ' .bb-lead-magnet-footer-form .sqs-button-element--primary{padding:8px 16px;width:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .bb-lead-magnet-subtitle{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin:0 0 8px 0!important;}' +
+<<<<<<< HEAD
         s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
         s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
         s + ' .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
+=======
+        s + ' .bb-comments-section{margin-top:0!important;padding-top:24px;}' +
+        s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
+        s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
+>>>>>>> origin/main
         s + ' .bb-comment-form-wrap{padding-top:0!important;margin-top:0!important;}' +
         s + ' .bb-comment-form-heading,' +
         s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
         s + ' .bb-comment-form-rule{display:block!important;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px!important;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+<<<<<<< HEAD
         below + '{display:flex;flex-direction:column;gap:56px!important;margin-top:0!important;padding-top:0!important;}' +
+=======
+        below + '{display:flex;flex-direction:column;gap:56px!important;}' +
+>>>>>>> origin/main
         below + '>*{order:1;}' +
         below + '>.blog-overlay-feature-comments-section{order:0;}' +
         pack + '{display:flex;flex-direction:column;gap:56px!important;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:0;align-items:stretch;order:1;}' +
@@ -9080,7 +9305,17 @@
         s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
         s + ' .blog-overlay-body{margin-bottom:-80px!important;}' +
         s + ' .blog-overlay-footer-content{gap:56px!important;}' +
-        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
+        s + ' .bb-newsletter-footer-copy:not(:has(div)),' +
+        s + ' .bb-newsletter-footer-copy:empty,' +
+        s + ' .bb-newsletter-footer-msg:empty{display:none!important;}' +
+        s + ' .blog-overlay-email-capture-footer .bb-newsletter-btn,' +
+        s + ' .bb-newsletter-footer-form .sqs-button-element--primary,' +
+        s + ' .bb-newsletter-footer-form .bb-newsletter-btn{display:inline-block!important;width:100%;padding:8px 16px!important;box-sizing:border-box;text-align:center;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:inline-block!important;width:100%!important;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}'
       );
     },
 
@@ -9110,7 +9345,7 @@
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;color:inherit;text-shadow:none!important;}' +
         s + ' .blog-overlay-post-header-categories{margin:0 0 8px 0!important;justify-content:flex-start!important;text-align:left;width:100%;}' +
-        s + ' .blog-overlay-post-header-categories .bb-category-label,' +
+        s + ' .blog-overlay-post-header-categories .bb-category-label:not(.bb-category-label--on-image),' +
         s + ' .blog-overlay-post-category--story,' +
         s + ' .bb-category-label--on-dark{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8)!important;margin:0!important;text-shadow:none!important;}' +
         s + ' .blog-overlay-story-info-panel .blog-overlay-post-title,' +
@@ -9163,8 +9398,17 @@
         s + ' .blog-overlay-body{padding-top:20px!important;margin-bottom:-80px!important;}' +
         s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail{gap:28px!important;}' +
         s + ' .blog-overlay-sidebar-anchor:not(.bb-mobile-rail-hidden)>.blog-overlay-sidebar-rail>.blog-overlay-sidebar-section{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .bb-sidebar-post-card{width:100%;gap:12px!important;}' +
+        s + ' .bb-sidebar-post-thumb{width:80px!important;height:80px!important;aspect-ratio:1/1;flex-shrink:0;border-radius:4px!important;overflow:hidden;}' +
+        s + ' .bb-sidebar-post-thumb img{border-radius:4px;}' +
+        s + ' .bb-sidebar-post-text{flex:1 1 auto!important;min-width:0;height:auto!important;max-height:none!important;}' +
         s + ' .blog-overlay-footer-content{gap:56px!important;}' +
-        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}'
+        s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
+        s + ' .bb-comment-form-heading,' +
+        s + ' h2.bb-comment-form-heading,' +
+        s + ' .bb-comment-form-wrap .bb-below-main-heading,' +
+        s + ' .bb-comment-form-wrap h2.bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700!important;text-transform:uppercase!important;letter-spacing:0.08em!important;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
+        s + ' .bb-comment-submit{display:flex!important;align-items:center;justify-content:center!important;width:100%!important;max-width:none;padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;text-align:center;}'
       );
     },
 
@@ -9191,7 +9435,7 @@
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
         s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
-        s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:0;}' +
+        s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:24px;}' +
         s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
         s + ' .bb-comments-list:not(:empty){margin-bottom:24px!important;}' +
         s + ' .bb-comments-list:empty{display:none!important;margin:0!important;padding:0!important;height:0!important;min-height:0!important;}' +
@@ -9221,13 +9465,7 @@
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-sidebar-divider{margin:0 0 20px 0;height:1px;background:var(--bb-border);border:none;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-footer-sidebar-alt{display:none!important;}' +
         s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .blog-overlay-relevant-posts--footer{display:flex!important;flex-direction:column;gap:24px!important;width:100%;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-card{display:flex;flex-direction:column;gap:10px;width:100%;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-thumb{width:100%;aspect-ratio:16/10!important;border-radius:4px;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-text{display:flex;flex-direction:column;gap:4px;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-category,' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-category-label{font-size:11px!important;font-family:inherit;font-weight:700!important;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent)!important;background:none!important;padding:0!important;}' +
-        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-title{font-size:17px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.25;}' +
-        s + ' .bb-more-to-read-deck{display:none!important;}'
+        s + ' .bb-mobile-sidebar-treatment[data-bb-module="relevantPosts"] .bb-more-to-read-text{display:flex;flex-direction:column;gap:4px;}'
       );
     },
 
@@ -9274,8 +9512,8 @@
         '#blog-overlay-list .blog-overlay-post-category--story{text-align:left;margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-category--feature{text-align:center;margin-bottom:-4px;}' +
         '#blog-overlay-list .blog-overlay-post-category--ribbon{display:inline-flex;align-items:center;align-self:flex-start;width:fit-content;max-width:100%;font-size:14px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;padding:18px 12px;line-height:0;border:none;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .bb-category-label--on-image{text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
-        '#blog-overlay-list .bb-category-label--over-image{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-weight:700;}' +
+        '#blog-overlay-list .bb-category-label.bb-category-label--on-image:not(.blog-overlay-post-category--ribbon),' +
+        '#blog-overlay-list .bb-category-label.bb-category-label--over-image:not(.blog-overlay-post-category--ribbon){color:rgba(255,255,255,0.78)!important;font-weight:700!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack{max-width:800px;margin-left:auto;margin-right:auto;box-sizing:border-box;gap:0;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
@@ -9382,7 +9620,7 @@
         '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;margin-bottom:5px;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
-        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:600;}' +
+        '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
         '#blog-overlay-list .blog-overlay-more-to-read-text .bb-more-to-read-title:first-child{margin-top:5px;}' +
         '#blog-overlay-list .bb-sidebar-post-meta{font-size:12px;line-height:1.15;color:var(--bb-extra-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);margin:0;padding:0;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
         '#blog-overlay-list .blog-overlay-topic-badges a,#blog-overlay-list .blog-overlay-topic-badges .bb-topic-badge{border-radius:min(var(--bb-btn-radius),8px);}' +
@@ -9402,8 +9640,12 @@
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-header{display:none;}' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,' +
-        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary{padding:8px 16px!important;box-sizing:border-box;}' +
-        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary{padding:8px 16px!important;box-sizing:border-box;}}' +
+        '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,' +
+        '#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,' +
+        '#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,' +
+        '#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}' +
+        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}}' +
         '#blog-overlay-list .bb-lead-magnet-msg{font-size:0.85rem;margin-top:4px;}' +
         '#blog-overlay-list .bb-footer-card{border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;background:transparent;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-email-capture-footer .bb-newsletter-heading{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
@@ -9433,6 +9675,8 @@
         '#blog-overlay-list .bb-mobile-sidebar-filter-hidden,' +
         '#blog-overlay-list .bb-mobile-rail-hidden,' +
         '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
+        '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"]{display:none!important;}}' +
+        '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"]{display:none!important;}' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
@@ -9449,7 +9693,7 @@
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-author-card{border:none;padding:0;margin:0;border-radius:0;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer.bb-footer-card,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-lead-magnet-card{border:none;padding:0;border-radius:0;background:transparent;}' +
-        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none;}' +
+        '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .blog-overlay-email-capture-footer .bb-newsletter-heading{display:none!important;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-email-capture-footer-row{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;}' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-copy,' +
         '#blog-overlay-list.bb-narrow-viewport .bb-mobile-sidebar-treatment .bb-newsletter-footer-form-stack,' +
@@ -9470,11 +9714,15 @@
           this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobilePostFooterGapCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
           this._mobilePrevNextCss('#blog-overlay-list[data-bb-spec-horizontal-padding="1"]') +
+          this._mobileSidebarPostCardCss('#blog-overlay-list') +
+          this._mobileMoreToReadCss('#blog-overlay-list') +
         '}' +
         '#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
         this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePostFooterGapCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
         this._mobilePrevNextCss('#blog-overlay-list.bb-narrow-viewport[data-bb-spec-horizontal-padding="1"]') +
+        this._mobileSidebarPostCardCss('#blog-overlay-list.bb-narrow-viewport') +
+        this._mobileMoreToReadCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._mobileAuthorCardCss('#blog-overlay-list') + '}' +
         this._mobileAuthorCardCss('#blog-overlay-list.bb-narrow-viewport') +
         '@media (max-width: 767px){' + this._reporterMobileCss('#blog-overlay-list[data-bb-reporter-layout="1"]') + '}' +
@@ -9537,7 +9785,7 @@
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link{display:none!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-title{font-size:22px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-meta-row{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
-          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-right .blog-overlay-showcase-body{padding-left:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-left .blog-overlay-showcase-image{margin-right:12px;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card--img-right .blog-overlay-showcase-image{margin-left:12px;}' +
@@ -9557,12 +9805,12 @@
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-title{font-size:18px!important;line-height:1.25!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-meta-row{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;width:100vw!important;max-width:100vw!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero>div,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero img{border-radius:0!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-category-label--on-image{font-size:13px!important;margin-bottom:8px!important;font-weight:700!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-category-label--on-image{font-size:13px!important;margin-bottom:8px!important;color:rgba(255,255,255,0.78)!important;font-weight:700!important;text-shadow:0 1px 2px rgba(0,0,0,0.5)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-title--on-image{font-size:28px!important;line-height:1.15!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero .bb-meta--on-image{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;}' +
@@ -9575,7 +9823,7 @@
           '#blog-overlay-list[data-bb-collection-layout="grid"] article{padding-left:0!important;padding-right:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-title{font-size:18px!important;line-height:1.2!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] article .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-row{flex-direction:column!important;flex-wrap:nowrap!important;align-items:stretch!important;gap:10px!important;width:100%!important;max-width:none!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-copy,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form-stack,' +
@@ -9583,12 +9831,12 @@
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form{flex-direction:column!important;justify-content:flex-start!important;gap:10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .bb-form-input{width:100%!important;flex:0 0 auto!important;padding:12px 14px!important;font-size:16px!important;font-family:var(--bb-p1-font-family,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .bb-newsletter-footer-form .sqs-button-element--primary{width:100%!important;max-width:none!important;flex:0 0 auto!important;text-align:center!important;justify-content:center!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-zone{padding-top:0!important;padding-bottom:4px!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-zone{padding-top:0!important;padding-bottom:24px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-header-content{margin-bottom:0!important;padding-bottom:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
-            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:2px!important;' +
+            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:12px!important;' +
             'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
             'border-radius:0!important;' +
           '}' +
@@ -9600,7 +9848,7 @@
             'font-size:15px;padding:12px 8px;font-weight:800;letter-spacing:1px;' +
             'font-family:var(--bb-p1-font-family,inherit);margin-bottom:0;' +
           '}' +
-          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-title{font-size:28px!important;line-height:1.15!important;font-weight:var(--bb-heading-font-weight,inherit)!important;margin-bottom:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-meta-row{font-family:var(--bb-p1-font-family,inherit);font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;margin-bottom:14px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
@@ -9611,7 +9859,7 @@
           '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article){padding-left:0!important;padding-right:0!important;margin-bottom:4px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-title{font-size:18px!important;line-height:1.2!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-meta--on-bg{font-size:13px!important;line-height:1.3!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
-          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-category-label{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image,' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image>div,' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] article:not(.blog-overlay-digest-featured-article) .blog-overlay-featured-image img{' +
@@ -9626,6 +9874,9 @@
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-author-card-name{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-main-row .blog-overlay-pagination-zone{margin-top:-50px!important;margin-bottom:16px!important;width:100%;max-width:100%;box-sizing:border-box;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more,#blog-overlay-list[data-bb-collection-layout="digest"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
+          this._mobilePostSidebarRailCss('#blog-overlay-list[data-bb-collection-layout="digest"]') +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
+          '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"]{margin-top:0!important;padding-top:calc(var(--bb-nav-height,0px) - 4px)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-editorial-row{padding-left:0!important;padding-right:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;margin-top:-20px!important;}' +
@@ -9675,7 +9926,12 @@
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more,' +
           '#blog-overlay-list[data-bb-collection-layout="editorial"] .bb-load-more-btn{font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-btn-weight,inherit);}' +
-        '}';
+          this._mobileCollectionModuleCtaCss('#blog-overlay-list') +
+        '}' +
+        this._mobileCollectionModuleCtaCss('#blog-overlay-list.bb-narrow-viewport') +
+        this._mobilePostSidebarRailCss('#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"]') +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-sidebar-section[data-bb-module="popularPosts"],' +
+        '#blog-overlay-list.bb-narrow-viewport[data-bb-collection-layout="digest"] .blog-overlay-popular-posts{margin-bottom:0!important;}';
       if (!style) {
         style = document.createElement('style');
         style.id = 'bb-collection-styles';
@@ -9755,7 +10011,6 @@
       el.classList.add('bb-category-label');
       if (opts.onDarkSolid) el.classList.add('bb-category-label--on-dark');
       else if (opts.onImage) el.classList.add('bb-category-label--on-image');
-      if (opts.overImage) el.classList.add('bb-category-label--over-image');
       if (opts.modifier) el.classList.add(opts.modifier);
     },
 
@@ -10562,12 +10817,14 @@
     },
 
     /**
-     * Mobile (<768): if a pairable module is in the sidebar and duplicated in the footer,
-     * hide the footer copy (sidebar-wins). Footer-only modules keep rendering but get
-     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always hidden
-     * on mobile, even when enabled; a footer copy (if any) is shown instead.
-     * Hide Table of Contents on mobile for every post template (Feature,
-     * Publisher, Reporter, and any other sidebar TOC). Comments are footer-only and exempt.
+     * Mobile (<768): hide every left sidebar rail. If a pairable module is in
+     * the right sidebar and duplicated in the footer, hide the footer copy
+     * (sidebar-wins). Left-sidebar copies do not count — a footer copy of a
+     * left-only module is shown. Footer-only modules keep rendering but get
+     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always
+     * hidden on mobile, even when enabled; a footer copy (if any) is shown
+     * instead. Hide Table of Contents on mobile for every post template.
+     * Comments are footer-only and exempt.
      */
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
@@ -10593,7 +10850,9 @@
       for (i = 0; i < pairIds.length; i++) {
         var id = pairIds[i];
         var isFilter = !!filterIds[id];
-        var sidebarHas = !!wrapper.querySelector('[data-bb-zone="sidebar"][data-bb-module="' + id + '"]');
+        var sidebarHas = !!wrapper.querySelector(
+          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+        );
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {
           /* Sidebar-wins, except Tags/Categories: keep the footer copy. */
@@ -10636,7 +10895,10 @@
         var rail = rails[i];
         var railMods = rail.querySelectorAll('[data-bb-module]');
         var hideRail = false;
-        if (narrow && railMods.length > 0) {
+        var isLeftRail = rail.getAttribute('data-bb-sidebar-side') === 'left';
+        if (narrow && isLeftRail) {
+          hideRail = true;
+        } else if (narrow && railMods.length > 0) {
           hideRail = true;
           for (var rm = 0; rm < railMods.length; rm++) {
             var modId = railMods[rm].getAttribute('data-bb-module');
@@ -10649,6 +10911,7 @@
           }
         }
         rail.classList.toggle('bb-mobile-rail-hidden', hideRail);
+        if (isLeftRail) rail.setAttribute('aria-hidden', hideRail ? 'true' : 'false');
       }
       var footerContent = wrapper.querySelector('.blog-overlay-footer-content');
       if (footerContent) {
@@ -10670,6 +10933,7 @@
       this._applyPrevNextRadiusVars(wrapper, narrow);
       this._capMobileBodyHeadings(wrapper, narrow);
       this._applyReporterMobileLayout(wrapper, narrow);
+      this._applyFeatureMobileLayout(wrapper, narrow);
       this._applyStoryMobileLayout(wrapper, narrow);
       /* Feature rebuilds author cards; appendChild does not stick. CSS-only. */
       if (!opts.featurePostLayout) {
@@ -10927,6 +11191,23 @@
       }
     },
 
+    /**
+     * Feature mobile: measure article→comments gap after the below-row is
+     * stacked under the body. Extra space below the last glyph is
+     * post-dependent — do not use a fixed margin.
+     */
+    _applyFeatureMobileLayout: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var apply = wrapper.getAttribute('data-bb-feature-layout') === '1' && !!narrow;
+      this._syncFeatureMobileArticleGap(wrapper, apply);
+      if (apply && typeof requestAnimationFrame === 'function') {
+        var self = this;
+        requestAnimationFrame(function() {
+          self._syncFeatureMobileArticleGap(wrapper, true);
+        });
+      }
+    },
+
     /** Bottom of the last visible text line inside `root` (Range rects, not the container box). */
     _lastTextLineBottom: function(root) {
       if (!root) return 0;
@@ -10972,26 +11253,26 @@
     },
 
     /**
-     * Reporter mobile: set article margin-bottom so ~24px separates the last
-     * line of body text from the comments block (or the next visible block
-     * when comments are off). Extra space below the last glyph inside
-     * `.blog-overlay-body` is post-dependent — do not use a fixed margin.
+     * Mobile article→comments gap: last line of body text (Range rects) to
+     * `#bb-comments` (or the next visible block when comments are off) must
+     * be ~24px. Extra space below the last glyph is post-dependent — do not
+     * swap in another fixed negative margin.
      */
-    _syncReporterMobileArticleGap: function(wrapper, narrow) {
-      if (!wrapper) return;
-      var article = wrapper.querySelector('.blog-overlay-post-article--sidebar-row');
-      if (!article || !article.style) return;
-      if (wrapper.getAttribute('data-bb-reporter-layout') !== '1' || !narrow) {
-        article.style.removeProperty('--bb-reporter-article-mb');
+    _syncMobileArticleCommentsGap: function(wrapper, narrow, spec) {
+      if (!wrapper || !spec) return;
+      var box = wrapper.querySelector(spec.boxSelector);
+      if (!box || !box.style) return;
+      if ((spec.layoutAttr && wrapper.getAttribute(spec.layoutAttr) !== '1') || !narrow) {
+        box.style.removeProperty(spec.cssVar);
         return;
       }
-      var body = article.querySelector('.blog-overlay-body') || article;
+      var body = spec.bodySelector ? (box.querySelector(spec.bodySelector) || box) : box;
       var lastText = this._lastTextLineBottom(body);
       if (!lastText) return;
       var next = wrapper.querySelector('#bb-comments');
       if (next && !this._isReporterGapTarget(next)) next = null;
       if (!next) {
-        next = article.nextElementSibling;
+        next = spec.nextFromBody ? body.nextElementSibling : box.nextElementSibling;
         while (next && !this._isReporterGapTarget(next)) next = next.nextElementSibling;
       }
       if (!next || !next.getBoundingClientRect) return;
@@ -10999,7 +11280,7 @@
       var gap = nextTop - lastText;
       var current = 0;
       try {
-        current = parseFloat(window.getComputedStyle(article).marginBottom) || 0;
+        current = parseFloat(window.getComputedStyle(box).marginBottom) || 0;
       } catch (eMb) {
         current = 0;
       }
@@ -11009,9 +11290,27 @@
       if (nextMb < -240) nextMb = -240;
       if (nextMb > 80) nextMb = 80;
       var rounded = Math.round(nextMb);
-      var prev = article.style.getPropertyValue('--bb-reporter-article-mb');
+      var prev = box.style.getPropertyValue(spec.cssVar);
       if (prev === rounded + 'px') return;
-      article.style.setProperty('--bb-reporter-article-mb', rounded + 'px');
+      box.style.setProperty(spec.cssVar, rounded + 'px');
+    },
+
+    _syncReporterMobileArticleGap: function(wrapper, narrow) {
+      this._syncMobileArticleCommentsGap(wrapper, narrow, {
+        layoutAttr: 'data-bb-reporter-layout',
+        cssVar: '--bb-reporter-article-mb',
+        boxSelector: '.blog-overlay-post-article--sidebar-row',
+        bodySelector: '.blog-overlay-body'
+      });
+    },
+
+    _syncFeatureMobileArticleGap: function(wrapper, narrow) {
+      this._syncMobileArticleCommentsGap(wrapper, narrow, {
+        layoutAttr: 'data-bb-feature-layout',
+        cssVar: '--bb-feature-article-mb',
+        boxSelector: '.blog-overlay-body',
+        nextFromBody: true
+      });
     },
 
     /**
@@ -13528,7 +13827,6 @@
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
-      var writerPostLayoutForFooter = isSinglePost && self._isWriterPostLayout(cfg);
       var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowMods = [];
       var featureBelowRowHost = null;
@@ -13969,7 +14267,7 @@
           if (heroCats.length > 0) {
             var heroCat = document.createElement('div');
             heroCat.textContent = heroCats[0];
-            self._applyCategoryLabelStyle(heroCat, { onImage: true, overImage: true });
+            self._applyCategoryLabelStyle(heroCat, { onImage: true });
             heroCat.style.marginBottom = '8px';
             if (mastheadHeroMobile) heroCat.style.fontSize = '22px';
             heroContent.appendChild(heroCat);
@@ -14897,7 +15195,6 @@
         }
         self._warnDuplicateValues('sidebar', moduleIds);
         var width = Math.min(400, Math.max(160, sidebarCfg.width || (isSinglePost ? 300 : 240)));
-        if (featurePostLayout) width = 300;
         var mods = [];
         var hideRecentPostsInBbPreview = self._bbPreview && isSinglePost;
         for (var m = 0; m < moduleIds.length; m++) {
@@ -15113,7 +15410,7 @@
             p,
             siteAccentForPostCats,
             categoryFilterUiEnabled,
-            { onDark: true, compact: !isLarge, overImage: isLarge }
+            { onDark: true, compact: !isLarge }
           );
           if (mobilePairCard) {
             var edSpacer = document.createElement('div');
@@ -15324,10 +15621,6 @@
           var sidebarWidthDefault = isSinglePost ? 300 : 240;
           var leftSidebarWidth = leftSidebarCfg && leftSidebarCfg.width ? Math.min(400, Math.max(160, leftSidebarCfg.width)) : sidebarWidthDefault;
           var rightSidebarWidth = rightSidebarCfg && rightSidebarCfg.width ? Math.min(400, Math.max(160, rightSidebarCfg.width)) : sidebarWidthDefault;
-          if (featurePostLayout) {
-            leftSidebarWidth = 300;
-            rightSidebarWidth = 300;
-          }
           var leftSpaceAbove = isSinglePost
             ? BB_POST_CONTENT_TOP_PADDING
             : (leftSidebarCfg && typeof leftSidebarCfg.spaceAbove === 'number' ? Math.max(0, leftSidebarCfg.spaceAbove) : 0);
@@ -15359,6 +15652,7 @@
           for (var lm = 0; lm < leftModules.length; lm++) leftSidebarEl.appendChild(leftModules[lm]);
           var leftSidebarWrapEl = document.createElement('div');
           leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          leftSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'left');
           leftSidebarWrapEl.style.flexShrink = '0';
           leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
           leftSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -15384,6 +15678,7 @@
           for (var rm = 0; rm < rightModules.length; rm++) rightSidebarEl.appendChild(rightModules[rm]);
           var rightSidebarWrapEl = document.createElement('div');
           rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
+          rightSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'right');
           rightSidebarWrapEl.style.flexShrink = '0';
           rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
           rightSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -15531,7 +15826,7 @@
               self._syncDigestMobileFeaturedImageBleed(wrapper);
             }
             self._applyMobileSidebarFooterRule(wrapper, { featurePostLayout: featurePostLayout, publisherPostLayout: publisherPostLayout });
-            var mobilePostRail = isSinglePost && (stack || self._isNarrowCollectionViewport());
+            var mobilePostRail = (isSinglePost || collectionLayout === 'digest') && (stack || self._isNarrowCollectionViewport());
             if (leftHas) {
               leftSidebarEl.style.gap = (mobilePostRail && !leftSidebarWrapEl.classList.contains('bb-mobile-rail-hidden')) ? '28px' : '16px';
             }
@@ -15954,12 +16249,8 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
-                /** Writer/Story: no "More to Read" grid (spec module order). */
-                if (fmod === 'relevantPosts' && (writerPostLayoutForFooter || storyPostLayoutForFooter)) {
-                  continue;
-                }
-                /** Writer: lead magnet is skipped entirely; prev/next replaces it instead. */
-                if (fmod === 'leadMagnet' && writerPostLayoutForFooter) {
+                /** Story: no "More to Read" grid (spec module order). */
+                if (fmod === 'relevantPosts' && storyPostLayoutForFooter) {
                   continue;
                 }
                 var footerAuthorHeader = null;
@@ -15993,6 +16284,19 @@
                     fmodEl.style.maxWidth = '100%';
                     fmodEl.style.minWidth = '0';
                   }
+                } else if (fmod === 'filterByCategory') {
+                  var catFooter = self._createFilterByCategoryModule(items, 220, true, 'footer');
+                  fmodEl = catFooter ? createSidebarSection('Categories', catFooter) : null;
+                } else if (fmod === 'filterByTag') {
+                  var tagFooter = self._createFilterByTagModule(items, 220, true, 'footer');
+                  fmodEl = tagFooter ? createSidebarSection('Tags', tagFooter) : null;
+                } else if (fmod === 'filterByTagsAndCategories') {
+                  var bothCat = self._createFilterByCategoryModule(items, 220, true, 'footer');
+                  var bothTag = self._createFilterByTagModule(items, 220, true, 'footer');
+                  fmodEl = document.createElement('div');
+                  if (bothCat) fmodEl.appendChild(createSidebarSection('Categories', bothCat));
+                  if (bothTag) fmodEl.appendChild(createSidebarSection('Tags', bothTag));
+                  if (!fmodEl.childNodes.length) fmodEl = null;
                 } else if (fmod === 'prevNextArticle') {
                   fmodEl = createPrevNextArticleModule();
                   if (fmodEl) {
@@ -16074,14 +16378,7 @@
             paginationZoneEl.style.position = 'relative';
             paginationZoneEl.style.zIndex = '1';
             paginationZoneEl.appendChild(collectionPaginationEl);
-            if (!isSinglePost && collectionLayout === 'digest' && self._isNarrowCollectionViewport()) {
-              var pagSidebarAnchor = mainRowEl.querySelector('.blog-overlay-sidebar-anchor');
-              paginationZoneEl.style.order = '1';
-              if (pagSidebarAnchor) mainRowEl.insertBefore(paginationZoneEl, pagSidebarAnchor);
-              else mainRowEl.appendChild(paginationZoneEl);
-            } else {
-              wrapper.appendChild(paginationZoneEl);
-            }
+            wrapper.appendChild(paginationZoneEl);
           }
 
           var commentCfg = cfg && cfg.commentSettings;
