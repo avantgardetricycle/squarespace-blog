@@ -13,8 +13,15 @@ import {
 import { DEFAULT_PLAN_KEY, isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
+import { isAdminEmail } from '../lib/admin-team.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
-import { isActiveSubscriptionStatus, isResubscribableStatus } from '../lib/subscriptionStatus.js'
+import {
+  effectiveSubscriptionStatus,
+  isEntitledSubscription,
+  isResubscribableStatus,
+  pickDisplaySubscription,
+  usableStripeCustomerId
+} from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 import {
@@ -146,11 +153,10 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
       return
     }
 
-    const subscription =
-      userWithRelations.subscriptions.find((s) => isActiveSubscriptionStatus(s.status)) ??
-      userWithRelations.subscriptions[0] ??
-      null
-    const subscriptionActive = isActiveSubscriptionStatus(subscription?.status)
+    const subscription = pickDisplaySubscription(userWithRelations.subscriptions)
+    const subscriptionActive = isEntitledSubscription(subscription)
+    const reportedStatus = subscription ? effectiveSubscriptionStatus(subscription) : null
+    const betaActive = subscription?.source === 'beta' && subscriptionActive
     const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
 
     const stripeEnv = getStripeEnvironment()
@@ -166,7 +172,9 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
     const cadence = planRecord?.cadence ?? 'monthly'
 
     let priceDisplay = '—'
-    if (subscription) {
+    if (betaActive) {
+      priceDisplay = 'Free'
+    } else if (subscription) {
       try {
         if (subscription.stripePriceId) {
           priceDisplay = await getStripePriceDisplayForPriceId(subscription.stripePriceId)
@@ -196,7 +204,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             planDisplay: getPlanDisplayName(subscription.plan),
             cadence,
             priceDisplay,
-            status: subscription.status,
+            status: reportedStatus ?? subscription.status,
+            source: subscription.source,
             maxSites: subscription.maxSites,
             currentPeriodEnd: subscription.currentPeriodEnd,
             cancelAtPeriodEnd: subscription.cancelAtPeriodEnd
@@ -221,7 +230,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           : null
       })),
       canCreateSite: subscriptionActive && (maxSites === null || siteCount < maxSites),
-      isSupportTeam: isSupportTeamEmail(userWithRelations.email)
+      isSupportTeam: isSupportTeamEmail(userWithRelations.email),
+      isAdmin: isAdminEmail(userWithRelations.email)
     })
   } catch (err) {
     console.error('Dashboard me error:', err)
@@ -392,13 +402,13 @@ router.post('/subscription/portal', requireSession, async (req: Request, res: Re
       orderBy: { createdAt: 'desc' }
     })
 
-    let stripeCustomerId: string | null = subscription?.stripeCustomerId ?? null
+    let stripeCustomerId = usableStripeCustomerId(subscription?.stripeCustomerId)
     if (!stripeCustomerId) {
       const u = await prisma.user.findUnique({
         where: { id: user.id },
         select: { stripeCustomerId: true }
       })
-      stripeCustomerId = u?.stripeCustomerId ?? null
+      stripeCustomerId = usableStripeCustomerId(u?.stripeCustomerId)
     }
     if (!stripeCustomerId) {
       res.status(404).json({ error: 'No Stripe customer found. Subscribe to a plan first.' })
@@ -440,14 +450,15 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
   const stripeEnv = getStripeEnvironment()
 
   try {
-    const [dbUser, subscription] = await Promise.all([
+    const [dbUser, subscriptions] = await Promise.all([
       prisma.user.findUnique({
         where: { id: user.id },
         select: { id: true, email: true, name: true, stripeCustomerId: true }
       }),
-      prisma.subscription.findFirst({
+      prisma.subscription.findMany({
         where: { userId: user.id },
-        orderBy: { updatedAt: 'desc' }
+        orderBy: { updatedAt: 'desc' },
+        take: 10
       })
     ])
 
@@ -456,11 +467,14 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       return
     }
 
-    if (!isResubscribableStatus(subscription?.status)) {
-      if (isActiveSubscriptionStatus(subscription?.status)) {
-        res.status(409).json({ error: 'You already have an active subscription.' })
-        return
-      }
+    const entitled = subscriptions.find((sub) => isEntitledSubscription(sub))
+    if (entitled) {
+      res.status(409).json({ error: 'You already have an active subscription.' })
+      return
+    }
+
+    const subscription = subscriptions[0] ?? null
+    if (!isResubscribableStatus(effectiveSubscriptionStatus(subscription))) {
       res.status(409).json({
         error: 'Update your payment method to continue this subscription.'
       })
@@ -482,7 +496,9 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
     }
 
     const stripe = getStripe()
-    let stripeCustomerId = subscription?.stripeCustomerId ?? dbUser.stripeCustomerId
+    let stripeCustomerId =
+      usableStripeCustomerId(dbUser.stripeCustomerId) ??
+      usableStripeCustomerId(subscription?.source === 'beta' ? null : subscription?.stripeCustomerId)
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: dbUser.email,
@@ -559,15 +575,17 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
   const rawSubscribeForCreate = rawSubscribeTop !== undefined ? rawSubscribeTop : rawSubscribeFromNested
 
   try {
-    const [subscription, siteCount] = await Promise.all([
-      prisma.subscription.findFirst({
+    const [subscriptionRows, siteCount] = await Promise.all([
+      prisma.subscription.findMany({
         where: { userId: user.id, status: { in: ['trialing', 'active'] } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { updatedAt: 'desc' },
+        take: 10
       }),
       prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
+    const subscription = subscriptionRows.find((sub) => isEntitledSubscription(sub)) ?? null
 
-    if (!isActiveSubscriptionStatus(subscription?.status)) {
+    if (!subscription) {
       res.status(403).json({ error: 'Subscription required' })
       return
     }
@@ -842,14 +860,16 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       return
     }
 
-    const [subscription, activeCount] = await Promise.all([
-      prisma.subscription.findFirst({
+    const [subscriptionRows, activeCount] = await Promise.all([
+      prisma.subscription.findMany({
         where: { userId: user.id, status: { in: ['trialing', 'active'] } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { updatedAt: 'desc' },
+        take: 10
       }),
       prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
     ])
-    if (!isActiveSubscriptionStatus(subscription?.status)) {
+    const subscription = subscriptionRows.find((sub) => isEntitledSubscription(sub)) ?? null
+    if (!subscription) {
       res.status(403).json({ error: 'Subscription required' })
       return
     }

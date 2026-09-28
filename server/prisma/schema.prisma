@@ -195,6 +195,7 @@ model Subscription {
   stripePriceId         String?   @map("stripe_price_id")
   plan                  String    // essentials | professional | publication
   status                String    // trialing | active | past_due | canceled
+  source                String    @default("stripe") // stripe | beta
   maxSites              Int?      @map("max_sites") // 1 | 3 | null (unlimited)
   currentPeriodEnd      DateTime? @map("current_period_end")
   cancelAtPeriodEnd     Boolean   @default(false) @map("cancel_at_period_end")

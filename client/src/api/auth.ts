@@ -17,6 +17,7 @@ export interface DashboardMe {
     cadence: string
     priceDisplay: string
     status: string
+    source?: string
     maxSites: number | null
     currentPeriodEnd: string | null
     cancelAtPeriodEnd: boolean
@@ -39,6 +40,7 @@ export interface DashboardMe {
   }>
   canCreateSite: boolean
   isSupportTeam?: boolean
+  isAdmin?: boolean
 }
 
 export async function getDashboardMe(): Promise<DashboardMe | null> {

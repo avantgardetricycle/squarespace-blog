@@ -13,6 +13,7 @@ import {
   resolveParentIdForReply,
 } from '../lib/comment-thread-depth.js'
 import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
+import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
 
 const router = Router()
 
@@ -103,15 +104,16 @@ async function getSiteWithSubscription(siteToken: string) {
           subscriptions: {
             where: { status: { in: ['trialing', 'active'] } },
             orderBy: { updatedAt: 'desc' },
-            take: 1,
-            select: { id: true, status: true, updatedAt: true },
+            take: 10,
+            select: { id: true, status: true, source: true, currentPeriodEnd: true, updatedAt: true },
           },
         },
       },
       blogCommentSettings: true,
     },
   })
-  if (!site || !site.user?.subscriptions?.[0]) return null
+  const entitled = site?.user?.subscriptions?.find((sub) => isEntitledSubscription(sub))
+  if (!site || !entitled) return null
   return site
 }
 
