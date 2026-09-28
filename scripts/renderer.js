@@ -4171,20 +4171,7 @@
       wrap.appendChild(lockSvg);
       wrap.appendChild(label);
       if (includeSubscribe) {
-        var pill = document.createElement('a');
-        pill.className = 'bb-subscribe-pill';
-        pill.href = self._resolvePaywallSubscribeHref();
-        pill.textContent = 'Subscribe to read';
-        pill.style.display = 'inline-flex';
-        pill.style.alignItems = 'center';
-        pill.style.padding = '6px 14px';
-        pill.style.borderRadius = '4px';
-        pill.style.background = colors.accent;
-        pill.style.color = '#fff';
-        pill.style.fontSize = '0.8rem';
-        pill.style.fontWeight = '600';
-        pill.style.textDecoration = 'none';
-        wrap.appendChild(pill);
+        wrap.appendChild(self._createSubscribeToReadPillLink());
       }
       return wrap;
     },
@@ -4256,28 +4243,36 @@
       hostEl.appendChild(badge);
     },
 
-    _createSubscribeToReadPillLink: function(opts) {
-      var o = opts && typeof opts === 'object' ? opts : {};
-      var compact = Boolean(o.compact);
-      var colors = this._bbPaywallFooterColors();
+    /** Same arrow as the unlocked-card "Read article" link. */
+    _createReadLinkArrowSvg: function(size) {
+      var px = size || 16;
+      var arrowNs = 'http://www.w3.org/2000/svg';
+      var arrowSvg = document.createElementNS(arrowNs, 'svg');
+      arrowSvg.setAttribute('width', String(px));
+      arrowSvg.setAttribute('height', String(px));
+      arrowSvg.setAttribute('viewBox', '0 0 24 24');
+      arrowSvg.setAttribute('fill', 'none');
+      arrowSvg.setAttribute('stroke', 'currentColor');
+      arrowSvg.setAttribute('stroke-width', '2');
+      arrowSvg.setAttribute('stroke-linecap', 'round');
+      arrowSvg.setAttribute('stroke-linejoin', 'round');
+      arrowSvg.setAttribute('aria-hidden', 'true');
+      arrowSvg.style.display = 'block';
+      arrowSvg.style.flexShrink = '0';
+      var arrowPath = document.createElementNS(arrowNs, 'path');
+      arrowPath.setAttribute('d', 'M5 12h14m-7-7l7 7-7 7');
+      arrowSvg.appendChild(arrowPath);
+      return arrowSvg;
+    },
+
+    _createSubscribeToReadPillLink: function() {
       var pill = document.createElement('a');
       pill.className = 'bb-subscribe-pill';
       pill.href = this._resolvePaywallSubscribeHref();
-      pill.textContent = 'Subscribe to read';
-      pill.style.display = 'inline-flex';
-      pill.style.alignItems = 'center';
-      pill.style.width = 'fit-content';
-      pill.style.maxWidth = '100%';
-      pill.style.boxSizing = 'border-box';
-      pill.style.padding = compact ? '8px 10px' : '6px 14px';
-      pill.style.borderRadius = '4px';
-      pill.style.background = colors.accent;
-      pill.style.color = '#fff';
-      pill.style.fontSize = compact ? '0.75rem' : '0.8rem';
-      pill.style.fontWeight = '600';
-      pill.style.lineHeight = '1.2';
-      pill.style.textDecoration = 'none';
-      pill.style.whiteSpace = 'nowrap';
+      var label = document.createElement('span');
+      label.textContent = 'Subscribe to read';
+      pill.appendChild(label);
+      pill.appendChild(this._createReadLinkArrowSvg(16));
       return pill;
     },
 
@@ -9510,8 +9505,8 @@
         '#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.blog-overlay-toc-active{border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));}' +
         '#blog-overlay-list .blog-overlay-toc[data-toc-style="connectedDots"] .bb-toc-item{flex:1;min-width:0;padding:4px 0;border-left:none;background:transparent;}' +
         '#blog-overlay-list .blog-overlay-toc-row{display:flex;align-items:center;gap:10px;margin-left:-18px;}' +
-        '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
-        '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
+        '#blog-overlay-list .bb-read-link,#blog-overlay-list .bb-subscribe-pill{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
+        '#blog-overlay-list .bb-read-link span,#blog-overlay-list .bb-subscribe-pill span{text-decoration:underline;text-underline-offset:2px;}' +
         '#blog-overlay-list .bb-pagination-btn{padding:6px 12px;font-size:14px;min-width:36px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-chrome-radius,6px);background:transparent;color:var(--bb-body,#333);cursor:pointer;font-family:inherit;}' +
         '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
         '#blog-overlay-list .bb-load-more,#blog-overlay-list .bb-load-more-btn{padding:10px 24px;font-size:14px;font-weight:var(--bb-btn-weight,inherit);border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-p1-font-family,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
@@ -9690,7 +9685,8 @@
             'font-size:15px;padding:12px 8px;font-weight:800;letter-spacing:1px;' +
             'font-family:var(--bb-p1-font-family,inherit);margin-bottom:0;' +
           '}' +
-          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link,' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-subscribe-pill{display:none!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-title{font-size:22px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-meta-row{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
@@ -13357,30 +13353,12 @@
         var readLabel = document.createElement('span');
         readLabel.textContent = 'Read article';
         readLink.appendChild(readLabel);
-        var arrowNs = 'http://www.w3.org/2000/svg';
-        var arrowSvg = document.createElementNS(arrowNs, 'svg');
-        arrowSvg.setAttribute('width', showcaseMobile ? '14' : '16');
-        arrowSvg.setAttribute('height', showcaseMobile ? '14' : '16');
-        arrowSvg.setAttribute('viewBox', '0 0 24 24');
-        arrowSvg.setAttribute('fill', 'none');
-        arrowSvg.setAttribute('stroke', 'currentColor');
-        arrowSvg.setAttribute('stroke-width', '2');
-        arrowSvg.setAttribute('stroke-linecap', 'round');
-        arrowSvg.setAttribute('stroke-linejoin', 'round');
-        arrowSvg.style.display = 'block';
-        arrowSvg.style.flexShrink = '0';
-        var arrowPath = document.createElementNS(arrowNs, 'path');
-        arrowPath.setAttribute('d', 'M5 12h14m-7-7l7 7-7 7');
-        arrowSvg.appendChild(arrowPath);
-        readLink.appendChild(arrowSvg);
+        readLink.appendChild(self._createReadLinkArrowSvg(showcaseMobile ? 14 : 16));
         bodyCol.appendChild(titleEl);
         if (bodyEl) bodyCol.appendChild(bodyEl);
         bodyCol.appendChild(metaEl);
         if (gatedShowcase) {
-          var scPill = self._createSubscribeToReadPillLink({ compact: true });
-          scPill.style.marginTop = '8px';
-          scPill.style.alignSelf = 'flex-start';
-          bodyCol.appendChild(scPill);
+          bodyCol.appendChild(self._createSubscribeToReadPillLink());
         } else {
           bodyCol.appendChild(readLink);
         }
