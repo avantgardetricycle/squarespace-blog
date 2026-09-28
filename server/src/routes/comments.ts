@@ -21,6 +21,7 @@ const RATE_LIMIT_COMMENTS_PER_IP = 5
 const MAX_DISPLAY_NAME = 100
 const MAX_BODY = 5000
 const MAX_EMAIL = 254
+const ANONYMOUS_HANDLE_RE = /^Anonymous\d{4}$/
 
 const commentRateMap = new Map<string, number[]>()
 const ANON_RETRY_TTL_MS = 5 * 60 * 1000
@@ -503,6 +504,7 @@ router.post('/', async (req: Request, res: Response) => {
     verification_cookie_token?: string
     post_as_anonymous?: boolean
     anonymous_retry_token?: string
+    anonymous_handle?: string
     post_title?: string
     post_published_at?: string
     post_url?: string
@@ -667,7 +669,21 @@ router.post('/', async (req: Request, res: Response) => {
   let displayName = displayNameRaw.slice(0, MAX_DISPLAY_NAME)
   let verifiedSubscriber = false
   let squarespaceProfileId: string | null = null
-  const memberEmailAttempt = !postAsAnonymous && !displayNameRaw && !!email
+  const anonymousHandleBody =
+    typeof body.anonymous_handle === 'string' ? body.anonymous_handle.trim() : ''
+  const generatedHandle = !settings.allowAnonymousComments
+    ? null
+    : ANONYMOUS_HANDLE_RE.test(anonymousHandleBody)
+      ? anonymousHandleBody
+      : ANONYMOUS_HANDLE_RE.test(displayNameRaw)
+        ? displayNameRaw
+        : null
+  // Anonymous comments with verification off never keep a caller-chosen name or email.
+  // A generated Anonymous#### handle also skips member verification.
+  const useAnonymousIdentity =
+    settings.allowAnonymousComments &&
+    (!settings.subscriberCommentsEnabled || generatedHandle != null)
+  const memberEmailAttempt = !useAnonymousIdentity && !postAsAnonymous && !displayNameRaw && !!email
   const verifyDebug: Record<string, unknown> = {
     ...emailLookupMeta(email),
     memberEmailAttempt,
@@ -693,13 +709,22 @@ router.post('/', async (req: Request, res: Response) => {
     email,
     memberEmailAttempt,
     postAsAnonymous,
+    useAnonymousIdentity,
+    generatedHandle,
     allowAnonymousComments: settings.allowAnonymousComments,
     subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
     hasSquarespaceApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
   })
 
-  // Subscriber verification: if they have API key and subscriber_comments_enabled, verify when email provided
-  if (!postAsAnonymous && settings.subscriberCommentsEnabled && email && effectiveSquarespaceApiKeyEnc) {
+  // Subscriber verification: if they have API key and subscriber_comments_enabled, verify when email provided.
+  // Generated anonymous handles never go through Profiles, so a typed email cannot impersonate a member.
+  if (
+    !useAnonymousIdentity &&
+    !postAsAnonymous &&
+    settings.subscriberCommentsEnabled &&
+    email &&
+    effectiveSquarespaceApiKeyEnc
+  ) {
     verifyDebug.attempted = true
     try {
       const apiKey = decrypt(effectiveSquarespaceApiKeyEnc)
@@ -868,15 +893,19 @@ router.post('/', async (req: Request, res: Response) => {
       // Graceful degradation - continue as unverified. Network/5xx is not a dead API key.
     }
   } else {
-    const skipReason = postAsAnonymous
-      ? 'post-as-anonymous'
-      : !settings.subscriberCommentsEnabled
-        ? 'subscriberCommentsEnabled=false'
-        : !email
-          ? 'no-email'
-          : !effectiveSquarespaceApiKeyEnc
-            ? 'no-squarespace-api-key'
-            : 'unknown'
+    const skipReason = useAnonymousIdentity
+      ? generatedHandle
+        ? 'generated-anonymous-handle'
+        : 'anonymous-comments-without-verification'
+      : postAsAnonymous
+        ? 'post-as-anonymous'
+        : !settings.subscriberCommentsEnabled
+          ? 'subscriberCommentsEnabled=false'
+          : !email
+            ? 'no-email'
+            : !effectiveSquarespaceApiKeyEnc
+              ? 'no-squarespace-api-key'
+              : 'unknown'
     verifyDebug.skipReason = skipReason
     debugCommentsIngest('H4', 'comments.ts:profiles-skipped', 'profiles verify skipped', {
       skipReason,
@@ -897,7 +926,7 @@ router.post('/', async (req: Request, res: Response) => {
     })
   }
 
-  if (memberEmailAttempt && !verifiedSubscriber) {
+  if (!useAnonymousIdentity && memberEmailAttempt && !verifiedSubscriber) {
     if (!settings.allowAnonymousComments) {
       if (!settings.subscriberCommentsEnabled || !effectiveSquarespaceApiKeyEnc) {
         console.log('[comments] member email rejected: verification not configured', {
@@ -945,9 +974,18 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
 
-  // Logged-in/member flow omits display_name; if verification fails and anonymous comments are allowed, post as Anonymous.
+  // Unverified comments never keep a caller-chosen name or email. Generated handles
+  // (Anonymous1234) are the only custom anonymous identity. Verified members keep both.
   const displayNameBeforeFallback = displayName
-  if (!displayName) {
+  if (useAnonymousIdentity) {
+    displayName = generatedHandle || 'Anonymous'
+    email = null
+    verifiedSubscriber = false
+    squarespaceProfileId = null
+  } else if (!verifiedSubscriber) {
+    displayName = 'Anonymous'
+    email = null
+  } else if (!displayName) {
     displayName = 'Anonymous'
   }
   verifyDebug.verifiedSubscriber = verifiedSubscriber

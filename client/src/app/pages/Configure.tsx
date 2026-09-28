@@ -4200,7 +4200,7 @@ export default function Configure() {
                                   onCheckedChange={(v) => setCommentSettings((p) => p ? { ...p, allowAnonymousComments: v } : p)}
                                 />
                               </div>
-                              <p className="text-xs text-[#6b6b6b]">Readers can comment with a name only. When verification is also on, guests still see the comment form.</p>
+                              <p className="text-xs text-[#6b6b6b]">Readers post as a session username such as Anonymous1234. They cannot enter their own name or email. When verification is also on, logged-out readers still see a sign-in link.</p>
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center justify-between">
