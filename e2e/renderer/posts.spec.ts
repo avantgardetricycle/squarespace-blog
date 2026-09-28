@@ -234,6 +234,78 @@ test.describe("post layout contract", () => {
     expect(fullScreen.commentsWidth).toBeGreaterThan(postBody.commentsWidth + 40);
   });
 
+  test("sidebar subscribe and get-it-free use compact desktop padding", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const cfg = structuredClone(postTemplates.reporter) as Record<string, any>;
+    cfg.rightSidebar = {
+      show: true,
+      modules: ["emailCapture", "leadMagnet"],
+      moduleOrder: ["emailCapture", "leadMagnet"],
+      width: 280,
+      spaceAbove: 0,
+      sticky: false,
+    };
+    cfg.footerContent = {
+      ...cfg.footerContent,
+      modules: ["emailCapture", "leadMagnet"],
+      moduleOrder: ["emailCapture", "leadMagnet"],
+    };
+    cfg.postModules.emailCapture = {
+      enabled: true,
+      position: "rightSidebar",
+      header: "Subscribe to our newsletter",
+      buttonText: "Subscribe",
+    };
+    cfg.postModules.leadMagnet = {
+      enabled: true,
+      position: "rightSidebar",
+      resourceTitle: "Free resource",
+      description: "A guide.",
+      buttonText: "Get it free",
+    };
+    await mountRenderer(page, { postConfig: cfg });
+
+    const sidebar = await page.evaluate(() => {
+      function read(selector: string) {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const parent = el.parentElement ? el.parentElement.getBoundingClientRect().width : 0;
+        return {
+          padding: cs.padding,
+          width: el.getBoundingClientRect().width,
+          parent,
+          fontSizeInline: el.style.fontSize,
+          primary: el.classList.contains("sqs-button-element--primary"),
+        };
+      }
+      return {
+        subscribe: read(".blog-overlay-sidebar-section .bb-newsletter-btn"),
+        lead: read(".blog-overlay-sidebar-section .bb-lead-magnet-btn"),
+        footerSubscribe: read(".blog-overlay-email-capture-footer .bb-newsletter-btn"),
+      };
+    });
+
+    expect(sidebar.subscribe).not.toBeNull();
+    expect(sidebar.lead).not.toBeNull();
+    expect(sidebar.subscribe!.primary).toBe(true);
+    expect(sidebar.lead!.primary).toBe(true);
+    expect(sidebar.subscribe!.fontSizeInline).toBe("");
+    expect(sidebar.lead!.fontSizeInline).toBe("");
+
+    if (mobile) {
+      expect(sidebar.footerSubscribe!.padding).toBe("8px 16px");
+      return;
+    }
+
+    expect(sidebar.subscribe!.padding).toBe("8px 16px");
+    expect(sidebar.lead!.padding).toBe("8px 16px");
+    expect(Math.abs(sidebar.subscribe!.width - sidebar.subscribe!.parent)).toBeLessThan(2);
+    expect(Math.abs(sidebar.lead!.width - sidebar.lead!.parent)).toBeLessThan(2);
+    expect(sidebar.footerSubscribe!.padding).not.toBe("8px 16px");
+    expect(sidebar.footerSubscribe!.width).toBeLessThan(sidebar.footerSubscribe!.parent - 20);
+  });
+
   test("sticky sidebar stays in flow until it pins, and does not pin at top 0", async ({ page }, testInfo) => {
     test.skip(isMobileProject(testInfo), "sidebars stack and drop sticky on phones");
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
