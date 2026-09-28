@@ -185,6 +185,31 @@ test.describe("post layout contract", () => {
     expectPx(width, 320, 2);
   });
 
+  test("reporter and publisher desktop footer side margins follow the setting", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    for (const name of ["reporter", "publisher"] as const) {
+      const base = structuredClone(postTemplates[name]) as Record<string, any>;
+      base.footerContent = { ...base.footerContent, sideMargins: "postBody" };
+      await mountRenderer(page, { postConfig: base });
+      const postBody = await footerSideBox(page);
+      base.footerContent = { ...base.footerContent, sideMargins: "fullScreen" };
+      await mountRenderer(page, { postConfig: base });
+      const fullScreen = await footerSideBox(page);
+
+      if (mobile) {
+        expect(Math.abs(postBody.footerWidth - fullScreen.footerWidth)).toBeLessThan(2);
+        expect(Math.abs(postBody.footerLeft - fullScreen.footerLeft)).toBeLessThan(2);
+        continue;
+      }
+
+      expect(Math.abs(postBody.footerLeft - postBody.articleLeft)).toBeLessThan(2);
+      expect(Math.abs(postBody.footerWidth - postBody.articleWidth)).toBeLessThan(2);
+      expect(fullScreen.footerWidth).toBeGreaterThan(fullScreen.articleWidth + 40);
+      expect(Math.abs(fullScreen.footerLeft - fullScreen.rowLeft)).toBeLessThan(2);
+      expect(fullScreen.footerWidth).toBeGreaterThan(postBody.footerWidth + 40);
+    }
+  });
+
   test("sticky sidebar stays in flow until it pins, and does not pin at top 0", async ({ page }, testInfo) => {
     test.skip(isMobileProject(testInfo), "sidebars stack and drop sticky on phones");
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
@@ -204,6 +229,28 @@ test.describe("post layout contract", () => {
     }
   });
 });
+
+async function footerSideBox(page: Page) {
+  return page.evaluate(() => {
+    const footer = document.querySelector(".blog-overlay-footer-zone");
+    const article = document.querySelector(".blog-overlay-posts");
+    const row = document.querySelector(".blog-overlay-main-row");
+    const box = (el: Element | null) => {
+      const rect = el ? el.getBoundingClientRect() : null;
+      return rect ? { left: rect.left, width: rect.width } : { left: 0, width: 0 };
+    };
+    const f = box(footer);
+    const a = box(article);
+    const r = box(row);
+    return {
+      footerLeft: f.left,
+      footerWidth: f.width,
+      articleLeft: a.left,
+      articleWidth: a.width,
+      rowLeft: r.left,
+    };
+  });
+}
 
 async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolean) {
   const title = await cssNumber(page, ".blog-overlay-post-title", "font-size");

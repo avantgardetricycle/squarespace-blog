@@ -3907,8 +3907,8 @@
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
       /* Desktop comments and footer are siblings after the main row.
-         postBody stays in that column. fullScreen bleeds to the page-section
-         content box (site margins), not the article column. */
+         Reporter/Publisher postBody is pinned to the article column.
+         fullScreen spans the row and bleeds to the page-section content box. */
       if (!featurePostLayout && mainRowEl) {
         if (commentsEl) {
           if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
@@ -3916,9 +3916,17 @@
         if (footerHasContent) {
           var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
           if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
-          if (this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'fullScreen') {
+          var desktopFooterMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
+          var articleColumnFooter = (this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg)) &&
+            desktopFooterMode === 'postBody';
+          if (articleColumnFooter) {
+            this._clearPostFooterZoneBleed(footerZoneEl);
+            this._scheduleFeatureArticleColumnFooter(footerZoneEl, main);
+          } else if (desktopFooterMode === 'fullScreen') {
+            this._clearFeatureArticleColumnFooter(footerZoneEl);
             this._scheduleFullScreenFooterBleed(footerZoneEl);
           } else {
+            this._clearFeatureArticleColumnFooter(footerZoneEl);
             this._clearPostFooterZoneBleed(footerZoneEl);
           }
         }
