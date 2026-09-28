@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import prisma from '../db/index.js'
 import { hashToken } from '../lib/auth.js'
+import { isAdminEmail } from '../lib/admin-team.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
 
 export interface SessionUser {
@@ -65,6 +66,23 @@ export async function requireTeamSession(
     if (res.headersSent) return
     const user = (req as Request & { user: SessionUser }).user
     if (!isSupportTeamEmail(user.email)) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    next()
+  })
+}
+
+/** Session required and email must be in ADMIN_EMAILS. Returns 404 otherwise. */
+export async function requireAdminSession(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  await requireSession(req, res, () => {
+    if (res.headersSent) return
+    const user = (req as Request & { user: SessionUser }).user
+    if (!isAdminEmail(user.email)) {
       res.status(404).json({ error: 'Not found' })
       return
     }

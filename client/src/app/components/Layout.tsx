@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link, Navigate, useNavigate, useLocation, useLoaderData } from "react-router";
-import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, AlertCircle } from "lucide-react";
+import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, AlertCircle, Shield } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 import type { DashboardMe } from "@/api/auth";
@@ -41,6 +41,7 @@ export default function Layout() {
     { to: "/dashboard/configure", icon: Settings, label: "Customize Blog" },
     { to: "/dashboard/account", icon: User, label: "Account" },
     { to: "/dashboard/support", icon: LifeBuoy, label: "Support" },
+    ...(me.isAdmin ? [{ to: "/dashboard/admin", icon: Shield, label: "Admin" }] : []),
   ];
 
   return (
