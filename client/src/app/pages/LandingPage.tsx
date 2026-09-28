@@ -5,6 +5,7 @@ import { Logo } from "@/app/components/Logo";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/app/components/ui/utils";
 import { BeforeAfterComparison } from "@/app/components/BeforeAfterComparison";
+import TemplatesSection from "@/app/components/TemplatesSection";
 import { FeatureGrid } from "@/app/components/FeatureGrid_new";
 import { FeatureExplorer } from "@/app/components/FeatureExplorer_new";
 import HowItWorks from "@/app/components/HowItWorks";
@@ -325,6 +326,9 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Templates */}
+      <TemplatesSection />
 
       {/* Feature Grid */}
       <FeatureGrid />
