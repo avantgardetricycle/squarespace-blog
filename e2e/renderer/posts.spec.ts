@@ -210,6 +210,30 @@ test.describe("post layout contract", () => {
     }
   });
 
+  test("story desktop comments follow the footer side margin setting", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const base = structuredClone(postTemplates.story) as Record<string, any>;
+    base.footerContent = { ...base.footerContent, sideMargins: "postBody" };
+    await mountRenderer(page, { postConfig: base });
+    const postBody = await storyCommentsFooterBox(page);
+    base.footerContent = { ...base.footerContent, sideMargins: "fullScreen" };
+    await mountRenderer(page, { postConfig: base });
+    const fullScreen = await storyCommentsFooterBox(page);
+
+    expect(Math.abs(postBody.commentsLeft - postBody.footerLeft)).toBeLessThan(2);
+    expect(Math.abs(postBody.commentsWidth - postBody.footerWidth)).toBeLessThan(2);
+    expect(Math.abs(fullScreen.commentsLeft - fullScreen.footerLeft)).toBeLessThan(2);
+    expect(Math.abs(fullScreen.commentsWidth - fullScreen.footerWidth)).toBeLessThan(2);
+
+    if (mobile) {
+      expect(Math.abs(postBody.commentsWidth - fullScreen.commentsWidth)).toBeLessThan(2);
+      expect(Math.abs(postBody.commentsLeft - fullScreen.commentsLeft)).toBeLessThan(2);
+      return;
+    }
+
+    expect(fullScreen.commentsWidth).toBeGreaterThan(postBody.commentsWidth + 40);
+  });
+
   test("sticky sidebar stays in flow until it pins, and does not pin at top 0", async ({ page }, testInfo) => {
     test.skip(isMobileProject(testInfo), "sidebars stack and drop sticky on phones");
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
@@ -229,6 +253,27 @@ test.describe("post layout contract", () => {
     }
   });
 });
+
+async function storyCommentsFooterBox(page: Page) {
+  return page.evaluate(() => {
+    function contentBox(el: Element | null) {
+      if (!el) return { left: 0, width: 0 };
+      const rect = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const padLeft = parseFloat(cs.paddingLeft) || 0;
+      const padRight = parseFloat(cs.paddingRight) || 0;
+      return { left: rect.left + padLeft, width: rect.width - padLeft - padRight };
+    }
+    const comments = contentBox(document.getElementById("bb-comments"));
+    const footer = contentBox(document.querySelector(".blog-overlay-footer-content"));
+    return {
+      commentsLeft: comments.left,
+      commentsWidth: comments.width,
+      footerLeft: footer.left,
+      footerWidth: footer.width,
+    };
+  });
+}
 
 async function footerSideBox(page: Page) {
   return page.evaluate(() => {

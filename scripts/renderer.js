@@ -3597,6 +3597,23 @@
       return wrap;
     },
 
+    /**
+     * Story desktop comments use the footer side-margin setting.
+     * postBody keeps the article inset; fullScreen matches the footer bleed.
+     * Mobile returns before this runs.
+     */
+    _syncStoryCommentsToFooterWidth: function(commentsEl, cfg, footerContentCfg) {
+      if (!commentsEl || !commentsEl.style) return;
+      if (this._isNarrowCollectionViewport() || !this._isStoryPostLayout(cfg)) return;
+      this._applyPostFooterSideMargins(commentsEl, cfg, footerContentCfg);
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+        this._clearFeatureArticleColumnFooter(commentsEl);
+        this._scheduleFullScreenFooterBleed(commentsEl);
+        return;
+      }
+      this._clearPostFooterZoneBleed(commentsEl);
+    },
+
     /** Story desktop: wide horizontal inset shared by post body and footer. */
     _applyStoryPostHorizontalInset: function(el, cfg) {
       if (!el || !el.style || !cfg) return false;
@@ -3912,6 +3929,7 @@
       if (!featurePostLayout && mainRowEl) {
         if (commentsEl) {
           if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+          this._syncStoryCommentsToFooterWidth(commentsEl, cfg, opts.footerContentCfg);
         }
         if (footerHasContent) {
           var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
