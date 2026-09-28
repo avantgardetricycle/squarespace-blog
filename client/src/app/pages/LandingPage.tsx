@@ -7,7 +7,6 @@ import { cn } from "@/app/components/ui/utils";
 import { BeforeAfterComparison } from "@/app/components/BeforeAfterComparison";
 import TemplatesSection from "@/app/components/TemplatesSection";
 import { FeatureGrid } from "@/app/components/FeatureGrid_new";
-import { FeatureExplorer } from "@/app/components/FeatureExplorer_new";
 import HowItWorks from "@/app/components/HowItWorks";
 import { InterestModal } from "@/app/components/InterestModal";
 import { getDashboardMe } from "@/api/auth";
@@ -330,12 +329,9 @@ export default function LandingPage() {
       {/* Templates */}
       <TemplatesSection />
 
-      {/* Feature Grid */}
-      <FeatureGrid />
-
-      {/* Feature Explorer - replaces all feature sections */}
+      {/* Feature grid + live preview (merged; #feature-explorer kept for existing anchors) */}
       <div id="feature-explorer">
-        <FeatureExplorer />
+        <FeatureGrid />
       </div>
 
       {/* How It Works */}

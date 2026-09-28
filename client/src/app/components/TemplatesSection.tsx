@@ -3,22 +3,12 @@ import { motion } from 'motion/react';
 /* Wireframe helpers + data ported from the approved landing-page design.
    Markup is static and author-authored; no user input reaches these strings. */
 const L = (n: number, a?: boolean) => Array.from({length:n},(_,i)=>`<div class="wl${a&&i===0?' a':''}" style="width:${[92,78,85,64][i%4]}%"></div>`).join('');
-const R = (h,cls='wi') => `<div class="${cls}" style="height:${h}px;flex-shrink:0"></div>`;
 // shared: a sidebar column (violet dot + lines) and a centered header (dot + title)
 // unified sidebar parts — no background, accent heading + content rows
 const SBH = (w = 64) => `<div class="wl a" style="width:${w}%;height:2px;flex-shrink:0"></div>`;
 const SBROW = () => `<div style="display:flex;gap:3px;align-items:center;flex-shrink:0"><div class="wi" style="width:9px;height:8px"></div><div style="flex:1;display:flex;flex-direction:column;gap:1px"><div class="wl" style="width:92%;height:2px;background:#dcdce4"></div><div class="wl" style="width:56%;height:2px"></div></div></div>`;
 const SBAV = () => `<div style="display:flex;gap:3px;align-items:center;flex-shrink:0"><div class="wi" style="width:8px;height:8px;border-radius:50%"></div><div class="wl" style="width:52%;height:2px"></div></div>`;
 const SB = (n = 2) => `<div class="wsb" style="flex:1;gap:2px">${SBH(62)}${SBAV()}${SBH(54)}${Array.from({length:n},SBROW).join('')}</div>`;
-// footer zone — modules that sit below the article
-const FT = {
-  author:`<div style="display:flex;gap:5px;align-items:center"><div class="wi" style="width:13px;height:13px;border-radius:50%;flex-shrink:0"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div class="wl" style="width:34%;height:2px;background:#dcdce4"></div><div class="wl" style="width:76%;height:2px"></div></div></div>`,
-  related:`<div style="display:flex;flex-direction:column;gap:3px"><div class="wl a" style="width:26%;height:2px"></div><div style="display:flex;gap:4px">${[0,1,2].map(()=>`<div style="flex:1;display:flex;flex-direction:column;gap:2px"><div class="wi" style="height:10px"></div><div class="wl" style="width:84%;height:2px;background:#dcdce4"></div></div>`).join('')}</div></div>`,
-  email:`<div style="display:flex;flex-direction:column;gap:3px;align-items:center"><div class="wl" style="width:42%;height:2px;background:#dcdce4"></div><div style="display:flex;gap:3px;width:82%"><div class="w" style="flex:1;height:8px;border:1px solid #dcdad4"></div><div style="width:32%;height:8px;background:var(--violet);opacity:.8;border-radius:2px"></div></div></div>`,
-  prevnext:`<div style="display:flex;gap:6px">${[0,1].map(()=>`<div style="flex:1;display:flex;flex-direction:column;gap:2px"><div class="wl a" style="width:32%;height:2px"></div><div class="wl" style="width:82%;height:2px;background:#dcdce4"></div></div>`).join('')}</div>`
-};
-const FTR = (...ks) => `<div style="flex-shrink:0;border-top:1px solid #dcdad4;margin-top:auto;padding-top:6px;display:flex;flex-direction:column;gap:6px">${ks.map(k=>FT[k]).join('')}</div>`;
-const CH = (w1=60,w2=38) => `<div style="display:flex;flex-direction:column;gap:3px;align-items:center;padding:3px 0 4px"><div class="wo"></div><div class="wt" style="width:${w1}%"></div><div class="wt" style="width:${w2}%;height:4px"></div><div class="wl" style="width:22%"></div></div>`;
 const OV = (w1 = 70, w2 = 42) => `<div class="wl w" style="width:${w1}%;height:4px"></div><div class="wl w" style="width:${w2}%"></div>`;
 const T: Record<string, string> = {
   // ── Collection ──
@@ -75,7 +65,6 @@ const TPL: { collection: [string,string,string][]; post: [string,string,string][
     ['story','The Story','Dark split hero, narrow column'],
     ['publisher','The Publisher','Hero overlay, right sidebar']]
 };
-const tpCard = ([k,n,d]) => `<div class="tp-card"><div class="tp-thumb">${T[k]}</div><div class="tp-name">${n}</div><div class="tp-desc">${d}</div></div>`;
 
 /* ── Footer blocks ── */
 const B: Record<string, string> = {
