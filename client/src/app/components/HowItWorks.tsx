@@ -22,7 +22,7 @@ export default function HowItWorks() {
               Then <em className="italic text-[#5B4FE8]">forget about code forever.</em>
             </h2>
             <p className="text-[0.95rem] text-[#6b6b6b] font-light leading-[1.7] max-w-[460px] mx-auto">
-              The snippet installs in 60 seconds. After that, everything is controlled from your BetterBlog dashboard — no touching Squarespace, no developer needed.
+              The snippet installs in 30 seconds. After that, everything is controlled from your BetterBlog dashboard.
             </p>
           </motion.div>
         </div>
@@ -117,7 +117,7 @@ export default function HowItWorks() {
               Paste it once
             </div>
             <div className="text-[0.85rem] text-[#6b6b6b] font-light leading-[1.75] mb-7">
-              In Squarespace, go to Settings → Advanced → Code Injection → Footer. Paste your snippet. Save. That's the last time you'll touch this screen.
+              In Squarespace, go to Settings → Advanced → Code Injection → Header. Paste your snippet. Save. That's the last time you'll touch this screen.
             </div>
 
             <div className="rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
@@ -144,7 +144,7 @@ export default function HowItWorks() {
                       Code Injection
                     </div>
                     <div className="px-[14px] pt-[10px] pb-1 text-[0.52rem] font-semibold text-[#6b6b6b] uppercase tracking-[0.1em]">
-                      Footer
+                      Header
                     </div>
                     <div className="mx-[14px] mb-[10px] bg-[#13121f] rounded-md p-[10px] px-3 font-mono text-[0.58rem] text-[#a8b0c8] leading-[1.7]">
                       <span className="text-[#c792ea]">&lt;script</span>{' '}
@@ -188,72 +188,57 @@ export default function HowItWorks() {
               Format from your dashboard
             </div>
             <div className="text-[0.85rem] text-[#6b6b6b] font-light leading-[1.75] mb-7">
-              Turn features on, tweak settings, choose layouts — all from BetterBlog. Every change goes live the moment you hit save.
+              Turn features on, tweak settings, choose templates — all from BetterBlog. Every change goes live the moment you hit save.
             </div>
 
             <div className="rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
-              <div className="bg-[#f7f6f3] p-5">
-                <div className="flex items-center gap-2 mb-[14px]">
-                  <div className="text-[0.5rem] text-[#6b6b6b] flex items-center gap-[3px]">
-                    ← Dashboard
-                  </div>
-                  <div className="font-heading text-[0.8rem] text-[#0a0a0a] tracking-tight">Blog Settings</div>
-                  <div className="ml-auto text-[0.48rem] font-semibold bg-[rgba(40,201,64,0.12)] text-[#1a8a2e] px-2 py-[3px] rounded-full tracking-wider">
-                    ● Live
-                  </div>
+              <div className="bg-white px-[18px] pt-4 pb-[18px]">
+                <div className="text-[0.48rem] font-bold tracking-[0.14em] uppercase text-[#a85a16] mb-[10px]">
+                  Publishing &amp; Management
                 </div>
-                <div className="text-[0.5rem] font-bold tracking-[0.14em] uppercase text-[#6b6b6b] pb-[6px] border-b border-[#e4e3de] mb-[10px]">
-                  Layout & Design
+                <div className="flex items-center gap-[10px] py-[9px] border-t border-[#ededea]">
+                  <span className="flex-1 text-[0.82rem] text-[#1a1a1a]">Show Author(s)</span>
+                  <span className="w-[26px] h-[15px] rounded-full bg-[#5B4FE8] relative flex-shrink-0">
+                    <span className="absolute right-[2px] top-[2px] w-[11px] h-[11px] rounded-full bg-white"></span>
+                  </span>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#b8b8b2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
                 </div>
-                <div className="flex items-center justify-between py-[7px] border-b border-[rgba(228,227,222,0.5)]">
-                  <div>
-                    <div className="text-[0.6rem] text-[#1a1a1a] font-normal">Sidebar</div>
-                    <div className="text-[0.5rem] text-[#6b6b6b] font-light mt-[1px]">Right side</div>
-                  </div>
-                  <div className="w-7 h-4 rounded-lg bg-[#5B4FE8] relative flex-shrink-0">
-                    <div className="absolute w-3 h-3 rounded-full bg-white top-[2px] left-[14px] shadow-[0_1px_3px_rgba(0,0,0,0.2)]"></div>
-                  </div>
+                <div className="text-[0.48rem] font-bold tracking-[0.14em] uppercase text-[#5B4FE8] mt-4 mb-[10px] pt-[14px] border-t border-[#ededea]">
+                  Layout &amp; Design
                 </div>
-                <div className="flex items-center justify-between py-[7px] border-b border-[rgba(228,227,222,0.5)]">
-                  <div>
-                    <div className="text-[0.6rem] text-[#1a1a1a] font-normal">Template Layout</div>
-                  </div>
-                  <div className="text-[0.52rem] text-[#5B4FE8] font-medium bg-[rgba(91,79,232,0.12)] px-[9px] py-[3px] rounded border border-[rgba(91,79,232,0.2)]">
-                    Magazine
-                  </div>
+                <div className="flex items-center gap-[10px] mb-[9px]">
+                  <span className="flex-1 text-[0.82rem] text-[#1a1a1a]">Header Content</span>
+                  <span className="w-[19px] h-[19px] border border-[#5B4FE8] rounded-[5px] inline-flex items-center justify-center flex-shrink-0">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#5B4FE8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </span>
                 </div>
-                <div className="flex items-center justify-between py-[7px] border-b border-[rgba(228,227,222,0.5)]">
-                  <div>
-                    <div className="text-[0.6rem] text-[#1a1a1a] font-normal">Scroll Progress Bar</div>
-                  </div>
-                  <div className="w-7 h-4 rounded-lg bg-[#5B4FE8] relative flex-shrink-0">
-                    <div className="absolute w-3 h-3 rounded-full bg-white top-[2px] left-[14px] shadow-[0_1px_3px_rgba(0,0,0,0.2)]"></div>
-                  </div>
+                <div className="text-[0.6rem] text-[#55555f] mb-[5px]">Modules</div>
+                <div className="text-[0.55rem] text-[#9a9a94] leading-[1.5] mb-[9px]">
+                  Filters align left; search and sort align right (search before sort when both are on).
                 </div>
-                <div className="flex items-center justify-between py-[7px] border-b border-[rgba(228,227,222,0.5)]">
-                  <div>
-                    <div className="text-[0.6rem] text-[#1a1a1a] font-normal">Reading Time</div>
-                  </div>
-                  <div className="w-7 h-4 rounded-lg bg-[#5B4FE8] relative flex-shrink-0">
-                    <div className="absolute w-3 h-3 rounded-full bg-white top-[2px] left-[14px] shadow-[0_1px_3px_rgba(0,0,0,0.2)]"></div>
-                  </div>
+                <div className="flex flex-wrap gap-[6px] mb-[14px]">
+                  {['Filter by Category', 'Search Posts', 'Sort Posts'].map((m) => (
+                    <span
+                      key={m}
+                      className="inline-flex items-center gap-[6px] bg-[#f1effc] rounded px-2 py-1 text-[0.58rem] text-[#3f34c4] font-medium"
+                    >
+                      {m}
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#8a80e0" strokeWidth="3" strokeLinecap="round">
+                        <line x1="5" y1="5" x2="19" y2="19" />
+                        <line x1="19" y1="5" x2="5" y2="19" />
+                      </svg>
+                    </span>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between py-[7px]">
-                  <div>
-                    <div className="text-[0.6rem] text-[#1a1a1a] font-normal">Featured Posts</div>
-                  </div>
-                  <div className="w-7 h-4 rounded-lg bg-[#ddd] relative flex-shrink-0">
-                    <div className="absolute w-3 h-3 rounded-full bg-white top-[2px] left-[2px] shadow-[0_1px_3px_rgba(0,0,0,0.2)]"></div>
-                  </div>
-                </div>
-                <div className="mt-[14px] flex justify-between items-center">
-                  <div className="text-[0.52rem] text-[#6b6b6b] font-light flex items-center gap-1">
-                    <span className="text-[0.4rem] text-[#28c940] animate-pulse">●</span>
-                    Changes go live on save
-                  </div>
-                  <div className="text-[0.58rem] text-white px-4 py-[7px] rounded-md bg-[#5B4FE8] font-semibold shadow-[0_2px_10px_rgba(91,79,232,0.3)]">
-                    Save Changes
-                  </div>
+                <div className="flex items-center gap-[10px] pt-[13px] border-t border-[#ededea]">
+                  <span className="flex-1 text-[0.82rem] text-[#1a1a1a]">Footer Content</span>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#b8b8b2" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
                 </div>
               </div>
             </div>
