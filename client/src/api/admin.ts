@@ -16,8 +16,8 @@ export type BetaTesterSummary = {
 export type BetaConfigSummary = {
   version: number;
   updatedAt: string;
-  collectionTemplateId: string | null;
-  postTemplateId: string | null;
+  collectionTemplateName: string | null;
+  postTemplateName: string | null;
   showDate: boolean;
   showAuthor: boolean;
   showReadingTime: boolean;
