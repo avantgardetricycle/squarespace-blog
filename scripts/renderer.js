@@ -1208,6 +1208,51 @@
         bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
       }
+      var anonymousCookieName = 'bb_anon_commenter_' + String(siteKey || 'site');
+      var ANONYMOUS_HANDLE_RE = /^Anonymous\d{4}$/;
+      function bbUseGeneratedAnonymousName(mode) {
+        return allowAnonymousComments && (mode !== 'loggedIn' || !subscriberCommentsEnabled);
+      }
+      function bbShowMemberSignIn(mode) {
+        return subscriberCommentsEnabled && mode !== 'loggedIn';
+      }
+      function bbWriteSessionCookie(name, value) {
+        try {
+          document.cookie = name + '=' + encodeURIComponent(value) + '; Path=/; SameSite=Lax';
+          bbCommentsLog('cookie write', { name: name, session: true, valueLen: String(value || '').length });
+        } catch (e) {
+          bbCommentsLog('cookie write failed', { name: name, error: String(e && e.message || e) });
+        }
+      }
+      function bbGetOrCreateAnonymousHandle() {
+        var existing = bbReadCookie(anonymousCookieName);
+        if (existing && ANONYMOUS_HANDLE_RE.test(existing)) return existing;
+        var n = 1000 + Math.floor(Math.random() * 9000);
+        var handle = 'Anonymous' + String(n);
+        bbWriteSessionCookie(anonymousCookieName, handle);
+        return handle;
+      }
+      function bbCommentSignInHref() {
+        try {
+          if (self._resolvePaywallSignInHref) return self._resolvePaywallSignInHref();
+        } catch (e) {}
+        return '/account/login';
+      }
+      function bbFillAnonymousIdentityLine(el, mode) {
+        var handle = bbGetOrCreateAnonymousHandle();
+        el.textContent = '';
+        var label = document.createElement('span');
+        label.textContent = 'Commenting as ' + handle;
+        el.appendChild(label);
+        if (bbShowMemberSignIn(mode)) {
+          var link = document.createElement('a');
+          link.href = bbCommentSignInHref();
+          link.textContent = 'Sign in to comment as a member';
+          link.style.cssText = 'margin-left:10px;color:var(--bb-accent, #5B4FE8);text-decoration:underline';
+          el.appendChild(link);
+        }
+        return handle;
+      }
       function bbCreateCommentModalShell() {
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
@@ -1555,6 +1600,9 @@
             replyFormTitle.textContent = 'Write a reply';
             replyFormTitle.style.cssText = 'font-size:0.9rem;font-weight:600;color:#1a1a1a;margin-bottom:10px';
             replyFormShell.appendChild(replyFormTitle);
+            var rAnonLine = document.createElement('div');
+            rAnonLine.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;font-size:0.9rem;color:#444';
+            replyFormShell.appendChild(rAnonLine);
             var rName = document.createElement('input');
             rName.type = 'text';
             rName.placeholder = allowAnonymousComments ? 'Name (optional)' : 'Name (required)';
@@ -1621,14 +1669,25 @@
               for (var ri = 0; ri < allInline.length; ri++) allInline[ri].style.display = 'none';
               if (wasOpen) return;
               replyFormShell.style.display = 'block';
-              try {
-                if (nameInput && nameInput.value && !rName.value) rName.value = nameInput.value;
-                if (emailInput && emailInput.value && !rEmail.value) rEmail.value = emailInput.value;
-              } catch (e) {}
-              if (currentCommentViewerMode().mode === 'loggedIn') {
+              var replyOpenMode = currentCommentViewerMode().mode;
+              var replyGenerated = bbUseGeneratedAnonymousName(replyOpenMode);
+              if (!replyGenerated) {
+                try {
+                  if (nameInput && nameInput.value && !rName.value) rName.value = nameInput.value;
+                  if (emailInput && emailInput.value && !rEmail.value) rEmail.value = emailInput.value;
+                } catch (e) {}
+              }
+              if (replyGenerated) {
+                rName.style.display = 'none';
+                rEmail.style.display = 'none';
+                rAnonLine.style.display = 'block';
+                bbFillAnonymousIdentityLine(rAnonLine, replyOpenMode);
+              } else if (replyOpenMode === 'loggedIn') {
+                rAnonLine.style.display = 'none';
                 rName.style.display = 'none';
                 rEmail.style.display = loggedInOptionalEmail ? 'block' : 'none';
               } else {
+                rAnonLine.style.display = 'none';
                 rName.style.display = 'block';
                 rEmail.style.display = 'block';
               }
@@ -1644,19 +1703,24 @@
               var bd = (rBody.value || '').trim();
               if (modeNow !== 'loggedIn' && !allowAnonymousComments && !nm) { rName.focus(); return; }
               if (!bd) { rBody.focus(); return; }
+              var replyGenerated = bbUseGeneratedAnonymousName(modeNow);
+              var replyHandle = replyGenerated ? bbGetOrCreateAnonymousHandle() : '';
               var verifiedIdentity = bbGetVerifiedIdentity();
-              var loggedInEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null);
+              var loggedInEmail = replyGenerated
+                ? null
+                : (verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null));
               bbCommentsLog('reply submit start', {
                 mode: modeNow,
                 allowAnonymousComments: allowAnonymousComments,
                 subscriberCommentsEnabled: subscriberCommentsEnabled,
                 loggedInOptionalEmail: loggedInOptionalEmail,
-                displayName: modeNow === 'loggedIn' ? '' : nm,
+                generatedAnonymous: replyGenerated,
+                displayName: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
                 verifiedCookie: verifiedIdentity,
-                emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none')),
+                emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
                 email: bbEmailDebug(loggedInEmail)
               });
-              if (modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
+              if (!replyGenerated && modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
                 bbCommentsLog('reply submit waiting for email prompt', { mode: modeNow });
                 bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', {
                   allowAnonymousChoice: allowAnonymousComments && subscriberCommentsEnabled
@@ -1679,7 +1743,7 @@
               rSubmit.textContent = 'Posting…';
               var payload = {
                 post_id: postId,
-                display_name: modeNow === 'loggedIn' ? '' : nm,
+                display_name: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
                 body: bd,
                 siteKey: siteKey,
                 parent_id: parentCommentId,
@@ -1687,7 +1751,7 @@
                 post_published_at: bbResolvePostPublishedAt(post),
                 post_url: (post && (post.fullUrl || post.url)) || null
               };
-              var rEm = replyPostAsAnonymous ? null : (modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim());
+              var rEm = (replyGenerated || replyPostAsAnonymous) ? null : (modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim());
               if (replyPostAsAnonymous) payload.post_as_anonymous = true;
               if (replyPostAsAnonymous && replyAnonymousRetryToken) payload.anonymous_retry_token = replyAnonymousRetryToken;
               if (rEm) payload.email = rEm;
@@ -1882,6 +1946,35 @@
       var loggedInIdentityLine = document.createElement('div');
       loggedInIdentityLine.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;font-size:0.9rem;color:#444';
       formWrap.appendChild(loggedInIdentityLine);
+      var anonymousIdentityLine = document.createElement('div');
+      anonymousIdentityLine.style.cssText = 'display:none;width:100%;box-sizing:border-box;margin:0 0 10px 0;font-size:0.9rem;color:#444';
+      formWrap.appendChild(anonymousIdentityLine);
+      function bbSetFormHeading(text, linkIt) {
+        heading.textContent = '';
+        if (linkIt) {
+          var headingLink = document.createElement('a');
+          headingLink.href = bbCommentSignInHref();
+          headingLink.textContent = text;
+          headingLink.style.cssText = 'color:inherit;text-decoration:underline';
+          heading.appendChild(headingLink);
+        } else {
+          heading.textContent = text;
+        }
+      }
+      function bbFillGuestOnlyNote() {
+        guestOnlyNote.textContent = '';
+        guestOnlyNote.appendChild(document.createTextNode('Anonymous comments are turned off. '));
+        if (subscriberCommentsEnabled) {
+          var signInLink = document.createElement('a');
+          signInLink.href = bbCommentSignInHref();
+          signInLink.textContent = 'Sign in';
+          signInLink.style.cssText = 'color:var(--bb-accent, #5B4FE8);text-decoration:underline';
+          guestOnlyNote.appendChild(signInLink);
+          guestOnlyNote.appendChild(document.createTextNode(' with your site member account to leave a comment.'));
+        } else {
+          guestOnlyNote.appendChild(document.createTextNode('Sign in with your site member account to leave a comment.'));
+        }
+      }
 
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
@@ -1941,22 +2034,27 @@
         var id = resolved.identity || null;
         var verifiedIdentity = bbGetVerifiedIdentity();
         var guestsMayPost = allowAnonymousComments || mode === 'loggedIn';
+        var generatedAnonymous = bbUseGeneratedAnonymousName(mode);
         var formModePayload = {
           mode: mode,
           guestsMayPost: guestsMayPost,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
+          generatedAnonymous: generatedAnonymous,
           squarespaceIdentity: id ? { loggedIn: id.loggedIn, name: id.name || null, email: id.email || null } : null,
           verifiedIdentity: verifiedIdentity,
           nameInputVisible: null,
           emailInputVisible: null
         };
         if (!guestsMayPost) {
-          heading.textContent = 'Sign in to comment';
+          bbSetFormHeading('Sign in to comment', subscriberCommentsEnabled);
           guestOnlyNote.style.display = 'block';
+          bbFillGuestOnlyNote();
           nameInput.style.display = 'none';
           emailInput.style.display = 'none';
+          anonymousIdentityLine.style.display = 'none';
+          anonymousIdentityLine.textContent = '';
           bodyArea.style.display = 'none';
           mainBodyCount.style.display = 'none';
           submitBtn.style.display = 'none';
@@ -1964,12 +2062,28 @@
           identityNote.textContent = '';
           loggedInIdentityLine.style.display = 'none';
           loggedInIdentityLine.textContent = '';
+        } else if (generatedAnonymous) {
+          bbSetFormHeading('Leave a comment', false);
+          guestOnlyNote.style.display = 'none';
+          nameInput.style.display = 'none';
+          emailInput.style.display = 'none';
+          anonymousIdentityLine.style.display = 'block';
+          bbFillAnonymousIdentityLine(anonymousIdentityLine, mode);
+          bodyArea.style.display = 'block';
+          mainBodyCount.style.display = 'block';
+          submitBtn.style.display = '';
+          identityNote.style.display = 'none';
+          identityNote.textContent = '';
+          loggedInIdentityLine.style.display = 'none';
+          loggedInIdentityLine.textContent = '';
         } else if (mode === 'loggedIn') {
-          heading.textContent = 'Leave a comment';
+          bbSetFormHeading('Leave a comment', false);
           guestOnlyNote.style.display = 'none';
           nameInput.style.display = 'none';
           emailInput.style.display = loggedInOptionalEmail ? 'block' : 'none';
           emailInput.placeholder = 'Email (optional)';
+          anonymousIdentityLine.style.display = 'none';
+          anonymousIdentityLine.textContent = '';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
           submitBtn.style.display = '';
@@ -1984,11 +2098,13 @@
             loggedInIdentityLine.textContent = '';
           }
         } else {
-          heading.textContent = 'Leave a comment';
+          bbSetFormHeading('Leave a comment', false);
           guestOnlyNote.style.display = 'none';
           nameInput.style.display = 'block';
           emailInput.style.display = 'block';
           emailInput.placeholder = 'Email (optional)';
+          anonymousIdentityLine.style.display = 'none';
+          anonymousIdentityLine.textContent = '';
           bodyArea.style.display = 'block';
           mainBodyCount.style.display = 'block';
           submitBtn.style.display = '';
@@ -2001,6 +2117,8 @@
         formModePayload.emailInputVisible = emailInput.style.display !== 'none';
         formModePayload.loggedInIdentityLineVisible = loggedInIdentityLine.style.display !== 'none';
         formModePayload.loggedInIdentityLineText = loggedInIdentityLine.textContent || '';
+        formModePayload.anonymousIdentityLineVisible = anonymousIdentityLine.style.display !== 'none';
+        formModePayload.anonymousIdentityLineText = anonymousIdentityLine.textContent || '';
         var formModeSig = JSON.stringify(formModePayload);
         if (formModeSig !== self._lastCommentsFormModeLogSig) {
           self._lastCommentsFormModeLogSig = formModeSig;
@@ -2050,9 +2168,10 @@
         submitBtn.style.opacity = '0.55';
         submitBtn.style.cursor = 'not-allowed';
         submitBtn.textContent = 'Posting…';
+        var generatedNow = bbUseGeneratedAnonymousName(modeNow);
         var payload = {
           post_id: postId,
-          display_name: modeNow === 'loggedIn' ? '' : name,
+          display_name: generatedNow ? bbGetOrCreateAnonymousHandle() : (modeNow === 'loggedIn' ? '' : name),
           body: body,
           siteKey: siteKey,
           post_title: (post && post.title) || null,
@@ -2061,7 +2180,7 @@
         };
         if (postAsAnonymous) payload.post_as_anonymous = true;
         if (postAsAnonymous && anonymousRetryToken) payload.anonymous_retry_token = anonymousRetryToken;
-        if (!postAsAnonymous && emailToUse) payload.email = emailToUse;
+        if (!generatedNow && !postAsAnonymous && emailToUse) payload.email = emailToUse;
         bbCommentsLog('main POST payload', {
           mode: modeNow,
           post_id: payload.post_id,
@@ -2071,6 +2190,7 @@
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
+          generatedAnonymous: generatedNow,
           postAsAnonymous: Boolean(postAsAnonymous)
         });
         if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
@@ -2102,9 +2222,9 @@
             fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'post-fix',hypothesisId:'H6',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous')},timestamp:Date.now()})}).catch(function(){});
             // #endregion
             if (data && data.id) {
-              if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse) {
+              if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse && !bbUseGeneratedAnonymousName(modeNow)) {
                 bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
-              } else if (modeNow === 'loggedIn') {
+              } else if (modeNow === 'loggedIn' && !bbUseGeneratedAnonymousName(modeNow)) {
                 bbCommentsLog('main verified cookie NOT set', {
                   reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
                   display_name: data && data.display_name ? data.display_name : null,
@@ -2158,6 +2278,19 @@
         var body = (bodyArea.value || '').trim();
         if (modeNow !== 'loggedIn' && !allowAnonymousComments && !name) { nameInput.focus(); return; }
         if (!body) { bodyArea.focus(); return; }
+        if (bbUseGeneratedAnonymousName(modeNow)) {
+          var anonHandle = bbGetOrCreateAnonymousHandle();
+          bbCommentsLog('main submit start', {
+            mode: modeNow,
+            allowAnonymousComments: allowAnonymousComments,
+            subscriberCommentsEnabled: subscriberCommentsEnabled,
+            generatedAnonymous: true,
+            displayName: anonHandle,
+            email: null
+          });
+          submitMainCommentWithEmail(modeNow, anonHandle, body, null);
+          return;
+        }
         if (modeNow === 'loggedIn') {
           var verifiedIdentity = bbGetVerifiedIdentity();
           var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
@@ -3597,6 +3730,23 @@
       return wrap;
     },
 
+    /**
+     * Story desktop comments use the footer side-margin setting.
+     * postBody keeps the article inset; fullScreen matches the footer bleed.
+     * Mobile returns before this runs.
+     */
+    _syncStoryCommentsToFooterWidth: function(commentsEl, cfg, footerContentCfg) {
+      if (!commentsEl || !commentsEl.style) return;
+      if (this._isNarrowCollectionViewport() || !this._isStoryPostLayout(cfg)) return;
+      this._applyPostFooterSideMargins(commentsEl, cfg, footerContentCfg);
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'fullScreen') {
+        this._clearFeatureArticleColumnFooter(commentsEl);
+        this._scheduleFullScreenFooterBleed(commentsEl);
+        return;
+      }
+      this._clearPostFooterZoneBleed(commentsEl);
+    },
+
     /** Story desktop: wide horizontal inset shared by post body and footer. */
     _applyStoryPostHorizontalInset: function(el, cfg) {
       if (!el || !el.style || !cfg) return false;
@@ -3907,18 +4057,27 @@
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
       /* Desktop comments and footer are siblings after the main row.
-         postBody stays in that column. fullScreen bleeds to the page-section
-         content box (site margins), not the article column. */
+         Reporter/Publisher postBody is pinned to the article column.
+         fullScreen spans the row and bleeds to the page-section content box. */
       if (!featurePostLayout && mainRowEl) {
         if (commentsEl) {
           if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+          this._syncStoryCommentsToFooterWidth(commentsEl, cfg, opts.footerContentCfg);
         }
         if (footerHasContent) {
           var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
           if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
-          if (this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'fullScreen') {
+          var desktopFooterMode = this._getPostFooterSideMarginsMode(opts.footerContentCfg);
+          var articleColumnFooter = (this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg)) &&
+            desktopFooterMode === 'postBody';
+          if (articleColumnFooter) {
+            this._clearPostFooterZoneBleed(footerZoneEl);
+            this._scheduleFeatureArticleColumnFooter(footerZoneEl, main);
+          } else if (desktopFooterMode === 'fullScreen') {
+            this._clearFeatureArticleColumnFooter(footerZoneEl);
             this._scheduleFullScreenFooterBleed(footerZoneEl);
           } else {
+            this._clearFeatureArticleColumnFooter(footerZoneEl);
             this._clearPostFooterZoneBleed(footerZoneEl);
           }
         }
@@ -4145,20 +4304,7 @@
       wrap.appendChild(lockSvg);
       wrap.appendChild(label);
       if (includeSubscribe) {
-        var pill = document.createElement('a');
-        pill.className = 'bb-subscribe-pill';
-        pill.href = self._resolvePaywallSubscribeHref();
-        pill.textContent = 'Subscribe to read';
-        pill.style.display = 'inline-flex';
-        pill.style.alignItems = 'center';
-        pill.style.padding = '6px 14px';
-        pill.style.borderRadius = '4px';
-        pill.style.background = colors.accent;
-        pill.style.color = '#fff';
-        pill.style.fontSize = '0.8rem';
-        pill.style.fontWeight = '600';
-        pill.style.textDecoration = 'none';
-        wrap.appendChild(pill);
+        wrap.appendChild(self._createSubscribeToReadPillLink());
       }
       return wrap;
     },
@@ -4230,28 +4376,36 @@
       hostEl.appendChild(badge);
     },
 
-    _createSubscribeToReadPillLink: function(opts) {
-      var o = opts && typeof opts === 'object' ? opts : {};
-      var compact = Boolean(o.compact);
-      var colors = this._bbPaywallFooterColors();
+    /** Same arrow as the unlocked-card "Read article" link. */
+    _createReadLinkArrowSvg: function(size) {
+      var px = size || 16;
+      var arrowNs = 'http://www.w3.org/2000/svg';
+      var arrowSvg = document.createElementNS(arrowNs, 'svg');
+      arrowSvg.setAttribute('width', String(px));
+      arrowSvg.setAttribute('height', String(px));
+      arrowSvg.setAttribute('viewBox', '0 0 24 24');
+      arrowSvg.setAttribute('fill', 'none');
+      arrowSvg.setAttribute('stroke', 'currentColor');
+      arrowSvg.setAttribute('stroke-width', '2');
+      arrowSvg.setAttribute('stroke-linecap', 'round');
+      arrowSvg.setAttribute('stroke-linejoin', 'round');
+      arrowSvg.setAttribute('aria-hidden', 'true');
+      arrowSvg.style.display = 'block';
+      arrowSvg.style.flexShrink = '0';
+      var arrowPath = document.createElementNS(arrowNs, 'path');
+      arrowPath.setAttribute('d', 'M5 12h14m-7-7l7 7-7 7');
+      arrowSvg.appendChild(arrowPath);
+      return arrowSvg;
+    },
+
+    _createSubscribeToReadPillLink: function() {
       var pill = document.createElement('a');
       pill.className = 'bb-subscribe-pill';
       pill.href = this._resolvePaywallSubscribeHref();
-      pill.textContent = 'Subscribe to read';
-      pill.style.display = 'inline-flex';
-      pill.style.alignItems = 'center';
-      pill.style.width = 'fit-content';
-      pill.style.maxWidth = '100%';
-      pill.style.boxSizing = 'border-box';
-      pill.style.padding = compact ? '8px 10px' : '6px 14px';
-      pill.style.borderRadius = '4px';
-      pill.style.background = colors.accent;
-      pill.style.color = '#fff';
-      pill.style.fontSize = compact ? '0.75rem' : '0.8rem';
-      pill.style.fontWeight = '600';
-      pill.style.lineHeight = '1.2';
-      pill.style.textDecoration = 'none';
-      pill.style.whiteSpace = 'nowrap';
+      var label = document.createElement('span');
+      label.textContent = 'Subscribe to read';
+      pill.appendChild(label);
+      pill.appendChild(this._createReadLinkArrowSvg(16));
       return pill;
     },
 
@@ -5331,6 +5485,7 @@
     _getAuthor: function(item) {
       if (!item) return null;
       var a = item.author;
+      if (a && typeof a === 'string' && a.trim()) return a.trim();
       if (a) {
         var fromAuthor = (a.displayName || a.fullName || a.name || '').trim();
         if (fromAuthor) return fromAuthor;
@@ -5338,6 +5493,7 @@
       var arr = item.authors || item.contributors;
       if (Array.isArray(arr) && arr.length > 0) {
         var first = arr[0];
+        if (typeof first === 'string' && first.trim()) return first.trim();
         if (first && (first.displayName || first.fullName || first.name)) {
           var name = (first.displayName || first.fullName || first.name || '').trim();
           if (name) return name;
@@ -5437,6 +5593,7 @@
     /**
      * True profile records (id -> {name, bio, ...}), not the postModules
      * toggle `{enabled, position}` that can land on the merged post cfg.
+     * Empty `{}` is not a map — fall through to root config.
      */
     _isAuthorProfilesMap: function(obj) {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
@@ -9329,7 +9486,7 @@
         s + ' .bb-comment-form-heading,' +
         s + ' .bb-comment-form-wrap .bb-below-main-heading{font-size:12px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--bb-body,#111);margin:0 0 8px 0!important;}' +
         s + ' .bb-comment-form-rule{display:block;margin:0 0 16px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
-        s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
+        s + ' .bb-comment-submit{width:100%;padding:8px 16px;font-size:14px!important;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' aside.blog-overlay-relevant-posts{width:100%!important;max-width:none!important;flex-shrink:1;}' +
         s + ' aside.blog-overlay-relevant-posts>div{width:100%!important;max-width:none!important;}' +
         s + ' .bb-sidebar-post-card{width:100%;gap:12px;}' +
@@ -9448,8 +9605,7 @@
         '#blog-overlay-list .bb-more-to-read-text{display:contents;}' +
         '#blog-overlay-list .bb-more-to-read-meta{display:none;}' +
         '#blog-overlay-list .bb-below-main-heading{font-size:28px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 16px 0;}' +
-        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;border-top:1px solid var(--bb-border,#e5e4e0);margin-top:48px;padding-top:24px;}' +
-        '#blog-overlay-list[data-bb-reporter-layout="1"] .blog-overlay-more-to-read{border-top:none;margin-top:0;}' +
+        '#blog-overlay-list .blog-overlay-more-to-read{padding-bottom:20px;padding-top:24px;}' +
         '#blog-overlay-list .bb-more-to-read-deck{display:none;}' +
         '#blog-overlay-list .blog-overlay-relevant-posts--footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;max-width:100%;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-more-to-read-card{display:flex;flex-direction:column;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
@@ -9485,8 +9641,8 @@
         '#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.is-active,#blog-overlay-list .blog-overlay-toc[data-toc-style="bookmark"] .bb-toc-item.blog-overlay-toc-active{border-left-color:var(--bb-accent,#5B4FE8);background:var(--bb-accent-10,rgba(91,79,232,0.1));}' +
         '#blog-overlay-list .blog-overlay-toc[data-toc-style="connectedDots"] .bb-toc-item{flex:1;min-width:0;padding:4px 0;border-left:none;background:transparent;}' +
         '#blog-overlay-list .blog-overlay-toc-row{display:flex;align-items:center;gap:10px;margin-left:-18px;}' +
-        '#blog-overlay-list .bb-read-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
-        '#blog-overlay-list .bb-read-link span{text-decoration:underline;text-underline-offset:2px;}' +
+        '#blog-overlay-list .bb-read-link,#blog-overlay-list .bb-subscribe-pill{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:600;color:var(--bb-accent,#5B4FE8);text-decoration:none;cursor:pointer;}' +
+        '#blog-overlay-list .bb-read-link span,#blog-overlay-list .bb-subscribe-pill span{text-decoration:underline;text-underline-offset:2px;}' +
         '#blog-overlay-list .bb-pagination-btn{padding:6px 12px;font-size:14px;min-width:36px;border:1px solid var(--bb-border,#ddd);border-radius:var(--bb-chrome-radius,6px);background:transparent;color:var(--bb-body,#333);cursor:pointer;font-family:inherit;}' +
         '#blog-overlay-list .bb-pagination-btn--active{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-color:var(--bb-accent,#5B4FE8);cursor:default;}' +
         '#blog-overlay-list .bb-load-more,#blog-overlay-list .bb-load-more-btn{padding:10px 24px;font-size:14px;font-weight:var(--bb-btn-weight,inherit);border:none;cursor:pointer;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);font-family:var(--bb-p1-font-family,inherit);letter-spacing:var(--bb-btn-letter-spacing,normal);text-transform:var(--bb-btn-transform,none);}' +
@@ -9525,6 +9681,7 @@
         '#blog-overlay-list .bb-lead-magnet-input::placeholder{color:var(--bb-muted);opacity:1;}' +
         '#blog-overlay-list .bb-lead-magnet-btn{border:none;cursor:pointer;background:var(--bb-accent);color:var(--bb-text-on-accent);border-radius:var(--bb-btn-radius,0);font-family:var(--primary-button-font-font-family);font-weight:var(--primary-button-font-font-weight);letter-spacing:var(--primary-button-font-letter-spacing);text-transform:var(--primary-button-font-text-transform);}' +
         '#blog-overlay-list .bb-lead-magnet-btn:hover{filter:brightness(0.92);}' +
+        '@media (min-width:768px){#blog-overlay-list:not(.bb-narrow-viewport) .blog-overlay-sidebar-section .bb-newsletter-btn,#blog-overlay-list:not(.bb-narrow-viewport) .blog-overlay-sidebar-section .bb-lead-magnet-btn{padding:8px 16px!important;width:100%;box-sizing:border-box;}}' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-heading,' +
         '#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-header{display:none;}' +
         '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-btn.sqs-button-element--primary,#blog-overlay-list .blog-overlay-sidebar-section .bb-lead-magnet-form .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .sqs-button-element--primary,#blog-overlay-list .blog-overlay-footer-module .bb-newsletter-btn,#blog-overlay-list .blog-overlay-footer-module .bb-lead-magnet-btn,#blog-overlay-list .bb-newsletter-btn,#blog-overlay-list .bb-lead-magnet-btn,#blog-overlay-list .bb-comment-submit{padding:8px 16px!important;font-size:14px!important;box-sizing:border-box;}}' +
@@ -9664,7 +9821,8 @@
             'font-size:15px;padding:12px 8px;font-weight:800;letter-spacing:1px;' +
             'font-family:var(--bb-p1-font-family,inherit);margin-bottom:0;' +
           '}' +
-          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link{display:none!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-showcase-read-link,' +
+          '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-subscribe-pill{display:none!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-title{font-size:22px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .blog-overlay-meta-row{font-size:13px!important;font-weight:var(--bb-heading-font-weight,inherit);}' +
           '#blog-overlay-list[data-bb-collection-layout="showcase"] .blog-overlay-showcase-card .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
@@ -13331,30 +13489,12 @@
         var readLabel = document.createElement('span');
         readLabel.textContent = 'Read article';
         readLink.appendChild(readLabel);
-        var arrowNs = 'http://www.w3.org/2000/svg';
-        var arrowSvg = document.createElementNS(arrowNs, 'svg');
-        arrowSvg.setAttribute('width', showcaseMobile ? '14' : '16');
-        arrowSvg.setAttribute('height', showcaseMobile ? '14' : '16');
-        arrowSvg.setAttribute('viewBox', '0 0 24 24');
-        arrowSvg.setAttribute('fill', 'none');
-        arrowSvg.setAttribute('stroke', 'currentColor');
-        arrowSvg.setAttribute('stroke-width', '2');
-        arrowSvg.setAttribute('stroke-linecap', 'round');
-        arrowSvg.setAttribute('stroke-linejoin', 'round');
-        arrowSvg.style.display = 'block';
-        arrowSvg.style.flexShrink = '0';
-        var arrowPath = document.createElementNS(arrowNs, 'path');
-        arrowPath.setAttribute('d', 'M5 12h14m-7-7l7 7-7 7');
-        arrowSvg.appendChild(arrowPath);
-        readLink.appendChild(arrowSvg);
+        readLink.appendChild(self._createReadLinkArrowSvg(showcaseMobile ? 14 : 16));
         bodyCol.appendChild(titleEl);
         if (bodyEl) bodyCol.appendChild(bodyEl);
         bodyCol.appendChild(metaEl);
         if (gatedShowcase) {
-          var scPill = self._createSubscribeToReadPillLink({ compact: true });
-          scPill.style.marginTop = '8px';
-          scPill.style.alignSelf = 'flex-start';
-          bodyCol.appendChild(scPill);
+          bodyCol.appendChild(self._createSubscribeToReadPillLink());
         } else {
           bodyCol.appendChild(readLink);
         }
@@ -13709,7 +13849,6 @@
       var paywallGateSinglePostBody = Boolean(vs.paywallGateSinglePostBody);
       var featurePostLayout = isSinglePost && self._isFeaturePostLayout(cfg);
       var publisherPostLayout = isSinglePost && self._isPublisherPostLayout(cfg);
-      var storyPostLayoutForFooter = isSinglePost && self._isStoryPostLayout(cfg);
       var featureBelowRowMods = [];
       var featureBelowRowHost = null;
       var featureCommentsSectionEl = null;
@@ -14771,7 +14910,7 @@
         var btn = document.createElement('button');
         btn.textContent = ecCfg.buttonText || 'Subscribe';
         btn.type = 'button';
-        btn.className = 'bb-newsletter-btn';
+        btn.className = 'sqs-button-element--primary bb-newsletter-btn';
         btn.onmouseover = function() { btn.style.filter = 'brightness(0.92)'; };
         btn.onmouseout = function() { btn.style.filter = ''; };
         var msgEl = document.createElement('div');
@@ -16131,10 +16270,6 @@
               for (var fm = 0; fm < fcModules.length; fm++) {
                 var fmod = fcModules[fm];
                 var fmodEl = null;
-                /** Story: no "More to Read" grid (spec module order). */
-                if (fmod === 'relevantPosts' && storyPostLayoutForFooter) {
-                  continue;
-                }
                 var footerAuthorHeader = null;
                 if (fmod === 'relevantPosts') {
                   fmodEl = createRelevantPostsModule(220, { variant: 'footer' });

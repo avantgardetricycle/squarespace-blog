@@ -7,6 +7,7 @@ import {
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
 import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
@@ -626,7 +627,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           subscriptions: {
             where: { status: { in: ['trialing', 'active'] } },
             orderBy: { updatedAt: 'desc' },
-            take: 1
+            take: 10
           }
         }
       },
@@ -645,7 +646,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const activeSubscription = site.user?.subscriptions?.[0] ?? null
+  const activeSubscription =
+    site.user?.subscriptions?.find((sub) => isEntitledSubscription(sub)) ?? null
   if (!activeSubscription) {
     res.status(403).json({ error: 'Subscription required' })
     return
