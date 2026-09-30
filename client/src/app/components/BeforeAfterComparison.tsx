@@ -718,7 +718,7 @@ export function BeforeAfterComparison() {
   
         <div className="ba-proof-strip">
           <div className="ba-proof-item">
-            <div className="ba-proof-num">12+</div>
+            <div className="ba-proof-num">23</div>
             <div className="ba-proof-label">Pro blogging features</div>
           </div>
           <div className="ba-proof-sep"></div>
@@ -733,8 +733,8 @@ export function BeforeAfterComparison() {
           </div>
           <div className="ba-proof-sep"></div>
           <div className="ba-proof-item">
-            <div className="ba-proof-num">∞</div>
-            <div className="ba-proof-label">Better than before</div>
+            <div className="ba-proof-num">10</div>
+            <div className="ba-proof-label">Designed templates</div>
           </div>
         </div>
       </div>
