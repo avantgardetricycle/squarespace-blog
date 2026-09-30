@@ -168,6 +168,8 @@ export default function Account() {
   const currentPeriodEnd = formatSubscriptionDate(me.subscription?.currentPeriodEnd) ?? "—";
   const scheduledCancel = Boolean(subscriptionActive && me.subscription?.cancelAtPeriodEnd);
   const subscriptionExpired = !subscriptionActive;
+  const isBeta = me.subscription?.source === "beta";
+  const betaActive = Boolean(isBeta && subscriptionActive);
   const canResubscribe = subscriptionExpired && isResubscribableStatus(me.subscription?.status);
 
   return (
@@ -220,11 +222,15 @@ export default function Account() {
           <CardHeader>
             <CardTitle>Current Plan</CardTitle>
             <CardDescription>
-              {subscriptionExpired
-                ? canResubscribe
-                  ? `Your ${planDisplay} plan has been canceled.`
-                  : `Your ${planDisplay} plan needs a payment update.`
-                : `You are currently subscribed to the ${planDisplay} plan.`}
+              {betaActive
+                ? "You have complimentary beta access to BetterBlog."
+                : isBeta && subscriptionExpired
+                  ? "Your beta access has ended."
+                  : subscriptionExpired
+                    ? canResubscribe
+                      ? `Your ${planDisplay} plan has been canceled.`
+                      : `Your ${planDisplay} plan needs a payment update.`
+                    : `You are currently subscribed to the ${planDisplay} plan.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -234,12 +240,15 @@ export default function Account() {
               </div>
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-medium leading-none">
-                  {planDisplay} Plan
+                  {betaActive ? "Beta access" : `${planDisplay} Plan`}
                 </p>
                 <p className="text-xs text-[#6b6b6b]">
-                  {cadenceDisplay} • {priceDisplay} • {statusDisplay}
+                  {betaActive
+                    ? `Free until ${currentPeriodEnd}`
+                    : `${cadenceDisplay} • ${priceDisplay} • ${statusDisplay}`}
                 </p>
               </div>
+              {isBeta ? null : (
               <Button
                 variant="outline"
                 size="sm"
@@ -248,12 +257,19 @@ export default function Account() {
               >
                 {portalLoadingButton === "changePlan" ? "Opening…" : "Change Plan"}
               </Button>
+              )}
             </div>
             <div className="text-sm text-[#6b6b6b]">
-              {subscriptionExpired ? (
+              {betaActive ? (
+                <>
+                  Beta access ends on{" "}
+                  <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
+                  The Publication plan is included, with no payment method required.
+                </>
+              ) : subscriptionExpired ? (
                 currentPeriodEnd !== "—" ? (
                   <>
-                    Your subscription ended on{" "}
+                    {isBeta ? "Beta access ended on" : "Your subscription ended on"}{" "}
                     <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
                     {canResubscribe
                       ? " Resubscribe to continue using BetterBlog."
@@ -282,7 +298,11 @@ export default function Account() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
-            {subscriptionExpired || scheduledCancel ? (
+            {betaActive ? (
+              <p className="text-sm text-[#6b6b6b]">
+                No payment method is required during beta access.
+              </p>
+            ) : subscriptionExpired || scheduledCancel ? (
               <p className="text-sm text-amber-600">
                 {scheduledCancel
                   ? "Cancellation scheduled for end of period"
@@ -326,7 +346,7 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            {scheduledCancel ? (
+            {betaActive ? null : scheduledCancel ? (
               <Button
                 onClick={() => void handleRestoreSubscription()}
                 disabled={restoring || portalLoading}

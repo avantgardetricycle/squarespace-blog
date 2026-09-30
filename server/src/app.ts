@@ -17,6 +17,7 @@ import analyticsRoutes from './routes/analytics.js'
 import captureRoutes from './routes/capture.js'
 import commentsRoutes from './routes/comments.js'
 import commentActionsRoutes from './routes/comment-actions.js'
+import adminRoutes from './routes/admin.js'
 
 export interface CreateAppOptions {
   /** When false, Stripe webhook is served only by `api/webhooks/stripe` (Vercel). */
@@ -70,6 +71,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   )
   app.use('/api/comment-actions', commentActionsRoutes)
   app.use('/api/dashboard', dashboardRoutes)
+  app.use('/api/admin', adminRoutes)
   app.use('/api/blog-authors', blogAuthorsRoutes)
   app.use('/api/templates', templatesRoutes)
   app.use('/api/checkout', checkoutRoutes)
