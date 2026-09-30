@@ -19,6 +19,7 @@
     "db:seed:production": "prisma db seed -- --target=production",
     "db:studio": "prisma studio",
     "generate-email-logo": "tsx scripts/generate-email-logo.ts",
+    "invite-user": "tsx scripts/invite-user.ts",
     "test": "tsx --test src/lib/anonymous-comment-identity.test.ts"
   },
   "dependencies": {
