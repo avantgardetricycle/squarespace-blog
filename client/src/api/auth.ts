@@ -257,25 +257,6 @@ export type SitePatchResponse = {
   paywallSettings?: SitePaywallSettingsJson | null
 }
 
-export type PaywallReconcileMismatch = {
-  siteId: string
-  siteKey: string
-  name: string | null
-  storedState: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
-  probedState: 'detected_paywalled' | 'detected_unpaywalled'
-  signals: string[]
-}
-
-export async function getPaywallReconcile(): Promise<{ mismatches: PaywallReconcileMismatch[] } | null> {
-  try {
-    const res = await fetch(`${API}/dashboard/paywall-reconcile`, { credentials: 'include' })
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
-  }
-}
-
 export async function updateSite(
   siteKey: string,
   updates: {

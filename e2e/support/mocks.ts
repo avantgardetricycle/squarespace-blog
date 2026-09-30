@@ -238,9 +238,6 @@ export async function setupApiMocks(page: Page, options?: ApiMockOptions): Promi
     if (options?.extraRoutes && (await options.extraRoutes({ method, path, route }))) return;
 
     if (method === "GET" && path === "/api/dashboard/me") return json(route, 200, me);
-    if (method === "GET" && path === "/api/dashboard/paywall-reconcile") {
-      return json(route, 200, { mismatches: [] });
-    }
     if (method === "GET" && path === "/api/checkout/prices") return json(route, 200, checkoutPlanPrices);
     if (method === "GET" && path === "/api/health") return json(route, 200, { status: "ok", isLive: true });
     if (method === "GET" && path === `/api/config/${siteKey}`) return json(route, 200, configResponse);
