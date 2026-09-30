@@ -18,7 +18,8 @@
     "db:seed:staging": "prisma db seed -- --target=staging",
     "db:seed:production": "prisma db seed -- --target=production",
     "db:studio": "prisma studio",
-    "generate-email-logo": "tsx scripts/generate-email-logo.ts"
+    "generate-email-logo": "tsx scripts/generate-email-logo.ts",
+    "invite-user": "tsx scripts/invite-user.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.1",
