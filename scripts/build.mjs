@@ -11,7 +11,7 @@
  *
  * Usage:
  *   node scripts/build.mjs
- *   API_BASE_URL=https://staging.betterblog.xyz node scripts/build.mjs
+ *   API_BASE_URL=https://staging.betterblog.co node scripts/build.mjs
  *   node scripts/build.mjs --out ./pages-scripts --api-base https://app.example
  */
 

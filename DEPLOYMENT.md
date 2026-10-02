@@ -48,14 +48,14 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `STRIPE_ENVIRONMENT` | `sandbox` (Preview / test key) or `live` (Production / live key). Aliases: `test`/`staging` → sandbox; `production`/`prod` → live. If unset, inferred from `STRIPE_SECRET_KEY` (`sk_test` / `sk_live`). |
 | `SENDGRID_API_KEY` | SendGrid API key |
 | `SENDGRID_MAIL_FROM` | Verified sender |
-| `SUPPORT_EMAIL` | Inbox for support portal and Support tab tickets (default `support@betterblog.xyz`) |
+| `SUPPORT_EMAIL` | Inbox for support portal and Support tab tickets (default `support@betterblog.co`) |
 | `ANTHROPIC_API_KEY` | Server-only key for the dashboard Support chatbot (`claude-sonnet-4-6`) |
 | `TEAM_SUPPORT_EMAILS` | Comma-separated emails allowed to open `/internal/support` and team support APIs |
 | `ADMIN_EMAILS` | Comma-separated emails allowed to open the dashboard Admin tab and beta-tester APIs |
 | `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
 | `HCAPTCHA_*` | hCaptcha keys |
 | `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA (checkout + Log in). Set per environment (e.g. `true` on Preview / staging, `false` on Production). Baked into the client at build time; `/api/health` overrides when reachable. |
-| `VITE_GA_MEASUREMENT_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`) for the marketing landing page. **Production only** — leave unset on Preview/staging. Analytics only loads on `betterblog.xyz` and `www.betterblog.xyz`. |
+| `VITE_GA_MEASUREMENT_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`) for the marketing landing page. **Production only** — leave unset on Preview/staging. Analytics only loads on `betterblog.co` and `www.betterblog.co`. |
 
 6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
    Events: `checkout.session.completed`, `customer.subscription.updated`.
@@ -70,13 +70,13 @@ If Vercel logs show `Task timed out after 60 seconds` on `/api/dashboard/me`, `/
 
 The landing page uses the **build-time** `IS_BETTER_BLOG_LIVE` value immediately so the UI does not wait on `/api/health`.
 
-### Staging (`staging.betterblog.xyz`) and Deployment Protection
+### Staging (`staging.betterblog.co`) and Deployment Protection
 
 If **Vercel Authentication** (Deployment Protection) is enabled for Preview, browsers cannot call `/api/health` without logging in (401). The landing page used to treat that as “not live.” The client now falls back to the **build-time** value of `IS_BETTER_BLOG_LIVE` for that environment.
 
 After changing `IS_BETTER_BLOG_LIVE`, **redeploy** the branch (env vars are applied at build time for the fallback).
 
-Optional: disable Deployment Protection for Preview, or add `staging.betterblog.xyz` to the protection allowlist, if you want runtime `/api/health` to drive the UI.
+Optional: disable Deployment Protection for Preview, or add `staging.betterblog.co` to the protection allowlist, if you want runtime `/api/health` to drive the UI.
 
 ### Google Analytics (marketing landing page)
 
@@ -85,16 +85,16 @@ GA4 tracks pricing engagement and the coming-soon email modal on the public land
 **Setup (one-time):**
 
 1. In [Google Analytics](https://analytics.google.com/), create a GA4 property (e.g. "BetterBlog Marketing").
-2. Add a **Web** data stream for `https://betterblog.xyz`.
+2. Add a **Web** data stream for `https://betterblog.co`.
 3. Enable **Enhanced measurement** (scrolls, outbound clicks, etc.).
 4. Copy the **Measurement ID** (`G-XXXXXXXXXX`).
 5. In Vercel → **Production** environment only, set `VITE_GA_MEASUREMENT_ID` to that ID. Redeploy production after adding it.
 
-Analytics is gated in code: gtag loads only when the hostname is `betterblog.xyz` or `www.betterblog.xyz` **and** the env var is set. Staging (`staging.betterblog.xyz`), Preview, and localhost never send events.
+Analytics is gated in code: gtag loads only when the hostname is `betterblog.co` or `www.betterblog.co` **and** the env var is set. Staging (`staging.betterblog.co`), Preview, and localhost never send events.
 
 **Post-deploy GA4 admin (recommended):**
 
-1. **Realtime** — confirm events on `betterblog.xyz`; confirm zero hits from staging.
+1. **Realtime** — confirm events on `betterblog.co`; confirm zero hits from staging.
 2. **Admin → Custom definitions → Create custom dimensions** (Event scope): `trigger_source`, `tier`, `billing_period`.
 3. **Admin → Events** — mark `interest_modal_success` as a **Key event** (conversion).
 4. **Explore → Funnel exploration** — steps: `interest_modal_open` → `interest_modal_submit` → `interest_modal_success`, broken down by `trigger_source`.
@@ -162,7 +162,7 @@ Set `STRIPE_QUEUE_INLINE_FALLBACK=false` to require queue publish in local API-o
 
 ## GitHub Pages (loader.js / renderer.js) — optional CDN
 
-The `scripts/` directory can still be deployed to GitHub Pages. Set repository variable **`API_BASE_URL`** to your app URL (e.g. `https://staging.betterblog.xyz`) so [deploy-pages.yml](.github/workflows/deploy-pages.yml) passes it into `scripts/build.mjs`, which injects the API base into `loader.js` **before** minification.
+The `scripts/` directory can still be deployed to GitHub Pages. Set repository variable **`API_BASE_URL`** to your app URL (e.g. `https://staging.betterblog.co`) so [deploy-pages.yml](.github/workflows/deploy-pages.yml) passes it into `scripts/build.mjs`, which injects the API base into `loader.js` **before** minification.
 
 If you serve scripts from Vercel instead, skip Pages deploy and point Squarespace at:
 

@@ -2,7 +2,7 @@
 #
 # Repository secrets this workflow reads:
 #   SENDGRID_API_KEY          — sends the invite email
-#   DEVELOP_APP_URL           — public origin for develop, e.g. https://staging.betterblog.xyz
+#   DEVELOP_APP_URL           — public origin for develop, e.g. https://staging.betterblog.co
 #   PRODUCTION_APP_URL        — public origin for production magic links
 #   STAGING_DATABASE_URL      — already used by Database sync
 #   PRODUCTION_DATABASE_URL   — already used by Database sync

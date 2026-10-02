@@ -257,7 +257,7 @@ CREATE INDEX idx_support_conversations_escalated ON support_conversations(escala
 1. Validate required fields
 2. Upload screenshot to storage if present (return URL)
 3. Store ticket in `support_tickets` table
-4. Send email to `support@betterblog.xyz` with all fields, screenshot link, and chat transcript link
+4. Send email to `support@betterblog.co` with all fields, screenshot link, and chat transcript link
 5. If `conversation_id` present, mark that conversation as `escalated = true` in `support_conversations`
 6. Show confirmation: "Sent! We'll get back to you at [email] within one business day."
 

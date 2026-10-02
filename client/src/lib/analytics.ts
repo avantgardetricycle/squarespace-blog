@@ -1,4 +1,4 @@
-const PRODUCTION_HOSTS = new Set(['betterblog.xyz', 'www.betterblog.xyz']);
+const PRODUCTION_HOSTS = new Set(['betterblog.co', 'www.betterblog.co']);
 
 declare global {
   interface Window {

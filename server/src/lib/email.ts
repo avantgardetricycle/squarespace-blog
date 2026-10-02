@@ -15,7 +15,7 @@ const transporter = nodemailer.createTransport({
 })
 
 const appName = process.env.APP_NAME ?? 'BetterBlog'
-const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <support@betterblog.xyz>'
+const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <support@betterblog.co>'
 const inviteEmailSubject = 'Your BetterBlog access link'
 
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
@@ -368,7 +368,7 @@ export interface SupportRequestPayload {
 
 /** Forward a support portal form submission to the support inbox */
 export async function sendSupportRequestEmail(payload: SupportRequestPayload): Promise<void> {
-  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.xyz'
+  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.co'
   const modeLabel = payload.mode === 'problem' ? 'Problem report' : 'Question'
   const subjectLine = `[BetterBlog Support] ${modeLabel}: ${payload.subject}`
 
@@ -441,7 +441,7 @@ export interface SupportTicketEmailPayload {
 
 /** Notify the support inbox of a dashboard Support tab ticket. */
 export async function sendSupportTicketEmail(payload: SupportTicketEmailPayload): Promise<void> {
-  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.xyz'
+  const supportTo = process.env.SUPPORT_EMAIL ?? 'support@betterblog.co'
   const subjectLine = `[BetterBlog Support] Ticket: ${payload.subject}`
   const fields: Array<[string, string]> = [
     ['Ticket ID', payload.ticketId],
