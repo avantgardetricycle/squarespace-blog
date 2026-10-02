@@ -253,7 +253,7 @@ export default function LandingPage() {
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 </div>
                 <div className="p-8 pt-12 text-white font-mono text-sm leading-relaxed opacity-80">
-                  <span className="text-blue-400">&lt;script</span> <span className="text-purple-400">src</span>=<span className="text-green-400">"https://cdn.betterblog.com/v1/bundle.js"</span><span className="text-blue-400">&gt;&lt;/script&gt;</span>
+                  <span className="text-blue-400">&lt;script</span> <span className="text-purple-400">src</span>=<span className="text-green-400">"https://cdn.betterblog.co/v1/bundle.js"</span><span className="text-blue-400">&gt;&lt;/script&gt;</span>
                   <br /><br />
                   <span className="text-neutral-500">// That's literally all the code you need.</span>
                 </div>

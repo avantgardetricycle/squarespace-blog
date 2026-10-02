@@ -1670,7 +1670,7 @@ function AnalyticsPanel() {
         <div className="w-[10px] h-[10px] rounded-full bg-[#ffbd2e]"></div>
         <div className="w-[10px] h-[10px] rounded-full bg-[#28c940]"></div>
         <div className="flex-1 mx-3 bg-[#e4e4ea] rounded h-5 flex items-center px-[10px] text-[0.6rem] text-[#999] tracking-[0.01em]">
-          app.betterblog.io/dashboard/analytics
+          app.betterblog.co/dashboard/analytics
         </div>
       </div>
 

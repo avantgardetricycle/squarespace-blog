@@ -397,7 +397,7 @@ export default function Checkout() {
               <p className="text-sm text-[#6b6b6b]">
                 Questions?{" "}
                 <a
-                  href="mailto:support@betterblog.com"
+                  href="mailto:support@betterblog.co"
                   className="text-[#5B4FE8] hover:text-[#4a3fd4] font-medium underline"
                 >
                   Contact support

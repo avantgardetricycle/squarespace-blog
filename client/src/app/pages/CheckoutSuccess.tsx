@@ -185,7 +185,7 @@ export default function CheckoutSuccess() {
 
         {/* Support Link */}
         <p className="text-center text-[#6b6b6b] text-sm mt-6">
-          Need help? <a href="mailto:support@betterblog.app" className="text-[#5B4FE8] hover:text-[#4a3fd4] underline">Contact our support team</a>
+          Need help? <a href="mailto:support@betterblog.co" className="text-[#5B4FE8] hover:text-[#4a3fd4] underline">Contact our support team</a>
         </p>
       </div>
     </div>
