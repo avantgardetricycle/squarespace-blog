@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(false);
   const [siteUrl, setSiteUrl] = useState("https://my-awesome-blog.squarespace.com");
   
-  const scriptTag = `<script src="https://cdn.betterblog.com/v1/bundle.js" data-id="user_123456"></script>`;
+  const scriptTag = `<script src="https://cdn.betterblog.co/v1/bundle.js" data-id="user_123456"></script>`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(scriptTag);

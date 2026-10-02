@@ -28,7 +28,7 @@ These two systems do not share session state. A user can be authenticated as a c
 
 Squarespace sets security headers on default `.squarespace.com` domains that prevent other sites from embedding them in an iframe. This affects BetterBlog's live preview, which works by loading your actual blog in an iframe inside the customizer.
 
-**The technical cause:** Squarespace sends an `X-Frame-Options: SAMEORIGIN` header (and in some cases a `Content-Security-Policy: frame-ancestors 'self'` directive) on responses from `.squarespace.com` subdomains. These headers instruct browsers to refuse iframe embedding from any origin other than the same domain. BetterBlog's customizer is served from `app.betterblog.xyz`, which is a different origin — so the browser blocks the iframe silently.
+**The technical cause:** Squarespace sends an `X-Frame-Options: SAMEORIGIN` header (and in some cases a `Content-Security-Policy: frame-ancestors 'self'` directive) on responses from `.squarespace.com` subdomains. These headers instruct browsers to refuse iframe embedding from any origin other than the same domain. BetterBlog's customizer is served from `app.betterblog.co`, which is a different origin — so the browser blocks the iframe silently.
 
 This restriction is not present on custom domains connected to Squarespace. When a site has a custom domain, Squarespace's response headers allow iframe embedding from external origins, which is why the BetterBlog preview works correctly for sites on custom domains.
 

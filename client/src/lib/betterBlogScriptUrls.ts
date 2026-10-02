@@ -1,7 +1,7 @@
 /**
  * URLs for the Squarespace installation snippet (loader + API).
  * Prefer the current app origin so staging/production dashboards emit snippets
- * that call staging.betterblog.xyz (or production), not GitHub Pages.
+ * that call staging.betterblog.co (or production), not GitHub Pages.
  */
 
 const GITHUB_PAGES_LOADER_FALLBACK =
