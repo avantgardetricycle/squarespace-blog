@@ -8392,7 +8392,9 @@
             try {
               var rect = header.getBoundingClientRect();
               if (rect && rect.height > 0 && rect.top < 80) {
-                height = Math.round(rect.bottom);
+                /* An absolute header scrolls off with the page. rect.bottom then
+                   shrinks to the visible sliver and must not replace the resting height. */
+                height = rect.top < 0 ? Math.round(rect.height) : Math.round(rect.bottom);
               }
             } catch (eRect) { /* ignore */ }
             if (!height) height = header.offsetHeight || 0;
