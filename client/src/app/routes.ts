@@ -12,6 +12,7 @@ import Analytics from "./pages/Analytics";
 import Support from "./pages/Support";
 import SupportPortal from "./pages/SupportPortal";
 import InternalSupport from "./pages/InternalSupport";
+import Admin from "./pages/Admin";
 import { getDashboardMe } from "@/api/auth";
 
 const protectedLoader = async ({ request }: LoaderFunctionArgs) => {
@@ -30,6 +31,18 @@ const teamLoader = async ({ request }: LoaderFunctionArgs) => {
     return redirect("/login?returnTo=" + encodeURIComponent(u.pathname + u.search));
   }
   if (!me.isSupportTeam) {
+    throw new Response("Not Found", { status: 404 });
+  }
+  return me;
+};
+
+const adminLoader = async ({ request }: LoaderFunctionArgs) => {
+  const me = await getDashboardMe();
+  if (!me) {
+    const u = new URL(request.url);
+    return redirect("/login?returnTo=" + encodeURIComponent(u.pathname + u.search));
+  }
+  if (!me.isAdmin) {
     throw new Response("Not Found", { status: 404 });
   }
   return me;
@@ -94,6 +107,11 @@ export const router = createBrowserRouter([
       {
         path: "support",
         Component: Support,
+      },
+      {
+        path: "admin",
+        Component: Admin,
+        loader: adminLoader,
       },
     ],
   },

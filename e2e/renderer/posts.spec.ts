@@ -225,6 +225,127 @@ test.describe("post layout contract", () => {
     expectPx(width, 320, 2);
   });
 
+  test("reporter and publisher desktop footer side margins follow the setting", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    for (const name of ["reporter", "publisher"] as const) {
+      const base = structuredClone(postTemplates[name]) as Record<string, any>;
+      base.footerContent = { ...base.footerContent, sideMargins: "postBody" };
+      await mountRenderer(page, { postConfig: base });
+      const postBody = await footerSideBox(page);
+      base.footerContent = { ...base.footerContent, sideMargins: "fullScreen" };
+      await mountRenderer(page, { postConfig: base });
+      const fullScreen = await footerSideBox(page);
+
+      if (mobile) {
+        expect(Math.abs(postBody.footerWidth - fullScreen.footerWidth)).toBeLessThan(2);
+        expect(Math.abs(postBody.footerLeft - fullScreen.footerLeft)).toBeLessThan(2);
+        continue;
+      }
+
+      expect(Math.abs(postBody.footerLeft - postBody.articleLeft)).toBeLessThan(2);
+      expect(Math.abs(postBody.footerWidth - postBody.articleWidth)).toBeLessThan(2);
+      expect(fullScreen.footerWidth).toBeGreaterThan(fullScreen.articleWidth + 40);
+      expect(Math.abs(fullScreen.footerLeft - fullScreen.rowLeft)).toBeLessThan(2);
+      expect(fullScreen.footerWidth).toBeGreaterThan(postBody.footerWidth + 40);
+    }
+  });
+
+  test("story desktop comments follow the footer side margin setting", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const base = structuredClone(postTemplates.story) as Record<string, any>;
+    base.footerContent = { ...base.footerContent, sideMargins: "postBody" };
+    await mountRenderer(page, { postConfig: base });
+    const postBody = await storyCommentsFooterBox(page);
+    base.footerContent = { ...base.footerContent, sideMargins: "fullScreen" };
+    await mountRenderer(page, { postConfig: base });
+    const fullScreen = await storyCommentsFooterBox(page);
+
+    expect(Math.abs(postBody.commentsLeft - postBody.footerLeft)).toBeLessThan(2);
+    expect(Math.abs(postBody.commentsWidth - postBody.footerWidth)).toBeLessThan(2);
+    expect(Math.abs(fullScreen.commentsLeft - fullScreen.footerLeft)).toBeLessThan(2);
+    expect(Math.abs(fullScreen.commentsWidth - fullScreen.footerWidth)).toBeLessThan(2);
+
+    if (mobile) {
+      expect(Math.abs(postBody.commentsWidth - fullScreen.commentsWidth)).toBeLessThan(2);
+      expect(Math.abs(postBody.commentsLeft - fullScreen.commentsLeft)).toBeLessThan(2);
+      return;
+    }
+
+    expect(fullScreen.commentsWidth).toBeGreaterThan(postBody.commentsWidth + 40);
+  });
+
+  test("sidebar subscribe and get-it-free use compact desktop padding", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const cfg = structuredClone(postTemplates.reporter) as Record<string, any>;
+    cfg.rightSidebar = {
+      show: true,
+      modules: ["emailCapture", "leadMagnet"],
+      moduleOrder: ["emailCapture", "leadMagnet"],
+      width: 280,
+      spaceAbove: 0,
+      sticky: false,
+    };
+    cfg.footerContent = {
+      ...cfg.footerContent,
+      modules: ["emailCapture", "leadMagnet"],
+      moduleOrder: ["emailCapture", "leadMagnet"],
+    };
+    cfg.postModules.emailCapture = {
+      enabled: true,
+      position: "rightSidebar",
+      header: "Subscribe to our newsletter",
+      buttonText: "Subscribe",
+    };
+    cfg.postModules.leadMagnet = {
+      enabled: true,
+      position: "rightSidebar",
+      resourceTitle: "Free resource",
+      description: "A guide.",
+      buttonText: "Get it free",
+    };
+    await mountRenderer(page, { postConfig: cfg });
+
+    const sidebar = await page.evaluate(() => {
+      function read(selector: string) {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        const parent = el.parentElement ? el.parentElement.getBoundingClientRect().width : 0;
+        return {
+          padding: cs.padding,
+          width: el.getBoundingClientRect().width,
+          parent,
+          fontSizeInline: el.style.fontSize,
+          primary: el.classList.contains("sqs-button-element--primary"),
+        };
+      }
+      return {
+        subscribe: read(".blog-overlay-sidebar-section .bb-newsletter-btn"),
+        lead: read(".blog-overlay-sidebar-section .bb-lead-magnet-btn"),
+        footerSubscribe: read(".blog-overlay-email-capture-footer .bb-newsletter-btn"),
+      };
+    });
+
+    expect(sidebar.subscribe).not.toBeNull();
+    expect(sidebar.lead).not.toBeNull();
+    expect(sidebar.subscribe!.primary).toBe(true);
+    expect(sidebar.lead!.primary).toBe(true);
+    expect(sidebar.subscribe!.fontSizeInline).toBe("");
+    expect(sidebar.lead!.fontSizeInline).toBe("");
+
+    if (mobile) {
+      expect(sidebar.footerSubscribe!.padding).toBe("8px 16px");
+      return;
+    }
+
+    expect(sidebar.subscribe!.padding).toBe("8px 16px");
+    expect(sidebar.lead!.padding).toBe("8px 16px");
+    expect(Math.abs(sidebar.subscribe!.width - sidebar.subscribe!.parent)).toBeLessThan(2);
+    expect(Math.abs(sidebar.lead!.width - sidebar.lead!.parent)).toBeLessThan(2);
+    expect(sidebar.footerSubscribe!.padding).not.toBe("8px 16px");
+    expect(sidebar.footerSubscribe!.width).toBeLessThan(sidebar.footerSubscribe!.parent - 20);
+  });
+
   test("sticky sidebar stays in flow until it pins, and does not pin at top 0", async ({ page }, testInfo) => {
     test.skip(isMobileProject(testInfo), "sidebars stack and drop sticky on phones");
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
@@ -244,6 +365,49 @@ test.describe("post layout contract", () => {
     }
   });
 });
+
+async function storyCommentsFooterBox(page: Page) {
+  return page.evaluate(() => {
+    function contentBox(el: Element | null) {
+      if (!el) return { left: 0, width: 0 };
+      const rect = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const padLeft = parseFloat(cs.paddingLeft) || 0;
+      const padRight = parseFloat(cs.paddingRight) || 0;
+      return { left: rect.left + padLeft, width: rect.width - padLeft - padRight };
+    }
+    const comments = contentBox(document.getElementById("bb-comments"));
+    const footer = contentBox(document.querySelector(".blog-overlay-footer-content"));
+    return {
+      commentsLeft: comments.left,
+      commentsWidth: comments.width,
+      footerLeft: footer.left,
+      footerWidth: footer.width,
+    };
+  });
+}
+
+async function footerSideBox(page: Page) {
+  return page.evaluate(() => {
+    const footer = document.querySelector(".blog-overlay-footer-zone");
+    const article = document.querySelector(".blog-overlay-posts");
+    const row = document.querySelector(".blog-overlay-main-row");
+    const box = (el: Element | null) => {
+      const rect = el ? el.getBoundingClientRect() : null;
+      return rect ? { left: rect.left, width: rect.width } : { left: 0, width: 0 };
+    };
+    const f = box(footer);
+    const a = box(article);
+    const r = box(row);
+    return {
+      footerLeft: f.left,
+      footerWidth: f.width,
+      articleLeft: a.left,
+      articleWidth: a.width,
+      rowLeft: r.left,
+    };
+  });
+}
 
 async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolean) {
   const title = await cssNumber(page, ".blog-overlay-post-title", "font-size");
@@ -326,7 +490,10 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
       expect(crumbsAbove).toBe(true);
     } else {
       expect(direction).toBe("row");
+      await expect(page.locator(".blog-overlay-more-to-read")).toBeVisible();
     }
+    expect(await page.locator(".blog-overlay-relevant-posts--footer").count()).toBeGreaterThan(0);
+    await assertMoreToReadAndThumbs(page, mobile);
   }
 
   if (name === "publisher") {

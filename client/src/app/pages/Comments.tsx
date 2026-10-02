@@ -248,29 +248,6 @@ export default function Comments() {
         if (data) {
           setComments(data.comments || []);
           setTotal(data.total || 0);
-          const list = (data.comments || []) as Array<{
-            id: string;
-            displayName?: string;
-            verifiedSubscriber?: boolean;
-            email?: string | null;
-            squarespaceProfileId?: string | null;
-            status?: string;
-          }>;
-          console.log("[BetterBlog comments] dashboard list", {
-            siteKey,
-            total: data.total || 0,
-            verifiedCount: list.filter((c) => c.verifiedSubscriber === true).length,
-            anonymousCount: list.filter((c) => c.verifiedSubscriber !== true).length,
-            comments: list.map((c) => ({
-              id: c.id,
-              displayName: c.displayName,
-              verifiedSubscriber: Boolean(c.verifiedSubscriber),
-              hasEmail: Boolean(c.email),
-              email: c.email ?? null,
-              squarespaceProfileId: c.squarespaceProfileId ?? null,
-              status: c.status,
-            })),
-          });
         }
       })
       .finally(() => setFetching(false));
@@ -332,15 +309,6 @@ export default function Comments() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) {
-          console.log("[BetterBlog comments] dashboard settings", {
-            siteKey,
-            allowAnonymousComments: data.allowAnonymousComments ?? true,
-            subscriberCommentsEnabled: data.subscriberCommentsEnabled ?? false,
-            apiKeyVerified: data.apiKeyVerified ?? false,
-            apiKeyInvalid: data.apiKeyInvalid ?? false,
-            commentsEnabled: data.commentsEnabled ?? true,
-            allowNewComments: data.allowNewComments ?? true,
-          });
           setSettings({
             commentsEnabled: data.commentsEnabled ?? true,
             allowNewComments: data.allowNewComments ?? true,
@@ -1412,7 +1380,7 @@ export default function Comments() {
                   disabled={settingsSaving}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Readers can comment with a name only. When verification is also on, guests still see the comment form.</p>
+              <p className="text-xs text-neutral-500">Readers post as a session username such as Anonymous1234. They cannot enter their own name or email. When verification is also on, logged-out readers still see a sign-in link.</p>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">

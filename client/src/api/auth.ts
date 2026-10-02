@@ -17,6 +17,7 @@ export interface DashboardMe {
     cadence: string
     priceDisplay: string
     status: string
+    source?: string
     maxSites: number | null
     currentPeriodEnd: string | null
     cancelAtPeriodEnd: boolean
@@ -39,6 +40,7 @@ export interface DashboardMe {
   }>
   canCreateSite: boolean
   isSupportTeam?: boolean
+  isAdmin?: boolean
 }
 
 export async function getDashboardMe(): Promise<DashboardMe | null> {
@@ -255,25 +257,6 @@ export type SitePatchResponse = {
   verificationStatus: 'pending' | 'verified' | 'needs_attention'
   createdAt: string
   paywallSettings?: SitePaywallSettingsJson | null
-}
-
-export type PaywallReconcileMismatch = {
-  siteId: string
-  siteKey: string
-  name: string | null
-  storedState: 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
-  probedState: 'detected_paywalled' | 'detected_unpaywalled'
-  signals: string[]
-}
-
-export async function getPaywallReconcile(): Promise<{ mismatches: PaywallReconcileMismatch[] } | null> {
-  try {
-    const res = await fetch(`${API}/dashboard/paywall-reconcile`, { credentials: 'include' })
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
-  }
 }
 
 export async function updateSite(
