@@ -81,7 +81,7 @@ export default function HowItWorks() {
                   <div className="font-mono text-[0.62rem] text-[#a8b0c8] leading-[1.6] whitespace-nowrap overflow-hidden">
                     <span className="text-[#c792ea]">&lt;script</span>{' '}
                     <span className="text-[#80cbc4]">src</span>=
-                    <span className="text-[#c3e88d]">"https://cdn.betterblog.io/bb.js"</span>
+                    <span className="text-[#c3e88d]">"https://cdn.betterblog.co/bb.js"</span>
                     <br />
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                     <span className="text-[#80cbc4]">key</span>=
@@ -149,7 +149,7 @@ export default function HowItWorks() {
                     <div className="mx-[14px] mb-[10px] bg-[#13121f] rounded-md p-[10px] px-3 font-mono text-[0.58rem] text-[#a8b0c8] leading-[1.7]">
                       <span className="text-[#c792ea]">&lt;script</span>{' '}
                       <span className="text-[#80cbc4]">src</span>=
-                      <span className="text-[#c3e88d]">"https://cdn.betterblog.io/bb.js"</span>
+                      <span className="text-[#c3e88d]">"https://cdn.betterblog.co/bb.js"</span>
                       <br />
                       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                       <span className="text-[#80cbc4]">key</span>=

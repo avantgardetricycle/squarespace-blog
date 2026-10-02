@@ -114,7 +114,7 @@ export default function SubscriptionExpired() {
               <p className="text-sm text-neutral-600">
                 Need help?{" "}
                 <a
-                  href="mailto:support@betterblog.com"
+                  href="mailto:support@betterblog.co"
                   className="text-blue-700 hover:text-blue-800 font-medium underline"
                 >
                   Contact support
