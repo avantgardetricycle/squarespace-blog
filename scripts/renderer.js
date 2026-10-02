@@ -591,13 +591,7 @@
       else console.log('[BlogOverlay][auth-debug] ' + label);
     },
 
-    /** Always-on comment identity logs so we can compare verified vs anonymous across browsers. */
-    _commentsLog: function(label, payload) {
-      try {
-        if (payload !== undefined) console.log('[BetterBlog comments] ' + label, payload);
-        else console.log('[BetterBlog comments] ' + label);
-      } catch (e) {}
-    },
+    _commentsLog: function() {},
 
     _paywallDebug: function(label, payload) {
       if (!this._isPaywallDebugEnabled()) return;
@@ -801,9 +795,6 @@
       if (typeof MutationObserver !== 'function' || !root) return;
       if (this._rootInjectionGuard && this._rootInjectionGuardTarget === root) return;
       this._stopRootInjectionGuard();
-      // #region agent log
-      console.warn('[BB-DEBUG-7918cd] rootInjectionGuard STARTED on', root.tagName, root.id || '(no id)', root.className || '(no class)');
-      // #endregion
       var self = this;
       this._rootInjectionGuard = new MutationObserver(function(mutations) {
         for (var m = 0; m < mutations.length; m++) {
@@ -813,9 +804,6 @@
             var node = added[n];
             if (!node || node.nodeType !== 1) continue;
             if (node.id === 'blog-overlay-list' || node.id === 'blog-overlay-progress') continue;
-            // #region agent log
-            console.warn('[BB-DEBUG-7918cd] rootInjectionGuard REMOVING node:', node.tagName, node.id || '', node.className || '', 'hypothesisId=H3');
-            // #endregion
             try {
               if (node.parentNode === root) root.removeChild(node);
             } catch (e) { /* ignore */ }
@@ -842,11 +830,6 @@
     },
 
     _onEditorModeChange: function() {
-      // #region agent log
-      var _editorNow = this._isSquarespaceEditingUi();
-      var _inIframe = window.parent !== window;
-      console.warn('[BB-DEBUG-7918cd] _onEditorModeChange fired: isEditUi=' + _editorNow + ' wasSuppressed=' + this._suppressedByEditorMode + ' inIframe=' + _inIframe + ' htmlClasses=' + (document.documentElement ? document.documentElement.className : ''));
-      // #endregion
       if (this._isSquarespaceEditingUi()) {
         this._suppressedByEditorMode = true;
         this._stopRootInjectionGuard();
@@ -2422,15 +2405,11 @@
         hasBbLoadingClass: document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : false,
         isEditUi: (!previewMode && !bbPreview) ? this._isSquarespaceEditingUi() : 'skipped'
       };
-      console.warn('[BB-DEBUG-7918cd] renderer.init', JSON.stringify(_rendererDbg));
       fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'renderer.js:init',message:'renderer init state',data:_rendererDbg,timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
       // #endregion
 
       if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
-        // #region agent log
-        console.warn('[BB-DEBUG-7918cd] renderer BAILED: edit mode detected');
-        // #endregion
         this._suppressedByEditorMode = true;
         this._startEditorModeObserver();
         this._clearBootstrapLoading();
@@ -2444,15 +2423,6 @@
         // #region agent log
         try {
           this._ensureBlogRouteHydrated();
-          console.warn('[BB-DEBUG-d12b8c] init routeGate', JSON.stringify({
-            pathname: pathname,
-            blogPath: blogPath,
-            isOnBlogRoute: this._isOnBlogRoute(pathname, blogPath),
-            isTransientAccountDrawerRoute: this._isTransientAccountDrawerRoute(pathname),
-            lastBlogRoutePathname: this._lastBlogRoutePathname || null,
-            isOnEffectiveBlogRoute: this._isOnEffectiveBlogRoute(),
-            viewerMode: this._resolveViewerMode()
-          }));
           fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.routeGate',message:'init route gate decision',data:{pathname:pathname,blogPath:blogPath,isTransientAccountDrawerRoute:this._isTransientAccountDrawerRoute(pathname),lastBlogRoutePathname:this._lastBlogRoutePathname||null,isOnEffectiveBlogRoute:this._isOnEffectiveBlogRoute()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
         } catch (e) {}
         // #endregion
@@ -5058,22 +5028,7 @@
       });
     },
 
-    _logViewerModeResolution: function(reason, resolvedMode, details) {
-      try {
-        var loc = typeof window !== 'undefined' && window.location
-          ? (window.location.pathname || '/') + (window.location.search || '') + (window.location.hash || '')
-          : '';
-        var payload = Object.assign({
-          reason: reason,
-          resolvedMode: resolvedMode,
-          path: loc
-        }, details || {});
-        var sig = JSON.stringify(payload);
-        if (sig === this._lastViewerModeResolutionLogSig) return;
-        this._lastViewerModeResolutionLogSig = sig;
-        console.log('[BetterBlog auth] viewer mode resolved', payload);
-      } catch (e) {}
-    },
+    _logViewerModeResolution: function() {},
 
     _resolveViewerMode: function() {
       var cfg = this.config || {};
@@ -8405,83 +8360,6 @@
       return best;
     },
 
-    _dbgHeader: function(hypothesisId, message, data) {
-      var payload = {
-        sessionId: 'ce3659',
-        runId: 'pre-fix',
-        hypothesisId: hypothesisId,
-        location: 'renderer.js:header',
-        message: message,
-        data: data || {},
-        timestamp: Date.now()
-      };
-      try {
-        if (typeof window !== 'undefined') {
-          window.__bbHeaderDebug = window.__bbHeaderDebug || [];
-          window.__bbHeaderDebug.push(payload);
-          if (window.__bbHeaderDebug.length > 80) window.__bbHeaderDebug.shift();
-        }
-        console.warn('[BB-DEBUG-ce3659] ' + message, data || {});
-      } catch (eDbg) { /* ignore */ }
-      // #region agent log
-      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3659'},body:JSON.stringify(payload)}).catch(function(){});
-      // #endregion
-    },
-
-    _dbgHeaderSnap: function(phase, hypothesisId) {
-      var header = document.getElementById('header');
-      var hb = null;
-      var headerPos = null;
-      var headerTf = null;
-      var kids = [];
-      if (header && header.getBoundingClientRect) {
-        var hr = header.getBoundingClientRect();
-        hb = Math.round(hr.bottom);
-        try {
-          var hcs = window.getComputedStyle(header);
-          headerPos = hcs.position;
-          headerTf = hcs.transform === 'none' ? 'none' : String(hcs.transform).slice(0, 72);
-        } catch (eHcs) { /* ignore */ }
-        var all = header.querySelectorAll('div, nav');
-        for (var i = 0; i < all.length && kids.length < 5; i++) {
-          var c = all[i];
-          var r = c.getBoundingClientRect();
-          if (r.height < 12) continue;
-          var cs = window.getComputedStyle(c);
-          if (cs.position === 'static' && kids.length >= 3) continue;
-          kids.push({
-            cls: String(c.className || '').replace(/\s+/g, ' ').trim().slice(0, 60),
-            pos: cs.position,
-            t: Math.round(r.top),
-            b: Math.round(r.bottom),
-            h: Math.round(r.height)
-          });
-        }
-      }
-      function topOf(sel) {
-        var n = document.querySelector(sel);
-        if (!n || !n.getBoundingClientRect) return null;
-        return Math.round(n.getBoundingClientRect().top);
-      }
-      var crumbs = topOf('.blog-overlay-post-breadcrumbs');
-      var title = topOf('.blog-overlay-post-title');
-      var contentTop = crumbs != null ? crumbs : title;
-      var w = document.getElementById('blog-overlay-list');
-      this._dbgHeader(hypothesisId, phase, {
-        scrollY: Math.round(window.scrollY || document.documentElement.scrollTop || 0),
-        headerBottom: hb,
-        headerH: header && header.getBoundingClientRect ? Math.round(header.getBoundingClientRect().height) : null,
-        headerPos: headerPos,
-        headerTf: headerTf,
-        crumbsTop: crumbs,
-        titleTop: title,
-        overlap: contentTop != null && hb != null ? hb - contentTop : null,
-        wrapperPad: w ? w.style.paddingTop : null,
-        navVar: w ? w.style.getPropertyValue('--bb-nav-height') : null,
-        kids: kids
-      });
-    },
-
     _getNavbarOffset: function() {
       var root = this._root || document.getElementById('blogga-blogga-root');
       if (root) {
@@ -10483,21 +10361,6 @@
       }
       wrapper.style.setProperty('--bb-nav-height', navH + 'px');
       wrapper.style.paddingTop = padT + 'px';
-      // #region agent log
-      if (this._dbgLastPadT !== padT || this._dbgLastNavH !== navH) {
-        var _prevPad = this._dbgLastPadT;
-        this._dbgLastPadT = padT;
-        this._dbgLastNavH = navH;
-        this._dbgHeader('H2', 'wrapper pad applied', {
-          padT: padT,
-          prevPad: _prevPad,
-          navH: navH,
-          mobilePost: !!mobilePost,
-          flushNav: !!flushNav,
-          scrollY: Math.round(window.scrollY || 0)
-        });
-      }
-      // #endregion
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
       wrapper.style.marginTop = (mobilePost || flushNav) ? '0' : '16px';
@@ -11896,34 +11759,6 @@
           });
         }
       }
-
-      try {
-        var selectedPostForLog = isSinglePost && displayItems[0] ? displayItems[0] : null;
-        var renderLogPayload = {
-          path: typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') + (window.location.search || '') + (window.location.hash || '') : '',
-          viewerMode: viewerMode,
-          selectedIndex: selectedIndex,
-          isSinglePost: isSinglePost,
-          itemCount: items ? items.length : 0,
-          displayItemCount: displayItems.length,
-          selectedTitle: selectedPostForLog ? (selectedPostForLog.title || null) : null,
-          selectedFullUrl: selectedPostForLog ? (selectedPostForLog.fullUrl || null) : null,
-          selectedBodyLength: selectedPostForLog && selectedPostForLog.body ? String(selectedPostForLog.body).length : 0,
-          selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
-          paywallFullActive: paywallFullActiveForRender,
-          paywallShowFooter: paywalledLoggedOut && !isSinglePost,
-          paywallHideFooterModules: paywallHideFooterModules,
-          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && self._shouldGateSinglePostBody(selectedPostForLog),
-          paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
-          paywallDetectionState: rawCfg.paywallDetectionState || null,
-          paywallMode: rawCfg.paywallMode || null
-        };
-        var renderLogSig = JSON.stringify(renderLogPayload);
-        if (renderLogSig !== this._lastViewerModeRenderLogSig) {
-          this._lastViewerModeRenderLogSig = renderLogSig;
-          console.log('[BetterBlog auth] render state', renderLogPayload);
-        }
-      } catch (eLogState) {}
 
       return {
         baseCfg: baseCfg,
@@ -13877,9 +13712,6 @@
           toRemove.push(child);
         }
       }
-      // #region agent log
-      console.warn('[BB-DEBUG-7918cd] _renderContent replacing root children:', toRemove.length, 'nodes in', root.tagName, root.id || '', 'hypothesisId=H4');
-      // #endregion
       if (!this._originalRootChildren) this._originalRootChildren = [];
       if (this._originalRootChildren.length === 0 && toRemove.length > 0) {
         this._originalRootChildren = toRemove.slice();
@@ -16693,19 +16525,11 @@
         }
         var newOffset = self._getNavbarOffset();
         var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
-        var willApply = flushNav ? Math.abs(newOffset - lastAppliedOffset) >= 2 : newOffset > lastAppliedOffset;
-        // #region agent log
-        if (Math.abs(newOffset - lastAppliedOffset) >= 2) {
-          self._dbgHeader('H1', 'nav recheck', {
-            newOffset: newOffset,
-            last: lastAppliedOffset,
-            flushNav: !!flushNav,
-            willApply: !!willApply,
-            scrollY: Math.round(window.scrollY || 0)
-          });
+        if (flushNav) {
+          if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
+        } else if (newOffset > lastAppliedOffset) {
+          applyNavbarOffset(newOffset);
         }
-        // #endregion
-        if (willApply) applyNavbarOffset(newOffset);
       };
       requestAnimationFrame(function() {
         requestAnimationFrame(scheduleRecheck);
@@ -16722,27 +16546,6 @@
           try { ro.observe(roTargets[t]); } catch (e) { /* ignore */ }
         }
       }
-
-      // #region agent log
-      (function() {
-        var sawDown = false;
-        var upTimer = null;
-        window.addEventListener('scroll', function() {
-          var y = window.scrollY || document.documentElement.scrollTop || 0;
-          if (!sawDown && y > 200) {
-            sawDown = true;
-            self._dbgHeaderSnap('scrolled-down', 'H5');
-          }
-          if (sawDown && y < 8) {
-            sawDown = false;
-            self._dbgHeaderSnap('scrolled-back-immediate', 'H3');
-            if (upTimer) clearTimeout(upTimer);
-            upTimer = setTimeout(function() { self._dbgHeaderSnap('scrolled-back-settled', 'H4'); }, 700);
-          }
-        }, { passive: true });
-        self._dbgHeaderSnap('initial', 'H5');
-      })();
-      // #endregion
 
       self._pageLoadTime = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       self._analyticsPageContextPostId =
