@@ -8403,6 +8403,83 @@
       return best;
     },
 
+    _dbgHeader: function(hypothesisId, message, data) {
+      var payload = {
+        sessionId: 'ce3659',
+        runId: 'pre-fix',
+        hypothesisId: hypothesisId,
+        location: 'renderer.js:header',
+        message: message,
+        data: data || {},
+        timestamp: Date.now()
+      };
+      try {
+        if (typeof window !== 'undefined') {
+          window.__bbHeaderDebug = window.__bbHeaderDebug || [];
+          window.__bbHeaderDebug.push(payload);
+          if (window.__bbHeaderDebug.length > 80) window.__bbHeaderDebug.shift();
+        }
+        console.warn('[BB-DEBUG-ce3659] ' + message, data || {});
+      } catch (eDbg) { /* ignore */ }
+      // #region agent log
+      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ce3659'},body:JSON.stringify(payload)}).catch(function(){});
+      // #endregion
+    },
+
+    _dbgHeaderSnap: function(phase, hypothesisId) {
+      var header = document.getElementById('header');
+      var hb = null;
+      var headerPos = null;
+      var headerTf = null;
+      var kids = [];
+      if (header && header.getBoundingClientRect) {
+        var hr = header.getBoundingClientRect();
+        hb = Math.round(hr.bottom);
+        try {
+          var hcs = window.getComputedStyle(header);
+          headerPos = hcs.position;
+          headerTf = hcs.transform === 'none' ? 'none' : String(hcs.transform).slice(0, 72);
+        } catch (eHcs) { /* ignore */ }
+        var all = header.querySelectorAll('div, nav');
+        for (var i = 0; i < all.length && kids.length < 5; i++) {
+          var c = all[i];
+          var r = c.getBoundingClientRect();
+          if (r.height < 12) continue;
+          var cs = window.getComputedStyle(c);
+          if (cs.position === 'static' && kids.length >= 3) continue;
+          kids.push({
+            cls: String(c.className || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+            pos: cs.position,
+            t: Math.round(r.top),
+            b: Math.round(r.bottom),
+            h: Math.round(r.height)
+          });
+        }
+      }
+      function topOf(sel) {
+        var n = document.querySelector(sel);
+        if (!n || !n.getBoundingClientRect) return null;
+        return Math.round(n.getBoundingClientRect().top);
+      }
+      var crumbs = topOf('.blog-overlay-post-breadcrumbs');
+      var title = topOf('.blog-overlay-post-title');
+      var contentTop = crumbs != null ? crumbs : title;
+      var w = document.getElementById('blog-overlay-list');
+      this._dbgHeader(hypothesisId, phase, {
+        scrollY: Math.round(window.scrollY || document.documentElement.scrollTop || 0),
+        headerBottom: hb,
+        headerH: header && header.getBoundingClientRect ? Math.round(header.getBoundingClientRect().height) : null,
+        headerPos: headerPos,
+        headerTf: headerTf,
+        crumbsTop: crumbs,
+        titleTop: title,
+        overlap: contentTop != null && hb != null ? hb - contentTop : null,
+        wrapperPad: w ? w.style.paddingTop : null,
+        navVar: w ? w.style.getPropertyValue('--bb-nav-height') : null,
+        kids: kids
+      });
+    },
+
     _getNavbarOffset: function() {
       var root = this._root || document.getElementById('blogga-blogga-root');
       if (root) {
@@ -10404,6 +10481,21 @@
       }
       wrapper.style.setProperty('--bb-nav-height', navH + 'px');
       wrapper.style.paddingTop = padT + 'px';
+      // #region agent log
+      if (this._dbgLastPadT !== padT || this._dbgLastNavH !== navH) {
+        var _prevPad = this._dbgLastPadT;
+        this._dbgLastPadT = padT;
+        this._dbgLastNavH = navH;
+        this._dbgHeader('H2', 'wrapper pad applied', {
+          padT: padT,
+          prevPad: _prevPad,
+          navH: navH,
+          mobilePost: !!mobilePost,
+          flushNav: !!flushNav,
+          scrollY: Math.round(window.scrollY || 0)
+        });
+      }
+      // #endregion
       wrapper.style.paddingBottom = '16px';
       wrapper.style.boxSizing = 'border-box';
       wrapper.style.marginTop = (mobilePost || flushNav) ? '0' : '16px';
@@ -16599,11 +16691,19 @@
         }
         var newOffset = self._getNavbarOffset();
         var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
-        if (flushNav) {
-          if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
-        } else if (newOffset > lastAppliedOffset) {
-          applyNavbarOffset(newOffset);
+        var willApply = flushNav ? Math.abs(newOffset - lastAppliedOffset) >= 2 : newOffset > lastAppliedOffset;
+        // #region agent log
+        if (Math.abs(newOffset - lastAppliedOffset) >= 2) {
+          self._dbgHeader('H1', 'nav recheck', {
+            newOffset: newOffset,
+            last: lastAppliedOffset,
+            flushNav: !!flushNav,
+            willApply: !!willApply,
+            scrollY: Math.round(window.scrollY || 0)
+          });
         }
+        // #endregion
+        if (willApply) applyNavbarOffset(newOffset);
       };
       requestAnimationFrame(function() {
         requestAnimationFrame(scheduleRecheck);
@@ -16620,6 +16720,27 @@
           try { ro.observe(roTargets[t]); } catch (e) { /* ignore */ }
         }
       }
+
+      // #region agent log
+      (function() {
+        var sawDown = false;
+        var upTimer = null;
+        window.addEventListener('scroll', function() {
+          var y = window.scrollY || document.documentElement.scrollTop || 0;
+          if (!sawDown && y > 200) {
+            sawDown = true;
+            self._dbgHeaderSnap('scrolled-down', 'H5');
+          }
+          if (sawDown && y < 8) {
+            sawDown = false;
+            self._dbgHeaderSnap('scrolled-back-immediate', 'H3');
+            if (upTimer) clearTimeout(upTimer);
+            upTimer = setTimeout(function() { self._dbgHeaderSnap('scrolled-back-settled', 'H4'); }, 700);
+          }
+        }, { passive: true });
+        self._dbgHeaderSnap('initial', 'H5');
+      })();
+      // #endregion
 
       self._pageLoadTime = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
       self._analyticsPageContextPostId =
