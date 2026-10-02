@@ -251,8 +251,8 @@ export default function Admin() {
                       <p className="text-sm text-[#6b6b6b]">{blog.url || "No URL"}</p>
                       {blog.config ? (
                         <dl className="mt-3 grid gap-1 text-sm text-[#0a0a0a]">
-                          <div>Collection template: {blog.config.collectionTemplateId || "—"}</div>
-                          <div>Post template: {blog.config.postTemplateId || "—"}</div>
+                          <div>Collection template: {blog.config.collectionTemplateName || "—"}</div>
+                          <div>Post template: {blog.config.postTemplateName || "—"}</div>
                           <div>
                             Date {blog.config.showDate ? "on" : "off"} · Author {blog.config.showAuthor ? "on" : "off"} · Reading time{" "}
                             {blog.config.showReadingTime ? "on" : "off"}

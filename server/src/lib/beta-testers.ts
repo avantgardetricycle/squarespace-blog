@@ -9,7 +9,7 @@ import {
 } from './subscriptionStatus.js'
 import { getAppUrl } from './url.js'
 
-export const BETA_INVITE_DAYS = 7
+export const BETA_INVITE_DAYS = 14
 export const BETA_ACCESS_YEARS = 1
 
 export type InviteStatus = 'pending' | 'accepted' | 'expired'
@@ -28,8 +28,8 @@ export type BetaTesterSummary = {
 export type BetaConfigSummary = {
   version: number
   updatedAt: string
-  collectionTemplateId: string | null
-  postTemplateId: string | null
+  collectionTemplateName: string | null
+  postTemplateName: string | null
   showDate: boolean
   showAuthor: boolean
   showReadingTime: boolean
@@ -101,22 +101,30 @@ function moduleEnabled(value: unknown): boolean {
   return (value as { show?: boolean }).show === true
 }
 
-function summarizeConfig(config: {
-  version: number
-  createdAt: Date
-  collectionTemplateId: string | null
-  postTemplateId: string | null
-  showDate: boolean
-  showAuthor: boolean
-  showReadingTime: boolean
-  progressBar: unknown
-  tableOfContents: unknown
-  recentPostsSidebar: unknown
-  leftSidebar: unknown
-  rightSidebar: unknown
-  headerContent: unknown
-  socialMediaLinks: unknown
-}): BetaConfigSummary {
+function templateName(id: string | null, names: Map<string, string>): string | null {
+  if (!id) return null
+  return names.get(id) ?? 'Unknown template'
+}
+
+function summarizeConfig(
+  config: {
+    version: number
+    createdAt: Date
+    collectionTemplateId: string | null
+    postTemplateId: string | null
+    showDate: boolean
+    showAuthor: boolean
+    showReadingTime: boolean
+    progressBar: unknown
+    tableOfContents: unknown
+    recentPostsSidebar: unknown
+    leftSidebar: unknown
+    rightSidebar: unknown
+    headerContent: unknown
+    socialMediaLinks: unknown
+  },
+  templateNames: Map<string, string>
+): BetaConfigSummary {
   const modules: string[] = []
   if (moduleEnabled(config.progressBar)) modules.push('Progress bar')
   if (moduleEnabled(config.tableOfContents)) modules.push('Table of contents')
@@ -128,8 +136,8 @@ function summarizeConfig(config: {
   return {
     version: config.version,
     updatedAt: config.createdAt.toISOString(),
-    collectionTemplateId: config.collectionTemplateId,
-    postTemplateId: config.postTemplateId,
+    collectionTemplateName: templateName(config.collectionTemplateId, templateNames),
+    postTemplateName: templateName(config.postTemplateId, templateNames),
     showDate: config.showDate,
     showAuthor: config.showAuthor,
     showReadingTime: config.showReadingTime,
@@ -289,6 +297,23 @@ export async function getBetaTesterUsage(userId: number): Promise<BetaTesterUsag
     })
   ])
 
+  const templateIds = [
+    ...new Set(
+      sites.flatMap((site) =>
+        site.siteConfigs.flatMap((config) =>
+          [config.collectionTemplateId, config.postTemplateId].filter((id): id is string => Boolean(id))
+        )
+      )
+    )
+  ]
+  const templateRows = templateIds.length
+    ? await prisma.templateConfig.findMany({
+        where: { id: { in: templateIds } },
+        select: { id: true, name: true }
+      })
+    : []
+  const templateNames = new Map(templateRows.map((row) => [row.id, row.name]))
+
   const blogs: BetaBlogSummary[] = sites
     .filter((site) => site.deletedAt == null)
     .map((site) => {
@@ -298,7 +323,7 @@ export async function getBetaTesterUsage(userId: number): Promise<BetaTesterUsag
         name: site.name,
         url: site.url,
         createdAt: site.createdAt.toISOString(),
-        config: active ? summarizeConfig(active) : null
+        config: active ? summarizeConfig(active, templateNames) : null
       }
     })
 

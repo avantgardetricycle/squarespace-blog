@@ -70,7 +70,6 @@
     }
     // #region agent log
     _dbg.result = false;
-    console.warn('[BB-DEBUG-7918cd] isSquarespaceEditingUi', JSON.stringify(_dbg));
     fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'loader.js:isSquarespaceEditingUi',message:'edit detection result',data:_dbg,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
     // #endregion
     return false;
@@ -298,13 +297,7 @@
     var _earlyEditResult = isSquarespaceEditingUi();
     var _inIframeEarly = false;
     try { _inIframeEarly = window.parent !== window; } catch (e) { _inIframeEarly = true; }
-    // #region agent log
-    console.warn('[BB-DEBUG-7918cd] loader early boot: isEditUi=' + _earlyEditResult + ' inIframe=' + _inIframeEarly + ' bbLoadingClass=' + (document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : 'N/A'));
-    // #endregion
     if (_inIframeEarly && !isExplicitPreviewContext()) {
-      // #region agent log
-      console.warn('[BB-DEBUG-7918cd] loader: IFRAME detected, skipping bootstrap overlay (hypothesisId=H2_FIX)');
-      // #endregion
       clearBootstrapLoading();
     } else if (_earlyEditResult) {
       clearBootstrapLoading();
@@ -414,10 +407,6 @@
     try { _inIframeStart = window.parent !== window; } catch (e) { _inIframeStart = true; }
     if (!_inIframeStart || isExplicitPreviewContext()) {
       installBootstrapLoading();
-    } else {
-      // #region agent log
-      console.warn('[BB-DEBUG-7918cd] startLoader: IFRAME detected, skipping installBootstrapLoading (hypothesisId=H2_FIX)');
-      // #endregion
     }
     initRendererWithConfig(config);
   }
@@ -472,9 +461,6 @@
   // Start immediately — do not wait for DOMContentLoaded. The config fetch begins
   // inside startLoader; only appending the renderer <script> needs document.head.
   var _startEditResult = isSquarespaceEditingUi();
-  // #region agent log
-  console.warn('[BB-DEBUG-7918cd] loader startLoader gate: isEditUi=' + _startEditResult);
-  // #endregion
   if (!_startEditResult) {
     startLoader();
   }

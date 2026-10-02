@@ -591,13 +591,7 @@
       else console.log('[BlogOverlay][auth-debug] ' + label);
     },
 
-    /** Always-on comment identity logs so we can compare verified vs anonymous across browsers. */
-    _commentsLog: function(label, payload) {
-      try {
-        if (payload !== undefined) console.log('[BetterBlog comments] ' + label, payload);
-        else console.log('[BetterBlog comments] ' + label);
-      } catch (e) {}
-    },
+    _commentsLog: function() {},
 
     _paywallDebug: function(label, payload) {
       if (!this._isPaywallDebugEnabled()) return;
@@ -801,9 +795,6 @@
       if (typeof MutationObserver !== 'function' || !root) return;
       if (this._rootInjectionGuard && this._rootInjectionGuardTarget === root) return;
       this._stopRootInjectionGuard();
-      // #region agent log
-      console.warn('[BB-DEBUG-7918cd] rootInjectionGuard STARTED on', root.tagName, root.id || '(no id)', root.className || '(no class)');
-      // #endregion
       var self = this;
       this._rootInjectionGuard = new MutationObserver(function(mutations) {
         for (var m = 0; m < mutations.length; m++) {
@@ -813,9 +804,6 @@
             var node = added[n];
             if (!node || node.nodeType !== 1) continue;
             if (node.id === 'blog-overlay-list' || node.id === 'blog-overlay-progress') continue;
-            // #region agent log
-            console.warn('[BB-DEBUG-7918cd] rootInjectionGuard REMOVING node:', node.tagName, node.id || '', node.className || '', 'hypothesisId=H3');
-            // #endregion
             try {
               if (node.parentNode === root) root.removeChild(node);
             } catch (e) { /* ignore */ }
@@ -842,11 +830,6 @@
     },
 
     _onEditorModeChange: function() {
-      // #region agent log
-      var _editorNow = this._isSquarespaceEditingUi();
-      var _inIframe = window.parent !== window;
-      console.warn('[BB-DEBUG-7918cd] _onEditorModeChange fired: isEditUi=' + _editorNow + ' wasSuppressed=' + this._suppressedByEditorMode + ' inIframe=' + _inIframe + ' htmlClasses=' + (document.documentElement ? document.documentElement.className : ''));
-      // #endregion
       if (this._isSquarespaceEditingUi()) {
         this._suppressedByEditorMode = true;
         this._stopRootInjectionGuard();
@@ -2422,15 +2405,11 @@
         hasBbLoadingClass: document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : false,
         isEditUi: (!previewMode && !bbPreview) ? this._isSquarespaceEditingUi() : 'skipped'
       };
-      console.warn('[BB-DEBUG-7918cd] renderer.init', JSON.stringify(_rendererDbg));
       fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'renderer.js:init',message:'renderer init state',data:_rendererDbg,timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
       // #endregion
 
       if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
-        // #region agent log
-        console.warn('[BB-DEBUG-7918cd] renderer BAILED: edit mode detected');
-        // #endregion
         this._suppressedByEditorMode = true;
         this._startEditorModeObserver();
         this._clearBootstrapLoading();
@@ -2444,15 +2423,6 @@
         // #region agent log
         try {
           this._ensureBlogRouteHydrated();
-          console.warn('[BB-DEBUG-d12b8c] init routeGate', JSON.stringify({
-            pathname: pathname,
-            blogPath: blogPath,
-            isOnBlogRoute: this._isOnBlogRoute(pathname, blogPath),
-            isTransientAccountDrawerRoute: this._isTransientAccountDrawerRoute(pathname),
-            lastBlogRoutePathname: this._lastBlogRoutePathname || null,
-            isOnEffectiveBlogRoute: this._isOnEffectiveBlogRoute(),
-            viewerMode: this._resolveViewerMode()
-          }));
           fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.routeGate',message:'init route gate decision',data:{pathname:pathname,blogPath:blogPath,isTransientAccountDrawerRoute:this._isTransientAccountDrawerRoute(pathname),lastBlogRoutePathname:this._lastBlogRoutePathname||null,isOnEffectiveBlogRoute:this._isOnEffectiveBlogRoute()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
         } catch (e) {}
         // #endregion
@@ -4028,6 +3998,7 @@
 
       if (narrow) {
         if (featureBelowRowHost) this._clearFeatureArticleColumnFooter(featureBelowRowHost);
+        if (commentsEl) this._clearSidebarSpanBlockWidth(commentsEl);
         if (belowHasContent) {
           if (featurePostLayout) this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, true);
           this._reorderFeatureBelowRow(featureBelowRowHost, true);
@@ -4037,7 +4008,10 @@
           main.appendChild(commentsEl);
         }
         footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
-        if (footerHasContent) main.appendChild(footerZoneEl);
+        if (footerHasContent) {
+          this._clearSidebarSpanBlockWidth(footerZoneEl);
+          main.appendChild(footerZoneEl);
+        }
         if (featurePostLayout) this._syncFeatureMobileArticleGap(wrapper, true);
         return;
       }
@@ -4057,11 +4031,13 @@
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
       /* Desktop comments and footer are siblings after the main row.
-         Reporter/Publisher postBody is pinned to the article column.
-         fullScreen spans the row and bleeds to the page-section content box. */
+         Reporter / Publisher follow the side-margins toggle: postBody matches
+         the article column; fullScreen uses the site content box.
+         Story comments follow that toggle with the story inset. */
       if (!featurePostLayout && mainRowEl) {
         if (commentsEl) {
           if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+          this._syncSidebarSpanBlockWidth(commentsEl, main, cfg, opts.footerContentCfg);
           this._syncStoryCommentsToFooterWidth(commentsEl, cfg, opts.footerContentCfg);
         }
         if (footerHasContent) {
@@ -4117,6 +4093,33 @@
       return footerContentCfg && footerContentCfg.sideMargins === 'fullScreen' ? 'fullScreen' : 'postBody';
     },
 
+    /** Drop article-column pin and full-screen bleed so a block can span its parent. */
+    _clearSidebarSpanBlockWidth: function(el) {
+      this._clearPostFooterZoneBleed(el);
+      this._clearFeatureArticleColumnFooter(el);
+    },
+
+    /**
+     * Reporter / Publisher desktop: comments and footer share the side-margins
+     * toggle. postBody matches the article column. fullScreen spans the site
+     * content box (page-section padding), the same bleed the footer uses.
+     */
+    _syncSidebarSpanBlockWidth: function(el, articleCol, cfg, footerContentCfg) {
+      if (!el || !el.style) return;
+      if (!(this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg))) return;
+      if (this._isNarrowCollectionViewport()) {
+        this._clearSidebarSpanBlockWidth(el);
+        return;
+      }
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'postBody') {
+        this._clearPostFooterZoneBleed(el);
+        this._scheduleFeatureArticleColumnFooter(el, articleCol);
+        return;
+      }
+      this._clearFeatureArticleColumnFooter(el);
+      this._scheduleFullScreenFooterBleed(el);
+    },
+
     /** Post footer horizontal inset: postBody matches post text; fullScreen uses site margins only. */
     _applyPostFooterSideMargins: function(el, cfg, footerContentCfg) {
       if (!el || !el.style || !cfg) return;
@@ -4169,6 +4172,9 @@
       var targetRight = sec.right - (pad.right || 0);
       var leftGap = Math.round(box.left - targetLeft);
       var rightGap = Math.round(targetRight - box.right);
+      /* A second pass sees the box it just widened. Clearing here snaps the
+         block back to the article column, so an exact match must stay put. */
+      if (leftGap > -1 && leftGap < 1 && rightGap > -1 && rightGap < 1) return;
       if (leftGap < 1 && rightGap < 1) {
         this._clearPostFooterZoneBleed(footerZoneEl);
         return;
@@ -5058,22 +5064,7 @@
       });
     },
 
-    _logViewerModeResolution: function(reason, resolvedMode, details) {
-      try {
-        var loc = typeof window !== 'undefined' && window.location
-          ? (window.location.pathname || '/') + (window.location.search || '') + (window.location.hash || '')
-          : '';
-        var payload = Object.assign({
-          reason: reason,
-          resolvedMode: resolvedMode,
-          path: loc
-        }, details || {});
-        var sig = JSON.stringify(payload);
-        if (sig === this._lastViewerModeResolutionLogSig) return;
-        this._lastViewerModeResolutionLogSig = sig;
-        console.log('[BetterBlog auth] viewer mode resolved', payload);
-      } catch (e) {}
-    },
+    _logViewerModeResolution: function() {},
 
     _resolveViewerMode: function() {
       var cfg = this.config || {};
@@ -8392,7 +8383,9 @@
             try {
               var rect = header.getBoundingClientRect();
               if (rect && rect.height > 0 && rect.top < 80) {
-                height = Math.round(rect.bottom);
+                /* An absolute header scrolls off with the page. rect.bottom then
+                   shrinks to the visible sliver and must not replace the resting height. */
+                height = rect.top < 0 ? Math.round(rect.height) : Math.round(rect.bottom);
               }
             } catch (eRect) { /* ignore */ }
             if (!height) height = header.offsetHeight || 0;
@@ -11803,34 +11796,6 @@
         }
       }
 
-      try {
-        var selectedPostForLog = isSinglePost && displayItems[0] ? displayItems[0] : null;
-        var renderLogPayload = {
-          path: typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') + (window.location.search || '') + (window.location.hash || '') : '',
-          viewerMode: viewerMode,
-          selectedIndex: selectedIndex,
-          isSinglePost: isSinglePost,
-          itemCount: items ? items.length : 0,
-          displayItemCount: displayItems.length,
-          selectedTitle: selectedPostForLog ? (selectedPostForLog.title || null) : null,
-          selectedFullUrl: selectedPostForLog ? (selectedPostForLog.fullUrl || null) : null,
-          selectedBodyLength: selectedPostForLog && selectedPostForLog.body ? String(selectedPostForLog.body).length : 0,
-          selectedExcerptLength: selectedPostForLog && selectedPostForLog.excerpt ? String(selectedPostForLog.excerpt).length : 0,
-          paywallFullActive: paywallFullActiveForRender,
-          paywallShowFooter: paywalledLoggedOut && !isSinglePost,
-          paywallHideFooterModules: paywallHideFooterModules,
-          paywallGateSinglePostBody: paywalledLoggedOut && isSinglePost && selectedPostForLog && self._shouldGateSinglePostBody(selectedPostForLog),
-          paywallReplaceCollectionTeaser: paywalledLoggedOut && !isSinglePost,
-          paywallDetectionState: rawCfg.paywallDetectionState || null,
-          paywallMode: rawCfg.paywallMode || null
-        };
-        var renderLogSig = JSON.stringify(renderLogPayload);
-        if (renderLogSig !== this._lastViewerModeRenderLogSig) {
-          this._lastViewerModeRenderLogSig = renderLogSig;
-          console.log('[BetterBlog auth] render state', renderLogPayload);
-        }
-      } catch (eLogState) {}
-
       return {
         baseCfg: baseCfg,
         viewerMode: viewerMode,
@@ -13783,9 +13748,6 @@
           toRemove.push(child);
         }
       }
-      // #region agent log
-      console.warn('[BB-DEBUG-7918cd] _renderContent replacing root children:', toRemove.length, 'nodes in', root.tagName, root.id || '', 'hypothesisId=H4');
-      // #endregion
       if (!this._originalRootChildren) this._originalRootChildren = [];
       if (this._originalRootChildren.length === 0 && toRemove.length > 0) {
         this._originalRootChildren = toRemove.slice();
