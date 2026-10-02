@@ -16,7 +16,7 @@ import { sendInviteEmailViaSendGrid } from '../src/lib/email.js'
 import { isActiveSubscriptionStatus } from '../src/lib/subscriptionStatus.js'
 import type { StripePlanEnvironment } from '../src/lib/stripeEnvironment.js'
 
-const TOKEN_EXPIRY_HOURS = 24
+const TOKEN_EXPIRY_DAYS = 14
 const COMPLIMENTARY_PLAN = 'professional'
 
 function normalizeEmail (raw: string | undefined): string {
@@ -123,7 +123,7 @@ async function invite (prisma: PrismaClient): Promise<void> {
 
   const rawToken = generateToken()
   const expiresAt = new Date()
-  expiresAt.setHours(expiresAt.getHours() + TOKEN_EXPIRY_HOURS)
+  expiresAt.setDate(expiresAt.getDate() + TOKEN_EXPIRY_DAYS)
 
   await prisma.loginToken.create({
     data: {
@@ -139,7 +139,7 @@ async function invite (prisma: PrismaClient): Promise<void> {
   await sendInviteEmailViaSendGrid(email, magicLink)
 
   console.log(`${existingUser ? 'Re-invited' : 'Invited'} ${email} on ${environmentLabel}`)
-  console.log(`Invite email sent. The link expires in ${TOKEN_EXPIRY_HOURS} hours.`)
+  console.log(`Invite email sent. The link expires in ${TOKEN_EXPIRY_DAYS} days.`)
 }
 
 main()

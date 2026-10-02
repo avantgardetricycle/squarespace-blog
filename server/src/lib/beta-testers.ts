@@ -9,7 +9,7 @@ import {
 } from './subscriptionStatus.js'
 import { getAppUrl } from './url.js'
 
-export const BETA_INVITE_DAYS = 7
+export const BETA_INVITE_DAYS = 14
 export const BETA_ACCESS_YEARS = 1
 
 export type InviteStatus = 'pending' | 'accepted' | 'expired'
