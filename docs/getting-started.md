@@ -85,7 +85,7 @@ You can change or cancel your plan at any time from the Account section of the B
 
 ### 1. Create your BetterBlog account
 
-Go to [betterblog.xyz](https://betterblog.xyz) and click **Get Started**. Enter your name and email address. You'll receive a magic link by email — click it to log in. No password to set or remember.
+Go to [betterblog.co](https://betterblog.co) and click **Get Started**. Enter your name and email address. You'll receive a magic link by email — click it to log in. No password to set or remember.
 
 Magic links expire after 24 hours. If yours has expired, return to the login page and request a new one.
 
@@ -120,7 +120,7 @@ After adding your blog, a snippet is displayed. It looks something like this:
   /* BetterBlog preloader */
   ...
 </script>
-<script defer src="https://app.betterblog.xyz/loader.js"
+<script defer src="https://app.betterblog.co/loader.js"
   data-site-key="YOUR_SITE_KEY">
 </script>
 ```
