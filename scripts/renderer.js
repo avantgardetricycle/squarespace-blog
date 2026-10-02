@@ -3878,6 +3878,7 @@
 
       if (narrow) {
         if (featureBelowRowHost) this._clearFeatureArticleColumnFooter(featureBelowRowHost);
+        if (commentsEl) this._clearSidebarSpanBlockWidth(commentsEl);
         if (belowHasContent) {
           if (featurePostLayout) this._syncFeatureFooterModulePack(featureBelowRowHost, footerZoneEl, true);
           this._reorderFeatureBelowRow(featureBelowRowHost, true);
@@ -3887,7 +3888,10 @@
           main.appendChild(commentsEl);
         }
         footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
-        if (footerHasContent) main.appendChild(footerZoneEl);
+        if (footerHasContent) {
+          this._clearSidebarSpanBlockWidth(footerZoneEl);
+          main.appendChild(footerZoneEl);
+        }
         if (featurePostLayout) this._syncFeatureMobileArticleGap(wrapper, true);
         return;
       }
@@ -3907,16 +3911,19 @@
       }
       footerHasContent = !!(footerZoneEl && footerZoneEl.childNodes.length);
       /* Desktop comments and footer are siblings after the main row.
-         postBody stays in that column. fullScreen bleeds to the page-section
-         content box (site margins), not the article column. */
+         Reporter / Publisher follow the side-margins toggle: postBody matches
+         the article column; fullScreen uses the site content box. */
       if (!featurePostLayout && mainRowEl) {
         if (commentsEl) {
           if (mainRowEl.nextSibling !== commentsEl) wrapper.insertBefore(commentsEl, mainRowEl.nextSibling);
+          this._syncSidebarSpanBlockWidth(commentsEl, main, cfg, opts.footerContentCfg);
         }
         if (footerHasContent) {
           var afterComments = (commentsEl && commentsEl.parentNode === wrapper) ? commentsEl : mainRowEl;
           if (afterComments.nextSibling !== footerZoneEl) wrapper.insertBefore(footerZoneEl, afterComments.nextSibling);
-          if (this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'fullScreen') {
+          if (this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg)) {
+            this._syncSidebarSpanBlockWidth(footerZoneEl, main, cfg, opts.footerContentCfg);
+          } else if (this._getPostFooterSideMarginsMode(opts.footerContentCfg) === 'fullScreen') {
             this._scheduleFullScreenFooterBleed(footerZoneEl);
           } else {
             this._clearPostFooterZoneBleed(footerZoneEl);
@@ -3956,6 +3963,33 @@
 
     _getPostFooterSideMarginsMode: function(footerContentCfg) {
       return footerContentCfg && footerContentCfg.sideMargins === 'fullScreen' ? 'fullScreen' : 'postBody';
+    },
+
+    /** Drop article-column pin and full-screen bleed so a block can span its parent. */
+    _clearSidebarSpanBlockWidth: function(el) {
+      this._clearPostFooterZoneBleed(el);
+      this._clearFeatureArticleColumnFooter(el);
+    },
+
+    /**
+     * Reporter / Publisher desktop: comments and footer share the side-margins
+     * toggle. postBody matches the article column. fullScreen spans the site
+     * content box (page-section padding), the same bleed the footer uses.
+     */
+    _syncSidebarSpanBlockWidth: function(el, articleCol, cfg, footerContentCfg) {
+      if (!el || !el.style) return;
+      if (!(this._isReporterPostLayout(cfg) || this._isPublisherPostLayout(cfg))) return;
+      if (this._isNarrowCollectionViewport()) {
+        this._clearSidebarSpanBlockWidth(el);
+        return;
+      }
+      if (this._getPostFooterSideMarginsMode(footerContentCfg) === 'postBody') {
+        this._clearPostFooterZoneBleed(el);
+        this._scheduleFeatureArticleColumnFooter(el, articleCol);
+        return;
+      }
+      this._clearFeatureArticleColumnFooter(el);
+      this._scheduleFullScreenFooterBleed(el);
     },
 
     /** Post footer horizontal inset: postBody matches post text; fullScreen uses site margins only. */
@@ -4010,6 +4044,9 @@
       var targetRight = sec.right - (pad.right || 0);
       var leftGap = Math.round(box.left - targetLeft);
       var rightGap = Math.round(targetRight - box.right);
+      /* A second pass sees the box it just widened. Clearing here snaps the
+         block back to the article column, so an exact match must stay put. */
+      if (leftGap > -1 && leftGap < 1 && rightGap > -1 && rightGap < 1) return;
       if (leftGap < 1 && rightGap < 1) {
         this._clearPostFooterZoneBleed(footerZoneEl);
         return;

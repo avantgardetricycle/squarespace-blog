@@ -176,6 +176,46 @@ test.describe("post layout contract", () => {
     expect(footerHidden).toBe(false);
   });
 
+  test("reporter and publisher comments follow the side margins toggle", async ({ page }, testInfo) => {
+    test.skip(isMobileProject(testInfo), "stacked mobile comments span the content column");
+    for (const name of ["reporter", "publisher"] as const) {
+      for (const mode of ["postBody", "fullScreen"] as const) {
+        const cfg = structuredClone(postTemplates[name]) as Record<string, any>;
+        cfg.footerContent.sideMargins = mode;
+        await mountRenderer(page, { postConfig: cfg });
+        const widths = await page.evaluate(() => {
+          function size(el: Element | null) {
+            if (!el) return { width: 0, left: 0 };
+            const box = el.getBoundingClientRect();
+            return { width: Math.round(box.width), left: Math.round(box.left) };
+          }
+          const comments = document.getElementById("bb-comments");
+          return {
+            comments: size(comments),
+            main: size(document.querySelector(".blog-overlay-posts")),
+            row: size(document.querySelector(".blog-overlay-main-row")),
+            footer: size(document.querySelector(".blog-overlay-footer-zone")),
+            inMainRow: Boolean(comments?.closest(".blog-overlay-main-row")),
+          };
+        });
+        expect(widths.inMainRow, `${name} ${mode} comments stay outside the main row`).toBe(false);
+        expectPx(widths.comments.left, widths.main.left, 2);
+        expectPx(widths.footer.width, widths.comments.width, 2);
+        if (mode === "postBody") {
+          expectPx(widths.comments.width, widths.main.width, 2);
+          expect(widths.comments.width, `${name} post body comments are narrower than the content row`).toBeLessThan(
+            widths.row.width - 40,
+          );
+        } else {
+          expectPx(widths.comments.width, widths.row.width, 2);
+          expect(widths.comments.width, `${name} full screen comments span past the article column`).toBeGreaterThan(
+            widths.main.width + 40,
+          );
+        }
+      }
+    }
+  });
+
   test("sidebar width comes from settings", async ({ page }, testInfo) => {
     test.skip(isMobileProject(testInfo), "mobile rails stretch to the content width");
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.publisher) });
