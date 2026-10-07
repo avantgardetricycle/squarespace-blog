@@ -8995,6 +8995,107 @@
         || this._getSiteAccentColor();
     },
 
+    /** background-color when opaque, else ''. */
+    _opaqueBackgroundColor: function(el) {
+      try {
+        if (!el || !window.getComputedStyle) return '';
+        var bg = window.getComputedStyle(el).backgroundColor;
+        bg = bg ? String(bg).trim() : '';
+        if (!this._isValidCssColorValue(bg)) return '';
+        var alpha = bg.match(/^rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)$/i);
+        if (alpha && parseFloat(alpha[1]) <= 0) return '';
+        return bg;
+      } catch (e) {
+        return '';
+      }
+    },
+
+    _elementHasBackgroundImage: function(el) {
+      try {
+        if (!el || !window.getComputedStyle) return false;
+        var image = window.getComputedStyle(el).backgroundImage;
+        return Boolean(image && image !== 'none');
+      } catch (e) {
+        return false;
+      }
+    },
+
+    _pageBackgroundFromCssVars: function(scopeEl) {
+      var fromVars = this._walkScopeForCssVar(scopeEl || (typeof document !== 'undefined' ? document.documentElement : null), [
+        '--backgroundColor', '--background-color', '--sectionBackgroundColor',
+        '--tweak-blog-site-background', '--siteBackgroundColor'
+      ]);
+      if (fromVars) return fromVars;
+      return this._bbReadCssVar('--tweak-blog-site-background', null)
+        || this._bbReadCssVar('--siteBackgroundColor', null)
+        || '';
+    },
+
+    /**
+     * Page canvas color. Prefer the blog section's painted background (the cream
+     * .section-background we remove with the native markup) over :root site variables,
+     * which are often the dark color behind that section.
+     * paint is false when that background is an image, so the overlay stays transparent.
+     */
+    _readPageBackground: function(scopeEl) {
+      var section = this._findBlogPageSection(scopeEl);
+      var seen = [];
+      var push = function(el) {
+        if (!el || seen.indexOf(el) !== -1) return;
+        seen.push(el);
+      };
+      if (section && section.querySelectorAll) {
+        try {
+          var bgs = section.querySelectorAll('.section-background, .section-background-content');
+          for (var bi = 0; bi < bgs.length; bi++) push(bgs[bi]);
+        } catch (eBg) { /* ignore */ }
+      }
+      push(scopeEl);
+      push(section);
+      var walk = section || scopeEl;
+      for (var depth = 0; walk && depth < 24; depth++) {
+        push(walk);
+        if (typeof document !== 'undefined' && (walk === document.body || walk === document.documentElement)) break;
+        walk = walk.parentElement;
+      }
+      for (var i = 0; i < seen.length; i++) {
+        if (this._elementHasBackgroundImage(seen[i])) {
+          return {
+            color: this._opaqueBackgroundColor(seen[i]) || this._pageBackgroundFromCssVars(section || scopeEl) || '#ffffff',
+            paint: false
+          };
+        }
+        var color = this._opaqueBackgroundColor(seen[i]);
+        if (color) return { color: color, paint: true };
+      }
+      var fromVars = this._pageBackgroundFromCssVars(section || scopeEl);
+      if (fromVars) return { color: fromVars, paint: true };
+      return { color: '#ffffff', paint: false };
+    },
+
+    _canPaintPageBackground: function(el) {
+      if (!el || !el.style) return false;
+      if (typeof document !== 'undefined' && (el === document.body || el === document.documentElement)) return false;
+      var id = String(el.id || '').toLowerCase();
+      if (id === 'sitewrapper' || id === 'site-wrapper' || id === 'header' || id === 'footer' || id === 'footer-sections') return false;
+      var tag = el.tagName;
+      if (tag === 'HEADER' || tag === 'FOOTER' || tag === 'NAV') return false;
+      if (el.classList && (el.classList.contains('Header') || el.classList.contains('Footer'))) return false;
+      return true;
+    },
+
+    /** Paint the resolved page color onto the blog container and its section, which stay after native markup is removed. */
+    _paintPageBackground: function(rootEl, color) {
+      if (!color || !this._isValidCssColorValue(color)) return;
+      var apply = function(el) {
+        if (!this._canPaintPageBackground(el)) return;
+        el.style.setProperty('background-color', color, 'important');
+      }.bind(this);
+      apply(rootEl);
+      var section = this._findBlogPageSection(rootEl);
+      if (section && section !== rootEl && section.isConnected !== false) apply(section);
+    },
+
     /** Resolve collection style tokens (Rules A–E) once per render. */
     _resolveCollectionStyleTokens: function(rootEl) {
       var scope = this._findBlogPageSection(rootEl || this._root) || rootEl || this._root || (typeof document !== 'undefined' ? document.body : null);
@@ -9008,6 +9109,7 @@
       var formRadius = this._readFormFieldRadiusFromScope(scope);
       var buttonRadiusPx = this._firstPxValue(buttonRadius, 0);
       var cardRadius = Math.max(0, Math.min(buttonRadiusPx, 20)) + 'px';
+      var pageBackground = this._readPageBackground(scope);
       var tokens = {
         accent: accent,
         body: body,
@@ -9016,9 +9118,8 @@
         headingFontWeight: headingTypography.fontWeight || '',
         p1FontFamily: paragraphTypography.fontFamily || '',
         p1FontWeight: paragraphTypography.fontWeight || '',
-        surface: this._bbReadCssVar('--tweak-blog-site-background', null)
-          || this._bbReadCssVar('--siteBackgroundColor', null)
-          || '#ffffff',
+        surface: pageBackground.color,
+        paintPageBackground: pageBackground.paint,
         buttonRadius: buttonRadius,
         formRadius: formRadius,
         cardRadius: cardRadius,
@@ -9053,6 +9154,9 @@
       if (tokens.p1FontFamily) el.style.setProperty('--bb-p1-font-family', tokens.p1FontFamily);
       if (tokens.p1FontWeight) el.style.setProperty('--bb-p1-font-weight', tokens.p1FontWeight);
       el.style.setProperty('--bb-surface', tokens.surface);
+      if (tokens.paintPageBackground && tokens.surface && this._isValidCssColorValue(tokens.surface)) {
+        el.style.setProperty('background-color', tokens.surface, 'important');
+      }
       /* Rule D — derived neutrals resolve from --bb-body via color-mix (see #bb-collection-styles). */
       el.style.setProperty('--bb-muted', tokens.muted);
       el.style.setProperty('--bb-extra-muted', tokens.extraMuted);
@@ -13870,6 +13974,9 @@
       if (isSinglePost && self._isReporterPostLayout(cfg)) wrapper.setAttribute('data-bb-reporter-layout', '1');
       else wrapper.removeAttribute('data-bb-reporter-layout');
       self._applyCollectionTokensToElement(wrapper, collectionStyleTokens);
+      if (collectionStyleTokens.paintPageBackground) {
+        self._paintPageBackground(root, collectionStyleTokens.surface);
+      }
       if (!isSinglePost && collectionLayout) {
         wrapper.setAttribute('data-bb-collection-layout', collectionLayout);
       } else {
