@@ -30,6 +30,12 @@ type MountOptions = {
   loggedInAccount?: { displayName: string; email: string; id: string };
   /** Node-side handler for POST /api/comments. Defaults to an empty 200. */
   commentPostResponse?: () => { status: number; json: unknown };
+  /**
+   * Host page colors. `section` is the blog section background (removed with native markup).
+   * `cssVariable` is --siteBackgroundColor. When only `section` is set, the site variable and
+   * body stay dark so the test can tell them apart.
+   */
+  pageBackground?: { section?: string; cssVariable?: string; image?: boolean };
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
@@ -69,6 +75,28 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   });
   await page.route("**/e2e/renderer-mount", async (route) => {
     const widthStyle = rootWidth ? `style="width:${rootWidth}px;margin:0 auto"` : "";
+    const pageBackground = options.pageBackground;
+    const header = `<header class="Header" style="height:64px;background:#111;color:#fff">Site header</header>`;
+    let css = "html,body{margin:0;padding:0;background:#fff}";
+    let mount = `<div id="root" ${widthStyle}></div>`;
+    if (pageBackground?.section) {
+      const site = pageBackground.cssVariable || "#111111";
+      const section = pageBackground.section;
+      const imageStyle = pageBackground.image ? `background-image:linear-gradient(${section},${section});` : "";
+      css = `html,body{margin:0;padding:0;background:${site}}html{--siteBackgroundColor:${site};--tweak-blog-site-background:${site}}`;
+      mount = `<main id="root" ${widthStyle}>
+      <section class="page-section" data-section-id="blog-section">
+        <div class="section-border">
+          <div class="section-background" style="${imageStyle}background-color:${section}"></div>
+        </div>
+        <div class="content-wrapper">
+          <article class="blog-item"><h1>Native post</h1><p>Native excerpt</p></article>
+        </div>
+      </section>
+    </main>`;
+    } else if (pageBackground?.cssVariable) {
+      css = `html,body{margin:0;padding:0;background:transparent}html{--siteBackgroundColor:${pageBackground.cssVariable}}`;
+    }
     await route.fulfill({
       status: 200,
       contentType: "text/html",
@@ -78,11 +106,11 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Renderer layout harness</title>
-  <style>html,body{margin:0;padding:0;background:#fff}</style>
+  <style>${css}</style>
 </head>
 <body>
-  <header class="Header" style="height:64px;background:#111;color:#fff">Site header</header>
-  <div id="root" ${widthStyle}></div>
+  ${header}
+  ${mount}
 </body>
 </html>`,
     });
