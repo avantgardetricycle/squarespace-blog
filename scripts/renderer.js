@@ -496,6 +496,7 @@
     _originalRootChildren: null,
     _rootInjectionGuard: null,
     _rootInjectionGuardTarget: null,
+    _customScriptsInactiveEmitted: false,
     _searchRenderTimer: null,
     _SEARCH_RENDER_DEBOUNCE_MS: 260,
     _lastCollectionShellKey: '',
@@ -804,6 +805,7 @@
             var node = added[n];
             if (!node || node.nodeType !== 1) continue;
             if (node.id === 'blog-overlay-list' || node.id === 'blog-overlay-progress') continue;
+            if (node.hasAttribute && node.hasAttribute('data-bb-custom')) continue;
             try {
               if (node.parentNode === root) root.removeChild(node);
             } catch (e) { /* ignore */ }
@@ -817,6 +819,43 @@
         this._rootInjectionGuard = null;
         this._rootInjectionGuardTarget = null;
       }
+    },
+
+    /**
+     * Run header scripts registered with BetterBlog.ready.
+     * Skipped in the dashboard preview, which has no Squarespace header scripts.
+     * bbPreview (the live site iframe) still emits so rewritten scripts run there.
+     */
+    _emitCustomScripts: function(partial) {
+      if (this._previewMode) return;
+      try {
+        var bb = typeof window !== 'undefined' ? window.BetterBlog : null;
+        if (!bb || typeof bb._emit !== 'function') return;
+        var ctx = partial || {};
+        if (!ctx.pathname) {
+          ctx.pathname = (typeof window !== 'undefined' && window.location && window.location.pathname)
+            ? window.location.pathname
+            : '/';
+        }
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'view')) ctx.view = null;
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'root')) ctx.root = null;
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'overlay')) ctx.overlay = null;
+        bb._emit(ctx);
+      } catch (e) { /* ignore */ }
+    },
+
+    /** One inactive notice until the next successful content render. */
+    _notifyCustomScriptsInactive: function(reason) {
+      if (this._previewMode) return;
+      if (this._customScriptsInactiveEmitted) return;
+      this._customScriptsInactiveEmitted = true;
+      this._emitCustomScripts({
+        active: false,
+        reason: reason,
+        view: null,
+        root: null,
+        overlay: null
+      });
     },
 
     _stopRootInjectionGuard: function() {
@@ -2450,6 +2489,7 @@
           this._paywallFullySuppressed = true;
           this._startPaywallAuthObserver();
           this._clearBootstrapLoading();
+          this._notifyCustomScriptsInactive('paywall');
           return;
         }
       }
@@ -2459,6 +2499,7 @@
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
         this._clearBootstrapLoading();
+        this._notifyCustomScriptsInactive('no-container');
         return;
       }
       this._root = root;
@@ -4830,6 +4871,7 @@
             self._removeOverlayNodes();
             self._restoreOriginalRootChildren();
             self._clearBootstrapLoading();
+            self._notifyCustomScriptsInactive('paywall');
             return;
           }
           self._paywallFullySuppressed = false;
@@ -7985,6 +8027,7 @@
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
         this._clearBootstrapLoading();
+        this._notifyCustomScriptsInactive('no-container');
         return;
       }
 
@@ -13877,7 +13920,10 @@
         rootIsConnected = Boolean(this._root && this._root.isConnected !== false && document.documentElement && document.documentElement.contains(this._root));
       } catch (eRoot) {}
       var root = rootIsConnected ? this._root : (findBlogContainer() || document.getElementById('blogga-blogga-root'));
-      if (!root) return;
+      if (!root) {
+        this._notifyCustomScriptsInactive('no-container');
+        return;
+      }
       this._root = root;
       this._renderContentInProgress = true;
       self._ensureCollectionStylesheet();
@@ -16819,7 +16865,20 @@
 
       // Arm the root-injection guard last so late-loading Squarespace Y bundles
       // can't repopulate `root` after the loading overlay has been cleared.
+      // Disconnect only for the custom-script emit so those scripts can write
+      // into `root`; the guard stays up during the rest of the async render.
       self._perfMark('renderDomCommitted');
+      self._stopRootInjectionGuard();
+      var customOverlay = null;
+      try { customOverlay = root.querySelector('#blog-overlay-list'); } catch (eOverlay) { /* ignore */ }
+      self._customScriptsInactiveEmitted = false;
+      self._emitCustomScripts({
+        active: true,
+        reason: 'render',
+        view: isSinglePost ? 'post' : 'collection',
+        root: root,
+        overlay: customOverlay
+      });
       self._startRootInjectionGuard(root);
       this._renderContentInProgress = false;
     }
