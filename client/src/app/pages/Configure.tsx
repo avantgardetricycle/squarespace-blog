@@ -248,6 +248,9 @@ export type CollectionLayoutMode = "grid" | "listRows" | "editorial" | "showcase
 
 export type GridColumnsOption = 2 | 3;
 
+/** Grid-card thumbnail crop. Widescreen is today's 16:9. Portrait is 2:3. */
+export type ThumbnailShape = "16:9" | "2:3";
+
 export type FeaturedArticlePosition = "header" | "inLayout";
 
 /** Masthead (grid) and Digest own featured placement — position control is not user-facing. */
@@ -369,6 +372,8 @@ export interface CollectionLevelConfig extends BaseLevelConfig {
   pagination?: { show: boolean; mode: PaginationMode; postsPerPage: PostsPerPageOption };
   collectionLayout?: CollectionLayoutMode;
   gridColumns?: GridColumnsOption;
+  /** Masthead grid cards only. Other templates ignore this until they get the same control. */
+  thumbnailShape?: ThumbnailShape;
   collectionModules?: CollectionModulesConfig;
   featuredArticle?: FeaturedArticleConfig;
   /** Collection cards/rows: show post excerpt/teaser. Absent on Editorial/Digest (layout-driven). */
@@ -500,6 +505,7 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   pagination: { show: true, mode: "pages" as PaginationMode, postsPerPage: 10 },
   collectionLayout: "grid",
   gridColumns: 3,
+  thumbnailShape: "16:9",
   collectionModules: defaultCollectionModules,
   featuredArticle: defaultFeaturedArticle,
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
@@ -1727,6 +1733,7 @@ function parseLevelConfig(
     (v === "header" || v === "leftSidebar" || v === "rightSidebar" || v === "footer") ? v : "none";
   const collectionLayout = validCollectionLayout(raw?.collectionLayout);
   const gridColumns = validGridColumns(raw?.gridColumns);
+  const thumbnailShape: ThumbnailShape = raw?.thumbnailShape === "2:3" ? "2:3" : "16:9";
   const cmRaw = raw?.collectionModules && typeof raw.collectionModules === "object" ? raw.collectionModules as Record<string, unknown> : null;
   const pmRaw = raw?.postModules && typeof raw.postModules === "object" ? raw.postModules as Record<string, unknown> : null;
   const parseCollectionModules = (): CollectionModulesConfig => {
@@ -1947,6 +1954,7 @@ function parseLevelConfig(
     pagination,
     collectionLayout,
     gridColumns,
+    ...(level === "collection" ? { thumbnailShape } : {}),
     collectionModules,
     leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: normalizedLsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
     rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: normalizedRsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
@@ -2165,6 +2173,8 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     (a as CollectionLevelConfig).pagination?.postsPerPage === (b as CollectionLevelConfig).pagination?.postsPerPage;
   const collLayoutEqual = (a as CollectionLevelConfig).collectionLayout === (b as CollectionLevelConfig).collectionLayout;
   const gridColsEqual = (a as CollectionLevelConfig).gridColumns === (b as CollectionLevelConfig).gridColumns;
+  const thumbShapeEqual =
+    ((a as CollectionLevelConfig).thumbnailShape ?? "16:9") === ((b as CollectionLevelConfig).thumbnailShape ?? "16:9");
   const faA = (a as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle;
   const faB = (b as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle;
   const faEqual = faA.show === faB.show &&
@@ -2179,7 +2189,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     (a.footerContent?.moduleOrder ?? []).every((m, i) => m === (b.footerContent?.moduleOrder ?? [])[i]);
   const base = a.showDate === b.showDate && a.showAuthor === b.showAuthor && a.showReadingTime === b.showReadingTime &&
     (a as CollectionLevelConfig).showPostExcerpt === (b as CollectionLevelConfig).showPostExcerpt &&
-    postSortEqual && pagEqual && collLayoutEqual && gridColsEqual && faEqual && cmEqual && pmEqual && moduleOrderEqual && fcEqual && lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
+    postSortEqual && pagEqual && collLayoutEqual && gridColsEqual && thumbShapeEqual && faEqual && cmEqual && pmEqual && moduleOrderEqual && fcEqual && lsEqual && rsEqual && hcEqual && smEqual && fiEqual;
   if ("progressBar" in a && "progressBar" in b) {
     const pa = (a as PostLevelConfig).progressBar;
     const pb = (b as PostLevelConfig).progressBar;
@@ -2299,6 +2309,7 @@ export default function Configure() {
     leftSidebar: false,
     rightSidebar: false,
     headerContent: false,
+    postGridLayout: false,
     footerContent: false,
     socialMediaLinks: false,
     postHeader: false,
@@ -3330,6 +3341,9 @@ export default function Configure() {
     if (path === "pagination.mode") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), mode: value as PaginationMode } };
     if (path === "pagination.postsPerPage") return { ...cfg, pagination: { ...((cfg as CollectionLevelConfig).pagination ?? { show: true, mode: "pages", postsPerPage: 10 }), postsPerPage: value as PostsPerPageOption } };
     if (path === "gridColumns" && "gridColumns" in cfg) return { ...cfg, gridColumns: value as GridColumnsOption };
+    if (path === "thumbnailShape" && "featuredArticle" in cfg) {
+      return { ...cfg, thumbnailShape: value === "2:3" ? "2:3" : "16:9" };
+    }
     if (path === "featuredArticle.show" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), show: value as boolean } };
     if (path === "featuredArticle.position" && "featuredArticle" in cfg) return { ...cfg, featuredArticle: { ...((cfg as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle), position: value as FeaturedArticlePosition } };
     if (path === "featuredArticle.featuredPostId" && "featuredArticle" in cfg) {
@@ -4906,6 +4920,41 @@ export default function Configure() {
                                 );
                               })()}
                             </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                    )}
+
+                    {selectedLevel === "collection" && activeCollectionTemplateKey === "masthead" && (
+                    <div className="border-b border-[#e5e4e0]">
+                      <div className="flex items-center justify-between py-3">
+                        <span className="font-medium">Post Grid Layout</span>
+                        <button
+                          type="button"
+                          onClick={() => setSectionExpanded((p) => ({ ...p, postGridLayout: !p.postGridLayout }))}
+                          className="p-1 rounded hover:bg-[#e5e4e0]/50 text-[#6b6b6b] shrink-0"
+                          aria-label={sectionExpanded.postGridLayout ? "Collapse" : "Expand"}
+                        >
+                          {sectionExpanded.postGridLayout ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <Collapsible open={sectionExpanded.postGridLayout}>
+                        <CollapsibleContent>
+                          <div className="pb-4 space-y-2">
+                            <Label className="text-xs text-[#6b6b6b]">Thumbnail shape</Label>
+                            <Select
+                              value={(effectiveConfig as CollectionLevelConfig).thumbnailShape ?? "16:9"}
+                              onValueChange={(v) => updateLevelConfigPath("thumbnailShape", v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="16:9">Widescreen (16:9)</SelectItem>
+                                <SelectItem value="2:3">Portrait (2:3)</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         </CollapsibleContent>
                       </Collapsible>
