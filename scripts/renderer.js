@@ -212,6 +212,130 @@
     }
   }
 
+  var BB_BIO_ALLOW_TAGS = { p: 1, br: 1, strong: 1, b: 1, em: 1, i: 1, a: 1, ul: 1, ol: 1, li: 1 };
+  var BB_BIO_DROP_TAGS = { script: 1, style: 1, iframe: 1, object: 1, embed: 1, noscript: 1, svg: 1, math: 1, link: 1, meta: 1, base: 1, form: 1, input: 1, textarea: 1, select: 1, button: 1 };
+
+  function bbEscapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function bbSafeBioHref(url) {
+    var trimmed = String(url || '').replace(/^\s+|\s+$/g, '');
+    if (!trimmed || /^\s*javascript:/i.test(trimmed)) return '';
+    if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) return trimmed;
+    return '';
+  }
+
+  function bbApplyInlineMarkdown(escaped) {
+    var withLinks = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, label, url) {
+      var href = bbSafeBioHref(url);
+      if (!href) return label;
+      return '<a href="' + bbEscapeHtml(href) + '">' + label + '</a>';
+    });
+    var withBold = withLinks.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    var withItalic = withBold.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    return withItalic.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, '$1<em>$2</em>');
+  }
+
+  function bbBioListKind(line) {
+    if (/^\s*[-*]\s+\S/.test(line)) return 'ul';
+    if (/^\s*\d+\.\s+\S/.test(line)) return 'ol';
+    return '';
+  }
+
+  function bbMarkdownToBioHtml(src) {
+    var text = String(src).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var blocks = text.split(/\n{2,}/);
+    var html = [];
+    var b, li, lines, kind, uniform, k, items, itemText, parts;
+    for (b = 0; b < blocks.length; b++) {
+      if (!blocks[b].replace(/^\s+|\s+$/g, '')) continue;
+      lines = blocks[b].split('\n');
+      kind = '';
+      uniform = true;
+      for (li = 0; li < lines.length; li++) {
+        if (!lines[li].replace(/^\s+|\s+$/g, '')) continue;
+        k = bbBioListKind(lines[li]);
+        if (!k || (kind && kind !== k)) { uniform = false; break; }
+        kind = k;
+      }
+      if (uniform && kind) {
+        items = [];
+        for (li = 0; li < lines.length; li++) {
+          if (!lines[li].replace(/^\s+|\s+$/g, '')) continue;
+          itemText = lines[li].replace(/^\s*(?:[-*]|\d+\.)\s+/, '');
+          items.push('<li>' + bbApplyInlineMarkdown(bbEscapeHtml(itemText)) + '</li>');
+        }
+        html.push('<' + kind + '>' + items.join('') + '</' + kind + '>');
+      } else {
+        parts = [];
+        for (li = 0; li < lines.length; li++) {
+          parts.push(bbApplyInlineMarkdown(bbEscapeHtml(lines[li])));
+        }
+        html.push('<p>' + parts.join('<br>') + '</p>');
+      }
+    }
+    return html.join('');
+  }
+
+  function bbAppendSanitizedBioNodes(source, target) {
+    if (!source || !target) return;
+    var nodes = source.childNodes;
+    var i, node, tag, el, href;
+    for (i = 0; i < nodes.length; i++) {
+      node = nodes[i];
+      if (node.nodeType === 3) {
+        target.appendChild(document.createTextNode(node.textContent || ''));
+        continue;
+      }
+      if (node.nodeType !== 1) continue;
+      tag = node.tagName.toLowerCase();
+      if (BB_BIO_DROP_TAGS[tag]) continue;
+      if (!BB_BIO_ALLOW_TAGS[tag]) {
+        bbAppendSanitizedBioNodes(node, target);
+        continue;
+      }
+      if (tag === 'a') {
+        href = bbSafeBioHref(node.getAttribute('href') || '');
+        if (!href) {
+          bbAppendSanitizedBioNodes(node, target);
+          continue;
+        }
+        el = document.createElement('a');
+        el.setAttribute('href', href);
+        if (/^https?:\/\//i.test(href)) {
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+        bbAppendSanitizedBioNodes(node, el);
+        target.appendChild(el);
+        continue;
+      }
+      el = document.createElement(tag);
+      if (tag !== 'br') bbAppendSanitizedBioNodes(node, el);
+      target.appendChild(el);
+    }
+  }
+
+  function bbFillAuthorBioElement(el, bio, format) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    if (format !== 'markdown' && format !== 'html') {
+      el.textContent = bio;
+      return;
+    }
+    var html = format === 'markdown' ? bbMarkdownToBioHtml(bio) : String(bio);
+    try {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      bbAppendSanitizedBioNodes(doc.body, el);
+    } catch (e) {
+      el.textContent = bio;
+    }
+  }
+
   function bbCollectImportedExternalIds(comments) {
     var set = {};
     function walk(arr) {
@@ -7631,7 +7755,8 @@
         if (bio) {
           var bioEl = document.createElement('div');
           bioEl.className = 'blog-overlay-author-card-bio';
-          bioEl.textContent = bio;
+          var bioFormat = (p && (p.bioFormat === 'markdown' || p.bioFormat === 'html')) ? p.bioFormat : 'text';
+          bbFillAuthorBioElement(bioEl, bio, bioFormat);
           bioEl.style.fontSize = bioFontPx + 'px';
           bioEl.style.marginTop = '6px';
           rightCol.appendChild(bioEl);
@@ -9455,6 +9580,11 @@
         s + ' .blog-overlay-author-card-avatar{width:44px!important;height:44px!important;flex:0 0 44px!important;order:0;font-size:14px;}' +
         s + ' .blog-overlay-author-card-name{order:1;flex:1 1 0%!important;min-width:0;font-size:16px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.2;}' +
         s + ' .blog-overlay-author-card-bio{order:2;flex:0 0 100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin-top:0!important;}' +
+        s + ' .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
+        s + ' .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
+        s + ' .blog-overlay-author-card-bio ul,' + s + ' .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
+        s + ' .blog-overlay-author-card-bio li{margin:0;}' +
+        s + ' .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
         s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
         s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
         s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
@@ -9764,6 +9894,11 @@
         '#blog-overlay-list .blog-overlay-author-card-name{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;}' +
         '#blog-overlay-list .blog-overlay-author-card-social a{display:inline-flex;color:var(--bb-accent,#5B4FE8);text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio{font-size:15px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ul,#blog-overlay-list .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio li{margin:0;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +

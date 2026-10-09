@@ -106,8 +106,42 @@ export interface BlogAuthorOption {
   imageUrl?: string | null;
   bio?: string | null;
   bioLong?: string | null;
+  bioFormat?: AuthorBioFormat | null;
   email?: string | null;
   socialLinks?: Record<string, string>;
+}
+
+export type AuthorBioFormat = "text" | "markdown" | "html";
+
+const AUTHOR_BIO_FORMATS: { id: AuthorBioFormat; label: string }[] = [
+  { id: "text", label: "Text" },
+  { id: "markdown", label: "Markdown" },
+  { id: "html", label: "HTML" },
+];
+
+const AUTHOR_BIO_FORMAT_HINTS: Record<AuthorBioFormat, string> = {
+  text: "Shown exactly as typed.",
+  markdown: "Supports **bold**, *italic*, [links](url), and lists.",
+  html: "Paragraphs, bold, italic, links, and lists. Other tags are removed.",
+};
+
+const AUTHOR_BIO_PLACEHOLDERS: Record<AuthorBioFormat, { short: string; long: string }> = {
+  text: {
+    short: "A brief description for the sidebar...",
+    long: "Extended bio for the footer...",
+  },
+  markdown: {
+    short: "Writer and **editor**. [Site](https://example.com)",
+    long: "Extended bio. Use **bold**, *italic*, and lists.",
+  },
+  html: {
+    short: "Writer and <strong>editor</strong>.",
+    long: "<p>Extended bio for the footer.</p>",
+  },
+};
+
+function authorBioFormatOf(author: BlogAuthorOption): AuthorBioFormat {
+  return author.bioFormat === "markdown" || author.bioFormat === "html" ? author.bioFormat : "text";
 }
 
 function resolveInitialAuthorForProfileEdit(
@@ -2252,6 +2286,7 @@ export default function Configure() {
   const [newAuthorImageUrl, setNewAuthorImageUrl] = useState<string | null>(null);
   const [newAuthorBio, setNewAuthorBio] = useState("");
   const [newAuthorBioLong, setNewAuthorBioLong] = useState("");
+  const [newAuthorBioFormat, setNewAuthorBioFormat] = useState<AuthorBioFormat>("markdown");
   const [newAuthorEmail, setNewAuthorEmail] = useState("");
   const [newAuthorSocials, setNewAuthorSocials] = useState<Record<string, string>>({});
   const [addAuthorModalOpen, setAddAuthorModalOpen] = useState(false);
@@ -2516,6 +2551,7 @@ export default function Configure() {
     setNewAuthorImageUrl(author.imageUrl ?? null);
     setNewAuthorBio(author.bio ?? "");
     setNewAuthorBioLong(author.bioLong ?? "");
+    setNewAuthorBioFormat(authorBioFormatOf(author));
     setNewAuthorEmail(author.email ?? "");
     setNewAuthorSocials(author.socialLinks ?? {});
     setAddAuthorModalOpen(true);
@@ -2987,7 +3023,7 @@ export default function Configure() {
   const rendererConfig = useMemo(() => {
     const base = configToRendererConfig(config);
     const authorMap: Record<string, string> = {};
-    const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; bioLong: string | null; email: string | null; socialLinks: Record<string, string> }> = {};
+    const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; bioLong: string | null; bioFormat: AuthorBioFormat; email: string | null; socialLinks: Record<string, string> }> = {};
     for (const a of authors) {
       authorMap[a.id] = a.name;
       authorProfiles[a.id] = {
@@ -2995,6 +3031,7 @@ export default function Configure() {
         imageUrl: a.imageUrl ?? null,
         bio: a.bio ?? null,
         bioLong: a.bioLong ?? null,
+        bioFormat: authorBioFormatOf(a),
         email: a.email ?? null,
         socialLinks: a.socialLinks ?? {},
       };
@@ -4004,6 +4041,7 @@ export default function Configure() {
                                             setEditAuthor(null);
                                             setAddAuthorContext({ postId });
                                             setAddAuthorAsDefault(false);
+                                            setNewAuthorBioFormat("markdown");
                                             setAddAuthorModalOpen(true);
                                           }}
                                         >
@@ -4137,6 +4175,7 @@ export default function Configure() {
                                         setEditAuthor(null);
                                         setAddAuthorContext("default");
                                         setAddAuthorAsDefault(true);
+                                        setNewAuthorBioFormat("markdown");
                                         setAddAuthorModalOpen(true);
                                       }}
                                     >
@@ -5746,6 +5785,7 @@ export default function Configure() {
               setNewAuthorImageUrl(null);
               setNewAuthorBio("");
               setNewAuthorBioLong("");
+              setNewAuthorBioFormat("markdown");
               setNewAuthorEmail("");
               setNewAuthorSocials({});
             }
@@ -5765,6 +5805,7 @@ export default function Configure() {
                       setNewAuthorImageUrl(a.imageUrl ?? null);
                       setNewAuthorBio(a.bio ?? "");
                       setNewAuthorBioLong(a.bioLong ?? "");
+                      setNewAuthorBioFormat(authorBioFormatOf(a));
                       setNewAuthorEmail(a.email ?? "");
                       setNewAuthorSocials(a.socialLinks ?? {});
                     }
@@ -5805,6 +5846,7 @@ export default function Configure() {
                       imageUrl: newAuthorImageUrl,
                       bio: newAuthorBio.trim() || null,
                       bioLong: newAuthorBioLong.trim() || null,
+                      bioFormat: newAuthorBioFormat,
                       email: newAuthorEmail.trim() || null,
                       socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
                     }),
@@ -5820,6 +5862,7 @@ export default function Configure() {
                         setNewAuthorImageUrl(null);
                         setNewAuthorBio("");
                         setNewAuthorBioLong("");
+                        setNewAuthorBioFormat("markdown");
                         setNewAuthorEmail("");
                         setNewAuthorSocials({});
                         setAddAuthorModalOpen(false);
@@ -5838,6 +5881,7 @@ export default function Configure() {
                       imageUrl: newAuthorImageUrl,
                       bio: newAuthorBio.trim() || null,
                       bioLong: newAuthorBioLong.trim() || null,
+                      bioFormat: newAuthorBioFormat,
                       email: newAuthorEmail.trim() || null,
                       socialLinks: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
                     }),
@@ -5853,6 +5897,7 @@ export default function Configure() {
                             imageUrl: data.imageUrl ?? null,
                             bio: data.bio ?? null,
                             bioLong: data.bioLong ?? null,
+                            bioFormat: data.bioFormat === "html" || data.bioFormat === "text" ? data.bioFormat : "markdown",
                             email: data.email ?? null,
                             socialLinks: data.socialLinks ?? {},
                           },
@@ -5870,6 +5915,7 @@ export default function Configure() {
                         setNewAuthorImageUrl(null);
                         setNewAuthorBio("");
                         setNewAuthorBioLong("");
+                        setNewAuthorBioFormat("markdown");
                         setNewAuthorEmail("");
                         setNewAuthorSocials({});
                         setAddAuthorModalOpen(false);
@@ -5894,11 +5940,35 @@ export default function Configure() {
                 authorName={newAuthorName}
               />
               <div className="space-y-2">
+                <Label className="text-xs text-[#6b6b6b]">Bio format</Label>
+                <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio format">
+                  {AUTHOR_BIO_FORMATS.map((format) => (
+                    <button
+                      key={format.id}
+                      type="button"
+                      aria-pressed={newAuthorBioFormat === format.id}
+                      onClick={() => setNewAuthorBioFormat(format.id)}
+                      className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                        newAuthorBioFormat === format.id
+                          ? "bg-white text-[#0a0a0a] shadow-sm"
+                          : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                      }`}
+                    >
+                      {format.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[#6b6b6b]">{AUTHOR_BIO_FORMAT_HINTS[newAuthorBioFormat]}</p>
+                <p className="text-xs text-[#6b6b6b]">
+                  Character counts include the source. Switching format does not convert what you have typed.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label className="text-xs text-[#6b6b6b]">Short bio (max 200 characters)</Label>
                 <textarea
                   value={newAuthorBio}
                   onChange={(e) => setNewAuthorBio(e.target.value.slice(0, 200))}
-                  placeholder="A brief description for sidebar..."
+                  placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].short}
                   className="w-full min-h-[60px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
                   maxLength={200}
                 />
@@ -5909,7 +5979,7 @@ export default function Configure() {
                 <textarea
                   value={newAuthorBioLong}
                   onChange={(e) => setNewAuthorBioLong(e.target.value.slice(0, 1000))}
-                  placeholder="Extended bio for footer..."
+                  placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].long}
                   className="w-full min-h-[80px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
                   maxLength={1000}
                 />
