@@ -7,6 +7,7 @@ const router = Router()
 const CANONICAL_MASTHEAD_COLLECTION_TEMPLATE = {
   collectionLayout: 'grid' as const,
   gridColumns: 3 as const,
+  thumbnailShape: '16:9' as const,
   showDate: true,
   showAuthor: true,
   showReadingTime: true,

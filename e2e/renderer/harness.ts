@@ -36,6 +36,8 @@ type MountOptions = {
    * body stay dark so the test can tell them apart.
    */
   pageBackground?: { section?: string; cssVariable?: string; image?: boolean };
+  /** Replace the fixture blog items. Used when a test needs fields such as mediaFocalPoint. */
+  blogItems?: Array<Record<string, unknown>>;
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
@@ -46,7 +48,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(blogJson),
+      body: JSON.stringify(options.blogItems ? { ...blogJson, items: options.blogItems } : blogJson),
     });
   });
   await page.route("**/api/config/check-placeholder-images", async (route) => {
