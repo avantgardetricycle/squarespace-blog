@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { cssNumber, cssValue, expectPx, isMobileProject, mountRenderer } from "./harness";
+import { authorProfiles } from "./fixtures/blog";
 import { postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
 
 const POSTS: PostTemplateName[] = ["feature", "reporter", "writer", "story", "publisher"];
@@ -125,6 +126,45 @@ test.describe("post layout contract", () => {
       .first()
       .evaluate((el) => el.classList.contains("bb-mobile-duplicate-hidden"));
     expect(hidden).toBe(mobile);
+  });
+
+  test("author bios render text, markdown, and sanitized html", async ({ page }) => {
+    await mountRenderer(page, {
+      postConfig: structuredClone(postTemplates.feature),
+      defaultAuthorIds: ["literal", "markdown", "html"],
+      authorProfiles,
+    });
+
+    const bio = (zone: "sidebar" | "footer", name: string) =>
+      page
+        .locator(`[data-bb-zone="${zone}"][data-bb-module="authorProfiles"] .blog-overlay-author-unit`)
+        .filter({ hasText: name })
+        .locator(".blog-overlay-author-card-bio");
+
+    const literal = bio("sidebar", "Literal Author");
+    await expect(literal).toHaveText("See **bold** and <strong>nope</strong>");
+    await expect(literal.locator("strong")).toHaveCount(0);
+    await expect(bio("footer", "Literal Author")).toHaveText("Footer literal stays **bold**");
+
+    const markdown = bio("sidebar", "Markdown Author");
+    await expect(markdown.locator("strong")).toHaveText("first");
+    await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    const markdownFooter = bio("footer", "Markdown Author");
+    await expect(markdownFooter.locator("strong")).toHaveText("long");
+    await expect(markdownFooter.locator("a")).toHaveAttribute("href", "https://example.invalid/long");
+
+    const html = bio("sidebar", "HTML Author");
+    await expect(html.locator("strong")).toHaveText("HTML");
+    await expect(html.locator('a[href="https://example.invalid/ok"]')).toHaveCount(1);
+    const htmlSource = (await html.innerHTML()).toLowerCase();
+    expect(htmlSource).not.toContain("script");
+    expect(htmlSource).not.toContain("onerror");
+
+    const htmlFooter = bio("footer", "HTML Author");
+    await expect(htmlFooter.locator("em")).toHaveText("HTML");
+    const htmlFooterSource = (await htmlFooter.innerHTML()).toLowerCase();
+    expect(htmlFooterSource).not.toContain("script");
+    expect(htmlFooterSource).not.toContain("onerror");
   });
 
   test("a left-only module keeps its footer copy on mobile", async ({ page }, testInfo) => {

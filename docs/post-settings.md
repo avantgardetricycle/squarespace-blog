@@ -110,6 +110,10 @@ Authors are managed from **Show Author(s)** on either the Collection or Post tab
 - Photo
 - **Short bio** (max 200 characters) — used in sidebars
 - **Longer bio** (max 1000 characters) — used in the footer
+- **Bio format** — Text, Markdown, or HTML. One format applies to both bios. New authors default to Markdown. Authors saved before this option stay on Text until you change it, so existing copy is shown exactly as typed. Switching format does not convert the text already in the fields. Character limits count the source.
+  - **Text** — shown exactly as typed.
+  - **Markdown** — `**bold**`, `*italic*`, `[links](url)`, and lists.
+  - **HTML** — paragraphs, bold, italic, links, and lists (`p`, `br`, `strong`, `em`, `a`, `ul`, `ol`, `li`). Other tags are removed. Links must use `http`, `https`, or `mailto`.
 - **Email**
 - Optional social links: Instagram, Facebook, LinkedIn
 - **Default author** checkbox — also add to site defaults

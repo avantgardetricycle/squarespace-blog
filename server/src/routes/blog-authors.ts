@@ -24,6 +24,42 @@ const photoUpload = multer({
   }
 })
 
+const BIO_FORMATS = ['text', 'markdown', 'html'] as const
+type BioFormatValue = (typeof BIO_FORMATS)[number]
+
+function parseBioFormat(value: unknown): BioFormatValue {
+  if (typeof value === 'string' && (BIO_FORMATS as readonly string[]).includes(value)) {
+    return value as BioFormatValue
+  }
+  return 'text'
+}
+
+function authorJson(a: {
+  id: string
+  name: string
+  imageUrl: string | null
+  bio: string | null
+  bioLong: string | null
+  bioFormat: BioFormatValue
+  email: string | null
+  socialLinks: unknown
+  ingestedFrom: string
+  isDefault: boolean
+}) {
+  return {
+    id: a.id,
+    name: a.name,
+    imageUrl: a.imageUrl ?? null,
+    bio: a.bio ?? null,
+    bioLong: a.bioLong ?? null,
+    bioFormat: a.bioFormat ?? 'text',
+    email: a.email ?? null,
+    socialLinks: (a.socialLinks as Record<string, string>) ?? {},
+    ingestedFrom: a.ingestedFrom,
+    isDefault: a.isDefault
+  }
+}
+
 function isFileTooLarge(err: unknown): boolean {
   return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'LIMIT_FILE_SIZE')
 }
@@ -131,19 +167,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
     orderBy: { name: 'asc' }
   })
 
-  res.json(
-    authors.map((a) => ({
-      id: a.id,
-      name: a.name,
-      imageUrl: a.imageUrl ?? null,
-      bio: a.bio ?? null,
-      bioLong: a.bioLong ?? null,
-      email: a.email ?? null,
-      socialLinks: (a.socialLinks as Record<string, string>) ?? {},
-      ingestedFrom: a.ingestedFrom,
-      isDefault: a.isDefault
-    }))
-  )
+  res.json(authors.map((a) => authorJson(a)))
 })
 
 // POST /api/blog-authors - Add a new author (requires auth, must own site)
@@ -157,10 +181,11 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     imageUrl?: string | null
     bio?: string | null
     bioLong?: string | null
+    bioFormat?: string | null
     email?: string | null
     socialLinks?: Record<string, string> | null
   }
-  const { siteKey, name, ingestedFrom, isDefault, imageUrl, bio, bioLong, email, socialLinks } = body
+  const { siteKey, name, ingestedFrom, isDefault, imageUrl, bio, bioLong, bioFormat, email, socialLinks } = body
 
   if (!siteKey || typeof name !== 'string' || !name.trim()) {
     res.status(400).json({ error: 'siteKey and name are required' })
@@ -180,17 +205,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     where: { siteId_name: { siteId: site.id, name: trimmedName } }
   })
   if (existing) {
-    res.json({
-      id: existing.id,
-      name: existing.name,
-      imageUrl: existing.imageUrl ?? null,
-      bio: existing.bio ?? null,
-      bioLong: existing.bioLong ?? null,
-      email: existing.email ?? null,
-      socialLinks: (existing.socialLinks as Record<string, string>) ?? {},
-      ingestedFrom: existing.ingestedFrom,
-      isDefault: existing.isDefault
-    })
+    res.json(authorJson(existing))
     return
   }
 
@@ -205,22 +220,13 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
       imageUrl: typeof imageUrl === 'string' ? imageUrl : null,
       bio: typeof bio === 'string' ? bio : null,
       bioLong: bioLongTrimmed || null,
+      bioFormat: parseBioFormat(bioFormat),
       email: typeof email === 'string' ? email : null,
       socialLinks: socialLinks && typeof socialLinks === 'object' ? socialLinks : {}
     }
   })
 
-  res.status(201).json({
-    id: author.id,
-    name: author.name,
-    imageUrl: author.imageUrl ?? null,
-    bio: author.bio ?? null,
-    bioLong: author.bioLong ?? null,
-    email: author.email ?? null,
-    socialLinks: (author.socialLinks as Record<string, string>) ?? {},
-    ingestedFrom: author.ingestedFrom,
-    isDefault: author.isDefault
-  })
+  res.status(201).json(authorJson(author))
 })
 
 // PATCH /api/blog-authors/:id - Update author profile (requires auth, must own site)
@@ -232,6 +238,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     imageUrl?: string | null
     bio?: string | null
     bioLong?: string | null
+    bioFormat?: string | null
     email?: string | null
     socialLinks?: Record<string, string> | null
   }
@@ -258,6 +265,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     imageUrl?: string | null
     bio?: string | null
     bioLong?: string | null
+    bioFormat?: BioFormatValue
     email?: string | null
     socialLinks?: object
   } = {}
@@ -267,6 +275,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl ?? null
   if (body.bio !== undefined) data.bio = body.bio ?? null
   if (body.bioLong !== undefined) data.bioLong = body.bioLong != null ? String(body.bioLong).slice(0, 1000) : null
+  if (body.bioFormat !== undefined) data.bioFormat = parseBioFormat(body.bioFormat)
   if (body.email !== undefined) data.email = body.email ?? null
   if (body.socialLinks !== undefined) {
     data.socialLinks =
@@ -278,17 +287,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     data
   })
 
-  res.json({
-    id: updated.id,
-    name: updated.name,
-    imageUrl: updated.imageUrl ?? null,
-    bio: updated.bio ?? null,
-    bioLong: updated.bioLong ?? null,
-    email: updated.email ?? null,
-    socialLinks: (updated.socialLinks as Record<string, string>) ?? {},
-    ingestedFrom: updated.ingestedFrom,
-    isDefault: updated.isDefault
-  })
+  res.json(authorJson(updated))
 })
 
 export default router

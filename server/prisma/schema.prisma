@@ -121,6 +121,12 @@ enum IngestedFrom {
   BETTER_BLOG
 }
 
+enum BioFormat {
+  text
+  markdown
+  html
+}
+
 model BlogAuthor {
   id           String       @id @default(uuid())
   siteId       String       @map("site_id")
@@ -128,6 +134,7 @@ model BlogAuthor {
   imageUrl     String?      @map("image_url") @db.Text
   bio          String?      @db.Text
   bioLong      String?      @map("bio_long") @db.Text
+  bioFormat    BioFormat    @default(text) @map("bio_format")
   email        String?
   socialLinks  Json?        @map("social_links")
   ingestedFrom IngestedFrom @default(BETTER_BLOG) @map("ingested_from")
