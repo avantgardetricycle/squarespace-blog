@@ -9755,6 +9755,24 @@
         '#blog-overlay-list .bb-sidebar-post-card{display:flex;flex-direction:row;align-items:flex-start;gap:10px;min-width:0;text-decoration:none;color:inherit;}' +
         '#blog-overlay-list .bb-sidebar-post-thumb{width:60px;height:60px;flex-shrink:0;border-radius:min(var(--bb-btn-radius),8px);overflow:hidden;position:relative;}' +
         '#blog-overlay-list .blog-overlay-featured-image > div{border-radius:4px;}' +
+        '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image{' +
+          'aspect-ratio:var(--bb-grid-thumb-ratio,16/9)!important;' +
+          'height:auto!important;' +
+          'max-height:none!important;' +
+          'padding:0!important;' +
+        '}' +
+        '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image>div:not(.blog-overlay-featured-caption){' +
+          'width:100%!important;' +
+          'height:100%!important;' +
+          'aspect-ratio:auto!important;' +
+          'max-height:none!important;' +
+          'padding:0!important;' +
+        '}' +
+        '#blog-overlay-list[data-bb-collection-layout="grid"] article .blog-overlay-featured-image img{' +
+          'width:100%!important;' +
+          'height:100%!important;' +
+          'object-fit:cover!important;' +
+        '}' +
         '#blog-overlay-list .blog-overlay-featured-hero > div{border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div{width:100%;max-height:600px;aspect-ratio:16/9;overflow:hidden;border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div img,' +
@@ -10278,6 +10296,35 @@
         } catch (e) { /* ignore */ }
       }
       return null;
+    },
+
+    /** Masthead grid card thumbnails. 16:9 is today's crop; 2:3 is portrait. */
+    _gridThumbnailAspectCss: function(cfg) {
+      return cfg && cfg.thumbnailShape === '2:3' ? '2 / 3' : '16 / 9';
+    },
+
+    /**
+     * Squarespace blog items store mediaFocalPoint as 0–1 fractions.
+     * object-position uses that point; a missing or invalid point stays centered.
+     */
+    _squarespaceImageObjectPosition: function(post) {
+      var fp = null;
+      if (post && post.mediaFocalPoint && typeof post.mediaFocalPoint === 'object') fp = post.mediaFocalPoint;
+      else if (post && post.focalPoint && typeof post.focalPoint === 'object') fp = post.focalPoint;
+      else if (post && post.asset && typeof post.asset === 'object' && post.asset.mediaFocalPoint && typeof post.asset.mediaFocalPoint === 'object') {
+        fp = post.asset.mediaFocalPoint;
+      }
+      if (!fp) return 'center';
+      var x = Number(fp.x);
+      var y = Number(fp.y);
+      if (!isFinite(x) || !isFinite(y)) return 'center';
+      if (Math.abs(x) <= 1 && Math.abs(y) <= 1) {
+        x = x * 100;
+        y = y * 100;
+      }
+      x = Math.min(100, Math.max(0, x));
+      y = Math.min(100, Math.max(0, y));
+      return x + '% ' + y + '%';
     },
 
     /** Spec: all featured images and thumbnails use 4px radius (avatars stay 50% circle). */
@@ -12294,6 +12341,9 @@
         }
         /** Masthead (grid), Newsroom (listRows), Digest: same aspect + cover crop on every card thumbnail. */
         var uniformCollectionThumbs = !isSinglePost && (collectionLayout === 'grid' || collectionLayout === 'listRows' || collectionLayout === 'digest');
+        /** Masthead grid cards only. Hero and other templates keep their own crops. */
+        var gridCardThumb = !isSinglePost && collectionLayout === 'grid';
+        var gridThumbCssRatio = gridCardThumb ? self._gridThumbnailAspectCss(cfg) : null;
         var fiFixedAspectCrop = fiAspect === 'cropped' || uniformCollectionThumbs;
         var fiShadow = Boolean(fiCfg.shadow);
         var fiCaption = Boolean(fiCfg.showCaption !== false);
@@ -12580,6 +12630,13 @@
                 fiWrap.style.maxWidth = '100%';
                 fiWrap.style.boxSizing = 'border-box';
                 fiWrap.removeAttribute('data-digest-viewport-bleed');
+                if (gridCardThumb) {
+                  fiWrap.style.aspectRatio = gridThumbCssRatio;
+                  fiWrap.style.height = 'auto';
+                  fiWrap.style.maxHeight = 'none';
+                  fiWrap.style.padding = '0';
+                  fiWrap.style.overflow = 'hidden';
+                }
               }
             } else {
               self._applyViewportFullBleed(fiWrap);
@@ -12609,7 +12666,13 @@
           var digestFeaturedViewportBleed = collectionLayout === 'digest' && isFeaturedInLayout && digestMobileFullBleed;
           self._applyFeaturedImageRadius(fiInner);
           if (fiShadow && !digestFeaturedViewportBleed) fiInner.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-          if (reporterPostHeaderImage) {
+          if (gridCardThumb) {
+            fiInner.style.width = '100%';
+            fiInner.style.height = '100%';
+            fiInner.style.maxHeight = 'none';
+            fiInner.style.aspectRatio = 'auto';
+            fiInner.style.padding = '0';
+          } else if (reporterPostHeaderImage) {
             fiInner.style.aspectRatio = '3 / 2';
             fiInner.style.width = '100%';
           } else if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
@@ -12629,7 +12692,7 @@
             img.style.height = '100%';
             img.style.display = 'block';
             img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
-            img.style.objectPosition = 'center';
+            img.style.objectPosition = gridCardThumb ? self._squarespaceImageObjectPosition(post) : 'center';
             self._bindFeaturedImagePlaceholderFallback(img, fiInner, imgUrl, placeholderMap, post, items);
             fiInner.appendChild(img);
           } else {
@@ -13979,8 +14042,14 @@
       }
       if (!isSinglePost && collectionLayout) {
         wrapper.setAttribute('data-bb-collection-layout', collectionLayout);
+        if (collectionLayout === 'grid') {
+          wrapper.style.setProperty('--bb-grid-thumb-ratio', self._gridThumbnailAspectCss(cfg));
+        } else {
+          wrapper.style.removeProperty('--bb-grid-thumb-ratio');
+        }
       } else {
         wrapper.removeAttribute('data-bb-collection-layout');
+        wrapper.style.removeProperty('--bb-grid-thumb-ratio');
       }
       var navbarOffset = this._getNavbarOffset();
       var flushNavHero = isSinglePost && self._isFlushNavHeroLayout(cfg);
