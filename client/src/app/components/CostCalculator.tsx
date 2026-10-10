@@ -21,6 +21,9 @@ import { trackEvent } from "@/lib/analytics";
  * capped at 1,000 members, no paid subscriptions), beehiiv.com/pricing
  * (subscribers slider; Free capped at 2,500, paid subscriptions from Lite),
  * squarespace.com/pricing (Core list price $29; promotions vary).
+ * Plan limits in the notes, from the same pages: Ghost Starter has no custom
+ * themes; beehiiv Free has no custom domain and can't remove beehiiv
+ * branding; beehiiv Lite can't remove branding either (Pro and up only).
  * Re-verify before changing numbers and update PRICES_AS_OF.
  */
 const PRICES_AS_OF = "October 2026";
@@ -83,29 +86,33 @@ export default function CostCalculator() {
 
   // Each platform's cheapest plan that does the job at this size.
   const bb = paid ? BB_PUBLICATION : BB_PROFESSIONAL;
-  const ghost = !paid && s.subs <= 1000 ? GHOST_STARTER : s.ghostPub;
-  const ghostPlan = !paid && s.subs <= 1000 ? "Ghost Starter" : "Ghost Publisher";
-  const bee = !paid && s.subs <= 2500 ? 0 : s.beeLite;
-  const beePlan = !paid && s.subs <= 2500 ? "beehiiv Free" : "beehiiv Lite";
+  const ghostStarter = !paid && s.subs <= 1000;
+  const ghost = ghostStarter ? GHOST_STARTER : s.ghostPub;
+  const beeFree = !paid && s.subs <= 2500;
+  const bee = beeFree ? 0 : s.beeLite;
 
   const rows: Row[] = [
     {
       name: "Squarespace + BetterBlog",
       add: bb,
       note: paid
-        ? `BetterBlog Publication: sign-up forms and paywall. Same price at any size.`
-        : `BetterBlog Professional. Same price at any size.`,
+        ? "BetterBlog Publication: sign-up forms and paywall. Same price at any size. Your blog stays on Squarespace."
+        : "BetterBlog Professional. Same price at any size. Your blog stays on Squarespace.",
       ours: true,
     },
     {
       name: "Squarespace + Ghost",
       add: ghost,
-      note: `${ghostPlan} for ${subsLabel} members. Your blog moves to a second site.`,
+      note: ghostStarter
+        ? `Ghost Starter for ${subsLabel} members: no custom themes. Your blog moves to a second site.`
+        : `Ghost Publisher for ${subsLabel} members. Your blog moves to a second site.`,
     },
     {
       name: "Squarespace + beehiiv",
       add: bee,
-      note: `${beePlan} for ${subsLabel} subscribers. Your blog moves to a second site.`,
+      note: beeFree
+        ? `beehiiv Free for ${subsLabel} subscribers: no custom domain, and beehiiv branding on your site. Your blog moves to a second site.`
+        : `beehiiv Lite for ${subsLabel} subscribers: beehiiv branding stays on your site. Your blog moves to a second site.`,
     },
   ];
 
@@ -227,7 +234,8 @@ export default function CostCalculator() {
               {gSave > 0 && bSave <= 0 && (
                 <>
                   Over a year, you&apos;d save <b className="text-[#1f8a5b]">{money(gSave)}</b> compared with Ghost.
-                  beehiiv&apos;s free plan costs less up to 2,500 subscribers, but your blog would move off your site.
+                  beehiiv&apos;s free plan costs less up to 2,500 subscribers, but your blog moves off your site to a
+                  beehiiv address, with beehiiv branding.
                 </>
               )}
               {gSave <= 0 && bSave > 0 && (
