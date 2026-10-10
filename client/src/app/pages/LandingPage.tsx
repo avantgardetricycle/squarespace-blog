@@ -21,6 +21,7 @@ import { PUBLIC_PRICING_TIERS, annualSavingsPercent, annualSavingsAmount } from 
 import {
   billingPeriod,
   INTEREST_MODAL_SOURCES,
+  openCookieSettings,
   trackEvent,
   type InterestModalSource,
 } from "@/lib/analytics";
@@ -631,8 +632,15 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <Logo size="sm" />
-            <div className="text-sm text-neutral-500">
-              &copy; {new Date().getFullYear()} BetterBlog. All rights reserved.
+            <div className="flex items-center gap-5 text-sm text-neutral-500">
+              <span>&copy; {new Date().getFullYear()} BetterBlog. All rights reserved.</span>
+              <button
+                type="button"
+                onClick={openCookieSettings}
+                className="bg-transparent border-none p-0 text-sm text-neutral-500 underline underline-offset-2 cursor-pointer hover:text-neutral-700"
+              >
+                Cookie settings
+              </button>
             </div>
           </div>
           {/* Squarespace Developer Terms 17.4(e): trademark notice + link, wherever the name is used. */}
