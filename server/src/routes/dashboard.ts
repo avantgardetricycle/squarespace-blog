@@ -3,7 +3,6 @@ import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
-import dashboardEmailIntegrationRoutes from './dashboard-email-integration.js'
 import dashboardCommentsRoutes from './dashboard-comments.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
 import {
@@ -122,7 +121,6 @@ function generateSiteKey(): string {
 }
 
 router.use('/settings/comments', dashboardCommentSettingsRoutes)
-router.use('/settings/email-integration', dashboardEmailIntegrationRoutes)
 router.use('/comments', dashboardCommentsRoutes)
 
 // GET /api/dashboard/me - Current user, plan, sites

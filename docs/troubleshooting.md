@@ -24,18 +24,6 @@ BetterBlog includes a safety timeout — if the script fails to load within abou
 **I have two copies of the snippet in Code Injection.**
 Remove both, then paste a single fresh copy from the Installation instructions modal. Duplicate snippets cause conflicts and unpredictable behavior.
 
-**A custom Header or footer script used to change the blog, and it no longer appears. It still works on other pages.**
-BetterBlog replaces the blog container on collection and post pages, so changes a script made to the native Squarespace blog are wiped. BetterBlog also removes elements added directly into that container afterward. The script is still running — it runs before BetterBlog, or its later changes are removed.
-
-To run it after BetterBlog:
-
-1. Send the script from the **Support** tab. BetterBlog will send back a version that uses `BetterBlog.ready`. The dashboard does not convert scripts automatically.
-2. In Code Injection, replace the existing BetterBlog block with a fresh copy from **Installation instructions**. Do not paste a second BetterBlog block.
-3. Paste the rewritten script after the BetterBlog block.
-4. Save, then hard-refresh the blog (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows).
-
-Scripts that do not need the BetterBlog layout can stay as normal script tags. See [Installation](installation.md).
-
 **BetterBlog isn't loading in the Squarespace editor.**
 This is expected. BetterBlog intentionally does not activate inside the Squarespace editing interface — it only runs on your live published blog. Use BetterBlog's own live preview in the dashboard customizer to see your changes.
 

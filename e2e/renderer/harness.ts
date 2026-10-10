@@ -2,7 +2,7 @@ import * as path from "path";
 
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
-import { authorProfiles as fixtureAuthorProfiles, blogJson, BLOG_JSON_PATH, commentListJson } from "./fixtures/blog";
+import { blogJson, BLOG_JSON_PATH, commentListJson } from "./fixtures/blog";
 
 const RENDERER_PATH = path.join(process.cwd(), "scripts", "renderer.js");
 
@@ -38,9 +38,6 @@ type MountOptions = {
   pageBackground?: { section?: string; cssVariable?: string; image?: boolean };
   /** Replace the fixture blog items. Used when a test needs fields such as mediaFocalPoint. */
   blogItems?: Array<Record<string, unknown>>;
-  /** Replace fixture author profiles. Defaults to the shared layout authors. */
-  authorProfiles?: Record<string, { name: string; imageUrl?: string | null; bio?: string | null; bioLong?: string | null; bioFormat?: string; email?: string | null; socialLinks?: Record<string, string> }>;
-  defaultAuthorIds?: string[];
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
@@ -124,14 +121,8 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   await page.goto("/e2e/renderer-mount", { waitUntil: "domcontentloaded" });
   await page.addScriptTag({ path: RENDERER_PATH });
 
-  const profiles = options.authorProfiles ?? fixtureAuthorProfiles;
-  const defaultAuthorIds = options.defaultAuthorIds ?? ["ada", "grace"];
-  const authorMap = Object.fromEntries(
-    Object.entries(profiles).map(([id, profile]) => [id, profile.name]),
-  );
-
   await page.evaluate(
-    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap }) => {
+    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount }) => {
       const w = window as unknown as {
         BlogOverlayRenderer: { init: (config: Record<string, unknown>) => void };
         Static?: { SQUARESPACE_CONTEXT: Record<string, unknown> };
@@ -158,9 +149,24 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
         blogPath: "/e2e/renderer-blog",
         previewSelectedPostIndex: selected,
         previewDevice,
-        defaultAuthorIds,
-        authorMap,
-        authorProfiles,
+        defaultAuthorIds: ["ada", "grace"],
+        authorMap: { ada: "Ada Lovelace", grace: "Grace Hopper" },
+        authorProfiles: {
+          ada: {
+            name: "Ada Lovelace",
+            imageUrl: null,
+            bio: "Wrote the first algorithm.",
+            email: "ada@example.invalid",
+            socialLinks: { website: "https://example.invalid/ada" },
+          },
+          grace: {
+            name: "Grace Hopper",
+            imageUrl: null,
+            bio: "Invented the compiler.",
+            email: "grace@example.invalid",
+            socialLinks: { website: "https://example.invalid/grace" },
+          },
+        },
         collectionConfig,
         postConfig,
         commentSettings: {
@@ -179,9 +185,6 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       previewDevice: options.previewDevice,
       commentSettings: options.commentSettings,
       loggedInAccount: options.loggedInAccount,
-      authorProfiles: profiles,
-      defaultAuthorIds,
-      authorMap,
     },
   );
 

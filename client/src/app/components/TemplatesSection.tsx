@@ -169,7 +169,7 @@ export default function TemplatesSection() {
           </h2>
           <p>
             Five templates for your blog index, five for the post itself, and a set of blocks you can stack
-            underneath either one. All designed by a designer who builds Squarespace sites for a living, all built to inherit your site&apos;s fonts and
+            underneath either one. All designed by a Squarespace pro, all built to inherit your site&apos;s fonts and
             colors.
           </p>
         </motion.div>

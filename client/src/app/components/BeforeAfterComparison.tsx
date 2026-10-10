@@ -556,7 +556,7 @@ export function BeforeAfterComparison() {
   
           {/* LEFT: Before */}
           <div className="ba-side-before">
-            <div className="ba-side-before-label">Without BetterBlog</div>
+            <div className="ba-side-before-label">Plain Squarespace</div>
             <div className="ba-browser">
               <div className="ba-browser-chrome">
                 <div className="ba-chrome-dot red"></div>

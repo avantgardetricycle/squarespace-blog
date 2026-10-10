@@ -30,12 +30,12 @@ const pricingPlans = {
   professional: {
     name: "Professional",
     description: "A real blog—discoverable, navigable, readable",
-    features: ["Up to 3 blogs", "Advanced customization"],
+    features: ["Up to 3 blogs", "Advanced customization", "Priority support"],
   },
   publication: {
     name: "Publication",
     description: "Serious publication tools and higher limits",
-    features: ["Unlimited blogs (fair use)", "Publication-focused features"],
+    features: ["Unlimited blogs (fair use)", "Publication-focused features", "Priority support"],
   },
 } as const;
 
@@ -383,10 +383,10 @@ export default function Checkout() {
                 {/* Money Back Guarantee */}
                 <div className="bg-[#eaf7f2] border border-[#10B981]/30 rounded-[10px] p-4">
                   <p className="text-sm text-[#10B981] font-medium text-center">
-                    ✓ 30-day money-back guarantee on annual plans
+                    ✓ 30-Day Money-Back Guarantee
                   </p>
                   <p className="text-xs text-[#10B981]/80 text-center mt-1">
-                    Not satisfied? Annual plans get a full refund within 30 days of the first annual payment.
+                    Not satisfied? Get a full refund within 30 days.
                   </p>
                 </div>
               </CardContent>
