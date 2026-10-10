@@ -11,7 +11,8 @@ import { Check, Minus } from "lucide-react";
  * registered members, free included), Substack help article "How much does
  * Substack cost?" (10% + Stripe), beehiiv.com/pricing (paid subscriptions
  * start on Lite, $49/mo yearly at 1,000), squarespace.com/pricing (Digital
- * Content and Memberships fee 5% Core, 1% Plus, 0% Advanced).
+ * Content and Memberships fee 5% Core, 1% Plus, 0% Advanced), ghost.org/help/
+ * multiple-sites ("subscriptions include hosting for one Ghost publication").
  */
 const PRICES_AS_OF = "October 2026";
 
@@ -27,6 +28,15 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
       { text: "A separate Ghost site" },
       { text: "On Substack" },
       { text: "A separate beehiiv site" },
+    ],
+  },
+  {
+    label: "Several blogs on one website",
+    cells: [
+      { text: "Up to 3 blogs, each with its own template", good: true, note: "Publication plan" },
+      { text: "One blog per subscription", note: "Each extra site is another plan" },
+      { text: "Each blog is a separate publication" },
+      { text: "Each blog is a separate publication" },
     ],
   },
   {
