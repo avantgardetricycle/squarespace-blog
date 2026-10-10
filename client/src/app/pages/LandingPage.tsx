@@ -50,7 +50,7 @@ export default function LandingPage() {
     setInterestModalOpen(open);
   }, []);
 
-  const trackNavClick = useCallback((link: "features" | "how_it_works" | "pricing" | "support") => {
+  const trackNavClick = useCallback((link: "features" | "how_it_works" | "pricing" | "blog" | "support") => {
     if (link === "pricing") {
       trackEvent("pricing_nav_click");
     }
@@ -81,6 +81,15 @@ export default function LandingPage() {
 
   useEffect(() => {
     getDashboardMe().then((me) => setIsAuthenticated(!!me));
+  }, []);
+
+  useEffect(() => {
+    const id = window.location.hash.replace(/^#/, "");
+    if (!id) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView();
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -192,6 +201,13 @@ export default function LandingPage() {
             <a href="#features" onClick={() => trackNavClick("features")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Features</a>
             <a href="#how-it-works" onClick={() => trackNavClick("how_it_works")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">How it Works</a>
             <a href="#pricing" onClick={() => trackNavClick("pricing")} className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors">Pricing</a>
+            <Link
+              to="/blog"
+              onClick={() => trackNavClick("blog")}
+              className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors"
+            >
+              Blog
+            </Link>
             <Link
               to="/support"
               onClick={() => trackNavClick("support")}
