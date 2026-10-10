@@ -73,15 +73,6 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
       { text: "0%", good: true },
     ],
   },
-  {
-    label: "Sends your email newsletter",
-    cells: [
-      { text: "No", note: "Collects sign-ups into a list you can download for your email tool" },
-      { text: "Yes", good: true },
-      { text: "Yes", good: true },
-      { text: "Yes", good: true },
-    ],
-  },
 ];
 
 const BENEFITS = [
