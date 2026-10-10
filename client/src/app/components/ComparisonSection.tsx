@@ -6,10 +6,12 @@ import { Check, Minus } from "lucide-react";
  *
  * Every competitor fact here is checkable, so keep it current: re-verify
  * against each company's own pricing page before changing copy, and update
- * PRICES_AS_OF. Sources (Oct 2026): ghost.org/pricing, Substack's help
- * article "How much does Substack cost?", beehiiv.com/pricing, and
- * Squarespace's Digital Content and Memberships fees (5% Core, 1% Plus,
- * 0% Advanced).
+ * PRICES_AS_OF. Verified Oct 9 2026 on each company's own pricing page:
+ * ghost.org/pricing (Publisher $29/mo yearly at 1,000 members; members =
+ * registered members, free included), Substack help article "How much does
+ * Substack cost?" (10% + Stripe), beehiiv.com/pricing (paid subscriptions
+ * start on Lite, $49/mo yearly at 1,000), squarespace.com/pricing (Digital
+ * Content and Memberships fee 5% Core, 1% Plus, 0% Advanced).
  */
 const PRICES_AS_OF = "October 2026";
 
@@ -52,7 +54,7 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
       { text: "$29/mo", note: "Publication plan" },
       { text: "From $29/mo", note: "Publisher, up to 1,000 members" },
       { text: "$0", note: "Substack takes a cut instead" },
-      { text: "From $43/mo", note: "Scale plan" },
+      { text: "From $49/mo", note: "Lite, up to 1,000 subscribers" },
     ],
   },
   {

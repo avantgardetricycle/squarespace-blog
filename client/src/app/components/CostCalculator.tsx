@@ -11,19 +11,21 @@ import { trackEvent } from "@/lib/analytics";
  * sign-up forms) against each platform's plan that holds that many
  * subscribers. All prices billed annually, US dollars.
  * Re-verify against ghost.org/pricing and beehiiv.com/pricing before
- * changing, and update PRICES_AS_OF. Sources (Oct 2026): Ghost Publisher
- * tiers and beehiiv Scale tiers as published; Squarespace Core $29/mo annual.
+ * changing, and update PRICES_AS_OF. Verified Oct 9 2026 on each company's own
+ * pricing page (yearly billing): ghost.org/pricing Publisher slider,
+ * beehiiv.com/pricing Lite slider (Free plan caps at 2,500 subscribers),
+ * squarespace.com/pricing Core list price $29 (promos vary).
  */
 const PRICES_AS_OF = "October 2026";
 const SQUARESPACE_CORE = 29;
 const BETTERBLOG_PUBLICATION = 29;
 
 const STEPS = [
-  { subs: 5000, ghost: 63, bee: 68 },
-  { subs: 10000, ghost: 88, bee: 85 },
-  { subs: 25000, ghost: 141, bee: 128 },
-  { subs: 50000, ghost: 208, bee: 171 },
-  { subs: 100000, ghost: 274, bee: 343 },
+  { subs: 5000, ghost: 63, bee: 95 },
+  { subs: 10000, ghost: 88, bee: 119 },
+  { subs: 25000, ghost: 141, bee: 169 },
+  { subs: 50000, ghost: 208, bee: 249 },
+  { subs: 100000, ghost: 274, bee: 399 },
 ];
 const DEFAULT_STEP = 1; // 10,000 subscribers
 
@@ -81,7 +83,7 @@ export default function CostCalculator() {
       name: "Squarespace + beehiiv",
       add: s.bee,
       addLabel: `beehiiv ${money(s.bee)}`,
-      note: `beehiiv Scale for up to ${subsLabel} subscribers. Your blog moves to a second site.`,
+      note: `beehiiv Lite for ${subsLabel} subscribers. Your blog moves to a second site.`,
     },
   ];
 
@@ -173,7 +175,7 @@ export default function CostCalculator() {
         <p className="mt-5 text-[12.5px] text-[#6b6b6b] leading-relaxed">
           For a blog with free subscribers. Each company&apos;s published US prices as of {PRICES_AS_OF}, billed
           annually: Squarespace Core, BetterBlog Publication (includes email sign-up forms), Ghost Publisher and beehiiv
-          Scale. Ghost and beehiiv prices include emailing your subscribers; BetterBlog doesn&apos;t send email. Ghost and
+          Lite. Ghost and beehiiv prices include emailing your subscribers; BetterBlog doesn&apos;t send email. Ghost and
           beehiiv are trademarks of their respective owners; BetterBlog is not affiliated with or endorsed by them.
         </p>
       </div>
