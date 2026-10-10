@@ -120,10 +120,10 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
   {
     label: "Price to sell paid subscriptions, with 10,000 subscribers",
     cells: [
-      { text: "$29/mo", good: true, note: "Publication plan. Same price at 1,000 or 100,000 subscribers" },
-      { text: "$88/mo", note: "Publisher. $29 at 1,000 members, rising to $274 at 100,000" },
+      { text: "$29/mo for any number of subscribers", good: true, note: "Publication plan. Same price at 1,000 or 100,000" },
+      { text: "$88/mo for 10,000 members", note: "Publisher. Starts at $29 for 1,000; $274 for 100,000" },
       { text: "10% of every subscription", note: "Free to start; the cut grows with your revenue" },
-      { text: "$119/mo", note: "Lite. $49 at 1,000 subscribers, rising to $399 at 100,000" },
+      { text: "$119/mo for 10,000 subscribers", note: "Lite. Starts at $49 for 1,000; $399 for 100,000" },
     ],
   },
   {
