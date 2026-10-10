@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect, type LoaderFunctionArgs } from "react-ro
 import AppLayout from "./components/Layout";
 import Login from "./pages/Login";
 import LandingPage from "./pages/LandingPage";
+import { BlogIndex, BlogLayout, BlogPostPage } from "./pages/Blog";
 import Dashboard from "./pages/Dashboard";
 import Account from "./pages/Account";
 import Configure from "./pages/Configure";
@@ -60,6 +61,14 @@ export const router = createBrowserRouter([
   {
     path: "/",
     Component: LandingPage,
+  },
+  {
+    path: "/blog",
+    Component: BlogLayout,
+    children: [
+      { index: true, Component: BlogIndex },
+      { path: ":slug", Component: BlogPostPage },
+    ],
   },
   {
     path: "/login",
