@@ -23,7 +23,9 @@ import { trackEvent } from "@/lib/analytics";
  * squarespace.com/pricing (Core list price $29; promotions vary).
  * Plan limits in the notes, from the same pages: Ghost Starter has no custom
  * themes; beehiiv Free has no custom domain and can't remove beehiiv
- * branding; beehiiv Lite can't remove branding either (Pro and up only).
+ * branding; beehiiv Lite can't remove branding either (Pro and up only);
+ * Ghost Publisher has 3 staff users and no custom subdirectory install
+ * (Business plan add-on, +$50/mo). Squarespace Core: unlimited contributors.
  * Re-verify before changing numbers and update PRICES_AS_OF.
  */
 const PRICES_AS_OF = "October 2026";
@@ -105,7 +107,7 @@ export default function CostCalculator() {
       add: ghost,
       note: ghostStarter
         ? `Ghost Starter for ${subsLabel} members: no custom themes. Your blog moves to a second site.`
-        : `Ghost Publisher for ${subsLabel} members. Your blog moves to a second site.`,
+        : `Ghost Publisher for ${subsLabel} members: 3 staff accounts, and your blog can't sit at yoursite.com/blog (that's Business, +$50/mo). Your blog moves to a second site.`,
     },
     {
       name: "Squarespace + beehiiv",
