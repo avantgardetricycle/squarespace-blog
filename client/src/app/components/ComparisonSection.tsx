@@ -118,13 +118,12 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
     ],
   },
   {
-    label: "Price to sell paid subscriptions",
-    neutral: true,
+    label: "Price to sell paid subscriptions, with 10,000 subscribers",
     cells: [
-      { text: "$29/mo", note: "Publication plan" },
-      { text: "From $29/mo", note: "Publisher, up to 1,000 members" },
-      { text: "$0", note: "Substack takes a cut instead" },
-      { text: "From $49/mo", note: "Lite, up to 1,000 subscribers" },
+      { text: "$29/mo", good: true, note: "Publication plan. Same price at 1,000 or 100,000 subscribers" },
+      { text: "$88/mo", note: "Publisher. $29 at 1,000 members, rising to $274 at 100,000" },
+      { text: "10% of every subscription", note: "Free to start; the cut grows with your revenue" },
+      { text: "$119/mo", note: "Lite. $49 at 1,000 subscribers, rising to $399 at 100,000" },
     ],
   },
   {
