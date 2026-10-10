@@ -1,4 +1,5 @@
-import { motion } from 'motion/react';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 
 /* Wireframe helpers + data ported from the approved landing-page design.
    Markup is static and author-authored; no user input reaches these strings. */
@@ -92,8 +93,16 @@ const BLK: [string,string,string][] = [
   ['prevnext','Previous / Next','Keep readers moving through the archive']
 ];
 
+type GroupKey = 'collection' | 'post' | 'footer';
+
+const GROUPS: { key: GroupKey; label: string; hint: string; items: [string, string, string][]; thumbs: Record<string, string>; blk?: boolean }[] = [
+  { key: 'collection', label: 'Blog index', hint: 'How the page listing your posts looks', items: TPL.collection, thumbs: T },
+  { key: 'post', label: 'Post page', hint: 'How each article looks', items: TPL.post, thumbs: T },
+  { key: 'footer', label: 'Footer blocks', hint: 'Stack any of these under a post or collection', items: BLK, thumbs: B, blk: true },
+];
+
 const STYLES = `.bb-templates{
-  --violet:#5B4FE8; --violet-lt:#8F86F0; --line:#e4e3de; --mid:#6b6b6b;
+  --violet:#5B4FE8; --violet-lt:#8F86F0; --line:#e4e3de; --mid:#5f5f5f;
   --black:#0a0a0a; --serif:"DM Serif Display",serif;
 }
 .bb-templates .tp-wrap{max-width:1160px;margin:0 auto;padding:0 16px}
@@ -101,28 +110,53 @@ const STYLES = `.bb-templates{
 .bb-templates .tp-eyebrow i{display:block;width:28px;height:1.5px;background:var(--violet);opacity:.35;border-radius:2px}
 .bb-templates .tp-h2{font-family:var(--serif);font-size:clamp(2.2rem,4vw,3.2rem);font-weight:400;letter-spacing:-.02em;color:var(--black);line-height:1.1}
 .bb-templates .tp-h2 em{font-style:italic;color:var(--violet)}
-@media (max-width:760px){
-  .bb-templates .tp-row{grid-template-columns:repeat(2,1fr)}
-  .bb-templates .tp-row.blocks{grid-template-columns:1fr}
-}
-.bb-templates .tp-head{text-align:center;margin-bottom:54px}
+.bb-templates .tp-head{text-align:center;margin-bottom:36px}
 .bb-templates .tp-head p{font-size:.98rem;color:var(--mid);font-weight:300;max-width:560px;margin:16px auto 0;line-height:1.7}
-.bb-templates .tp-group{margin-bottom:40px}
-.bb-templates .tp-group:last-of-type{margin-bottom:0}
-.bb-templates .tp-gl{display:flex;align-items:center;gap:14px;margin-bottom:18px}
-.bb-templates .tp-gl span{font-size:.95rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);white-space:nowrap}
-.bb-templates .tp-gl em{font-style:normal;font-size:.85rem;color:var(--mid);font-weight:300}
-.bb-templates .tp-gl::after{content:'';flex:1;height:1px;background:var(--line)}
-.bb-templates .tp-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
-.bb-templates .tp-card{display:flex;flex-direction:column;gap:10px;cursor:default}
-.bb-templates .tp-thumb{aspect-ratio:4/3;background:#fff;border:1px solid #e6e6ec;border-radius:9px;padding:11px;overflow:hidden;
-  box-shadow:0 8px 26px rgba(91,79,232,.09);
-  display:flex;flex-direction:column;gap:5px;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.bb-templates .tp-card:hover .tp-thumb{transform:translateY(-4px);box-shadow:0 14px 34px rgba(91,79,232,.16);border-color:rgba(91,79,232,.3)}
+
+/* tabs */
+.bb-templates .tp-tabs{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:4px;background:#f4f3f0;border-radius:999px;width:fit-content;margin:0 auto}
+.bb-templates .tp-tab{border:0;cursor:pointer;font:inherit;font-size:.95rem;font-weight:600;padding:12px 22px;min-height:44px;border-radius:999px;background:transparent;color:var(--mid);transition:background .15s,color .15s,box-shadow .15s}
+.bb-templates .tp-tab:hover{color:var(--black)}
+.bb-templates .tp-tab[aria-selected="true"]{background:#fff;color:var(--black);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.bb-templates .tp-tab span{opacity:.6;font-weight:400;margin-left:4px}
+.bb-templates .tp-tab:focus-visible,.bb-templates .tp-opt:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+
+/* panel */
+.bb-templates .tp-panel{display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start;margin-top:40px}
+.bb-templates .tp-stage{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:18px}
+.bb-templates .tp-frame{background:#fbfaf8;border:1px solid #ecebe6;border-radius:16px;padding:32px;display:flex;justify-content:center;align-items:center;min-height:420px;box-sizing:border-box}
+.bb-templates .tp-big{width:300px;zoom:2}
+.bb-templates .tp-big.blk{width:330px;zoom:1.8}
+.bb-templates .tp-cap{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+.bb-templates .tp-cap-name{font-family:var(--serif);font-size:1.6rem;letter-spacing:-.01em;color:var(--black)}
+.bb-templates .tp-cap-desc{font-size:.95rem;color:var(--mid);font-weight:300;margin-top:2px}
+.bb-templates .tp-cap-pos{font-size:.8rem;color:#6b6b6b}
+.bb-templates .tp-list{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.bb-templates .tp-hint{font-size:.8rem;color:#6b6b6b;padding:0 4px 8px}
+.bb-templates .tp-opt{display:flex;align-items:center;gap:14px;width:100%;padding:10px;min-height:64px;border-radius:12px;cursor:pointer;font:inherit;text-align:left;background:#fff;border:1.5px solid transparent;transition:background .15s,border-color .15s}
+.bb-templates .tp-opt:hover{background:#faf9fe}
+.bb-templates .tp-opt[aria-pressed="true"]{background:#f3f1fe;border-color:var(--violet)}
+.bb-templates .tp-mini{width:200px;zoom:.32;flex-shrink:0;pointer-events:none}
+.bb-templates .tp-mini.blk{zoom:.32}
+.bb-templates .tp-opt-name{display:block;font-family:var(--serif);font-size:1.05rem;color:var(--black)}
+.bb-templates .tp-opt-desc{display:block;font-size:.8rem;color:#6b6b6b;font-weight:300;margin-top:2px}
+.bb-templates .tp-mix{margin-top:48px;text-align:center;font-size:.85rem;color:var(--mid);font-weight:300}
+.bb-templates .tp-mix b{font-weight:600;color:var(--black)}
+@media (max-width:640px){
+  .bb-templates .tp-tabs{flex-wrap:nowrap}
+  .bb-templates .tp-tab{font-size:.85rem;padding:10px 12px;white-space:nowrap}
+  .bb-templates .tp-frame{padding:16px;min-height:0}
+  .bb-templates .tp-big{zoom:1}
+  .bb-templates .tp-big.blk{zoom:1}
+  .bb-templates .tp-panel{gap:28px;margin-top:28px}
+}
+
+/* wireframe thumbnail shell */
+.bb-templates .tp-thumb{aspect-ratio:4/3;background:#fff;border:1px solid #e6e6ec;border-radius:9px;padding:11px;overflow:hidden;box-sizing:border-box;
+  box-shadow:0 8px 26px rgba(91,79,232,.09);display:flex;flex-direction:column;gap:5px}
 .bb-templates .tp-thumb div{border-color:#eeeef3!important}
-.bb-templates .tp-thumb .w{background:#f8f8fb}
-.bb-templates .tp-name{font-family:var(--serif);font-size:1rem;color:var(--black);letter-spacing:-.01em;line-height:1.2}
-.bb-templates .tp-desc{font-size:.74rem;color:var(--mid);font-weight:300;line-height:1.45;margin-top:-5px}
+.bb-templates .tp-thumb.blk{aspect-ratio:3/1;justify-content:center;gap:0;padding:14px 16px}
+.bb-templates .tp-mini .tp-thumb{box-shadow:none}
 /* wireframe primitives */
 .bb-templates .w{background:#f8f8fb;border-radius:2px}
 .bb-templates .wi{background:linear-gradient(135deg,#ded8f8,#b9afee);border-radius:2px}
@@ -133,22 +167,40 @@ const STYLES = `.bb-templates{
 .bb-templates .wt{height:5px;background:#e0e0e8;border-radius:2px}
 .bb-templates .wo{width:5px;height:5px;border-radius:50%;background:var(--violet);flex-shrink:0}
 .bb-templates .wsb{display:flex;flex-direction:column;gap:3px}
-.bb-templates .wov{background:linear-gradient(to top,rgba(18,14,48,.78),rgba(18,14,48,0) 62%),linear-gradient(135deg,#ded8f8,#9b90ec);border-radius:2px;display:flex;flex-direction:column;justify-content:flex-end;padding:4px;gap:2px}
-.bb-templates .tp-row.blocks{grid-template-columns:repeat(3,1fr);gap:16px}
-.bb-templates .tp-thumb.blk{aspect-ratio:3/1;justify-content:center;gap:0;padding:14px 16px}
-.bb-templates .tp-mix{margin-top:40px;text-align:center;font-size:.8rem;color:var(--mid);font-weight:300}`;
+.bb-templates .wov{background:linear-gradient(to top,rgba(18,14,48,.78),rgba(18,14,48,0) 62%),linear-gradient(135deg,#ded8f8,#9b90ec);border-radius:2px;display:flex;flex-direction:column;justify-content:flex-end;padding:4px;gap:2px}`;
 
-function TemplateCard({ thumb, name, desc, blk }: { thumb: string; name: string; desc: string; blk?: boolean }) {
-  return (
-    <div className="tp-card">
-      <div className={blk ? 'tp-thumb blk' : 'tp-thumb'} dangerouslySetInnerHTML={{ __html: thumb }} />
-      <div className="tp-name">{name}</div>
-      <div className="tp-desc">{desc}</div>
-    </div>
-  );
+function Thumb({ html, blk }: { html: string; blk?: boolean }) {
+  return <div className={blk ? 'tp-thumb blk' : 'tp-thumb'} aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/**
+ * One template type at a time (tabs), one large preview, and a short list to
+ * switch between them. Replaces the 16-card grid, which showed everything at
+ * once and was hard to take in.
+ */
 export default function TemplatesSection() {
+  const [tab, setTab] = useState<GroupKey>('collection');
+  const [sel, setSel] = useState<Record<GroupKey, number>>({ collection: 0, post: 0, footer: 0 });
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const groupIndex = GROUPS.findIndex((g) => g.key === tab);
+  const group = GROUPS[groupIndex];
+  const idx = sel[tab];
+  const [key, name, desc] = group.items[idx];
+
+  // Left/Right/Home/End move between tabs (WAI-ARIA tabs pattern).
+  const onTabKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (groupIndex + 1) % GROUPS.length;
+    else if (e.key === 'ArrowLeft') next = (groupIndex - 1 + GROUPS.length) % GROUPS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = GROUPS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    setTab(GROUPS[next].key);
+    tabRefs.current[next]?.focus();
+  };
+
   return (
     <section id="templates" className="bb-templates bg-white py-12 md:py-[100px] overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
@@ -174,38 +226,73 @@ export default function TemplatesSection() {
           </p>
         </motion.div>
 
-        <div className="tp-group">
-          <div className="tp-gl">
-            <span>Collection templates</span>
-            <em>Your blog&apos;s index page</em>
-          </div>
-          <div className="tp-row">
-            {TPL.collection.map(([k, n, d]) => (
-              <TemplateCard key={k} thumb={T[k]} name={n} desc={d} />
-            ))}
-          </div>
+        <div role="tablist" aria-label="Template type" className="tp-tabs" onKeyDown={onTabKey}>
+          {GROUPS.map((g, i) => (
+            <button
+              key={g.key}
+              ref={(el) => {
+                tabRefs.current[i] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`tp-tab-${g.key}`}
+              aria-selected={g.key === tab}
+              aria-controls="tp-panel"
+              tabIndex={g.key === tab ? 0 : -1}
+              className="tp-tab"
+              onClick={() => setTab(g.key)}
+            >
+              {g.label}
+              <span>{g.items.length}</span>
+            </button>
+          ))}
         </div>
 
-        <div className="tp-group">
-          <div className="tp-gl">
-            <span>Post templates</span>
-            <em>The article itself</em>
+        <div id="tp-panel" role="tabpanel" aria-labelledby={`tp-tab-${tab}`} className="tp-panel">
+          <div className="tp-stage">
+            <div className="tp-frame">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`${tab}-${key}`}
+                  className={group.blk ? 'tp-big blk' : 'tp-big'}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <Thumb html={group.thumbs[key]} blk={group.blk} />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+            <div className="tp-cap" aria-live="polite">
+              <div>
+                <div className="tp-cap-name">{name}</div>
+                <div className="tp-cap-desc">{desc}</div>
+              </div>
+              <div className="tp-cap-pos">
+                {idx + 1} of {group.items.length}
+              </div>
+            </div>
           </div>
-          <div className="tp-row">
-            {TPL.post.map(([k, n, d]) => (
-              <TemplateCard key={k} thumb={T[k]} name={n} desc={d} />
-            ))}
-          </div>
-        </div>
 
-        <div className="tp-group">
-          <div className="tp-gl">
-            <span>Footer blocks</span>
-            <em>Stack any of these below a post or collection</em>
-          </div>
-          <div className="tp-row blocks">
-            {BLK.map(([k, n, d]) => (
-              <TemplateCard key={k} thumb={B[k]} name={n} desc={d} blk />
+          <div className="tp-list">
+            <div className="tp-hint">{group.hint}</div>
+            {group.items.map(([k, n, d], i) => (
+              <button
+                key={k}
+                type="button"
+                className="tp-opt"
+                aria-pressed={i === idx}
+                onClick={() => setSel((s) => ({ ...s, [tab]: i }))}
+              >
+                <span className={group.blk ? 'tp-mini blk' : 'tp-mini'}>
+                  <Thumb html={group.thumbs[k]} blk={group.blk} />
+                </span>
+                <span>
+                  <span className="tp-opt-name">{n}</span>
+                  <span className="tp-opt-desc">{d}</span>
+                </span>
+              </button>
             ))}
           </div>
         </div>
