@@ -13,6 +13,13 @@ import { Check, Minus } from "lucide-react";
  * start on Lite, $49/mo yearly at 1,000), squarespace.com/pricing (Digital
  * Content and Memberships fee 5% Core, 1% Plus, 0% Advanced), ghost.org/help/
  * multiple-sites ("subscriptions include hosting for one Ghost publication").
+ * Feature rows (checked Oct 9 2026): Ghost tutorial "Show reading time &
+ * progress" (progress bar needs theme code) and forum "Feature request: table
+ * of contents" (code injection/theme); Substack help "How do I add anchor
+ * links" + "A guide to customizing your Substack website" (preset layouts,
+ * homepage-only right rail; no TOC/progress-bar articles); beehiiv help "How
+ * to add a TOC to your post" (TOC block) and "Customizing your site in the
+ * Website Builder" (columns/widgets); no beehiiv progress-bar feature found.
  */
 const PRICES_AS_OF = "October 2026";
 
@@ -55,6 +62,33 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
       { text: "Separate theme to set up" },
       { text: "Substack's layout" },
       { text: "beehiiv's site builder" },
+    ],
+  },
+  {
+    label: "Table of contents",
+    cells: [
+      { text: "Built in, generated from your headings", good: true },
+      { text: "Needs theme code" },
+      { text: "Build it by hand with anchor links" },
+      { text: "Built-in block", good: true },
+    ],
+  },
+  {
+    label: "Reading progress bar",
+    cells: [
+      { text: "Built in", good: true },
+      { text: "Needs theme code" },
+      { text: "Not offered" },
+      { text: "Not offered" },
+    ],
+  },
+  {
+    label: "Sidebars on posts",
+    cells: [
+      { text: "Built in", good: true, note: "Related posts, author, sign-up form and more" },
+      { text: "Depends on your theme" },
+      { text: "Not offered on posts" },
+      { text: "Build your own with columns" },
     ],
   },
   {
@@ -190,7 +224,7 @@ export default function ComparisonSection() {
         </div>
 
         <p className="mt-5 text-[12.5px] text-[#6b6b6b] leading-relaxed max-w-[860px]">
-          Prices are each company&apos;s published US prices as of {PRICES_AS_OF}, billed annually. Card processing fees
+          Prices and features are from each company&apos;s own pricing and help pages as of {PRICES_AS_OF}; prices are US, billed annually. Card processing fees
           apply on every platform, and BetterBlog requires a Squarespace 7.1 site on the Core plan or higher. Ghost,
           Substack and beehiiv are trademarks of their respective owners; BetterBlog is not affiliated with or endorsed
           by them.
