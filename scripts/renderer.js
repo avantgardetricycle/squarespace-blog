@@ -5636,6 +5636,28 @@
     },
 
     /**
+     * Squarespace ?format=json items include updatedOn (ms) for the last save.
+     * Returns "Updated <date>" or null when the field is missing.
+     */
+    _getUpdatedAtLabel: function(item) {
+      if (!item || item.updatedOn == null || item.updatedOn === '') return null;
+      var raw = item.updatedOn;
+      var date = null;
+      if (typeof raw === 'number' && !isNaN(raw)) {
+        date = new Date(raw);
+      } else if (typeof raw === 'string') {
+        var trimmed = raw.trim();
+        if (/^\d+$/.test(trimmed)) date = new Date(Number(trimmed));
+        else {
+          var parsed = Date.parse(trimmed);
+          if (!isNaN(parsed)) date = new Date(parsed);
+        }
+      }
+      if (!date || isNaN(date.getTime())) return null;
+      return 'Updated ' + date.toLocaleDateString();
+    },
+
+    /**
      * Get author display name from item (legacy single author)
      * Supports: author.displayName, authors[0].displayName, contributors[0].displayName
      */
@@ -13224,6 +13246,10 @@
           if (showDate) {
             var dateStrSingle = self._getDate(post);
             if (dateStrSingle) metaParts.push(dateStrSingle);
+          }
+          if (cfg.showPostUpdatedAt) {
+            var updatedAtLabel = self._getUpdatedAtLabel(post);
+            if (updatedAtLabel) metaParts.push(updatedAtLabel);
           }
           if (showReadingTime) {
             var minsSingle = self._getReadingTimeMinutes(post.body);

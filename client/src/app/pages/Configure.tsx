@@ -479,6 +479,8 @@ export function resolveEffectiveFeaturedArticle<T extends { title?: string }>(ar
 }
 
 export interface PostLevelConfig extends BaseLevelConfig {
+  /** Post header only. Uses Squarespace item.updatedOn. Off until turned on. */
+  showPostUpdatedAt: boolean;
   progressBar: { show: boolean; position: "top" | "bottom"; thickness: number; color: string };
   postModules?: PostModulesConfig;
   postHeader?: PostHeaderConfig;
@@ -1408,6 +1410,7 @@ function validPostHeaderBackgroundColor(v: unknown): string | undefined {
 
 const defaultPostConfig: PostLevelConfig = {
   ...defaultCollectionConfig,
+  showPostUpdatedAt: false,
   postModules: defaultPostModules,
   postHeader: defaultPostHeader,
   leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
@@ -2020,6 +2023,7 @@ function parseLevelConfig(
     const postHeader: PostHeaderConfig = postHeaderForDerive ?? defaultPostHeader;
     return {
       ...base,
+      showPostUpdatedAt: Boolean(raw?.showPostUpdatedAt ?? false),
       postModules,
       postHeader,
       leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: [...postDerived.left] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
@@ -2239,7 +2243,9 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "");
-    return base && pa.show === pb.show && phEqual;
+    const updatedAtEqual =
+      Boolean((a as PostLevelConfig).showPostUpdatedAt) === Boolean((b as PostLevelConfig).showPostUpdatedAt);
+    return base && pa.show === pb.show && phEqual && updatedAtEqual;
   }
   return base;
 }
@@ -3291,7 +3297,10 @@ export default function Configure() {
         const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
         setConfig((prev) => ({
           ...prev,
-          postConfig: parsedPost,
+          postConfig: {
+            ...parsedPost,
+            showPostUpdatedAt: Boolean(prev.postConfig.showPostUpdatedAt),
+          },
           postTemplateId: template.id,
         }));
         if (previewDebugEnabled) {
@@ -3361,6 +3370,9 @@ export default function Configure() {
     if (path === "showDate") return { ...cfg, showDate: value as boolean };
     if (path === "showAuthor") return { ...cfg, showAuthor: value as boolean };
     if (path === "showReadingTime") return { ...cfg, showReadingTime: value as boolean };
+    if (path === "showPostUpdatedAt" && "progressBar" in cfg) {
+      return { ...cfg, showPostUpdatedAt: value as boolean };
+    }
     if (path === "showPostExcerpt" && "showPostExcerpt" in cfg) return { ...cfg, showPostExcerpt: value as boolean };
     if (path === "leftSidebar.show") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, show: value as boolean } };
     if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
@@ -3752,6 +3764,20 @@ export default function Configure() {
                         <span className="w-6 h-6 shrink-0" aria-hidden />
                       </div>
                     </div>
+
+                    {selectedLevel === "post" && (
+                    <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
+                      <span className="font-medium">Show Post Updated At</span>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          id="show-post-updated-at"
+                          checked={(effectiveConfig as PostLevelConfig).showPostUpdatedAt ?? false}
+                          onCheckedChange={(v) => updateLevelConfigPath("showPostUpdatedAt", v)}
+                        />
+                        <span className="w-6 h-6 shrink-0" aria-hidden />
+                      </div>
+                    </div>
+                    )}
 
                     {selectedLevel === "collection" && !isCollectionControlLocked("showPostExcerpt") && (
                     <div className="flex items-center justify-between py-3 border-b border-[#e5e4e0]">
