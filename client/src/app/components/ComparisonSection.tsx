@@ -23,6 +23,11 @@ import { Check, Minus } from "lucide-react";
  * Templates row: ghost.org/pricing (marketplace + custom themes from Publisher),
  * Substack guide (preset hero/list/grid layouts), beehiiv.com/pricing compare
  * table (website templates on all plans).
+ * /blog row: ghost.org/help/run-ghost-from-a-subdirectory ("paid add-on for
+ * our Business plan" + reverse proxy); Substack help "Can I use my root
+ * domain..." (www./newsletter. subdomain formats; $50 custom domain per
+ * pricing article); beehiiv help "Understanding domains in beehiiv"
+ * (subdomain like newsletter.yoursite.com; custom domains on paid plans).
  */
 const PRICES_AS_OF = "October 2026";
 
@@ -38,6 +43,15 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
       { text: "A separate Ghost site" },
       { text: "On Substack" },
       { text: "A separate beehiiv site" },
+    ],
+  },
+  {
+    label: "Blog stays at yoursite.com/blog",
+    cells: [
+      { text: "Yes, it's your Squarespace blog page", good: true, note: "Same web address, so your search rankings stay put" },
+      { text: "Business plan add-on and a server proxy", note: "On Publisher: a separate address like blog.yoursite.com" },
+      { text: "Separate address", note: "Like newsletter.yoursite.com. Custom domain is $50 one-time" },
+      { text: "Separate address", note: "Like newsletter.yoursite.com. Custom domain on paid plans" },
     ],
   },
   {
