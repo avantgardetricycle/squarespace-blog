@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { cssNumber, cssValue, expectPx, isMobileProject, mountRenderer } from "./harness";
-import { authorProfiles } from "./fixtures/blog";
+import { authorProfiles, blogJson } from "./fixtures/blog";
 import { postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
 
 const POSTS: PostTemplateName[] = ["feature", "reporter", "writer", "story", "publisher"];
@@ -403,6 +403,42 @@ test.describe("post layout contract", () => {
     if (stuck.position === "fixed") {
       expect(stuck.top).toBeGreaterThan(0);
     }
+  });
+});
+
+test.describe("post updated at", () => {
+  function itemsWithUpdatedOn(extraMs: number) {
+    return blogJson.items.map((item) => ({
+      ...item,
+      updatedOn: item.publishOn + extraMs,
+    }));
+  }
+
+  test("shows Squarespace updatedOn in the post header when enabled", async ({ page }) => {
+    const items = itemsWithUpdatedOn(20 * 86_400_000);
+    await mountRenderer(page, {
+      postConfig: { ...postTemplates.reporter, showDate: true, showPostUpdatedAt: true },
+      blogItems: items,
+    });
+    const meta = page.locator(".blog-overlay-meta").first();
+    const labels = await page.evaluate((post) => {
+      return {
+        published: new Date(post.publishOn).toLocaleDateString(),
+        updated: "Updated " + new Date(post.updatedOn).toLocaleDateString(),
+      };
+    }, items[1]);
+    await expect(meta).toContainText(labels.published);
+    await expect(meta).toContainText(labels.updated);
+  });
+
+  test("hides the updated date when the post control is off", async ({ page }) => {
+    const items = itemsWithUpdatedOn(20 * 86_400_000);
+    await mountRenderer(page, {
+      postConfig: { ...postTemplates.reporter, showDate: true, showPostUpdatedAt: false },
+      blogItems: items,
+    });
+    const meta = page.locator(".blog-overlay-meta").first();
+    await expect(meta).not.toContainText("Updated");
   });
 });
 
