@@ -96,8 +96,8 @@ export default function CostCalculator() {
       name: "Squarespace + BetterBlog",
       add: bb,
       note: paid
-        ? "BetterBlog Publication: sign-up forms and paywall. Same price at any size. Your blog stays on Squarespace."
-        : "BetterBlog Professional. Same price at any size. Your blog stays on Squarespace.",
+        ? "BetterBlog Publication: all 10 templates, sign-up forms and paywall, all customizable with live preview. Same price at any size. Your blog stays on Squarespace."
+        : "BetterBlog Professional: 8 templates, sidebars, table of contents, search and comments, all customizable with live preview. Same price at any size. Your blog stays on Squarespace.",
       ours: true,
     },
     {

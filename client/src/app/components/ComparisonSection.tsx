@@ -20,6 +20,9 @@ import { Check, Minus } from "lucide-react";
  * homepage-only right rail; no TOC/progress-bar articles); beehiiv help "How
  * to add a TOC to your post" (TOC block) and "Customizing your site in the
  * Website Builder" (columns/widgets); no beehiiv progress-bar feature found.
+ * Templates row: ghost.org/pricing (marketplace + custom themes from Publisher),
+ * Substack guide (preset hero/list/grid layouts), beehiiv.com/pricing compare
+ * table (website templates on all plans).
  */
 const PRICES_AS_OF = "October 2026";
 
@@ -53,6 +56,15 @@ const ROWS: { label: string; neutral?: boolean; cells: [Cell, Cell, Cell, Cell] 
       { text: "Yes" },
       { text: "Yes" },
       { text: "Yes" },
+    ],
+  },
+  {
+    label: "Designed blog templates",
+    cells: [
+      { text: "10 templates, switch in one click", good: true, note: "4 on Essentials, 8 on Professional, all 10 on Publication. Customize each with live preview" },
+      { text: "Theme marketplace", note: "Custom themes from Publisher up" },
+      { text: "A few preset layouts" },
+      { text: "Website templates" },
     ],
   },
   {
