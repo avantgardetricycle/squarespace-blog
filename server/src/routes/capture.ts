@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { getSiteBySiteKey } from '../db/index.js'
 import { sendNewSubscriberNotification, sendNewLeadMagnetNotification } from '../lib/email.js'
+import { createEmailSyncDeps, persistAndForwardLead } from '../lib/email-sync.js'
 
 const router = Router()
 
@@ -105,24 +106,16 @@ router.post('/', async (req: Request, res: Response) => {
 
     const resourceTitleForDb = type === 'newsletter' ? '' : (resourceTitle ?? '')
 
-    await prisma.leadCapture.upsert({
-      where: {
-        siteId_email_type_resourceTitle: {
-          siteId: site.id,
-          email,
-          type,
-          resourceTitle: resourceTitleForDb,
-        },
-      },
-      create: {
+    await persistAndForwardLead(
+      {
         siteId: site.id,
         email,
         name,
         type,
         resourceTitle: resourceTitleForDb,
       },
-      update: { name },
-    })
+      createEmailSyncDeps()
+    )
 
     const siteOwner = await prisma.user.findUnique({
       where: { id: site.userId },

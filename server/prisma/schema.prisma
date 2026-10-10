@@ -69,6 +69,7 @@ model Site {
   googleAnalytics       SiteGoogleAnalytics?
   leadCaptures          LeadCapture[]
   blogCommentSettings   BlogCommentSettings?
+  emailIntegration      SiteEmailIntegration?
   sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
@@ -121,6 +122,12 @@ enum IngestedFrom {
   BETTER_BLOG
 }
 
+enum BioFormat {
+  text
+  markdown
+  html
+}
+
 model BlogAuthor {
   id           String       @id @default(uuid())
   siteId       String       @map("site_id")
@@ -128,6 +135,7 @@ model BlogAuthor {
   imageUrl     String?      @map("image_url") @db.Text
   bio          String?      @db.Text
   bioLong      String?      @map("bio_long") @db.Text
+  bioFormat    BioFormat    @default(text) @map("bio_format")
   email        String?
   socialLinks  Json?        @map("social_links")
   ingestedFrom IngestedFrom @default(BETTER_BLOG) @map("ingested_from")
@@ -387,6 +395,21 @@ model BlogCommentSettings {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("blog_comment_settings")
+}
+
+model SiteEmailIntegration {
+  siteId        String    @id @map("site_id")
+  provider      String    @default("betterblog") // betterblog | kit | mailchimp
+  apiKeyEnc     String?   @map("api_key_enc") @db.Text
+  destinationId String?   @map("destination_id") // Kit form id or Mailchimp audience id
+  lastError     String?   @map("last_error") @db.Text
+  lastErrorAt   DateTime? @map("last_error_at")
+  lastSuccessAt DateTime? @map("last_success_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_email_integrations")
 }
 
 model SitePaywallSettings {
