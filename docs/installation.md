@@ -63,44 +63,7 @@ Click **Copy Code** to copy the full snippet to your clipboard.
 
 5. Click **Save**
 
-That's it for BetterBlog itself. You won't need to return to Code Injection unless you're updating or removing BetterBlog, or you have another script that should run on the blog. See the next section.
-
----
-
-## Other scripts in Code Injection
-
-Other scripts in **Settings → Advanced → Code Injection** still run. BetterBlog does not turn them off, and it does not reorder an unmodified script.
-
-On a blog page those scripts run before BetterBlog replaces the blog container (usually the main content area). Changes they make to the native Squarespace blog disappear when BetterBlog draws its own layout. Anything they add directly into that container later is removed as well, because BetterBlog also removes Squarespace content that reappears there.
-
-**Scripts that should keep running immediately on every page**, and that do not need the BetterBlog layout, stay as normal script tags. Paste them wherever you already do. They will not see the BetterBlog layout.
-
-**Scripts that should run after BetterBlog** need three things:
-
-1. A fresh BetterBlog block from **Installation instructions**, pasted first. If BetterBlog is already installed, replace the existing BetterBlog block. Do not paste a second copy. Leave your other scripts in place, and put the ones that should run after BetterBlog below the new block.
-2. The script's work wrapped in `BetterBlog.ready`.
-3. A hard refresh after you save Code Injection.
-
-```html
-<script>
-BetterBlog.ready(function (ctx) {
-  if (!ctx.active) return;
-  // ctx.root is the container BetterBlog took over.
-  // ctx.overlay is the BetterBlog layout.
-  // ctx.view is "collection" or "post".
-});
-</script>
-```
-
-BetterBlog runs these callbacks, in the order they were registered, after its layout is in the page and before the loading state lifts. It runs them again each time it redraws the blog, including when a reader moves between the collection and a post without a full page reload. Write the callback so it is safe to run more than once. `ctx.renderId` increases on each run, which is useful if the script should only do something once (for example, send an analytics event).
-
-A callback registered after BetterBlog has already rendered runs immediately, then again on later renders.
-
-These callbacks do not run while the Squarespace editor is open. On pages that are not a BetterBlog collection, and if BetterBlog cannot render the blog, they still run once with `ctx.active` set to false.
-
-If the script adds an element directly inside the blog container after `BetterBlog.ready` has returned, set `data-bb-custom` on that element. Otherwise BetterBlog removes it. Elements inserted inside the BetterBlog layout itself are left alone.
-
-There is no automatic converter in the dashboard. If you need a script adapted, send it from the **Support** tab. BetterBlog will send back a version written for `BetterBlog.ready`.
+That's it on the Squarespace side. You won't need to return to Code Injection unless you're updating or removing BetterBlog.
 
 ---
 

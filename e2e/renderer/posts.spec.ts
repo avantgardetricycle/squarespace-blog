@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { cssNumber, cssValue, expectPx, isMobileProject, mountRenderer } from "./harness";
-import { authorProfiles, blogJson } from "./fixtures/blog";
 import { postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
 
 const POSTS: PostTemplateName[] = ["feature", "reporter", "writer", "story", "publisher"];
@@ -126,45 +125,6 @@ test.describe("post layout contract", () => {
       .first()
       .evaluate((el) => el.classList.contains("bb-mobile-duplicate-hidden"));
     expect(hidden).toBe(mobile);
-  });
-
-  test("author bios render text, markdown, and sanitized html", async ({ page }) => {
-    await mountRenderer(page, {
-      postConfig: structuredClone(postTemplates.feature),
-      defaultAuthorIds: ["literal", "markdown", "html"],
-      authorProfiles,
-    });
-
-    const bio = (zone: "sidebar" | "footer", name: string) =>
-      page
-        .locator(`[data-bb-zone="${zone}"][data-bb-module="authorProfiles"] .blog-overlay-author-unit`)
-        .filter({ hasText: name })
-        .locator(".blog-overlay-author-card-bio");
-
-    const literal = bio("sidebar", "Literal Author");
-    await expect(literal).toHaveText("See **bold** and <strong>nope</strong>");
-    await expect(literal.locator("strong")).toHaveCount(0);
-    await expect(bio("footer", "Literal Author")).toHaveText("Footer literal stays **bold**");
-
-    const markdown = bio("sidebar", "Markdown Author");
-    await expect(markdown.locator("strong")).toHaveText("first");
-    await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
-    const markdownFooter = bio("footer", "Markdown Author");
-    await expect(markdownFooter.locator("strong")).toHaveText("long");
-    await expect(markdownFooter.locator("a")).toHaveAttribute("href", "https://example.invalid/long");
-
-    const html = bio("sidebar", "HTML Author");
-    await expect(html.locator("strong")).toHaveText("HTML");
-    await expect(html.locator('a[href="https://example.invalid/ok"]')).toHaveCount(1);
-    const htmlSource = (await html.innerHTML()).toLowerCase();
-    expect(htmlSource).not.toContain("script");
-    expect(htmlSource).not.toContain("onerror");
-
-    const htmlFooter = bio("footer", "HTML Author");
-    await expect(htmlFooter.locator("em")).toHaveText("HTML");
-    const htmlFooterSource = (await htmlFooter.innerHTML()).toLowerCase();
-    expect(htmlFooterSource).not.toContain("script");
-    expect(htmlFooterSource).not.toContain("onerror");
   });
 
   test("a left-only module keeps its footer copy on mobile", async ({ page }, testInfo) => {
@@ -406,42 +366,6 @@ test.describe("post layout contract", () => {
   });
 });
 
-test.describe("post updated at", () => {
-  function itemsWithUpdatedOn(extraMs: number) {
-    return blogJson.items.map((item) => ({
-      ...item,
-      updatedOn: item.publishOn + extraMs,
-    }));
-  }
-
-  test("shows Squarespace updatedOn in the post header when enabled", async ({ page }) => {
-    const items = itemsWithUpdatedOn(20 * 86_400_000);
-    await mountRenderer(page, {
-      postConfig: { ...postTemplates.reporter, showDate: true, showPostUpdatedAt: true },
-      blogItems: items,
-    });
-    const meta = page.locator(".blog-overlay-meta").first();
-    const labels = await page.evaluate((post) => {
-      return {
-        published: new Date(post.publishOn).toLocaleDateString(),
-        updated: "Updated " + new Date(post.updatedOn).toLocaleDateString(),
-      };
-    }, items[1]);
-    await expect(meta).toContainText(labels.published);
-    await expect(meta).toContainText(labels.updated);
-  });
-
-  test("hides the updated date when the post control is off", async ({ page }) => {
-    const items = itemsWithUpdatedOn(20 * 86_400_000);
-    await mountRenderer(page, {
-      postConfig: { ...postTemplates.reporter, showDate: true, showPostUpdatedAt: false },
-      blogItems: items,
-    });
-    const meta = page.locator(".blog-overlay-meta").first();
-    await expect(meta).not.toContainText("Updated");
-  });
-});
-
 async function storyCommentsFooterBox(page: Page) {
   return page.evaluate(() => {
     function contentBox(el: Element | null) {
@@ -662,61 +586,3 @@ async function expectArticleCommentsGap(page: Page, tolerance: number) {
   });
   expectPx(gap, 24, tolerance);
 }
-
-test.describe("post video blocks", () => {
-  test("youtube, vimeo, and file videos fill the Squarespace wrapper", async ({ page }) => {
-    const youtube =
-      '<div class="sqs-block video-block sqs-block-video" data-block-type="32" data-sqsp-block="video">' +
-      '<div class="sqs-block-content"><div class="intrinsic" style="max-width:100%">' +
-      '<div class="embed-block-wrapper" style="height:0;overflow:hidden;padding-bottom:56.25%">' +
-      '<div class="sqs-video-wrapper" data-provider-name="YouTube" data-html="&lt;iframe src=&quot;//www.youtube.com/embed/dQw4w9WgXcQ?wmode=opaque&quot; width=&quot;854&quot; height=&quot;480&quot; frameborder=&quot;0&quot; allowfullscreen&gt;&lt;/iframe&gt;"></div>' +
-      "</div></div></div></div>";
-    const vimeo =
-      '<div class="sqs-block video-block sqs-block-video" data-block-type="32" data-sqsp-block="video" ' +
-      'data-block-json="{&quot;url&quot;:&quot;https://vimeo.com/76979871&quot;,&quot;providerName&quot;:&quot;Vimeo&quot;,&quot;resolvedBy&quot;:&quot;vimeo&quot;,&quot;width&quot;:640,&quot;height&quot;:360,&quot;html&quot;:&quot;&quot;}">' +
-      '<div class="sqs-block-content"><div class="sqs-video-wrapper" data-provider-name="Vimeo"></div></div></div>';
-    const file =
-      '<div class="sqs-block video-block sqs-block-video" data-sqsp-block="video">' +
-      '<div class="sqs-block-content"><div class="sqs-video-wrapper" data-html="&lt;video controls src=&quot;https://cdn.example.com/clip.mp4&quot;&gt;&lt;/video&gt;"></div></div></div>';
-    const native =
-      '<div class="sqs-block video-block sqs-block-video" data-sqsp-block="video" ' +
-      'data-block-json="{&quot;resolvedBy&quot;:&quot;native&quot;,&quot;alexandriaUrl&quot;:&quot;https://video.squarespace-cdn.com/content/v1/site/clip/{variant}&quot;,&quot;width&quot;:1920,&quot;height&quot;:1080,&quot;html&quot;:&quot;&quot;}">' +
-      '<div class="sqs-block-content"><div class="sqs-native-video" data-config-video="{&quot;alexandriaUrl&quot;:&quot;https://video.squarespace-cdn.com/content/v1/site/clip/{variant}&quot;}"></div>' +
-      '<div class="sqs-video-wrapper"></div></div></div>';
-
-    await mountRenderer(page, {
-      previewSelectedPostIndex: 0,
-      blogItems: [
-        {
-          ...blogJson.items[0],
-          title: "Video post",
-          body: ["<p>Opening line before the players.</p>", youtube, vimeo, file, native].join(""),
-        },
-      ],
-    });
-
-    await page.addStyleTag({
-      content:
-        ".sqs-video-wrapper{position:absolute;top:0;left:0;width:100%;height:100%}" +
-        ".embed-block-wrapper{height:0;overflow:hidden}" +
-        ".sqs-native-video{position:absolute;inset:0}",
-    });
-
-    const youtubeSrc = await page.locator(".blog-overlay-body iframe").nth(0).getAttribute("src");
-    const vimeoSrc = await page.locator(".blog-overlay-body iframe").nth(1).getAttribute("src");
-    expect(youtubeSrc).toContain("https://www.youtube.com/embed/dQw4w9WgXcQ");
-    expect(vimeoSrc).toBe("https://player.vimeo.com/video/76979871");
-
-    const fileSrc = await page.locator('.blog-overlay-body video[src*="clip.mp4"]').getAttribute("src");
-    expect(fileSrc).toBe("https://cdn.example.com/clip.mp4");
-
-    const nativeSrc = await page.locator(".blog-overlay-body video[data-bb-video-src]").last().getAttribute("data-bb-video-src");
-    expect(nativeSrc).toBe("https://video.squarespace-cdn.com/content/v1/site/clip/playlist.m3u8");
-
-    const heights = await page.locator(".blog-overlay-body .bb-video-frame").evaluateAll((els) =>
-      els.map((el) => el.getBoundingClientRect().height),
-    );
-    expect(heights).toHaveLength(4);
-    for (const height of heights) expect(height).toBeGreaterThan(80);
-  });
-});

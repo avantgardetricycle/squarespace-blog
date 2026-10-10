@@ -114,9 +114,7 @@ Squarespace 7.0 and 7.1 are architecturally distinct versions of the platform. T
 
 ## Ajax navigation and script re-initialization
 
-Squarespace 7.1 uses Ajax-based page transitions by default — when a reader clicks a link on the site, Squarespace loads the new page content without a full browser reload. Ordinary scripts in Code Injection do not run again on those transitions.
-
-Scripts registered with `BetterBlog.ready` are the exception. BetterBlog runs them again after each blog render, including when a reader moves between the collection and a post without a full reload. See [Installation](installation.md). Unmodified scripts are not reordered and do not get this second run.
+Squarespace 7.1 uses Ajax-based page transitions by default — when a reader clicks a link on the site, Squarespace loads the new page content without a full browser reload. This means the browser does not re-execute scripts on navigation, which affects how BetterBlog initializes.
 
 **The technical implication:** BetterBlog listens for Squarespace's Ajax navigation events and re-initializes the overlay on each page transition. If a new version of Squarespace changes the events it dispatches for navigation, BetterBlog's re-initialization logic may break, causing the overlay to fail to apply on navigated pages while still working on direct page loads.
 
@@ -130,6 +128,6 @@ This is not a current known issue, but it is a class of issue worth being aware 
 
 When a site owner is actively editing their Squarespace site in the Squarespace editor, BetterBlog does not activate. This is intentional — BetterBlog detects the editor context and exits early to avoid interfering with the editing interface.
 
-The Squarespace editor injects its own scripts and DOM modifications that conflict with BetterBlog's overlay. Attempting to run BetterBlog inside the editor would produce unpredictable rendering and could disrupt the editor's own functionality. Scripts registered with `BetterBlog.ready` also do not run while the editor is open.
+The Squarespace editor injects its own scripts and DOM modifications that conflict with BetterBlog's overlay. Attempting to run BetterBlog inside the editor would produce unpredictable rendering and could disrupt the editor's own functionality.
 
 Use BetterBlog's customizer preview to review layout changes. The live blog (viewed outside the editor, in a separate browser tab) is always the authoritative render.

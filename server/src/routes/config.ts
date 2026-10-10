@@ -690,15 +690,13 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         })
       : []
     const authorMap: Record<string, string> = {}
-    const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; bioLong: string | null; bioFormat: 'text' | 'markdown' | 'html'; email: string | null; socialLinks: Record<string, string> }> = {}
+    const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; email: string | null; socialLinks: Record<string, string> }> = {}
     for (const a of authors) {
       authorMap[a.id] = a.name
       authorProfiles[a.id] = {
         name: a.name,
         imageUrl: a.imageUrl ?? null,
         bio: a.bio ?? null,
-        bioLong: a.bioLong ?? null,
-        bioFormat: a.bioFormat ?? 'text',
         email: a.email ?? null,
         socialLinks: (a.socialLinks as Record<string, string>) ?? {}
       }
