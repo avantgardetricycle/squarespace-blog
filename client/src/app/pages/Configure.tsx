@@ -63,6 +63,12 @@ import {
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import {
+  EmailDestinationFields,
+  emailDestinationDirty,
+  emailDestinationFromApi,
+  type EmailDestinationState,
+} from "@/app/components/EmailDestinationFields";
 import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
 import { groupBlogsBySquarespaceOrigin, squarespaceOriginFromUrl } from "@/lib/squarespaceSiteGroups";
 
@@ -2329,6 +2335,10 @@ export default function Configure() {
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
   const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
+  const [emailDestination, setEmailDestination] = useState<EmailDestinationState | null>(null);
+  const [savedEmailDestination, setSavedEmailDestination] = useState<EmailDestinationState | null>(null);
+  const [emailDestinationTesting, setEmailDestinationTesting] = useState(false);
+  const [emailDestinationTestMessage, setEmailDestinationTestMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
@@ -2541,6 +2551,31 @@ export default function Configure() {
       .finally(() => setCommentSettingsLoading(false));
   }, [effectiveSiteKey]);
 
+  useEffect(() => {
+    if (!effectiveSiteKey) return;
+    let cancelled = false;
+    setEmailDestinationTestMessage(null);
+    fetch(`/api/dashboard/settings/email-integration?siteKey=${encodeURIComponent(effectiveSiteKey)}`, {
+      credentials: "include",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const next = emailDestinationFromApi(data);
+        setEmailDestination(next);
+        setSavedEmailDestination(next);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const next = emailDestinationFromApi(null);
+        setEmailDestination(next);
+        setSavedEmailDestination(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveSiteKey]);
+
   // Fetch blog authors for the site
   useEffect(() => {
     if (!effectiveSiteKey) return;
@@ -2662,7 +2697,11 @@ export default function Configure() {
       paywallForm.headlineText !== savedPaywallForm.headlineText ||
       paywallForm.featureItems.length !== savedPaywallForm.featureItems.length ||
       paywallForm.featureItems.some((item, i) => item !== savedPaywallForm.featureItems[i]));
-  const isDirty = !configsEqual(config, savedConfig) || !!commentSettingsDirty || paywallFormDirty;
+  const isDirty =
+    !configsEqual(config, savedConfig) ||
+    !!commentSettingsDirty ||
+    paywallFormDirty ||
+    emailDestinationDirty(emailDestination, savedEmailDestination);
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
@@ -3137,7 +3176,7 @@ export default function Configure() {
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
     try {
-      const [configRes, commentsRes] = await Promise.all([
+      const [configRes, commentsRes, emailRes] = await Promise.all([
         fetch(`${apiBase}/api/config`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3185,9 +3224,23 @@ export default function Configure() {
               }),
             })
           : Promise.resolve({ ok: true } as Response),
+        emailDestination
+          ? fetch(`${apiBase}/api/dashboard/settings/email-integration`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                siteKey: keyToSave,
+                provider: emailDestination.provider,
+                destinationId: emailDestination.destinationId,
+                apiKey: emailDestination.apiKey,
+              }),
+            })
+          : Promise.resolve({ ok: true } as Response),
       ]);
       const configOk = configRes.ok;
       const commentsOk = !commentSettings || (commentsRes as Response).ok;
+      const emailOk = !emailDestination || (emailRes as Response).ok;
       if (configOk) {
         setSavedConfig(config);
         setConfig(config);
@@ -3203,7 +3256,17 @@ export default function Configure() {
         }
       }
       if (commentsOk && commentSettings) setSavedCommentSettings(commentSettings);
-      if (configOk && commentsOk) {
+      if (emailOk && emailDestination) {
+        const data = await (emailRes as Response).json().catch(() => null);
+        const next =
+          data && typeof data === "object" && "provider" in data
+            ? emailDestinationFromApi(data)
+            : { ...emailDestination, apiKey: "" };
+        setEmailDestination(next);
+        setSavedEmailDestination(next);
+        setEmailDestinationTestMessage(null);
+      }
+      if (configOk && commentsOk && emailOk) {
         toast.success("Configuration saved successfully!");
       } else {
         if (!configOk) {
@@ -3212,6 +3275,9 @@ export default function Configure() {
         } else if (!commentsOk && commentSettings) {
           const data = await (commentsRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save comment settings.");
+        } else if (!emailOk && emailDestination) {
+          const data = await (emailRes as Response).json().catch(() => ({}));
+          toast.error(data?.error ?? "Failed to save email destination.");
         }
       }
     } catch {
@@ -3230,14 +3296,50 @@ export default function Configure() {
     paywallForm.eyebrowText,
     paywallForm.headlineText,
     paywallForm.featureItems,
+    emailDestination,
   ]);
 
   const handleReset = () => {
     setConfig(savedConfig);
     if (savedCommentSettings) setCommentSettings(savedCommentSettings);
+    if (savedEmailDestination) setEmailDestination(savedEmailDestination);
+    setEmailDestinationTestMessage(null);
     if (shouldShowViewerModeToggle) setPaywallForm(savedPaywallForm);
     toast.info("Changes reverted.");
   };
+
+  const handleTestEmailDestination = useCallback(async () => {
+    const keyToSave = effectiveSiteKey ?? siteKey;
+    if (!keyToSave || !emailDestination || emailDestination.provider === "betterblog") return;
+    setEmailDestinationTesting(true);
+    setEmailDestinationTestMessage(null);
+    try {
+      const res = await fetch("/api/dashboard/settings/email-integration/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          siteKey: keyToSave,
+          provider: emailDestination.provider,
+          destinationId: emailDestination.destinationId,
+          apiKey: emailDestination.apiKey,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setEmailDestinationTestMessage({ ok: true, text: "Connection succeeded." });
+      } else {
+        setEmailDestinationTestMessage({
+          ok: false,
+          text: typeof data?.error === "string" ? data.error : "Connection failed.",
+        });
+      }
+    } catch {
+      setEmailDestinationTestMessage({ ok: false, text: "Connection failed." });
+    } finally {
+      setEmailDestinationTesting(false);
+    }
+  }, [effectiveSiteKey, siteKey, emailDestination]);
 
   const handleConfirmClearSettings = useCallback(() => {
     if (!clearSettingsCollection && !clearSettingsPost) return;
@@ -5555,6 +5657,18 @@ export default function Configure() {
                                         placeholder="Subscribe"
                                       />
                                     </div>
+                                    {emailDestination && (
+                                      <EmailDestinationFields
+                                        value={emailDestination}
+                                        onChange={(next) => {
+                                          setEmailDestination(next);
+                                          setEmailDestinationTestMessage(null);
+                                        }}
+                                        onTest={() => void handleTestEmailDestination()}
+                                        testing={emailDestinationTesting}
+                                        testMessage={emailDestinationTestMessage}
+                                      />
+                                    )}
                                   </div>
                                 }
                               />
@@ -5565,6 +5679,9 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", collectionLeadMagnetLocations)}
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      Signups are saved in BetterBlog and sent to the destination chosen under Email Capture.
+                                    </p>
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -5692,6 +5809,18 @@ export default function Configure() {
                                         placeholder="Subscribe"
                                       />
                                     </div>
+                                    {emailDestination && (
+                                      <EmailDestinationFields
+                                        value={emailDestination}
+                                        onChange={(next) => {
+                                          setEmailDestination(next);
+                                          setEmailDestinationTestMessage(null);
+                                        }}
+                                        onTest={() => void handleTestEmailDestination()}
+                                        testing={emailDestinationTesting}
+                                        testMessage={emailDestinationTestMessage}
+                                      />
+                                    )}
                                   </div>
                                 }
                               />
@@ -5702,6 +5831,9 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", postFeatureSidebarFooterLocations, "leadMagnet")}
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      Signups are saved in BetterBlog and sent to the destination chosen under Email Capture.
+                                    </p>
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
