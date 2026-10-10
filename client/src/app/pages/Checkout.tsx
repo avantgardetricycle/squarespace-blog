@@ -383,10 +383,10 @@ export default function Checkout() {
                 {/* Money Back Guarantee */}
                 <div className="bg-[#eaf7f2] border border-[#10B981]/30 rounded-[10px] p-4">
                   <p className="text-sm text-[#10B981] font-medium text-center">
-                    ✓ 30-Day Money-Back Guarantee
+                    ✓ 30-day money-back guarantee on annual plans
                   </p>
                   <p className="text-xs text-[#10B981]/80 text-center mt-1">
-                    Not satisfied? Get a full refund within 30 days.
+                    Not satisfied? Annual plans get a full refund within 30 days of the first annual payment.
                   </p>
                 </div>
               </CardContent>
