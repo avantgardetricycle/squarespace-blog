@@ -17,7 +17,7 @@ import {
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
 import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
-import { PUBLIC_PRICING_TIERS, annualSavingsPercent } from "@/lib/pricingTiers";
+import { PUBLIC_PRICING_TIERS, annualSavingsPercent, annualSavingsAmount } from "@/lib/pricingTiers";
 import {
   billingPeriod,
   INTEREST_MODAL_SOURCES,
@@ -122,12 +122,6 @@ export default function LandingPage() {
 
   const priceCurrency = stripePrices?.currency ?? "usd";
 
-  const annualSavePercentProfessional = useMemo(() => {
-    const tier = stripePrices?.plans?.professional;
-    if (!tier) return null;
-    return annualSavingsPercent(tier.monthly.perMonth, tier.annual.perYear);
-  }, [stripePrices]);
-
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -152,18 +146,34 @@ export default function LandingPage() {
   const studioTier = {
     name: "BetterBlog Studio",
     tier: "Studio",
-    description: "Manage every client blog from one place. Bill the cost back on your first project.",
+    description: "For designers and agencies.",
     monthlyPrice: 149,
     annualPrice: 99,
+    capacity: "10 client websites, then $7/mo each · 3 blogs per website",
     features: [
-      "Unlimited client sites",
-      "All Professional features included",
-      "Client management dashboard",
-      "White-label options",
-      "Team member access",
-      "Early feature access & dedicated support"
+      "Everything in Publication, on every client website",
     ]
   };
+
+  // Headline saving for the billing toggle: the best annual discount on offer,
+  // across the Stripe-priced tiers and Studio. Derived, never hardcoded.
+  const bestAnnualSavePercent = useMemo(() => {
+    const pcts: number[] = [];
+    for (const t of PUBLIC_PRICING_TIERS) {
+      const p = stripePrices?.plans?.[t.planKey];
+      if (!p) continue;
+      const pct = annualSavingsPercent(p.monthly.perMonth, p.annual.perYear);
+      if (pct != null) pcts.push(pct);
+    }
+    const studioPct = annualSavingsPercent(studioTier.monthlyPrice, studioTier.annualPrice * 12);
+    if (studioPct != null) pcts.push(studioPct);
+    return pcts.length > 0 ? Math.max(...pcts) : null;
+  }, [stripePrices, studioTier.monthlyPrice, studioTier.annualPrice]);
+
+  const studioAnnualSaving = annualSavingsAmount(
+    studioTier.monthlyPrice,
+    studioTier.annualPrice * 12
+  );
 
   const tierModalSources: Record<(typeof pricingTiers)[number]["planKey"], InterestModalSource> = {
     essentials: INTEREST_MODAL_SOURCES.pricingTierEssentials,
@@ -230,7 +240,7 @@ export default function LandingPage() {
             </motion.div>
             
             <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl font-heading font-bold tracking-tight text-neutral-900 leading-[1.1]">
-              Finally, a Squarespace blog worth having.
+              Everything your Squarespace blog was missing.
             </motion.h1>
             
             <motion.p variants={itemVariants} className="text-xl text-neutral-500 max-w-2xl mx-auto leading-relaxed">
@@ -350,15 +360,15 @@ export default function LandingPage() {
                     : "bg-transparent text-neutral-400"
                 )}
               >
-                Annual 
-                {annualSavePercentProfessional != null && (
+                Annual
+                {bestAnnualSavePercent != null && (
                   <span className={cn(
                     "text-[9.5px] font-bold px-1.5 py-0.5 rounded-full tracking-wide",
-                    isAnnual 
-                      ? "bg-white/20 text-white" 
+                    isAnnual
+                      ? "bg-white/20 text-white"
                       : "bg-[#eaf7f2] text-[#10B981]"
                   )}>
-                    Save {annualSavePercentProfessional}%
+                    Save up to {bestAnnualSavePercent}%
                   </span>
                 )}
               </button>
@@ -381,6 +391,10 @@ export default function LandingPage() {
                     ? tierStripe.annual.perMonth
                     : tierStripe.monthly.perMonth;
               const annualYearTotal = tierStripe?.annual.perYear ?? null;
+              const annualSaving =
+                tierStripe == null
+                  ? null
+                  : annualSavingsAmount(tierStripe.monthly.perMonth, tierStripe.annual.perYear);
 
               return (
               <motion.div
@@ -405,7 +419,7 @@ export default function LandingPage() {
 
                 {tier.highlight && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#5B4FE8] text-white text-[9.5px] font-bold tracking-[0.1em] uppercase px-3 py-1 rounded-full whitespace-nowrap">
-                    Most popular
+                    Recommended
                   </div>
                 )}
 
@@ -438,7 +452,17 @@ export default function LandingPage() {
                         ? `Billed ${formatCurrencyAmount(annualYearTotal, priceCurrency)}/year`
                         : "Loading prices…"}
                   </p>
+                  {isAnnual && annualSaving != null && (
+                    <p className="text-[11.5px] font-semibold text-[#10B981] mt-1">
+                      Save {formatCurrencyAmount(annualSaving, priceCurrency)}/yr
+                    </p>
+                  )}
                 </div>
+
+                {/* Capacity */}
+                <p className="text-[12.5px] font-medium text-[#0a0a0a] mb-4">
+                  {tier.capacity}
+                </p>
 
                 {/* Divider */}
                 <div className="h-px bg-neutral-100 mb-4.5"></div>
@@ -533,13 +557,21 @@ export default function LandingPage() {
                 <span className="text-[13px] text-[#f4f4f7]/45 pb-1 ml-1">/mo</span>
               </div>
               <p className="text-[11.5px] text-[#f4f4f7]/35 mt-1 min-h-[16px]">
-                {isAnnual 
+                {isAnnual
                   ? `Billed $${(isAnnual ? studioTier.annualPrice : studioTier.monthlyPrice) * 12}/year`
                   : 'Billed monthly'}
               </p>
+              {isAnnual && studioAnnualSaving != null && (
+                <p className="text-[11.5px] font-semibold text-[#10B981] mt-1">
+                  Save ${studioAnnualSaving}/yr
+                </p>
+              )}
             </div>
 
             <ul className="flex flex-col gap-1.5 relative z-10">
+              <li className="text-[12.5px] font-medium text-[#f4f4f7]/85 leading-[1.45] mb-1">
+                {studioTier.capacity}
+              </li>
               {studioTier.features.map((feature, idx) => (
                 <li key={idx} className="flex items-start gap-2.5 text-[12.5px] text-[#f4f4f7]/60 leading-[1.45]">
                   <span className="w-[15px] h-[15px] rounded-full bg-[#5B4FE8]/25 text-[#8F86F0] flex items-center justify-center flex-shrink-0 mt-0.5 text-[8px] font-black">
@@ -565,7 +597,11 @@ export default function LandingPage() {
 
           {/* Footer Note */}
           <p className="text-center mt-7 text-[12.5px] text-neutral-400 leading-[1.9]">
-            All plans include a 7-day free trial &nbsp;·&nbsp; Cancel anytime
+            7-day free trial, card required.
+            <br />
+            Requires Squarespace 7.1 on a Core plan or higher.
+            <br />
+            30-day money-back guarantee on annual plans.
           </p>
         </div>
       </section>
@@ -586,7 +622,7 @@ export default function LandingPage() {
           <Button size="lg" onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.bottomGetStarted)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">
             Get Started for Free
           </Button>
-          <p className="mt-6 text-sm text-neutral-500">All plans include a 7-day free trial.</p>
+          <p className="mt-6 text-sm text-neutral-500">7-day free trial, card required.</p>
         </div>
       </section>
 
@@ -599,6 +635,18 @@ export default function LandingPage() {
               &copy; {new Date().getFullYear()} BetterBlog. All rights reserved.
             </div>
           </div>
+          {/* Squarespace Developer Terms 17.4(e): trademark notice + link, wherever the name is used. */}
+          <p className="mt-8 pt-6 border-t border-neutral-100 text-center text-xs text-neutral-400 leading-relaxed">
+            <a
+              href="https://www.squarespace.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-neutral-600"
+            >
+              Squarespace
+            </a>
+            {" "}is a trademark of Squarespace, Inc. BetterBlog is not affiliated with or endorsed by Squarespace.
+          </p>
         </div>
       </footer>
 

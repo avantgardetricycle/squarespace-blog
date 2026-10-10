@@ -30,12 +30,12 @@ const pricingPlans = {
   professional: {
     name: "Professional",
     description: "A real blog—discoverable, navigable, readable",
-    features: ["Up to 3 blogs", "Advanced customization", "Priority support"],
+    features: ["Up to 3 blogs", "Advanced customization"],
   },
   publication: {
     name: "Publication",
     description: "Serious publication tools and higher limits",
-    features: ["Unlimited blogs (fair use)", "Publication-focused features", "Priority support"],
+    features: ["Unlimited blogs (fair use)", "Publication-focused features"],
   },
 } as const;
 
