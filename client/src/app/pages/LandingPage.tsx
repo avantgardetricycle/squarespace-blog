@@ -7,7 +7,6 @@ import { cn } from "@/app/components/ui/utils";
 import { BeforeAfterComparison } from "@/app/components/BeforeAfterComparison";
 import TemplatesSection from "@/app/components/TemplatesSection";
 import ComparisonSection from "@/app/components/ComparisonSection";
-import CostCalculator from "@/app/components/CostCalculator";
 import { FeatureGrid } from "@/app/components/FeatureGrid_new";
 import HowItWorks from "@/app/components/HowItWorks";
 import { InterestModal } from "@/app/components/InterestModal";
@@ -320,9 +319,6 @@ export default function LandingPage() {
 
       {/* BetterBlog vs moving to Ghost / Substack / beehiiv */}
       <ComparisonSection />
-
-      {/* Two-platform cost vs BetterBlog; last thing before pricing on purpose (price anchoring) */}
-      <CostCalculator />
 
       {/* Pricing Section */}
       <section id="pricing" ref={pricingSectionRef} className="py-12 md:py-20 bg-[#f7f6f3]">
