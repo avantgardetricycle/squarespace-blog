@@ -13,12 +13,35 @@ import {
   type ProviderResult,
 } from './email-providers.js'
 
+export const EMAIL_MODULES = [
+  'collection_newsletter',
+  'post_newsletter',
+  'collection_lead_magnet',
+  'post_lead_magnet',
+] as const
+
+export type EmailModuleKey = (typeof EMAIL_MODULES)[number]
+
+export function isEmailModuleKey(value: string): value is EmailModuleKey {
+  return (EMAIL_MODULES as readonly string[]).includes(value)
+}
+
+export function emailModuleForLead(
+  type: 'newsletter' | 'lead_magnet',
+  surface: 'collection' | 'post'
+): EmailModuleKey {
+  const level = surface === 'post' ? 'post' : 'collection'
+  const kind = type === 'lead_magnet' ? 'lead_magnet' : 'newsletter'
+  return `${level}_${kind}` as EmailModuleKey
+}
+
 export type CapturedLead = {
   siteId: string
   email: string
   name: string | null
   type: 'newsletter' | 'lead_magnet'
   resourceTitle: string
+  surface?: 'collection' | 'post'
 }
 
 export type StoredEmailIntegration = {
@@ -38,8 +61,8 @@ export type EmailForwardStatus = {
 
 export type EmailSyncDeps = {
   upsertLead: (lead: CapturedLead) => Promise<void>
-  loadIntegration: (siteId: string) => Promise<StoredEmailIntegration | null>
-  saveStatus: (siteId: string, status: EmailForwardStatus) => Promise<void>
+  loadIntegration: (siteId: string, module: EmailModuleKey) => Promise<StoredEmailIntegration | null>
+  saveStatus: (siteId: string, module: EmailModuleKey, status: EmailForwardStatus) => Promise<void>
   forward: typeof forwardSubscriber
   decryptKey: (ciphertext: string) => string
   log?: (fields: Record<string, unknown>) => void
@@ -53,15 +76,16 @@ function failureMessage(err: unknown): string {
 async function recordStatus(
   deps: EmailSyncDeps,
   siteId: string,
+  module: EmailModuleKey,
   provider: string,
   status: EmailForwardStatus,
   logError: string | null
 ): Promise<void> {
   if (logError) {
-    deps.log?.({ siteId, provider, error: logError })
+    deps.log?.({ siteId, module, provider, error: logError })
   }
   try {
-    await deps.saveStatus(siteId, status)
+    await deps.saveStatus(siteId, module, status)
   } catch (err) {
     deps.log?.({
       siteId,
@@ -73,11 +97,12 @@ async function recordStatus(
 }
 
 export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps): Promise<void> {
+  const module = emailModuleForLead(lead.type, lead.surface === 'post' ? 'post' : 'collection')
   let integration: StoredEmailIntegration | null
   try {
-    integration = await deps.loadIntegration(lead.siteId)
+    integration = await deps.loadIntegration(lead.siteId, module)
   } catch (err) {
-    deps.log?.({ siteId: lead.siteId, provider: 'unknown', error: failureMessage(err) })
+    deps.log?.({ siteId: lead.siteId, module, provider: 'unknown', error: failureMessage(err) })
     return
   }
   if (!integration || integration.provider === 'betterblog') return
@@ -91,7 +116,7 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
           ? 'Kit is missing an API key or tag.'
           : 'Kit is missing an API key or form.'
         : 'Mailchimp is missing an API key or audience.'
-    await recordStatus(deps, lead.siteId, provider, { lastError: error, lastErrorAt: new Date() }, error)
+    await recordStatus(deps, lead.siteId, module, provider, { lastError: error, lastErrorAt: new Date() }, error)
     return
   }
 
@@ -100,7 +125,7 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     apiKey = deps.decryptKey(integration.apiKeyEnc)
   } catch {
     const error = 'Could not read the stored API key.'
-    await recordStatus(deps, lead.siteId, provider, { lastError: error, lastErrorAt: new Date() }, error)
+    await recordStatus(deps, lead.siteId, module, provider, { lastError: error, lastErrorAt: new Date() }, error)
     return
   }
 
@@ -117,7 +142,7 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     })
   } catch (err) {
     const error = failureMessage(err)
-    await recordStatus(deps, lead.siteId, provider, { lastError: error, lastErrorAt: new Date() }, error)
+    await recordStatus(deps, lead.siteId, module, provider, { lastError: error, lastErrorAt: new Date() }, error)
     return
   }
 
@@ -125,6 +150,7 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     await recordStatus(
       deps,
       lead.siteId,
+      module,
       provider,
       { lastError: result.error, lastErrorAt: new Date() },
       result.error
@@ -135,6 +161,7 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
   await recordStatus(
     deps,
     lead.siteId,
+    module,
     provider,
     {
       lastError: result.warning ?? null,
@@ -173,21 +200,37 @@ export function createEmailSyncDeps(): EmailSyncDeps {
         update: { name: lead.name },
       })
     },
-    loadIntegration: async (siteId) => {
-      const row = await prisma.siteEmailIntegration.findUnique({ where: { siteId } })
+    loadIntegration: async (siteId, module) => {
+      const row = await prisma.siteEmailIntegration.findUnique({
+        where: { siteId_module: { siteId, module } },
+      })
       if (!row) return null
+      let apiKeyEnc = row.apiKeyEnc
+      if (!apiKeyEnc && (row.provider === 'kit' || row.provider === 'mailchimp')) {
+        const credential = await prisma.siteEmailCredential.findUnique({
+          where: { siteId_provider: { siteId, provider: row.provider } },
+        })
+        apiKeyEnc = credential?.apiKeyEnc ?? null
+        if (!apiKeyEnc) {
+          const sibling = await prisma.siteEmailIntegration.findFirst({
+            where: { siteId, provider: row.provider, apiKeyEnc: { not: null } },
+            select: { apiKeyEnc: true },
+          })
+          apiKeyEnc = sibling?.apiKeyEnc ?? null
+        }
+      }
       return {
         provider: row.provider,
-        apiKeyEnc: row.apiKeyEnc,
+        apiKeyEnc,
         destinationId: row.destinationId,
         destinationKind: row.destinationKind,
         tagId: row.tagId,
         tagName: row.tagName,
       }
     },
-    saveStatus: async (siteId, status) => {
+    saveStatus: async (siteId, module, status) => {
       await prisma.siteEmailIntegration.update({
-        where: { siteId },
+        where: { siteId_module: { siteId, module } },
         data: {
           lastError: status.lastError,
           lastErrorAt: status.lastErrorAt,

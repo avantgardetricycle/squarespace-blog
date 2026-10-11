@@ -58,6 +58,7 @@ router.post('/', async (req: Request, res: Response) => {
       email?: string
       name?: string
       resourceTitle?: string
+      surface?: string
     }
 
     const siteKey = typeof body.siteKey === 'string' ? body.siteKey.trim() : null
@@ -113,6 +114,7 @@ router.post('/', async (req: Request, res: Response) => {
         name,
         type,
         resourceTitle: resourceTitleForDb,
+        surface: body.surface === 'post' ? 'post' : 'collection',
       },
       createEmailSyncDeps()
     )

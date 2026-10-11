@@ -15859,7 +15859,7 @@
             fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email }),
+              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email, surface: isSinglePost ? 'post' : 'collection' }),
               credentials: 'omit'
             }).then(function(res) {
               return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -16054,7 +16054,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle, surface: isSinglePost ? 'post' : 'collection' }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -16148,7 +16148,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle, surface: isSinglePost ? 'post' : 'collection' }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });

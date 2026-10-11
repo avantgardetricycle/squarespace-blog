@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { persistAndForwardLead, type EmailSyncDeps } from './email-sync.js'
+import { emailModuleForLead, persistAndForwardLead, type EmailSyncDeps } from './email-sync.js'
 
 const lead = {
   siteId: 'site-1',
@@ -34,6 +34,13 @@ function deps(overrides: Partial<EmailSyncDeps> = {}): EmailSyncDeps & { calls: 
   }
 }
 
+test('signup modules keep collection and post destinations apart', () => {
+  assert.equal(emailModuleForLead('newsletter', 'collection'), 'collection_newsletter')
+  assert.equal(emailModuleForLead('newsletter', 'post'), 'post_newsletter')
+  assert.equal(emailModuleForLead('lead_magnet', 'collection'), 'collection_lead_magnet')
+  assert.equal(emailModuleForLead('lead_magnet', 'post'), 'post_lead_magnet')
+})
+
 test('a failed provider call still keeps the local lead and records lastError', async () => {
   let recorded: { lastError: string | null } | null = null
   const harness = deps({
@@ -41,7 +48,7 @@ test('a failed provider call still keeps the local lead and records lastError', 
       harness.calls.push('forward')
       return { ok: false, error: 'Kit rejected this API key.' }
     },
-    saveStatus: async (_siteId, status) => {
+    saveStatus: async (_siteId, _module, status) => {
       harness.calls.push('status')
       recorded = { lastError: status.lastError }
     },
@@ -59,7 +66,7 @@ test('a thrown provider error is recorded without the address and does not rejec
     forward: async () => {
       throw new Error('network down for reader@example.com')
     },
-    saveStatus: async (_siteId, status) => {
+    saveStatus: async (_siteId, _module, status) => {
       recorded = status.lastError
     },
   })
