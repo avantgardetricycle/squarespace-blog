@@ -745,12 +745,13 @@ test.describe("sidebar mobile drawer", () => {
     const rightTab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
     const rightPanel = page.locator("#bb-mobile-drawer-panel-right");
     await expect(rightTab).toBeVisible();
-    await expect(rightTab).toHaveText("Right");
+    await expect(rightTab).toHaveText("More");
     const tabBox = await rightTab.boundingBox();
     const viewport = page.viewportSize();
     expect(tabBox).not.toBeNull();
     expect(tabBox!.x + tabBox!.width).toBeGreaterThan((viewport?.width ?? 0) - 4);
     expect(tabBox!.width).toBeLessThanOrEqual(36);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual((viewport?.width ?? 0) + 1);
 
     await expect(rightPanel).toBeHidden();
     await rightTab.click();
@@ -760,7 +761,10 @@ test.describe("sidebar mobile drawer", () => {
       const panelBox = await rightPanel.boundingBox();
       const tabNow = await rightTab.boundingBox();
       if (!panelBox || !tabNow) return Number.POSITIVE_INFINITY;
-      return panelBox.x + panelBox.width - tabNow.x;
+      const hostRight = viewport?.width ?? 0;
+      const flush = Math.abs(panelBox.x + panelBox.width - hostRight);
+      const tabMeetsPanel = Math.abs(tabNow.x + tabNow.width - panelBox.x);
+      return Math.max(flush, tabMeetsPanel);
     }).toBeLessThanOrEqual(2);
 
     await page.mouse.click(12, 280);
@@ -788,17 +792,50 @@ test.describe("sidebar mobile drawer", () => {
     expect(Math.abs(tabBox!.x + tabBox!.width - (rootBox!.x + rootBox!.width))).toBeLessThan(8);
     expect(tabBox!.x).toBeGreaterThan(rootBox!.x + rootBox!.width - 48);
 
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const root = document.getElementById("root");
+        if (!root) return Number.POSITIVE_INFINITY;
+        return root.scrollWidth - root.clientWidth;
+      });
+    }).toBeLessThanOrEqual(2);
+
     await tab.click();
     const panel = page.locator("#bb-mobile-drawer-panel-right");
     await expect(panel).toBeVisible();
     await expect.poll(async () => {
       const panelBox = await panel.boundingBox();
+      const tabNow = await tab.boundingBox();
       const rootNow = await page.locator("#root").boundingBox();
-      if (!panelBox || !rootNow) return Number.POSITIVE_INFINITY;
-      return panelBox.x + panelBox.width - (rootNow.x + rootNow.width);
+      if (!panelBox || !tabNow || !rootNow) return Number.POSITIVE_INFINITY;
+      const flush = Math.abs(panelBox.x + panelBox.width - (rootNow.x + rootNow.width));
+      const tabMeetsPanel = Math.abs(tabNow.x + tabNow.width - panelBox.x);
+      return Math.max(flush, tabMeetsPanel);
     }).toBeLessThanOrEqual(2);
     const settled = await panel.boundingBox();
     expect(settled).not.toBeNull();
     expect(settled!.x).toBeGreaterThanOrEqual((rootBox!.x) - 2);
+  });
+
+  test("hidden sidebars do not widen the phone frame", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "renderer-desktop", "needs a wide window around a 375px root");
+    const postConfig = zoneOrderPostConfig("feature");
+    (postConfig.leftSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+    (postConfig.rightSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+
+    await mountRenderer(page, {
+      postConfig,
+      previewDevice: "mobile",
+      rootWidth: 375,
+    });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const root = document.getElementById("root");
+        if (!root) return Number.POSITIVE_INFINITY;
+        return root.scrollWidth - root.clientWidth;
+      });
+    }).toBeLessThanOrEqual(2);
+    await expect(page.locator(".bb-mobile-drawer-tab")).toHaveCount(0);
   });
 });
