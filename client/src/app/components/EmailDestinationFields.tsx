@@ -11,11 +11,22 @@ import {
 
 export type EmailDestinationProvider = "betterblog" | "kit" | "mailchimp";
 
+type ProviderDraft = {
+  destinationId: string;
+  apiKey: string;
+};
+
+const emptyDraft = (): ProviderDraft => ({ destinationId: "", apiKey: "" });
+
 export type EmailDestinationState = {
   provider: EmailDestinationProvider;
   destinationId: string;
   apiKey: string;
   hasApiKey: boolean;
+  /** Provider that owns the key stored on the server. */
+  savedProvider: EmailDestinationProvider;
+  savedHasApiKey: boolean;
+  drafts: { kit: ProviderDraft; mailchimp: ProviderDraft };
   lastError: string | null;
   lastErrorAt: string | null;
   lastSuccessAt: string | null;
@@ -25,14 +36,58 @@ export function emailDestinationFromApi(data: unknown): EmailDestinationState {
   const row = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
   const provider: EmailDestinationProvider =
     row.provider === "kit" || row.provider === "mailchimp" ? row.provider : "betterblog";
+  const destinationId = typeof row.destinationId === "string" ? row.destinationId : "";
+  const hasApiKey = row.hasApiKey === true;
   return {
     provider,
-    destinationId: typeof row.destinationId === "string" ? row.destinationId : "",
+    destinationId: provider === "betterblog" ? "" : destinationId,
     apiKey: "",
-    hasApiKey: row.hasApiKey === true,
+    hasApiKey: provider === "betterblog" ? false : hasApiKey,
+    savedProvider: provider,
+    savedHasApiKey: hasApiKey,
+    drafts: {
+      kit: provider === "kit" ? { destinationId, apiKey: "" } : emptyDraft(),
+      mailchimp: provider === "mailchimp" ? { destinationId, apiKey: "" } : emptyDraft(),
+    },
     lastError: typeof row.lastError === "string" ? row.lastError : null,
     lastErrorAt: typeof row.lastErrorAt === "string" ? row.lastErrorAt : null,
     lastSuccessAt: typeof row.lastSuccessAt === "string" ? row.lastSuccessAt : null,
+  };
+}
+
+export function switchEmailDestination(
+  current: EmailDestinationState,
+  nextProvider: EmailDestinationProvider
+): EmailDestinationState {
+  if (nextProvider === current.provider) return current;
+  const drafts = {
+    kit: { ...current.drafts.kit },
+    mailchimp: { ...current.drafts.mailchimp },
+  };
+  if (current.provider === "kit" || current.provider === "mailchimp") {
+    drafts[current.provider] = {
+      destinationId: current.destinationId,
+      apiKey: current.apiKey,
+    };
+  }
+  if (nextProvider === "betterblog") {
+    return {
+      ...current,
+      provider: "betterblog",
+      drafts,
+      destinationId: "",
+      apiKey: "",
+      hasApiKey: false,
+    };
+  }
+  const draft = drafts[nextProvider];
+  return {
+    ...current,
+    provider: nextProvider,
+    drafts,
+    destinationId: draft.destinationId,
+    apiKey: draft.apiKey,
+    hasApiKey: nextProvider === current.savedProvider && current.savedHasApiKey,
   };
 }
 
@@ -71,8 +126,9 @@ export function EmailDestinationFields({
 }: EmailDestinationFieldsProps) {
   const external = value.provider === "kit" || value.provider === "mailchimp";
   const destinationLabel = value.provider === "mailchimp" ? "Audience ID" : "Form ID";
-  const successWhen = formatWhen(value.lastSuccessAt);
-  const errorWhen = formatWhen(value.lastErrorAt);
+  const showingSaved = value.provider === value.savedProvider;
+  const successWhen = showingSaved ? formatWhen(value.lastSuccessAt) : null;
+  const errorWhen = showingSaved ? formatWhen(value.lastErrorAt) : null;
 
   return (
     <div className="space-y-3 border-t border-[#e5e4e0] pt-3">
@@ -81,7 +137,7 @@ export function EmailDestinationFields({
         <Select
           value={value.provider}
           onValueChange={(provider) =>
-            onChange({ ...value, provider: provider as EmailDestinationProvider })
+            onChange(switchEmailDestination(value, provider as EmailDestinationProvider))
           }
         >
           <SelectTrigger className="w-full">
@@ -101,7 +157,7 @@ export function EmailDestinationFields({
       </div>
       {external && (
         <>
-          <div className="space-y-2">
+          <div className="space-y-2" key={`${value.provider}-key`}>
             <Label className="text-xs text-[#6b6b6b]">API key</Label>
             <Input
               type="password"
@@ -111,7 +167,7 @@ export function EmailDestinationFields({
               onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2" key={`${value.provider}-destination`}>
             <Label className="text-xs text-[#6b6b6b]">{destinationLabel}</Label>
             <Input
               value={value.destinationId}
@@ -139,7 +195,7 @@ export function EmailDestinationFields({
       {successWhen && (
         <p className="text-[10px] text-[#6b6b6b]">Last successful send {successWhen}.</p>
       )}
-      {value.lastError && (
+      {showingSaved && value.lastError && (
         <p className="text-[10px] text-red-600">
           {errorWhen ? `Last send problem (${errorWhen}): ` : ""}
           {value.lastError}
