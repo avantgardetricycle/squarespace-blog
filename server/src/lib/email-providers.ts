@@ -151,12 +151,35 @@ export async function testEmailProvider(opts: {
     return { ok: true }
   }
 
+  const kitUrl = `https://api.kit.com/v4/forms/${encodeURIComponent(destinationId)}`
   const result = await providerFetch(
     fetchImpl,
     'Kit',
-    `https://api.kit.com/v4/forms/${encodeURIComponent(destinationId)}`,
+    kitUrl,
     { method: 'GET', headers: kitHeaders(apiKey) }
   )
+  // #region agent log
+  const kitHttp = !('ok' in result)
+  const kitStatus = kitHttp ? result.res.status : 0
+  const kitBody = redactSubscriberText(kitHttp ? result.text : result.error).slice(0, 300)
+  const kitProbe = {sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A-C-D',location:'email-providers.ts:testEmailProvider',message:'Kit single-form test response',data:{destinationId,url:kitUrl,status:kitStatus,networkFailure:!kitHttp,body:kitBody},timestamp:Date.now()}
+  console.log(JSON.stringify(kitProbe))
+  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitProbe)}).catch(()=>{})
+  if (kitHttp && !result.res.ok) {
+    const listed = await providerFetch(fetchImpl, 'Kit', 'https://api.kit.com/v4/forms?per_page=500', { method: 'GET', headers: kitHeaders(apiKey) })
+    const listHttp = !('ok' in listed)
+    const forms = listHttp && Array.isArray(listed.json?.forms) ? listed.json.forms : []
+    const summary = forms.slice(0, 30).map((form) => {
+      if (!form || typeof form !== 'object') return null
+      const row = form as { id?: unknown; name?: unknown; uid?: unknown; type?: unknown; archived?: unknown }
+      return { id: row.id ?? null, name: typeof row.name === 'string' ? row.name.slice(0, 80) : null, uid: row.uid ?? null, type: row.type ?? null, archived: row.archived ?? null }
+    }).filter(Boolean)
+    const pagination = listHttp && listed.json?.pagination && typeof listed.json.pagination === 'object' ? listed.json.pagination as { has_next_page?: unknown } : null
+    const kitListProbe = {sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A-B-E',location:'email-providers.ts:testEmailProvider',message:'Kit form list compared with submitted id',data:{destinationId,listStatus:listHttp?listed.res.status:0,listNetworkFailure:!listHttp,listError:listHttp?'':redactSubscriberText(listed.error).slice(0,200),formCount:forms.length,idFound:summary.some((form)=>form && String((form as {id?: unknown}).id)===destinationId),hasNextPage:pagination?.has_next_page===true,forms:summary},timestamp:Date.now()}
+    console.log(JSON.stringify(kitListProbe))
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitListProbe)}).catch(()=>{})
+  }
+  // #endregion
   if ('ok' in result) return result
   if (!result.res.ok) return { ok: false, error: friendlyStatus('Kit', result.res.status) }
   return { ok: true }
