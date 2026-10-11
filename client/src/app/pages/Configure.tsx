@@ -66,12 +66,15 @@ import {
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import {
   EmailDestinationFields,
+  EMAIL_MODULE_KEYS,
   EMPTY_EMAIL_CATALOG,
   emailCatalogFromApi,
-  emailDestinationDirty,
-  emailDestinationFromApi,
+  emailDestinationsDirty,
+  emailDestinationsFromApi,
+  modulePayload,
   type EmailCatalog,
-  type EmailDestinationState,
+  type EmailDestinationsState,
+  type EmailModuleKey,
 } from "@/app/components/EmailDestinationFields";
 import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
 import { groupBlogsBySquarespaceOrigin, squarespaceOriginFromUrl } from "@/lib/squarespaceSiteGroups";
@@ -2277,6 +2280,27 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     levelConfigsEqual(a.postConfig, b.postConfig);
 }
 
+type ModuleCatalog = {
+  catalog: EmailCatalog;
+  provider: string | null;
+  loading: boolean;
+  error: string | null;
+  tagsError: string | null;
+};
+
+function emptyCatalogSlot(): ModuleCatalog {
+  return { catalog: EMPTY_EMAIL_CATALOG, provider: null, loading: false, error: null, tagsError: null };
+}
+
+function emptyModuleCatalogs(): Record<EmailModuleKey, ModuleCatalog> {
+  return {
+    collection_newsletter: emptyCatalogSlot(),
+    post_newsletter: emptyCatalogSlot(),
+    collection_lead_magnet: emptyCatalogSlot(),
+    post_lead_magnet: emptyCatalogSlot(),
+  };
+}
+
 export default function Configure() {
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
@@ -2340,16 +2364,17 @@ export default function Configure() {
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
   const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
-  const [emailDestination, setEmailDestination] = useState<EmailDestinationState | null>(null);
-  const [savedEmailDestination, setSavedEmailDestination] = useState<EmailDestinationState | null>(null);
-  const [emailDestinationTesting, setEmailDestinationTesting] = useState(false);
-  const [emailDestinationTestMessage, setEmailDestinationTestMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [emailCatalog, setEmailCatalog] = useState<EmailCatalog>(EMPTY_EMAIL_CATALOG);
-  const [emailCatalogProvider, setEmailCatalogProvider] = useState<string | null>(null);
-  const [emailCatalogLoading, setEmailCatalogLoading] = useState(false);
-  const [emailCatalogError, setEmailCatalogError] = useState<string | null>(null);
-  const [emailCatalogTagsError, setEmailCatalogTagsError] = useState<string | null>(null);
-  const [emailCatalogRefresh, setEmailCatalogRefresh] = useState(0);
+  const [emailDestinations, setEmailDestinations] = useState<EmailDestinationsState | null>(null);
+  const [savedEmailDestinations, setSavedEmailDestinations] = useState<EmailDestinationsState | null>(null);
+  const [emailTestingModule, setEmailTestingModule] = useState<EmailModuleKey | null>(null);
+  const [emailTestMessages, setEmailTestMessages] = useState<Partial<Record<EmailModuleKey, { ok: boolean; text: string } | null>>>({});
+  const [emailCatalogs, setEmailCatalogs] = useState<Record<EmailModuleKey, ModuleCatalog>>(emptyModuleCatalogs);
+  const [emailCatalogRefresh, setEmailCatalogRefresh] = useState<Record<EmailModuleKey, number>>({
+    collection_newsletter: 0,
+    post_newsletter: 0,
+    collection_lead_magnet: 0,
+    post_lead_magnet: 0,
+  });
   const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
@@ -2565,108 +2590,129 @@ export default function Configure() {
   useEffect(() => {
     if (!effectiveSiteKey) return;
     let cancelled = false;
-    setEmailDestinationTestMessage(null);
+    setEmailTestMessages({});
     fetch(`/api/dashboard/settings/email-integration?siteKey=${encodeURIComponent(effectiveSiteKey)}`, {
       credentials: "include",
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        const next = emailDestinationFromApi(data);
-        setEmailDestination(next);
-        setSavedEmailDestination(next);
+        const next = emailDestinationsFromApi(data);
+        setEmailDestinations(next);
+        setSavedEmailDestinations(next);
       })
       .catch(() => {
         if (cancelled) return;
-        const next = emailDestinationFromApi(null);
-        setEmailDestination(next);
-        setSavedEmailDestination(next);
+        const next = emailDestinationsFromApi(null);
+        setEmailDestinations(next);
+        setSavedEmailDestinations(next);
       });
     return () => {
       cancelled = true;
     };
   }, [effectiveSiteKey]);
 
-  const emailCatalogAudienceId =
-    emailDestination?.provider === "mailchimp" ? emailDestination.destinationId : "";
+  const emailCatalogSig = emailDestinations
+    ? EMAIL_MODULE_KEYS.map((key) => {
+        const dest = emailDestinations.modules[key];
+        const audience = dest.provider === "mailchimp" ? dest.destinationId : "";
+        return `${key}:${dest.provider}:${dest.apiKey}:${dest.hasApiKey ? 1 : 0}:${audience}:${emailCatalogRefresh[key]}`;
+      }).join("|")
+    : "";
+  const emailCatalogSigRef = useRef<Partial<Record<EmailModuleKey, string>>>({});
+  const emailCatalogRequests = useRef<Partial<Record<EmailModuleKey, { controller: AbortController; timer: number }>>>({});
+
+  useEffect(() => {
+    return () => {
+      for (const request of Object.values(emailCatalogRequests.current)) {
+        request?.controller.abort();
+        if (request) window.clearTimeout(request.timer);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const catalogSiteKey = effectiveSiteKey ?? siteKey;
-    if (!catalogSiteKey || !emailDestination) return;
-    if (emailDestination.provider !== "kit" && emailDestination.provider !== "mailchimp") {
-      setEmailCatalog(EMPTY_EMAIL_CATALOG);
-      setEmailCatalogProvider(null);
-      setEmailCatalogError(null);
-      setEmailCatalogTagsError(null);
-      setEmailCatalogLoading(false);
-      return;
-    }
-    if (emailDestination.provider === "mailchimp") {
-      setEmailCatalog((prev) =>
-        emailCatalogProvider === "mailchimp" ? { ...prev, tags: [] } : prev
-      );
-    }
-    const typedKey = emailDestination.apiKey.trim();
-    if (!typedKey && !emailDestination.hasApiKey) {
-      setEmailCatalog(EMPTY_EMAIL_CATALOG);
-      setEmailCatalogProvider(null);
-      setEmailCatalogError(null);
-      setEmailCatalogTagsError(null);
-      setEmailCatalogLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      setEmailCatalogLoading(true);
-      setEmailCatalogError(null);
-      setEmailCatalogTagsError(null);
-      fetch("/api/dashboard/settings/email-integration/options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        signal: controller.signal,
-        body: JSON.stringify({
-          siteKey: catalogSiteKey,
-          provider: emailDestination.provider,
-          apiKey: emailDestination.apiKey,
-          audienceId: emailCatalogAudienceId,
-        }),
-      })
-        .then(async (res) => {
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            const message = typeof data?.error === "string" ? data.error : "Could not load destinations.";
-            throw new Error(message);
-          }
-          return emailCatalogFromApi(data);
+    if (!catalogSiteKey || !emailDestinations) return;
+    for (const moduleKey of EMAIL_MODULE_KEYS) {
+      const dest = emailDestinations.modules[moduleKey];
+      const audienceId = dest.provider === "mailchimp" ? dest.destinationId.trim() : "";
+      const sig = `${dest.provider}|${dest.apiKey}|${dest.hasApiKey ? 1 : 0}|${audienceId}|${emailCatalogRefresh[moduleKey]}|${catalogSiteKey}`;
+      if (emailCatalogSigRef.current[moduleKey] === sig) continue;
+      emailCatalogSigRef.current[moduleKey] = sig;
+      const previous = emailCatalogRequests.current[moduleKey];
+      previous?.controller.abort();
+      if (previous) window.clearTimeout(previous.timer);
+      const controller = new AbortController();
+      const external = dest.provider === "kit" || dest.provider === "mailchimp";
+      const typedKey = dest.apiKey.trim();
+      if (!external || (!typedKey && !dest.hasApiKey)) {
+        delete emailCatalogRequests.current[moduleKey];
+        setEmailCatalogs((prev) => ({ ...prev, [moduleKey]: emptyCatalogSlot() }));
+        continue;
+      }
+      const timer = window.setTimeout(() => {
+        setEmailCatalogs((prev) => ({
+          ...prev,
+          [moduleKey]: {
+            ...prev[moduleKey],
+            loading: true,
+            error: null,
+            tagsError: null,
+            catalog:
+              dest.provider === "mailchimp"
+                ? { ...prev[moduleKey].catalog, tags: [] }
+                : prev[moduleKey].catalog,
+          },
+        }));
+        fetch("/api/dashboard/settings/email-integration/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          signal: controller.signal,
+          body: JSON.stringify({
+            siteKey: catalogSiteKey,
+            provider: dest.provider,
+            apiKey: dest.apiKey,
+            audienceId,
+          }),
         })
-        .then((parsed) => {
-          if (controller.signal.aborted) return;
-          setEmailCatalog(parsed.catalog);
-          setEmailCatalogProvider(emailDestination.provider);
-          setEmailCatalogTagsError(parsed.tagsError);
-        })
-        .catch((err: unknown) => {
-          if (controller.signal.aborted) return;
-          setEmailCatalogError(err instanceof Error ? err.message : "Could not load destinations.");
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setEmailCatalogLoading(false);
-        });
-    }, typedKey ? 400 : 0);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [
-    effectiveSiteKey,
-    siteKey,
-    emailDestination?.provider,
-    emailDestination?.apiKey,
-    emailDestination?.hasApiKey,
-    emailCatalogAudienceId,
-    emailCatalogRefresh,
-  ]);
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              const message = typeof data?.error === "string" ? data.error : "Could not load destinations.";
+              throw new Error(message);
+            }
+            return emailCatalogFromApi(data);
+          })
+          .then((parsed) => {
+            if (controller.signal.aborted) return;
+            setEmailCatalogs((prev) => ({
+              ...prev,
+              [moduleKey]: {
+                catalog: parsed.catalog,
+                provider: dest.provider,
+                loading: false,
+                error: null,
+                tagsError: parsed.tagsError,
+              },
+            }));
+          })
+          .catch((err: unknown) => {
+            if (controller.signal.aborted) return;
+            setEmailCatalogs((prev) => ({
+              ...prev,
+              [moduleKey]: {
+                ...prev[moduleKey],
+                loading: false,
+                error: err instanceof Error ? err.message : "Could not load destinations.",
+              },
+            }));
+          });
+      }, typedKey ? 400 : 0);
+      emailCatalogRequests.current[moduleKey] = { controller, timer };
+    }
+  }, [effectiveSiteKey, siteKey, emailDestinations, emailCatalogRefresh, emailCatalogSig]);
 
   // Fetch blog authors for the site
   useEffect(() => {
@@ -2794,7 +2840,7 @@ export default function Configure() {
     !configsEqual(config, savedConfig) ||
     !!commentSettingsDirty ||
     paywallFormDirty ||
-    emailDestinationDirty(emailDestination, savedEmailDestination);
+    emailDestinationsDirty(emailDestinations, savedEmailDestinations);
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
@@ -3317,26 +3363,23 @@ export default function Configure() {
               }),
             })
           : Promise.resolve({ ok: true } as Response),
-        emailDestination
+        emailDestinations
           ? fetch(`${apiBase}/api/dashboard/settings/email-integration`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
               body: JSON.stringify({
                 siteKey: keyToSave,
-                provider: emailDestination.provider,
-                destinationId: emailDestination.destinationId,
-                destinationKind: emailDestination.provider === "kit" ? emailDestination.kitTarget : undefined,
-                tagId: emailDestination.provider === "mailchimp" ? emailDestination.tagId : "",
-                tagName: emailDestination.provider === "mailchimp" ? emailDestination.tagName : "",
-                apiKey: emailDestination.apiKey,
+                modules: Object.fromEntries(
+                  EMAIL_MODULE_KEYS.map((key) => [key, modulePayload(emailDestinations.modules[key])])
+                ),
               }),
             })
           : Promise.resolve({ ok: true } as Response),
       ]);
       const configOk = configRes.ok;
       const commentsOk = !commentSettings || (commentsRes as Response).ok;
-      const emailOk = !emailDestination || (emailRes as Response).ok;
+      const emailOk = !emailDestinations || (emailRes as Response).ok;
       if (configOk) {
         setSavedConfig(config);
         setConfig(config);
@@ -3352,15 +3395,20 @@ export default function Configure() {
         }
       }
       if (commentsOk && commentSettings) setSavedCommentSettings(commentSettings);
-      if (emailOk && emailDestination) {
+      if (emailOk && emailDestinations) {
         const data = await (emailRes as Response).json().catch(() => null);
         const next =
-          data && typeof data === "object" && "provider" in data
-            ? emailDestinationFromApi(data)
-            : { ...emailDestination, apiKey: "" };
-        setEmailDestination(next);
-        setSavedEmailDestination(next);
-        setEmailDestinationTestMessage(null);
+          data && typeof data === "object" && "modules" in data
+            ? emailDestinationsFromApi(data)
+            : {
+                ...emailDestinations,
+                modules: Object.fromEntries(
+                  EMAIL_MODULE_KEYS.map((key) => [key, { ...emailDestinations.modules[key], apiKey: "" }])
+                ) as EmailDestinationsState["modules"],
+              };
+        setEmailDestinations(next);
+        setSavedEmailDestinations(next);
+        setEmailTestMessages({});
       }
       if (configOk && commentsOk && emailOk) {
         toast.success("Configuration saved successfully!");
@@ -3371,7 +3419,7 @@ export default function Configure() {
         } else if (!commentsOk && commentSettings) {
           const data = await (commentsRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save comment settings.");
-        } else if (!emailOk && emailDestination) {
+        } else if (!emailOk && emailDestinations) {
           const data = await (emailRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save email destination.");
         }
@@ -3392,53 +3440,72 @@ export default function Configure() {
     paywallForm.eyebrowText,
     paywallForm.headlineText,
     paywallForm.featureItems,
-    emailDestination,
+    emailDestinations,
   ]);
 
   const handleReset = () => {
     setConfig(savedConfig);
     if (savedCommentSettings) setCommentSettings(savedCommentSettings);
-    if (savedEmailDestination) setEmailDestination(savedEmailDestination);
-    setEmailDestinationTestMessage(null);
+    if (savedEmailDestinations) setEmailDestinations(savedEmailDestinations);
+    setEmailTestMessages({});
     if (shouldShowViewerModeToggle) setPaywallForm(savedPaywallForm);
     toast.info("Changes reverted.");
   };
 
-  const handleTestEmailDestination = useCallback(async () => {
+  const handleTestEmailDestination = useCallback(async (moduleKey: EmailModuleKey) => {
     const keyToSave = effectiveSiteKey ?? siteKey;
-    if (!keyToSave || !emailDestination || emailDestination.provider === "betterblog") return;
-    setEmailDestinationTesting(true);
-    setEmailDestinationTestMessage(null);
+    const destination = emailDestinations?.modules[moduleKey];
+    if (!keyToSave || !destination || destination.provider === "betterblog") return;
+    setEmailTestingModule(moduleKey);
+    setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
     try {
       const res = await fetch("/api/dashboard/settings/email-integration/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          siteKey: keyToSave,
-          provider: emailDestination.provider,
-          destinationId: emailDestination.destinationId,
-          destinationKind: emailDestination.provider === "kit" ? emailDestination.kitTarget : undefined,
-          tagId: emailDestination.provider === "mailchimp" ? emailDestination.tagId : "",
-          tagName: emailDestination.provider === "mailchimp" ? emailDestination.tagName : "",
-          apiKey: emailDestination.apiKey,
-        }),
+        body: JSON.stringify({ siteKey: keyToSave, ...modulePayload(destination) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setEmailDestinationTestMessage({ ok: true, text: "Connection succeeded." });
-      } else {
-        setEmailDestinationTestMessage({
-          ok: false,
-          text: typeof data?.error === "string" ? data.error : "Connection failed.",
-        });
-      }
+      setEmailTestMessages((prev) => ({
+        ...prev,
+        [moduleKey]: res.ok
+          ? { ok: true, text: "Connection succeeded." }
+          : { ok: false, text: typeof data?.error === "string" ? data.error : "Connection failed." },
+      }));
     } catch {
-      setEmailDestinationTestMessage({ ok: false, text: "Connection failed." });
+      setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: { ok: false, text: "Connection failed." } }));
     } finally {
-      setEmailDestinationTesting(false);
+      setEmailTestingModule(null);
     }
-  }, [effectiveSiteKey, siteKey, emailDestination]);
+  }, [effectiveSiteKey, siteKey, emailDestinations]);
+
+  const renderEmailDestination = (moduleKey: EmailModuleKey) => {
+    if (!emailDestinations) return null;
+    const value = emailDestinations.modules[moduleKey];
+    const slot = emailCatalogs[moduleKey];
+    return (
+      <EmailDestinationFields
+        value={value}
+        savedKeys={emailDestinations.savedKeys}
+        onChange={(next) => {
+          setEmailDestinations((current) =>
+            current ? { ...current, modules: { ...current.modules, [moduleKey]: next } } : current
+          );
+          setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
+        }}
+        onTest={() => void handleTestEmailDestination(moduleKey)}
+        onRefresh={() =>
+          setEmailCatalogRefresh((prev) => ({ ...prev, [moduleKey]: prev[moduleKey] + 1 }))
+        }
+        testing={emailTestingModule === moduleKey}
+        testMessage={emailTestMessages[moduleKey] ?? null}
+        catalog={slot.provider === value.provider ? slot.catalog : EMPTY_EMAIL_CATALOG}
+        catalogLoading={slot.loading}
+        catalogError={slot.error}
+        tagsError={slot.tagsError}
+      />
+    );
+  };
 
   const handleConfirmClearSettings = useCallback(() => {
     if (!clearSettingsCollection && !clearSettingsPost) return;
@@ -5758,27 +5825,7 @@ export default function Configure() {
                                         placeholder="Subscribe"
                                       />
                                     </div>
-                                    {emailDestination && (
-                                      <EmailDestinationFields
-                                        value={emailDestination}
-                                        onChange={(next) => {
-                                          setEmailDestination(next);
-                                          setEmailDestinationTestMessage(null);
-                                        }}
-                                        onTest={() => void handleTestEmailDestination()}
-                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
-                                        testing={emailDestinationTesting}
-                                        testMessage={emailDestinationTestMessage}
-                                        catalog={
-                                          emailCatalogProvider === emailDestination.provider
-                                            ? emailCatalog
-                                            : EMPTY_EMAIL_CATALOG
-                                        }
-                                        catalogLoading={emailCatalogLoading}
-                                        catalogError={emailCatalogError}
-                                        tagsError={emailCatalogTagsError}
-                                      />
-                                    )}
+                                    {renderEmailDestination("collection_newsletter")}
                                   </div>
                                 }
                               />
@@ -5790,29 +5837,9 @@ export default function Configure() {
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", collectionLeadMagnetLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      Signups are saved in BetterBlog and sent to the same destination as Email Capture.
+                                      Signups are saved in BetterBlog and sent to the destination chosen here.
                                     </p>
-                                    {emailDestination && (
-                                      <EmailDestinationFields
-                                        value={emailDestination}
-                                        onChange={(next) => {
-                                          setEmailDestination(next);
-                                          setEmailDestinationTestMessage(null);
-                                        }}
-                                        onTest={() => void handleTestEmailDestination()}
-                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
-                                        testing={emailDestinationTesting}
-                                        testMessage={emailDestinationTestMessage}
-                                        catalog={
-                                          emailCatalogProvider === emailDestination.provider
-                                            ? emailCatalog
-                                            : EMPTY_EMAIL_CATALOG
-                                        }
-                                        catalogLoading={emailCatalogLoading}
-                                        catalogError={emailCatalogError}
-                                        tagsError={emailCatalogTagsError}
-                                      />
-                                    )}
+                                    {renderEmailDestination("collection_lead_magnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -5940,27 +5967,7 @@ export default function Configure() {
                                         placeholder="Subscribe"
                                       />
                                     </div>
-                                    {emailDestination && (
-                                      <EmailDestinationFields
-                                        value={emailDestination}
-                                        onChange={(next) => {
-                                          setEmailDestination(next);
-                                          setEmailDestinationTestMessage(null);
-                                        }}
-                                        onTest={() => void handleTestEmailDestination()}
-                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
-                                        testing={emailDestinationTesting}
-                                        testMessage={emailDestinationTestMessage}
-                                        catalog={
-                                          emailCatalogProvider === emailDestination.provider
-                                            ? emailCatalog
-                                            : EMPTY_EMAIL_CATALOG
-                                        }
-                                        catalogLoading={emailCatalogLoading}
-                                        catalogError={emailCatalogError}
-                                        tagsError={emailCatalogTagsError}
-                                      />
-                                    )}
+                                    {renderEmailDestination("post_newsletter")}
                                   </div>
                                 }
                               />
@@ -5972,29 +5979,9 @@ export default function Configure() {
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", postFeatureSidebarFooterLocations, "leadMagnet")}
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      Signups are saved in BetterBlog and sent to the same destination as Email Capture.
+                                      Signups are saved in BetterBlog and sent to the destination chosen here.
                                     </p>
-                                    {emailDestination && (
-                                      <EmailDestinationFields
-                                        value={emailDestination}
-                                        onChange={(next) => {
-                                          setEmailDestination(next);
-                                          setEmailDestinationTestMessage(null);
-                                        }}
-                                        onTest={() => void handleTestEmailDestination()}
-                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
-                                        testing={emailDestinationTesting}
-                                        testMessage={emailDestinationTestMessage}
-                                        catalog={
-                                          emailCatalogProvider === emailDestination.provider
-                                            ? emailCatalog
-                                            : EMPTY_EMAIL_CATALOG
-                                        }
-                                        catalogLoading={emailCatalogLoading}
-                                        catalogError={emailCatalogError}
-                                        tagsError={emailCatalogTagsError}
-                                      />
-                                    )}
+                                    {renderEmailDestination("post_lead_magnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input

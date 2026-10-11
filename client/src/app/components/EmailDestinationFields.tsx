@@ -12,6 +12,21 @@ import {
 export type EmailDestinationProvider = "betterblog" | "kit" | "mailchimp";
 export type KitTarget = "form" | "tag";
 
+export type EmailModuleKey =
+  | "collection_newsletter"
+  | "post_newsletter"
+  | "collection_lead_magnet"
+  | "post_lead_magnet";
+
+export const EMAIL_MODULE_KEYS: EmailModuleKey[] = [
+  "collection_newsletter",
+  "post_newsletter",
+  "collection_lead_magnet",
+  "post_lead_magnet",
+];
+
+export type SavedEmailKeys = { kit: boolean; mailchimp: boolean };
+
 export type EmailCatalogItem = { id: string; name: string };
 
 export type EmailCatalog = {
@@ -124,9 +139,64 @@ export function emailDestinationFromApi(data: unknown): EmailDestinationState {
   };
 }
 
+export type EmailDestinationsState = {
+  modules: Record<EmailModuleKey, EmailDestinationState>;
+  savedKeys: SavedEmailKeys;
+};
+
+export function emptyEmailDestinations(): EmailDestinationsState {
+  return {
+    modules: {
+      collection_newsletter: emailDestinationFromApi(null),
+      post_newsletter: emailDestinationFromApi(null),
+      collection_lead_magnet: emailDestinationFromApi(null),
+      post_lead_magnet: emailDestinationFromApi(null),
+    },
+    savedKeys: { kit: false, mailchimp: false },
+  };
+}
+
+export function emailDestinationsFromApi(data: unknown): EmailDestinationsState {
+  const row = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const keys = row.savedKeys && typeof row.savedKeys === "object" ? (row.savedKeys as Record<string, unknown>) : {};
+  const savedKeys: SavedEmailKeys = { kit: keys.kit === true, mailchimp: keys.mailchimp === true };
+  const modulesRaw = row.modules && typeof row.modules === "object" ? (row.modules as Record<string, unknown>) : {};
+  const modules = {} as Record<EmailModuleKey, EmailDestinationState>;
+  for (const key of EMAIL_MODULE_KEYS) {
+    const moduleState = emailDestinationFromApi(modulesRaw[key] ?? null);
+    if (moduleState.provider === "kit" || moduleState.provider === "mailchimp") {
+      const hasKey = savedKeys[moduleState.provider] || moduleState.hasApiKey;
+      moduleState.hasApiKey = hasKey;
+      moduleState.savedHasApiKey = hasKey;
+    }
+    modules[key] = moduleState;
+  }
+  return { modules, savedKeys };
+}
+
+export function emailDestinationsDirty(
+  current: EmailDestinationsState | null,
+  saved: EmailDestinationsState | null
+): boolean {
+  if (!current || !saved) return false;
+  return EMAIL_MODULE_KEYS.some((key) => emailDestinationDirty(current.modules[key], saved.modules[key]));
+}
+
+export function modulePayload(state: EmailDestinationState) {
+  return {
+    provider: state.provider,
+    destinationId: state.destinationId,
+    destinationKind: state.provider === "kit" ? state.kitTarget : undefined,
+    tagId: state.provider === "mailchimp" ? state.tagId : "",
+    tagName: state.provider === "mailchimp" ? state.tagName : "",
+    apiKey: state.apiKey,
+  };
+}
+
 export function switchEmailDestination(
   current: EmailDestinationState,
-  nextProvider: EmailDestinationProvider
+  nextProvider: EmailDestinationProvider,
+  savedKeys: SavedEmailKeys = { kit: false, mailchimp: false }
 ): EmailDestinationState {
   if (nextProvider === current.provider) return current;
   const drafts = {
@@ -160,7 +230,9 @@ export function switchEmailDestination(
       hasApiKey: false,
     };
   }
-  const ownsKey = nextProvider === current.savedProvider && current.savedHasApiKey;
+  const ownsKey =
+    (nextProvider === "kit" || nextProvider === "mailchimp") &&
+    (savedKeys[nextProvider] || (nextProvider === current.savedProvider && current.savedHasApiKey));
   if (nextProvider === "kit") {
     const draft = drafts.kit;
     return {
@@ -279,6 +351,7 @@ function choicesFor(items: EmailCatalogItem[], selectedId: string, selectedName?
 
 type EmailDestinationFieldsProps = {
   value: EmailDestinationState;
+  savedKeys: SavedEmailKeys;
   onChange: (next: EmailDestinationState) => void;
   onTest: () => void;
   onRefresh: () => void;
@@ -292,6 +365,7 @@ type EmailDestinationFieldsProps = {
 
 export function EmailDestinationFields({
   value,
+  savedKeys,
   onChange,
   onTest,
   onRefresh,
@@ -315,7 +389,7 @@ export function EmailDestinationFields({
         <Select
           value={value.provider}
           onValueChange={(provider) =>
-            onChange(switchEmailDestination(value, provider as EmailDestinationProvider))
+            onChange(switchEmailDestination(value, provider as EmailDestinationProvider, savedKeys))
           }
         >
           <SelectTrigger className="w-full">

@@ -69,7 +69,8 @@ model Site {
   googleAnalytics       SiteGoogleAnalytics?
   leadCaptures          LeadCapture[]
   blogCommentSettings   BlogCommentSettings?
-  emailIntegration      SiteEmailIntegration?
+  emailIntegrations     SiteEmailIntegration[]
+  emailCredentials      SiteEmailCredential[]
   sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
@@ -398,21 +399,35 @@ model BlogCommentSettings {
 }
 
 model SiteEmailIntegration {
-  siteId        String    @id @map("site_id")
-  provider      String    @default("betterblog") // betterblog | kit | mailchimp
+  siteId          String
+  module          String    @default("collection_newsletter") // collection_newsletter | post_newsletter | collection_lead_magnet | post_lead_magnet
+  provider        String    @default("betterblog") // betterblog | kit | mailchimp
   apiKeyEnc       String?   @map("api_key_enc") @db.Text
   destinationId   String?   @map("destination_id") // Kit form/tag id or Mailchimp audience id
   destinationKind String?   @map("destination_kind") // kit: form | tag
   tagId           String?   @map("tag_id") // Mailchimp tag (static segment) id
   tagName         String?   @map("tag_name") // Mailchimp tag name, applied on subscribe
   lastError       String?   @map("last_error") @db.Text
-  lastErrorAt   DateTime? @map("last_error_at")
-  lastSuccessAt DateTime? @map("last_success_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  lastErrorAt     DateTime? @map("last_error_at")
+  lastSuccessAt   DateTime? @map("last_success_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
+  @@id([siteId, module])
   @@map("site_email_integrations")
+}
+
+model SiteEmailCredential {
+  siteId    String   @map("site_id")
+  provider  String // kit | mailchimp
+  apiKeyEnc String   @map("api_key_enc") @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, provider])
+  @@map("site_email_credentials")
 }
 
 model SitePaywallSettings {

@@ -10,13 +10,22 @@ import {
   type EmailProviderName,
   type KitDestinationKind,
 } from '../lib/email-providers.js'
+import { EMAIL_MODULES, type EmailModuleKey } from '../lib/email-sync.js'
 
 const router = Router()
 
 const PROVIDERS = ['betterblog', 'kit', 'mailchimp'] as const
 type Provider = (typeof PROVIDERS)[number]
 
+const MODULE_LABEL: Record<EmailModuleKey, string> = {
+  collection_newsletter: 'Collection email capture',
+  post_newsletter: 'Post email capture',
+  collection_lead_magnet: 'Collection lead magnet',
+  post_lead_magnet: 'Post lead magnet',
+}
+
 type IntegrationRow = {
+  module: string
   provider: string
   apiKeyEnc: string | null
   destinationId: string | null
@@ -28,7 +37,29 @@ type IntegrationRow = {
   lastSuccessAt: Date | null
 }
 
-function toPublic(row: IntegrationRow | null) {
+type CredentialRow = {
+  provider: string
+  apiKeyEnc: string
+}
+
+function savedKeyMap(rows: IntegrationRow[], credentials: CredentialRow[]) {
+  const has = (provider: 'kit' | 'mailchimp') =>
+    credentials.some((row) => row.provider === provider && row.apiKeyEnc) ||
+    rows.some((row) => row.provider === provider && row.apiKeyEnc)
+  return { kit: has('kit'), mailchimp: has('mailchimp') }
+}
+
+function storedKeyEnc(
+  provider: 'kit' | 'mailchimp',
+  rows: IntegrationRow[],
+  credentials: CredentialRow[]
+): string | null {
+  const credential = credentials.find((row) => row.provider === provider && row.apiKeyEnc)
+  if (credential) return credential.apiKeyEnc
+  return rows.find((row) => row.provider === provider && row.apiKeyEnc)?.apiKeyEnc ?? null
+}
+
+function toPublic(row: IntegrationRow | null, keys: { kit: boolean; mailchimp: boolean }) {
   const provider: Provider = row?.provider === 'kit' || row?.provider === 'mailchimp' ? row.provider : 'betterblog'
   const destinationKind: KitDestinationKind | null =
     provider === 'kit' ? (row?.destinationKind === 'tag' ? 'tag' : 'form') : null
@@ -38,17 +69,29 @@ function toPublic(row: IntegrationRow | null) {
     destinationKind,
     tagId: provider === 'mailchimp' ? row?.tagId ?? '' : '',
     tagName: provider === 'mailchimp' ? row?.tagName ?? '' : '',
-    hasApiKey: Boolean(row?.apiKeyEnc),
+    hasApiKey: provider === 'kit' || provider === 'mailchimp' ? keys[provider] : false,
     lastError: row?.lastError ?? null,
     lastErrorAt: row?.lastErrorAt ? row.lastErrorAt.toISOString() : null,
     lastSuccessAt: row?.lastSuccessAt ? row.lastSuccessAt.toISOString() : null,
   }
 }
 
+function toPublicModules(rows: IntegrationRow[], credentials: CredentialRow[]) {
+  const savedKeys = savedKeyMap(rows, credentials)
+  const modules = {} as Record<EmailModuleKey, ReturnType<typeof toPublic>>
+  for (const moduleKey of EMAIL_MODULES) {
+    modules[moduleKey] = toPublic(
+      rows.find((row) => row.module === moduleKey) ?? null,
+      savedKeys
+    )
+  }
+  return { savedKeys, modules }
+}
+
 async function getSiteForUser(siteKey: string, userId: number) {
   return prisma.site.findFirst({
     where: { siteKey, userId, deletedAt: null },
-    include: { emailIntegration: true },
+    include: { emailIntegrations: true, emailCredentials: true },
   })
 }
 
@@ -83,7 +126,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Site not found' })
     return
   }
-  res.json(toPublic(site.emailIntegration))
+  res.json(toPublicModules(site.emailIntegrations, site.emailCredentials))
 })
 
 type ExternalCredentials = {
@@ -108,7 +151,8 @@ async function credentialsFromBody(
     tagId?: unknown
     tagName?: unknown
   },
-  stored: IntegrationRow | null
+  rows: IntegrationRow[],
+  credentials: CredentialRow[]
 ): Promise<ExternalCredentials | { error: string }> {
   const provider = parseProvider(body.provider)
   if (provider !== 'kit' && provider !== 'mailchimp') {
@@ -122,22 +166,21 @@ async function credentialsFromBody(
   const tagName = provider === 'mailchimp' && typeof body.tagName === 'string' ? body.tagName.trim().slice(0, 100) : ''
   const tagError = provider === 'mailchimp' ? validateMailchimpTag(tagId, tagName) : null
   if (tagError) return { error: tagError }
-  const sameProvider = stored?.provider === provider
-  const resolved = resolveApiKey(body.apiKey, sameProvider ? stored?.apiKeyEnc ?? null : null)
+  const resolved = resolveApiKey(body.apiKey, storedKeyEnc(provider, rows, credentials))
   if ('error' in resolved) return resolved
   return { provider, apiKey: resolved.key, destinationId, destinationKind, tagId, tagName }
 }
 
 async function apiKeyFromBody(
   body: { provider?: unknown; apiKey?: unknown },
-  stored: IntegrationRow | null
+  rows: IntegrationRow[],
+  credentials: CredentialRow[]
 ): Promise<{ provider: EmailProviderName; apiKey: string } | { error: string }> {
   const provider = parseProvider(body.provider)
   if (provider !== 'kit' && provider !== 'mailchimp') {
     return { error: 'Choose Kit or Mailchimp to load destinations.' }
   }
-  const sameProvider = stored?.provider === provider
-  const resolved = resolveApiKey(body.apiKey, sameProvider ? stored?.apiKeyEnc ?? null : null)
+  const resolved = resolveApiKey(body.apiKey, storedKeyEnc(provider, rows, credentials))
   if ('error' in resolved) return resolved
   return { provider, apiKey: resolved.key }
 }
@@ -164,7 +207,7 @@ router.post('/test', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Site not found' })
     return
   }
-  const credentials = await credentialsFromBody(body, site.emailIntegration)
+  const credentials = await credentialsFromBody(body, site.emailIntegrations, site.emailCredentials)
   if ('error' in credentials) {
     res.status(400).json({ error: credentials.error })
     return
@@ -202,7 +245,7 @@ router.post('/options', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Site not found' })
     return
   }
-  const credentials = await apiKeyFromBody(body, site.emailIntegration)
+  const credentials = await apiKeyFromBody(body, site.emailIntegrations, site.emailCredentials)
   if ('error' in credentials) {
     res.status(400).json({ error: credentials.error })
     return
@@ -228,26 +271,28 @@ router.post('/options', requireSession, async (req: Request, res: Response) => {
   })
 })
 
+type ModuleWrite = {
+  module: EmailModuleKey
+  provider: Provider
+  apiKeyEnc: string | null
+  destinationId: string | null
+  destinationKind: string | null
+  tagId: string | null
+  tagName: string | null
+}
+
 // PUT /api/dashboard/settings/email-integration
 router.put('/', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
-  const body = req.body as {
-    siteKey?: unknown
-    provider?: unknown
-    apiKey?: unknown
-    destinationId?: unknown
-    destinationKind?: unknown
-    tagId?: unknown
-    tagName?: unknown
-  }
+  const body = req.body as { siteKey?: unknown; modules?: unknown }
   const siteKey = typeof body.siteKey === 'string' ? body.siteKey.trim() : ''
   if (!siteKey) {
     res.status(400).json({ error: 'siteKey is required' })
     return
   }
-  const provider = parseProvider(body.provider)
-  if (!provider) {
-    res.status(400).json({ error: 'provider must be betterblog, kit, or mailchimp' })
+  const modulesBody = body.modules && typeof body.modules === 'object' ? (body.modules as Record<string, unknown>) : null
+  if (!modulesBody) {
+    res.status(400).json({ error: 'modules is required' })
     return
   }
   const site = await getSiteForUser(siteKey, user.id)
@@ -256,17 +301,27 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     return
   }
 
-  const existing = site.emailIntegration
-  let apiKeyEnc = existing?.apiKeyEnc ?? null
-  let destinationId = existing?.destinationId ?? null
-  let destinationKind = existing?.destinationKind ?? null
-  let tagId = existing?.tagId ?? null
-  let tagName = existing?.tagName ?? null
-
-  if (provider === 'kit' || provider === 'mailchimp') {
-    const credentials = await credentialsFromBody(body, existing)
+  const writes: ModuleWrite[] = []
+  const freshKeys: Partial<Record<'kit' | 'mailchimp', string>> = {}
+  for (const moduleKey of EMAIL_MODULES) {
+    const raw = modulesBody[moduleKey]
+    const moduleBody = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+    const provider = parseProvider(moduleBody.provider) ?? 'betterblog'
+    if (provider === 'betterblog') {
+      writes.push({
+        module: moduleKey,
+        provider,
+        apiKeyEnc: null,
+        destinationId: null,
+        destinationKind: null,
+        tagId: null,
+        tagName: null,
+      })
+      continue
+    }
+    const credentials = await credentialsFromBody(moduleBody, site.emailIntegrations, site.emailCredentials)
     if ('error' in credentials) {
-      res.status(400).json({ error: credentials.error })
+      res.status(400).json({ error: `${MODULE_LABEL[moduleKey]}: ${credentials.error}` })
       return
     }
     const verified = await testEmailProvider({
@@ -277,43 +332,67 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
       tagId: credentials.tagId,
     })
     if (!verified.ok) {
-      res.status(400).json({ error: verified.error })
+      res.status(400).json({ error: `${MODULE_LABEL[moduleKey]}: ${verified.error}` })
       return
     }
-    destinationId = credentials.destinationId
-    destinationKind = provider === 'kit' ? credentials.destinationKind : null
-    tagId = provider === 'mailchimp' && credentials.tagId ? credentials.tagId : null
-    tagName = provider === 'mailchimp' && credentials.tagName ? credentials.tagName : null
-    const typedKey = typeof body.apiKey === 'string' && body.apiKey.trim().length > 0
-    if (typedKey) {
+    const typed = typeof moduleBody.apiKey === 'string' && moduleBody.apiKey.trim().length > 0
+    let apiKeyEnc = storedKeyEnc(provider, site.emailIntegrations, site.emailCredentials)
+    if (typed) {
       try {
-        apiKeyEnc = encrypt(credentials.apiKey)
+        freshKeys[provider] = encrypt(credentials.apiKey)
       } catch {
         console.error('[email-integration] Encryption failed')
         res.status(500).json({ error: 'Failed to store API key' })
         return
       }
+      apiKeyEnc = freshKeys[provider] ?? null
     }
+    writes.push({
+      module: moduleKey,
+      provider,
+      apiKeyEnc,
+      destinationId: credentials.destinationId,
+      destinationKind: provider === 'kit' ? credentials.destinationKind : null,
+      tagId: provider === 'mailchimp' && credentials.tagId ? credentials.tagId : null,
+      tagName: provider === 'mailchimp' && credentials.tagName ? credentials.tagName : null,
+    })
   }
 
-  const saved = await prisma.siteEmailIntegration.upsert({
-    where: { siteId: site.id },
-    create: {
-      siteId: site.id,
-      provider,
-      apiKeyEnc: provider === 'betterblog' ? null : apiKeyEnc,
-      destinationId: provider === 'betterblog' ? null : destinationId,
-      destinationKind: provider === 'kit' ? destinationKind : null,
-      tagId: provider === 'mailchimp' ? tagId : null,
-      tagName: provider === 'mailchimp' ? tagName : null,
-    },
-    update:
-      provider === 'betterblog'
-        ? { provider }
-        : { provider, apiKeyEnc, destinationId, destinationKind, tagId, tagName },
-  })
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const write of writes) {
+        const data = {
+          provider: write.provider,
+          apiKeyEnc: write.apiKeyEnc,
+          destinationId: write.destinationId,
+          destinationKind: write.destinationKind,
+          tagId: write.tagId,
+          tagName: write.tagName,
+        }
+        await tx.siteEmailIntegration.upsert({
+          where: { siteId_module: { siteId: site.id, module: write.module } },
+          create: { siteId: site.id, module: write.module, ...data },
+          update: data,
+        })
+      }
+      for (const provider of ['kit', 'mailchimp'] as const) {
+        const enc = freshKeys[provider]
+        if (!enc) continue
+        await tx.siteEmailCredential.upsert({
+          where: { siteId_provider: { siteId: site.id, provider } },
+          create: { siteId: site.id, provider, apiKeyEnc: enc },
+          update: { apiKeyEnc: enc },
+        })
+      }
+    })
+  } catch (err) {
+    console.error('[email-integration] Save failed', err)
+    res.status(500).json({ error: 'Failed to save email destinations' })
+    return
+  }
 
-  res.json(toPublic(saved))
+  const saved = await getSiteForUser(siteKey, user.id)
+  res.json(toPublicModules(saved?.emailIntegrations ?? [], saved?.emailCredentials ?? []))
 })
 
 export default router
