@@ -158,6 +158,7 @@ export async function testEmailProvider(opts: {
     kitUrl,
     { method: 'GET', headers: kitHeaders(apiKey) }
   )
+  let kitListed: Awaited<ReturnType<typeof providerFetch>> | null = null
   // #region agent log
   const kitHttp = !('ok' in result)
   const kitStatus = kitHttp ? result.res.status : 0
@@ -167,6 +168,7 @@ export async function testEmailProvider(opts: {
   fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitProbe)}).catch(()=>{})
   if (kitHttp && !result.res.ok) {
     const listed = await providerFetch(fetchImpl, 'Kit', 'https://api.kit.com/v4/forms?per_page=500', { method: 'GET', headers: kitHeaders(apiKey) })
+    kitListed = listed
     const listHttp = !('ok' in listed)
     const forms = listHttp && Array.isArray(listed.json?.forms) ? listed.json.forms : []
     const summary = forms.slice(0, 30).map((form) => {
@@ -181,8 +183,25 @@ export async function testEmailProvider(opts: {
   }
   // #endregion
   if ('ok' in result) return result
-  if (!result.res.ok) return { ok: false, error: friendlyStatus('Kit', result.res.status) }
-  return { ok: true }
+  if (result.res.ok) return { ok: true }
+  if (kitListed && !('ok' in kitListed) && kitListed.res.ok) {
+    const forms = Array.isArray(kitListed.json?.forms) ? kitListed.json.forms : []
+    const found = forms.some(
+      (form) => form && typeof form === 'object' && String((form as { id?: unknown }).id) === destinationId
+    )
+    // #region agent log
+    const kitDecision = {sessionId:'5d73ac',runId:'post-fix',hypothesisId:'A',location:'email-providers.ts:testEmailProvider',message:'Kit test decided from form list',data:{destinationId,singleStatus:result.res.status,found},timestamp:Date.now()}
+    console.log(JSON.stringify(kitDecision))
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitDecision)}).catch(()=>{})
+    // #endregion
+    if (found) return { ok: true }
+    return { ok: false, error: 'Kit form was not found.' }
+  }
+  if (kitListed && 'ok' in kitListed) return kitListed
+  if (kitListed && !('ok' in kitListed) && !kitListed.res.ok) {
+    return { ok: false, error: friendlyStatus('Kit', kitListed.res.status) }
+  }
+  return { ok: false, error: friendlyStatus('Kit', result.res.status) }
 }
 
 async function subscribeKitForm(
