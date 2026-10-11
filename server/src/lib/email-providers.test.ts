@@ -50,7 +50,7 @@ test('kit form subscribe posts the address with the API key header', async () =>
   assert.equal(calls[0].url, 'https://api.kit.com/v4/subscribers')
   assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
     email_address: 'reader@example.com',
-    state: 'inactive',
+    state: 'active',
   })
   assert.equal(calls[1].url, 'https://api.kit.com/v4/forms/42/subscribers')
   const headers = new Headers(calls[1].init?.headers)
