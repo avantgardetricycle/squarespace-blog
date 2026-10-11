@@ -69,8 +69,10 @@ import {
   EMAIL_MODULE_KEYS,
   EMPTY_EMAIL_CATALOG,
   emailCatalogFromApi,
+  emailDestinationDirty,
   emailDestinationsDirty,
   emailDestinationsFromApi,
+  emptyEmailDestinations,
   modulePayload,
   type EmailCatalog,
   type EmailDestinationsState,
@@ -2387,8 +2389,10 @@ export default function Configure() {
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
   const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
-  const [emailDestinations, setEmailDestinations] = useState<EmailDestinationsState | null>(null);
-  const [savedEmailDestinations, setSavedEmailDestinations] = useState<EmailDestinationsState | null>(null);
+  const [emailDestinations, setEmailDestinations] = useState<EmailDestinationsState>(emptyEmailDestinations);
+  const [savedEmailDestinations, setSavedEmailDestinations] = useState<EmailDestinationsState>(emptyEmailDestinations);
+  const emailSavedRef = useRef<EmailDestinationsState>(savedEmailDestinations);
+  const emailEditedRef = useRef(false);
   const [emailTestingModule, setEmailTestingModule] = useState<EmailModuleKey | null>(null);
   const [emailTestMessages, setEmailTestMessages] = useState<Partial<Record<EmailModuleKey, { ok: boolean; text: string } | null>>>({});
   const [emailCatalogs, setEmailCatalogs] = useState<Record<EmailModuleKey, ModuleCatalog>>(emptyModuleCatalogs);
@@ -2614,24 +2618,38 @@ export default function Configure() {
     if (!effectiveSiteKey) return;
     let cancelled = false;
     setEmailTestMessages({});
+    emailEditedRef.current = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12000);
     fetch(`/api/dashboard/settings/email-integration?siteKey=${encodeURIComponent(effectiveSiteKey)}`, {
       credentials: "include",
+      signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
         const next = emailDestinationsFromApi(data);
-        setEmailDestinations(next);
+        const previous = emailSavedRef.current;
+        emailSavedRef.current = next;
         setSavedEmailDestinations(next);
+        setEmailDestinations((current) => {
+          if (!emailEditedRef.current) return next;
+          const modules = { ...next.modules };
+          for (const key of EMAIL_MODULE_KEYS) {
+            if (emailDestinationDirty(current.modules[key], previous.modules[key])) {
+              modules[key] = current.modules[key];
+            }
+          }
+          return { ...next, modules };
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        const next = emailDestinationsFromApi(null);
-        setEmailDestinations(next);
-        setSavedEmailDestinations(next);
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
     };
   }, [effectiveSiteKey]);
 
@@ -3337,6 +3355,12 @@ export default function Configure() {
     if (!keyToSave) return;
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
+    const dirtyEmailModules = Object.fromEntries(
+      EMAIL_MODULE_KEYS.filter((key) =>
+        emailDestinationDirty(emailDestinations.modules[key], savedEmailDestinations.modules[key])
+      ).map((key) => [key, modulePayload(emailDestinations.modules[key])])
+    );
+    const emailDirty = Object.keys(dirtyEmailModules).length > 0;
     try {
       const [configRes, commentsRes, emailRes] = await Promise.all([
         fetch(`${apiBase}/api/config`, {
@@ -3386,23 +3410,21 @@ export default function Configure() {
               }),
             })
           : Promise.resolve({ ok: true } as Response),
-        emailDestinations
+        emailDirty
           ? fetch(`${apiBase}/api/dashboard/settings/email-integration`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
               body: JSON.stringify({
                 siteKey: keyToSave,
-                modules: Object.fromEntries(
-                  EMAIL_MODULE_KEYS.map((key) => [key, modulePayload(emailDestinations.modules[key])])
-                ),
+                modules: dirtyEmailModules,
               }),
             })
           : Promise.resolve({ ok: true } as Response),
       ]);
       const configOk = configRes.ok;
       const commentsOk = !commentSettings || (commentsRes as Response).ok;
-      const emailOk = !emailDestinations || (emailRes as Response).ok;
+      const emailOk = !emailDirty || (emailRes as Response).ok;
       if (configOk) {
         setSavedConfig(config);
         setConfig(config);
@@ -3418,7 +3440,7 @@ export default function Configure() {
         }
       }
       if (commentsOk && commentSettings) setSavedCommentSettings(commentSettings);
-      if (emailOk && emailDestinations) {
+      if (emailOk && emailDirty) {
         const data = await (emailRes as Response).json().catch(() => null);
         const next =
           data && typeof data === "object" && "modules" in data
@@ -3429,6 +3451,8 @@ export default function Configure() {
                   EMAIL_MODULE_KEYS.map((key) => [key, { ...emailDestinations.modules[key], apiKey: "" }])
                 ) as EmailDestinationsState["modules"],
               };
+        emailSavedRef.current = next;
+        emailEditedRef.current = false;
         setEmailDestinations(next);
         setSavedEmailDestinations(next);
         setEmailTestMessages({});
@@ -3442,7 +3466,7 @@ export default function Configure() {
         } else if (!commentsOk && commentSettings) {
           const data = await (commentsRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save comment settings.");
-        } else if (!emailOk && emailDestinations) {
+        } else if (!emailOk && emailDirty) {
           const data = await (emailRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save email destination.");
         }
@@ -3464,12 +3488,14 @@ export default function Configure() {
     paywallForm.headlineText,
     paywallForm.featureItems,
     emailDestinations,
+    savedEmailDestinations,
   ]);
 
   const handleReset = () => {
     setConfig(savedConfig);
     if (savedCommentSettings) setCommentSettings(savedCommentSettings);
-    if (savedEmailDestinations) setEmailDestinations(savedEmailDestinations);
+    setEmailDestinations(savedEmailDestinations);
+    emailEditedRef.current = false;
     setEmailTestMessages({});
     if (shouldShowViewerModeToggle) setPaywallForm(savedPaywallForm);
     toast.info("Changes reverted.");
@@ -3503,17 +3529,18 @@ export default function Configure() {
   }, [effectiveSiteKey, siteKey, emailDestinations]);
 
   const renderEmailDestination = (moduleKey: EmailModuleKey) => {
-    if (!emailDestinations) return null;
     const value = emailDestinations.modules[moduleKey];
-    const slot = emailCatalogs[moduleKey];
+    const slot = emailCatalogs[moduleKey] ?? emptyCatalogSlot();
     return (
       <EmailDestinationFields
         value={value}
         savedKeys={emailDestinations.savedKeys}
         onChange={(next) => {
-          setEmailDestinations((current) =>
-            current ? { ...current, modules: { ...current.modules, [moduleKey]: next } } : current
-          );
+          emailEditedRef.current = true;
+          setEmailDestinations((current) => ({
+            ...current,
+            modules: { ...current.modules, [moduleKey]: next },
+          }));
           setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
         }}
         onTest={() => void handleTestEmailDestination(moduleKey)}
