@@ -15682,7 +15682,7 @@
       }
       function createLeadMagnetForm(lmCfg, width, hideHeader) {
         if (!lmCfg) return null;
-        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
+        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Free Resource';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
@@ -15763,7 +15763,7 @@
       }
       function createLeadMagnetFooterCard(lmCfg) {
         if (!lmCfg) return null;
-        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
+        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Free Resource';
         var buttonText = (lmCfg.buttonText && lmCfg.buttonText.trim()) ? lmCfg.buttonText.trim() : 'Get it free';
         var description = (lmCfg.description && lmCfg.description.trim()) ? lmCfg.description.trim() : '';
 
@@ -15906,7 +15906,7 @@
       function footerChromeTitle(fmod, extra) {
         if (fmod === 'authorProfiles') return (extra && extra.authorHeader) || 'About the Author';
         if (fmod === 'emailCapture') return (ecCfg && ecCfg.header) || 'Subscribe to our newsletter';
-        if (fmod === 'leadMagnet') return (lmCfg && lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet';
+        if (fmod === 'leadMagnet') return (lmCfg && lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Free Resource';
         if (fmod === 'relevantPosts') return 'More to Read';
         if (fmod === 'popularPosts') return 'Popular Posts';
         if (fmod === 'filterByCategory') return 'Categories';
@@ -16059,7 +16059,7 @@
           } else if (mod === 'leadMagnet' && lmCfg) {
             var lmForm = createLeadMagnetForm(lmCfg, width, true);
             el = lmForm ? createSidebarSection(
-              (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet',
+              (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Free Resource',
               lmForm
             ) : null;
           }
