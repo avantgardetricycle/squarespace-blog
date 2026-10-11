@@ -183,6 +183,23 @@ export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
 /** Position for a discovery/navigation module */
 export type ModulePosition = "header" | "leftSidebar" | "rightSidebar" | "footer" | "none";
 
+/** How a sidebar behaves below the phone breakpoint. Hidden matches the current mobile layout. */
+export type SidebarMobileDisplay = "hidden" | "drawer";
+
+export interface SidebarZoneConfig {
+  show: boolean;
+  modules: string[];
+  moduleOrder: string[];
+  width: number;
+  spaceAbove: number;
+  sticky: boolean;
+  mobileDisplay: SidebarMobileDisplay;
+}
+
+function sidebarMobileDisplayOf(v: unknown): SidebarMobileDisplay {
+  return v === "drawer" ? "drawer" : "hidden";
+}
+
 export type TocStyle = "numbered" | "connectedDots" | "bookmark";
 
 /** Filter type: which filter module to show (derived from filterByTags + filterByCategories) */
@@ -273,8 +290,8 @@ export interface BaseLevelConfig {
   showDate: boolean;
   showAuthor: boolean;
   showReadingTime: boolean;
-  leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
-  rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
+  leftSidebar: SidebarZoneConfig;
+  rightSidebar: SidebarZoneConfig;
   headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
   footerContent: FooterContentConfig;
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
@@ -554,8 +571,8 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   thumbnailShape: "16:9",
   collectionModules: defaultCollectionModules,
   featuredArticle: defaultFeaturedArticle,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   socialMediaLinks: { show: false, platforms: [] },
@@ -870,6 +887,7 @@ function enforcePostTemplateLockedValues(
           ...tpl,
           modules: [...(tpl.modules ?? [])],
           moduleOrder: [...(tpl.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -891,6 +909,7 @@ function enforcePostTemplateLockedValues(
           ...tpl,
           modules: [...(tpl.modules ?? [])],
           moduleOrder: [...(tpl.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -1213,6 +1232,7 @@ function enforceCollectionTemplateLockedValues(
           ...tplSb,
           modules: [...(tplSb.modules ?? [])],
           moduleOrder: [...(tplSb.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -1240,6 +1260,7 @@ function enforceCollectionTemplateLockedValues(
           ...tplSb,
           modules: [...(tplSb.modules ?? [])],
           moduleOrder: [...(tplSb.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -1423,8 +1444,8 @@ const defaultPostConfig: PostLevelConfig = {
   showPostUpdatedAt: false,
   postModules: defaultPostModules,
   postHeader: defaultPostHeader,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
@@ -1707,8 +1728,8 @@ function parseLevelConfig(
     showCaption: Boolean(fi.showCaption ?? true),
     verticalSpacing: (fi.verticalSpacing === "tight" ? "tight" : fi.verticalSpacing === "spacious" ? "spacious" : "normal") as FeaturedImageVerticalSpacing,
   } : defaultFeaturedImage;
-  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
-  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
+  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean; mobileDisplay?: unknown } : null;
+  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean; mobileDisplay?: unknown } : null;
   const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
   const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number; sideMargins?: string } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
@@ -1734,12 +1755,12 @@ function parseLevelConfig(
     Array.isArray(hc?.modules) ? hc.modules as string[] : undefined
   );
   const hcModuleOrder = level === "collection" ? validHeaderCollection(hcOrderSource) : validHeaderPost(hcOrderSource);
-  const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: 0, sticky: ls.sticky === true }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
-  const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: 0, sticky: rs.sticky === true }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
+  const leftSidebar: SidebarZoneConfig = ls
+    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: 0, sticky: ls.sticky === true, mobileDisplay: sidebarMobileDisplayOf(ls.mobileDisplay) }
+    : { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" };
+  const rightSidebar: SidebarZoneConfig = rs
+    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: 0, sticky: rs.sticky === true, mobileDisplay: sidebarMobileDisplayOf(rs.mobileDisplay) }
+    : { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" };
   const headerContent = hc
     ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
     : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
@@ -2003,8 +2024,8 @@ function parseLevelConfig(
     gridColumns,
     ...(level === "collection" ? { thumbnailShape } : {}),
     collectionModules,
-    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: normalizedLsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: normalizedRsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: normalizedLsOrder } as SidebarZoneConfig,
+    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: normalizedRsOrder } as SidebarZoneConfig,
     headerContent: { ...headerContent, modules: collHeaderOrdered, moduleOrder: normalizedHcOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
     footerContent: { ...footerContent, modules: collDerived.footer, moduleOrder: finalFcOrder },
     socialMediaLinks,
@@ -2036,8 +2057,8 @@ function parseLevelConfig(
       showPostUpdatedAt: Boolean(raw?.showPostUpdatedAt ?? false),
       postModules,
       postHeader,
-      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: [...postDerived.left] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: [...postDerived.right] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: [...postDerived.left] } as SidebarZoneConfig,
+      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: [...postDerived.right] } as SidebarZoneConfig,
       headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: [...postDerived.header] } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
       footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: [...postDerived.footer] },
       progressBar: {
@@ -2186,12 +2207,14 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     a.leftSidebar.width === b.leftSidebar.width &&
     a.leftSidebar.spaceAbove === b.leftSidebar.spaceAbove &&
     a.leftSidebar.sticky === b.leftSidebar.sticky &&
+    sidebarMobileDisplayOf(a.leftSidebar.mobileDisplay) === sidebarMobileDisplayOf(b.leftSidebar.mobileDisplay) &&
     a.leftSidebar.modules.length === b.leftSidebar.modules.length &&
     a.leftSidebar.modules.every((m, i) => m === b.leftSidebar.modules[i]);
   const rsEqual = a.rightSidebar.show === b.rightSidebar.show &&
     a.rightSidebar.width === b.rightSidebar.width &&
     a.rightSidebar.spaceAbove === b.rightSidebar.spaceAbove &&
     a.rightSidebar.sticky === b.rightSidebar.sticky &&
+    sidebarMobileDisplayOf(a.rightSidebar.mobileDisplay) === sidebarMobileDisplayOf(b.rightSidebar.mobileDisplay) &&
     a.rightSidebar.modules.length === b.rightSidebar.modules.length &&
     a.rightSidebar.modules.every((m, i) => m === b.rightSidebar.modules[i]);
   const hcEqual = a.headerContent.show === b.headerContent.show &&
@@ -3579,10 +3602,12 @@ export default function Configure() {
     if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
     if (path === "leftSidebar.width") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, width: value as number } };
     if (path === "leftSidebar.sticky") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, sticky: value as boolean } };
+    if (path === "leftSidebar.mobileDisplay") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, mobileDisplay: sidebarMobileDisplayOf(value) } };
     if (path === "rightSidebar.show") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, show: value as boolean } };
     if (path === "rightSidebar.modules") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, modules: value as string[] } };
     if (path === "rightSidebar.width") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, width: value as number } };
     if (path === "rightSidebar.sticky") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, sticky: value as boolean } };
+    if (path === "rightSidebar.mobileDisplay") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, mobileDisplay: sidebarMobileDisplayOf(value) } };
     if (path === "headerContent.show") return { ...cfg, headerContent: { ...cfg.headerContent, show: value as boolean } };
     if (path === "headerContent.modules") return { ...cfg, headerContent: { ...cfg.headerContent, modules: value as string[] } };
     if (path === "headerContent.height") return { ...cfg, headerContent: { ...cfg.headerContent, height: value as number } };
@@ -5555,6 +5580,29 @@ export default function Configure() {
                                       checked={cfg.sticky === true}
                                       onCheckedChange={(v) => updateLevelConfigPath(`${subPath}.sticky`, v)}
                                     />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Mobile display</Label>
+                                    <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Mobile display">
+                                      {(["hidden", "drawer"] as const).map((mode) => (
+                                        <button
+                                          key={mode}
+                                          type="button"
+                                          aria-pressed={sidebarMobileDisplayOf(cfg.mobileDisplay) === mode}
+                                          onClick={() => updateLevelConfigPath(`${subPath}.mobileDisplay`, mode)}
+                                          className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                                            sidebarMobileDisplayOf(cfg.mobileDisplay) === mode
+                                              ? "bg-white text-[#0a0a0a] shadow-sm"
+                                              : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                                          }`}
+                                        >
+                                          {mode === "hidden" ? "Hidden" : "Drawer"}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      On phones, Hidden keeps today’s layout. Drawer adds a tab on the right edge that opens this sidebar.
+                                    </p>
                                   </div>
                                   <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>

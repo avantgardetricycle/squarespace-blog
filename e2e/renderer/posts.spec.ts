@@ -720,3 +720,84 @@ test.describe("post video blocks", () => {
     for (const height of heights) expect(height).toBeGreaterThan(80);
   });
 });
+
+test.describe("sidebar mobile drawer", () => {
+  test("drawer tabs sit on the right and open the sidebar", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const postConfig = zoneOrderPostConfig("feature");
+    const left = postConfig.leftSidebar as { mobileDisplay?: string; show?: boolean };
+    const right = postConfig.rightSidebar as { mobileDisplay?: string; show?: boolean };
+    left.mobileDisplay = "drawer";
+    right.mobileDisplay = "drawer";
+
+    await mountRenderer(page, { postConfig });
+
+    const tabs = page.locator(".bb-mobile-drawer-tab");
+    if (!mobile) {
+      await expect(tabs).toHaveCount(0);
+      const leftDisplay = await page.locator('[data-bb-sidebar-side="left"]').first().evaluate((el) => getComputedStyle(el).display);
+      expect(leftDisplay).not.toBe("none");
+      return;
+    }
+
+    await expect(tabs).toHaveCount(2);
+    const rightTab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
+    const rightPanel = page.locator("#bb-mobile-drawer-panel-right");
+    await expect(rightTab).toBeVisible();
+    await expect(rightTab).toHaveText("Right");
+    const tabBox = await rightTab.boundingBox();
+    const viewport = page.viewportSize();
+    expect(tabBox).not.toBeNull();
+    expect(tabBox!.x + tabBox!.width).toBeGreaterThan((viewport?.width ?? 0) - 4);
+    expect(tabBox!.width).toBeLessThanOrEqual(36);
+
+    await expect(rightPanel).toBeHidden();
+    await rightTab.click();
+    await expect(rightPanel).toBeVisible();
+    await expect(rightPanel.locator("[data-bb-module]").first()).toBeVisible();
+    await expect.poll(async () => {
+      const panelBox = await rightPanel.boundingBox();
+      const tabNow = await rightTab.boundingBox();
+      if (!panelBox || !tabNow) return Number.POSITIVE_INFINITY;
+      return panelBox.x + panelBox.width - tabNow.x;
+    }).toBeLessThanOrEqual(2);
+
+    await page.mouse.click(12, 280);
+    await expect(rightPanel).toBeHidden();
+  });
+
+  test("Configure phone frame pins the drawer tab to the preview column", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "renderer-desktop", "needs a wide window around a 375px root");
+    const postConfig = zoneOrderPostConfig("feature");
+    (postConfig.rightSidebar as { mobileDisplay?: string }).mobileDisplay = "drawer";
+    (postConfig.leftSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+
+    await mountRenderer(page, {
+      postConfig,
+      previewDevice: "mobile",
+      rootWidth: 375,
+    });
+
+    const tab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
+    await expect(tab).toBeVisible();
+    const tabBox = await tab.boundingBox();
+    const rootBox = await page.locator("#root").boundingBox();
+    expect(tabBox).not.toBeNull();
+    expect(rootBox).not.toBeNull();
+    expect(Math.abs(tabBox!.x + tabBox!.width - (rootBox!.x + rootBox!.width))).toBeLessThan(8);
+    expect(tabBox!.x).toBeGreaterThan(rootBox!.x + rootBox!.width - 48);
+
+    await tab.click();
+    const panel = page.locator("#bb-mobile-drawer-panel-right");
+    await expect(panel).toBeVisible();
+    await expect.poll(async () => {
+      const panelBox = await panel.boundingBox();
+      const rootNow = await page.locator("#root").boundingBox();
+      if (!panelBox || !rootNow) return Number.POSITIVE_INFINITY;
+      return panelBox.x + panelBox.width - (rootNow.x + rootNow.width);
+    }).toBeLessThanOrEqual(2);
+    const settled = await panel.boundingBox();
+    expect(settled).not.toBeNull();
+    expect(settled!.x).toBeGreaterThanOrEqual((rootBox!.x) - 2);
+  });
+});

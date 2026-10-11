@@ -10442,6 +10442,12 @@
         '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
         '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"]{display:none!important;}}' +
         '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"]{display:none!important;}' +
+        '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"].bb-mobile-drawer{display:block!important;}}' +
+        '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"].bb-mobile-drawer{display:block!important;}' +
+        '#blog-overlay-list .bb-mobile-drawer-tab{display:none;}' +
+        '#blog-overlay-list .bb-mobile-drawer-backdrop{display:none;}' +
+        this._mobileSidebarDrawerCss('#blog-overlay-list.bb-narrow-viewport') +
+        '@media (max-width:767px){' + this._mobileSidebarDrawerCss('#blog-overlay-list') + '}' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
@@ -11612,13 +11618,236 @@
     },
 
     /**
-     * Mobile (<768): hide every left sidebar rail. If a pairable module is in
-     * the right sidebar and duplicated in the footer, hide the footer copy
-     * (sidebar-wins). Left-sidebar copies do not count — a footer copy of a
-     * left-only module is shown. Footer-only modules keep rendering but get
-     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always
-     * hidden on mobile, even when enabled; a footer copy (if any) is shown
-     * instead. Hide Table of Contents on mobile for every post template.
+     * Phone drawer chrome. Scoped either to .bb-narrow-viewport (Configure's
+     * phone frame on a wide window) or inside a max-width:767px query.
+     */
+    _mobileSidebarDrawerCss: function(s) {
+      var d = s + ' .bb-mobile-drawer';
+      var tab = d + '>.bb-mobile-drawer-tab';
+      var rail = d + '>.blog-overlay-sidebar-rail';
+      var open = d + '.bb-mobile-drawer-open';
+      return (
+        d + '{position:fixed!important;top:0;right:0;bottom:0;left:auto;width:0!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:visible!important;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
+        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;}' +
+        open + '>.bb-mobile-drawer-tab{background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);}' +
+        rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:32px;bottom:0;left:auto;width:min(280px,86vw)!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(calc(100% + 32px));transition:transform .22s ease;}' +
+        open + '>.blog-overlay-sidebar-rail{visibility:visible;pointer-events:auto;transform:translateX(0);}' +
+        s + '.bb-mobile-drawer-has-open>.bb-mobile-drawer-backdrop{display:block;position:fixed;background:rgba(17,17,17,.35);z-index:999;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;appearance:none;}'
+      );
+    },
+
+    _mobileDrawerHostRect: function(wrapper) {
+      var vw = (typeof window !== 'undefined' && window.innerWidth) || 0;
+      var vh = (typeof window !== 'undefined' && window.innerHeight) || 0;
+      var viewport = { top: 0, left: 0, right: vw, bottom: vh, width: vw, height: vh };
+      if (this._previewMode) {
+        var scroller = this._getScrollContainer();
+        if (scroller && scroller.getBoundingClientRect) {
+          var sr = scroller.getBoundingClientRect();
+          if (sr.width >= 200 && sr.height >= 200 && sr.width < vw - 40) {
+            return { top: sr.top, left: sr.left, right: sr.right, bottom: sr.bottom, width: sr.width, height: sr.height };
+          }
+        }
+        var boxEl = wrapper || this._root;
+        if (boxEl && boxEl.getBoundingClientRect) {
+          var br = boxEl.getBoundingClientRect();
+          if (br.width >= 200 && br.width < vw - 40) {
+            var top = br.top;
+            var bottom = br.bottom;
+            if (br.height > vh) {
+              top = Math.max(0, br.top);
+              bottom = Math.min(vh, br.bottom);
+              if (bottom - top < 160) {
+                top = 0;
+                bottom = vh;
+              }
+            }
+            return {
+              top: top,
+              left: br.left,
+              right: br.right,
+              bottom: bottom,
+              width: br.width,
+              height: Math.max(0, bottom - top)
+            };
+          }
+        }
+      }
+      var topInset = 0;
+      if (wrapper && !this._previewMode && !this._bbPreview) {
+        var navH = parseFloat(wrapper.style.getPropertyValue('--bb-nav-height')) || 0;
+        if (navH > 0 && navH < vh * 0.45) topInset = navH;
+      }
+      return {
+        top: viewport.top + topInset,
+        left: viewport.left,
+        right: viewport.right,
+        bottom: viewport.bottom,
+        width: viewport.width,
+        height: Math.max(0, viewport.height - topInset)
+      };
+    },
+
+    _positionMobileDrawers: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var drawers = wrapper.querySelectorAll('.bb-mobile-drawer');
+      if (!drawers.length) return;
+      var rect = this._mobileDrawerHostRect(wrapper);
+      var tabH = 96;
+      var gap = 10;
+      var stackH = drawers.length * tabH + Math.max(0, drawers.length - 1) * gap;
+      var start = Math.max(64, Math.round((rect.height - stackH) / 2));
+      var i;
+      for (i = 0; i < drawers.length; i++) {
+        var el = drawers[i];
+        el.style.setProperty('top', rect.top + 'px', 'important');
+        el.style.setProperty('height', rect.height + 'px', 'important');
+        el.style.setProperty('right', Math.max(0, Math.round(window.innerWidth - rect.right)) + 'px', 'important');
+        el.style.setProperty('bottom', 'auto', 'important');
+        el.style.setProperty('left', 'auto', 'important');
+        var tab = el.querySelector(':scope > .bb-mobile-drawer-tab');
+        if (tab) tab.style.top = (start + i * (tabH + gap)) + 'px';
+        var rail = el.querySelector(':scope > .blog-overlay-sidebar-rail');
+        if (rail) {
+          var configured = parseInt(el.getAttribute('data-bb-sidebar-width'), 10);
+          if (!configured || configured < 160) configured = 280;
+          var panelW = Math.max(200, Math.min(configured, Math.round(rect.width * 0.86), Math.round(rect.width - 44)));
+          rail.setAttribute('data-bb-drawer-width', '1');
+          rail.style.setProperty('width', panelW + 'px', 'important');
+        }
+      }
+      var backdrop = wrapper.querySelector(':scope > .bb-mobile-drawer-backdrop');
+      if (backdrop) {
+        backdrop.style.setProperty('top', rect.top + 'px', 'important');
+        backdrop.style.setProperty('left', rect.left + 'px', 'important');
+        backdrop.style.setProperty('width', rect.width + 'px', 'important');
+        backdrop.style.setProperty('height', rect.height + 'px', 'important');
+      }
+    },
+
+    _ensureMobileDrawerTracking: function() {
+      if (this._mobileDrawerTracking) return;
+      this._mobileDrawerTracking = true;
+      var self = this;
+      this._mobileDrawerOnViewport = function() {
+        var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
+        if (wrap && wrap.querySelector('.bb-mobile-drawer')) self._positionMobileDrawers(wrap);
+      };
+      window.addEventListener('resize', this._mobileDrawerOnViewport);
+      window.addEventListener('scroll', this._mobileDrawerOnViewport, true);
+      window.addEventListener('keydown', function(e) {
+        if (!e || e.key !== 'Escape' || !self._mobileDrawerOpen) return;
+        if (!self._mobileDrawerOpen.left && !self._mobileDrawerOpen.right) return;
+        self._mobileDrawerOpen.left = false;
+        self._mobileDrawerOpen.right = false;
+        var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
+        if (wrap) self._syncMobileSidebarDrawers(wrap, self._isNarrowCollectionViewport());
+      });
+    },
+
+    /**
+     * Narrow viewports: sidebars set to Drawer become a tab on the right edge.
+     * Hidden (the default) keeps the existing mobile rules.
+     */
+    _syncMobileSidebarDrawers: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var self = this;
+      if (!self._mobileDrawerOpen) self._mobileDrawerOpen = { left: false, right: false };
+      var anchors = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
+      var active = [];
+      var i;
+      for (i = 0; i < anchors.length; i++) {
+        var anchor = anchors[i];
+        var side = anchor.getAttribute('data-bb-sidebar-side') === 'right' ? 'right' : 'left';
+        var rail = anchor.querySelector(':scope > .blog-overlay-sidebar-rail');
+        var want = !!narrow && anchor.getAttribute('data-bb-mobile-display') === 'drawer' && !!rail;
+        if (!want) {
+          anchor.classList.remove('bb-mobile-drawer', 'bb-mobile-drawer-open');
+          var stale = anchor.querySelector(':scope > .bb-mobile-drawer-tab');
+          if (stale) stale.remove();
+          if (rail && rail.getAttribute('data-bb-drawer-width') === '1') {
+            rail.style.removeProperty('width');
+            rail.style.width = '100%';
+            rail.removeAttribute('data-bb-drawer-width');
+          }
+          continue;
+        }
+        anchor.classList.add('bb-mobile-drawer');
+        anchor.classList.toggle('bb-mobile-drawer-open', !!self._mobileDrawerOpen[side]);
+        var tab = anchor.querySelector(':scope > .bb-mobile-drawer-tab');
+        if (!tab) {
+          tab = document.createElement('button');
+          tab.type = 'button';
+          tab.className = 'bb-mobile-drawer-tab';
+          anchor.insertBefore(tab, anchor.firstChild);
+          tab.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var host = ev.currentTarget && ev.currentTarget.parentElement;
+            if (!host) return;
+            var hostSide = host.getAttribute('data-bb-sidebar-side') === 'right' ? 'right' : 'left';
+            var nextOpen = !self._mobileDrawerOpen[hostSide];
+            self._mobileDrawerOpen.left = false;
+            self._mobileDrawerOpen.right = false;
+            self._mobileDrawerOpen[hostSide] = nextOpen;
+            var live = host.closest ? host.closest('#blog-overlay-list') : wrapper;
+            self._syncMobileSidebarDrawers(live || wrapper, self._isNarrowCollectionViewport());
+          });
+        }
+        var label = side === 'right' ? 'Right' : 'Left';
+        tab.textContent = label;
+        var open = !!self._mobileDrawerOpen[side];
+        tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+        tab.setAttribute('aria-label', (open ? 'Close' : 'Open') + ' ' + label.toLowerCase() + ' sidebar');
+        if (!rail.id) rail.id = 'bb-mobile-drawer-panel-' + side;
+        tab.setAttribute('aria-controls', rail.id);
+        rail.setAttribute('aria-hidden', open ? 'false' : 'true');
+        var concealed = anchor.querySelectorAll('.bb-mobile-sidebar-filter-hidden, .bb-mobile-toc-hidden');
+        var c;
+        for (c = 0; c < concealed.length; c++) {
+          concealed[c].classList.remove('bb-mobile-sidebar-filter-hidden', 'bb-mobile-toc-hidden');
+          concealed[c].setAttribute('aria-hidden', 'false');
+        }
+        active.push(anchor);
+      }
+      var anyOpen = false;
+      for (i = 0; i < active.length; i++) {
+        if (active[i].classList.contains('bb-mobile-drawer-open')) anyOpen = true;
+      }
+      wrapper.classList.toggle('bb-mobile-drawer-has-open', anyOpen && !!narrow);
+      var backdrop = wrapper.querySelector(':scope > .bb-mobile-drawer-backdrop');
+      if (active.length) {
+        if (!backdrop) {
+          backdrop = document.createElement('button');
+          backdrop.type = 'button';
+          backdrop.className = 'bb-mobile-drawer-backdrop';
+          backdrop.setAttribute('aria-label', 'Close sidebar');
+          wrapper.insertBefore(backdrop, wrapper.firstChild);
+          backdrop.addEventListener('click', function() {
+            self._mobileDrawerOpen.left = false;
+            self._mobileDrawerOpen.right = false;
+            self._syncMobileSidebarDrawers(wrapper, self._isNarrowCollectionViewport());
+          });
+        }
+      } else if (backdrop) {
+        backdrop.remove();
+      }
+      if (active.length) {
+        this._positionMobileDrawers(wrapper);
+        this._ensureMobileDrawerTracking();
+      }
+    },
+
+    /**
+     * Mobile (<768): hide every left sidebar rail unless that sidebar's
+     * mobile display is Drawer. If a pairable module is in the right sidebar
+     * and duplicated in the footer, hide the footer copy (sidebar-wins).
+     * Left-sidebar copies do not count — a footer copy of a left-only module
+     * is shown. Footer-only modules keep rendering but get sidebar chrome.
+     * Tags/Categories invert that: the sidebar copy is always hidden on
+     * mobile, even when enabled; a footer copy (if any) is shown instead.
+     * Hide Table of Contents on mobile for every post template.
+     * Drawer sidebars keep those modules inside the panel.
      * Comments are footer-only and exempt.
      */
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
@@ -11691,7 +11920,10 @@
         var railMods = rail.querySelectorAll('[data-bb-module]');
         var hideRail = false;
         var isLeftRail = rail.getAttribute('data-bb-sidebar-side') === 'left';
-        if (narrow && isLeftRail) {
+        var useDrawer = narrow && rail.getAttribute('data-bb-mobile-display') === 'drawer' && rail.querySelector('.blog-overlay-sidebar-rail');
+        if (useDrawer) {
+          hideRail = false;
+        } else if (narrow && isLeftRail) {
           hideRail = true;
         } else if (narrow && railMods.length > 0) {
           hideRail = true;
@@ -11734,6 +11966,7 @@
       if (!opts.featurePostLayout) {
         this._applyMobileAuthorCardLayout(wrapper, narrow);
       }
+      this._syncMobileSidebarDrawers(wrapper, narrow);
     },
 
     /**
@@ -16432,6 +16665,8 @@
           var leftSidebarWrapEl = document.createElement('div');
           leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
           leftSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'left');
+          leftSidebarWrapEl.setAttribute('data-bb-mobile-display', leftSidebarCfg && leftSidebarCfg.mobileDisplay === 'drawer' ? 'drawer' : 'hidden');
+          leftSidebarWrapEl.setAttribute('data-bb-sidebar-width', String(leftSidebarWidth));
           leftSidebarWrapEl.style.flexShrink = '0';
           leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
           leftSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -16458,6 +16693,8 @@
           var rightSidebarWrapEl = document.createElement('div');
           rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
           rightSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'right');
+          rightSidebarWrapEl.setAttribute('data-bb-mobile-display', rightSidebarCfg && rightSidebarCfg.mobileDisplay === 'drawer' ? 'drawer' : 'hidden');
+          rightSidebarWrapEl.setAttribute('data-bb-sidebar-width', String(rightSidebarWidth));
           rightSidebarWrapEl.style.flexShrink = '0';
           rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
           rightSidebarWrapEl.style.alignSelf = 'flex-start';
