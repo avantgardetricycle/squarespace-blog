@@ -149,6 +149,7 @@ test.describe("post layout contract", () => {
     const markdown = bio("sidebar", "Markdown Author");
     await expect(markdown.locator("strong")).toHaveText("first");
     await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    await expect(markdown.locator("li")).toHaveText(["Ada", "Code"]);
     const markdownFooter = bio("footer", "Markdown Author");
     await expect(markdownFooter.locator("strong")).toHaveText("long");
     await expect(markdownFooter.locator("a")).toHaveAttribute("href", "https://example.invalid/long");

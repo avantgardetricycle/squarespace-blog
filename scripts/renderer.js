@@ -242,41 +242,35 @@
   }
 
   function bbBioListKind(line) {
-    if (/^\s*[-*]\s+\S/.test(line)) return 'ul';
+    if (/^\s*(?:[-–—•]\s*|\*\s+)\S/.test(line)) return 'ul';
     if (/^\s*\d+\.\s+\S/.test(line)) return 'ol';
     return '';
   }
 
   function bbMarkdownToBioHtml(src) {
     var text = String(src).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    var blocks = text.split(/\n{2,}/);
+    var lines = text.split('\n');
     var html = [];
-    var b, li, lines, kind, uniform, k, items, itemText, parts;
-    for (b = 0; b < blocks.length; b++) {
-      if (!blocks[b].replace(/^\s+|\s+$/g, '')) continue;
-      lines = blocks[b].split('\n');
-      kind = '';
-      uniform = true;
-      for (li = 0; li < lines.length; li++) {
-        if (!lines[li].replace(/^\s+|\s+$/g, '')) continue;
-        k = bbBioListKind(lines[li]);
-        if (!k || (kind && kind !== k)) { uniform = false; break; }
-        kind = k;
-      }
-      if (uniform && kind) {
+    var i = 0;
+    var kind, items, itemText, parts;
+    while (i < lines.length) {
+      if (!lines[i].replace(/^\s+|\s+$/g, '')) { i++; continue; }
+      kind = bbBioListKind(lines[i]);
+      if (kind) {
         items = [];
-        for (li = 0; li < lines.length; li++) {
-          if (!lines[li].replace(/^\s+|\s+$/g, '')) continue;
-          itemText = lines[li].replace(/^\s*(?:[-*]|\d+\.)\s+/, '');
+        while (i < lines.length && bbBioListKind(lines[i]) === kind) {
+          itemText = lines[i].replace(/^\s*(?:[-–—•]\s*|\*\s+|\d+\.\s+)/, '');
           items.push('<li>' + bbApplyInlineMarkdown(bbEscapeHtml(itemText)) + '</li>');
+          i++;
         }
         html.push('<' + kind + '>' + items.join('') + '</' + kind + '>');
       } else {
         parts = [];
-        for (li = 0; li < lines.length; li++) {
-          parts.push(bbApplyInlineMarkdown(bbEscapeHtml(lines[li])));
+        while (i < lines.length && lines[i].replace(/^\s+|\s+$/g, '') && !bbBioListKind(lines[i])) {
+          parts.push(bbApplyInlineMarkdown(bbEscapeHtml(lines[i])));
+          i++;
         }
-        html.push('<p>' + parts.join('<br>') + '</p>');
+        if (parts.length) html.push('<p>' + parts.join('<br>') + '</p>');
       }
     }
     return html.join('');
@@ -10016,7 +10010,9 @@
         s + ' .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
         s + ' .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
         s + ' .blog-overlay-author-card-bio ul,' + s + ' .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
-        s + ' .blog-overlay-author-card-bio li{margin:0;}' +
+        s + ' .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
+        s + ' .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
+        s + ' .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
         s + ' .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
         s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
         s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
@@ -10330,7 +10326,9 @@
         '#blog-overlay-list .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio ul,#blog-overlay-list .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
-        '#blog-overlay-list .blog-overlay-author-card-bio li{margin:0;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
