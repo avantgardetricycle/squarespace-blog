@@ -8,7 +8,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
-import { TemplatePreview } from "@/app/components/TemplatePreview";
+import { TEMPLATE_PICKER_ART } from "@/app/components/template-picker-art";
 import { cn } from "@/app/components/ui/utils";
 
 export interface Template {
@@ -245,8 +245,8 @@ export function TemplateModal({
                       <span className="h-1.5 w-1.5 rounded-full bg-[#D6D2CB]" />
                       <span className="ml-2.5 text-[10px] text-[#6B6B6B]">mayaokonkwo.com/journal</span>
                     </div>
-                    <div className="relative min-h-0 flex-1 overflow-hidden">
-                      <ScaledPreview previewLayout={previewTemplate.previewLayout} scale={0.4188} />
+                    <div className="relative min-h-0 flex-1 overflow-hidden [container-type:inline-size]">
+                      <ScaledPreview previewLayout={previewTemplate.previewLayout} />
                       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-gradient-to-b from-transparent to-white" />
                     </div>
                   </div>
@@ -339,15 +339,21 @@ export function TemplateModal({
   );
 }
 
-function ScaledPreview({ previewLayout, scale }: { previewLayout: string; scale: number }) {
+function ScaledPreview({ previewLayout }: { previewLayout: string }) {
+  const html = TEMPLATE_PICKER_ART[previewLayout];
+  if (!html) return null;
   return (
     <div
       className="pointer-events-none absolute top-0 left-0 origin-top-left select-none"
-      style={{ width: `${100 / scale}%`, transform: `scale(${scale})` }}
+      style={{
+        width: 1280,
+        height: 1000,
+        transform: "scale(calc(100cqw / 1280px))",
+        transformOrigin: "top left",
+      }}
       aria-hidden
-    >
-      <TemplatePreview previewLayout={previewLayout} />
-    </div>
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
 
@@ -372,8 +378,8 @@ function TemplateThumb({
         selected ? "border-[#5B4FE8] bg-[#F1EFFE]" : "border-transparent bg-transparent hover:bg-white/60"
       )}
     >
-      <div className="relative h-[130px] w-full overflow-hidden rounded-md border border-[#E6E4DE] bg-white">
-        <ScaledPreview previewLayout={template.previewLayout} scale={0.1359} />
+      <div className="relative h-[130px] w-full overflow-hidden rounded-md border border-[#E6E4DE] bg-white [container-type:inline-size]">
+        <ScaledPreview previewLayout={template.previewLayout} />
       </div>
       <span className="truncate px-[3px] text-[13px] font-semibold">{template.name}</span>
     </button>
