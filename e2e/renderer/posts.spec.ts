@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { cssNumber, cssValue, expectPx, isMobileProject, mountRenderer } from "./harness";
 import { authorProfiles, blogJson } from "./fixtures/blog";
-import { postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
+import { collectionTemplates, postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
 
 const POSTS: PostTemplateName[] = ["feature", "reporter", "writer", "story", "publisher"];
 
@@ -837,5 +837,34 @@ test.describe("sidebar mobile drawer", () => {
       });
     }).toBeLessThanOrEqual(2);
     await expect(page.locator(".bb-mobile-drawer-tab")).toHaveCount(0);
+  });
+
+  test("mobile full-bleed header stays edge to edge without sideways scroll", async ({ page }, testInfo) => {
+    test.skip(!isMobileProject(testInfo), "mobile viewport");
+    const digest = structuredClone(collectionTemplates.digest) as {
+      leftSidebar: { mobileDisplay?: string };
+      rightSidebar: { mobileDisplay?: string };
+    };
+    digest.leftSidebar.mobileDisplay = "drawer";
+    digest.rightSidebar.mobileDisplay = "drawer";
+    await mountRenderer(page, {
+      collectionConfig: digest,
+      previewSelectedPostIndex: -1,
+    });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const img = document.querySelector(".blog-overlay-digest-featured-article .blog-overlay-featured-image");
+        const doc = document.documentElement;
+        if (!img) return "missing";
+        const rect = img.getBoundingClientRect();
+        const scroll = doc.scrollWidth - doc.clientWidth;
+        if (scroll > 1) return "scroll " + scroll;
+        if (rect.left < -1 || rect.left > 2) return "left " + rect.left;
+        const rightGap = doc.clientWidth - rect.right;
+        if (rightGap < -1 || rightGap > 2) return "right " + rightGap;
+        return "ok";
+      });
+    }).toBe("ok");
   });
 });
