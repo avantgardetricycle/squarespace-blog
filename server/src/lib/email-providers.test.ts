@@ -46,18 +46,26 @@ test('kit form subscribe posts the address with the API key header', async () =>
   })
 
   assert.deepEqual(result, { ok: true })
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, 'https://api.kit.com/v4/forms/42/subscribers')
-  const headers = new Headers(calls[0].init?.headers)
+  assert.equal(calls.length, 2)
+  assert.equal(calls[0].url, 'https://api.kit.com/v4/subscribers')
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
+    email_address: 'reader@example.com',
+    state: 'inactive',
+  })
+  assert.equal(calls[1].url, 'https://api.kit.com/v4/forms/42/subscribers')
+  const headers = new Headers(calls[1].init?.headers)
   assert.equal(headers.get('X-Kit-Api-Key'), 'kit-secret')
-  assert.equal(calls[0].init?.method, 'POST')
-  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { email_address: 'reader@example.com' })
+  assert.equal(calls[1].init?.method, 'POST')
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), { email_address: 'reader@example.com' })
 })
 
 test('kit lead magnet subscribe also creates and applies a tag', async () => {
   const calls: string[] = []
   const fetchImpl: FetchLike = async (url, init) => {
     calls.push(`${init?.method ?? 'GET'} ${url}`)
+    if (url === 'https://api.kit.com/v4/subscribers') {
+      return new Response(JSON.stringify({ subscriber: { id: 1 } }), { status: 201 })
+    }
     if (url.includes('/forms/')) {
       return new Response('{}', { status: 201 })
     }
@@ -84,6 +92,7 @@ test('kit lead magnet subscribe also creates and applies a tag', async () => {
 
   assert.deepEqual(result, { ok: true })
   assert.deepEqual(calls, [
+    'POST https://api.kit.com/v4/subscribers',
     'POST https://api.kit.com/v4/forms/42/subscribers',
     'GET https://api.kit.com/v4/tags?per_page=500',
     'POST https://api.kit.com/v4/tags',
@@ -93,6 +102,7 @@ test('kit lead magnet subscribe also creates and applies a tag', async () => {
 
 test('kit tag failure still counts as a successful subscribe', async () => {
   const fetchImpl: FetchLike = async (url, init) => {
+    if (url === 'https://api.kit.com/v4/subscribers') return new Response('{}', { status: 201 })
     if (url.includes('/forms/')) return new Response('{}', { status: 200 })
     if (init?.method === 'GET') return new Response(JSON.stringify({ tags: [] }), { status: 200 })
     return new Response(JSON.stringify({ errors: ['tag failed for reader@example.com'] }), { status: 422 })
