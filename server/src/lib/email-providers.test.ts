@@ -186,6 +186,28 @@ test('test connection checks the kit form and the mailchimp audience', async () 
   })
   assert.deepEqual(kit, { ok: true })
 
+  const listed = await testEmailProvider({
+    provider: 'kit',
+    apiKey: 'kit-secret',
+    destinationId: '10027791',
+    fetchImpl: async (url) => {
+      if (url === 'https://api.kit.com/v4/forms/10027791') {
+        return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404 })
+      }
+      return new Response(
+        JSON.stringify({
+          forms: [
+            { id: 10027791, name: 'BetterBlog test' },
+            { id: 10027779, name: 'Newsletter site' },
+          ],
+          pagination: { has_next_page: false },
+        }),
+        { status: 200 }
+      )
+    },
+  })
+  assert.deepEqual(listed, { ok: true })
+
   const mailchimp = await testEmailProvider({
     provider: 'mailchimp',
     apiKey: 'secret-us21',
