@@ -66,8 +66,11 @@ import {
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import {
   EmailDestinationFields,
+  EMPTY_EMAIL_CATALOG,
+  emailCatalogFromApi,
   emailDestinationDirty,
   emailDestinationFromApi,
+  type EmailCatalog,
   type EmailDestinationState,
 } from "@/app/components/EmailDestinationFields";
 import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
@@ -2341,6 +2344,12 @@ export default function Configure() {
   const [savedEmailDestination, setSavedEmailDestination] = useState<EmailDestinationState | null>(null);
   const [emailDestinationTesting, setEmailDestinationTesting] = useState(false);
   const [emailDestinationTestMessage, setEmailDestinationTestMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailCatalog, setEmailCatalog] = useState<EmailCatalog>(EMPTY_EMAIL_CATALOG);
+  const [emailCatalogProvider, setEmailCatalogProvider] = useState<string | null>(null);
+  const [emailCatalogLoading, setEmailCatalogLoading] = useState(false);
+  const [emailCatalogError, setEmailCatalogError] = useState<string | null>(null);
+  const [emailCatalogTagsError, setEmailCatalogTagsError] = useState<string | null>(null);
+  const [emailCatalogRefresh, setEmailCatalogRefresh] = useState(0);
   const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
@@ -2577,6 +2586,87 @@ export default function Configure() {
       cancelled = true;
     };
   }, [effectiveSiteKey]);
+
+  const emailCatalogAudienceId =
+    emailDestination?.provider === "mailchimp" ? emailDestination.destinationId : "";
+
+  useEffect(() => {
+    const catalogSiteKey = effectiveSiteKey ?? siteKey;
+    if (!catalogSiteKey || !emailDestination) return;
+    if (emailDestination.provider !== "kit" && emailDestination.provider !== "mailchimp") {
+      setEmailCatalog(EMPTY_EMAIL_CATALOG);
+      setEmailCatalogProvider(null);
+      setEmailCatalogError(null);
+      setEmailCatalogTagsError(null);
+      setEmailCatalogLoading(false);
+      return;
+    }
+    if (emailDestination.provider === "mailchimp") {
+      setEmailCatalog((prev) =>
+        emailCatalogProvider === "mailchimp" ? { ...prev, tags: [] } : prev
+      );
+    }
+    const typedKey = emailDestination.apiKey.trim();
+    if (!typedKey && !emailDestination.hasApiKey) {
+      setEmailCatalog(EMPTY_EMAIL_CATALOG);
+      setEmailCatalogProvider(null);
+      setEmailCatalogError(null);
+      setEmailCatalogTagsError(null);
+      setEmailCatalogLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setEmailCatalogLoading(true);
+      setEmailCatalogError(null);
+      setEmailCatalogTagsError(null);
+      fetch("/api/dashboard/settings/email-integration/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({
+          siteKey: catalogSiteKey,
+          provider: emailDestination.provider,
+          apiKey: emailDestination.apiKey,
+          audienceId: emailCatalogAudienceId,
+        }),
+      })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const message = typeof data?.error === "string" ? data.error : "Could not load destinations.";
+            throw new Error(message);
+          }
+          return emailCatalogFromApi(data);
+        })
+        .then((parsed) => {
+          if (controller.signal.aborted) return;
+          setEmailCatalog(parsed.catalog);
+          setEmailCatalogProvider(emailDestination.provider);
+          setEmailCatalogTagsError(parsed.tagsError);
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          setEmailCatalogError(err instanceof Error ? err.message : "Could not load destinations.");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setEmailCatalogLoading(false);
+        });
+    }, typedKey ? 400 : 0);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    effectiveSiteKey,
+    siteKey,
+    emailDestination?.provider,
+    emailDestination?.apiKey,
+    emailDestination?.hasApiKey,
+    emailCatalogAudienceId,
+    emailCatalogRefresh,
+  ]);
 
   // Fetch blog authors for the site
   useEffect(() => {
@@ -3236,6 +3326,9 @@ export default function Configure() {
                 siteKey: keyToSave,
                 provider: emailDestination.provider,
                 destinationId: emailDestination.destinationId,
+                destinationKind: emailDestination.provider === "kit" ? emailDestination.kitTarget : undefined,
+                tagId: emailDestination.provider === "mailchimp" ? emailDestination.tagId : "",
+                tagName: emailDestination.provider === "mailchimp" ? emailDestination.tagName : "",
                 apiKey: emailDestination.apiKey,
               }),
             })
@@ -3325,6 +3418,9 @@ export default function Configure() {
           siteKey: keyToSave,
           provider: emailDestination.provider,
           destinationId: emailDestination.destinationId,
+          destinationKind: emailDestination.provider === "kit" ? emailDestination.kitTarget : undefined,
+          tagId: emailDestination.provider === "mailchimp" ? emailDestination.tagId : "",
+          tagName: emailDestination.provider === "mailchimp" ? emailDestination.tagName : "",
           apiKey: emailDestination.apiKey,
         }),
       });
@@ -5670,8 +5766,17 @@ export default function Configure() {
                                           setEmailDestinationTestMessage(null);
                                         }}
                                         onTest={() => void handleTestEmailDestination()}
+                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
                                         testing={emailDestinationTesting}
                                         testMessage={emailDestinationTestMessage}
+                                        catalog={
+                                          emailCatalogProvider === emailDestination.provider
+                                            ? emailCatalog
+                                            : EMPTY_EMAIL_CATALOG
+                                        }
+                                        catalogLoading={emailCatalogLoading}
+                                        catalogError={emailCatalogError}
+                                        tagsError={emailCatalogTagsError}
                                       />
                                     )}
                                   </div>
@@ -5695,8 +5800,17 @@ export default function Configure() {
                                           setEmailDestinationTestMessage(null);
                                         }}
                                         onTest={() => void handleTestEmailDestination()}
+                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
                                         testing={emailDestinationTesting}
                                         testMessage={emailDestinationTestMessage}
+                                        catalog={
+                                          emailCatalogProvider === emailDestination.provider
+                                            ? emailCatalog
+                                            : EMPTY_EMAIL_CATALOG
+                                        }
+                                        catalogLoading={emailCatalogLoading}
+                                        catalogError={emailCatalogError}
+                                        tagsError={emailCatalogTagsError}
                                       />
                                     )}
                                     <div className="space-y-2">
@@ -5834,8 +5948,17 @@ export default function Configure() {
                                           setEmailDestinationTestMessage(null);
                                         }}
                                         onTest={() => void handleTestEmailDestination()}
+                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
                                         testing={emailDestinationTesting}
                                         testMessage={emailDestinationTestMessage}
+                                        catalog={
+                                          emailCatalogProvider === emailDestination.provider
+                                            ? emailCatalog
+                                            : EMPTY_EMAIL_CATALOG
+                                        }
+                                        catalogLoading={emailCatalogLoading}
+                                        catalogError={emailCatalogError}
+                                        tagsError={emailCatalogTagsError}
                                       />
                                     )}
                                   </div>
@@ -5859,8 +5982,17 @@ export default function Configure() {
                                           setEmailDestinationTestMessage(null);
                                         }}
                                         onTest={() => void handleTestEmailDestination()}
+                                        onRefresh={() => setEmailCatalogRefresh((n) => n + 1)}
                                         testing={emailDestinationTesting}
                                         testMessage={emailDestinationTestMessage}
+                                        catalog={
+                                          emailCatalogProvider === emailDestination.provider
+                                            ? emailCatalog
+                                            : EMPTY_EMAIL_CATALOG
+                                        }
+                                        catalogLoading={emailCatalogLoading}
+                                        catalogError={emailCatalogError}
+                                        tagsError={emailCatalogTagsError}
                                       />
                                     )}
                                     <div className="space-y-2">

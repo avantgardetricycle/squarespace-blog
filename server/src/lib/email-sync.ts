@@ -25,6 +25,9 @@ export type StoredEmailIntegration = {
   provider: string
   apiKeyEnc: string | null
   destinationId: string | null
+  destinationKind?: string | null
+  tagId?: string | null
+  tagName?: string | null
 }
 
 export type EmailForwardStatus = {
@@ -82,16 +85,13 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
 
   const provider = integration.provider
   if (!integration.apiKeyEnc || !integration.destinationId) {
-    await recordStatus(
-      deps,
-      lead.siteId,
-      provider,
-      {
-        lastError: provider === 'kit' ? 'Kit is missing an API key or form ID.' : 'Mailchimp is missing an API key or audience ID.',
-        lastErrorAt: new Date(),
-      },
-      provider === 'kit' ? 'Kit is missing an API key or form ID.' : 'Mailchimp is missing an API key or audience ID.'
-    )
+    const error =
+      provider === 'kit'
+        ? integration.destinationKind === 'tag'
+          ? 'Kit is missing an API key or tag.'
+          : 'Kit is missing an API key or form.'
+        : 'Mailchimp is missing an API key or audience.'
+    await recordStatus(deps, lead.siteId, provider, { lastError: error, lastErrorAt: new Date() }, error)
     return
   }
 
@@ -110,6 +110,8 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
       provider: provider as EmailProviderName,
       apiKey,
       destinationId: integration.destinationId,
+      destinationKind: integration.destinationKind === 'tag' ? 'tag' : 'form',
+      tagName: integration.tagName,
       email: lead.email,
       leadMagnetTitle: lead.type === 'lead_magnet' ? lead.resourceTitle : null,
     })
@@ -178,6 +180,9 @@ export function createEmailSyncDeps(): EmailSyncDeps {
         provider: row.provider,
         apiKeyEnc: row.apiKeyEnc,
         destinationId: row.destinationId,
+        destinationKind: row.destinationKind,
+        tagId: row.tagId,
+        tagName: row.tagName,
       }
     },
     saveStatus: async (siteId, status) => {
