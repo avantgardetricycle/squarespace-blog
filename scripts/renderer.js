@@ -10579,7 +10579,7 @@
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-title{font-size:18px!important;line-height:1.25!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-meta-row{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
-          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;width:100vw!important;max-width:100vw!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero>div,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero img{border-radius:0!important;}' +
@@ -10609,9 +10609,8 @@
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
-            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:12px!important;' +
-            'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
-            'border-radius:0!important;' +
+            'margin-top:0!important;margin-bottom:12px!important;' +
+            'position:relative;overflow:hidden;border-radius:0!important;' +
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>div,' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image img{border-radius:0!important;}' +
@@ -11402,60 +11401,27 @@
       return { left: r.left, right: r.right, width: r.width };
     },
 
-    /** Break out to the viewport width (full-bleed images only). */
+    /**
+     * Layout viewport width. 100vw is wider than this on phones (it includes
+     * the scrollbar gutter), which is what lets the page pan sideways.
+     */
+    _layoutViewportWidth: function() {
+      var doc = typeof document !== 'undefined' ? document.documentElement : null;
+      var cw = doc && doc.clientWidth ? doc.clientWidth : 0;
+      if (cw > 0) return cw;
+      return (typeof window !== 'undefined' && window.innerWidth) || 0;
+    },
+
+    /** Break out to the screen edges without using 100vw. */
     _applyViewportFullBleed: function(el) {
       if (!el || !el.style) return;
       el.style.boxSizing = 'border-box';
-      if (this._containedBleedHost()) {
-        el.style.width = '100%';
-        el.style.maxWidth = '100%';
-        el.style.marginLeft = '0';
-        el.style.marginRight = '0';
-        el.setAttribute('data-bb-contained-bleed', '1');
-        this._scheduleContainedBleed(el);
-        return;
-      }
-      el.removeAttribute('data-bb-contained-bleed');
-      el.style.width = '100vw';
-      el.style.maxWidth = '100vw';
-      el.style.marginLeft = 'calc(50% - 50vw)';
-      el.style.marginRight = 'calc(50% - 50vw)';
-    },
-
-    _scheduleContainedBleed: function(el) {
-      var self = this;
-      var apply = function(tries) {
-        if (!el || !el.isConnected) {
-          if (tries < 8 && typeof requestAnimationFrame === 'function') requestAnimationFrame(function() { apply(tries + 1); });
-          return;
-        }
-        var parent = el.parentElement;
-        var parentW = 0;
-        try { parentW = parent && parent.getBoundingClientRect ? parent.getBoundingClientRect().width : 0; } catch (eParent) {}
-        if (!parent || parentW < 2) {
-          if (tries < 8 && typeof requestAnimationFrame === 'function') requestAnimationFrame(function() { apply(tries + 1); });
-          return;
-        }
-        self._applyContainedBleed(el);
-      };
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function() { apply(0); });
-      else apply(8);
-    },
-
-    /** Widen el to the preview column, not the browser window. */
-    _applyContainedBleed: function(el) {
-      var host = this._containedBleedHost();
-      if (!host || !el || !el.parentElement || !el.parentElement.getBoundingClientRect) return;
-      var pr;
-      try { pr = el.parentElement.getBoundingClientRect(); } catch (ePr) { return; }
-      if (!pr || pr.width < 2) return;
-      var leftGap = Math.max(0, Math.round(pr.left - host.left));
-      var rightGap = Math.max(0, Math.round(host.right - pr.right));
-      el.style.width = 'calc(100% + ' + (leftGap + rightGap) + 'px)';
-      el.style.maxWidth = 'none';
-      el.style.marginLeft = (-leftGap) + 'px';
-      el.style.marginRight = (-rightGap) + 'px';
-      el.style.boxSizing = 'border-box';
+      el.style.width = '100%';
+      el.style.maxWidth = '100%';
+      el.style.marginLeft = '0';
+      el.style.marginRight = '0';
+      el.setAttribute('data-bb-viewport-bleed', '1');
+      this._scheduleViewportBleeds();
     },
 
     /**
@@ -11479,45 +11445,69 @@
     },
 
     /**
-     * After layout: extend el to the viewport left/right edges using measured gaps.
-     * @param {Element} el - element to widen
-     * @param {Element} [refEl] - box to measure (defaults to el)
+     * After layout: extend el to the screen edges. Uses the layout viewport,
+     * not 100vw, so the image stays edge to edge without widening the page.
      * @returns {boolean} true when bleed styles were applied
      */
-    _applyMeasuredViewportHorizontalBleed: function(el, refEl) {
+    _applyMeasuredViewportHorizontalBleed: function(el) {
       if (!el || !el.style || typeof window === 'undefined') return false;
-      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
-      if (!vw) return false;
       var host = this._containedBleedHost();
       var edgeLeft = host ? host.left : 0;
-      var edgeRight = host ? host.right : vw;
-      var ref = refEl && refEl.getBoundingClientRect ? refEl : el;
-      var rect;
-      try { rect = ref.getBoundingClientRect(); } catch (eRect) { return false; }
-      if (!rect) return false;
-      var leftGap = Math.max(0, Math.round(rect.left - edgeLeft));
-      var rightGap = Math.max(0, Math.round(edgeRight - rect.right));
-      if (leftGap < 1 && rightGap < 1) return false;
-      el.style.width = 'calc(100% + ' + (leftGap + rightGap) + 'px)';
-      el.style.maxWidth = 'none';
-      el.style.marginLeft = (-leftGap) + 'px';
-      el.style.marginRight = (-rightGap) + 'px';
-      el.style.boxSizing = 'border-box';
+      var edgeRight = host ? host.right : this._layoutViewportWidth();
+      if (!(edgeRight > edgeLeft + 1)) return false;
+      var parent = el.parentElement;
+      if (!parent || !parent.getBoundingClientRect) return false;
+      el.style.setProperty('box-sizing', 'border-box', 'important');
+      el.style.setProperty('width', '100%', 'important');
+      el.style.setProperty('max-width', '100%', 'important');
+      el.style.setProperty('margin-left', '0', 'important');
+      el.style.setProperty('margin-right', '0', 'important');
+      var pr;
+      try { pr = parent.getBoundingClientRect(); } catch (eRect) { return false; }
+      if (!pr || pr.width < 2) return false;
+      var pullLeft = Math.max(0, pr.left - edgeLeft);
+      var pullRight = Math.max(0, edgeRight - pr.right);
+      var marginLeft = -Math.floor(pullLeft);
+      var marginRight = -Math.floor(pullRight);
+      var pxWidth = Math.floor(pr.width - marginLeft - marginRight);
+      var maxWidth = Math.floor(edgeRight - edgeLeft);
+      if (pxWidth > maxWidth) pxWidth = maxWidth;
+      if (pxWidth < 1) return false;
+      el.style.setProperty('width', pxWidth + 'px', 'important');
+      el.style.setProperty('max-width', pxWidth + 'px', 'important');
+      el.style.setProperty('margin-left', marginLeft + 'px', 'important');
+      el.style.setProperty('margin-right', marginRight + 'px', 'important');
       return true;
+    },
+
+    _scheduleViewportBleeds: function() {
+      var self = this;
+      if (self._viewportBleedScheduled) return;
+      self._viewportBleedScheduled = true;
+      var seq = self._renderSeq;
+      var run = function() {
+        self._viewportBleedScheduled = false;
+        if (self._renderSeq !== seq) return;
+        var wrapper = document.getElementById('blog-overlay-list');
+        if (wrapper) self._syncViewportBleeds(wrapper);
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { requestAnimationFrame(run); });
+      } else {
+        run();
+      }
+    },
+
+    _syncViewportBleeds: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var nodes = wrapper.querySelectorAll('[data-bb-viewport-bleed], [data-digest-viewport-bleed]');
+      var i;
+      for (i = 0; i < nodes.length; i++) this._applyMeasuredViewportHorizontalBleed(nodes[i]);
     },
 
     /** Digest mobile featured hero: measure and bleed to viewport after the overlay is in the DOM. */
     _syncDigestMobileFeaturedImageBleed: function(wrapper) {
-      if (!wrapper || !wrapper.querySelector) return;
-      var imgs = wrapper.querySelectorAll('.blog-overlay-digest-featured-article .blog-overlay-featured-image[data-digest-viewport-bleed]');
-      for (var i = 0; i < imgs.length; i++) {
-        var fiWrap = imgs[i];
-        fiWrap.style.width = '';
-        fiWrap.style.maxWidth = '';
-        fiWrap.style.marginLeft = '';
-        fiWrap.style.marginRight = '';
-        this._applyMeasuredViewportHorizontalBleed(fiWrap, fiWrap);
-      }
+      this._syncViewportBleeds(wrapper);
     },
 
     _scheduleDigestMobileFeaturedImageBleed: function(vs) {
@@ -11691,18 +11681,18 @@
       var rail = d + '>.blog-overlay-sidebar-rail';
       var open = d + '.bb-mobile-drawer-open';
       return (
-        d + '{position:fixed!important;top:0;right:0;bottom:0;left:0;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
+        d + '{position:fixed!important;top:0;right:0;bottom:0;left:0;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;contain:paint;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
         open + '{z-index:1001!important;}' +
         tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
         open + '>.bb-mobile-drawer-tab{right:var(--bb-drawer-panel-width,280px);background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);}' +
-        rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:0;bottom:0;left:auto;width:var(--bb-drawer-panel-width,min(280px,86vw))!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(100%);transition:transform .22s ease;}' +
+        rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:0;bottom:0;left:auto;width:var(--bb-drawer-panel-width,86%)!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(100%);transition:transform .22s ease;}' +
         open + '>.blog-overlay-sidebar-rail{visibility:visible;pointer-events:auto;transform:translateX(0);}' +
         s + '.bb-mobile-drawer-has-open>.bb-mobile-drawer-backdrop{display:block;position:fixed;background:rgba(17,17,17,.35);z-index:999;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;appearance:none;}'
       );
     },
 
     _mobileDrawerHostRect: function(wrapper) {
-      var vw = (typeof window !== 'undefined' && window.innerWidth) || 0;
+      var vw = this._layoutViewportWidth();
       var vh = (typeof window !== 'undefined' && window.innerHeight) || 0;
       var viewport = { top: 0, left: 0, right: vw, bottom: vh, width: vw, height: vh };
       if (this._previewMode) {
@@ -11799,7 +11789,9 @@
       var self = this;
       this._mobileDrawerOnViewport = function() {
         var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
-        if (wrap && wrap.querySelector('.bb-mobile-drawer')) self._positionMobileDrawers(wrap);
+        if (!wrap) return;
+        if (wrap.querySelector('.bb-mobile-drawer')) self._positionMobileDrawers(wrap);
+        if (wrap.querySelector('[data-bb-viewport-bleed], [data-digest-viewport-bleed]')) self._syncViewportBleeds(wrap);
       };
       window.addEventListener('resize', this._mobileDrawerOnViewport);
       window.addEventListener('scroll', this._mobileDrawerOnViewport, true);
@@ -11917,11 +11909,31 @@
      * Drawer sidebars keep those modules inside the panel.
      * Comments are footer-only and exempt.
      */
+    /** Stop the phone page from panning sideways. Live site only; Configure preview stays in its column. */
+    _lockMobilePageAxis: function(narrow) {
+      var html = document.documentElement;
+      var body = document.body;
+      if (!html || !body) return;
+      var lock = !!narrow && !this._previewMode;
+      if (lock) {
+        html.style.setProperty('overflow-x', 'clip');
+        body.style.setProperty('overflow-x', 'clip');
+        html.style.setProperty('overscroll-behavior-x', 'none');
+        body.style.setProperty('overscroll-behavior-x', 'none');
+      } else {
+        html.style.removeProperty('overflow-x');
+        body.style.removeProperty('overflow-x');
+        html.style.removeProperty('overscroll-behavior-x');
+        body.style.removeProperty('overscroll-behavior-x');
+      }
+    },
+
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      this._lockMobilePageAxis(narrow);
       var filterIds = {
         filterByCategory: true,
         filterByTag: true,
