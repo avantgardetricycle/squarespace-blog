@@ -12,6 +12,8 @@ Settings a template owns are hidden. If a control is missing, your current post 
 
 **Show Reading Time** — Shows estimated reading time.
 
+**Show Post Updated At** — Shows the date Squarespace last saved the post, in the post header (for example, “Updated 10/9/2026”). Squarespace stores that time on each post. It appears on the post page only, not on collection cards. If a post has not been edited since it was published, this date can match the publish date. Off until you turn it on.
+
 **Show Author(s)** — Shows author name(s) in post meta. Turning this on reveals author management.
 
 **Progress Bar** — A reading progress indicator that fills as the reader scrolls the post. Turn it on or off here. Position (top of the viewport), thickness, and color use BetterBlog defaults.
