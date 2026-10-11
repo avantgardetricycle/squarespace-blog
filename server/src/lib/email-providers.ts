@@ -179,11 +179,6 @@ async function subscribeKitForm(
   if ('ok' in created) return created
   if (!created.res.ok) {
     const detail = detailFromBody(created.json, '')
-    // #region agent log
-    const kitCreateProbe = {sessionId:'5d73ac',runId:'post-fix',hypothesisId:'A',location:'email-providers.ts:subscribeKitForm',message:'Kit create subscriber failed',data:{formId,createStatus:created.res.status,body:redactSubscriberText(created.text).slice(0,300)},timestamp:Date.now()}
-    console.log(JSON.stringify(kitCreateProbe))
-    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitCreateProbe)}).catch(()=>{})
-    // #endregion
     return { ok: false, error: detail || friendlyStatus('Kit', created.res.status) }
   }
 
@@ -200,27 +195,8 @@ async function subscribeKitForm(
   if ('ok' in result) return result
   if (!result.res.ok) {
     const detail = detailFromBody(result.json, '')
-    // #region agent log
-    const kitForwardProbe = {sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A-E',location:'email-providers.ts:subscribeKitForm',message:'Kit form subscribe failed',data:{formId,status:result.res.status,body:redactSubscriberText(result.text).slice(0,300),jsonKeys:result.json?Object.keys(result.json):[],detail:detail.slice(0,200)},timestamp:Date.now()}
-    console.log(JSON.stringify(kitForwardProbe))
-    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitForwardProbe)}).catch(()=>{})
-    // #endregion
     return { ok: false, error: detail || friendlyStatus('Kit', result.res.status) }
   }
-  // #region agent log
-  const kitAddedProbe = {sessionId:'5d73ac',runId:'post-fix',hypothesisId:'A',location:'email-providers.ts:subscribeKitForm',message:'Kit subscriber created then added to form',data:{formId,createStatus:created.res.status,formStatus:result.res.status},timestamp:Date.now()}
-  console.log(JSON.stringify(kitAddedProbe))
-  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitAddedProbe)}).catch(()=>{})
-  const subscriberState = (json: Record<string, unknown> | null) => {
-    const subscriber = json?.subscriber
-    if (!subscriber || typeof subscriber !== 'object') return null
-    const state = (subscriber as { state?: unknown }).state
-    return typeof state === 'string' ? state : null
-  }
-  const kitStateProbe = {sessionId:'5d73ac',runId:'post-fix',hypothesisId:'F',location:'email-providers.ts:subscribeKitForm',message:'Kit subscriber states',data:{formId,createState:subscriberState(created.json),formState:subscriberState(result.json)},timestamp:Date.now()}
-  console.log(JSON.stringify(kitStateProbe))
-  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify(kitStateProbe)}).catch(()=>{})
-  // #endregion
   return { ok: true }
 }
 

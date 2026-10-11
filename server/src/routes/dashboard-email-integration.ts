@@ -82,7 +82,8 @@ async function credentialsFromBody(
   const destinationId = typeof body.destinationId === 'string' ? body.destinationId.trim() : ''
   const destinationError = validateDestinationId(provider, destinationId)
   if (destinationError) return { error: destinationError }
-  const resolved = resolveApiKey(body.apiKey, stored?.apiKeyEnc ?? null)
+  const sameProvider = stored?.provider === provider
+  const resolved = resolveApiKey(body.apiKey, sameProvider ? stored?.apiKeyEnc ?? null : null)
   if ('error' in resolved) return resolved
   return { provider, apiKey: resolved.key, destinationId }
 }
