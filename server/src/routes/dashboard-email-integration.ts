@@ -88,11 +88,101 @@ function toPublicModules(rows: IntegrationRow[], credentials: CredentialRow[]) {
   return { savedKeys, modules }
 }
 
+type EmailState = { rows: IntegrationRow[]; credentials: CredentialRow[] }
+
+function integrationFromRecord(record: Record<string, unknown>, module: string): IntegrationRow {
+  const dateOrNull = (value: unknown) => (value instanceof Date ? value : null)
+  return {
+    module,
+    provider: typeof record.provider === 'string' ? record.provider : 'betterblog',
+    apiKeyEnc: typeof record.api_key_enc === 'string' ? record.api_key_enc : null,
+    destinationId: typeof record.destination_id === 'string' ? record.destination_id : null,
+    destinationKind: typeof record.destination_kind === 'string' ? record.destination_kind : null,
+    tagId: typeof record.tag_id === 'string' ? record.tag_id : null,
+    tagName: typeof record.tag_name === 'string' ? record.tag_name : null,
+    lastError: typeof record.last_error === 'string' ? record.last_error : null,
+    lastErrorAt: dateOrNull(record.last_error_at),
+    lastSuccessAt: dateOrNull(record.last_success_at),
+  }
+}
+
+async function queryLegacyRows(siteId: string): Promise<EmailState> {
+  const statements = [
+    `SELECT module, provider, api_key_enc, destination_id, destination_kind, tag_id, tag_name, last_error, last_error_at, last_success_at FROM site_email_integrations WHERE site_id = $1`,
+    `SELECT provider, api_key_enc, destination_id, destination_kind, tag_id, tag_name, last_error, last_error_at, last_success_at FROM site_email_integrations WHERE site_id = $1`,
+    `SELECT provider, api_key_enc, destination_id, last_error, last_error_at, last_success_at FROM site_email_integrations WHERE site_id = $1`,
+  ]
+  for (const statement of statements) {
+    try {
+      const found = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(statement, siteId)
+      if (found.some((row) => typeof row.module === 'string' && row.module)) {
+        return {
+          rows: found.map((row) => integrationFromRecord(row, String(row.module))),
+          credentials: [],
+        }
+      }
+      const source = found[0]
+      if (!source) return { rows: [], credentials: [] }
+      return {
+        rows: EMAIL_MODULES.map((module) => integrationFromRecord(source, module)),
+        credentials: [],
+      }
+    } catch {
+      continue
+    }
+  }
+  return { rows: [], credentials: [] }
+}
+
+async function repairMissingModules(siteId: string, rows: IntegrationRow[]): Promise<IntegrationRow[]> {
+  const present = new Set(rows.map((row) => row.module))
+  if (present.size !== 1 || !present.has('collection_newsletter')) return rows
+  const source = rows[0]
+  const created: IntegrationRow[] = []
+  for (const module of EMAIL_MODULES) {
+    if (module === source.module) continue
+    try {
+      const row = await prisma.siteEmailIntegration.create({
+        data: {
+          siteId,
+          module,
+          provider: source.provider,
+          apiKeyEnc: source.apiKeyEnc,
+          destinationId: source.destinationId,
+          destinationKind: source.destinationKind,
+          tagId: source.tagId,
+          tagName: source.tagName,
+        },
+      })
+      created.push(row)
+    } catch (err) {
+      console.error('[email-integration] Could not copy destination to', module, err)
+      created.push({ ...source, module })
+    }
+  }
+  return [source, ...created]
+}
+
+async function loadEmailState(siteId: string): Promise<EmailState> {
+  try {
+    const [rows, credentials] = await Promise.all([
+      prisma.siteEmailIntegration.findMany({ where: { siteId } }),
+      prisma.siteEmailCredential.findMany({ where: { siteId } }).catch(() => []),
+    ])
+    return { rows: await repairMissingModules(siteId, rows), credentials }
+  } catch (err) {
+    console.error('[email-integration] Per-module destinations unavailable', err)
+    return queryLegacyRows(siteId)
+  }
+}
+
 async function getSiteForUser(siteKey: string, userId: number) {
-  return prisma.site.findFirst({
+  const site = await prisma.site.findFirst({
     where: { siteKey, userId, deletedAt: null },
-    include: { emailIntegrations: true, emailCredentials: true },
   })
+  if (!site) return null
+  const email = await loadEmailState(site.id)
+  return { ...site, emailIntegrations: email.rows, emailCredentials: email.credentials }
 }
 
 function parseProvider(value: unknown): Provider | null {
@@ -121,12 +211,17 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     res.status(400).json({ error: 'siteKey is required' })
     return
   }
-  const site = await getSiteForUser(siteKey, user.id)
-  if (!site) {
-    res.status(404).json({ error: 'Site not found' })
-    return
+  try {
+    const site = await getSiteForUser(siteKey, user.id)
+    if (!site) {
+      res.status(404).json({ error: 'Site not found' })
+      return
+    }
+    res.json(toPublicModules(site.emailIntegrations, site.emailCredentials))
+  } catch (err) {
+    console.error('[email-integration] GET failed', err)
+    res.status(500).json({ error: 'Could not load email destinations' })
   }
-  res.json(toPublicModules(site.emailIntegrations, site.emailCredentials))
 })
 
 type ExternalCredentials = {
@@ -295,6 +390,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     res.status(400).json({ error: 'modules is required' })
     return
   }
+  const moduleKeys = EMAIL_MODULES.filter((key) => modulesBody[key] && typeof modulesBody[key] === 'object')
   const site = await getSiteForUser(siteKey, user.id)
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
@@ -303,9 +399,8 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
 
   const writes: ModuleWrite[] = []
   const freshKeys: Partial<Record<'kit' | 'mailchimp', string>> = {}
-  for (const moduleKey of EMAIL_MODULES) {
-    const raw = modulesBody[moduleKey]
-    const moduleBody = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  for (const moduleKey of moduleKeys) {
+    const moduleBody = modulesBody[moduleKey] as Record<string, unknown>
     const provider = parseProvider(moduleBody.provider) ?? 'betterblog'
     if (provider === 'betterblog') {
       writes.push({
