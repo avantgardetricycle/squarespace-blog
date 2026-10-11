@@ -178,10 +178,10 @@ test('test connection checks the kit form and the mailchimp audience', async () 
     apiKey: 'kit-secret',
     destinationId: '42',
     fetchImpl: async (url, init) => {
-      assert.equal(url, 'https://api.kit.com/v4/forms/42')
+      assert.equal(url, 'https://api.kit.com/v4/forms?per_page=500')
       assert.equal(init?.method, 'GET')
       assert.equal(new Headers(init?.headers).get('X-Kit-Api-Key'), 'kit-secret')
-      return new Response('{}', { status: 200 })
+      return new Response(JSON.stringify({ forms: [{ id: 42, name: 'Newsletter' }] }), { status: 200 })
     },
   })
   assert.deepEqual(kit, { ok: true })
@@ -190,21 +190,16 @@ test('test connection checks the kit form and the mailchimp audience', async () 
     provider: 'kit',
     apiKey: 'kit-secret',
     destinationId: '10027791',
-    fetchImpl: async (url) => {
-      if (url === 'https://api.kit.com/v4/forms/10027791') {
-        return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404 })
-      }
-      return new Response(
+    fetchImpl: async () =>
+      new Response(
         JSON.stringify({
           forms: [
             { id: 10027791, name: 'BetterBlog test' },
             { id: 10027779, name: 'Newsletter site' },
           ],
-          pagination: { has_next_page: false },
         }),
         { status: 200 }
-      )
-    },
+      ),
   })
   assert.deepEqual(listed, { ok: true })
 
