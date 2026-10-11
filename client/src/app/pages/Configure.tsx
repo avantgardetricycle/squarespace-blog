@@ -53,6 +53,7 @@ import BlogPreviewIframe, {
 } from "@/app/components/BlogPreviewIframe";
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
+import { AuthorBioPreview } from "@/app/components/AuthorBioPreview";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import {
@@ -2287,6 +2288,7 @@ export default function Configure() {
   const [newAuthorBio, setNewAuthorBio] = useState("");
   const [newAuthorBioLong, setNewAuthorBioLong] = useState("");
   const [newAuthorBioFormat, setNewAuthorBioFormat] = useState<AuthorBioFormat>("markdown");
+  const [authorBioView, setAuthorBioView] = useState<"raw" | "preview">("raw");
   const [newAuthorEmail, setNewAuthorEmail] = useState("");
   const [newAuthorSocials, setNewAuthorSocials] = useState<Record<string, string>>({});
   const [addAuthorModalOpen, setAddAuthorModalOpen] = useState(false);
@@ -2552,6 +2554,7 @@ export default function Configure() {
     setNewAuthorBio(author.bio ?? "");
     setNewAuthorBioLong(author.bioLong ?? "");
     setNewAuthorBioFormat(authorBioFormatOf(author));
+    setAuthorBioView("raw");
     setNewAuthorEmail(author.email ?? "");
     setNewAuthorSocials(author.socialLinks ?? {});
     setAddAuthorModalOpen(true);
@@ -4042,6 +4045,7 @@ export default function Configure() {
                                             setAddAuthorContext({ postId });
                                             setAddAuthorAsDefault(false);
                                             setNewAuthorBioFormat("markdown");
+                                            setAuthorBioView("raw");
                                             setAddAuthorModalOpen(true);
                                           }}
                                         >
@@ -4176,6 +4180,7 @@ export default function Configure() {
                                         setAddAuthorContext("default");
                                         setAddAuthorAsDefault(true);
                                         setNewAuthorBioFormat("markdown");
+                                        setAuthorBioView("raw");
                                         setAddAuthorModalOpen(true);
                                       }}
                                     >
@@ -5786,12 +5791,13 @@ export default function Configure() {
               setNewAuthorBio("");
               setNewAuthorBioLong("");
               setNewAuthorBioFormat("markdown");
+              setAuthorBioView("raw");
               setNewAuthorEmail("");
               setNewAuthorSocials({});
             }
           }}
         >
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-3xl max-h-[calc(100vh-3rem)] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editAuthor ? "Edit Author" : "Add New Author"}</DialogTitle>
               {editAuthor && (
@@ -5806,6 +5812,7 @@ export default function Configure() {
                       setNewAuthorBio(a.bio ?? "");
                       setNewAuthorBioLong(a.bioLong ?? "");
                       setNewAuthorBioFormat(authorBioFormatOf(a));
+                      setAuthorBioView("raw");
                       setNewAuthorEmail(a.email ?? "");
                       setNewAuthorSocials(a.socialLinks ?? {});
                     }
@@ -5825,7 +5832,7 @@ export default function Configure() {
               )}
             </DialogHeader>
             <form
-              className="space-y-4 pt-2"
+              className="space-y-3"
               onSubmit={(e) => {
                 e.preventDefault();
                 const name = newAuthorName.trim();
@@ -5863,6 +5870,7 @@ export default function Configure() {
                         setNewAuthorBio("");
                         setNewAuthorBioLong("");
                         setNewAuthorBioFormat("markdown");
+                        setAuthorBioView("raw");
                         setNewAuthorEmail("");
                         setNewAuthorSocials({});
                         setAddAuthorModalOpen(false);
@@ -5916,6 +5924,7 @@ export default function Configure() {
                         setNewAuthorBio("");
                         setNewAuthorBioLong("");
                         setNewAuthorBioFormat("markdown");
+                        setAuthorBioView("raw");
                         setNewAuthorEmail("");
                         setNewAuthorSocials({});
                         setAddAuthorModalOpen(false);
@@ -5924,83 +5933,131 @@ export default function Configure() {
                 }
               }}
             >
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Name</Label>
-                <Input
-                  value={newAuthorName}
-                  onChange={(e) => setNewAuthorName(e.target.value)}
-                  placeholder="Author name"
-                  className="flex-1"
-                />
-              </div>
-              <AuthorImageUpload
-                value={newAuthorImageUrl}
-                onChange={setNewAuthorImageUrl}
-                siteKey={effectiveSiteKey}
-                authorName={newAuthorName}
-              />
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Bio format</Label>
-                <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio format">
-                  {AUTHOR_BIO_FORMATS.map((format) => (
-                    <button
-                      key={format.id}
-                      type="button"
-                      aria-pressed={newAuthorBioFormat === format.id}
-                      onClick={() => setNewAuthorBioFormat(format.id)}
-                      className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
-                        newAuthorBioFormat === format.id
-                          ? "bg-white text-[#0a0a0a] shadow-sm"
-                          : "text-[#6b6b6b] hover:text-[#0a0a0a]"
-                      }`}
-                    >
-                      {format.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-[#6b6b6b]">{AUTHOR_BIO_FORMAT_HINTS[newAuthorBioFormat]}</p>
-                <p className="text-xs text-[#6b6b6b]">
-                  Character counts include the source. Switching format does not convert what you have typed.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Short bio (max 200 characters)</Label>
-                <textarea
-                  value={newAuthorBio}
-                  onChange={(e) => setNewAuthorBio(e.target.value.slice(0, 200))}
-                  placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].short}
-                  className="w-full min-h-[60px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
-                  maxLength={200}
-                />
-                <span className="text-xs text-[#6b6b6b]">{newAuthorBio.length}/200</span>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Longer bio (max 1000 characters)</Label>
-                <textarea
-                  value={newAuthorBioLong}
-                  onChange={(e) => setNewAuthorBioLong(e.target.value.slice(0, 1000))}
-                  placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].long}
-                  className="w-full min-h-[80px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
-                  maxLength={1000}
-                />
-                <span className="text-xs text-[#6b6b6b]">{newAuthorBioLong.length}/1000</span>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Email</Label>
-                <Input
-                  type="email"
-                  value={newAuthorEmail}
-                  onChange={(e) => setNewAuthorEmail(e.target.value)}
-                  placeholder="author@example.com"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Social links (optional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
+                  <Label className="text-xs text-[#6b6b6b]">Name</Label>
+                  <Input
+                    value={newAuthorName}
+                    onChange={(e) => setNewAuthorName(e.target.value)}
+                    placeholder="Author name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-[#6b6b6b]">Email</Label>
+                  <Input
+                    type="email"
+                    value={newAuthorEmail}
+                    onChange={(e) => setNewAuthorEmail(e.target.value)}
+                    placeholder="author@example.com"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[220px_minmax(0,1fr)] gap-3 items-start">
+                <AuthorImageUpload
+                  value={newAuthorImageUrl}
+                  onChange={setNewAuthorImageUrl}
+                  siteKey={effectiveSiteKey}
+                  authorName={newAuthorName}
+                />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs text-[#6b6b6b]">Bio format</Label>
+                    {newAuthorBioFormat !== "text" && (
+                      <div className="flex gap-1 p-0.5 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio view">
+                        {(["raw", "preview"] as const).map((view) => (
+                          <button
+                            key={view}
+                            type="button"
+                            aria-pressed={authorBioView === view}
+                            onClick={() => setAuthorBioView(view)}
+                            className={`py-1 px-2 rounded-md text-xs font-medium transition-colors ${
+                              authorBioView === view
+                                ? "bg-white text-[#0a0a0a] shadow-sm"
+                                : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                            }`}
+                          >
+                            {view === "raw" ? "Raw text" : "Preview"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio format">
+                    {AUTHOR_BIO_FORMATS.map((format) => (
+                      <button
+                        key={format.id}
+                        type="button"
+                        aria-pressed={newAuthorBioFormat === format.id}
+                        onClick={() => {
+                          setNewAuthorBioFormat(format.id);
+                          if (format.id === "text") setAuthorBioView("raw");
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                          newAuthorBioFormat === format.id
+                            ? "bg-white text-[#0a0a0a] shadow-sm"
+                            : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                        }`}
+                      >
+                        {format.label}
+                      </button>
+                    ))}
+                  </div>
+                  {newAuthorBioFormat === "text" ? (
+                    <p className="text-xs text-[#6b6b6b]">Shown exactly as typed.</p>
+                  ) : (
+                    <p className="text-xs text-[#6b6b6b]">{AUTHOR_BIO_FORMAT_HINTS[newAuthorBioFormat]}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label className="text-xs text-[#6b6b6b]">Short bio</Label>
+                    <span className="text-xs text-[#6b6b6b]">{newAuthorBio.length}/200</span>
+                  </div>
+                  {newAuthorBioFormat !== "text" && authorBioView === "preview" ? (
+                    <AuthorBioPreview
+                      source={newAuthorBio}
+                      format={newAuthorBioFormat === "html" ? "html" : "markdown"}
+                    />
+                  ) : (
+                    <textarea
+                      value={newAuthorBio}
+                      onChange={(e) => setNewAuthorBio(e.target.value.slice(0, 200))}
+                      placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].short}
+                      className="w-full min-h-[72px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
+                      maxLength={200}
+                    />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label className="text-xs text-[#6b6b6b]">Longer bio</Label>
+                    <span className="text-xs text-[#6b6b6b]">{newAuthorBioLong.length}/1000</span>
+                  </div>
+                  {newAuthorBioFormat !== "text" && authorBioView === "preview" ? (
+                    <AuthorBioPreview
+                      source={newAuthorBioLong}
+                      format={newAuthorBioFormat === "html" ? "html" : "markdown"}
+                    />
+                  ) : (
+                    <textarea
+                      value={newAuthorBioLong}
+                      onChange={(e) => setNewAuthorBioLong(e.target.value.slice(0, 1000))}
+                      placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].long}
+                      className="w-full min-h-[72px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
+                      maxLength={1000}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-[#6b6b6b]">Social links (optional)</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(["instagram", "facebook", "linkedin"] as const).map((platform) => (
-                    <div key={platform} className="flex items-center gap-2">
-                      <span className="text-xs text-[#6b6b6b] w-20 shrink-0 capitalize">
+                    <div key={platform} className="space-y-1">
+                      <span className="text-xs text-[#6b6b6b] capitalize">
                         {platform === "instagram" ? "Instagram" : platform === "facebook" ? "Facebook" : "LinkedIn"}
                       </span>
                       <Input
@@ -6010,32 +6067,36 @@ export default function Configure() {
                         }
                         placeholder={
                           platform === "instagram"
-                            ? "https://instagram.com/username"
+                            ? "instagram.com/…"
                             : platform === "facebook"
-                              ? "https://facebook.com/username"
-                              : "https://linkedin.com/in/username"
+                              ? "facebook.com/…"
+                              : "linkedin.com/in/…"
                         }
-                        className="h-8 text-sm flex-1"
+                        className="h-8 text-sm"
                       />
                     </div>
                   ))}
                 </div>
               </div>
-              {!editAuthor && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
-                    onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
-                    disabled={addAuthorContext === "default"}
-                  />
-                  <span className="text-sm">
-                    {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
-                  </span>
-                </label>
-              )}
-              <Button type="submit" className="w-full" disabled={!newAuthorName.trim()}>
-                {editAuthor ? "Save Changes" : "Add Author"}
-              </Button>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                {!editAuthor ? (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
+                      onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
+                      disabled={addAuthorContext === "default"}
+                    />
+                    <span className="text-sm">
+                      {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
+                    </span>
+                  </label>
+                ) : (
+                  <span />
+                )}
+                <Button type="submit" className="shrink-0" disabled={!newAuthorName.trim()}>
+                  {editAuthor ? "Save Changes" : "Add Author"}
+                </Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
