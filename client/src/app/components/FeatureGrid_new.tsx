@@ -29,6 +29,8 @@ const IC: Record<string, string> = {
   paywall:'<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1.2"/>',
   email:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2.5 6 12 13 21.5 6"/>',
   magnet:'<path d="M6 3v9a6 6 0 0 0 12 0V3"/><line x1="3" y1="3" x2="9" y2="3"/><line x1="15" y1="3" x2="21" y2="3"/><line x1="6" y1="10" x2="9" y2="10"/><line x1="15" y1="10" x2="18" y2="10"/>',
+  updated:'<path d="M21 12a9 9 0 1 1-2.6-6.4"/><polyline points="21 3 21 9 15 9"/><polyline points="12 7 12 12 15 14"/>',
+  sync:'<rect x="2" y="5" width="8" height="14" rx="1.5"/><rect x="14" y="5" width="8" height="6" rx="1.5"/><rect x="14" y="13" width="8" height="6" rx="1.5"/><path d="M10 12h2v-4h2M12 12v4h2"/>',
   popular:'<path d="M12 2s4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.6-2.8 1.3-4"/><path d="M12 22a7 7 0 0 1-7-7c0-2 1-3.6 2.2-5A6.9 6.9 0 0 0 12 22a6.9 6.9 0 0 0 4.8-12c1.2 1.4 2.2 3 2.2 5a7 7 0 0 1-7 7z"/>'
 };
 
@@ -41,7 +43,7 @@ const CATS: Record<string, { label: string; tag: string; badge: string }> = {
   analytics:{label:'Insights & Analytics',tag:'Analytics',badge:'b-analytics'}
 };
 
-interface Feat { id: string; c: string; n: string; i: string; d: string; s?: string }
+interface Feat { id: string; c: string; n: string; i: string; d: string; s?: string; isNew?: boolean }
 const F: Feat[] = [
   {id:'sidebars',c:'layout',n:'Sidebars',i:'sidebars',d:'Sidebars are built into certain templates. Fill them with recent posts, categories, a newsletter signup, your author bio, or anything else you need. Configured from your dashboard, no code required.',s:'Sidebars'},
   {id:'header',c:'layout',n:'Post Headers',i:'header',d:'Your header treatment comes with the template you pick: full-bleed, overlay, beside-the-title, or text-only. From there, choose what appears in it — breadcrumbs, byline, share icons, a caption.',s:'Post Headers'},
@@ -57,14 +59,16 @@ const F: Feat[] = [
   {id:'page',c:'nav',n:'Pagination',i:'page',d:"Replace Squarespace's bare arrows with real pagination — numbered pages, or a load-more button that keeps readers on the page. Either way they see how much archive is left.",s:'Pagination'},
   {id:'progress',c:'reader',n:'Scroll Progress Bar',i:'progress',d:'A thin bar across the top of every post that fills as readers scroll. Subtle, satisfying, and a quiet nudge to keep going.',s:'Progress Bar'},
   {id:'time',c:'reader',n:'Reading Time',i:'time',d:'Auto-calculate and display estimated reading time. Sets expectations before readers click in.',s:'Reading Time'},
+  {id:'updated',c:'reader',n:'Last Updated Date',i:'updated',isNew:true,d:"Show readers when you last revised a post, right beside the date you published it. It uses the edit date Squarespace already keeps, so there's nothing to maintain. Switch it on from your dashboard.",s:'Updated Date'},
   {id:'comments',c:'reader',n:'Comments',i:'comments',d:'A real comment system on your Squarespace blog — threaded replies, likes, and a full moderation dashboard. Approve, hide, or mark spam, and tell verified subscribers from anonymous readers at a glance.',s:'Comments'},
   {id:'authors',c:'pub',n:'Multiple Authors',i:'authors',d:'Publish posts under any author name. Add multiple authors to a single post, or assign different contributors across your blog — no workarounds needed.',s:'Multi-Author'},
   {id:'profiles',c:'pub',n:'Author Profiles',i:'profiles',d:'Display a rich author profile in the sidebar of every post — name, photo, bio, and social links. Builds trust with readers.',s:'Author Profiles'},
   {id:'featured',c:'pub',n:'Featured Posts',i:'featured',d:"Mark any post as Featured and it'll appear at the top of your blog as a hero, no matter when it was published.",s:'Featured'},
   {id:'sorting',c:'pub',n:'Advanced Post Sorting',i:'sorting',d:'Let readers reorder your archive themselves — by date, A–Z, or by what other readers are actually reading. One control, instant results.',s:'Sorting'},
   {id:'paywall',c:'growth',n:'Paywall & Memberships',i:'paywall',d:"Put posts behind your Squarespace membership with a proper paywall overlay for logged-out readers. It stays in sync with Squarespace's own membership settings. BetterBlog takes no cut; Squarespace's own fees apply.",s:'Paywall'},
-  {id:'email',c:'growth',n:'Email Capture',i:'email',d:'Drop a newsletter signup anywhere on your blog — sidebar, post footer, or collection page. Subscribers land in your dashboard, and can also be sent to Kit or Mailchimp.',s:'Email Capture'},
+  {id:'email',c:'growth',n:'Email Capture',i:'email',d:'Drop a newsletter signup anywhere on your blog — sidebar, post footer, or collection page. Subscribers land in your dashboard, ready to download, or go straight to Kit or Mailchimp.',s:'Email Capture'},
   {id:'magnet',c:'growth',n:'Lead Magnet',i:'magnet',d:'Offer a freebie in exchange for an email. Guides, checklists, templates — delivered automatically, tracked alongside your newsletter signups.',s:'Lead Magnet'},
+  {id:'integrations',c:'growth',n:'Kit & Mailchimp',i:'sync',isNew:true,d:"Connect Kit or Mailchimp once and every newsletter sign-up and lead-magnet request on your blog goes straight to your list. Lead-magnet sign-ups are tagged with the freebie's name, so you know who came for what.",s:'Kit & Mailchimp'},
   {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics and your blog events forward straight into GA4, so traffic sources, top referrers and new vs. returning show up in your GA reports.',s:'Analytics'}
 ];
 
@@ -284,6 +288,21 @@ function stage(f: Feat): string {
             <span style="color:#d2d2d8">&middot;</span> <span style="color:var(--violet);font-weight:700">4 min read</span></div>
         </div>
       </div>
+    </div>`,
+    updated:`<div style="width:100%;max-width:640px;margin:0 auto">
+      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">In the post header, next to the publish date</div>
+      <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:22px 24px 18px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
+        <div style="text-align:center">
+          <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">GUIDES</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:1.12rem;color:#1a1a1a;line-height:1.2;margin-bottom:10px">The best walking routes in the Lake District</div>
+          <div style="width:26px;height:1px;background:#d8d8de;margin:0 auto 11px"></div>
+          <div style="font-size:.58rem;color:#9e9ea8;margin-bottom:16px">Sarah Clarke <span style="color:#cbcbd4">&middot;</span> Mar 12, 2025
+            <span style="color:#cbcbd4">&middot;</span> <span style="color:var(--violet);font-weight:700;background:var(--violet-f2);padding:2px 7px;border-radius:100px">Updated 10/2/2026</span>
+            <span style="color:#cbcbd4">&middot;</span> 7 min read</div>
+        </div>
+        ${lines(4)}
+      </div>
+      <div style="font-size:.56rem;color:#a5a5ae;margin-top:10px;text-align:center">The date appears in each reader's own local format</div>
     </div>`,
     social:`${blogNav}
       <div style="position:relative;height:138px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 18px 13px;
@@ -554,6 +573,24 @@ function stage(f: Feat): string {
         <div style="display:flex;gap:6px;max-width:330px">
           <div style="flex:1;background:#fff;border:1px solid #e4dae2;border-radius:4px;padding:6px 9px;font-size:.52rem;color:#bbb">you@example.com</div>
           <div style="background:var(--plum);color:#fff;font-size:.54rem;font-weight:600;padding:6px 13px;border-radius:4px;white-space:nowrap">Send it to me</div></div></div></div>`,
+    integrations:`<div style="width:100%;max-width:720px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1.15fr);gap:10px;align-items:center">
+      <div style="border:1px solid rgba(122,45,94,.2);background:#fdf8fb;border-radius:8px;padding:14px;text-align:center">
+        <div style="font-family:var(--serif);font-size:.78rem;color:#1a1a1a;margin-bottom:5px">The weekly letter</div>
+        <div style="font-size:.52rem;color:var(--mid);line-height:1.5;margin-bottom:9px">One honest note about slow work, every Sunday.</div>
+        <div style="background:#fff;border:1px solid #e4dae2;border-radius:4px;padding:6px 8px;font-size:.54rem;color:#555;text-align:left;margin-bottom:6px">maya@example.com</div>
+        <div style="background:var(--plum);color:#fff;font-size:.56rem;font-weight:600;padding:7px;border-radius:4px">Subscribe</div>
+        <div style="font-size:.48rem;color:#aaa;margin-top:8px">A sign-up form on your blog</div></div>
+      <svg viewBox="0 0 40 24" width="40" height="24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round"><line x1="2" y1="12" x2="34" y2="12"/><polyline points="28 6 34 12 28 18"/></svg>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px 14px;box-shadow:0 6px 20px rgba(91,79,232,.08)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.66rem;font-weight:700;color:#1a1a1a">Kit</span><span style="font-size:.5rem;color:#1f8a5b;font-weight:600;white-space:nowrap">&#10003; Added</span></div>
+          <div style="font-size:.54rem;color:#777">maya@example.com &rarr; form &ldquo;Weekly letter&rdquo;</div></div>
+        <div style="text-align:center;font-size:.52rem;color:#aaa">or</div>
+        <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px 14px;box-shadow:0 6px 20px rgba(91,79,232,.08)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.66rem;font-weight:700;color:#1a1a1a">Mailchimp</span><span style="font-size:.5rem;color:#1f8a5b;font-weight:600;white-space:nowrap">&#10003; Added</span></div>
+          <div style="font-size:.54rem;color:#777">maya@example.com &rarr; your audience, tagged &ldquo;Packing checklist&rdquo;</div></div>
+      </div>
+    </div>`,
     related:`<div style="width:100%;max-width:700px;margin:0 auto">
       <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Appears at the end of a post, picked from your tags and categories</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:16px 17px 17px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
@@ -701,7 +738,7 @@ function stage(f: Feat): string {
       </div>`
   }[f.id] as string | undefined;
 
-  if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting'].includes(f.id)) return body as string;
+  if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting','updated','integrations'].includes(f.id)) return body as string;
   if(body) return shell(body);
   // generic fallback
   return shell(`${blogNav}<div style="padding:16px 18px">
@@ -804,6 +841,9 @@ const STYLES = `.bb-features{
 .bb-features .fc:hover{transform:translateY(-2px);background:#fdfcff}
 .bb-features .fc.on{background:#fff;border-color:rgba(91,79,232,.32);box-shadow:0 3px 14px rgba(91,79,232,.14)}
 .bb-features .fc.on .fc-nm{color:var(--violet);font-weight:600}
+.bb-features .fc{position:relative}
+.bb-features .ex-new{display:inline-block;vertical-align:middle;margin-left:10px;font-family:'DM Sans',sans-serif;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--violet);background:var(--violet-f2);border-radius:100px;padding:3px 9px}
+.bb-features .fc-new{position:absolute;top:6px;right:8px;font-size:.5rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--violet);border-radius:100px;padding:2px 6px;line-height:1.3}
 .bb-features .fc:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
 .bb-features .fg-hint{text-align:center;font-size:.72rem;color:#b5b3ac;font-weight:300;margin:14px 0 14px}
 .bb-features .ex-pane.preview{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;
@@ -957,6 +997,7 @@ export function FeatureGrid() {
                   <svg viewBox="0 0 24 24" dangerouslySetInnerHTML={{ __html: IC[f.i] }} />
                 </span>
                 <span className="fc-nm">{f.s || f.n}</span>
+                {f.isNew && <span className="fc-new">New</span>}
               </button>
             ))}
           </div>
@@ -976,7 +1017,7 @@ export function FeatureGrid() {
         <div className="ex-pane preview">
           <div className="ex-ph">
             <div>
-              <div className="ex-pn">{feature.n}</div>
+              <div className="ex-pn">{feature.n}{feature.isNew && <span className="ex-new">New</span>}</div>
               <div className="ex-pd">{feature.d}</div>
             </div>
             <div className={`ex-bd ${cat.badge}`}>{cat.label}</div>
