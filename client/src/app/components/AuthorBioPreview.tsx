@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { fillAuthorBioElement, type AuthorBioRichFormat } from "@/lib/authorBioHtml";
 
 const previewClassName =
-  "text-sm leading-relaxed text-[#0a0a0a] [&_p]:m-0 [&_p+p]:mt-1.5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0 [&_a]:underline [&_a]:text-[#0a0a0a]";
+  "text-sm leading-relaxed text-[#0a0a0a] [&_p]:m-0 [&_p+p]:mt-1.5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0 [&_li]:list-item [&_a]:underline [&_a]:text-[#0a0a0a]";
 
 export function AuthorBioPreview({
   source,

@@ -51,40 +51,36 @@ function applyInlineMarkdown(escaped: string): string {
 }
 
 function listKind(line: string): "ul" | "ol" | "" {
-  if (/^\s*[-*]\s+\S/.test(line)) return "ul";
+  if (/^\s*(?:[-–—•]\s*|\*\s+)\S/.test(line)) return "ul";
   if (/^\s*\d+\.\s+\S/.test(line)) return "ol";
   return "";
 }
 
 function markdownToBioHtml(source: string): string {
-  const text = source.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const blocks = text.split(/\n{2,}/);
+  const lines = source.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const html: string[] = [];
-  for (const block of blocks) {
-    if (!block.trim()) continue;
-    const lines = block.split("\n");
-    let kind: "ul" | "ol" | "" = "";
-    let uniform = true;
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const next = listKind(line);
-      if (!next || (kind && kind !== next)) {
-        uniform = false;
-        break;
-      }
-      kind = next;
+  let i = 0;
+  while (i < lines.length) {
+    if (!lines[i].trim()) {
+      i++;
+      continue;
     }
-    if (uniform && kind) {
-      const items = lines
-        .filter((line) => line.trim())
-        .map((line) => {
-          const itemText = line.replace(/^\s*(?:[-*]|\d+\.)\s+/, "");
-          return `<li>${applyInlineMarkdown(escapeHtml(itemText))}</li>`;
-        });
+    const kind = listKind(lines[i]);
+    if (kind) {
+      const items: string[] = [];
+      while (i < lines.length && listKind(lines[i]) === kind) {
+        const itemText = lines[i].replace(/^\s*(?:[-–—•]\s*|\*\s+|\d+\.\s+)/, "");
+        items.push(`<li>${applyInlineMarkdown(escapeHtml(itemText))}</li>`);
+        i++;
+      }
       html.push(`<${kind}>${items.join("")}</${kind}>`);
     } else {
-      const parts = lines.map((line) => applyInlineMarkdown(escapeHtml(line)));
-      html.push(`<p>${parts.join("<br>")}</p>`);
+      const parts: string[] = [];
+      while (i < lines.length && lines[i].trim() && !listKind(lines[i])) {
+        parts.push(applyInlineMarkdown(escapeHtml(lines[i])));
+        i++;
+      }
+      if (parts.length) html.push(`<p>${parts.join("<br>")}</p>`);
     }
   }
   return html.join("");

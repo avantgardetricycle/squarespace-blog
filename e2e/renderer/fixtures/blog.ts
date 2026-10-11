@@ -81,7 +81,7 @@ export const authorProfiles = {
   markdown: {
     name: "Markdown Author",
     imageUrl: null,
-    bio: "Wrote the **first** algorithm. [Notes](https://example.invalid/notes)",
+    bio: "Wrote the **first** algorithm. [Notes](https://example.invalid/notes)\n- Ada\n- Code",
     bioLong: "Footer **long** bio. [More](https://example.invalid/long)",
     bioFormat: "markdown" as const,
     email: null,
