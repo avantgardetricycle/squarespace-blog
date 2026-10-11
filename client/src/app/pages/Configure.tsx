@@ -5680,8 +5680,20 @@ export default function Configure() {
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", collectionLeadMagnetLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      Signups are saved in BetterBlog and sent to the destination chosen under Email Capture.
+                                      Signups are saved in BetterBlog and sent to the same destination as Email Capture.
                                     </p>
+                                    {emailDestination && (
+                                      <EmailDestinationFields
+                                        value={emailDestination}
+                                        onChange={(next) => {
+                                          setEmailDestination(next);
+                                          setEmailDestinationTestMessage(null);
+                                        }}
+                                        onTest={() => void handleTestEmailDestination()}
+                                        testing={emailDestinationTesting}
+                                        testMessage={emailDestinationTestMessage}
+                                      />
+                                    )}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -5832,8 +5844,20 @@ export default function Configure() {
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", postFeatureSidebarFooterLocations, "leadMagnet")}
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      Signups are saved in BetterBlog and sent to the destination chosen under Email Capture.
+                                      Signups are saved in BetterBlog and sent to the same destination as Email Capture.
                                     </p>
+                                    {emailDestination && (
+                                      <EmailDestinationFields
+                                        value={emailDestination}
+                                        onChange={(next) => {
+                                          setEmailDestination(next);
+                                          setEmailDestinationTestMessage(null);
+                                        }}
+                                        onTest={() => void handleTestEmailDestination()}
+                                        testing={emailDestinationTesting}
+                                        testMessage={emailDestinationTestMessage}
+                                      />
+                                    )}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
