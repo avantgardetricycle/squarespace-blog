@@ -67,6 +67,7 @@ model Site {
   blogAuthors           BlogAuthor[]
   analyticsEvents       AnalyticsEvent[]
   googleAnalytics       SiteGoogleAnalytics?
+  fathomAnalytics       SiteFathomAnalytics?
   leadCaptures          LeadCapture[]
   blogCommentSettings   BlogCommentSettings?
   emailIntegrations     SiteEmailIntegration[]
@@ -95,6 +96,19 @@ model SiteGoogleAnalytics {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_google_analytics")
+}
+
+model SiteFathomAnalytics {
+  id             String   @id @default(uuid())
+  siteId         String   @unique @map("site_id")
+  fathomSiteId   String   @map("fathom_site_id") // public Site ID from Fathom Settings → Sites
+  metricsEnabled String[] @map("metrics_enabled") // traffic_sources | top_referrers | new_vs_returning
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_fathom_analytics")
 }
 
 model AnalyticsEvent {

@@ -124,7 +124,7 @@ const featureData: Record<string, FeatureData> = {
   },
   analytics: {
     name: "Analytics Dashboard",
-    desc: "Track clicks, search queries, most-read posts, reading depth, per-author analytics, and integrate with Google Analytics — all in one comprehensive dashboard.",
+    desc: "Track clicks, search queries, most-read posts, reading depth, per-author analytics, and integrate with Google Analytics or Fathom — all in one comprehensive dashboard.",
     badge: "Insights & Analytics",
     bc: "badge-analytics",
   },
