@@ -6020,7 +6020,7 @@
     _fathomFlushQueue: function() {
       var api = typeof window !== 'undefined' ? window.fathom : null;
       // #region agent log
-      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0, isTracking: !!(api && typeof api.isTrackingEnabled === 'function' && api.isTrackingEnabled()), apiSiteLen: api && api.siteId ? String(api.siteId).length : 0, build: '6cfb79-r2' });
+      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0, isTracking: !!(api && typeof api.isTrackingEnabled === 'function' && api.isTrackingEnabled()), apiSiteLen: api && api.siteId ? String(api.siteId).length : 0, build: '6cfb79-r3' });
       // #endregion
       if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
       var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
@@ -6036,7 +6036,7 @@
     _fathomForward: function(type) {
       var fathom = this._fathomConfig();
       // #region agent log
-      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79-r2' });
+      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79-r3' });
       // #endregion
       if (!fathom || type === 'render_perf') return;
       var allowed = {
@@ -6086,11 +6086,30 @@
         }
         var imgsAfter = imgsBefore;
         var sidMatch = false;
+        var pixel = null;
         try {
           var imgs = document.querySelectorAll('img[src*="usefathom.com"]');
           imgsAfter = imgs.length;
-          if (imgsAfter > 0) sidMatch = imgs[imgsAfter - 1].src.indexOf('sid=' + encodeURIComponent(siteCode)) !== -1;
+          if (imgsAfter > 0) {
+            pixel = imgs[imgsAfter - 1];
+            sidMatch = pixel.src.indexOf('sid=' + encodeURIComponent(siteCode)) !== -1;
+          }
         } catch (eImg) { /* ignore */ }
+        if (pixel && imgsAfter > imgsBefore) {
+          var reported = false;
+          var reportPixel = function(result) {
+            if (reported) return;
+            reported = true;
+            // #region agent log
+            self._fathomDebug('F', 'renderer.js:pixel', 'fathom pixel finished', { result: result, type: type, naturalWidth: pixel.naturalWidth || 0, build: '6cfb79-r3' });
+            // #endregion
+          };
+          if (pixel.complete) reportPixel(pixel.naturalWidth > 0 ? 'load-already' : 'error-already');
+          else {
+            pixel.addEventListener('load', function() { reportPixel('load'); });
+            pixel.addEventListener('error', function() { reportPixel('error'); });
+          }
+        }
         // #region agent log
         self._fathomDebug('D', 'renderer.js:_fathomForward', 'fathom send result', {
           type: type,
@@ -6106,7 +6125,7 @@
           siteIdLen: siteCode ? String(siteCode).length : 0,
           isTracking: typeof api.isTrackingEnabled === 'function' ? api.isTrackingEnabled() : null,
           apiSiteMatch: api.siteId === siteCode,
-          build: '6cfb79-r2'
+          build: '6cfb79-r3'
         });
         // #endregion
       });
