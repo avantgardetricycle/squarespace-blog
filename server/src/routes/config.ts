@@ -711,7 +711,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     const protocol = req.get('x-forwarded-proto') || req.protocol || 'https'
     const host = req.get('x-forwarded-host') || req.get('host') || ''
     const baseUrl = host ? `${protocol}://${host}`.replace(/\/$/, '') : (process.env.APP_URL ?? 'http://localhost:3001').replace(/\/$/, '')
-    const rendererUrl = `${baseUrl}/renderer.js?v=6cfb79r3`
+    const rendererUrl = `${baseUrl}/renderer.js`
 
     const ls = leftSidebar && typeof leftSidebar === 'object'
       ? { show: leftSidebar.show ?? false, modules: Array.isArray(leftSidebar.modules) ? leftSidebar.modules : [], width: Math.min(400, Math.max(160, leftSidebar.width ?? 240)), spaceAbove: 0, sticky: (leftSidebar as { sticky?: boolean }).sticky === true }
@@ -891,9 +891,6 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         : {})
     }
 
-    // #region agent log
-    console.log('[bb-fathom-debug]', JSON.stringify({sessionId:'6cfb79',runId:'pre-fix',hypothesisId:'A',location:'config.ts:configData',message:'public config fathom presence',data:{siteKey,hasFathom:Boolean(site.fathomAnalytics),fathomSiteIdLen:site.fathomAnalytics?.fathomSiteId?.length??0,metrics:site.fathomAnalytics?.metricsEnabled??[]},timestamp:Date.now()}))
-    // #endregion
     console.log(`[config] GET ${siteKey} ok (${reqId})`, {
       allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
       subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,

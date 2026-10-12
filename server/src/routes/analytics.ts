@@ -151,15 +151,6 @@ async function forwardEventsToGA(
   }
 }
 
-// POST /api/analytics/fathom-debug - staging diagnostics from the blog page (no auth)
-router.post('/fathom-debug', (req: Request, res: Response) => {
-  const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {}
-  // #region agent log
-  console.log('[bb-fathom-debug]', JSON.stringify({sessionId:'6cfb79',runId:'pre-fix',hypothesisId:body.hypothesisId,location:body.location,message:body.message,data:body.data,timestamp:Date.now()}))
-  // #endregion
-  res.status(204).send()
-})
-
 // POST /api/analytics/events - Ingest events from renderer (no auth, validated by siteKey)
 router.post('/events', async (req: Request, res: Response) => {
   const body = req.body as { siteKey?: string; siteId?: string; visitorId?: string; events?: Array<{ type: string; postId?: string; postIndex?: number; payload?: object }> }
@@ -224,14 +215,6 @@ router.post('/events', async (req: Request, res: Response) => {
   forwardEventsToGA(resolvedSiteId, rows, visitorId, url).catch((e) =>
     console.error('[analytics] GA forward error:', e)
   )
-
-  // #region agent log
-  prisma.siteFathomAnalytics.findUnique({ where: { siteId: resolvedSiteId }, select: { fathomSiteId: true, metricsEnabled: true } })
-    .then((row) => {
-      console.log('[bb-fathom-debug]', JSON.stringify({sessionId:'6cfb79',runId:'pre-fix',hypothesisId:'E',location:'analytics.ts:events',message:'ingest saw fathom row',data:{eventTypes:rows.map((r)=>r.eventType),hasFathom:Boolean(row),fathomSiteIdLen:row?.fathomSiteId?.length??0,metrics:row?.metricsEnabled??[]},timestamp:Date.now()}))
-    })
-    .catch(() => {})
-  // #endregion
 
   res.status(204).send()
 })
