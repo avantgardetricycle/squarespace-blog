@@ -153,6 +153,47 @@ html.bb-loading-blog::after {
 </style>
 <script>
 (function () {
+  // KEEP IN SYNC with scripts/loader.js installBetterBlogReadyQueue.
+  // Installed before the route check so header scripts pasted after this block
+  // can call BetterBlog.ready during HTML parse.
+  try {
+    var bb = window.BetterBlog = window.BetterBlog || {};
+    bb._readyQueue = bb._readyQueue || [];
+    if (!bb.ready || !bb.ready.__bbReady) {
+      var ready = function (fn) {
+        if (typeof fn !== "function") return;
+        var list = bb._readyQueue || (bb._readyQueue = []);
+        list.push(fn);
+        if (bb._lastCtx) {
+          try { fn(bb._lastCtx); } catch (err) {
+            console.error("[BetterBlog] custom script failed", err);
+          }
+        }
+      };
+      ready.__bbReady = true;
+      bb.ready = ready;
+    }
+    if (!bb._emit || !bb._emit.__bbEmit) {
+      var emit = function (partial) {
+        var ctx = partial || {};
+        bb._renderSeq = (bb._renderSeq || 0) + 1;
+        ctx.renderId = bb._renderSeq;
+        if (!ctx.pathname) {
+          try { ctx.pathname = location.pathname || "/"; } catch (ePath) { ctx.pathname = "/"; }
+        }
+        bb._lastCtx = ctx;
+        var list = bb._readyQueue || [];
+        for (var qi = 0; qi < list.length; qi++) {
+          try { list[qi](ctx); } catch (err) {
+            console.error("[BetterBlog] custom script failed", err);
+          }
+        }
+      };
+      emit.__bbEmit = true;
+      bb._emit = emit;
+    }
+  } catch (eQueue) {}
+
   // KEEP IN SYNC with scripts/loader.js pathMatchesPrefix (longest prefix first).
   var prefixes = ${prefixesJson};
   try {
@@ -184,8 +225,22 @@ html.bb-loading-blog::after {
     if (!onBlogRoute) return;
     doc.classList.add("bb-loading-blog");
     // Safety: never trap the visitor on a blank page if the loader/renderer never runs.
+    // If nothing has emitted yet, run queued custom scripts once against the native page.
     setTimeout(function () {
       doc.classList.remove("bb-loading-blog");
+      try {
+        var api = window.BetterBlog;
+        if (api && typeof api._emit === "function" && !api._lastCtx) {
+          api._emit({
+            active: false,
+            reason: "timeout",
+            view: null,
+            root: null,
+            overlay: null,
+            pathname: location.pathname || "/"
+          });
+        }
+      } catch (eTimeout) {}
     }, 10000);
   } catch (e) {}
 })();
@@ -195,5 +250,6 @@ html.bb-loading-blog::after {
   src="${loaderUrl}"
   data-site-key="${primarySiteKey}"
   data-blogs='${dataBlogsAttr}'${apiAttr}
-></script>`;
+></script>
+<!-- Paste rewritten custom header scripts after this block. Register each one with BetterBlog.ready(function (ctx) { ... }). -->`;
 }

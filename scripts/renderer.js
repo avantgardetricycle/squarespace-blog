@@ -212,6 +212,124 @@
     }
   }
 
+  var BB_BIO_ALLOW_TAGS = { p: 1, br: 1, strong: 1, b: 1, em: 1, i: 1, a: 1, ul: 1, ol: 1, li: 1 };
+  var BB_BIO_DROP_TAGS = { script: 1, style: 1, iframe: 1, object: 1, embed: 1, noscript: 1, svg: 1, math: 1, link: 1, meta: 1, base: 1, form: 1, input: 1, textarea: 1, select: 1, button: 1 };
+
+  function bbEscapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function bbSafeBioHref(url) {
+    var trimmed = String(url || '').replace(/^\s+|\s+$/g, '');
+    if (!trimmed || /^\s*javascript:/i.test(trimmed)) return '';
+    if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) return trimmed;
+    return '';
+  }
+
+  function bbApplyInlineMarkdown(escaped) {
+    var withLinks = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, label, url) {
+      var href = bbSafeBioHref(url);
+      if (!href) return label;
+      return '<a href="' + bbEscapeHtml(href) + '">' + label + '</a>';
+    });
+    var withBold = withLinks.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    var withItalic = withBold.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    return withItalic.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, '$1<em>$2</em>');
+  }
+
+  function bbBioListKind(line) {
+    if (/^\s*(?:[-–—•]\s*|\*\s+)\S/.test(line)) return 'ul';
+    if (/^\s*\d+\.\s+\S/.test(line)) return 'ol';
+    return '';
+  }
+
+  function bbMarkdownToBioHtml(src) {
+    var text = String(src).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var lines = text.split('\n');
+    var html = [];
+    var i = 0;
+    var kind, items, itemText, parts;
+    while (i < lines.length) {
+      if (!lines[i].replace(/^\s+|\s+$/g, '')) { i++; continue; }
+      kind = bbBioListKind(lines[i]);
+      if (kind) {
+        items = [];
+        while (i < lines.length && bbBioListKind(lines[i]) === kind) {
+          itemText = lines[i].replace(/^\s*(?:[-–—•]\s*|\*\s+|\d+\.\s+)/, '');
+          items.push('<li>' + bbApplyInlineMarkdown(bbEscapeHtml(itemText)) + '</li>');
+          i++;
+        }
+        html.push('<' + kind + '>' + items.join('') + '</' + kind + '>');
+      } else {
+        parts = [];
+        while (i < lines.length && lines[i].replace(/^\s+|\s+$/g, '') && !bbBioListKind(lines[i])) {
+          parts.push(bbApplyInlineMarkdown(bbEscapeHtml(lines[i])));
+          i++;
+        }
+        if (parts.length) html.push('<p>' + parts.join('<br>') + '</p>');
+      }
+    }
+    return html.join('');
+  }
+
+  function bbAppendSanitizedBioNodes(source, target) {
+    if (!source || !target) return;
+    var nodes = source.childNodes;
+    var i, node, tag, el, href;
+    for (i = 0; i < nodes.length; i++) {
+      node = nodes[i];
+      if (node.nodeType === 3) {
+        target.appendChild(document.createTextNode(node.textContent || ''));
+        continue;
+      }
+      if (node.nodeType !== 1) continue;
+      tag = node.tagName.toLowerCase();
+      if (BB_BIO_DROP_TAGS[tag]) continue;
+      if (!BB_BIO_ALLOW_TAGS[tag]) {
+        bbAppendSanitizedBioNodes(node, target);
+        continue;
+      }
+      if (tag === 'a') {
+        href = bbSafeBioHref(node.getAttribute('href') || '');
+        if (!href) {
+          bbAppendSanitizedBioNodes(node, target);
+          continue;
+        }
+        el = document.createElement('a');
+        el.setAttribute('href', href);
+        if (/^https?:\/\//i.test(href)) {
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+        bbAppendSanitizedBioNodes(node, el);
+        target.appendChild(el);
+        continue;
+      }
+      el = document.createElement(tag);
+      if (tag !== 'br') bbAppendSanitizedBioNodes(node, el);
+      target.appendChild(el);
+    }
+  }
+
+  function bbFillAuthorBioElement(el, bio, format) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    if (format !== 'markdown' && format !== 'html') {
+      el.textContent = bio;
+      return;
+    }
+    var html = format === 'markdown' ? bbMarkdownToBioHtml(bio) : String(bio);
+    try {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      bbAppendSanitizedBioNodes(doc.body, el);
+    } catch (e) {
+      el.textContent = bio;
+    }
+  }
+
   function bbCollectImportedExternalIds(comments) {
     var set = {};
     function walk(arr) {
@@ -496,6 +614,7 @@
     _originalRootChildren: null,
     _rootInjectionGuard: null,
     _rootInjectionGuardTarget: null,
+    _customScriptsInactiveEmitted: false,
     _searchRenderTimer: null,
     _SEARCH_RENDER_DEBOUNCE_MS: 260,
     _lastCollectionShellKey: '',
@@ -804,6 +923,7 @@
             var node = added[n];
             if (!node || node.nodeType !== 1) continue;
             if (node.id === 'blog-overlay-list' || node.id === 'blog-overlay-progress') continue;
+            if (node.hasAttribute && node.hasAttribute('data-bb-custom')) continue;
             try {
               if (node.parentNode === root) root.removeChild(node);
             } catch (e) { /* ignore */ }
@@ -817,6 +937,43 @@
         this._rootInjectionGuard = null;
         this._rootInjectionGuardTarget = null;
       }
+    },
+
+    /**
+     * Run header scripts registered with BetterBlog.ready.
+     * Skipped in the dashboard preview, which has no Squarespace header scripts.
+     * bbPreview (the live site iframe) still emits so rewritten scripts run there.
+     */
+    _emitCustomScripts: function(partial) {
+      if (this._previewMode) return;
+      try {
+        var bb = typeof window !== 'undefined' ? window.BetterBlog : null;
+        if (!bb || typeof bb._emit !== 'function') return;
+        var ctx = partial || {};
+        if (!ctx.pathname) {
+          ctx.pathname = (typeof window !== 'undefined' && window.location && window.location.pathname)
+            ? window.location.pathname
+            : '/';
+        }
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'view')) ctx.view = null;
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'root')) ctx.root = null;
+        if (!Object.prototype.hasOwnProperty.call(ctx, 'overlay')) ctx.overlay = null;
+        bb._emit(ctx);
+      } catch (e) { /* ignore */ }
+    },
+
+    /** One inactive notice until the next successful content render. */
+    _notifyCustomScriptsInactive: function(reason) {
+      if (this._previewMode) return;
+      if (this._customScriptsInactiveEmitted) return;
+      this._customScriptsInactiveEmitted = true;
+      this._emitCustomScripts({
+        active: false,
+        reason: reason,
+        view: null,
+        root: null,
+        overlay: null
+      });
     },
 
     _stopRootInjectionGuard: function() {
@@ -2450,6 +2607,7 @@
           this._paywallFullySuppressed = true;
           this._startPaywallAuthObserver();
           this._clearBootstrapLoading();
+          this._notifyCustomScriptsInactive('paywall');
           return;
         }
       }
@@ -2459,6 +2617,7 @@
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
         this._clearBootstrapLoading();
+        this._notifyCustomScriptsInactive('no-container');
         return;
       }
       this._root = root;
@@ -3727,6 +3886,417 @@
       return true;
     },
 
+    /**
+     * Squarespace blog JSON stores video blocks as an empty .sqs-video-wrapper.
+     * The iframe or file player lives in data-html / data-block-json and is
+     * injected later by Squarespace's player script, which does not re-run on
+     * the overlay's copy. Without that pass the wrapper stays blank, and site
+     * CSS absolutely positions it inside a zero-height shell.
+     */
+    _hydratePostBodyVideos: function(root) {
+      if (!root || !root.querySelectorAll) return;
+      this._ensurePostVideoStyles();
+      var selector = '.sqs-block-video, [data-sqsp-block="video"], .sqs-native-video, .sqs-video-wrapper';
+      var nodes = root.querySelectorAll(selector);
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (el.parentElement && el.parentElement.closest && el.parentElement.closest(selector)) continue;
+        this._hydrateOneVideoBlock(el);
+      }
+    },
+
+    _releaseHydratedVideos: function() {
+      var list = this._bbHlsPlayers;
+      this._bbHlsPlayers = [];
+      if (!list) return;
+      for (var i = 0; i < list.length; i++) {
+        try { if (list[i] && list[i].destroy) list[i].destroy(); } catch (e) {}
+      }
+    },
+
+    _ensurePostVideoStyles: function() {
+      if (typeof document === 'undefined') return;
+      var style = document.getElementById('bb-post-video-styles');
+      var css =
+        '#blog-overlay-list .blog-overlay-body .bb-video-ready{margin:1.25em 0;max-width:100%;clear:both;}' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-ready .intrinsic{' +
+          'position:relative!important;display:block!important;width:100%!important;max-width:100%!important;' +
+          'height:auto!important;padding:0!important;overflow:visible!important;' +
+        '}' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame{' +
+          'position:relative!important;display:block!important;width:100%!important;max-width:100%!important;' +
+          'height:auto!important;aspect-ratio:var(--bb-video-aspect, 16 / 9)!important;' +
+          'padding:0!important;margin:0!important;overflow:hidden!important;background:#000;' +
+        '}' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame .sqs-video-wrapper,' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame .sqs-native-video,' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame .native-video-player,' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame .video-player,' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame iframe,' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-frame video{' +
+          'position:absolute!important;inset:0!important;top:0!important;right:0!important;bottom:0!important;left:0!important;' +
+          'width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;' +
+          'margin:0!important;padding:0!important;border:0!important;opacity:1!important;visibility:visible!important;' +
+          'display:block!important;transform:none!important;background:#000;' +
+        '}' +
+        '#blog-overlay-list .blog-overlay-body .bb-video-ready .sqs-video-overlay{display:none!important;}';
+      if (!style) {
+        style = document.createElement('style');
+        style.id = 'bb-post-video-styles';
+        style.textContent = css;
+        document.head.appendChild(style);
+      } else if (style.textContent !== css) {
+        style.textContent = css;
+      }
+    },
+
+    _bbHttpsMediaUrl: function(raw) {
+      var url = String(raw || '').replace(/^\s+|\s+$/g, '');
+      if (!url || /^\s*javascript:/i.test(url) || /^\s*data:/i.test(url)) return '';
+      if (url.indexOf('//') === 0) url = 'https:' + url;
+      if (!/^https:\/\//i.test(url)) return '';
+      return url;
+    },
+
+    _bbIsHlsUrl: function(url) {
+      return /\.m3u8(\?|#|$)/i.test(String(url || ''));
+    },
+
+    _bbDecodeVideoMarkup: function(raw) {
+      var s = String(raw || '');
+      if (!s) return '';
+      if (s.indexOf('<') === -1 && (s.indexOf('&lt;') !== -1 || s.indexOf('&#60;') !== -1 || s.indexOf('&#x3c;') !== -1)) {
+        var ta = document.createElement('textarea');
+        ta.innerHTML = s;
+        s = ta.value;
+      }
+      return s;
+    },
+
+    _bbFindVideoConfigString: function(obj, key, depth) {
+      if (!obj || typeof obj !== 'object' || depth > 5) return '';
+      if (typeof obj[key] === 'string' && obj[key]) return obj[key];
+      var keys = Object.keys(obj);
+      for (var i = 0; i < keys.length; i++) {
+        var child = obj[keys[i]];
+        if (child && typeof child === 'object') {
+          var found = this._bbFindVideoConfigString(child, key, depth + 1);
+          if (found) return found;
+        }
+      }
+      return '';
+    },
+
+    _bbReadVideoConfigs: function(block) {
+      var out = [];
+      function pull(el) {
+        if (!el || !el.getAttribute) return;
+        var names = ['data-block-json', 'data-config-video', 'data-config-settings'];
+        for (var i = 0; i < names.length; i++) {
+          var raw = el.getAttribute(names[i]);
+          if (!raw) continue;
+          try {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') out.push(parsed);
+          } catch (e) {}
+        }
+      }
+      pull(block);
+      if (block.querySelectorAll) {
+        var els = block.querySelectorAll('[data-block-json], [data-config-video], [data-config-settings]');
+        for (var j = 0; j < els.length; j++) pull(els[j]);
+      }
+      return out;
+    },
+
+    _bbReadVideoDataHtml: function(block) {
+      var nodes = [];
+      if (block.getAttribute && block.getAttribute('data-html')) nodes.push(block);
+      if (block.querySelectorAll) {
+        var found = block.querySelectorAll('[data-html]');
+        for (var i = 0; i < found.length; i++) nodes.push(found[i]);
+      }
+      for (var j = 0; j < nodes.length; j++) {
+        var raw = nodes[j].getAttribute('data-html') || '';
+        if (raw.replace(/\s+/g, '')) return raw;
+      }
+      return '';
+    },
+
+    _bbPlaybackOpts: function(config) {
+      var settings = config && config.settings && typeof config.settings === 'object' ? config.settings : {};
+      return {
+        autoPlay: Boolean(settings.autoPlay || settings.autoplay),
+        loop: Boolean(settings.loop)
+      };
+    },
+
+    _bbVideoAspect: function(block, config) {
+      var w = config && Number(config.width);
+      var h = config && Number(config.height);
+      if (w > 0 && h > 0 && w < 10000 && h < 10000) return String(Math.round(w)) + ' / ' + String(Math.round(h));
+      var padEl = block.querySelector && (block.querySelector('.embed-block-wrapper') || block.querySelector('.intrinsic'));
+      var pad = padEl && padEl.style ? padEl.style.paddingBottom : '';
+      if (pad && /%$/.test(pad)) {
+        var pct = parseFloat(pad);
+        if (pct > 1 && pct < 200) return String(Math.round((100 / pct) * 1000) / 1000) + ' / 1';
+      }
+      return '';
+    },
+
+    _bbCreateVideoIframe: function(src, title) {
+      var iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.setAttribute('title', title || 'Video');
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
+      return iframe;
+    },
+
+    _bbCreateFileVideo: function(src, poster, opts) {
+      var video = document.createElement('video');
+      video.setAttribute('controls', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('preload', 'metadata');
+      video.setAttribute('data-bb-video-src', src);
+      if (poster) video.setAttribute('poster', poster);
+      opts = opts || {};
+      if (opts.loop) video.loop = true;
+      if (this._bbIsHlsUrl(src)) this._bbAttachHlsVideo(video, src);
+      else video.src = src;
+      if (opts.autoPlay) {
+        video.muted = true;
+        video.autoplay = true;
+        video.setAttribute('autoplay', '');
+        video.setAttribute('muted', '');
+      }
+      return video;
+    },
+
+    _bbAttachHlsVideo: function(video, src) {
+      var self = this;
+      var canNative = '';
+      try {
+        canNative = video.canPlayType('application/vnd.apple.mpegurl') || video.canPlayType('application/x-mpegURL');
+      } catch (e) {}
+      if (canNative) {
+        video.src = src;
+        return;
+      }
+      function bind(Hls) {
+        if (!video.isConnected) return;
+        if (!Hls || !Hls.isSupported || !Hls.isSupported()) {
+          video.src = src;
+          return;
+        }
+        try {
+          var hls = new Hls();
+          hls.loadSource(src);
+          hls.attachMedia(video);
+          if (!self._bbHlsPlayers) self._bbHlsPlayers = [];
+          self._bbHlsPlayers.push(hls);
+        } catch (err) {
+          video.src = src;
+        }
+      }
+      if (typeof window !== 'undefined' && window.Hls) {
+        bind(window.Hls);
+        return;
+      }
+      if (!self._bbHlsLoader) {
+        self._bbHlsLoader = new Promise(function(resolve) {
+          var script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
+          script.async = true;
+          script.onload = function() { resolve(window.Hls || null); };
+          script.onerror = function() { resolve(null); };
+          (document.head || document.documentElement).appendChild(script);
+        });
+      }
+      self._bbHlsLoader.then(function(Hls) {
+        bind(Hls || (typeof window !== 'undefined' ? window.Hls : null));
+      });
+    },
+
+    _bbMediaFromMarkup: function(html, opts) {
+      var decoded = this._bbDecodeVideoMarkup(html);
+      if (!decoded || decoded.indexOf('<') === -1) return null;
+      var doc;
+      try {
+        doc = new DOMParser().parseFromString('<div id="bb-video-parse">' + decoded + '</div>', 'text/html');
+      } catch (e) {
+        return null;
+      }
+      var parsed = doc.getElementById('bb-video-parse') || doc.body;
+      if (!parsed) return null;
+      var iframe = parsed.querySelector('iframe');
+      if (iframe) {
+        var src = this._bbHttpsMediaUrl(iframe.getAttribute('src'));
+        if (!src) return null;
+        return this._bbCreateVideoIframe(src, iframe.getAttribute('title') || '');
+      }
+      var video = parsed.querySelector('video');
+      if (!video) return null;
+      var vsrc = this._bbHttpsMediaUrl(video.getAttribute('src'));
+      var poster = this._bbHttpsMediaUrl(video.getAttribute('poster'));
+      if (!vsrc) {
+        var source = video.querySelector('source');
+        vsrc = source ? this._bbHttpsMediaUrl(source.getAttribute('src')) : '';
+      }
+      if (!vsrc) return null;
+      var playback = opts || {};
+      if (video.hasAttribute('autoplay')) playback.autoPlay = true;
+      if (video.hasAttribute('loop')) playback.loop = true;
+      return this._bbCreateFileVideo(vsrc, poster, playback);
+    },
+
+    _bbEmbedUrlFromVideoPage: function(raw) {
+      var url = this._bbHttpsMediaUrl(raw);
+      if (!url) return '';
+      var u;
+      try { u = new URL(url); } catch (e) { return ''; }
+      var host = u.hostname.replace(/^www\./i, '').toLowerCase();
+      var parts = u.pathname.split('/').filter(function(part) { return part.length > 0; });
+      if (host === 'youtu.be') {
+        return parts[0] ? 'https://www.youtube.com/embed/' + encodeURIComponent(parts[0]) : '';
+      }
+      if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com' || host === 'youtube-nocookie.com') {
+        var embedHost = host === 'youtube-nocookie.com' ? 'www.youtube-nocookie.com' : 'www.youtube.com';
+        if (parts[0] === 'embed' || parts[0] === 'live' || parts[0] === 'shorts') {
+          if (!parts[1]) return '';
+          return 'https://' + embedHost + '/embed/' + encodeURIComponent(parts[1]);
+        }
+        var v = u.searchParams.get('v') || '';
+        return v ? 'https://' + embedHost + '/embed/' + encodeURIComponent(v) : '';
+      }
+      if (host === 'player.vimeo.com' || host === 'vimeo.com') {
+        var id = '';
+        var hash = '';
+        for (var i = 0; i < parts.length; i++) {
+          if (/^\d+$/.test(parts[i])) id = parts[i];
+          else if (id && !hash && host === 'vimeo.com') hash = parts[i];
+        }
+        if (!id) return '';
+        var hv = u.searchParams.get('h') || hash;
+        return 'https://player.vimeo.com/video/' + id + (hv ? '?h=' + encodeURIComponent(hv) : '');
+      }
+      if (/\.(mp4|webm|ogg|ogv|mov|m4v|m3u8)(\?|#|$)/i.test(u.pathname) || this._bbIsHlsUrl(url)) return url;
+      return '';
+    },
+
+    _bbAlexandriaPlaylistUrl: function(raw) {
+      var source = String(raw || '');
+      if (!source) return '';
+      var replaced = source.indexOf('{variant}') !== -1 ? source.replace('{variant}', 'playlist.m3u8') : source;
+      var url = this._bbHttpsMediaUrl(replaced);
+      if (!url) return '';
+      if (this._bbIsHlsUrl(url)) return url;
+      return this._bbHttpsMediaUrl(url.replace(/\/+$/, '') + '/playlist.m3u8');
+    },
+
+    _bbAlexandriaPosterUrl: function(raw) {
+      var source = String(raw || '');
+      if (!source) return '';
+      var thumb = source.indexOf('{variant}') !== -1
+        ? source.replace('{variant}', 'thumbnail')
+        : source.replace(/\/playlist\.m3u8(\?.*)?$/i, '/thumbnail');
+      return this._bbHttpsMediaUrl(thumb);
+    },
+
+    _bbMarkVideoFrame: function(block, aspect) {
+      var media = block.querySelector ? block.querySelector('iframe[src], video') : null;
+      var frame = media && media.closest
+        ? (media.closest('.embed-block-wrapper') || media.closest('.intrinsic') || media.parentElement)
+        : block;
+      if (!frame || (frame !== block && block.contains && !block.contains(frame))) frame = block;
+      frame.classList.add('bb-video-frame');
+      block.classList.add('bb-video-ready');
+      if (aspect) frame.style.setProperty('--bb-video-aspect', aspect);
+      if (!block.querySelectorAll) return;
+      var shells = block.querySelectorAll('.sqs-video-wrapper, .sqs-native-video');
+      for (var s = 0; s < shells.length; s++) {
+        var shell = shells[s];
+        if (shell === frame || frame.contains(shell) || (shell.contains && shell.contains(frame))) continue;
+        shell.style.display = 'none';
+      }
+    },
+
+    _hydrateOneVideoBlock: function(block) {
+      if (!block) return;
+      var existingIframe = block.querySelector && block.querySelector('iframe[src]');
+      var existingVideo = block.querySelector && block.querySelector('video');
+      if (existingIframe && this._bbHttpsMediaUrl(existingIframe.getAttribute('src'))) {
+        this._bbMarkVideoFrame(block, this._bbVideoAspect(block, null));
+        return;
+      }
+      if (existingVideo) {
+        var existingSrc = existingVideo.getAttribute('src') || '';
+        if (!existingSrc && existingVideo.querySelector('source')) {
+          existingSrc = existingVideo.querySelector('source').getAttribute('src') || '';
+        }
+        existingSrc = this._bbHttpsMediaUrl(existingSrc);
+        if (existingSrc) {
+          existingVideo.setAttribute('controls', '');
+          existingVideo.setAttribute('playsinline', '');
+          existingVideo.setAttribute('data-bb-video-src', existingSrc);
+          if (this._bbIsHlsUrl(existingSrc)) this._bbAttachHlsVideo(existingVideo, existingSrc);
+          this._bbMarkVideoFrame(block, this._bbVideoAspect(block, null));
+          return;
+        }
+      }
+
+      var configs = this._bbReadVideoConfigs(block);
+      var primary = configs.length ? configs[0] : null;
+      var playback = this._bbPlaybackOpts(primary);
+      var markup = this._bbReadVideoDataHtml(block);
+      var media = markup ? this._bbMediaFromMarkup(markup, playback) : null;
+      if (!media) {
+        for (var i = 0; i < configs.length && !media; i++) {
+          if (typeof configs[i].html === 'string') media = this._bbMediaFromMarkup(configs[i].html, this._bbPlaybackOpts(configs[i]));
+        }
+      }
+      if (!media) {
+        var pageUrl = '';
+        for (var u = 0; u < configs.length && !pageUrl; u++) {
+          if (typeof configs[u].url === 'string') pageUrl = configs[u].url;
+        }
+        var embed = this._bbEmbedUrlFromVideoPage(pageUrl);
+        if (embed) {
+          if (/\.(mp4|webm|ogg|ogv|mov|m4v)(\?|#|$)/i.test(embed) || this._bbIsHlsUrl(embed)) {
+            media = this._bbCreateFileVideo(embed, '', playback);
+          } else {
+            media = this._bbCreateVideoIframe(embed, (primary && primary.providerName) || 'Video');
+          }
+        }
+      }
+      if (!media) {
+        var alex = '';
+        for (var a = 0; a < configs.length && !alex; a++) {
+          alex = this._bbFindVideoConfigString(configs[a], 'alexandriaUrl', 0);
+        }
+        var playlist = this._bbAlexandriaPlaylistUrl(alex);
+        if (playlist) {
+          var poster = '';
+          for (var p = 0; p < configs.length && !poster; p++) {
+            poster = this._bbHttpsMediaUrl(configs[p].thumbnailUrl || configs[p].poster || '');
+            if (!poster) poster = this._bbHttpsMediaUrl(this._bbFindVideoConfigString(configs[p], 'thumbnailUrl', 0));
+          }
+          if (!poster) poster = this._bbAlexandriaPosterUrl(alex);
+          media = this._bbCreateFileVideo(playlist, poster, playback);
+        }
+      }
+      if (!media) return;
+      var host = (block.querySelector && (
+        block.querySelector('.sqs-video-wrapper') ||
+        block.querySelector('.sqs-native-video') ||
+        block.querySelector('.embed-block-wrapper') ||
+        block.querySelector('.sqs-block-content')
+      )) || block;
+      host.appendChild(media);
+      this._bbMarkVideoFrame(block, this._bbVideoAspect(block, primary));
+    },
+
     /** Feature / Reporter / Publisher: zero first-block top margin so body text aligns with sidebar headers. */
     _normalizePostBodyTopForSidebarRow: function(bodyEl) {
       if (!bodyEl) return;
@@ -4830,6 +5400,7 @@
             self._removeOverlayNodes();
             self._restoreOriginalRootChildren();
             self._clearBootstrapLoading();
+            self._notifyCustomScriptsInactive('paywall');
             return;
           }
           self._paywallFullySuppressed = false;
@@ -5467,6 +6038,28 @@
     _getDate: function(item) {
       var ts = item.publishedOn || item.publishOn || item.addedOn;
       return ts ? new Date(ts).toLocaleDateString() : null;
+    },
+
+    /**
+     * Squarespace ?format=json items include updatedOn (ms) for the last save.
+     * Returns "Updated <date>" or null when the field is missing.
+     */
+    _getUpdatedAtLabel: function(item) {
+      if (!item || item.updatedOn == null || item.updatedOn === '') return null;
+      var raw = item.updatedOn;
+      var date = null;
+      if (typeof raw === 'number' && !isNaN(raw)) {
+        date = new Date(raw);
+      } else if (typeof raw === 'string') {
+        var trimmed = raw.trim();
+        if (/^\d+$/.test(trimmed)) date = new Date(Number(trimmed));
+        else {
+          var parsed = Date.parse(trimmed);
+          if (!isNaN(parsed)) date = new Date(parsed);
+        }
+      }
+      if (!date || isNaN(date.getTime())) return null;
+      return 'Updated ' + date.toLocaleDateString();
     },
 
     /**
@@ -7589,7 +8182,8 @@
         if (bio) {
           var bioEl = document.createElement('div');
           bioEl.className = 'blog-overlay-author-card-bio';
-          bioEl.textContent = bio;
+          var bioFormat = (p && (p.bioFormat === 'markdown' || p.bioFormat === 'html')) ? p.bioFormat : 'text';
+          bbFillAuthorBioElement(bioEl, bio, bioFormat);
           bioEl.style.fontSize = bioFontPx + 'px';
           bioEl.style.marginTop = '6px';
           rightCol.appendChild(bioEl);
@@ -7985,6 +8579,7 @@
       if (!root) {
         console.log('[BlogOverlay] Skipping render: no blog container found');
         this._clearBootstrapLoading();
+        this._notifyCustomScriptsInactive('no-container');
         return;
       }
 
@@ -9412,6 +10007,13 @@
         s + ' .blog-overlay-author-card-avatar{width:44px!important;height:44px!important;flex:0 0 44px!important;order:0;font-size:14px;}' +
         s + ' .blog-overlay-author-card-name{order:1;flex:1 1 0%!important;min-width:0;font-size:16px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.2;}' +
         s + ' .blog-overlay-author-card-bio{order:2;flex:0 0 100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);line-height:1.5;margin-top:0!important;}' +
+        s + ' .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
+        s + ' .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
+        s + ' .blog-overlay-author-card-bio ul,' + s + ' .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
+        s + ' .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
+        s + ' .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
+        s + ' .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
+        s + ' .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
         s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
         s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
         s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
@@ -9721,6 +10323,13 @@
         '#blog-overlay-list .blog-overlay-author-card-name{font-size:18px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);line-height:1.3;}' +
         '#blog-overlay-list .blog-overlay-author-card-social a{display:inline-flex;color:var(--bb-accent,#5B4FE8);text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio{font-size:15px;line-height:1.5;color:var(--bb-excerpt,#666);}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ul,#blog-overlay-list .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
@@ -9831,6 +10440,15 @@
         '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
         '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"]{display:none!important;}}' +
         '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"]{display:none!important;}' +
+        '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"].bb-mobile-drawer{display:block!important;}}' +
+        '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"].bb-mobile-drawer{display:block!important;}' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-anchor:not(.bb-mobile-drawer),' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-main-row{min-width:0!important;max-width:100%!important;}' +
+        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-anchor:not(.bb-mobile-drawer),#blog-overlay-list .blog-overlay-main-row{min-width:0!important;max-width:100%!important;}}' +
+        '#blog-overlay-list .bb-mobile-drawer-tab{display:none;}' +
+        '#blog-overlay-list .bb-mobile-drawer-backdrop{display:none;}' +
+        this._mobileSidebarDrawerCss('#blog-overlay-list.bb-narrow-viewport') +
+        '@media (max-width:767px){' + this._mobileSidebarDrawerCss('#blog-overlay-list') + '}' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
@@ -9961,7 +10579,7 @@
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-title{font-size:18px!important;line-height:1.25!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-meta-row{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
-          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;width:100vw!important;max-width:100vw!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero>div,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero img{border-radius:0!important;}' +
@@ -9991,9 +10609,8 @@
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
-            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:12px!important;' +
-            'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
-            'border-radius:0!important;' +
+            'margin-top:0!important;margin-bottom:12px!important;' +
+            'position:relative;overflow:hidden;border-radius:0!important;' +
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>div,' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image img{border-radius:0!important;}' +
@@ -10770,14 +11387,41 @@
       return this._finishSiteContentInsets('default-zero', zero, root, null);
     },
 
-    /** Break out to the viewport width (full-bleed images only). */
+    /**
+     * Configure's phone/tablet frame is a column inside a wider window.
+     * 100vw is that window, so a full-bleed image forces the column to scroll sideways.
+     */
+    _containedBleedHost: function() {
+      var vw = (typeof window !== 'undefined' && window.innerWidth) || 0;
+      var root = this._root;
+      if (!root || !root.getBoundingClientRect || !vw) return null;
+      var r;
+      try { r = root.getBoundingClientRect(); } catch (eHost) { return null; }
+      if (!r || r.width < 200 || r.width >= vw - 40) return null;
+      return { left: r.left, right: r.right, width: r.width };
+    },
+
+    /**
+     * Layout viewport width. 100vw is wider than this on phones (it includes
+     * the scrollbar gutter), which is what lets the page pan sideways.
+     */
+    _layoutViewportWidth: function() {
+      var doc = typeof document !== 'undefined' ? document.documentElement : null;
+      var cw = doc && doc.clientWidth ? doc.clientWidth : 0;
+      if (cw > 0) return cw;
+      return (typeof window !== 'undefined' && window.innerWidth) || 0;
+    },
+
+    /** Break out to the screen edges without using 100vw. */
     _applyViewportFullBleed: function(el) {
       if (!el || !el.style) return;
-      el.style.width = '100vw';
-      el.style.maxWidth = '100vw';
-      el.style.marginLeft = 'calc(50% - 50vw)';
-      el.style.marginRight = 'calc(50% - 50vw)';
       el.style.boxSizing = 'border-box';
+      el.style.width = '100%';
+      el.style.maxWidth = '100%';
+      el.style.marginLeft = '0';
+      el.style.marginRight = '0';
+      el.setAttribute('data-bb-viewport-bleed', '1');
+      this._scheduleViewportBleeds();
     },
 
     /**
@@ -10801,42 +11445,69 @@
     },
 
     /**
-     * After layout: extend el to the viewport left/right edges using measured gaps.
-     * @param {Element} el - element to widen
-     * @param {Element} [refEl] - box to measure (defaults to el)
+     * After layout: extend el to the screen edges. Uses the layout viewport,
+     * not 100vw, so the image stays edge to edge without widening the page.
      * @returns {boolean} true when bleed styles were applied
      */
-    _applyMeasuredViewportHorizontalBleed: function(el, refEl) {
+    _applyMeasuredViewportHorizontalBleed: function(el) {
       if (!el || !el.style || typeof window === 'undefined') return false;
-      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
-      if (!vw) return false;
-      var ref = refEl && refEl.getBoundingClientRect ? refEl : el;
-      var rect;
-      try { rect = ref.getBoundingClientRect(); } catch (eRect) { return false; }
-      if (!rect) return false;
-      var leftGap = Math.max(0, Math.round(rect.left));
-      var rightGap = Math.max(0, Math.round(vw - rect.right));
-      if (leftGap < 1 && rightGap < 1) return false;
-      el.style.width = 'calc(100% + ' + (leftGap + rightGap) + 'px)';
-      el.style.maxWidth = 'none';
-      el.style.marginLeft = (-leftGap) + 'px';
-      el.style.marginRight = (-rightGap) + 'px';
-      el.style.boxSizing = 'border-box';
+      var host = this._containedBleedHost();
+      var edgeLeft = host ? host.left : 0;
+      var edgeRight = host ? host.right : this._layoutViewportWidth();
+      if (!(edgeRight > edgeLeft + 1)) return false;
+      var parent = el.parentElement;
+      if (!parent || !parent.getBoundingClientRect) return false;
+      el.style.setProperty('box-sizing', 'border-box', 'important');
+      el.style.setProperty('width', '100%', 'important');
+      el.style.setProperty('max-width', '100%', 'important');
+      el.style.setProperty('margin-left', '0', 'important');
+      el.style.setProperty('margin-right', '0', 'important');
+      var pr;
+      try { pr = parent.getBoundingClientRect(); } catch (eRect) { return false; }
+      if (!pr || pr.width < 2) return false;
+      var pullLeft = Math.max(0, pr.left - edgeLeft);
+      var pullRight = Math.max(0, edgeRight - pr.right);
+      var marginLeft = -Math.floor(pullLeft);
+      var marginRight = -Math.floor(pullRight);
+      var pxWidth = Math.floor(pr.width - marginLeft - marginRight);
+      var maxWidth = Math.floor(edgeRight - edgeLeft);
+      if (pxWidth > maxWidth) pxWidth = maxWidth;
+      if (pxWidth < 1) return false;
+      el.style.setProperty('width', pxWidth + 'px', 'important');
+      el.style.setProperty('max-width', pxWidth + 'px', 'important');
+      el.style.setProperty('margin-left', marginLeft + 'px', 'important');
+      el.style.setProperty('margin-right', marginRight + 'px', 'important');
       return true;
+    },
+
+    _scheduleViewportBleeds: function() {
+      var self = this;
+      if (self._viewportBleedScheduled) return;
+      self._viewportBleedScheduled = true;
+      var seq = self._renderSeq;
+      var run = function() {
+        self._viewportBleedScheduled = false;
+        if (self._renderSeq !== seq) return;
+        var wrapper = document.getElementById('blog-overlay-list');
+        if (wrapper) self._syncViewportBleeds(wrapper);
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { requestAnimationFrame(run); });
+      } else {
+        run();
+      }
+    },
+
+    _syncViewportBleeds: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var nodes = wrapper.querySelectorAll('[data-bb-viewport-bleed], [data-digest-viewport-bleed]');
+      var i;
+      for (i = 0; i < nodes.length; i++) this._applyMeasuredViewportHorizontalBleed(nodes[i]);
     },
 
     /** Digest mobile featured hero: measure and bleed to viewport after the overlay is in the DOM. */
     _syncDigestMobileFeaturedImageBleed: function(wrapper) {
-      if (!wrapper || !wrapper.querySelector) return;
-      var imgs = wrapper.querySelectorAll('.blog-overlay-digest-featured-article .blog-overlay-featured-image[data-digest-viewport-bleed]');
-      for (var i = 0; i < imgs.length; i++) {
-        var fiWrap = imgs[i];
-        fiWrap.style.width = '';
-        fiWrap.style.maxWidth = '';
-        fiWrap.style.marginLeft = '';
-        fiWrap.style.marginRight = '';
-        this._applyMeasuredViewportHorizontalBleed(fiWrap, fiWrap);
-      }
+      this._syncViewportBleeds(wrapper);
     },
 
     _scheduleDigestMobileFeaturedImageBleed: function(vs) {
@@ -11001,20 +11672,268 @@
     },
 
     /**
-     * Mobile (<768): hide every left sidebar rail. If a pairable module is in
-     * the right sidebar and duplicated in the footer, hide the footer copy
-     * (sidebar-wins). Left-sidebar copies do not count — a footer copy of a
-     * left-only module is shown. Footer-only modules keep rendering but get
-     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always
-     * hidden on mobile, even when enabled; a footer copy (if any) is shown
-     * instead. Hide Table of Contents on mobile for every post template.
+     * Phone drawer chrome. Scoped either to .bb-narrow-viewport (Configure's
+     * phone frame on a wide window) or inside a max-width:767px query.
+     */
+    _mobileSidebarDrawerCss: function(s) {
+      var d = s + ' .bb-mobile-drawer';
+      var tab = d + '>.bb-mobile-drawer-tab';
+      var rail = d + '>.blog-overlay-sidebar-rail';
+      var open = d + '.bb-mobile-drawer-open';
+      return (
+        d + '{position:fixed!important;top:0;right:0;bottom:0;left:0;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;contain:paint;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
+        open + '{z-index:1001!important;}' +
+        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
+        open + '>.bb-mobile-drawer-tab{right:var(--bb-drawer-panel-width,280px);background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);}' +
+        rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:0;bottom:0;left:auto;width:var(--bb-drawer-panel-width,86%)!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(100%);transition:transform .22s ease;}' +
+        open + '>.blog-overlay-sidebar-rail{visibility:visible;pointer-events:auto;transform:translateX(0);}' +
+        s + '.bb-mobile-drawer-has-open>.bb-mobile-drawer-backdrop{display:block;position:fixed;background:rgba(17,17,17,.35);z-index:999;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;appearance:none;}'
+      );
+    },
+
+    _mobileDrawerHostRect: function(wrapper) {
+      var vw = this._layoutViewportWidth();
+      var vh = (typeof window !== 'undefined' && window.innerHeight) || 0;
+      var viewport = { top: 0, left: 0, right: vw, bottom: vh, width: vw, height: vh };
+      if (this._previewMode) {
+        var scroller = this._getScrollContainer();
+        if (scroller && scroller.getBoundingClientRect) {
+          var sr = scroller.getBoundingClientRect();
+          if (sr.width >= 200 && sr.height >= 200 && sr.width < vw - 40) {
+            return { top: sr.top, left: sr.left, right: sr.right, bottom: sr.bottom, width: sr.width, height: sr.height };
+          }
+        }
+        var boxEl = wrapper || this._root;
+        if (boxEl && boxEl.getBoundingClientRect) {
+          var br = boxEl.getBoundingClientRect();
+          if (br.width >= 200 && br.width < vw - 40) {
+            var top = br.top;
+            var bottom = br.bottom;
+            if (br.height > vh) {
+              top = Math.max(0, br.top);
+              bottom = Math.min(vh, br.bottom);
+              if (bottom - top < 160) {
+                top = 0;
+                bottom = vh;
+              }
+            }
+            return {
+              top: top,
+              left: br.left,
+              right: br.right,
+              bottom: bottom,
+              width: br.width,
+              height: Math.max(0, bottom - top)
+            };
+          }
+        }
+      }
+      var topInset = 0;
+      if (wrapper && !this._previewMode && !this._bbPreview) {
+        var navH = parseFloat(wrapper.style.getPropertyValue('--bb-nav-height')) || 0;
+        if (navH > 0 && navH < vh * 0.45) topInset = navH;
+      }
+      return {
+        top: viewport.top + topInset,
+        left: viewport.left,
+        right: viewport.right,
+        bottom: viewport.bottom,
+        width: viewport.width,
+        height: Math.max(0, viewport.height - topInset)
+      };
+    },
+
+    _positionMobileDrawers: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var drawers = wrapper.querySelectorAll('.bb-mobile-drawer');
+      if (!drawers.length) return;
+      var rect = this._mobileDrawerHostRect(wrapper);
+      var tabH = 96;
+      var gap = 10;
+      var stackH = drawers.length * tabH + Math.max(0, drawers.length - 1) * gap;
+      var start = Math.max(64, Math.round((rect.height - stackH) / 2));
+      var i;
+      for (i = 0; i < drawers.length; i++) {
+        var el = drawers[i];
+        el.style.setProperty('top', Math.round(rect.top) + 'px', 'important');
+        el.style.setProperty('left', Math.round(rect.left) + 'px', 'important');
+        el.style.setProperty('width', Math.round(rect.width) + 'px', 'important');
+        el.style.setProperty('height', Math.round(rect.height) + 'px', 'important');
+        el.style.setProperty('right', 'auto', 'important');
+        el.style.setProperty('bottom', 'auto', 'important');
+        var tab = el.querySelector(':scope > .bb-mobile-drawer-tab');
+        if (tab) tab.style.top = (start + i * (tabH + gap)) + 'px';
+        var rail = el.querySelector(':scope > .blog-overlay-sidebar-rail');
+        if (rail) {
+          var configured = parseInt(el.getAttribute('data-bb-sidebar-width'), 10);
+          if (!configured || configured < 160) configured = 280;
+          var panelW = Math.max(200, Math.min(configured, Math.round(rect.width * 0.86), Math.round(rect.width - 44)));
+          el.style.setProperty('--bb-drawer-panel-width', panelW + 'px');
+          rail.setAttribute('data-bb-drawer-width', '1');
+          rail.style.setProperty('width', panelW + 'px', 'important');
+          rail.style.setProperty('right', '0', 'important');
+        }
+      }
+      var backdrop = wrapper.querySelector(':scope > .bb-mobile-drawer-backdrop');
+      if (backdrop) {
+        backdrop.style.setProperty('top', rect.top + 'px', 'important');
+        backdrop.style.setProperty('left', rect.left + 'px', 'important');
+        backdrop.style.setProperty('width', rect.width + 'px', 'important');
+        backdrop.style.setProperty('height', rect.height + 'px', 'important');
+      }
+    },
+
+    _ensureMobileDrawerTracking: function() {
+      if (this._mobileDrawerTracking) return;
+      this._mobileDrawerTracking = true;
+      var self = this;
+      this._mobileDrawerOnViewport = function() {
+        var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
+        if (!wrap) return;
+        if (wrap.querySelector('.bb-mobile-drawer')) self._positionMobileDrawers(wrap);
+        if (wrap.querySelector('[data-bb-viewport-bleed], [data-digest-viewport-bleed]')) self._syncViewportBleeds(wrap);
+      };
+      window.addEventListener('resize', this._mobileDrawerOnViewport);
+      window.addEventListener('scroll', this._mobileDrawerOnViewport, true);
+      window.addEventListener('keydown', function(e) {
+        if (!e || e.key !== 'Escape' || !self._mobileDrawerOpen) return;
+        if (!self._mobileDrawerOpen.left && !self._mobileDrawerOpen.right) return;
+        self._mobileDrawerOpen.left = false;
+        self._mobileDrawerOpen.right = false;
+        var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
+        if (wrap) self._syncMobileSidebarDrawers(wrap, self._isNarrowCollectionViewport());
+      });
+    },
+
+    /**
+     * Narrow viewports: sidebars set to Drawer become a tab on the right edge.
+     * Hidden (the default) keeps the existing mobile rules.
+     */
+    _syncMobileSidebarDrawers: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var self = this;
+      if (!self._mobileDrawerOpen) self._mobileDrawerOpen = { left: false, right: false };
+      var anchors = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
+      var active = [];
+      var i;
+      for (i = 0; i < anchors.length; i++) {
+        var anchor = anchors[i];
+        var side = anchor.getAttribute('data-bb-sidebar-side') === 'right' ? 'right' : 'left';
+        var rail = anchor.querySelector(':scope > .blog-overlay-sidebar-rail');
+        var want = !!narrow && anchor.getAttribute('data-bb-mobile-display') === 'drawer' && !!rail;
+        if (!want) {
+          anchor.classList.remove('bb-mobile-drawer', 'bb-mobile-drawer-open');
+          var stale = anchor.querySelector(':scope > .bb-mobile-drawer-tab');
+          if (stale) stale.remove();
+          if (rail && rail.getAttribute('data-bb-drawer-width') === '1') {
+            rail.style.removeProperty('width');
+            rail.style.width = '100%';
+            rail.removeAttribute('data-bb-drawer-width');
+          }
+          continue;
+        }
+        anchor.classList.add('bb-mobile-drawer');
+        anchor.classList.toggle('bb-mobile-drawer-open', !!self._mobileDrawerOpen[side]);
+        var tab = anchor.querySelector(':scope > .bb-mobile-drawer-tab');
+        if (!tab) {
+          tab = document.createElement('button');
+          tab.type = 'button';
+          tab.className = 'bb-mobile-drawer-tab';
+          anchor.insertBefore(tab, anchor.firstChild);
+          tab.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var host = ev.currentTarget && ev.currentTarget.parentElement;
+            if (!host) return;
+            var hostSide = host.getAttribute('data-bb-sidebar-side') === 'right' ? 'right' : 'left';
+            var nextOpen = !self._mobileDrawerOpen[hostSide];
+            self._mobileDrawerOpen.left = false;
+            self._mobileDrawerOpen.right = false;
+            self._mobileDrawerOpen[hostSide] = nextOpen;
+            var live = host.closest ? host.closest('#blog-overlay-list') : wrapper;
+            self._syncMobileSidebarDrawers(live || wrapper, self._isNarrowCollectionViewport());
+          });
+        }
+        tab.textContent = 'More';
+        var open = !!self._mobileDrawerOpen[side];
+        tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+        tab.setAttribute('aria-label', open ? 'Close sidebar' : 'Open sidebar');
+        if (!rail.id) rail.id = 'bb-mobile-drawer-panel-' + side;
+        tab.setAttribute('aria-controls', rail.id);
+        rail.setAttribute('aria-hidden', open ? 'false' : 'true');
+        var concealed = anchor.querySelectorAll('.bb-mobile-sidebar-filter-hidden, .bb-mobile-toc-hidden');
+        var c;
+        for (c = 0; c < concealed.length; c++) {
+          concealed[c].classList.remove('bb-mobile-sidebar-filter-hidden', 'bb-mobile-toc-hidden');
+          concealed[c].setAttribute('aria-hidden', 'false');
+        }
+        active.push(anchor);
+      }
+      var anyOpen = false;
+      for (i = 0; i < active.length; i++) {
+        if (active[i].classList.contains('bb-mobile-drawer-open')) anyOpen = true;
+      }
+      wrapper.classList.toggle('bb-mobile-drawer-has-open', anyOpen && !!narrow);
+      var backdrop = wrapper.querySelector(':scope > .bb-mobile-drawer-backdrop');
+      if (active.length) {
+        if (!backdrop) {
+          backdrop = document.createElement('button');
+          backdrop.type = 'button';
+          backdrop.className = 'bb-mobile-drawer-backdrop';
+          backdrop.setAttribute('aria-label', 'Close sidebar');
+          wrapper.insertBefore(backdrop, wrapper.firstChild);
+          backdrop.addEventListener('click', function() {
+            self._mobileDrawerOpen.left = false;
+            self._mobileDrawerOpen.right = false;
+            self._syncMobileSidebarDrawers(wrapper, self._isNarrowCollectionViewport());
+          });
+        }
+      } else if (backdrop) {
+        backdrop.remove();
+      }
+      if (active.length) {
+        this._positionMobileDrawers(wrapper);
+        this._ensureMobileDrawerTracking();
+      }
+    },
+
+    /**
+     * Mobile (<768): hide every left sidebar rail unless that sidebar's
+     * mobile display is Drawer. If a pairable module is in the right sidebar
+     * and duplicated in the footer, hide the footer copy (sidebar-wins).
+     * Left-sidebar copies do not count — a footer copy of a left-only module
+     * is shown. Footer-only modules keep rendering but get sidebar chrome.
+     * Tags/Categories invert that: the sidebar copy is always hidden on
+     * mobile, even when enabled; a footer copy (if any) is shown instead.
+     * Hide Table of Contents on mobile for every post template.
+     * Drawer sidebars keep those modules inside the panel.
      * Comments are footer-only and exempt.
      */
+    /** Stop the phone page from panning sideways. Live site only; Configure preview stays in its column. */
+    _lockMobilePageAxis: function(narrow) {
+      var html = document.documentElement;
+      var body = document.body;
+      if (!html || !body) return;
+      var lock = !!narrow && !this._previewMode;
+      if (lock) {
+        html.style.setProperty('overflow-x', 'clip');
+        body.style.setProperty('overflow-x', 'clip');
+        html.style.setProperty('overscroll-behavior-x', 'none');
+        body.style.setProperty('overscroll-behavior-x', 'none');
+      } else {
+        html.style.removeProperty('overflow-x');
+        body.style.removeProperty('overflow-x');
+        html.style.removeProperty('overscroll-behavior-x');
+        body.style.removeProperty('overscroll-behavior-x');
+      }
+    },
+
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      this._lockMobilePageAxis(narrow);
       var filterIds = {
         filterByCategory: true,
         filterByTag: true,
@@ -11080,7 +11999,10 @@
         var railMods = rail.querySelectorAll('[data-bb-module]');
         var hideRail = false;
         var isLeftRail = rail.getAttribute('data-bb-sidebar-side') === 'left';
-        if (narrow && isLeftRail) {
+        var useDrawer = narrow && rail.getAttribute('data-bb-mobile-display') === 'drawer' && rail.querySelector('.blog-overlay-sidebar-rail');
+        if (useDrawer) {
+          hideRail = false;
+        } else if (narrow && isLeftRail) {
           hideRail = true;
         } else if (narrow && railMods.length > 0) {
           hideRail = true;
@@ -11123,6 +12045,7 @@
       if (!opts.featurePostLayout) {
         this._applyMobileAuthorCardLayout(wrapper, narrow);
       }
+      this._syncMobileSidebarDrawers(wrapper, narrow);
     },
 
     /**
@@ -13047,6 +13970,10 @@
             var dateStrSingle = self._getDate(post);
             if (dateStrSingle) metaParts.push(dateStrSingle);
           }
+          if (cfg.showPostUpdatedAt) {
+            var updatedAtLabel = self._getUpdatedAtLabel(post);
+            if (updatedAtLabel) metaParts.push(updatedAtLabel);
+          }
           if (showReadingTime) {
             var minsSingle = self._getReadingTimeMinutes(post.body);
             metaParts.push(minsSingle === 1 ? '1 min read' : minsSingle + ' min read');
@@ -13347,6 +14274,7 @@
               if (firstHeading && /^Section\s+\d+$/i.test((firstHeading.textContent || '').trim())) {
                 firstHeading.remove();
               }
+              self._hydratePostBodyVideos(body);
             }
           }
         } else if (gatedCard) {
@@ -13877,9 +14805,13 @@
         rootIsConnected = Boolean(this._root && this._root.isConnected !== false && document.documentElement && document.documentElement.contains(this._root));
       } catch (eRoot) {}
       var root = rootIsConnected ? this._root : (findBlogContainer() || document.getElementById('blogga-blogga-root'));
-      if (!root) return;
+      if (!root) {
+        this._notifyCustomScriptsInactive('no-container');
+        return;
+      }
       this._root = root;
       this._renderContentInProgress = true;
+      this._releaseHydratedVideos();
       self._ensureCollectionStylesheet();
       var collectionStyleTokens = self._resolveCollectionStyleTokens(root);
       this._siteContentInsets = this._getSquarespaceSiteContentInsets();
@@ -14927,7 +15859,7 @@
             fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email }),
+              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email, surface: isSinglePost ? 'post' : 'collection' }),
               credentials: 'omit'
             }).then(function(res) {
               return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -15062,7 +15994,7 @@
       }
       function createLeadMagnetForm(lmCfg, width, hideHeader) {
         if (!lmCfg) return null;
-        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
+        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Free Resource';
         var wrap = document.createElement('div');
         wrap.className = 'blog-overlay-lead-magnet';
         wrap.style.width = '100%';
@@ -15122,7 +16054,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle, surface: isSinglePost ? 'post' : 'collection' }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -15143,7 +16075,7 @@
       }
       function createLeadMagnetFooterCard(lmCfg) {
         if (!lmCfg) return null;
-        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Lead Magnet';
+        var resourceTitle = (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) ? lmCfg.resourceTitle.trim() : 'Free Resource';
         var buttonText = (lmCfg.buttonText && lmCfg.buttonText.trim()) ? lmCfg.buttonText.trim() : 'Get it free';
         var description = (lmCfg.description && lmCfg.description.trim()) ? lmCfg.description.trim() : '';
 
@@ -15216,7 +16148,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle, surface: isSinglePost ? 'post' : 'collection' }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -15286,7 +16218,7 @@
       function footerChromeTitle(fmod, extra) {
         if (fmod === 'authorProfiles') return (extra && extra.authorHeader) || 'About the Author';
         if (fmod === 'emailCapture') return (ecCfg && ecCfg.header) || 'Subscribe to our newsletter';
-        if (fmod === 'leadMagnet') return (lmCfg && lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet';
+        if (fmod === 'leadMagnet') return (lmCfg && lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Free Resource';
         if (fmod === 'relevantPosts') return 'More to Read';
         if (fmod === 'popularPosts') return 'Popular Posts';
         if (fmod === 'filterByCategory') return 'Categories';
@@ -15439,7 +16371,7 @@
           } else if (mod === 'leadMagnet' && lmCfg) {
             var lmForm = createLeadMagnetForm(lmCfg, width, true);
             el = lmForm ? createSidebarSection(
-              (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Lead Magnet',
+              (lmCfg.resourceTitle && lmCfg.resourceTitle.trim()) || 'Free Resource',
               lmForm
             ) : null;
           }
@@ -15812,6 +16744,8 @@
           var leftSidebarWrapEl = document.createElement('div');
           leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
           leftSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'left');
+          leftSidebarWrapEl.setAttribute('data-bb-mobile-display', leftSidebarCfg && leftSidebarCfg.mobileDisplay === 'drawer' ? 'drawer' : 'hidden');
+          leftSidebarWrapEl.setAttribute('data-bb-sidebar-width', String(leftSidebarWidth));
           leftSidebarWrapEl.style.flexShrink = '0';
           leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
           leftSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -15838,6 +16772,8 @@
           var rightSidebarWrapEl = document.createElement('div');
           rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
           rightSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'right');
+          rightSidebarWrapEl.setAttribute('data-bb-mobile-display', rightSidebarCfg && rightSidebarCfg.mobileDisplay === 'drawer' ? 'drawer' : 'hidden');
+          rightSidebarWrapEl.setAttribute('data-bb-sidebar-width', String(rightSidebarWidth));
           rightSidebarWrapEl.style.flexShrink = '0';
           rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
           rightSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -15899,6 +16835,7 @@
                 leftSidebarWrapEl.style.order = '1';
                 leftSidebarWrapEl.style.width = '100%';
                 leftSidebarWrapEl.style.maxWidth = '100%';
+                leftSidebarWrapEl.style.minWidth = '0';
                 leftSidebarWrapEl.style.flexShrink = '1';
                 leftSidebarWrapEl.style.alignSelf = 'stretch';
                 leftSidebarEl.removeAttribute('data-bb-sticky-rail');
@@ -15911,6 +16848,7 @@
                 rightSidebarWrapEl.style.order = '2';
                 rightSidebarWrapEl.style.width = '100%';
                 rightSidebarWrapEl.style.maxWidth = '100%';
+                rightSidebarWrapEl.style.minWidth = '0';
                 rightSidebarWrapEl.style.flexShrink = '1';
                 rightSidebarWrapEl.style.alignSelf = 'stretch';
                 rightSidebarEl.removeAttribute('data-bb-sticky-rail');
@@ -15943,6 +16881,7 @@
                 leftSidebarWrapEl.style.order = '';
                 leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
                 leftSidebarWrapEl.style.maxWidth = '';
+                leftSidebarWrapEl.style.minWidth = '';
                 leftSidebarWrapEl.style.flexShrink = '0';
                 leftSidebarWrapEl.style.alignSelf = 'flex-start';
                 if (leftSticky) {
@@ -15962,6 +16901,7 @@
                 rightSidebarWrapEl.style.order = '';
                 rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
                 rightSidebarWrapEl.style.maxWidth = '';
+                rightSidebarWrapEl.style.minWidth = '';
                 rightSidebarWrapEl.style.flexShrink = '0';
                 rightSidebarWrapEl.style.alignSelf = 'flex-start';
                 if (rightSticky) {
@@ -16819,7 +17759,20 @@
 
       // Arm the root-injection guard last so late-loading Squarespace Y bundles
       // can't repopulate `root` after the loading overlay has been cleared.
+      // Disconnect only for the custom-script emit so those scripts can write
+      // into `root`; the guard stays up during the rest of the async render.
       self._perfMark('renderDomCommitted');
+      self._stopRootInjectionGuard();
+      var customOverlay = null;
+      try { customOverlay = root.querySelector('#blog-overlay-list'); } catch (eOverlay) { /* ignore */ }
+      self._customScriptsInactiveEmitted = false;
+      self._emitCustomScripts({
+        active: true,
+        reason: 'render',
+        view: isSinglePost ? 'post' : 'collection',
+        root: root,
+        overlay: customOverlay
+      });
       self._startRootInjectionGuard(root);
       this._renderContentInProgress = false;
     }

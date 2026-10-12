@@ -11,6 +11,10 @@
       "destination": "/api/health"
     },
     {
+      "source": "/api/geo",
+      "destination": "/api/geo"
+    },
+    {
       "source": "/api/cron/ping-squarespace-api-keys",
       "destination": "/api/cron/ping-squarespace-api-keys"
     },
@@ -37,6 +41,9 @@
   ],
   "functions": {
     "api/health.ts": {
+      "maxDuration": 10
+    },
+    "api/geo.ts": {
       "maxDuration": 10
     },
     "api/cron/ping-squarespace-api-keys.ts": {

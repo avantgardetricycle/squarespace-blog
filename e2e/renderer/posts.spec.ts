@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { cssNumber, cssValue, expectPx, isMobileProject, mountRenderer } from "./harness";
-import { postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
+import { authorProfiles, blogJson } from "./fixtures/blog";
+import { collectionTemplates, postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
 
 const POSTS: PostTemplateName[] = ["feature", "reporter", "writer", "story", "publisher"];
 
@@ -125,6 +126,46 @@ test.describe("post layout contract", () => {
       .first()
       .evaluate((el) => el.classList.contains("bb-mobile-duplicate-hidden"));
     expect(hidden).toBe(mobile);
+  });
+
+  test("author bios render text, markdown, and sanitized html", async ({ page }) => {
+    await mountRenderer(page, {
+      postConfig: structuredClone(postTemplates.feature),
+      defaultAuthorIds: ["literal", "markdown", "html"],
+      authorProfiles,
+    });
+
+    const bio = (zone: "sidebar" | "footer", name: string) =>
+      page
+        .locator(`[data-bb-zone="${zone}"][data-bb-module="authorProfiles"] .blog-overlay-author-unit`)
+        .filter({ hasText: name })
+        .locator(".blog-overlay-author-card-bio");
+
+    const literal = bio("sidebar", "Literal Author");
+    await expect(literal).toHaveText("See **bold** and <strong>nope</strong>");
+    await expect(literal.locator("strong")).toHaveCount(0);
+    await expect(bio("footer", "Literal Author")).toHaveText("Footer literal stays **bold**");
+
+    const markdown = bio("sidebar", "Markdown Author");
+    await expect(markdown.locator("strong")).toHaveText("first");
+    await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    await expect(markdown.locator("li")).toHaveText(["Ada", "Code"]);
+    const markdownFooter = bio("footer", "Markdown Author");
+    await expect(markdownFooter.locator("strong")).toHaveText("long");
+    await expect(markdownFooter.locator("a")).toHaveAttribute("href", "https://example.invalid/long");
+
+    const html = bio("sidebar", "HTML Author");
+    await expect(html.locator("strong")).toHaveText("HTML");
+    await expect(html.locator('a[href="https://example.invalid/ok"]')).toHaveCount(1);
+    const htmlSource = (await html.innerHTML()).toLowerCase();
+    expect(htmlSource).not.toContain("script");
+    expect(htmlSource).not.toContain("onerror");
+
+    const htmlFooter = bio("footer", "HTML Author");
+    await expect(htmlFooter.locator("em")).toHaveText("HTML");
+    const htmlFooterSource = (await htmlFooter.innerHTML()).toLowerCase();
+    expect(htmlFooterSource).not.toContain("script");
+    expect(htmlFooterSource).not.toContain("onerror");
   });
 
   test("a left-only module keeps its footer copy on mobile", async ({ page }, testInfo) => {
@@ -366,6 +407,42 @@ test.describe("post layout contract", () => {
   });
 });
 
+test.describe("post updated at", () => {
+  function itemsWithUpdatedOn(extraMs: number) {
+    return blogJson.items.map((item) => ({
+      ...item,
+      updatedOn: item.publishOn + extraMs,
+    }));
+  }
+
+  test("shows Squarespace updatedOn in the post header when enabled", async ({ page }) => {
+    const items = itemsWithUpdatedOn(20 * 86_400_000);
+    await mountRenderer(page, {
+      postConfig: { ...postTemplates.reporter, showDate: true, showPostUpdatedAt: true },
+      blogItems: items,
+    });
+    const meta = page.locator(".blog-overlay-meta").first();
+    const labels = await page.evaluate((post) => {
+      return {
+        published: new Date(post.publishOn).toLocaleDateString(),
+        updated: "Updated " + new Date(post.updatedOn).toLocaleDateString(),
+      };
+    }, items[1]);
+    await expect(meta).toContainText(labels.published);
+    await expect(meta).toContainText(labels.updated);
+  });
+
+  test("hides the updated date when the post control is off", async ({ page }) => {
+    const items = itemsWithUpdatedOn(20 * 86_400_000);
+    await mountRenderer(page, {
+      postConfig: { ...postTemplates.reporter, showDate: true, showPostUpdatedAt: false },
+      blogItems: items,
+    });
+    const meta = page.locator(".blog-overlay-meta").first();
+    await expect(meta).not.toContainText("Updated");
+  });
+});
+
 async function storyCommentsFooterBox(page: Page) {
   return page.evaluate(() => {
     function contentBox(el: Element | null) {
@@ -586,3 +663,208 @@ async function expectArticleCommentsGap(page: Page, tolerance: number) {
   });
   expectPx(gap, 24, tolerance);
 }
+
+test.describe("post video blocks", () => {
+  test("youtube, vimeo, and file videos fill the Squarespace wrapper", async ({ page }) => {
+    const youtube =
+      '<div class="sqs-block video-block sqs-block-video" data-block-type="32" data-sqsp-block="video">' +
+      '<div class="sqs-block-content"><div class="intrinsic" style="max-width:100%">' +
+      '<div class="embed-block-wrapper" style="height:0;overflow:hidden;padding-bottom:56.25%">' +
+      '<div class="sqs-video-wrapper" data-provider-name="YouTube" data-html="&lt;iframe src=&quot;//www.youtube.com/embed/dQw4w9WgXcQ?wmode=opaque&quot; width=&quot;854&quot; height=&quot;480&quot; frameborder=&quot;0&quot; allowfullscreen&gt;&lt;/iframe&gt;"></div>' +
+      "</div></div></div></div>";
+    const vimeo =
+      '<div class="sqs-block video-block sqs-block-video" data-block-type="32" data-sqsp-block="video" ' +
+      'data-block-json="{&quot;url&quot;:&quot;https://vimeo.com/76979871&quot;,&quot;providerName&quot;:&quot;Vimeo&quot;,&quot;resolvedBy&quot;:&quot;vimeo&quot;,&quot;width&quot;:640,&quot;height&quot;:360,&quot;html&quot;:&quot;&quot;}">' +
+      '<div class="sqs-block-content"><div class="sqs-video-wrapper" data-provider-name="Vimeo"></div></div></div>';
+    const file =
+      '<div class="sqs-block video-block sqs-block-video" data-sqsp-block="video">' +
+      '<div class="sqs-block-content"><div class="sqs-video-wrapper" data-html="&lt;video controls src=&quot;https://cdn.example.com/clip.mp4&quot;&gt;&lt;/video&gt;"></div></div></div>';
+    const native =
+      '<div class="sqs-block video-block sqs-block-video" data-sqsp-block="video" ' +
+      'data-block-json="{&quot;resolvedBy&quot;:&quot;native&quot;,&quot;alexandriaUrl&quot;:&quot;https://video.squarespace-cdn.com/content/v1/site/clip/{variant}&quot;,&quot;width&quot;:1920,&quot;height&quot;:1080,&quot;html&quot;:&quot;&quot;}">' +
+      '<div class="sqs-block-content"><div class="sqs-native-video" data-config-video="{&quot;alexandriaUrl&quot;:&quot;https://video.squarespace-cdn.com/content/v1/site/clip/{variant}&quot;}"></div>' +
+      '<div class="sqs-video-wrapper"></div></div></div>';
+
+    await mountRenderer(page, {
+      previewSelectedPostIndex: 0,
+      blogItems: [
+        {
+          ...blogJson.items[0],
+          title: "Video post",
+          body: ["<p>Opening line before the players.</p>", youtube, vimeo, file, native].join(""),
+        },
+      ],
+    });
+
+    await page.addStyleTag({
+      content:
+        ".sqs-video-wrapper{position:absolute;top:0;left:0;width:100%;height:100%}" +
+        ".embed-block-wrapper{height:0;overflow:hidden}" +
+        ".sqs-native-video{position:absolute;inset:0}",
+    });
+
+    const youtubeSrc = await page.locator(".blog-overlay-body iframe").nth(0).getAttribute("src");
+    const vimeoSrc = await page.locator(".blog-overlay-body iframe").nth(1).getAttribute("src");
+    expect(youtubeSrc).toContain("https://www.youtube.com/embed/dQw4w9WgXcQ");
+    expect(vimeoSrc).toBe("https://player.vimeo.com/video/76979871");
+
+    const fileSrc = await page.locator('.blog-overlay-body video[src*="clip.mp4"]').getAttribute("src");
+    expect(fileSrc).toBe("https://cdn.example.com/clip.mp4");
+
+    const nativeSrc = await page.locator(".blog-overlay-body video[data-bb-video-src]").last().getAttribute("data-bb-video-src");
+    expect(nativeSrc).toBe("https://video.squarespace-cdn.com/content/v1/site/clip/playlist.m3u8");
+
+    const heights = await page.locator(".blog-overlay-body .bb-video-frame").evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().height),
+    );
+    expect(heights).toHaveLength(4);
+    for (const height of heights) expect(height).toBeGreaterThan(80);
+  });
+});
+
+test.describe("sidebar mobile drawer", () => {
+  test("drawer tabs sit on the right and open the sidebar", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const postConfig = zoneOrderPostConfig("feature");
+    const left = postConfig.leftSidebar as { mobileDisplay?: string; show?: boolean };
+    const right = postConfig.rightSidebar as { mobileDisplay?: string; show?: boolean };
+    left.mobileDisplay = "drawer";
+    right.mobileDisplay = "drawer";
+
+    await mountRenderer(page, { postConfig });
+
+    const tabs = page.locator(".bb-mobile-drawer-tab");
+    if (!mobile) {
+      await expect(tabs).toHaveCount(0);
+      const leftDisplay = await page.locator('[data-bb-sidebar-side="left"]').first().evaluate((el) => getComputedStyle(el).display);
+      expect(leftDisplay).not.toBe("none");
+      return;
+    }
+
+    await expect(tabs).toHaveCount(2);
+    const rightTab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
+    const rightPanel = page.locator("#bb-mobile-drawer-panel-right");
+    await expect(rightTab).toBeVisible();
+    await expect(rightTab).toHaveText("More");
+    const tabBox = await rightTab.boundingBox();
+    const viewport = page.viewportSize();
+    expect(tabBox).not.toBeNull();
+    expect(tabBox!.x + tabBox!.width).toBeGreaterThan((viewport?.width ?? 0) - 4);
+    expect(tabBox!.width).toBeLessThanOrEqual(36);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual((viewport?.width ?? 0) + 1);
+
+    await expect(rightPanel).toBeHidden();
+    await rightTab.click();
+    await expect(rightPanel).toBeVisible();
+    await expect(rightPanel.locator("[data-bb-module]").first()).toBeVisible();
+    await expect.poll(async () => {
+      const panelBox = await rightPanel.boundingBox();
+      const tabNow = await rightTab.boundingBox();
+      if (!panelBox || !tabNow) return Number.POSITIVE_INFINITY;
+      const hostRight = viewport?.width ?? 0;
+      const flush = Math.abs(panelBox.x + panelBox.width - hostRight);
+      const tabMeetsPanel = Math.abs(tabNow.x + tabNow.width - panelBox.x);
+      return Math.max(flush, tabMeetsPanel);
+    }).toBeLessThanOrEqual(2);
+
+    await page.mouse.click(12, 280);
+    await expect(rightPanel).toBeHidden();
+  });
+
+  test("Configure phone frame pins the drawer tab to the preview column", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "renderer-desktop", "needs a wide window around a 375px root");
+    const postConfig = zoneOrderPostConfig("feature");
+    (postConfig.rightSidebar as { mobileDisplay?: string }).mobileDisplay = "drawer";
+    (postConfig.leftSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+
+    await mountRenderer(page, {
+      postConfig,
+      previewDevice: "mobile",
+      rootWidth: 375,
+    });
+
+    const tab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
+    await expect(tab).toBeVisible();
+    const tabBox = await tab.boundingBox();
+    const rootBox = await page.locator("#root").boundingBox();
+    expect(tabBox).not.toBeNull();
+    expect(rootBox).not.toBeNull();
+    expect(Math.abs(tabBox!.x + tabBox!.width - (rootBox!.x + rootBox!.width))).toBeLessThan(8);
+    expect(tabBox!.x).toBeGreaterThan(rootBox!.x + rootBox!.width - 48);
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const root = document.getElementById("root");
+        if (!root) return Number.POSITIVE_INFINITY;
+        return root.scrollWidth - root.clientWidth;
+      });
+    }).toBeLessThanOrEqual(2);
+
+    await tab.click();
+    const panel = page.locator("#bb-mobile-drawer-panel-right");
+    await expect(panel).toBeVisible();
+    await expect.poll(async () => {
+      const panelBox = await panel.boundingBox();
+      const tabNow = await tab.boundingBox();
+      const rootNow = await page.locator("#root").boundingBox();
+      if (!panelBox || !tabNow || !rootNow) return Number.POSITIVE_INFINITY;
+      const flush = Math.abs(panelBox.x + panelBox.width - (rootNow.x + rootNow.width));
+      const tabMeetsPanel = Math.abs(tabNow.x + tabNow.width - panelBox.x);
+      return Math.max(flush, tabMeetsPanel);
+    }).toBeLessThanOrEqual(2);
+    const settled = await panel.boundingBox();
+    expect(settled).not.toBeNull();
+    expect(settled!.x).toBeGreaterThanOrEqual((rootBox!.x) - 2);
+  });
+
+  test("hidden sidebars do not widen the phone frame", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "renderer-desktop", "needs a wide window around a 375px root");
+    const postConfig = zoneOrderPostConfig("feature");
+    (postConfig.leftSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+    (postConfig.rightSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+
+    await mountRenderer(page, {
+      postConfig,
+      previewDevice: "mobile",
+      rootWidth: 375,
+    });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const root = document.getElementById("root");
+        if (!root) return Number.POSITIVE_INFINITY;
+        return root.scrollWidth - root.clientWidth;
+      });
+    }).toBeLessThanOrEqual(2);
+    await expect(page.locator(".bb-mobile-drawer-tab")).toHaveCount(0);
+  });
+
+  test("mobile full-bleed header stays edge to edge without sideways scroll", async ({ page }, testInfo) => {
+    test.skip(!isMobileProject(testInfo), "mobile viewport");
+    const digest = structuredClone(collectionTemplates.digest) as {
+      leftSidebar: { mobileDisplay?: string };
+      rightSidebar: { mobileDisplay?: string };
+    };
+    digest.leftSidebar.mobileDisplay = "drawer";
+    digest.rightSidebar.mobileDisplay = "drawer";
+    await mountRenderer(page, {
+      collectionConfig: digest,
+      previewSelectedPostIndex: -1,
+    });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const img = document.querySelector(".blog-overlay-digest-featured-article .blog-overlay-featured-image");
+        const doc = document.documentElement;
+        if (!img) return "missing";
+        const rect = img.getBoundingClientRect();
+        const scroll = doc.scrollWidth - doc.clientWidth;
+        if (scroll > 1) return "scroll " + scroll;
+        if (rect.left < -1 || rect.left > 2) return "left " + rect.left;
+        const rightGap = doc.clientWidth - rect.right;
+        if (rightGap < -1 || rightGap > 2) return "right " + rightGap;
+        return "ok";
+      });
+    }).toBe("ok");
+  });
+});

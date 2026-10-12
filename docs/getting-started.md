@@ -8,7 +8,7 @@ This section covers everything you need to get up and running.
 
 ## What is BetterBlog?
 
-BetterBlog is a Squarespace blog enhancement plugin. You install it once by pasting a small script into your Squarespace site, then configure everything from the BetterBlog dashboard — no further code editing required.
+BetterBlog is a Squarespace blog enhancement plugin. You install it once by pasting a small script into your Squarespace site, then configure everything from the BetterBlog dashboard — no further code editing required for BetterBlog itself. Other scripts you have added in Squarespace Code Injection are separate. If one of them should change the blog after BetterBlog loads, it needs a small update. See [Installation](installation.md).
 
 Once installed, the app replaces your blog's default Squarespace layout with a fully customizable one. Your readers see the new layout automatically; you manage it from BetterBlog.
 
@@ -127,6 +127,8 @@ After adding your blog, a snippet is displayed. It looks something like this:
 
 Copy the entire snippet. You can also find it anytime from your blog's row in the BetterBlog dashboard.
 
+The example above is abbreviated. The snippet you copy from the dashboard is the one to paste. It also sets up `BetterBlog.ready`, which is how another Header script runs after BetterBlog. See [Installation](installation.md).
+
 ### 2. Open Code Injection in Squarespace
 
 1. Log in to Squarespace
@@ -148,7 +150,7 @@ To confirm installation from the dashboard: your blog row will show a green conn
 
 ## What's next
 
-Once the script is installed, everything else is configured from the BetterBlog dashboard — no more touching Squarespace.
+Once the script is installed, BetterBlog itself is configured from the BetterBlog dashboard. The exception is another Header script that should run on top of the blog — that script has to be updated so it runs after BetterBlog. See [Installation](installation.md).
 
 - **[Choose a template](templates.md)** — the fastest way to get a great-looking blog. Templates apply a curated layout in one click.
 - **[Customize your collection page](collection-settings.md)** — control sidebars, featured posts, filters, pagination, and footer modules.
