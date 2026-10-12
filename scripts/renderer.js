@@ -6020,7 +6020,7 @@
     _fathomFlushQueue: function() {
       var api = typeof window !== 'undefined' ? window.fathom : null;
       // #region agent log
-      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0 });
+      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0, isTracking: !!(api && typeof api.isTrackingEnabled === 'function' && api.isTrackingEnabled()), apiSiteLen: api && api.siteId ? String(api.siteId).length : 0, build: '6cfb79-r2' });
       // #endregion
       if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
       var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
@@ -6036,7 +6036,7 @@
     _fathomForward: function(type) {
       var fathom = this._fathomConfig();
       // #region agent log
-      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79' });
+      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79-r2' });
       // #endregion
       if (!fathom || type === 'render_perf') return;
       var allowed = {
@@ -6054,20 +6054,61 @@
         || metrics.indexOf('top_referrers') !== -1
         || metrics.indexOf('traffic_sources') !== -1;
       var siteCode = fathom.siteId;
+      var self = this;
       this._fathomQueue.push(function() {
         var api = window.fathom;
         if (!api) return;
         if (typeof api.setSite === 'function') api.setSite(siteCode);
-        if (type === 'page_view') {
-          if (typeof api.trackPageview !== 'function') return;
+        var imgsBefore = 0;
+        var scriptCount = 0;
+        var scriptSiteMatch = false;
+        var blocked = null;
+        try {
+          imgsBefore = document.querySelectorAll('img[src*="usefathom.com"]').length;
+          var scripts = document.querySelectorAll('script[src*="usefathom.com/script.js"]');
+          scriptCount = scripts.length;
+          for (var s = 0; s < scripts.length; s++) {
+            if (scripts[s].getAttribute('data-site') === siteCode) scriptSiteMatch = true;
+          }
+          blocked = window.localStorage ? window.localStorage.getItem('blockFathomTracking') : null;
+        } catch (eCount) { /* ignore */ }
+        var sent = false;
+        if (type === 'page_view' && typeof api.trackPageview === 'function') {
           var opts = { url: window.location.href };
           // Fathom falls back to document.referrer when this is omitted, so
           // unchecking referrer metrics cannot fully strip it the way GA can.
           if (includeReferrer && document.referrer) opts.referrer = document.referrer;
           api.trackPageview(opts);
-          return;
+          sent = true;
+        } else if (type !== 'page_view' && typeof api.trackEvent === 'function') {
+          api.trackEvent(type);
+          sent = true;
         }
-        if (typeof api.trackEvent === 'function') api.trackEvent(type);
+        var imgsAfter = imgsBefore;
+        var sidMatch = false;
+        try {
+          var imgs = document.querySelectorAll('img[src*="usefathom.com"]');
+          imgsAfter = imgs.length;
+          if (imgsAfter > 0) sidMatch = imgs[imgsAfter - 1].src.indexOf('sid=' + encodeURIComponent(siteCode)) !== -1;
+        } catch (eImg) { /* ignore */ }
+        // #region agent log
+        self._fathomDebug('D', 'renderer.js:_fathomForward', 'fathom send result', {
+          type: type,
+          sent: sent,
+          host: window.location.hostname || '',
+          visibility: document.visibilityState || '',
+          blocked: blocked,
+          scriptCount: scriptCount,
+          scriptSiteMatch: scriptSiteMatch,
+          imgsBefore: imgsBefore,
+          imgsAfter: imgsAfter,
+          sidMatch: sidMatch,
+          siteIdLen: siteCode ? String(siteCode).length : 0,
+          isTracking: typeof api.isTrackingEnabled === 'function' ? api.isTrackingEnabled() : null,
+          apiSiteMatch: api.siteId === siteCode,
+          build: '6cfb79-r2'
+        });
+        // #endregion
       });
       this._fathomEnsure();
       this._fathomFlushQueue();
