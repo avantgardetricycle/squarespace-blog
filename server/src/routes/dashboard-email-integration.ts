@@ -10,7 +10,7 @@ import {
   type EmailProviderName,
   type KitDestinationKind,
 } from '../lib/email-providers.js'
-import { EMAIL_MODULES, type EmailModuleKey } from '../lib/email-sync.js'
+import { EMAIL_MODULES, ensureEmailIntegrationModules, writeLegacyEmailDestination, type EmailModuleKey } from '../lib/email-sync.js'
 
 const router = Router()
 
@@ -134,42 +134,14 @@ async function queryLegacyRows(siteId: string): Promise<EmailState> {
   return { rows: [], credentials: [] }
 }
 
-async function repairMissingModules(siteId: string, rows: IntegrationRow[]): Promise<IntegrationRow[]> {
-  const present = new Set(rows.map((row) => row.module))
-  if (present.size !== 1 || !present.has('collection_newsletter')) return rows
-  const source = rows[0]
-  const created: IntegrationRow[] = []
-  for (const module of EMAIL_MODULES) {
-    if (module === source.module) continue
-    try {
-      const row = await prisma.siteEmailIntegration.create({
-        data: {
-          siteId,
-          module,
-          provider: source.provider,
-          apiKeyEnc: source.apiKeyEnc,
-          destinationId: source.destinationId,
-          destinationKind: source.destinationKind,
-          tagId: source.tagId,
-          tagName: source.tagName,
-        },
-      })
-      created.push(row)
-    } catch (err) {
-      console.error('[email-integration] Could not copy destination to', module, err)
-      created.push({ ...source, module })
-    }
-  }
-  return [source, ...created]
-}
-
 async function loadEmailState(siteId: string): Promise<EmailState> {
+  await ensureEmailIntegrationModules()
   try {
     const [rows, credentials] = await Promise.all([
       prisma.siteEmailIntegration.findMany({ where: { siteId } }),
       prisma.siteEmailCredential.findMany({ where: { siteId } }).catch(() => []),
     ])
-    return { rows: await repairMissingModules(siteId, rows), credentials }
+    return { rows, credentials }
   } catch (err) {
     console.error('[email-integration] Per-module destinations unavailable', err)
     return queryLegacyRows(siteId)
@@ -458,6 +430,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     })
   }
 
+  const moduleReady = await ensureEmailIntegrationModules()
   try {
     await prisma.$transaction(async (tx) => {
       for (const write of writes) {
@@ -487,8 +460,17 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     })
   } catch (err) {
     console.error('[email-integration] Save failed', err)
-    res.status(500).json({ error: 'Failed to save email destinations' })
-    return
+    try {
+      for (const write of writes) await writeLegacyEmailDestination(site.id, write)
+      // #region agent log
+      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'post-fix',hypothesisId:'G',location:'dashboard-email-integration.ts:PUT',message:'saved destination with sql',data:{moduleReady:moduleReady.moduleReady,modules:writes.map((write)=>({module:write.module,provider:write.provider,hasKey:Boolean(write.apiKeyEnc),hasDestination:Boolean(write.destinationId)}))},timestamp:Date.now()})}).catch(()=>{});
+      console.error('[capture-debug]', JSON.stringify({hypothesisId:'G',location:'dashboard-email-integration.ts:PUT',message:'saved destination with sql',moduleReady:moduleReady.moduleReady,modules:writes.map((write)=>({module:write.module,provider:write.provider,hasKey:Boolean(write.apiKeyEnc),hasDestination:Boolean(write.destinationId)}))}))
+      // #endregion
+    } catch (legacyErr) {
+      console.error('[email-integration] Save failed', legacyErr)
+      res.status(500).json({ error: 'Failed to save email destinations' })
+      return
+    }
   }
 
   const saved = await getSiteForUser(siteKey, user.id)

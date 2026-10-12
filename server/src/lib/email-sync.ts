@@ -4,7 +4,7 @@
  * so the public form can still confirm the BetterBlog signup.
  */
 
-import prisma, { queryRows } from '../db/index.js'
+import prisma, { executeSql, queryRows } from '../db/index.js'
 import { decrypt } from './encryption.js'
 import {
   forwardSubscriber,
@@ -73,6 +73,120 @@ const INTEGRATION_COLUMNS = [
 
 let integrationTable: { schema: string; columns: Set<string> } | null = null
 
+export async function ensureEmailIntegrationModules(): Promise<{ moduleReady: boolean; error: string | null }> {
+  const before = await describeIntegrationTable()
+  if (before.columns.has('module')) return { moduleReady: true, error: null }
+  const rel = `${quotedIdent(before.schema)}.${quotedIdent('site_email_integrations')}`
+  try {
+    await queryRows(
+      `ALTER TABLE ${rel} ADD COLUMN IF NOT EXISTS ${quotedIdent('module')} TEXT NOT NULL DEFAULT 'collection_newsletter'`
+    )
+    await queryRows(`DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+    WHERE i.indrelid = '${before.schema}.site_email_integrations'::regclass
+      AND i.indisprimary
+      AND a.attname = 'module'
+  ) THEN
+    ALTER TABLE ${rel} DROP CONSTRAINT ${quotedIdent('site_email_integrations_pkey')};
+    ALTER TABLE ${rel} ADD CONSTRAINT ${quotedIdent('site_email_integrations_pkey')} PRIMARY KEY (${quotedIdent('site_id')}, ${quotedIdent('module')});
+  END IF;
+END $$`)
+    await queryRows(`CREATE TABLE IF NOT EXISTS ${quotedIdent(before.schema)}.${quotedIdent('site_email_credentials')} (
+      ${quotedIdent('site_id')} TEXT NOT NULL,
+      ${quotedIdent('provider')} TEXT NOT NULL,
+      ${quotedIdent('api_key_enc')} TEXT NOT NULL,
+      ${quotedIdent('updated_at')} TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT ${quotedIdent('site_email_credentials_pkey')} PRIMARY KEY (${quotedIdent('site_id')}, ${quotedIdent('provider')})
+    )`)
+    integrationTable = null
+    const after = await describeIntegrationTable()
+    // #region agent log
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'post-fix',hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',message:'added module column',data:{moduleReady:after.columns.has('module')},timestamp:Date.now()})}).catch(()=>{});
+    console.error('[capture-debug]', JSON.stringify({hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',moduleReady:after.columns.has('module')}))
+    // #endregion
+    return { moduleReady: after.columns.has('module'), error: null }
+  } catch (err) {
+    integrationTable = null
+    const message = err instanceof Error ? err.message : 'schema upgrade failed'
+    // #region agent log
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'post-fix',hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',message:'module column upgrade failed',data:{error:message},timestamp:Date.now()})}).catch(()=>{});
+    console.error('[capture-debug]', JSON.stringify({hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',error:message}))
+    // #endregion
+    return { moduleReady: false, error: message }
+  }
+}
+
+export async function writeLegacyEmailDestination(
+  siteId: string,
+  write: {
+    module: string
+    provider: string
+    apiKeyEnc: string | null
+    destinationId: string | null
+    destinationKind: string | null
+    tagId: string | null
+    tagName: string | null
+  }
+): Promise<void> {
+  const table = await describeIntegrationTable()
+  const rel = `${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')}`
+  const values: unknown[] = [siteId]
+  const sets: string[] = []
+  const add = (column: string, value: unknown) => {
+    if (!table.columns.has(column)) return
+    values.push(value)
+    sets.push(`${quotedIdent(column)} = $${values.length}`)
+  }
+  add('provider', write.provider)
+  add('api_key_enc', write.apiKeyEnc)
+  add('destination_id', write.destinationId)
+  add('destination_kind', write.destinationKind)
+  add('tag_id', write.tagId)
+  add('tag_name', write.tagName)
+  if (table.columns.has('updated_at')) sets.push(`${quotedIdent('updated_at')} = CURRENT_TIMESTAMP`)
+  if (!table.columns.has('module')) {
+    if (sets.length === 0) return
+    await queryRows(`UPDATE ${rel} SET ${sets.join(', ')} WHERE ${quotedIdent('site_id')} = $1`, values)
+    return
+  }
+  const insertCols = ['site_id', 'module']
+  const insertVals: unknown[] = [siteId, write.module]
+  const updates: string[] = []
+  const include = (column: string, value: unknown) => {
+    if (!table.columns.has(column)) return
+    insertCols.push(column)
+    insertVals.push(value)
+    updates.push(`${quotedIdent(column)} = EXCLUDED.${quotedIdent(column)}`)
+  }
+  include('provider', write.provider)
+  include('api_key_enc', write.apiKeyEnc)
+  include('destination_id', write.destinationId)
+  include('destination_kind', write.destinationKind)
+  include('tag_id', write.tagId)
+  include('tag_name', write.tagName)
+  if (table.columns.has('updated_at')) updates.push(`${quotedIdent('updated_at')} = CURRENT_TIMESTAMP`)
+  const placeholders = insertVals.map((_, index) => `$${index + 1}`).join(', ')
+  try {
+    await queryRows(
+      `INSERT INTO ${rel} (${insertCols.map(quotedIdent).join(', ')}) VALUES (${placeholders}) ON CONFLICT (${quotedIdent('site_id')}, ${quotedIdent('module')}) DO UPDATE SET ${updates.join(', ')}`,
+      insertVals
+    )
+  } catch {
+    const moduleValues = [...values, write.module]
+    const updated = await executeSql(
+      `UPDATE ${rel} SET ${sets.join(', ')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('module')} = $${moduleValues.length}`,
+      moduleValues
+    )
+    if (updated === 0) {
+      await executeSql(`UPDATE ${rel} SET ${sets.join(', ')} WHERE ${quotedIdent('site_id')} = $1`, values)
+    }
+  }
+}
+
 async function describeIntegrationTable(): Promise<{ schema: string; columns: Set<string> }> {
   if (integrationTable) return integrationTable
   const found = await queryRows(
@@ -96,6 +210,7 @@ function quotedIdent(value: string): string {
 }
 
 async function loadStoredIntegration(siteId: string, module: EmailModuleKey): Promise<StoredEmailIntegration | null> {
+  await ensureEmailIntegrationModules()
   const table = await describeIntegrationTable()
   const selected = INTEGRATION_COLUMNS.filter((name) => table.columns.has(name) && name !== 'last_error' && name !== 'last_error_at' && name !== 'last_success_at')
   if (!selected.includes('provider')) return null

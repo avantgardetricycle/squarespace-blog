@@ -399,7 +399,7 @@ model BlogCommentSettings {
 }
 
 model SiteEmailIntegration {
-  siteId          String
+  siteId          String    @map("site_id")
   module          String    @default("collection_newsletter") // collection_newsletter | post_newsletter | collection_lead_magnet | post_lead_magnet
   provider        String    @default("betterblog") // betterblog | kit | mailchimp
   apiKeyEnc       String?   @map("api_key_enc") @db.Text
