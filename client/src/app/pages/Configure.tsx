@@ -74,6 +74,7 @@ import {
   emailDestinationsFromApi,
   emptyEmailDestinations,
   modulePayload,
+  presentModule,
   type EmailCatalog,
   type EmailDestinationsState,
   type EmailModuleKey,
@@ -2640,7 +2641,7 @@ export default function Configure() {
               modules[key] = current.modules[key];
             }
           }
-          return { ...next, modules };
+          return { ...next, modules, platformKeys: current.platformKeys };
         });
       })
       .catch(() => {
@@ -2655,7 +2656,7 @@ export default function Configure() {
 
   const emailCatalogSig = emailDestinations
     ? EMAIL_MODULE_KEYS.map((key) => {
-        const dest = emailDestinations.modules[key];
+        const dest = presentModule(emailDestinations, key);
         const audience = dest.provider === "mailchimp" ? dest.destinationId : "";
         return `${key}:${dest.provider}:${dest.apiKey}:${dest.hasApiKey ? 1 : 0}:${audience}:${emailCatalogRefresh[key]}`;
       }).join("|")
@@ -2676,7 +2677,7 @@ export default function Configure() {
     const catalogSiteKey = effectiveSiteKey ?? siteKey;
     if (!catalogSiteKey || !emailDestinations) return;
     for (const moduleKey of EMAIL_MODULE_KEYS) {
-      const dest = emailDestinations.modules[moduleKey];
+      const dest = presentModule(emailDestinations, moduleKey);
       const audienceId = dest.provider === "mailchimp" ? dest.destinationId.trim() : "";
       const sig = `${dest.provider}|${dest.apiKey}|${dest.hasApiKey ? 1 : 0}|${audienceId}|${emailCatalogRefresh[moduleKey]}|${catalogSiteKey}`;
       if (emailCatalogSigRef.current[moduleKey] === sig) continue;
@@ -3358,7 +3359,7 @@ export default function Configure() {
     const dirtyEmailModules = Object.fromEntries(
       EMAIL_MODULE_KEYS.filter((key) =>
         emailDestinationDirty(emailDestinations.modules[key], savedEmailDestinations.modules[key])
-      ).map((key) => [key, modulePayload(emailDestinations.modules[key])])
+      ).map((key) => [key, modulePayload(presentModule(emailDestinations, key))])
     );
     const emailDirty = Object.keys(dirtyEmailModules).length > 0;
     try {
@@ -3503,7 +3504,7 @@ export default function Configure() {
 
   const handleTestEmailDestination = useCallback(async (moduleKey: EmailModuleKey) => {
     const keyToSave = effectiveSiteKey ?? siteKey;
-    const destination = emailDestinations?.modules[moduleKey];
+    const destination = presentModule(emailDestinations, moduleKey);
     if (!keyToSave || !destination || destination.provider === "betterblog") return;
     setEmailTestingModule(moduleKey);
     setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
@@ -3529,18 +3530,26 @@ export default function Configure() {
   }, [effectiveSiteKey, siteKey, emailDestinations]);
 
   const renderEmailDestination = (moduleKey: EmailModuleKey) => {
-    const value = emailDestinations.modules[moduleKey];
+    const value = presentModule(emailDestinations, moduleKey);
     const slot = emailCatalogs[moduleKey] ?? emptyCatalogSlot();
     return (
       <EmailDestinationFields
         value={value}
         savedKeys={emailDestinations.savedKeys}
+        platformKeys={emailDestinations.platformKeys}
         onChange={(next) => {
           emailEditedRef.current = true;
-          setEmailDestinations((current) => ({
-            ...current,
-            modules: { ...current.modules, [moduleKey]: next },
-          }));
+          setEmailDestinations((current) => {
+            const platformKeys = { ...current.platformKeys };
+            if (next.provider === "kit" || next.provider === "mailchimp") {
+              platformKeys[next.provider] = next.apiKey;
+            }
+            return {
+              ...current,
+              platformKeys,
+              modules: { ...current.modules, [moduleKey]: next },
+            };
+          });
           setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
         }}
         onTest={() => void handleTestEmailDestination(moduleKey)}

@@ -26,6 +26,11 @@ export const EMAIL_MODULE_KEYS: EmailModuleKey[] = [
 ];
 
 export type SavedEmailKeys = { kit: boolean; mailchimp: boolean };
+export type PlatformKeys = { kit: string; mailchimp: string };
+
+export function emptyPlatformKeys(): PlatformKeys {
+  return { kit: "", mailchimp: "" };
+}
 
 export type EmailCatalogItem = { id: string; name: string };
 
@@ -142,6 +147,8 @@ export function emailDestinationFromApi(data: unknown): EmailDestinationState {
 export type EmailDestinationsState = {
   modules: Record<EmailModuleKey, EmailDestinationState>;
   savedKeys: SavedEmailKeys;
+  /** Unsaved API key text, shared by every module that uses that platform. */
+  platformKeys: PlatformKeys;
 };
 
 export function emptyEmailDestinations(): EmailDestinationsState {
@@ -153,6 +160,18 @@ export function emptyEmailDestinations(): EmailDestinationsState {
       post_lead_magnet: emailDestinationFromApi(null),
     },
     savedKeys: { kit: false, mailchimp: false },
+    platformKeys: emptyPlatformKeys(),
+  };
+}
+
+export function presentModule(state: EmailDestinationsState, moduleKey: EmailModuleKey): EmailDestinationState {
+  const moduleState = state.modules[moduleKey];
+  if (moduleState.provider !== "kit" && moduleState.provider !== "mailchimp") return moduleState;
+  const apiKey = state.platformKeys[moduleState.provider];
+  return {
+    ...moduleState,
+    apiKey,
+    hasApiKey: state.savedKeys[moduleState.provider] || apiKey.trim() !== "",
   };
 }
 
@@ -171,7 +190,7 @@ export function emailDestinationsFromApi(data: unknown): EmailDestinationsState 
     }
     modules[key] = moduleState;
   }
-  return { modules, savedKeys };
+  return { modules, savedKeys, platformKeys: emptyPlatformKeys() };
 }
 
 export function emailDestinationsDirty(
@@ -196,23 +215,24 @@ export function modulePayload(state: EmailDestinationState) {
 export function switchEmailDestination(
   current: EmailDestinationState,
   nextProvider: EmailDestinationProvider,
-  savedKeys: SavedEmailKeys = { kit: false, mailchimp: false }
+  savedKeys: SavedEmailKeys = { kit: false, mailchimp: false },
+  platformKeys: PlatformKeys = emptyPlatformKeys()
 ): EmailDestinationState {
   if (nextProvider === current.provider) return current;
   const drafts = {
-    kit: { ...current.drafts.kit },
-    mailchimp: { ...current.drafts.mailchimp },
+    kit: { ...current.drafts.kit, apiKey: "" },
+    mailchimp: { ...current.drafts.mailchimp, apiKey: "" },
   };
   if (current.provider === "kit") {
     drafts.kit = {
-      apiKey: current.apiKey,
+      apiKey: "",
       kitTarget: current.kitTarget,
       formId: current.kitTarget === "form" ? current.destinationId : current.drafts.kit.formId,
       tagId: current.kitTarget === "tag" ? current.destinationId : current.drafts.kit.tagId,
     };
   } else if (current.provider === "mailchimp") {
     drafts.mailchimp = {
-      apiKey: current.apiKey,
+      apiKey: "",
       audienceId: current.destinationId,
       tagId: current.tagId,
       tagName: current.tagName,
@@ -230,9 +250,8 @@ export function switchEmailDestination(
       hasApiKey: false,
     };
   }
-  const ownsKey =
-    (nextProvider === "kit" || nextProvider === "mailchimp") &&
-    (savedKeys[nextProvider] || (nextProvider === current.savedProvider && current.savedHasApiKey));
+  const apiKey = platformKeys[nextProvider];
+  const hasApiKey = savedKeys[nextProvider] || apiKey.trim() !== "";
   if (nextProvider === "kit") {
     const draft = drafts.kit;
     return {
@@ -241,10 +260,10 @@ export function switchEmailDestination(
       drafts,
       kitTarget: draft.kitTarget,
       destinationId: draft.kitTarget === "tag" ? draft.tagId : draft.formId,
-      apiKey: draft.apiKey,
+      apiKey,
       tagId: "",
       tagName: "",
-      hasApiKey: ownsKey,
+      hasApiKey,
     };
   }
   const draft = drafts.mailchimp;
@@ -255,8 +274,8 @@ export function switchEmailDestination(
     destinationId: draft.audienceId,
     tagId: draft.tagId,
     tagName: draft.tagName,
-    apiKey: draft.apiKey,
-    hasApiKey: ownsKey,
+    apiKey,
+    hasApiKey,
   };
 }
 
@@ -352,6 +371,7 @@ function choicesFor(items: EmailCatalogItem[], selectedId: string, selectedName?
 type EmailDestinationFieldsProps = {
   value: EmailDestinationState;
   savedKeys: SavedEmailKeys;
+  platformKeys: PlatformKeys;
   onChange: (next: EmailDestinationState) => void;
   onTest: () => void;
   onRefresh: () => void;
@@ -366,6 +386,7 @@ type EmailDestinationFieldsProps = {
 export function EmailDestinationFields({
   value,
   savedKeys,
+  platformKeys,
   onChange,
   onTest,
   onRefresh,
@@ -389,7 +410,7 @@ export function EmailDestinationFields({
         <Select
           value={value.provider}
           onValueChange={(provider) =>
-            onChange(switchEmailDestination(value, provider as EmailDestinationProvider, savedKeys))
+            onChange(switchEmailDestination(value, provider as EmailDestinationProvider, savedKeys, platformKeys))
           }
         >
           <SelectTrigger className="w-full">
