@@ -35,6 +35,74 @@ export function emailModuleForLead(
   return `${level}_${kind}` as EmailModuleKey
 }
 
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+/** Pick the row for this module. A legacy table has one row and no module column. */
+export function selectStoredIntegration(
+  rows: Array<Record<string, unknown>>,
+  module: EmailModuleKey
+): StoredEmailIntegration | null {
+  if (rows.length === 0) return null
+  const hasModule = rows.some((row) => typeof row.module === 'string' && row.module.length > 0)
+  const record = hasModule ? rows.find((row) => row.module === module) : rows[0]
+  if (!record) return null
+  return {
+    provider: typeof record.provider === 'string' ? record.provider : 'betterblog',
+    apiKeyEnc: textOrNull(record.api_key_enc),
+    destinationId: textOrNull(record.destination_id),
+    destinationKind: textOrNull(record.destination_kind),
+    tagId: textOrNull(record.tag_id),
+    tagName: textOrNull(record.tag_name),
+  }
+}
+
+const INTEGRATION_LOOKUPS = [
+  `SELECT module, provider, api_key_enc, destination_id, destination_kind, tag_id, tag_name FROM site_email_integrations WHERE site_id = $1`,
+  `SELECT provider, api_key_enc, destination_id, destination_kind, tag_id, tag_name FROM site_email_integrations WHERE site_id = $1`,
+  `SELECT provider, api_key_enc, destination_id FROM site_email_integrations WHERE site_id = $1`,
+]
+
+let loggedSchemaFallback = false
+
+async function loadIntegrationFallback(
+  siteId: string,
+  module: EmailModuleKey
+): Promise<StoredEmailIntegration | null> {
+  for (const statement of INTEGRATION_LOOKUPS) {
+    try {
+      const found = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(statement, siteId)
+      return selectStoredIntegration(found, module)
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+async function saveStatusFallback(siteId: string, module: EmailModuleKey, status: EmailForwardStatus): Promise<void> {
+  const statements = [
+    `UPDATE site_email_integrations SET last_error = $2, last_error_at = $3, last_success_at = COALESCE($4::timestamp, last_success_at), updated_at = CURRENT_TIMESTAMP WHERE site_id = $1 AND module = $5`,
+    `UPDATE site_email_integrations SET last_error = $2, last_error_at = $3, last_success_at = COALESCE($4::timestamp, last_success_at), updated_at = CURRENT_TIMESTAMP WHERE site_id = $1`,
+  ]
+  for (const statement of statements) {
+    try {
+      await prisma.$executeRawUnsafe(
+        statement,
+        siteId,
+        status.lastError,
+        status.lastErrorAt,
+        status.lastSuccessAt ?? null,
+        module
+      )
+      return
+    } catch {
+      continue
+    }
+  }
+}
+
 export type CapturedLead = {
   siteId: string
   email: string
@@ -201,42 +269,58 @@ export function createEmailSyncDeps(): EmailSyncDeps {
       })
     },
     loadIntegration: async (siteId, module) => {
-      const row = await prisma.siteEmailIntegration.findUnique({
-        where: { siteId_module: { siteId, module } },
-      })
-      if (!row) return null
-      let apiKeyEnc = row.apiKeyEnc
-      if (!apiKeyEnc && (row.provider === 'kit' || row.provider === 'mailchimp')) {
-        const credential = await prisma.siteEmailCredential.findUnique({
-          where: { siteId_provider: { siteId, provider: row.provider } },
+      try {
+        const row = await prisma.siteEmailIntegration.findUnique({
+          where: { siteId_module: { siteId, module } },
         })
-        apiKeyEnc = credential?.apiKeyEnc ?? null
-        if (!apiKeyEnc) {
-          const sibling = await prisma.siteEmailIntegration.findFirst({
-            where: { siteId, provider: row.provider, apiKeyEnc: { not: null } },
-            select: { apiKeyEnc: true },
-          })
-          apiKeyEnc = sibling?.apiKeyEnc ?? null
+        if (!row) return null
+        let apiKeyEnc = row.apiKeyEnc
+        if (!apiKeyEnc && (row.provider === 'kit' || row.provider === 'mailchimp')) {
+          try {
+            const credential = await prisma.siteEmailCredential.findUnique({
+              where: { siteId_provider: { siteId, provider: row.provider } },
+            })
+            apiKeyEnc = credential?.apiKeyEnc ?? null
+          } catch {
+            apiKeyEnc = null
+          }
+          if (!apiKeyEnc) {
+            const sibling = await prisma.siteEmailIntegration.findFirst({
+              where: { siteId, provider: row.provider, apiKeyEnc: { not: null } },
+              select: { apiKeyEnc: true },
+            })
+            apiKeyEnc = sibling?.apiKeyEnc ?? null
+          }
         }
-      }
-      return {
-        provider: row.provider,
-        apiKeyEnc,
-        destinationId: row.destinationId,
-        destinationKind: row.destinationKind,
-        tagId: row.tagId,
-        tagName: row.tagName,
+        return {
+          provider: row.provider,
+          apiKeyEnc,
+          destinationId: row.destinationId,
+          destinationKind: row.destinationKind,
+          tagId: row.tagId,
+          tagName: row.tagName,
+        }
+      } catch (err) {
+        if (!loggedSchemaFallback) {
+          loggedSchemaFallback = true
+          console.error('[email-integration] Per-module destination columns are missing; reading the stored row', err)
+        }
+        return loadIntegrationFallback(siteId, module)
       }
     },
     saveStatus: async (siteId, module, status) => {
-      await prisma.siteEmailIntegration.update({
-        where: { siteId_module: { siteId, module } },
-        data: {
-          lastError: status.lastError,
-          lastErrorAt: status.lastErrorAt,
-          ...(status.lastSuccessAt ? { lastSuccessAt: status.lastSuccessAt } : {}),
-        },
-      })
+      try {
+        await prisma.siteEmailIntegration.update({
+          where: { siteId_module: { siteId, module } },
+          data: {
+            lastError: status.lastError,
+            lastErrorAt: status.lastErrorAt,
+            ...(status.lastSuccessAt ? { lastSuccessAt: status.lastSuccessAt } : {}),
+          },
+        })
+      } catch {
+        await saveStatusFallback(siteId, module, status)
+      }
     },
     forward: forwardSubscriber,
     decryptKey: decrypt,
