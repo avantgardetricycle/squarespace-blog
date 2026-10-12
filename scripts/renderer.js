@@ -6020,7 +6020,7 @@
     _fathomFlushQueue: function() {
       var api = typeof window !== 'undefined' ? window.fathom : null;
       // #region agent log
-      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0 });
+      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0, isTracking: !!(api && typeof api.isTrackingEnabled === 'function' && api.isTrackingEnabled()), apiSiteLen: api && api.siteId ? String(api.siteId).length : 0, build: '6cfb79-r2' });
       // #endregion
       if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
       var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
@@ -6036,7 +6036,7 @@
     _fathomForward: function(type) {
       var fathom = this._fathomConfig();
       // #region agent log
-      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79' });
+      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79-r2' });
       // #endregion
       if (!fathom || type === 'render_perf') return;
       var allowed = {
@@ -6103,7 +6103,10 @@
           imgsBefore: imgsBefore,
           imgsAfter: imgsAfter,
           sidMatch: sidMatch,
-          siteIdLen: siteCode ? String(siteCode).length : 0
+          siteIdLen: siteCode ? String(siteCode).length : 0,
+          isTracking: typeof api.isTrackingEnabled === 'function' ? api.isTrackingEnabled() : null,
+          apiSiteMatch: api.siteId === siteCode,
+          build: '6cfb79-r2'
         });
         // #endregion
       });
