@@ -5974,22 +5974,6 @@
       return fathom;
     },
 
-    _fathomDebug: function(hypothesisId, location, message, data) {
-      var payload = { sessionId: '6cfb79', runId: 'pre-fix', hypothesisId: hypothesisId, location: location, message: message, data: data || {}, timestamp: Date.now() };
-      try { console.log('[bb-fathom-debug]', payload); } catch (eLog) { /* ignore */ }
-      try {
-        var baseUrl = this.config && this.config.baseUrl;
-        if (!baseUrl) return;
-        var url = String(baseUrl).replace(/\/+$/, '') + '/api/analytics/fathom-debug';
-        var body = JSON.stringify(payload);
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
-        } else {
-          fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(function() {});
-        }
-      } catch (eSend) { /* ignore */ }
-    },
-
     _fathomEnsure: function() {
       if (this._fathomScriptRequested) return;
       var fathom = this._fathomConfig();
@@ -6001,17 +5985,8 @@
       script.async = true;
       script.setAttribute('data-site', fathom.siteId);
       script.setAttribute('data-auto', 'false');
-      script.setAttribute('data-bb-fathom', '1');
       script.onload = function() {
-        // #region agent log
-        self._fathomDebug('C', 'renderer.js:_fathomEnsure', 'fathom script onload', { hasApi: typeof window.fathom !== 'undefined', queueLen: (self._fathomQueue && self._fathomQueue.length) || 0 });
-        // #endregion
         self._fathomFlushQueue();
-      };
-      script.onerror = function() {
-        // #region agent log
-        self._fathomDebug('C', 'renderer.js:_fathomEnsure', 'fathom script onerror', { queueLen: (self._fathomQueue && self._fathomQueue.length) || 0 });
-        // #endregion
       };
       var parent = document.head || document.documentElement;
       if (parent) parent.appendChild(script);
@@ -6019,25 +5994,15 @@
 
     _fathomFlushQueue: function() {
       var api = typeof window !== 'undefined' ? window.fathom : null;
-      // #region agent log
-      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0, isTracking: !!(api && typeof api.isTrackingEnabled === 'function' && api.isTrackingEnabled()), apiSiteLen: api && api.siteId ? String(api.siteId).length : 0, build: '6cfb79-r3' });
-      // #endregion
       if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
       var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
       for (var i = 0; i < queued.length; i++) {
-        try { queued[i](); } catch (e) {
-          // #region agent log
-          this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'fathom send threw', { error: e && e.message ? String(e.message) : 'unknown' });
-          // #endregion
-        }
+        try { queued[i](); } catch (e) { /* ignore */ }
       }
     },
 
     _fathomForward: function(type) {
       var fathom = this._fathomConfig();
-      // #region agent log
-      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79-r3' });
-      // #endregion
       if (!fathom || type === 'render_perf') return;
       var allowed = {
         page_view: 1,
@@ -6054,80 +6019,19 @@
         || metrics.indexOf('top_referrers') !== -1
         || metrics.indexOf('traffic_sources') !== -1;
       var siteCode = fathom.siteId;
-      var self = this;
       this._fathomQueue.push(function() {
         var api = window.fathom;
         if (!api) return;
         if (typeof api.setSite === 'function') api.setSite(siteCode);
-        var imgsBefore = 0;
-        var scriptCount = 0;
-        var scriptSiteMatch = false;
-        var blocked = null;
-        try {
-          imgsBefore = document.querySelectorAll('img[src*="usefathom.com"]').length;
-          var scripts = document.querySelectorAll('script[src*="usefathom.com/script.js"]');
-          scriptCount = scripts.length;
-          for (var s = 0; s < scripts.length; s++) {
-            if (scripts[s].getAttribute('data-site') === siteCode) scriptSiteMatch = true;
-          }
-          blocked = window.localStorage ? window.localStorage.getItem('blockFathomTracking') : null;
-        } catch (eCount) { /* ignore */ }
-        var sent = false;
         if (type === 'page_view' && typeof api.trackPageview === 'function') {
           var opts = { url: window.location.href };
           // Fathom falls back to document.referrer when this is omitted, so
           // unchecking referrer metrics cannot fully strip it the way GA can.
           if (includeReferrer && document.referrer) opts.referrer = document.referrer;
           api.trackPageview(opts);
-          sent = true;
         } else if (type !== 'page_view' && typeof api.trackEvent === 'function') {
           api.trackEvent(type);
-          sent = true;
         }
-        var imgsAfter = imgsBefore;
-        var sidMatch = false;
-        var pixel = null;
-        try {
-          var imgs = document.querySelectorAll('img[src*="usefathom.com"]');
-          imgsAfter = imgs.length;
-          if (imgsAfter > 0) {
-            pixel = imgs[imgsAfter - 1];
-            sidMatch = pixel.src.indexOf('sid=' + encodeURIComponent(siteCode)) !== -1;
-          }
-        } catch (eImg) { /* ignore */ }
-        if (pixel && imgsAfter > imgsBefore) {
-          var reported = false;
-          var reportPixel = function(result) {
-            if (reported) return;
-            reported = true;
-            // #region agent log
-            self._fathomDebug('F', 'renderer.js:pixel', 'fathom pixel finished', { result: result, type: type, naturalWidth: pixel.naturalWidth || 0, build: '6cfb79-r3' });
-            // #endregion
-          };
-          if (pixel.complete) reportPixel(pixel.naturalWidth > 0 ? 'load-already' : 'error-already');
-          else {
-            pixel.addEventListener('load', function() { reportPixel('load'); });
-            pixel.addEventListener('error', function() { reportPixel('error'); });
-          }
-        }
-        // #region agent log
-        self._fathomDebug('D', 'renderer.js:_fathomForward', 'fathom send result', {
-          type: type,
-          sent: sent,
-          host: window.location.hostname || '',
-          visibility: document.visibilityState || '',
-          blocked: blocked,
-          scriptCount: scriptCount,
-          scriptSiteMatch: scriptSiteMatch,
-          imgsBefore: imgsBefore,
-          imgsAfter: imgsAfter,
-          sidMatch: sidMatch,
-          siteIdLen: siteCode ? String(siteCode).length : 0,
-          isTracking: typeof api.isTrackingEnabled === 'function' ? api.isTrackingEnabled() : null,
-          apiSiteMatch: api.siteId === siteCode,
-          build: '6cfb79-r3'
-        });
-        // #endregion
       });
       this._fathomEnsure();
       this._fathomFlushQueue();
