@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { cssNumber, cssValue, expectPx, isMobileProject, mountRenderer } from "./harness";
 import { authorProfiles, blogJson } from "./fixtures/blog";
-import { postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
+import { collectionTemplates, postTemplates, zoneOrderPostConfig, type PostTemplateName } from "./fixtures/templates";
 
 const POSTS: PostTemplateName[] = ["feature", "reporter", "writer", "story", "publisher"];
 
@@ -149,6 +149,7 @@ test.describe("post layout contract", () => {
     const markdown = bio("sidebar", "Markdown Author");
     await expect(markdown.locator("strong")).toHaveText("first");
     await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    await expect(markdown.locator("li")).toHaveText(["Ada", "Code"]);
     const markdownFooter = bio("footer", "Markdown Author");
     await expect(markdownFooter.locator("strong")).toHaveText("long");
     await expect(markdownFooter.locator("a")).toHaveAttribute("href", "https://example.invalid/long");
@@ -718,5 +719,152 @@ test.describe("post video blocks", () => {
     );
     expect(heights).toHaveLength(4);
     for (const height of heights) expect(height).toBeGreaterThan(80);
+  });
+});
+
+test.describe("sidebar mobile drawer", () => {
+  test("drawer tabs sit on the right and open the sidebar", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const postConfig = zoneOrderPostConfig("feature");
+    const left = postConfig.leftSidebar as { mobileDisplay?: string; show?: boolean };
+    const right = postConfig.rightSidebar as { mobileDisplay?: string; show?: boolean };
+    left.mobileDisplay = "drawer";
+    right.mobileDisplay = "drawer";
+
+    await mountRenderer(page, { postConfig });
+
+    const tabs = page.locator(".bb-mobile-drawer-tab");
+    if (!mobile) {
+      await expect(tabs).toHaveCount(0);
+      const leftDisplay = await page.locator('[data-bb-sidebar-side="left"]').first().evaluate((el) => getComputedStyle(el).display);
+      expect(leftDisplay).not.toBe("none");
+      return;
+    }
+
+    await expect(tabs).toHaveCount(2);
+    const rightTab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
+    const rightPanel = page.locator("#bb-mobile-drawer-panel-right");
+    await expect(rightTab).toBeVisible();
+    await expect(rightTab).toHaveText("More");
+    const tabBox = await rightTab.boundingBox();
+    const viewport = page.viewportSize();
+    expect(tabBox).not.toBeNull();
+    expect(tabBox!.x + tabBox!.width).toBeGreaterThan((viewport?.width ?? 0) - 4);
+    expect(tabBox!.width).toBeLessThanOrEqual(36);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual((viewport?.width ?? 0) + 1);
+
+    await expect(rightPanel).toBeHidden();
+    await rightTab.click();
+    await expect(rightPanel).toBeVisible();
+    await expect(rightPanel.locator("[data-bb-module]").first()).toBeVisible();
+    await expect.poll(async () => {
+      const panelBox = await rightPanel.boundingBox();
+      const tabNow = await rightTab.boundingBox();
+      if (!panelBox || !tabNow) return Number.POSITIVE_INFINITY;
+      const hostRight = viewport?.width ?? 0;
+      const flush = Math.abs(panelBox.x + panelBox.width - hostRight);
+      const tabMeetsPanel = Math.abs(tabNow.x + tabNow.width - panelBox.x);
+      return Math.max(flush, tabMeetsPanel);
+    }).toBeLessThanOrEqual(2);
+
+    await page.mouse.click(12, 280);
+    await expect(rightPanel).toBeHidden();
+  });
+
+  test("Configure phone frame pins the drawer tab to the preview column", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "renderer-desktop", "needs a wide window around a 375px root");
+    const postConfig = zoneOrderPostConfig("feature");
+    (postConfig.rightSidebar as { mobileDisplay?: string }).mobileDisplay = "drawer";
+    (postConfig.leftSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+
+    await mountRenderer(page, {
+      postConfig,
+      previewDevice: "mobile",
+      rootWidth: 375,
+    });
+
+    const tab = page.locator('.bb-mobile-drawer[data-bb-sidebar-side="right"] .bb-mobile-drawer-tab');
+    await expect(tab).toBeVisible();
+    const tabBox = await tab.boundingBox();
+    const rootBox = await page.locator("#root").boundingBox();
+    expect(tabBox).not.toBeNull();
+    expect(rootBox).not.toBeNull();
+    expect(Math.abs(tabBox!.x + tabBox!.width - (rootBox!.x + rootBox!.width))).toBeLessThan(8);
+    expect(tabBox!.x).toBeGreaterThan(rootBox!.x + rootBox!.width - 48);
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const root = document.getElementById("root");
+        if (!root) return Number.POSITIVE_INFINITY;
+        return root.scrollWidth - root.clientWidth;
+      });
+    }).toBeLessThanOrEqual(2);
+
+    await tab.click();
+    const panel = page.locator("#bb-mobile-drawer-panel-right");
+    await expect(panel).toBeVisible();
+    await expect.poll(async () => {
+      const panelBox = await panel.boundingBox();
+      const tabNow = await tab.boundingBox();
+      const rootNow = await page.locator("#root").boundingBox();
+      if (!panelBox || !tabNow || !rootNow) return Number.POSITIVE_INFINITY;
+      const flush = Math.abs(panelBox.x + panelBox.width - (rootNow.x + rootNow.width));
+      const tabMeetsPanel = Math.abs(tabNow.x + tabNow.width - panelBox.x);
+      return Math.max(flush, tabMeetsPanel);
+    }).toBeLessThanOrEqual(2);
+    const settled = await panel.boundingBox();
+    expect(settled).not.toBeNull();
+    expect(settled!.x).toBeGreaterThanOrEqual((rootBox!.x) - 2);
+  });
+
+  test("hidden sidebars do not widen the phone frame", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "renderer-desktop", "needs a wide window around a 375px root");
+    const postConfig = zoneOrderPostConfig("feature");
+    (postConfig.leftSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+    (postConfig.rightSidebar as { mobileDisplay?: string }).mobileDisplay = "hidden";
+
+    await mountRenderer(page, {
+      postConfig,
+      previewDevice: "mobile",
+      rootWidth: 375,
+    });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const root = document.getElementById("root");
+        if (!root) return Number.POSITIVE_INFINITY;
+        return root.scrollWidth - root.clientWidth;
+      });
+    }).toBeLessThanOrEqual(2);
+    await expect(page.locator(".bb-mobile-drawer-tab")).toHaveCount(0);
+  });
+
+  test("mobile full-bleed header stays edge to edge without sideways scroll", async ({ page }, testInfo) => {
+    test.skip(!isMobileProject(testInfo), "mobile viewport");
+    const digest = structuredClone(collectionTemplates.digest) as {
+      leftSidebar: { mobileDisplay?: string };
+      rightSidebar: { mobileDisplay?: string };
+    };
+    digest.leftSidebar.mobileDisplay = "drawer";
+    digest.rightSidebar.mobileDisplay = "drawer";
+    await mountRenderer(page, {
+      collectionConfig: digest,
+      previewSelectedPostIndex: -1,
+    });
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const img = document.querySelector(".blog-overlay-digest-featured-article .blog-overlay-featured-image");
+        const doc = document.documentElement;
+        if (!img) return "missing";
+        const rect = img.getBoundingClientRect();
+        const scroll = doc.scrollWidth - doc.clientWidth;
+        if (scroll > 1) return "scroll " + scroll;
+        if (rect.left < -1 || rect.left > 2) return "left " + rect.left;
+        const rightGap = doc.clientWidth - rect.right;
+        if (rightGap < -1 || rightGap > 2) return "right " + rightGap;
+        return "ok";
+      });
+    }).toBe("ok");
   });
 });

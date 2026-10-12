@@ -53,6 +53,7 @@ import BlogPreviewIframe, {
 } from "@/app/components/BlogPreviewIframe";
 import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
+import { AuthorBioPreview } from "@/app/components/AuthorBioPreview";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import {
@@ -65,9 +66,18 @@ import {
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import {
   EmailDestinationFields,
+  EMAIL_MODULE_KEYS,
+  EMPTY_EMAIL_CATALOG,
+  emailCatalogFromApi,
   emailDestinationDirty,
-  emailDestinationFromApi,
-  type EmailDestinationState,
+  emailDestinationsDirty,
+  emailDestinationsFromApi,
+  emptyEmailDestinations,
+  modulePayload,
+  presentModule,
+  type EmailCatalog,
+  type EmailDestinationsState,
+  type EmailModuleKey,
 } from "@/app/components/EmailDestinationFields";
 import { InstallationInstructionsBody } from "@/app/components/InstallationInstructionsModal";
 import { groupBlogsBySquarespaceOrigin, squarespaceOriginFromUrl } from "@/lib/squarespaceSiteGroups";
@@ -179,6 +189,23 @@ export type HeaderPostModuleType = (typeof HEADER_POST_MODULES)[number];
 /** Position for a discovery/navigation module */
 export type ModulePosition = "header" | "leftSidebar" | "rightSidebar" | "footer" | "none";
 
+/** How a sidebar behaves below the phone breakpoint. Hidden matches the current mobile layout. */
+export type SidebarMobileDisplay = "hidden" | "drawer";
+
+export interface SidebarZoneConfig {
+  show: boolean;
+  modules: string[];
+  moduleOrder: string[];
+  width: number;
+  spaceAbove: number;
+  sticky: boolean;
+  mobileDisplay: SidebarMobileDisplay;
+}
+
+function sidebarMobileDisplayOf(v: unknown): SidebarMobileDisplay {
+  return v === "drawer" ? "drawer" : "hidden";
+}
+
 export type TocStyle = "numbered" | "connectedDots" | "bookmark";
 
 /** Filter type: which filter module to show (derived from filterByTags + filterByCategories) */
@@ -269,8 +296,8 @@ export interface BaseLevelConfig {
   showDate: boolean;
   showAuthor: boolean;
   showReadingTime: boolean;
-  leftSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
-  rightSidebar: { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean };
+  leftSidebar: SidebarZoneConfig;
+  rightSidebar: SidebarZoneConfig;
   headerContent: { show: boolean; modules: string[]; moduleOrder: string[]; height: number };
   footerContent: FooterContentConfig;
   socialMediaLinks: { show: boolean; platforms: SocialPlatform[] };
@@ -550,8 +577,8 @@ const defaultCollectionConfig: CollectionLevelConfig = {
   thumbnailShape: "16:9",
   collectionModules: defaultCollectionModules,
   featuredArticle: defaultFeaturedArticle,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   socialMediaLinks: { show: false, platforms: [] },
@@ -866,6 +893,7 @@ function enforcePostTemplateLockedValues(
           ...tpl,
           modules: [...(tpl.modules ?? [])],
           moduleOrder: [...(tpl.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -887,6 +915,7 @@ function enforcePostTemplateLockedValues(
           ...tpl,
           modules: [...(tpl.modules ?? [])],
           moduleOrder: [...(tpl.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -1209,6 +1238,7 @@ function enforceCollectionTemplateLockedValues(
           ...tplSb,
           modules: [...(tplSb.modules ?? [])],
           moduleOrder: [...(tplSb.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -1236,6 +1266,7 @@ function enforceCollectionTemplateLockedValues(
           ...tplSb,
           modules: [...(tplSb.modules ?? [])],
           moduleOrder: [...(tplSb.moduleOrder ?? [])],
+          mobileDisplay: sidebarMobileDisplayOf(cur.mobileDisplay),
         },
       };
     }
@@ -1419,8 +1450,8 @@ const defaultPostConfig: PostLevelConfig = {
   showPostUpdatedAt: false,
   postModules: defaultPostModules,
   postHeader: defaultPostHeader,
-  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
-  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false },
+  leftSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
+  rightSidebar: { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" },
   headerContent: { show: false, modules: [], moduleOrder: [], height: 48 },
   footerContent: { show: false, modules: [], moduleOrder: [], topPadding: 16, sideMargins: "postBody" },
   progressBar: { show: false, position: "top", thickness: 6, color: "#5B4FE8" },
@@ -1703,8 +1734,8 @@ function parseLevelConfig(
     showCaption: Boolean(fi.showCaption ?? true),
     verticalSpacing: (fi.verticalSpacing === "tight" ? "tight" : fi.verticalSpacing === "spacious" ? "spacious" : "normal") as FeaturedImageVerticalSpacing,
   } : defaultFeaturedImage;
-  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
-  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean } : null;
+  const ls = raw?.leftSidebar && typeof raw.leftSidebar === "object" ? raw.leftSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean; mobileDisplay?: unknown } : null;
+  const rs = raw?.rightSidebar && typeof raw.rightSidebar === "object" ? raw.rightSidebar as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; width?: number; spaceAbove?: number; sticky?: boolean; mobileDisplay?: unknown } : null;
   const hc = raw?.headerContent && typeof raw.headerContent === "object" ? raw.headerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; height?: number } : null;
   const fc = raw?.footerContent && typeof raw.footerContent === "object" ? raw.footerContent as { show?: boolean; modules?: unknown[]; moduleOrder?: unknown[]; topPadding?: number; height?: number; sideMargins?: string } : null;
   const validSidebarCollection = (arr: unknown): SidebarCollectionModuleType[] =>
@@ -1730,12 +1761,12 @@ function parseLevelConfig(
     Array.isArray(hc?.modules) ? hc.modules as string[] : undefined
   );
   const hcModuleOrder = level === "collection" ? validHeaderCollection(hcOrderSource) : validHeaderPost(hcOrderSource);
-  const leftSidebar = ls
-    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: 0, sticky: ls.sticky === true }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
-  const rightSidebar = rs
-    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: 0, sticky: rs.sticky === true }
-    : { show: false, modules: [] as SidebarCollectionModuleType[] & SidebarPostModuleType[], moduleOrder: [] as string[], width: 240, spaceAbove: 0, sticky: false };
+  const leftSidebar: SidebarZoneConfig = ls
+    ? { show: Boolean(ls.show ?? false), modules: lsModuleOrder as string[], moduleOrder: lsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(ls.width) || 240)), spaceAbove: 0, sticky: ls.sticky === true, mobileDisplay: sidebarMobileDisplayOf(ls.mobileDisplay) }
+    : { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" };
+  const rightSidebar: SidebarZoneConfig = rs
+    ? { show: Boolean(rs.show ?? false), modules: rsModuleOrder as string[], moduleOrder: rsModuleOrder as string[], width: Math.min(400, Math.max(160, Number(rs.width) || 240)), spaceAbove: 0, sticky: rs.sticky === true, mobileDisplay: sidebarMobileDisplayOf(rs.mobileDisplay) }
+    : { show: false, modules: [], moduleOrder: [], width: 240, spaceAbove: 0, sticky: false, mobileDisplay: "hidden" };
   const headerContent = hc
     ? { show: Boolean(hc.show ?? false), modules: hcModuleOrder as string[], moduleOrder: hcModuleOrder as string[], height: Math.min(120, Math.max(32, Number(hc.height) || 48)) }
     : { show: false, modules: [] as HeaderCollectionModuleType[] & HeaderPostModuleType[], moduleOrder: [] as string[], height: 48 };
@@ -1999,8 +2030,8 @@ function parseLevelConfig(
     gridColumns,
     ...(level === "collection" ? { thumbnailShape } : {}),
     collectionModules,
-    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: normalizedLsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: normalizedRsOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+    leftSidebar: { ...leftSidebar, modules: collDerived.left, moduleOrder: normalizedLsOrder } as SidebarZoneConfig,
+    rightSidebar: { ...rightSidebar, modules: collDerived.right, moduleOrder: normalizedRsOrder } as SidebarZoneConfig,
     headerContent: { ...headerContent, modules: collHeaderOrdered, moduleOrder: normalizedHcOrder } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
     footerContent: { ...footerContent, modules: collDerived.footer, moduleOrder: finalFcOrder },
     socialMediaLinks,
@@ -2032,8 +2063,8 @@ function parseLevelConfig(
       showPostUpdatedAt: Boolean(raw?.showPostUpdatedAt ?? false),
       postModules,
       postHeader,
-      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: [...postDerived.left] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
-      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: [...postDerived.right] } as { show: boolean; modules: string[]; moduleOrder: string[]; width: number; spaceAbove: number; sticky: boolean },
+      leftSidebar: { ...leftSidebar, modules: postDerived.left, moduleOrder: [...postDerived.left] } as SidebarZoneConfig,
+      rightSidebar: { ...rightSidebar, modules: postDerived.right, moduleOrder: [...postDerived.right] } as SidebarZoneConfig,
       headerContent: { ...headerContent, modules: postDerived.header, moduleOrder: [...postDerived.header] } as { show: boolean; modules: string[]; moduleOrder: string[]; height: number },
       footerContent: { ...footerContent, modules: postDerived.footer, moduleOrder: [...postDerived.footer] },
       progressBar: {
@@ -2182,12 +2213,14 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
     a.leftSidebar.width === b.leftSidebar.width &&
     a.leftSidebar.spaceAbove === b.leftSidebar.spaceAbove &&
     a.leftSidebar.sticky === b.leftSidebar.sticky &&
+    sidebarMobileDisplayOf(a.leftSidebar.mobileDisplay) === sidebarMobileDisplayOf(b.leftSidebar.mobileDisplay) &&
     a.leftSidebar.modules.length === b.leftSidebar.modules.length &&
     a.leftSidebar.modules.every((m, i) => m === b.leftSidebar.modules[i]);
   const rsEqual = a.rightSidebar.show === b.rightSidebar.show &&
     a.rightSidebar.width === b.rightSidebar.width &&
     a.rightSidebar.spaceAbove === b.rightSidebar.spaceAbove &&
     a.rightSidebar.sticky === b.rightSidebar.sticky &&
+    sidebarMobileDisplayOf(a.rightSidebar.mobileDisplay) === sidebarMobileDisplayOf(b.rightSidebar.mobileDisplay) &&
     a.rightSidebar.modules.length === b.rightSidebar.modules.length &&
     a.rightSidebar.modules.every((m, i) => m === b.rightSidebar.modules[i]);
   const hcEqual = a.headerContent.show === b.headerContent.show &&
@@ -2273,6 +2306,27 @@ function configsEqual(a: SiteConfigForm, b: SiteConfigForm): boolean {
     levelConfigsEqual(a.postConfig, b.postConfig);
 }
 
+type ModuleCatalog = {
+  catalog: EmailCatalog;
+  provider: string | null;
+  loading: boolean;
+  error: string | null;
+  tagsError: string | null;
+};
+
+function emptyCatalogSlot(): ModuleCatalog {
+  return { catalog: EMPTY_EMAIL_CATALOG, provider: null, loading: false, error: null, tagsError: null };
+}
+
+function emptyModuleCatalogs(): Record<EmailModuleKey, ModuleCatalog> {
+  return {
+    collection_newsletter: emptyCatalogSlot(),
+    post_newsletter: emptyCatalogSlot(),
+    collection_lead_magnet: emptyCatalogSlot(),
+    post_lead_magnet: emptyCatalogSlot(),
+  };
+}
+
 export default function Configure() {
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
@@ -2299,6 +2353,7 @@ export default function Configure() {
   const [newAuthorBio, setNewAuthorBio] = useState("");
   const [newAuthorBioLong, setNewAuthorBioLong] = useState("");
   const [newAuthorBioFormat, setNewAuthorBioFormat] = useState<AuthorBioFormat>("markdown");
+  const [authorBioView, setAuthorBioView] = useState<"raw" | "preview">("raw");
   const [newAuthorEmail, setNewAuthorEmail] = useState("");
   const [newAuthorSocials, setNewAuthorSocials] = useState<Record<string, string>>({});
   const [addAuthorModalOpen, setAddAuthorModalOpen] = useState(false);
@@ -2335,10 +2390,19 @@ export default function Configure() {
   } | null>(null);
   const [commentSettingsLoading, setCommentSettingsLoading] = useState(false);
   const [savedCommentSettings, setSavedCommentSettings] = useState<typeof commentSettings>(null);
-  const [emailDestination, setEmailDestination] = useState<EmailDestinationState | null>(null);
-  const [savedEmailDestination, setSavedEmailDestination] = useState<EmailDestinationState | null>(null);
-  const [emailDestinationTesting, setEmailDestinationTesting] = useState(false);
-  const [emailDestinationTestMessage, setEmailDestinationTestMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailDestinations, setEmailDestinations] = useState<EmailDestinationsState>(emptyEmailDestinations);
+  const [savedEmailDestinations, setSavedEmailDestinations] = useState<EmailDestinationsState>(emptyEmailDestinations);
+  const emailSavedRef = useRef<EmailDestinationsState>(savedEmailDestinations);
+  const emailEditedRef = useRef(false);
+  const [emailTestingModule, setEmailTestingModule] = useState<EmailModuleKey | null>(null);
+  const [emailTestMessages, setEmailTestMessages] = useState<Partial<Record<EmailModuleKey, { ok: boolean; text: string } | null>>>({});
+  const [emailCatalogs, setEmailCatalogs] = useState<Record<EmailModuleKey, ModuleCatalog>>(emptyModuleCatalogs);
+  const [emailCatalogRefresh, setEmailCatalogRefresh] = useState<Record<EmailModuleKey, number>>({
+    collection_newsletter: 0,
+    post_newsletter: 0,
+    collection_lead_magnet: 0,
+    post_lead_magnet: 0,
+  });
   const [squarespaceApiKeyModalOpen, setSquarespaceApiKeyModalOpen] = useState<SquarespaceApiKeyModalMode>(false);
   const [sectionExpanded, setSectionExpanded] = useState({
     showAuthor: false,
@@ -2554,27 +2618,143 @@ export default function Configure() {
   useEffect(() => {
     if (!effectiveSiteKey) return;
     let cancelled = false;
-    setEmailDestinationTestMessage(null);
+    setEmailTestMessages({});
+    emailEditedRef.current = false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 12000);
     fetch(`/api/dashboard/settings/email-integration?siteKey=${encodeURIComponent(effectiveSiteKey)}`, {
       credentials: "include",
+      signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled) return;
-        const next = emailDestinationFromApi(data);
-        setEmailDestination(next);
-        setSavedEmailDestination(next);
+        const next = emailDestinationsFromApi(data);
+        const previous = emailSavedRef.current;
+        emailSavedRef.current = next;
+        setSavedEmailDestinations(next);
+        setEmailDestinations((current) => {
+          if (!emailEditedRef.current) return next;
+          const modules = { ...next.modules };
+          for (const key of EMAIL_MODULE_KEYS) {
+            if (emailDestinationDirty(current.modules[key], previous.modules[key])) {
+              modules[key] = current.modules[key];
+            }
+          }
+          return { ...next, modules, platformKeys: current.platformKeys };
+        });
       })
       .catch(() => {
         if (cancelled) return;
-        const next = emailDestinationFromApi(null);
-        setEmailDestination(next);
-        setSavedEmailDestination(next);
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      controller.abort();
     };
   }, [effectiveSiteKey]);
+
+  const emailCatalogSig = emailDestinations
+    ? EMAIL_MODULE_KEYS.map((key) => {
+        const dest = presentModule(emailDestinations, key);
+        const audience = dest.provider === "mailchimp" ? dest.destinationId : "";
+        return `${key}:${dest.provider}:${dest.apiKey}:${dest.hasApiKey ? 1 : 0}:${audience}:${emailCatalogRefresh[key]}`;
+      }).join("|")
+    : "";
+  const emailCatalogSigRef = useRef<Partial<Record<EmailModuleKey, string>>>({});
+  const emailCatalogRequests = useRef<Partial<Record<EmailModuleKey, { controller: AbortController; timer: number }>>>({});
+
+  useEffect(() => {
+    return () => {
+      for (const request of Object.values(emailCatalogRequests.current)) {
+        request?.controller.abort();
+        if (request) window.clearTimeout(request.timer);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const catalogSiteKey = effectiveSiteKey ?? siteKey;
+    if (!catalogSiteKey || !emailDestinations) return;
+    for (const moduleKey of EMAIL_MODULE_KEYS) {
+      const dest = presentModule(emailDestinations, moduleKey);
+      const audienceId = dest.provider === "mailchimp" ? dest.destinationId.trim() : "";
+      const sig = `${dest.provider}|${dest.apiKey}|${dest.hasApiKey ? 1 : 0}|${audienceId}|${emailCatalogRefresh[moduleKey]}|${catalogSiteKey}`;
+      if (emailCatalogSigRef.current[moduleKey] === sig) continue;
+      emailCatalogSigRef.current[moduleKey] = sig;
+      const previous = emailCatalogRequests.current[moduleKey];
+      previous?.controller.abort();
+      if (previous) window.clearTimeout(previous.timer);
+      const controller = new AbortController();
+      const external = dest.provider === "kit" || dest.provider === "mailchimp";
+      const typedKey = dest.apiKey.trim();
+      if (!external || (!typedKey && !dest.hasApiKey)) {
+        delete emailCatalogRequests.current[moduleKey];
+        setEmailCatalogs((prev) => ({ ...prev, [moduleKey]: emptyCatalogSlot() }));
+        continue;
+      }
+      const timer = window.setTimeout(() => {
+        setEmailCatalogs((prev) => ({
+          ...prev,
+          [moduleKey]: {
+            ...prev[moduleKey],
+            loading: true,
+            error: null,
+            tagsError: null,
+            catalog:
+              dest.provider === "mailchimp"
+                ? { ...prev[moduleKey].catalog, tags: [] }
+                : prev[moduleKey].catalog,
+          },
+        }));
+        fetch("/api/dashboard/settings/email-integration/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          signal: controller.signal,
+          body: JSON.stringify({
+            siteKey: catalogSiteKey,
+            provider: dest.provider,
+            apiKey: dest.apiKey,
+            audienceId,
+          }),
+        })
+          .then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              const message = typeof data?.error === "string" ? data.error : "Could not load destinations.";
+              throw new Error(message);
+            }
+            return emailCatalogFromApi(data);
+          })
+          .then((parsed) => {
+            if (controller.signal.aborted) return;
+            setEmailCatalogs((prev) => ({
+              ...prev,
+              [moduleKey]: {
+                catalog: parsed.catalog,
+                provider: dest.provider,
+                loading: false,
+                error: null,
+                tagsError: parsed.tagsError,
+              },
+            }));
+          })
+          .catch((err: unknown) => {
+            if (controller.signal.aborted) return;
+            setEmailCatalogs((prev) => ({
+              ...prev,
+              [moduleKey]: {
+                ...prev[moduleKey],
+                loading: false,
+                error: err instanceof Error ? err.message : "Could not load destinations.",
+              },
+            }));
+          });
+      }, typedKey ? 400 : 0);
+      emailCatalogRequests.current[moduleKey] = { controller, timer };
+    }
+  }, [effectiveSiteKey, siteKey, emailDestinations, emailCatalogRefresh, emailCatalogSig]);
 
   // Fetch blog authors for the site
   useEffect(() => {
@@ -2593,6 +2773,7 @@ export default function Configure() {
     setNewAuthorBio(author.bio ?? "");
     setNewAuthorBioLong(author.bioLong ?? "");
     setNewAuthorBioFormat(authorBioFormatOf(author));
+    setAuthorBioView("raw");
     setNewAuthorEmail(author.email ?? "");
     setNewAuthorSocials(author.socialLinks ?? {});
     setAddAuthorModalOpen(true);
@@ -2701,7 +2882,7 @@ export default function Configure() {
     !configsEqual(config, savedConfig) ||
     !!commentSettingsDirty ||
     paywallFormDirty ||
-    emailDestinationDirty(emailDestination, savedEmailDestination);
+    emailDestinationsDirty(emailDestinations, savedEmailDestinations);
   const effectiveConfig = selectedLevel === "collection"
     ? config.collectionConfig
     : config.postConfig;
@@ -3175,6 +3356,12 @@ export default function Configure() {
     if (!keyToSave) return;
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
+    const dirtyEmailModules = Object.fromEntries(
+      EMAIL_MODULE_KEYS.filter((key) =>
+        emailDestinationDirty(emailDestinations.modules[key], savedEmailDestinations.modules[key])
+      ).map((key) => [key, modulePayload(presentModule(emailDestinations, key))])
+    );
+    const emailDirty = Object.keys(dirtyEmailModules).length > 0;
     try {
       const [configRes, commentsRes, emailRes] = await Promise.all([
         fetch(`${apiBase}/api/config`, {
@@ -3224,23 +3411,21 @@ export default function Configure() {
               }),
             })
           : Promise.resolve({ ok: true } as Response),
-        emailDestination
+        emailDirty
           ? fetch(`${apiBase}/api/dashboard/settings/email-integration`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
               body: JSON.stringify({
                 siteKey: keyToSave,
-                provider: emailDestination.provider,
-                destinationId: emailDestination.destinationId,
-                apiKey: emailDestination.apiKey,
+                modules: dirtyEmailModules,
               }),
             })
           : Promise.resolve({ ok: true } as Response),
       ]);
       const configOk = configRes.ok;
       const commentsOk = !commentSettings || (commentsRes as Response).ok;
-      const emailOk = !emailDestination || (emailRes as Response).ok;
+      const emailOk = !emailDirty || (emailRes as Response).ok;
       if (configOk) {
         setSavedConfig(config);
         setConfig(config);
@@ -3256,15 +3441,22 @@ export default function Configure() {
         }
       }
       if (commentsOk && commentSettings) setSavedCommentSettings(commentSettings);
-      if (emailOk && emailDestination) {
+      if (emailOk && emailDirty) {
         const data = await (emailRes as Response).json().catch(() => null);
         const next =
-          data && typeof data === "object" && "provider" in data
-            ? emailDestinationFromApi(data)
-            : { ...emailDestination, apiKey: "" };
-        setEmailDestination(next);
-        setSavedEmailDestination(next);
-        setEmailDestinationTestMessage(null);
+          data && typeof data === "object" && "modules" in data
+            ? emailDestinationsFromApi(data)
+            : {
+                ...emailDestinations,
+                modules: Object.fromEntries(
+                  EMAIL_MODULE_KEYS.map((key) => [key, { ...emailDestinations.modules[key], apiKey: "" }])
+                ) as EmailDestinationsState["modules"],
+              };
+        emailSavedRef.current = next;
+        emailEditedRef.current = false;
+        setEmailDestinations(next);
+        setSavedEmailDestinations(next);
+        setEmailTestMessages({});
       }
       if (configOk && commentsOk && emailOk) {
         toast.success("Configuration saved successfully!");
@@ -3275,7 +3467,7 @@ export default function Configure() {
         } else if (!commentsOk && commentSettings) {
           const data = await (commentsRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save comment settings.");
-        } else if (!emailOk && emailDestination) {
+        } else if (!emailOk && emailDirty) {
           const data = await (emailRes as Response).json().catch(() => ({}));
           toast.error(data?.error ?? "Failed to save email destination.");
         }
@@ -3296,50 +3488,83 @@ export default function Configure() {
     paywallForm.eyebrowText,
     paywallForm.headlineText,
     paywallForm.featureItems,
-    emailDestination,
+    emailDestinations,
+    savedEmailDestinations,
   ]);
 
   const handleReset = () => {
     setConfig(savedConfig);
     if (savedCommentSettings) setCommentSettings(savedCommentSettings);
-    if (savedEmailDestination) setEmailDestination(savedEmailDestination);
-    setEmailDestinationTestMessage(null);
+    setEmailDestinations(savedEmailDestinations);
+    emailEditedRef.current = false;
+    setEmailTestMessages({});
     if (shouldShowViewerModeToggle) setPaywallForm(savedPaywallForm);
     toast.info("Changes reverted.");
   };
 
-  const handleTestEmailDestination = useCallback(async () => {
+  const handleTestEmailDestination = useCallback(async (moduleKey: EmailModuleKey) => {
     const keyToSave = effectiveSiteKey ?? siteKey;
-    if (!keyToSave || !emailDestination || emailDestination.provider === "betterblog") return;
-    setEmailDestinationTesting(true);
-    setEmailDestinationTestMessage(null);
+    const destination = presentModule(emailDestinations, moduleKey);
+    if (!keyToSave || !destination || destination.provider === "betterblog") return;
+    setEmailTestingModule(moduleKey);
+    setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
     try {
       const res = await fetch("/api/dashboard/settings/email-integration/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          siteKey: keyToSave,
-          provider: emailDestination.provider,
-          destinationId: emailDestination.destinationId,
-          apiKey: emailDestination.apiKey,
-        }),
+        body: JSON.stringify({ siteKey: keyToSave, ...modulePayload(destination) }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setEmailDestinationTestMessage({ ok: true, text: "Connection succeeded." });
-      } else {
-        setEmailDestinationTestMessage({
-          ok: false,
-          text: typeof data?.error === "string" ? data.error : "Connection failed.",
-        });
-      }
+      setEmailTestMessages((prev) => ({
+        ...prev,
+        [moduleKey]: res.ok
+          ? { ok: true, text: "Connection succeeded." }
+          : { ok: false, text: typeof data?.error === "string" ? data.error : "Connection failed." },
+      }));
     } catch {
-      setEmailDestinationTestMessage({ ok: false, text: "Connection failed." });
+      setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: { ok: false, text: "Connection failed." } }));
     } finally {
-      setEmailDestinationTesting(false);
+      setEmailTestingModule(null);
     }
-  }, [effectiveSiteKey, siteKey, emailDestination]);
+  }, [effectiveSiteKey, siteKey, emailDestinations]);
+
+  const renderEmailDestination = (moduleKey: EmailModuleKey) => {
+    const value = presentModule(emailDestinations, moduleKey);
+    const slot = emailCatalogs[moduleKey] ?? emptyCatalogSlot();
+    return (
+      <EmailDestinationFields
+        value={value}
+        savedKeys={emailDestinations.savedKeys}
+        platformKeys={emailDestinations.platformKeys}
+        onChange={(next) => {
+          emailEditedRef.current = true;
+          setEmailDestinations((current) => {
+            const platformKeys = { ...current.platformKeys };
+            if (next.provider === "kit" || next.provider === "mailchimp") {
+              platformKeys[next.provider] = next.apiKey;
+            }
+            return {
+              ...current,
+              platformKeys,
+              modules: { ...current.modules, [moduleKey]: next },
+            };
+          });
+          setEmailTestMessages((prev) => ({ ...prev, [moduleKey]: null }));
+        }}
+        onTest={() => void handleTestEmailDestination(moduleKey)}
+        onRefresh={() =>
+          setEmailCatalogRefresh((prev) => ({ ...prev, [moduleKey]: prev[moduleKey] + 1 }))
+        }
+        testing={emailTestingModule === moduleKey}
+        testMessage={emailTestMessages[moduleKey] ?? null}
+        catalog={slot.provider === value.provider ? slot.catalog : EMPTY_EMAIL_CATALOG}
+        catalogLoading={slot.loading}
+        catalogError={slot.error}
+        tagsError={slot.tagsError}
+      />
+    );
+  };
 
   const handleConfirmClearSettings = useCallback(() => {
     if (!clearSettingsCollection && !clearSettingsPost) return;
@@ -3480,10 +3705,12 @@ export default function Configure() {
     if (path === "leftSidebar.modules") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, modules: value as string[] } };
     if (path === "leftSidebar.width") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, width: value as number } };
     if (path === "leftSidebar.sticky") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, sticky: value as boolean } };
+    if (path === "leftSidebar.mobileDisplay") return { ...cfg, leftSidebar: { ...cfg.leftSidebar, mobileDisplay: sidebarMobileDisplayOf(value) } };
     if (path === "rightSidebar.show") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, show: value as boolean } };
     if (path === "rightSidebar.modules") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, modules: value as string[] } };
     if (path === "rightSidebar.width") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, width: value as number } };
     if (path === "rightSidebar.sticky") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, sticky: value as boolean } };
+    if (path === "rightSidebar.mobileDisplay") return { ...cfg, rightSidebar: { ...cfg.rightSidebar, mobileDisplay: sidebarMobileDisplayOf(value) } };
     if (path === "headerContent.show") return { ...cfg, headerContent: { ...cfg.headerContent, show: value as boolean } };
     if (path === "headerContent.modules") return { ...cfg, headerContent: { ...cfg.headerContent, modules: value as string[] } };
     if (path === "headerContent.height") return { ...cfg, headerContent: { ...cfg.headerContent, height: value as number } };
@@ -4170,6 +4397,7 @@ export default function Configure() {
                                             setAddAuthorContext({ postId });
                                             setAddAuthorAsDefault(false);
                                             setNewAuthorBioFormat("markdown");
+                                            setAuthorBioView("raw");
                                             setAddAuthorModalOpen(true);
                                           }}
                                         >
@@ -4304,6 +4532,7 @@ export default function Configure() {
                                         setAddAuthorContext("default");
                                         setAddAuthorAsDefault(true);
                                         setNewAuthorBioFormat("markdown");
+                                        setAuthorBioView("raw");
                                         setAddAuthorModalOpen(true);
                                       }}
                                     >
@@ -5456,6 +5685,29 @@ export default function Configure() {
                                     />
                                   </div>
                                   <div className="space-y-2">
+                                    <Label className="text-xs text-[#6b6b6b]">Mobile display</Label>
+                                    <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Mobile display">
+                                      {(["hidden", "drawer"] as const).map((mode) => (
+                                        <button
+                                          key={mode}
+                                          type="button"
+                                          aria-pressed={sidebarMobileDisplayOf(cfg.mobileDisplay) === mode}
+                                          onClick={() => updateLevelConfigPath(`${subPath}.mobileDisplay`, mode)}
+                                          className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                                            sidebarMobileDisplayOf(cfg.mobileDisplay) === mode
+                                              ? "bg-white text-[#0a0a0a] shadow-sm"
+                                              : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                                          }`}
+                                        >
+                                          {mode === "hidden" ? "Hidden" : "Drawer"}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className="text-[10px] text-[#6b6b6b]">
+                                      On phones, Hidden keeps today’s layout. Drawer adds a tab on the right edge that opens this sidebar.
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
                                     <Label className="text-xs text-[#6b6b6b]">Module order</Label>
                                     <p className="text-[10px] text-[#6b6b6b]">
                                       Drag to reorder. Remove a module to disable that feature.
@@ -5657,18 +5909,7 @@ export default function Configure() {
                                         placeholder="Subscribe"
                                       />
                                     </div>
-                                    {emailDestination && (
-                                      <EmailDestinationFields
-                                        value={emailDestination}
-                                        onChange={(next) => {
-                                          setEmailDestination(next);
-                                          setEmailDestinationTestMessage(null);
-                                        }}
-                                        onTest={() => void handleTestEmailDestination()}
-                                        testing={emailDestinationTesting}
-                                        testMessage={emailDestinationTestMessage}
-                                      />
-                                    )}
+                                    {renderEmailDestination("collection_newsletter")}
                                   </div>
                                 }
                               />
@@ -5680,8 +5921,9 @@ export default function Configure() {
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", collectionLeadMagnetLocations)}
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      Signups are saved in BetterBlog and sent to the destination chosen under Email Capture.
+                                      Signups are saved in BetterBlog and sent to the destination chosen here.
                                     </p>
+                                    {renderEmailDestination("collection_lead_magnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -5809,18 +6051,7 @@ export default function Configure() {
                                         placeholder="Subscribe"
                                       />
                                     </div>
-                                    {emailDestination && (
-                                      <EmailDestinationFields
-                                        value={emailDestination}
-                                        onChange={(next) => {
-                                          setEmailDestination(next);
-                                          setEmailDestinationTestMessage(null);
-                                        }}
-                                        onTest={() => void handleTestEmailDestination()}
-                                        testing={emailDestinationTesting}
-                                        testMessage={emailDestinationTestMessage}
-                                      />
-                                    )}
+                                    {renderEmailDestination("post_newsletter")}
                                   </div>
                                 }
                               />
@@ -5832,8 +6063,9 @@ export default function Configure() {
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("leadMagnet", postFeatureSidebarFooterLocations, "leadMagnet")}
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      Signups are saved in BetterBlog and sent to the destination chosen under Email Capture.
+                                      Signups are saved in BetterBlog and sent to the destination chosen here.
                                     </p>
+                                    {renderEmailDestination("post_lead_magnet")}
                                     <div className="space-y-2">
                                       <Label className="text-xs text-[#6b6b6b]">Resource title</Label>
                                       <Input
@@ -5944,12 +6176,13 @@ export default function Configure() {
               setNewAuthorBio("");
               setNewAuthorBioLong("");
               setNewAuthorBioFormat("markdown");
+              setAuthorBioView("raw");
               setNewAuthorEmail("");
               setNewAuthorSocials({});
             }
           }}
         >
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-3xl max-h-[calc(100vh-3rem)] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editAuthor ? "Edit Author" : "Add New Author"}</DialogTitle>
               {editAuthor && (
@@ -5964,6 +6197,7 @@ export default function Configure() {
                       setNewAuthorBio(a.bio ?? "");
                       setNewAuthorBioLong(a.bioLong ?? "");
                       setNewAuthorBioFormat(authorBioFormatOf(a));
+                      setAuthorBioView("raw");
                       setNewAuthorEmail(a.email ?? "");
                       setNewAuthorSocials(a.socialLinks ?? {});
                     }
@@ -5983,7 +6217,7 @@ export default function Configure() {
               )}
             </DialogHeader>
             <form
-              className="space-y-4 pt-2"
+              className="space-y-3"
               onSubmit={(e) => {
                 e.preventDefault();
                 const name = newAuthorName.trim();
@@ -6021,6 +6255,7 @@ export default function Configure() {
                         setNewAuthorBio("");
                         setNewAuthorBioLong("");
                         setNewAuthorBioFormat("markdown");
+                        setAuthorBioView("raw");
                         setNewAuthorEmail("");
                         setNewAuthorSocials({});
                         setAddAuthorModalOpen(false);
@@ -6074,6 +6309,7 @@ export default function Configure() {
                         setNewAuthorBio("");
                         setNewAuthorBioLong("");
                         setNewAuthorBioFormat("markdown");
+                        setAuthorBioView("raw");
                         setNewAuthorEmail("");
                         setNewAuthorSocials({});
                         setAddAuthorModalOpen(false);
@@ -6082,83 +6318,131 @@ export default function Configure() {
                 }
               }}
             >
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Name</Label>
-                <Input
-                  value={newAuthorName}
-                  onChange={(e) => setNewAuthorName(e.target.value)}
-                  placeholder="Author name"
-                  className="flex-1"
-                />
-              </div>
-              <AuthorImageUpload
-                value={newAuthorImageUrl}
-                onChange={setNewAuthorImageUrl}
-                siteKey={effectiveSiteKey}
-                authorName={newAuthorName}
-              />
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Bio format</Label>
-                <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio format">
-                  {AUTHOR_BIO_FORMATS.map((format) => (
-                    <button
-                      key={format.id}
-                      type="button"
-                      aria-pressed={newAuthorBioFormat === format.id}
-                      onClick={() => setNewAuthorBioFormat(format.id)}
-                      className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
-                        newAuthorBioFormat === format.id
-                          ? "bg-white text-[#0a0a0a] shadow-sm"
-                          : "text-[#6b6b6b] hover:text-[#0a0a0a]"
-                      }`}
-                    >
-                      {format.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-[#6b6b6b]">{AUTHOR_BIO_FORMAT_HINTS[newAuthorBioFormat]}</p>
-                <p className="text-xs text-[#6b6b6b]">
-                  Character counts include the source. Switching format does not convert what you have typed.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Short bio (max 200 characters)</Label>
-                <textarea
-                  value={newAuthorBio}
-                  onChange={(e) => setNewAuthorBio(e.target.value.slice(0, 200))}
-                  placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].short}
-                  className="w-full min-h-[60px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
-                  maxLength={200}
-                />
-                <span className="text-xs text-[#6b6b6b]">{newAuthorBio.length}/200</span>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Longer bio (max 1000 characters)</Label>
-                <textarea
-                  value={newAuthorBioLong}
-                  onChange={(e) => setNewAuthorBioLong(e.target.value.slice(0, 1000))}
-                  placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].long}
-                  className="w-full min-h-[80px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
-                  maxLength={1000}
-                />
-                <span className="text-xs text-[#6b6b6b]">{newAuthorBioLong.length}/1000</span>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Email</Label>
-                <Input
-                  type="email"
-                  value={newAuthorEmail}
-                  onChange={(e) => setNewAuthorEmail(e.target.value)}
-                  placeholder="author@example.com"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-[#6b6b6b]">Social links (optional)</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
+                  <Label className="text-xs text-[#6b6b6b]">Name</Label>
+                  <Input
+                    value={newAuthorName}
+                    onChange={(e) => setNewAuthorName(e.target.value)}
+                    placeholder="Author name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-[#6b6b6b]">Email</Label>
+                  <Input
+                    type="email"
+                    value={newAuthorEmail}
+                    onChange={(e) => setNewAuthorEmail(e.target.value)}
+                    placeholder="author@example.com"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[220px_minmax(0,1fr)] gap-3 items-start">
+                <AuthorImageUpload
+                  value={newAuthorImageUrl}
+                  onChange={setNewAuthorImageUrl}
+                  siteKey={effectiveSiteKey}
+                  authorName={newAuthorName}
+                />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs text-[#6b6b6b]">Bio format</Label>
+                    {newAuthorBioFormat !== "text" && (
+                      <div className="flex gap-1 p-0.5 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio view">
+                        {(["raw", "preview"] as const).map((view) => (
+                          <button
+                            key={view}
+                            type="button"
+                            aria-pressed={authorBioView === view}
+                            onClick={() => setAuthorBioView(view)}
+                            className={`py-1 px-2 rounded-md text-xs font-medium transition-colors ${
+                              authorBioView === view
+                                ? "bg-white text-[#0a0a0a] shadow-sm"
+                                : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                            }`}
+                          >
+                            {view === "raw" ? "Raw text" : "Preview"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-1 p-1 rounded-lg bg-[#e5e4e0]/50" role="group" aria-label="Bio format">
+                    {AUTHOR_BIO_FORMATS.map((format) => (
+                      <button
+                        key={format.id}
+                        type="button"
+                        aria-pressed={newAuthorBioFormat === format.id}
+                        onClick={() => {
+                          setNewAuthorBioFormat(format.id);
+                          if (format.id === "text") setAuthorBioView("raw");
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-md text-sm font-medium transition-colors ${
+                          newAuthorBioFormat === format.id
+                            ? "bg-white text-[#0a0a0a] shadow-sm"
+                            : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                        }`}
+                      >
+                        {format.label}
+                      </button>
+                    ))}
+                  </div>
+                  {newAuthorBioFormat === "text" ? (
+                    <p className="text-xs text-[#6b6b6b]">Shown exactly as typed.</p>
+                  ) : (
+                    <p className="text-xs text-[#6b6b6b]">{AUTHOR_BIO_FORMAT_HINTS[newAuthorBioFormat]}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label className="text-xs text-[#6b6b6b]">Short bio</Label>
+                    <span className="text-xs text-[#6b6b6b]">{newAuthorBio.length}/200</span>
+                  </div>
+                  {newAuthorBioFormat !== "text" && authorBioView === "preview" ? (
+                    <AuthorBioPreview
+                      source={newAuthorBio}
+                      format={newAuthorBioFormat === "html" ? "html" : "markdown"}
+                    />
+                  ) : (
+                    <textarea
+                      value={newAuthorBio}
+                      onChange={(e) => setNewAuthorBio(e.target.value.slice(0, 200))}
+                      placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].short}
+                      className="w-full min-h-[72px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
+                      maxLength={200}
+                    />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label className="text-xs text-[#6b6b6b]">Longer bio</Label>
+                    <span className="text-xs text-[#6b6b6b]">{newAuthorBioLong.length}/1000</span>
+                  </div>
+                  {newAuthorBioFormat !== "text" && authorBioView === "preview" ? (
+                    <AuthorBioPreview
+                      source={newAuthorBioLong}
+                      format={newAuthorBioFormat === "html" ? "html" : "markdown"}
+                    />
+                  ) : (
+                    <textarea
+                      value={newAuthorBioLong}
+                      onChange={(e) => setNewAuthorBioLong(e.target.value.slice(0, 1000))}
+                      placeholder={AUTHOR_BIO_PLACEHOLDERS[newAuthorBioFormat].long}
+                      className="w-full min-h-[72px] px-3 py-2 text-sm border border-[#e5e4e0] rounded-md resize-y"
+                      maxLength={1000}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-[#6b6b6b]">Social links (optional)</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(["instagram", "facebook", "linkedin"] as const).map((platform) => (
-                    <div key={platform} className="flex items-center gap-2">
-                      <span className="text-xs text-[#6b6b6b] w-20 shrink-0 capitalize">
+                    <div key={platform} className="space-y-1">
+                      <span className="text-xs text-[#6b6b6b] capitalize">
                         {platform === "instagram" ? "Instagram" : platform === "facebook" ? "Facebook" : "LinkedIn"}
                       </span>
                       <Input
@@ -6168,32 +6452,36 @@ export default function Configure() {
                         }
                         placeholder={
                           platform === "instagram"
-                            ? "https://instagram.com/username"
+                            ? "instagram.com/…"
                             : platform === "facebook"
-                              ? "https://facebook.com/username"
-                              : "https://linkedin.com/in/username"
+                              ? "facebook.com/…"
+                              : "linkedin.com/in/…"
                         }
-                        className="h-8 text-sm flex-1"
+                        className="h-8 text-sm"
                       />
                     </div>
                   ))}
                 </div>
               </div>
-              {!editAuthor && (
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox
-                    checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
-                    onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
-                    disabled={addAuthorContext === "default"}
-                  />
-                  <span className="text-sm">
-                    {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
-                  </span>
-                </label>
-              )}
-              <Button type="submit" className="w-full" disabled={!newAuthorName.trim()}>
-                {editAuthor ? "Save Changes" : "Add Author"}
-              </Button>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                {!editAuthor ? (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <Checkbox
+                      checked={addAuthorContext === "default" ? true : addAuthorAsDefault}
+                      onCheckedChange={(v) => setAddAuthorAsDefault(Boolean(v))}
+                      disabled={addAuthorContext === "default"}
+                    />
+                    <span className="text-sm">
+                      {addAuthorContext === "default" ? "Default author (added to site defaults)" : "Also add as default author"}
+                    </span>
+                  </label>
+                ) : (
+                  <span />
+                )}
+                <Button type="submit" className="shrink-0" disabled={!newAuthorName.trim()}>
+                  {editAuthor ? "Save Changes" : "Add Author"}
+                </Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>

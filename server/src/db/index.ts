@@ -31,6 +31,20 @@ function getPrisma(): PrismaClient {
   return prismaInstance
 }
 
+export async function queryRows(text: string, values: unknown[] = []): Promise<Array<Record<string, unknown>>> {
+  getPrisma()
+  if (!pool) throw new Error('Database is not connected')
+  const result = await pool.query(text, values)
+  return result.rows as Array<Record<string, unknown>>
+}
+
+export async function executeSql(text: string, values: unknown[] = []): Promise<number> {
+  getPrisma()
+  if (!pool) throw new Error('Database is not connected')
+  const result = await pool.query(text, values)
+  return result.rowCount ?? 0
+}
+
 const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
     const client = getPrisma()

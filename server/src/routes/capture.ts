@@ -58,6 +58,7 @@ router.post('/', async (req: Request, res: Response) => {
       email?: string
       name?: string
       resourceTitle?: string
+      surface?: string
     }
 
     const siteKey = typeof body.siteKey === 'string' ? body.siteKey.trim() : null
@@ -113,9 +114,14 @@ router.post('/', async (req: Request, res: Response) => {
         name,
         type,
         resourceTitle: resourceTitleForDb,
+        surface: body.surface === 'post' ? 'post' : 'collection',
       },
       createEmailSyncDeps()
     )
+    // #region agent log
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'E',location:'capture.ts:POST',message:'capture accepted',data:{type,surface:body.surface=== 'post'?'post':'collection',rawSurface:typeof body.surface==='string'?body.surface:null},timestamp:Date.now()})}).catch(()=>{});
+    console.error('[capture-debug]', JSON.stringify({hypothesisId:'E',location:'capture.ts:POST',type,surface:body.surface==='post'?'post':'collection',rawSurface:typeof body.surface==='string'?body.surface:null}))
+    // #endregion
 
     const siteOwner = await prisma.user.findUnique({
       where: { id: site.userId },
