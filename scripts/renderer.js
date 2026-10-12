@@ -591,6 +591,8 @@
     _infiniteScrollLoaded: 0,
     _lastInfiniteScrollSignature: '',
     _analyticsQueue: [],
+    _fathomQueue: [],
+    _fathomScriptRequested: false,
     _analyticsFlushScheduled: null,
     _analyticsSearchDebounce: null,
     _pageLoadTime: null,
@@ -5966,6 +5968,75 @@
       this._analyticsFlush();
     },
 
+    _fathomConfig: function() {
+      var fathom = this.config && this.config.fathom;
+      if (!fathom || typeof fathom.siteId !== 'string' || !fathom.siteId) return null;
+      return fathom;
+    },
+
+    _fathomEnsure: function() {
+      if (this._fathomScriptRequested) return;
+      var fathom = this._fathomConfig();
+      if (!fathom || typeof document === 'undefined') return;
+      this._fathomScriptRequested = true;
+      var self = this;
+      var script = document.createElement('script');
+      script.src = 'https://cdn.usefathom.com/script.js';
+      script.async = true;
+      script.setAttribute('data-site', fathom.siteId);
+      script.setAttribute('data-auto', 'false');
+      script.setAttribute('data-bb-fathom', '1');
+      script.onload = function() { self._fathomFlushQueue(); };
+      var parent = document.head || document.documentElement;
+      if (parent) parent.appendChild(script);
+    },
+
+    _fathomFlushQueue: function() {
+      var api = typeof window !== 'undefined' ? window.fathom : null;
+      if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
+      var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
+      for (var i = 0; i < queued.length; i++) {
+        try { queued[i](); } catch (e) { /* ignore */ }
+      }
+    },
+
+    _fathomForward: function(type) {
+      var fathom = this._fathomConfig();
+      if (!fathom || type === 'render_perf') return;
+      var allowed = {
+        page_view: 1,
+        scroll_depth: 1,
+        click: 1,
+        search: 1,
+        search_click: 1,
+        time_on_page: 1
+      };
+      if (!allowed[type]) return;
+      if (!this._fathomQueue) this._fathomQueue = [];
+      var metrics = Array.isArray(fathom.metricsEnabled) ? fathom.metricsEnabled : [];
+      var includeReferrer = metrics.length === 0
+        || metrics.indexOf('top_referrers') !== -1
+        || metrics.indexOf('traffic_sources') !== -1;
+      var siteCode = fathom.siteId;
+      this._fathomQueue.push(function() {
+        var api = window.fathom;
+        if (!api) return;
+        if (typeof api.setSite === 'function') api.setSite(siteCode);
+        if (type === 'page_view') {
+          if (typeof api.trackPageview !== 'function') return;
+          var opts = { url: window.location.href };
+          // Fathom falls back to document.referrer when this is omitted, so
+          // unchecking referrer metrics cannot fully strip it the way GA can.
+          if (includeReferrer && document.referrer) opts.referrer = document.referrer;
+          api.trackPageview(opts);
+          return;
+        }
+        if (typeof api.trackEvent === 'function') api.trackEvent(type);
+      });
+      this._fathomEnsure();
+      this._fathomFlushQueue();
+    },
+
     _analyticsTrack: function(type, payload, postId, postIndex) {
       if (this._bbPreview || (this.config && this.config.previewMode)) return;
       var siteKey = this.config && this.config.siteKey;
@@ -5978,6 +6049,7 @@
         payload: payload || {}
       });
       this._analyticsScheduleFlush();
+      this._fathomForward(type);
     },
 
     _analyticsScheduleFlush: function() {

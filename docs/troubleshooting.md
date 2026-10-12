@@ -117,6 +117,9 @@ Read percent is tracked when a reader navigates away from the post — it captur
 **Google Analytics shows as connected but I don't see data in BetterBlog's dashboard.**
 Connecting Google Analytics sends your blog's event data to your GA property — it doesn't import GA data into BetterBlog. The BetterBlog analytics dashboard shows BetterBlog's own tracking data only. To see Traffic Sources, Top Referrers, and New vs. Returning Visitors, view those in your Google Analytics account directly.
 
+**Fathom shows as connected but I don't see data in BetterBlog's dashboard.**
+Connecting Fathom sends your blog's page views and reader events to your Fathom site — it doesn't import Fathom data into BetterBlog. The BetterBlog analytics dashboard shows BetterBlog's own tracking data only. To see Traffic Sources, Top Referrers, and New vs. Returning Visitors, view those in your Fathom account directly.
+
 ---
 
 ## Paywall and membership issues

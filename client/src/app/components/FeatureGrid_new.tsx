@@ -65,7 +65,7 @@ const F: Feat[] = [
   {id:'paywall',c:'growth',n:'Paywall & Memberships',i:'paywall',d:"Put posts behind your Squarespace membership with a proper paywall overlay for logged-out readers. It stays in sync with Squarespace's own membership settings. BetterBlog takes no cut; Squarespace's own fees apply.",s:'Paywall'},
   {id:'email',c:'growth',n:'Email Capture',i:'email',d:'Drop a newsletter signup anywhere on your blog — sidebar, post footer, or collection page. Subscribers land in your dashboard, and can also be sent to Kit or Mailchimp.',s:'Email Capture'},
   {id:'magnet',c:'growth',n:'Lead Magnet',i:'magnet',d:'Offer a freebie in exchange for an email. Guides, checklists, templates — delivered automatically, tracked alongside your newsletter signups.',s:'Lead Magnet'},
-  {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics and your blog events forward straight into GA4, so traffic sources, top referrers and new vs. returning show up in your GA reports.',s:'Analytics'}
+  {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics or Fathom and your blog events forward into that account, so traffic sources, top referrers and new vs. returning show up there.',s:'Analytics'}
 ];
 
 const shell = (inner: string) => `<div class="stage-mb">
@@ -696,6 +696,13 @@ function stage(f: Feat): string {
           <span style="font-size:.54rem;font-weight:600;color:#1a1a1a">Google Analytics</span>
           <span style="font-size:.44rem;color:#0f7a58;font-weight:700;background:rgba(16,185,129,.12);border-radius:100px;padding:2px 7px">Connected</span>
           <span style="font-size:.44rem;color:#9a9aa4;font-family:ui-monospace,Menlo,monospace">G-XXXXXXXXXX</span>
+          <span style="margin-left:auto;font-size:.44rem;color:#9a9aa4">Tracking: Traffic Sources <span style="color:#dcdce2">&middot;</span> Top Referrers <span style="color:#dcdce2">&middot;</span> New vs. Returning</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #f0f0f0;border-radius:7px;padding:9px 11px;margin-top:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#10B981;flex-shrink:0"></span>
+          <span style="font-size:.54rem;font-weight:600;color:#1a1a1a">Fathom</span>
+          <span style="font-size:.44rem;color:#0f7a58;font-weight:700;background:rgba(16,185,129,.12);border-radius:100px;padding:2px 7px">Connected</span>
+          <span style="font-size:.44rem;color:#9a9aa4;font-family:ui-monospace,Menlo,monospace">CDBUGS</span>
           <span style="margin-left:auto;font-size:.44rem;color:#9a9aa4">Tracking: Traffic Sources <span style="color:#dcdce2">&middot;</span> Top Referrers <span style="color:#dcdce2">&middot;</span> New vs. Returning</span>
         </div>
       </div>`

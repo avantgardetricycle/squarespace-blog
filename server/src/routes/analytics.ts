@@ -220,6 +220,14 @@ router.post('/events', async (req: Request, res: Response) => {
 })
 
 const GA_METRICS = ['traffic_sources', 'top_referrers', 'new_vs_returning'] as const
+const FATHOM_SITE_ID_RE = /^[A-Z0-9]{5,12}$/i
+
+function parseForwardMetrics(raw: unknown): string[] {
+  const metrics = Array.isArray(raw)
+    ? raw.filter((m): m is string => typeof m === 'string' && GA_METRICS.includes(m as (typeof GA_METRICS)[number]))
+    : []
+  return metrics.length > 0 ? metrics : GA_METRICS.slice()
+}
 
 // GET /api/analytics/ga/:siteKey - Get Google Analytics config (requires auth)
 router.get('/ga/:siteKey', requireSession, async (req: Request, res: Response) => {
@@ -251,9 +259,7 @@ router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
   const siteKey = req.params.siteKey as string
   const body = req.body as { measurementId?: string; metricsEnabled?: string[] }
   const measurementId = typeof body.measurementId === 'string' ? body.measurementId.trim() : ''
-  const metricsEnabled = Array.isArray(body.metricsEnabled)
-    ? body.metricsEnabled.filter((m): m is string => typeof m === 'string' && GA_METRICS.includes(m as (typeof GA_METRICS)[number]))
-    : []
+  const metricsEnabled = parseForwardMetrics(body.metricsEnabled)
 
   if (!measurementId || !/^G-[A-Z0-9]+$/i.test(measurementId)) {
     res.status(400).json({ error: 'Valid GA4 Measurement ID (G-XXXXXXXXX) is required' })
@@ -275,7 +281,7 @@ router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
         where: { siteId: site.id },
         data: {
           measurementId,
-          metricsEnabled: metricsEnabled.length > 0 ? metricsEnabled : GA_METRICS.slice()
+          metricsEnabled
         }
       })
     } else {
@@ -283,7 +289,7 @@ router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
         data: {
           siteId: site.id,
           measurementId,
-          metricsEnabled: metricsEnabled.length > 0 ? metricsEnabled : GA_METRICS.slice()
+          metricsEnabled
         }
       })
     }
@@ -312,6 +318,97 @@ router.delete('/ga/:siteKey', requireSession, async (req: Request, res: Response
     })
   }
     res.json({ success: true })
+})
+
+// GET /api/analytics/fathom/:siteKey - Get Fathom config (requires auth)
+router.get('/fathom/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id, deletedAt: null },
+    include: { fathomAnalytics: true }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const fathom = site.fathomAnalytics
+  if (!fathom) {
+    res.json({ connected: false, fathomSiteId: null, metricsEnabled: [] })
+    return
+  }
+  res.json({
+    connected: true,
+    fathomSiteId: fathom.fathomSiteId,
+    metricsEnabled: fathom.metricsEnabled
+  })
+})
+
+// PUT /api/analytics/fathom/:siteKey - Save Fathom config (requires auth)
+router.put('/fathom/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const body = req.body as { fathomSiteId?: string; metricsEnabled?: string[] }
+  const fathomSiteId = typeof body.fathomSiteId === 'string' ? body.fathomSiteId.trim().toUpperCase() : ''
+  const metricsEnabled = parseForwardMetrics(body.metricsEnabled)
+
+  if (!fathomSiteId || !FATHOM_SITE_ID_RE.test(fathomSiteId)) {
+    res.status(400).json({ error: 'Valid Fathom Site ID (5–12 letters or numbers) is required' })
+    return
+  }
+
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id, deletedAt: null },
+    include: { fathomAnalytics: true }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+
+  try {
+    if (site.fathomAnalytics) {
+      await prisma.siteFathomAnalytics.update({
+        where: { siteId: site.id },
+        data: {
+          fathomSiteId,
+          metricsEnabled
+        }
+      })
+    } else {
+      await prisma.siteFathomAnalytics.create({
+        data: {
+          siteId: site.id,
+          fathomSiteId,
+          metricsEnabled
+        }
+      })
+    }
+    res.json({ success: true })
+  } catch (err) {
+    console.error('[analytics] Fathom save error:', err)
+    res.status(500).json({ error: 'Failed to save Fathom config' })
+  }
+})
+
+// DELETE /api/analytics/fathom/:siteKey - Disconnect Fathom (requires auth)
+router.delete('/fathom/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id, deletedAt: null },
+    include: { fathomAnalytics: true }
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  if (site.fathomAnalytics) {
+    await prisma.siteFathomAnalytics.delete({
+      where: { siteId: site.id }
+    })
+  }
+  res.json({ success: true })
 })
 
 function parseLeadsTimeRange(range: string): { since: Date } {

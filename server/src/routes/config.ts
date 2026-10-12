@@ -632,7 +632,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         }
       },
       blogCommentSettings: true,
-      sitePaywallSettings: true
+      sitePaywallSettings: true,
+      fathomAnalytics: true
     }
   })
 
@@ -879,7 +880,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       recentPostsCount: 3,
       baseUrl,
       commentSettings,
-      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
+      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {}),
+      ...(site.fathomAnalytics
+        ? {
+            fathom: {
+              siteId: site.fathomAnalytics.fathomSiteId,
+              metricsEnabled: site.fathomAnalytics.metricsEnabled
+            }
+          }
+        : {})
     }
 
     console.log(`[config] GET ${siteKey} ok (${reqId})`, {
