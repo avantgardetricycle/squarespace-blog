@@ -1,6 +1,28 @@
 -- One destination per signup module. API keys stay per platform so a saved Kit or
 -- Mailchimp key can be reused by every module that selects that platform.
 -- Idempotent: db:migrate re-runs every *.sql after prisma db push.
+-- These ALTERs upgrade a site-level row in place when db push has not recreated the table.
+
+ALTER TABLE "site_email_integrations" ADD COLUMN IF NOT EXISTS "destination_kind" TEXT;
+ALTER TABLE "site_email_integrations" ADD COLUMN IF NOT EXISTS "tag_id" TEXT;
+ALTER TABLE "site_email_integrations" ADD COLUMN IF NOT EXISTS "tag_name" TEXT;
+ALTER TABLE "site_email_integrations" ADD COLUMN IF NOT EXISTS "module" TEXT NOT NULL DEFAULT 'collection_newsletter';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey)
+    WHERE i.indrelid = 'site_email_integrations'::regclass
+      AND i.indisprimary
+      AND a.attname = 'module'
+  ) THEN
+    ALTER TABLE "site_email_integrations" DROP CONSTRAINT "site_email_integrations_pkey";
+    ALTER TABLE "site_email_integrations"
+      ADD CONSTRAINT "site_email_integrations_pkey" PRIMARY KEY ("site_id", "module");
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "site_email_credentials" (
     "site_id" TEXT NOT NULL,

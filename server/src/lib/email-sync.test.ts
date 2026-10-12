@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { emailModuleForLead, persistAndForwardLead, type EmailSyncDeps } from './email-sync.js'
+import { emailModuleForLead, persistAndForwardLead, selectStoredIntegration, type EmailSyncDeps } from './email-sync.js'
 
 const lead = {
   siteId: 'site-1',
@@ -33,6 +33,28 @@ function deps(overrides: Partial<EmailSyncDeps> = {}): EmailSyncDeps & { calls: 
     ...overrides,
   }
 }
+
+test('a legacy destination row without a module is used for post newsletter', () => {
+  const stored = selectStoredIntegration(
+    [{ provider: 'mailchimp', api_key_enc: 'enc', destination_id: 'audience-1', tag_name: 'Readers' }],
+    'post_newsletter'
+  )
+  assert.equal(stored?.provider, 'mailchimp')
+  assert.equal(stored?.apiKeyEnc, 'enc')
+  assert.equal(stored?.destinationId, 'audience-1')
+  assert.equal(stored?.tagName, 'Readers')
+})
+
+test('per-module rows do not share another module destination', () => {
+  const rows = [
+    { module: 'collection_newsletter', provider: 'mailchimp', api_key_enc: 'enc', destination_id: 'audience-1' },
+    { module: 'post_newsletter', provider: 'kit', api_key_enc: 'enc', destination_id: 'form-9', destination_kind: 'form' },
+  ]
+  const post = selectStoredIntegration(rows, 'post_newsletter')
+  assert.equal(post?.provider, 'kit')
+  assert.equal(post?.destinationId, 'form-9')
+  assert.equal(selectStoredIntegration(rows, 'post_lead_magnet'), null)
+})
 
 test('signup modules keep collection and post destinations apart', () => {
   assert.equal(emailModuleForLead('newsletter', 'collection'), 'collection_newsletter')
