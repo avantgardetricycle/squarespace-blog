@@ -5974,6 +5974,22 @@
       return fathom;
     },
 
+    _fathomDebug: function(hypothesisId, location, message, data) {
+      var payload = { sessionId: '6cfb79', runId: 'pre-fix', hypothesisId: hypothesisId, location: location, message: message, data: data || {}, timestamp: Date.now() };
+      try { console.log('[bb-fathom-debug]', payload); } catch (eLog) { /* ignore */ }
+      try {
+        var baseUrl = this.config && this.config.baseUrl;
+        if (!baseUrl) return;
+        var url = String(baseUrl).replace(/\/+$/, '') + '/api/analytics/fathom-debug';
+        var body = JSON.stringify(payload);
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+        } else {
+          fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(function() {});
+        }
+      } catch (eSend) { /* ignore */ }
+    },
+
     _fathomEnsure: function() {
       if (this._fathomScriptRequested) return;
       var fathom = this._fathomConfig();
@@ -5986,22 +6002,42 @@
       script.setAttribute('data-site', fathom.siteId);
       script.setAttribute('data-auto', 'false');
       script.setAttribute('data-bb-fathom', '1');
-      script.onload = function() { self._fathomFlushQueue(); };
+      script.onload = function() {
+        // #region agent log
+        self._fathomDebug('C', 'renderer.js:_fathomEnsure', 'fathom script onload', { hasApi: typeof window.fathom !== 'undefined', queueLen: (self._fathomQueue && self._fathomQueue.length) || 0 });
+        // #endregion
+        self._fathomFlushQueue();
+      };
+      script.onerror = function() {
+        // #region agent log
+        self._fathomDebug('C', 'renderer.js:_fathomEnsure', 'fathom script onerror', { queueLen: (self._fathomQueue && self._fathomQueue.length) || 0 });
+        // #endregion
+      };
       var parent = document.head || document.documentElement;
       if (parent) parent.appendChild(script);
     },
 
     _fathomFlushQueue: function() {
       var api = typeof window !== 'undefined' ? window.fathom : null;
+      // #region agent log
+      this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'flush fathom queue', { hasApi: !!api, hasTrackPageview: !!(api && api.trackPageview), queueLen: (this._fathomQueue && this._fathomQueue.length) || 0 });
+      // #endregion
       if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
       var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
       for (var i = 0; i < queued.length; i++) {
-        try { queued[i](); } catch (e) { /* ignore */ }
+        try { queued[i](); } catch (e) {
+          // #region agent log
+          this._fathomDebug('D', 'renderer.js:_fathomFlushQueue', 'fathom send threw', { error: e && e.message ? String(e.message) : 'unknown' });
+          // #endregion
+        }
       }
     },
 
     _fathomForward: function(type) {
       var fathom = this._fathomConfig();
+      // #region agent log
+      this._fathomDebug('A', 'renderer.js:_fathomForward', 'fathom forward decision', { type: type, hasFathom: !!fathom, siteIdLen: fathom && fathom.siteId ? String(fathom.siteId).length : 0, build: '6cfb79' });
+      // #endregion
       if (!fathom || type === 'render_perf') return;
       var allowed = {
         page_view: 1,
