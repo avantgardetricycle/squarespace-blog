@@ -69,7 +69,7 @@ test.describe("post layout contract", () => {
       const h1 = await cssNumber(page, ".blog-overlay-body h1", "font-size");
       const h6 = await cssNumber(page, ".blog-overlay-body h6", "font-size");
       expectPx(h6, 12);
-      if (mobile) expectPx(h1, name === "writer" ? 29 : 24);
+      if (mobile) expectPx(h1, 24);
       else expectPx(h1, 48);
 
       const footerGapSel =
@@ -405,6 +405,60 @@ test.describe("post layout contract", () => {
       expect(stuck.top).toBeGreaterThan(0);
     }
   });
+
+  test("post header font choices use the Squarespace heading and paragraph sizes", async ({ page }, testInfo) => {
+    const config = zoneOrderPostConfig("feature");
+    const header = {
+      ...(config.postHeader as Record<string, unknown>),
+      titleFont: "h2",
+      deckFont: "p1",
+      metaFont: "p3",
+    };
+    await mountRenderer(page, {
+      postConfig: { ...config, postHeader: header },
+      extraCss: `
+        :root {
+          --heading-2-font-font-size: 36px;
+          --heading-2-font-font-family: Georgia, serif;
+          --paragraph-1-font-font-size: 22px;
+          --paragraph-3-font-font-size: 11px;
+        }
+      `,
+    });
+
+    const fonts = await page.evaluate(() => {
+      const list = document.getElementById("blog-overlay-list");
+      const read = (selector: string) => {
+        const el = document.querySelector(selector);
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { size: cs.fontSize, family: cs.fontFamily };
+      };
+      return {
+        titleFont: list?.getAttribute("data-bb-title-font"),
+        deckFont: list?.getAttribute("data-bb-deck-font"),
+        metaFont: list?.getAttribute("data-bb-meta-font"),
+        title: read(".blog-overlay-post-title"),
+        deck: read(".blog-overlay-post-deck"),
+        meta: read(".blog-overlay-meta"),
+      };
+    });
+
+    expect(fonts.titleFont).toBe("h2");
+    expect(fonts.deckFont).toBe("p1");
+    expect(fonts.metaFont).toBe("p3");
+    expect(fonts.title).not.toBeNull();
+    expect(fonts.deck).not.toBeNull();
+    expect(fonts.meta).not.toBeNull();
+    expectPx(parseFloat(fonts.title!.size), 36);
+    expectPx(parseFloat(fonts.deck!.size), 22);
+    expectPx(parseFloat(fonts.meta!.size), 11);
+    expect(fonts.title!.family.toLowerCase()).toContain("georgia");
+
+    if (isMobileProject(testInfo)) {
+      expectPx(await cssNumber(page, ".blog-overlay-body h1", "font-size"), 31);
+    }
+  });
 });
 
 test.describe("post updated at", () => {
@@ -542,7 +596,7 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
     const rule = await cssNumber(page, ".blog-overlay-writer-rule", "width");
     expectPx(rule, 40, 2);
     if (mobile) {
-      expectPx(title, 34);
+      expectPx(title, 28);
       expectPx(pad, 18.75, 1);
     } else {
       expect(pad).toBeGreaterThan(80);

@@ -41,6 +41,8 @@ type MountOptions = {
   /** Replace fixture author profiles. Defaults to the shared layout authors. */
   authorProfiles?: Record<string, { name: string; imageUrl?: string | null; bio?: string | null; bioLong?: string | null; bioFormat?: string; email?: string | null; socialLinks?: Record<string, string> }>;
   defaultAuthorIds?: string[];
+  /** Extra CSS in the host page, before the renderer runs. Used to simulate Squarespace type styles. */
+  extraCss?: string;
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
@@ -83,6 +85,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     const pageBackground = options.pageBackground;
     const header = `<header class="Header" style="height:64px;background:#111;color:#fff">Site header</header>`;
     let css = "html,body{margin:0;padding:0;background:#fff}";
+    if (options.extraCss) css += options.extraCss;
     let mount = `<div id="root" ${widthStyle}></div>`;
     if (pageBackground?.section) {
       const site = pageBackground.cssVariable || "#111111";
@@ -102,6 +105,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     } else if (pageBackground?.cssVariable) {
       css = `html,body{margin:0;padding:0;background:transparent}html{--siteBackgroundColor:${pageBackground.cssVariable}}`;
     }
+    if (options.extraCss && pageBackground) css += options.extraCss;
     await route.fulfill({
       status: 200,
       contentType: "text/html",
