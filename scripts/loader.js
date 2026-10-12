@@ -104,6 +104,67 @@
     return null;
   }
 
+  /**
+   * Queue for header scripts that must run after BetterBlog.
+   * KEEP IN SYNC with the inline installer in client/src/lib/betterBlogInstallationSnippet.ts.
+   * Installing here only helps older snippets that never created the queue; inline
+   * scripts pasted after those snippets have already run by the time this deferred
+   * loader executes. Sites with custom scripts need to re-copy the Header snippet.
+   */
+  function installBetterBlogReadyQueue() {
+    var bb = window.BetterBlog = window.BetterBlog || {};
+    bb._readyQueue = bb._readyQueue || [];
+    if (!bb.ready || !bb.ready.__bbReady) {
+      var ready = function (fn) {
+        if (typeof fn !== 'function') return;
+        var list = bb._readyQueue || (bb._readyQueue = []);
+        list.push(fn);
+        if (bb._lastCtx) {
+          try { fn(bb._lastCtx); } catch (err) {
+            console.error('[BetterBlog] custom script failed', err);
+          }
+        }
+      };
+      ready.__bbReady = true;
+      bb.ready = ready;
+    }
+    if (!bb._emit || !bb._emit.__bbEmit) {
+      var emit = function (partial) {
+        var ctx = partial || {};
+        bb._renderSeq = (bb._renderSeq || 0) + 1;
+        ctx.renderId = bb._renderSeq;
+        if (!ctx.pathname) {
+          try { ctx.pathname = location.pathname || '/'; } catch (ePath) { ctx.pathname = '/'; }
+        }
+        bb._lastCtx = ctx;
+        var list = bb._readyQueue || [];
+        for (var qi = 0; qi < list.length; qi++) {
+          try { list[qi](ctx); } catch (err) {
+            console.error('[BetterBlog] custom script failed', err);
+          }
+        }
+      };
+      emit.__bbEmit = true;
+      bb._emit = emit;
+    }
+  }
+
+  function emitCustomScriptsInactive(reason) {
+    if (isSquarespaceEditingUi()) return;
+    try {
+      if (!window.BetterBlog || typeof window.BetterBlog._emit !== 'function') return;
+      if (window.BetterBlog._lastCtx) return;
+      window.BetterBlog._emit({
+        active: false,
+        reason: reason,
+        view: null,
+        root: null,
+        overlay: null,
+        pathname: (typeof location !== 'undefined' && location.pathname) ? location.pathname : '/'
+      });
+    } catch (eEmit) { /* ignore */ }
+  }
+
   function parseBlogEntries(el) {
     if (!el) return [];
     var blogsAttr = el.getAttribute('data-blogs');
@@ -179,6 +240,8 @@
   }
   var normalizedApiBase = apiBase.replace(/\/+$/, '');
 
+  installBetterBlogReadyQueue();
+
   if (!blogEntries.length || !siteKey) {
     console.error('[BlogOverlay] Missing data-site-key / data-blogs attribute');
     return;
@@ -190,7 +253,9 @@
   // Combined snippet lists every collection path. If none match, this page is
   // not a BetterBlog route — leave native Squarespace alone (do not install
   // or clear the shared overlay; another snippet/loader may own it).
+  // Custom header scripts still run once, with BetterBlog inactive.
   if (knownPathEntries.length && !hasUnknownBlogPaths && !onKnownBlogRoute) {
+    emitCustomScriptsInactive('not-blog');
     return;
   }
 
@@ -452,7 +517,10 @@
     // (another pasted loader may own the current collection).
     fetchConfig()
       .then(function(config) {
-        if (!configMatchesCurrentPath(config)) return;
+        if (!configMatchesCurrentPath(config)) {
+          emitCustomScriptsInactive('not-blog');
+          return;
+        }
         beginOwnedLoader(config);
       })
       .catch(onConfigError);

@@ -732,3 +732,187 @@ test.describe("Loading transition — multiple blogs on one Squarespace site", (
   });
 });
 
+type CustomScriptCall = {
+  id: string;
+  renderId: number;
+  active: boolean;
+  reason: string;
+  view: string | null;
+  overlayExisted: boolean;
+};
+
+const customHeaderScripts = `
+<script>
+BetterBlog.ready(function (ctx) {
+  var w = window;
+  w.__bbCustomCalls = w.__bbCustomCalls || [];
+  w.__bbCustomCalls.push({
+    id: "first",
+    renderId: ctx.renderId,
+    active: ctx.active,
+    reason: ctx.reason,
+    view: ctx.view,
+    overlayExisted: !!(ctx.overlay && ctx.overlay.id === "blog-overlay-list")
+  });
+  if (ctx.active && ctx.root) {
+    var marker = document.getElementById("bb-custom-marker");
+    if (!marker) {
+      marker = document.createElement("div");
+      marker.id = "bb-custom-marker";
+      ctx.root.appendChild(marker);
+    }
+    marker.textContent = String(ctx.renderId);
+  }
+});
+</script>
+<script>
+BetterBlog.ready(function (ctx) {
+  var w = window;
+  w.__bbCustomCalls = w.__bbCustomCalls || [];
+  w.__bbCustomCalls.push({
+    id: "second",
+    renderId: ctx.renderId,
+    active: ctx.active,
+    reason: ctx.reason,
+    view: ctx.view,
+    overlayExisted: !!(ctx.overlay && ctx.overlay.id === "blog-overlay-list")
+  });
+});
+</script>`;
+
+function squarespacePageHtml(headExtra: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Custom header scripts</title>
+  ${headExtra}
+</head>
+<body>
+  <main id="content">
+    <article class="native-squarespace-blog-item" data-native-squarespace="true">
+      <h2>Native Squarespace Post 1</h2>
+    </article>
+  </main>
+</body>
+</html>`;
+}
+
+test.describe("Custom header scripts", () => {
+  test.beforeEach(async ({ page }) => {
+    await installRoutes(page);
+  });
+
+  test("registered scripts run after BetterBlog, in order, and again on route change", async ({ page }) => {
+    expect(headerInjection).toContain("BetterBlog.ready");
+    expect(headerInjection).toContain("Paste rewritten custom header scripts after this block");
+
+    const escapedPath = FAKE_BLOG_PATH.replace(/[/.]/g, "\\$&");
+    const blogPathRegex = new RegExp(`${escapedPath}(/[^?]*)?(\\?.*)?$`);
+    const pageHtml = squarespacePageHtml(`${headerInjection}\n${customHeaderScripts}`);
+    await page.route(blogPathRegex, async (route) => {
+      const reqUrl = new URL(route.request().url());
+      if (reqUrl.searchParams.get("format") === "json") {
+        await fulfillJson(route, blogJsonResponse);
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: "text/html", body: pageHtml });
+    });
+
+    await page.goto(FAKE_BLOG_PATH, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+
+    const marker = page.locator("#bb-custom-marker");
+    await expect(marker).toHaveCount(1);
+    const markerParentIsBlog = await marker.evaluate((el) => {
+      const root = el.parentElement;
+      return Boolean(root && root.querySelector("#blog-overlay-list"));
+    });
+    expect(markerParentIsBlog).toBe(true);
+
+    const firstPaint = await page.evaluate(() => {
+      const w = window as unknown as { __bbCustomCalls: CustomScriptCall[] };
+      return w.__bbCustomCalls.slice();
+    });
+    expect(firstPaint.length).toBeGreaterThanOrEqual(2);
+    expect(firstPaint[0].id).toBe("first");
+    expect(firstPaint[1].id).toBe("second");
+    expect(firstPaint[0].renderId).toBe(firstPaint[1].renderId);
+    expect(firstPaint[0].active).toBe(true);
+    expect(firstPaint[0].reason).toBe("render");
+    expect(firstPaint[0].view).toBe("collection");
+    expect(firstPaint[0].overlayExisted).toBe(true);
+    const firstRenderId = firstPaint[0].renderId;
+
+    await page.evaluate((targetPath) => {
+      history.pushState(null, "", targetPath);
+    }, `${FAKE_BLOG_PATH}/bb-post-1`);
+
+    await page.waitForFunction(
+      (previousRenderId) => {
+        const w = window as unknown as { __bbCustomCalls?: CustomScriptCall[] };
+        const calls = w.__bbCustomCalls || [];
+        return calls.some((call) => call.id === "first" && call.view === "post" && call.renderId > previousRenderId);
+      },
+      firstRenderId,
+      { timeout: 15_000 },
+    );
+
+    const afterNav = await page.evaluate(() => {
+      const w = window as unknown as { __bbCustomCalls: CustomScriptCall[] };
+      return w.__bbCustomCalls.filter((call) => call.view === "post" && call.id === "first");
+    });
+    expect(afterNav.length).toBeGreaterThan(0);
+    expect(afterNav[0].active).toBe(true);
+    expect(afterNav[0].renderId).toBeGreaterThan(firstRenderId);
+  });
+
+  test("non-blog pages run registered scripts once with BetterBlog inactive", async ({ page }) => {
+    const notBlogPath = "/e2e/not-a-blog-page";
+    const pageHtml = squarespacePageHtml(`${headerInjection}\n${customHeaderScripts}`);
+    await page.route(notBlogPath, async (route) => {
+      await route.fulfill({ status: 200, contentType: "text/html", body: pageHtml });
+    });
+
+    await page.goto(notBlogPath, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      () => {
+        const w = window as unknown as { __bbCustomCalls?: CustomScriptCall[] };
+        return (w.__bbCustomCalls || []).length >= 2;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    const calls = await page.evaluate(() => {
+      const w = window as unknown as { __bbCustomCalls: CustomScriptCall[] };
+      return w.__bbCustomCalls.slice();
+    });
+    expect(calls.map((call) => call.id)).toEqual(["first", "second"]);
+    expect(calls[0].renderId).toBe(calls[1].renderId);
+    expect(calls.every((call) => call.active === false && call.reason === "not-blog")).toBe(true);
+    expect(calls.every((call) => call.overlayExisted === false)).toBe(true);
+  });
+
+  test("injection guard removes late blog-container nodes unless they opt in", async ({ page }) => {
+    await page.goto(FAKE_BLOG_PATH, { waitUntil: "domcontentloaded" });
+    await waitForHandoffComplete(page);
+
+    await page.evaluate(() => {
+      const main = document.querySelector("main");
+      if (!main) throw new Error("missing main");
+      const plain = document.createElement("div");
+      plain.id = "bb-plain-inject";
+      main.appendChild(plain);
+      const marked = document.createElement("div");
+      marked.id = "bb-custom-inject";
+      marked.setAttribute("data-bb-custom", "true");
+      main.appendChild(marked);
+    });
+    await waitFrames(page, 3);
+
+    expect(await page.locator("#bb-plain-inject").count()).toBe(0);
+    expect(await page.locator("#bb-custom-inject").count()).toBe(1);
+  });
+});
+

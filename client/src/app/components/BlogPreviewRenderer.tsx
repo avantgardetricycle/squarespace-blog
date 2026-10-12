@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-09-28-merge-main";
+const RENDERER_VERSION = "2026-10-09-video-blocks";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
   defaultAuthorIds?: string[];
   postAuthorOverrides?: Record<string, string[]>;
   authorMap?: Record<string, string>;
-  authorProfiles?: Record<string, { name: string; imageUrl: string | null; bio: string | null; email: string | null; socialLinks: Record<string, string> }>;
+  authorProfiles?: Record<string, { name: string; imageUrl: string | null; bio: string | null; bioLong?: string | null; bioFormat?: "text" | "markdown" | "html"; email: string | null; socialLinks: Record<string, string> }>;
   collectionConfig?: Record<string, unknown>;
   postConfig?: Record<string, unknown>;
   recentPostsCount?: number;
