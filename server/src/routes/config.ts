@@ -891,6 +891,9 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         : {})
     }
 
+    // #region agent log
+    console.log('[bb-fathom-debug]', JSON.stringify({sessionId:'6cfb79',runId:'pre-fix',hypothesisId:'A',location:'config.ts:configData',message:'public config fathom presence',data:{siteKey,hasFathom:Boolean(site.fathomAnalytics),fathomSiteIdLen:site.fathomAnalytics?.fathomSiteId?.length??0,metrics:site.fathomAnalytics?.metricsEnabled??[]},timestamp:Date.now()}))
+    // #endregion
     console.log(`[config] GET ${siteKey} ok (${reqId})`, {
       allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
       subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
