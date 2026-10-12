@@ -4,7 +4,7 @@
  * so the public form can still confirm the BetterBlog signup.
  */
 
-import prisma from '../db/index.js'
+import prisma, { queryRows } from '../db/index.js'
 import { decrypt } from './encryption.js'
 import {
   forwardSubscriber,
@@ -58,49 +58,92 @@ export function selectStoredIntegration(
   }
 }
 
-const INTEGRATION_LOOKUPS = [
-  `SELECT module, provider, api_key_enc, destination_id, destination_kind, tag_id, tag_name FROM site_email_integrations WHERE site_id = $1`,
-  `SELECT provider, api_key_enc, destination_id, destination_kind, tag_id, tag_name FROM site_email_integrations WHERE site_id = $1`,
-  `SELECT provider, api_key_enc, destination_id FROM site_email_integrations WHERE site_id = $1`,
-]
+const INTEGRATION_COLUMNS = [
+  'module',
+  'provider',
+  'api_key_enc',
+  'destination_id',
+  'destination_kind',
+  'tag_id',
+  'tag_name',
+  'last_error',
+  'last_error_at',
+  'last_success_at',
+] as const
 
-let loggedSchemaFallback = false
+let integrationTable: { schema: string; columns: Set<string> } | null = null
 
-async function loadIntegrationFallback(
-  siteId: string,
-  module: EmailModuleKey
-): Promise<StoredEmailIntegration | null> {
-  for (const statement of INTEGRATION_LOOKUPS) {
-    try {
-      const found = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(statement, siteId)
-      return selectStoredIntegration(found, module)
-    } catch {
-      continue
-    }
+async function describeIntegrationTable(): Promise<{ schema: string; columns: Set<string> }> {
+  if (integrationTable) return integrationTable
+  const found = await queryRows(
+    `SELECT table_schema, column_name FROM information_schema.columns WHERE table_name = 'site_email_integrations'`
+  )
+  const schema = found.some((row) => row.table_schema === 'public')
+    ? 'public'
+    : typeof found[0]?.table_schema === 'string'
+      ? found[0].table_schema
+      : 'public'
+  integrationTable = {
+    schema,
+    columns: new Set(found.filter((row) => row.table_schema === schema).map((row) => String(row.column_name))),
   }
-  return null
+  return integrationTable
 }
 
-async function saveStatusFallback(siteId: string, module: EmailModuleKey, status: EmailForwardStatus): Promise<void> {
-  const statements = [
-    `UPDATE site_email_integrations SET last_error = $2, last_error_at = $3, last_success_at = COALESCE($4::timestamp, last_success_at), updated_at = CURRENT_TIMESTAMP WHERE site_id = $1 AND module = $5`,
-    `UPDATE site_email_integrations SET last_error = $2, last_error_at = $3, last_success_at = COALESCE($4::timestamp, last_success_at), updated_at = CURRENT_TIMESTAMP WHERE site_id = $1`,
-  ]
-  for (const statement of statements) {
-    try {
-      await prisma.$executeRawUnsafe(
-        statement,
-        siteId,
-        status.lastError,
-        status.lastErrorAt,
-        status.lastSuccessAt ?? null,
-        module
-      )
-      return
-    } catch {
-      continue
-    }
+function quotedIdent(value: string): string {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(value)) throw new Error('Unexpected database identifier')
+  return `"${value}"`
+}
+
+async function loadStoredIntegration(siteId: string, module: EmailModuleKey): Promise<StoredEmailIntegration | null> {
+  const table = await describeIntegrationTable()
+  const selected = INTEGRATION_COLUMNS.filter((name) => table.columns.has(name) && name !== 'last_error' && name !== 'last_error_at' && name !== 'last_success_at')
+  if (!selected.includes('provider')) return null
+  const rows = await queryRows(
+    `SELECT ${selected.map(quotedIdent).join(', ')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')} WHERE ${quotedIdent('site_id')} = $1`,
+    [siteId]
+  )
+  const stored = selectStoredIntegration(rows, module)
+  if (!stored || stored.apiKeyEnc || (stored.provider !== 'kit' && stored.provider !== 'mailchimp')) return stored
+  try {
+    const credentials = await queryRows(
+      `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_credentials')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 LIMIT 1`,
+      [siteId, stored.provider]
+    )
+    const credential = credentials[0]?.api_key_enc
+    if (typeof credential === 'string' && credential) stored.apiKeyEnc = credential
+  } catch {
+    // The platform key still lives on the integration row when the credentials table is absent.
   }
+  if (stored.apiKeyEnc || !table.columns.has('api_key_enc')) return stored
+  const siblings = await queryRows(
+    `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 AND ${quotedIdent('api_key_enc')} IS NOT NULL LIMIT 1`,
+    [siteId, stored.provider]
+  )
+  const sibling = siblings[0]?.api_key_enc
+  if (typeof sibling === 'string' && sibling) stored.apiKeyEnc = sibling
+  return stored
+}
+
+async function saveStoredStatus(siteId: string, module: EmailModuleKey, status: EmailForwardStatus): Promise<void> {
+  const table = await describeIntegrationTable()
+  if (!table.columns.has('last_error') || !table.columns.has('site_id')) return
+  const assignments = [`${quotedIdent('last_error')} = $2`, `${quotedIdent('last_error_at')} = $3`]
+  const values: unknown[] = [siteId, status.lastError, status.lastErrorAt]
+  if (status.lastSuccessAt && table.columns.has('last_success_at')) {
+    values.push(status.lastSuccessAt)
+    assignments.push(`${quotedIdent('last_success_at')} = $${values.length}`)
+  }
+  if (table.columns.has('updated_at')) assignments.push(`${quotedIdent('updated_at')} = CURRENT_TIMESTAMP`)
+  let where = `${quotedIdent('site_id')} = $1`
+  if (table.columns.has('module')) {
+    values.push(module)
+    where += ` AND ${quotedIdent('module')} = $${values.length}`
+  }
+  await queryRows(
+    `UPDATE ${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')} SET ${assignments.join(', ')} WHERE ${where}`,
+    values
+  )
 }
 
 export type CapturedLead = {
@@ -268,60 +311,8 @@ export function createEmailSyncDeps(): EmailSyncDeps {
         update: { name: lead.name },
       })
     },
-    loadIntegration: async (siteId, module) => {
-      try {
-        const row = await prisma.siteEmailIntegration.findUnique({
-          where: { siteId_module: { siteId, module } },
-        })
-        if (!row) return null
-        let apiKeyEnc = row.apiKeyEnc
-        if (!apiKeyEnc && (row.provider === 'kit' || row.provider === 'mailchimp')) {
-          try {
-            const credential = await prisma.siteEmailCredential.findUnique({
-              where: { siteId_provider: { siteId, provider: row.provider } },
-            })
-            apiKeyEnc = credential?.apiKeyEnc ?? null
-          } catch {
-            apiKeyEnc = null
-          }
-          if (!apiKeyEnc) {
-            const sibling = await prisma.siteEmailIntegration.findFirst({
-              where: { siteId, provider: row.provider, apiKeyEnc: { not: null } },
-              select: { apiKeyEnc: true },
-            })
-            apiKeyEnc = sibling?.apiKeyEnc ?? null
-          }
-        }
-        return {
-          provider: row.provider,
-          apiKeyEnc,
-          destinationId: row.destinationId,
-          destinationKind: row.destinationKind,
-          tagId: row.tagId,
-          tagName: row.tagName,
-        }
-      } catch (err) {
-        if (!loggedSchemaFallback) {
-          loggedSchemaFallback = true
-          console.error('[email-integration] Per-module destination columns are missing; reading the stored row', err)
-        }
-        return loadIntegrationFallback(siteId, module)
-      }
-    },
-    saveStatus: async (siteId, module, status) => {
-      try {
-        await prisma.siteEmailIntegration.update({
-          where: { siteId_module: { siteId, module } },
-          data: {
-            lastError: status.lastError,
-            lastErrorAt: status.lastErrorAt,
-            ...(status.lastSuccessAt ? { lastSuccessAt: status.lastSuccessAt } : {}),
-          },
-        })
-      } catch {
-        await saveStatusFallback(siteId, module, status)
-      }
-    },
+    loadIntegration: (siteId, module) => loadStoredIntegration(siteId, module),
+    saveStatus: (siteId, module, status) => saveStoredStatus(siteId, module, status),
     forward: forwardSubscriber,
     decryptKey: decrypt,
     log: (fields) => {
