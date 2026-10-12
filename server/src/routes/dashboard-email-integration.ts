@@ -247,7 +247,8 @@ async function credentialsFromBody(
     tagName?: unknown
   },
   rows: IntegrationRow[],
-  credentials: CredentialRow[]
+  credentials: CredentialRow[],
+  knownKeys: Partial<Record<'kit' | 'mailchimp', string>> = {}
 ): Promise<ExternalCredentials | { error: string }> {
   const provider = parseProvider(body.provider)
   if (provider !== 'kit' && provider !== 'mailchimp') {
@@ -261,9 +262,11 @@ async function credentialsFromBody(
   const tagName = provider === 'mailchimp' && typeof body.tagName === 'string' ? body.tagName.trim().slice(0, 100) : ''
   const tagError = provider === 'mailchimp' ? validateMailchimpTag(tagId, tagName) : null
   if (tagError) return { error: tagError }
+  const known = knownKeys[provider]
   const resolved = resolveApiKey(body.apiKey, storedKeyEnc(provider, rows, credentials))
-  if ('error' in resolved) return resolved
-  return { provider, apiKey: resolved.key, destinationId, destinationKind, tagId, tagName }
+  const key = 'error' in resolved ? (known && known.trim() ? { key: known.trim() } : resolved) : resolved
+  if ('error' in key) return key
+  return { provider, apiKey: key.key, destinationId, destinationKind, tagId, tagName }
 }
 
 async function apiKeyFromBody(
@@ -399,6 +402,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
 
   const writes: ModuleWrite[] = []
   const freshKeys: Partial<Record<'kit' | 'mailchimp', string>> = {}
+  const knownKeys: Partial<Record<'kit' | 'mailchimp', string>> = {}
   for (const moduleKey of moduleKeys) {
     const moduleBody = modulesBody[moduleKey] as Record<string, unknown>
     const provider = parseProvider(moduleBody.provider) ?? 'betterblog'
@@ -414,11 +418,12 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
       })
       continue
     }
-    const credentials = await credentialsFromBody(moduleBody, site.emailIntegrations, site.emailCredentials)
+    const credentials = await credentialsFromBody(moduleBody, site.emailIntegrations, site.emailCredentials, knownKeys)
     if ('error' in credentials) {
       res.status(400).json({ error: `${MODULE_LABEL[moduleKey]}: ${credentials.error}` })
       return
     }
+    knownKeys[provider] = credentials.apiKey
     const verified = await testEmailProvider({
       provider: credentials.provider,
       apiKey: credentials.apiKey,
@@ -431,7 +436,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
       return
     }
     const typed = typeof moduleBody.apiKey === 'string' && moduleBody.apiKey.trim().length > 0
-    let apiKeyEnc = storedKeyEnc(provider, site.emailIntegrations, site.emailCredentials)
+    let apiKeyEnc = freshKeys[provider] ?? storedKeyEnc(provider, site.emailIntegrations, site.emailCredentials)
     if (typed) {
       try {
         freshKeys[provider] = encrypt(credentials.apiKey)
