@@ -275,6 +275,14 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     return
   }
 
+  const forwardOk = result.ok
+  const forwardError = result.ok ? null : result.error
+  const forwardWarning = result.ok ? (result.warning ?? null) : null
+  // #region agent log
+  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',message:'provider forward finished',data:{module,provider,ok:forwardOk,error:forwardError,warning:forwardWarning,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)},timestamp:Date.now()})}).catch(()=>{});
+  console.error('[capture-debug]', JSON.stringify({hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',module,provider,ok:forwardOk,error:forwardError,warning:forwardWarning,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)}))
+  // #endregion
+
   if (!result.ok) {
     await recordStatus(
       deps,
@@ -299,10 +307,6 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     },
     result.warning ?? null
   )
-  // #region agent log
-  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',message:'provider forward finished',data:{module,provider,ok:result.ok,error:result.ok?null:result.error,warning:result.ok?result.warning??null:null,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)},timestamp:Date.now()})}).catch(()=>{});
-  console.error('[capture-debug]', JSON.stringify({hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',module,provider,ok:result.ok,error:result.ok?null:result.error,warning:result.ok?result.warning??null:null,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)}))
-  // #endregion
 }
 
 /** Upsert the BetterBlog lead first. Provider failures do not reject. */
