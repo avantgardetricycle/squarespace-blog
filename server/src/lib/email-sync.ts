@@ -104,24 +104,37 @@ async function loadStoredIntegration(siteId: string, module: EmailModuleKey): Pr
     [siteId]
   )
   const stored = selectStoredIntegration(rows, module)
+  // #region agent log
+  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A',location:'email-sync.ts:loadStoredIntegration',message:'stored destination lookup',data:{module,schema:table.schema,columns:[...table.columns],selected,rowCount:rows.length,rows:rows.map((row)=>({module:typeof row.module==='string'?row.module:null,provider:typeof row.provider==='string'?row.provider:null,hasKey:typeof row.api_key_enc==='string'&&row.api_key_enc.length>0,hasDestination:typeof row.destination_id==='string'&&row.destination_id.length>0})),picked:stored?{provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),hasDestination:Boolean(stored.destinationId),destinationKind:stored.destinationKind??null,hasTag:Boolean(stored.tagName)}:null},timestamp:Date.now()})}).catch(()=>{});
+  console.error('[capture-debug]', JSON.stringify({hypothesisId:'A',location:'email-sync.ts:loadStoredIntegration',module,schema:table.schema,columns:[...table.columns],selected,rowCount:rows.length,rows:rows.map((row)=>({module:typeof row.module==='string'?row.module:null,provider:typeof row.provider==='string'?row.provider:null,hasKey:typeof row.api_key_enc==='string'&&row.api_key_enc.length>0,hasDestination:typeof row.destination_id==='string'&&row.destination_id.length>0})),picked:stored?{provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),hasDestination:Boolean(stored.destinationId),destinationKind:stored.destinationKind??null,hasTag:Boolean(stored.tagName)}:null}))
+  // #endregion
   if (!stored || stored.apiKeyEnc || (stored.provider !== 'kit' && stored.provider !== 'mailchimp')) return stored
+  let credentialRows = 0
   try {
     const credentials = await queryRows(
       `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_credentials')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 LIMIT 1`,
       [siteId, stored.provider]
     )
+    credentialRows = credentials.length
     const credential = credentials[0]?.api_key_enc
     if (typeof credential === 'string' && credential) stored.apiKeyEnc = credential
   } catch {
-    // The platform key still lives on the integration row when the credentials table is absent.
+    credentialRows = -1
   }
-  if (stored.apiKeyEnc || !table.columns.has('api_key_enc')) return stored
-  const siblings = await queryRows(
-    `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 AND ${quotedIdent('api_key_enc')} IS NOT NULL LIMIT 1`,
-    [siteId, stored.provider]
-  )
-  const sibling = siblings[0]?.api_key_enc
-  if (typeof sibling === 'string' && sibling) stored.apiKeyEnc = sibling
+  let siblingRows = 0
+  if (!stored.apiKeyEnc && table.columns.has('api_key_enc')) {
+    const siblings = await queryRows(
+      `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 AND ${quotedIdent('api_key_enc')} IS NOT NULL LIMIT 1`,
+      [siteId, stored.provider]
+    )
+    siblingRows = siblings.length
+    const sibling = siblings[0]?.api_key_enc
+    if (typeof sibling === 'string' && sibling) stored.apiKeyEnc = sibling
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'B',location:'email-sync.ts:loadStoredIntegration:key',message:'api key resolution',data:{module,provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),credentialRows,siblingRows},timestamp:Date.now()})}).catch(()=>{});
+  console.error('[capture-debug]', JSON.stringify({hypothesisId:'B',location:'email-sync.ts:loadStoredIntegration:key',module,provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),credentialRows,siblingRows}))
+  // #endregion
   return stored
 }
 
@@ -216,8 +229,13 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     deps.log?.({ siteId: lead.siteId, module, provider: 'unknown', error: failureMessage(err) })
     return
   }
-  if (!integration || integration.provider === 'betterblog') return
-  if (integration.provider !== 'kit' && integration.provider !== 'mailchimp') return
+  if (!integration || integration.provider === 'betterblog' || (integration.provider !== 'kit' && integration.provider !== 'mailchimp')) {
+    // #region agent log
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A',location:'email-sync.ts:forwardSavedLead',message:'forward skipped',data:{module,surface:lead.surface??null,type:lead.type,provider:integration?.provider??null},timestamp:Date.now()})}).catch(()=>{});
+    console.error('[capture-debug]', JSON.stringify({hypothesisId:'A',location:'email-sync.ts:forwardSavedLead',message:'forward skipped',module,surface:lead.surface??null,type:lead.type,provider:integration?.provider??null}))
+    // #endregion
+    return
+  }
 
   const provider = integration.provider
   if (!integration.apiKeyEnc || !integration.destinationId) {
@@ -281,6 +299,10 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     },
     result.warning ?? null
   )
+  // #region agent log
+  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',message:'provider forward finished',data:{module,provider,ok:result.ok,error:result.ok?null:result.error,warning:result.ok?result.warning??null:null,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)},timestamp:Date.now()})}).catch(()=>{});
+  console.error('[capture-debug]', JSON.stringify({hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',module,provider,ok:result.ok,error:result.ok?null:result.error,warning:result.ok?result.warning??null:null,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)}))
+  // #endregion
 }
 
 /** Upsert the BetterBlog lead first. Provider failures do not reject. */
