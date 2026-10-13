@@ -2407,7 +2407,7 @@ export default function Configure() {
   const [loading, setLoading] = useState(true);
   const [configLoading, setConfigLoading] = useState(true);
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [previewAudience, setPreviewAudience] = useState<"loggedOut" | "member" | "postsOnly">("loggedOut");
+  const [previewAudience, setPreviewAudience] = useState<"paywalled" | "loggedIn">("paywalled");
   const [snapshotRevision, setSnapshotRevision] = useState(0);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [snapshotSparse, setSnapshotSparse] = useState(false);
@@ -3322,12 +3322,8 @@ export default function Configure() {
       siteKey: effectiveSiteKey ?? undefined,
       siteId: effectiveSite?.id ?? undefined,
       paywallMode: effectiveSite?.paywallMode ?? "auto",
-      paywallDetectionState:
-        previewAudience === "postsOnly"
-          ? "detected_paywalled"
-          : (effectiveSite?.paywallDetectionState ?? "unknown"),
-      viewerMode: previewAudience === "member" ? "loggedIn" : "loggedOut",
-      previewForcePostsOnlyPaywall: previewAudience === "postsOnly",
+      paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
+      viewerMode: previewAudience === "loggedIn" ? "loggedIn" : "loggedOut",
       paywallSettings:
         shouldShowViewerModeToggle
           ? {
@@ -6700,9 +6696,8 @@ export default function Configure() {
           <div className="flex items-center bg-[#f7f6f3] rounded-lg p-1" role="group" aria-label="Preview as">
             {(
               [
-                ["loggedOut", "Logged-out reader"],
-                ["member", "Member"],
-                ["postsOnly", "Posts-only paywall"],
+                ["paywalled", "Paywalled"],
+                ["loggedIn", "Logged in"],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -6727,12 +6722,6 @@ export default function Configure() {
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${snapshotRefreshing ? "animate-spin" : ""}`} />
             {snapshotRefreshing ? "Refreshing…" : "Refresh preview"}
           </Button>
-          {previewAudience === "member" && (
-            <span className="text-xs text-[#6b6b6b]">Layout only. Paywalled post text is not loaded.</span>
-          )}
-          {previewAudience === "postsOnly" && (
-            <span className="text-xs text-[#6b6b6b]">Shows the posts-only paywall treatment for a logged-out reader.</span>
-          )}
           {snapshotSparse && (
             <span className="text-xs text-[#6b6b6b]">
               This page is mostly rendered by JavaScript, so the preview is using the server HTML.

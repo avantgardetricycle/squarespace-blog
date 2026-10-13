@@ -5,6 +5,7 @@ import {
   SNAPSHOT_MAX_BYTES,
   buildSubstituteFontCss,
   collectStylesheetUrls,
+  applyPreviewFetchUrl,
   decorateServedSnapshot,
   extractLockedFontFamilies,
   googleFontsStylesheetQuery,
@@ -234,7 +235,7 @@ export async function captureSnapshotHtml (
     pageUrl: target.pageUrl,
     siteKey: site.siteKey,
     blogPath: site.blogPath || '/blog',
-    previewFetchUrl: `/api/config/blog-preview/${encodeURIComponent(site.siteKey)}`,
+    previewFetchUrl: previewBlogFetchUrl(site.siteKey, view, target.sourcePath),
     fontCss,
     quality
   })
@@ -290,10 +291,21 @@ export async function storeSnapshot (
   return { ...captured, fetchedAt }
 }
 
-function serveRow (row: { html: string; quality: string; fetchedAt: Date }, stale: boolean): ServedSnapshot {
+export function previewBlogFetchUrl (siteKey: string, view: SnapshotView, sourcePath: string): string {
+  const base = `/api/config/blog-preview/${encodeURIComponent(siteKey)}`
+  if (view !== 'post' || !sourcePath || sourcePath === '/') return base
+  return `${base}?postPath=${encodeURIComponent(sourcePath)}`
+}
+
+function serveRow (
+  row: { html: string; quality: string; fetchedAt: Date },
+  stale: boolean,
+  previewFetchUrl: string
+): ServedSnapshot {
   const quality: SnapshotQuality = row.quality === 'browser' || row.quality === 'http-sparse' ? row.quality : 'http'
+  const withFetch = applyPreviewFetchUrl(row.html, previewFetchUrl)
   return {
-    html: decorateServedSnapshot(row.html, {
+    html: decorateServedSnapshot(withFetch, {
       quality,
       stale,
       fetchedAt: row.fetchedAt.toISOString()
@@ -326,12 +338,13 @@ export async function getServedSnapshot (
       }
     }
   })
+  const previewFetchUrl = previewBlogFetchUrl(site.siteKey, view, target.sourcePath)
   if (existing) {
     const age = Date.now() - existing.fetchedAt.getTime()
-    return serveRow(existing, age >= SNAPSHOT_FRESH_MS)
+    return serveRow(existing, age >= SNAPSHOT_FRESH_MS, previewFetchUrl)
   }
   const stored = await storeSnapshot(site, view, requestedPath)
-  return serveRow(stored, false)
+  return serveRow(stored, false, previewFetchUrl)
 }
 
 export async function refreshStaleCollectionSnapshots (limit = 5): Promise<{ refreshed: number; failed: number }> {

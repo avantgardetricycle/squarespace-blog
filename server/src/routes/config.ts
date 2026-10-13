@@ -9,6 +9,7 @@ import {
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { SnapshotCaptureError, getServedSnapshot, storeSnapshot } from '../lib/preview-snapshot.js'
 import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/preview-snapshot-html.js'
+import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
 import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
 import { resolveDefaultPostTemplate } from './templates.js'
 
@@ -358,6 +359,25 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
         ? (firstJson.collection as Record<string, unknown>)
         : null
     annotateSquarespaceFeaturedOnItems(allItems, collForFeatured)
+
+    const postPath = firstQueryString(req.query.postPath)
+    if (postPath && site.url) {
+      const postJsonUrl = publicPostJsonUrl(site.url, postPath)
+      if (postJsonUrl) {
+        try {
+          const postRes = await fetch(appendPasswordToUrl(postJsonUrl, site.blogPassword), {
+            signal: AbortSignal.timeout(8000),
+            headers: { Accept: 'application/json' }
+          })
+          if (postRes.ok) {
+            const postJson = await postRes.json() as unknown
+            mergePublicPostBody(allItems, postPath, postJson, new URL(site.url).origin)
+          }
+        } catch (err) {
+          console.warn('[blog-preview] public post JSON unavailable', err)
+        }
+      }
+    }
 
     const debugFeatured = String(req.query.bbFeaturedDebug ?? '') === '1'
     if (debugFeatured) {

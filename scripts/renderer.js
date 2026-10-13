@@ -3269,7 +3269,6 @@
     },
 
     _isPaywalledSite: function() {
-      if (this.config && this.config.previewForcePostsOnlyPaywall) return true;
       return Boolean(this.config && this.config.paywallDetectionState === 'detected_paywalled');
     },
 
@@ -3812,6 +3811,9 @@
      */
     _isPaywallPublicPreviewPost: function(post) {
       if (this._isExplicitPaywallPublicPreviewPost(post)) return true;
+      // Collection JSON omitted this body. Preview filled it from the public post
+      // JSON so logged-in layout can show it; logged-out readers stay gated.
+      if (post && post.bbCollectionBodyGated === true) return false;
       var body = post && post.body != null ? String(post.body) : '';
       var plainBody = this._stripHtml(body).replace(/\s+/g, ' ').trim();
       return plainBody.length >= 40;

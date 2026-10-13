@@ -48,8 +48,8 @@ The customizer preview is a snapshot of your published blog, loaded from BetterB
 **The preview looks slightly different from the live site.**
 The snapshot uses your real Squarespace CSS, header, and post HTML. Adobe Fonts (Typekit) kits are locked to your domain, so those files often do not load inside BetterBlog. The preview substitutes a close Google or system font for those families. Layout, colors, and button styles still come from your theme.
 
-**Member preview does not show paywalled post text.**
-The preview audience control can show a logged-out reader, a member, or the posts-only paywall treatment. Snapshots are always taken as a logged-out visitor, so gated post bodies are never stored. Member preview shows the member layout using the public text a logged-out visitor can already see.
+**Paywalled and Logged in are the only preview audiences.**
+On a membership blog, Collection and Post each have a paywalled view and a logged-in view. Paywalled uses the logged-out layout for the level you are editing. Logged in uses the member layout. Squarespace still chooses posts-only versus overview-and-posts; the preview does not add a third mode.
 
 **Refresh preview failed, or the page looks empty.**
 Click **Refresh preview**. If your blog is password protected, add the blog password in the dashboard and refresh again. Pages that Squarespace only fills in with JavaScript may look sparse until a headless render is configured; the preview says so when that happens. Your live blog still uses the installed snippet and is not limited by the snapshot.
@@ -68,7 +68,7 @@ Applying a template overwrites your settings for that level (collection or post)
 Confirm the BetterBlog snippet is still installed in Squarespace Code Injection (it's possible it was accidentally removed if someone else edited the site). Also try a hard refresh on your live blog (Cmd+Shift+R / Ctrl+Shift+R).
 
 **The live blog looks different from the preview.**
-The preview is a logged-out snapshot of your Squarespace page, including your theme CSS. Typekit fonts may be substituted. Member preview is layout-only and does not reveal gated post text. If a zone or module is in the wrong place, confirm the template and module order in Customize Blog, then hard-refresh the live site.
+The preview is a logged-out snapshot of your Squarespace page, including your theme CSS. Typekit fonts may be substituted. Post text comes from Squarespace's public `?format=json` for that post. Logged in shows that text in the member layout. Text Squarespace leaves out of the public JSON stays out of the preview, including when you are signed in to Squarespace in another tab. If a zone or module is in the wrong place, confirm the template and module order in Customize Blog, then hard-refresh the live site.
 
 **My sidebar is overlapping the header.**
 A sticky sidebar can slide up under your Squarespace site header if there is not enough offset. On the Collection tab, open the sidebar section and increase **Space above**, or turn off **Sticky (move with scroll)**. On the Post tab, turn sticky off (Post sidebars do not expose a space-above control). If the overlap is your Squarespace header covering BetterBlog content, that header is controlled by Squarespace, not BetterBlog — adjust header height or position in the Squarespace site styles.

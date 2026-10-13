@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  applyPreviewFetchUrl,
   buildSubstituteFontCss,
   decorateServedSnapshot,
   extractLockedFontFamilies,
@@ -127,6 +128,18 @@ test('locked font families are substituted under the original family name', () =
   assert.match(substituted, /fonts\.gstatic\.com\/s\/montserrat\/v1\/a\.woff2/)
   assert.equal(/font-family:\s*'Montserrat'/.test(substituted), false)
   assert.equal(rewriteGoogleFontCss(google, 'futura-pt').includes('"futura-pt"'), true)
+})
+
+test('applyPreviewFetchUrl points a post snapshot at that post JSON', () => {
+  const html = sanitizeSnapshotHtml('<html><head></head><body><header></header><main><article>ok</article></main></body></html>', {
+    pageUrl,
+    siteKey: 's',
+    blogPath: '/blog',
+    previewFetchUrl: '/api/config/blog-preview/s'
+  })
+  const next = applyPreviewFetchUrl(html, '/api/config/blog-preview/s?postPath=%2Fblog%2Fhello')
+  assert.match(next, /"previewFetchUrl":"\/api\/config\/blog-preview\/s\?postPath=%2Fblog%2Fhello"/)
+  assert.equal((next.match(/previewFetchUrl/g) || []).length, 1)
 })
 
 test('decorateServedSnapshot marks a stale snapshot', () => {
