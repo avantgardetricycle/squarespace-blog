@@ -39,6 +39,15 @@ function textOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
+/** The encrypted key saved for this platform on any module. */
+export function platformKeyFromRows(rows: Array<Record<string, unknown>>, provider: string): string | null {
+  for (const row of rows) {
+    if (row.provider !== provider) continue
+    if (typeof row.api_key_enc === 'string' && row.api_key_enc.length > 0) return row.api_key_enc
+  }
+  return null
+}
+
 /** Pick the row for this module. A legacy table has one row and no module column. */
 export function selectStoredIntegration(
   rows: Array<Record<string, unknown>>,
@@ -104,19 +113,38 @@ END $$`)
     )`)
     integrationTable = null
     const after = await describeIntegrationTable()
-    // #region agent log
-    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'post-fix',hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',message:'added module column',data:{moduleReady:after.columns.has('module')},timestamp:Date.now()})}).catch(()=>{});
-    console.error('[capture-debug]', JSON.stringify({hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',moduleReady:after.columns.has('module')}))
-    // #endregion
     return { moduleReady: after.columns.has('module'), error: null }
   } catch (err) {
     integrationTable = null
     const message = err instanceof Error ? err.message : 'schema upgrade failed'
-    // #region agent log
-    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'post-fix',hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',message:'module column upgrade failed',data:{error:message},timestamp:Date.now()})}).catch(()=>{});
-    console.error('[capture-debug]', JSON.stringify({hypothesisId:'F',location:'email-sync.ts:ensureEmailIntegrationModules',error:message}))
-    // #endregion
+    console.error('[email-integration] Could not add per-module destination column', message)
     return { moduleReady: false, error: message }
+  }
+}
+
+export async function propagatePlatformKeys(
+  siteId: string,
+  writes: Array<{ provider: string; apiKeyEnc: string | null }>
+): Promise<void> {
+  const table = await describeIntegrationTable()
+  if (!table.columns.has('api_key_enc') || !table.columns.has('provider')) return
+  const rel = `${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')}`
+  const seen = new Set<string>()
+  for (const write of writes) {
+    if ((write.provider !== 'kit' && write.provider !== 'mailchimp') || !write.apiKeyEnc || seen.has(write.provider)) continue
+    seen.add(write.provider)
+    await executeSql(
+      `UPDATE ${rel} SET ${quotedIdent('api_key_enc')} = $3 WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 AND (${quotedIdent('api_key_enc')} IS NULL OR ${quotedIdent('api_key_enc')} = '')`,
+      [siteId, write.provider, write.apiKeyEnc]
+    )
+    try {
+      await executeSql(
+        `INSERT INTO ${quotedIdent(table.schema)}.${quotedIdent('site_email_credentials')} (${quotedIdent('site_id')}, ${quotedIdent('provider')}, ${quotedIdent('api_key_enc')}) VALUES ($1, $2, $3) ON CONFLICT (${quotedIdent('site_id')}, ${quotedIdent('provider')}) DO UPDATE SET ${quotedIdent('api_key_enc')} = EXCLUDED.${quotedIdent('api_key_enc')}`,
+        [siteId, write.provider, write.apiKeyEnc]
+      )
+    } catch {
+      // The platform key still lives on the integration rows when this table is absent.
+    }
   }
 }
 
@@ -219,37 +247,19 @@ async function loadStoredIntegration(siteId: string, module: EmailModuleKey): Pr
     [siteId]
   )
   const stored = selectStoredIntegration(rows, module)
-  // #region agent log
-  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A',location:'email-sync.ts:loadStoredIntegration',message:'stored destination lookup',data:{module,schema:table.schema,columns:[...table.columns],selected,rowCount:rows.length,rows:rows.map((row)=>({module:typeof row.module==='string'?row.module:null,provider:typeof row.provider==='string'?row.provider:null,hasKey:typeof row.api_key_enc==='string'&&row.api_key_enc.length>0,hasDestination:typeof row.destination_id==='string'&&row.destination_id.length>0})),picked:stored?{provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),hasDestination:Boolean(stored.destinationId),destinationKind:stored.destinationKind??null,hasTag:Boolean(stored.tagName)}:null},timestamp:Date.now()})}).catch(()=>{});
-  console.error('[capture-debug]', JSON.stringify({hypothesisId:'A',location:'email-sync.ts:loadStoredIntegration',module,schema:table.schema,columns:[...table.columns],selected,rowCount:rows.length,rows:rows.map((row)=>({module:typeof row.module==='string'?row.module:null,provider:typeof row.provider==='string'?row.provider:null,hasKey:typeof row.api_key_enc==='string'&&row.api_key_enc.length>0,hasDestination:typeof row.destination_id==='string'&&row.destination_id.length>0})),picked:stored?{provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),hasDestination:Boolean(stored.destinationId),destinationKind:stored.destinationKind??null,hasTag:Boolean(stored.tagName)}:null}))
-  // #endregion
-  if (!stored || stored.apiKeyEnc || (stored.provider !== 'kit' && stored.provider !== 'mailchimp')) return stored
-  let credentialRows = 0
+  if (!stored || (stored.provider !== 'kit' && stored.provider !== 'mailchimp')) return stored
+  if (!stored.apiKeyEnc) stored.apiKeyEnc = platformKeyFromRows(rows, stored.provider)
+  if (stored.apiKeyEnc) return stored
   try {
     const credentials = await queryRows(
       `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_credentials')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 LIMIT 1`,
       [siteId, stored.provider]
     )
-    credentialRows = credentials.length
     const credential = credentials[0]?.api_key_enc
     if (typeof credential === 'string' && credential) stored.apiKeyEnc = credential
   } catch {
-    credentialRows = -1
+    // The platform key still lives on the integration rows when this table is absent.
   }
-  let siblingRows = 0
-  if (!stored.apiKeyEnc && table.columns.has('api_key_enc')) {
-    const siblings = await queryRows(
-      `SELECT ${quotedIdent('api_key_enc')} FROM ${quotedIdent(table.schema)}.${quotedIdent('site_email_integrations')} WHERE ${quotedIdent('site_id')} = $1 AND ${quotedIdent('provider')} = $2 AND ${quotedIdent('api_key_enc')} IS NOT NULL LIMIT 1`,
-      [siteId, stored.provider]
-    )
-    siblingRows = siblings.length
-    const sibling = siblings[0]?.api_key_enc
-    if (typeof sibling === 'string' && sibling) stored.apiKeyEnc = sibling
-  }
-  // #region agent log
-  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'B',location:'email-sync.ts:loadStoredIntegration:key',message:'api key resolution',data:{module,provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),credentialRows,siblingRows},timestamp:Date.now()})}).catch(()=>{});
-  console.error('[capture-debug]', JSON.stringify({hypothesisId:'B',location:'email-sync.ts:loadStoredIntegration:key',module,provider:stored.provider,hasKey:Boolean(stored.apiKeyEnc),credentialRows,siblingRows}))
-  // #endregion
   return stored
 }
 
@@ -345,10 +355,6 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     return
   }
   if (!integration || integration.provider === 'betterblog' || (integration.provider !== 'kit' && integration.provider !== 'mailchimp')) {
-    // #region agent log
-    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'A',location:'email-sync.ts:forwardSavedLead',message:'forward skipped',data:{module,surface:lead.surface??null,type:lead.type,provider:integration?.provider??null},timestamp:Date.now()})}).catch(()=>{});
-    console.error('[capture-debug]', JSON.stringify({hypothesisId:'A',location:'email-sync.ts:forwardSavedLead',message:'forward skipped',module,surface:lead.surface??null,type:lead.type,provider:integration?.provider??null}))
-    // #endregion
     return
   }
 
@@ -389,14 +395,6 @@ export async function forwardSavedLead(lead: CapturedLead, deps: EmailSyncDeps):
     await recordStatus(deps, lead.siteId, module, provider, { lastError: error, lastErrorAt: new Date() }, error)
     return
   }
-
-  const forwardOk = result.ok
-  const forwardError = result.ok ? null : result.error
-  const forwardWarning = result.ok ? (result.warning ?? null) : null
-  // #region agent log
-  fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'pre-fix',hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',message:'provider forward finished',data:{module,provider,ok:forwardOk,error:forwardError,warning:forwardWarning,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)},timestamp:Date.now()})}).catch(()=>{});
-  console.error('[capture-debug]', JSON.stringify({hypothesisId:'D',location:'email-sync.ts:forwardSavedLead:result',module,provider,ok:forwardOk,error:forwardError,warning:forwardWarning,hasDestination:Boolean(integration.destinationId),hasTag:Boolean(integration.tagName)}))
-  // #endregion
 
   if (!result.ok) {
     await recordStatus(

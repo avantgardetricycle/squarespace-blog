@@ -230,13 +230,64 @@
     return '';
   }
 
+  /**
+   * Social fields are saved as the author typed them (instagram.com/name, www.facebook.com/name).
+   * A scheme-less host is a relative URL, so prefix https:// when http(s) is missing.
+   * www is optional and left as entered. Other schemes are dropped.
+   */
+  function bbNormalizeSocialHref(url) {
+    var trimmed = String(url || '').replace(/^\s+|\s+$/g, '');
+    if (!trimmed) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return '';
+    if (trimmed.indexOf('//') === 0) return 'https:' + trimmed;
+    if (/^(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[\/?#].*)?$/i.test(trimmed)) {
+      return 'https://' + trimmed;
+    }
+    return '';
+  }
+
+  function bbUnescapeHtml(s) {
+    return String(s)
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
+
+  /** Split a CommonMark destination into the URL and an optional "title" or 'title'. */
+  function bbSplitMarkdownLink(destination) {
+    var raw = String(destination || '').replace(/^\s+|\s+$/g, '');
+    var href = raw;
+    var title = '';
+    var match = raw.match(/^(.*?)\s+(?:"([^"]*)"|'([^']*)'|&quot;([\s\S]*?)&quot;)\s*$/);
+    if (match) {
+      href = match[1].replace(/^\s+|\s+$/g, '');
+      title = match[2] != null ? match[2] : (match[3] != null ? match[3] : match[4]);
+    }
+    var angled = href.match(/^<(.*)>$/) || href.match(/^&lt;([\s\S]*)&gt;$/);
+    if (angled) href = angled[1];
+    return { href: href, title: title };
+  }
+
   function bbApplyInlineMarkdown(escaped) {
     var withLinks = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, label, url) {
-      var href = bbSafeBioHref(url);
+      var parts = bbSplitMarkdownLink(url);
+      var href = bbSafeBioHref(parts.href);
       if (!href) return label;
-      return '<a href="' + bbEscapeHtml(href) + '">' + label + '</a>';
+      var html = '<a href="' + bbEscapeHtml(href) + '"';
+      if (parts.title && String(parts.title).replace(/^\s+|\s+$/g, '')) {
+        html += ' title="' + bbEscapeHtml(bbUnescapeHtml(parts.title)) + '"';
+      }
+      return html + '>' + label + '</a>';
     });
-    var withBold = withLinks.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    var withAutolinks = withLinks.replace(/&lt;((?:https?:\/\/|mailto:)[^<\s]*?)&gt;/gi, function(match, url) {
+      var href = bbSafeBioHref(bbUnescapeHtml(url));
+      if (!href) return match;
+      var text = bbEscapeHtml(href);
+      return '<a href="' + text + '">' + text + '</a>';
+    });
+    var withBold = withAutolinks.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
     var withItalic = withBold.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
     return withItalic.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, '$1<em>$2</em>');
   }
@@ -301,6 +352,7 @@
         }
         el = document.createElement('a');
         el.setAttribute('href', href);
+        if (node.getAttribute('title')) el.setAttribute('title', node.getAttribute('title'));
         if (/^https?:\/\//i.test(href)) {
           el.setAttribute('target', '_blank');
           el.setAttribute('rel', 'noopener noreferrer');
@@ -8290,7 +8342,7 @@
         linksWrap.style.alignItems = 'center';
         for (var j = 0; j < platforms.length; j++) {
           var platform = platforms[j];
-          var url = platform === 'email' ? (email ? 'mailto:' + email : null) : (socialLinks[platform] || null);
+          var url = platform === 'email' ? (email ? 'mailto:' + email : null) : bbNormalizeSocialHref(socialLinks[platform]);
           if (url && typeof url === 'string') {
             var a = document.createElement('a');
             a.href = url;
@@ -10413,7 +10465,7 @@
         s + ' .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
         s + ' .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
         s + ' .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
-        s + ' .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
+        s + ' .blog-overlay-author-card-bio a{color:var(--paragraphLinkColor, inherit);text-decoration:underline;text-underline-offset:0.2em;}' +
         s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
         s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
         s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
@@ -10729,7 +10781,7 @@
         '#blog-overlay-list .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
-        '#blog-overlay-list .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio a{color:var(--paragraphLinkColor, inherit);text-decoration:underline;text-underline-offset:0.2em;}' +
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
@@ -12087,7 +12139,7 @@
       return (
         d + '{position:fixed!important;top:0;right:0;bottom:0;left:0;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;contain:paint;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
         open + '{z-index:1001!important;}' +
-        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
+        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
         open + '>.bb-mobile-drawer-tab{right:var(--bb-drawer-panel-width,280px);background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);}' +
         rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:0;bottom:0;left:auto;width:var(--bb-drawer-panel-width,86%)!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(100%);transition:transform .22s ease;}' +
         open + '>.blog-overlay-sidebar-rail{visibility:visible;pointer-events:auto;transform:translateX(0);}' +
@@ -12303,8 +12355,10 @@
 
     /**
      * Mobile (<768): hide every left sidebar rail unless that sidebar's
-     * mobile display is Drawer. If a pairable module is in the right sidebar
-     * and duplicated in the footer, hide the footer copy (sidebar-wins).
+     * mobile display is Drawer. If a pairable module is in a right sidebar
+     * that stacks under the article (Below content) and is also in the
+     * footer, hide the footer copy (sidebar-wins). A Drawer is off the page,
+     * so it does not hide footer copies; the drawer keeps its own modules.
      * Left-sidebar copies do not count — a footer copy of a left-only module
      * is shown. Footer-only modules keep rendering but get sidebar chrome.
      * Tags/Categories invert that: the sidebar copy is always hidden on
@@ -12361,7 +12415,7 @@
         var id = pairIds[i];
         var isFilter = !!filterIds[id];
         var sidebarHas = !!wrapper.querySelector(
-          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+          '.blog-overlay-sidebar-anchor[data-bb-sidebar-side="right"]:not([data-bb-mobile-display="drawer"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
         );
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {

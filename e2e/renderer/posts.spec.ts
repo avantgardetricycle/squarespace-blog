@@ -118,6 +118,70 @@ test.describe("post layout contract", () => {
     });
   }
 
+  test("a drawer sidebar keeps footer copies on the page", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const cfg = structuredClone(postTemplates.publisher) as Record<string, any>;
+    cfg.rightSidebar.modules = ["authorProfiles", "popularPosts", "relevantPosts", "filterByCategory"];
+    cfg.rightSidebar.moduleOrder = cfg.rightSidebar.modules.slice();
+    cfg.rightSidebar.mobileDisplay = "drawer";
+    cfg.footerContent.modules = ["authorProfiles", "relevantPosts", "prevNextArticle"];
+    cfg.footerContent.moduleOrder = cfg.footerContent.modules.slice();
+    await mountRenderer(page, { postConfig: cfg });
+
+    const flags = await page.evaluate(() => {
+      const hidden = (sel: string) => {
+        const el = document.querySelector(sel);
+        return el ? el.classList.contains("bb-mobile-duplicate-hidden") : null;
+      };
+      const top = (sel: string) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        const box = el.getBoundingClientRect();
+        return box.height > 0 ? box.top : null;
+      };
+      return {
+        footerAuthorHidden: hidden('[data-bb-zone="footer"][data-bb-module="authorProfiles"]'),
+        footerRelatedHidden: hidden('[data-bb-zone="footer"][data-bb-module="relevantPosts"]'),
+        drawerAuthor: !!document.querySelector('.bb-mobile-drawer [data-bb-module="authorProfiles"]'),
+        drawerRelated: !!document.querySelector('.bb-mobile-drawer [data-bb-module="relevantPosts"]'),
+        comments: top("#bb-comments"),
+        author: top('[data-bb-zone="footer"][data-bb-module="authorProfiles"]'),
+        related: top('[data-bb-zone="footer"][data-bb-module="relevantPosts"]'),
+      };
+    });
+
+    expect(flags.footerAuthorHidden).toBe(false);
+    expect(flags.footerRelatedHidden).toBe(false);
+    if (mobile) {
+      expect(flags.drawerAuthor).toBe(true);
+      expect(flags.drawerRelated).toBe(true);
+      expect(flags.comments).not.toBeNull();
+      expect(flags.author).not.toBeNull();
+      expect(flags.related).not.toBeNull();
+      expect(flags.comments!).toBeLessThan(flags.author!);
+      expect(flags.author!).toBeLessThan(flags.related!);
+    }
+  });
+
+  test("a stacked right sidebar still wins over a duplicated footer module", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const cfg = structuredClone(postTemplates.publisher) as Record<string, any>;
+    cfg.rightSidebar.modules = ["authorProfiles", "popularPosts", "relevantPosts", "filterByCategory"];
+    cfg.rightSidebar.moduleOrder = cfg.rightSidebar.modules.slice();
+    cfg.rightSidebar.mobileDisplay = "hidden";
+    cfg.footerContent.modules = ["authorProfiles", "relevantPosts", "prevNextArticle"];
+    cfg.footerContent.moduleOrder = cfg.footerContent.modules.slice();
+    await mountRenderer(page, { postConfig: cfg });
+
+    const hidden = await page.evaluate(() => {
+      return ["authorProfiles", "relevantPosts"].map((id) => {
+        const el = document.querySelector(`[data-bb-zone="footer"][data-bb-module="${id}"]`);
+        return el ? el.classList.contains("bb-mobile-duplicate-hidden") : null;
+      });
+    });
+    expect(hidden).toEqual([mobile, mobile]);
+  });
+
   test("sidebar copy wins over a duplicated footer module on mobile", async ({ page }, testInfo) => {
     const mobile = isMobileProject(testInfo);
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
@@ -147,8 +211,24 @@ test.describe("post layout contract", () => {
     await expect(bio("footer", "Literal Author")).toHaveText("Footer literal stays **bold**");
 
     const markdown = bio("sidebar", "Markdown Author");
+    const markdownCard = markdown.locator("xpath=ancestor::*[contains(@class,'blog-overlay-author-unit')]");
+    await expect(markdownCard.locator('a[aria-label="Instagram"]')).toHaveAttribute(
+      "href",
+      "https://instagram.com/salaamssalaams",
+    );
+    await expect(markdownCard.locator('a[aria-label="Facebook"]')).toHaveAttribute(
+      "href",
+      "https://www.facebook.com/ada",
+    );
+    await expect(markdownCard.locator('a[aria-label="Linkedin"]')).toHaveAttribute(
+      "href",
+      "https://linkedin.com/in/ada",
+    );
+    await expect(markdownCard.locator('a[aria-label="X"]')).toHaveAttribute("href", "https://www.x.com/ada");
+    await expect(markdownCard.locator('a[aria-label="Website"]')).toHaveCount(0);
     await expect(markdown.locator("strong")).toHaveText("first");
-    await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    await expect(markdown.locator('a[href="https://example.invalid/notes"]')).toHaveAttribute("title", "Maya's notes");
+    await expect(markdown.locator('a[href="https://example.invalid/oak"]')).toHaveText("https://example.invalid/oak");
     await expect(markdown.locator("li")).toHaveText(["Ada", "Code"]);
     const markdownFooter = bio("footer", "Markdown Author");
     await expect(markdownFooter.locator("strong")).toHaveText("long");
