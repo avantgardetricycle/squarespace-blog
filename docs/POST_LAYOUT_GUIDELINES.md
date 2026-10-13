@@ -64,7 +64,7 @@ On mobile, cap `h1–h6` inside `.blog-overlay-body` at the computed post-title 
 - Deck uses a Squarespace paragraph style. Choices are P1–P3. The default choice is P1.
 - Meta uses a Squarespace paragraph style. Choices are P1–P3. The default choice is P2.
 - Size, family, weight, line-height, and letter-spacing come from that site style. The same choice is used on desktop and phones.
-- When the site style cannot be read, the choice still has a size: H1 is 40px on desktop and 28px on phones, H2 is 32px / 24px, H3 is 26px / 22px, H4 is 22px / 18px, P1 is 20px / 14px, P2 is 16px / 13px, and P3 is 14px / 12px. Those fallbacks are the same on every post template.
+- When the site style cannot be read, or every step in that menu computes to the same size, the choice still has a size: H1 is 40px on desktop and 28px on phones, H2 is 32px / 24px, H3 is 26px / 22px, H4 is 22px / 18px, P1 is 20px / 14px, P2 is 16px / 13px, and P3 is 14px / 12px. Those fallbacks are the same on every post template. A shared size is not a style for one step, so the menu still changes the type.
 
 **Main row**
 - display: flex, flex-direction: row

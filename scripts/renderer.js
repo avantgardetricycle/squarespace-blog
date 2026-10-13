@@ -9782,11 +9782,58 @@
       else el.style.removeProperty(name);
     },
 
+    _postHeaderChoiceKeys: function(key) {
+      return key && key.charAt(0) === 'h' ? ['h1', 'h2', 'h3', 'h4'] : ['p1', 'p2', 'p3'];
+    },
+
+    _fontSizeToPx: function(size) {
+      var n = parseFloat(size);
+      if (!isFinite(n)) return null;
+      var s = String(size);
+      if (s.indexOf('px') !== -1) return n;
+      if (s.indexOf('rem') !== -1) {
+        var rootPx = 16;
+        try {
+          rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+        } catch (ePx) { /* ignore */ }
+        return n * rootPx;
+      }
+      return null;
+    },
+
+    /**
+     * A size shared with another step in the menu is not that step's style
+     * (Squarespace often sets one size on h1–h4). Drop it so the choice's
+     * own fallback is used and the menu still changes the type.
+     */
+    _postHeaderStepSize: function(key) {
+      var resolved = this._resolveSquarespaceFont(key);
+      var size = resolved.size || '';
+      if (!size) return { size: '', resolved: resolved };
+      var keys = this._postHeaderChoiceKeys(key);
+      var selfPx = this._fontSizeToPx(size);
+      var matches = 0;
+      for (var i = 0; i < keys.length; i++) {
+        var other = this._resolveSquarespaceFont(keys[i]).size || '';
+        if (!other) continue;
+        if (selfPx != null) {
+          var otherPx = this._fontSizeToPx(other);
+          if (otherPx != null && Math.abs(selfPx - otherPx) < 1) matches++;
+          else if (otherPx == null && other === size) matches++;
+        } else if (other === size) {
+          matches++;
+        }
+      }
+      if (matches > 1) return { size: '', resolved: resolved };
+      return { size: size, resolved: resolved };
+    },
+
     _setRoleFontVars: function(el, role, key) {
       var fb = this._postHeaderFontFallbacks[key] || this._postHeaderFontFallbacks.h1;
-      var resolved = this._resolveSquarespaceFont(key);
-      var desktop = resolved.size || fb.desktop;
-      var mobile = resolved.size || fb.mobile;
+      var picked = this._postHeaderStepSize(key);
+      var resolved = picked.resolved;
+      var desktop = picked.size || fb.desktop;
+      var mobile = picked.size || fb.mobile;
       el.style.setProperty('--bb-' + role + '-size', desktop);
       el.style.setProperty('--bb-' + role + '-size-mobile', mobile);
       this._setOptionalStyleProp(el, '--bb-' + role + '-family', resolved.family);
