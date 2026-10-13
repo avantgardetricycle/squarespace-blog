@@ -710,8 +710,6 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
 router.get('/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
   const viewerMode = parseViewerModeQuery(req.query.viewerMode)
-  const reqId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  console.log(`[config] GET ${siteKey} start (${reqId})`)
   try {
 
   const site = await prisma.site.findFirst({
@@ -986,19 +984,13 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         : {})
     }
 
-    console.log(`[config] GET ${siteKey} ok (${reqId})`, {
-      allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
-      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
-      commentsEnabled: commentSettings.commentsEnabled,
-      allowNewComments: 'allowNewComments' in commentSettings ? commentSettings.allowNewComments : null,
-    })
     res.json(configData)
   } catch (err) {
-    console.error(`[config] GET ${siteKey} error (${reqId}):`, err)
+    console.error(`[config] GET ${siteKey} error:`, err)
     res.status(500).json({ error: 'Invalid config data' })
   }
   } catch (err) {
-    console.error(`[config] GET ${siteKey} unhandled (${reqId}):`, err)
+    console.error(`[config] GET ${siteKey} unhandled:`, err)
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to load config' })
     }

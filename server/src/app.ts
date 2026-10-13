@@ -92,7 +92,6 @@ export function createApp(options: CreateAppOptions = {}): Express {
       deploymentId: process.env.VERCEL_DEPLOYMENT_ID,
       isBetterBlogLiveEnv: isBetterBlogLiveEnv ?? null,
     }
-    console.info('[BetterBlog/health]', { isLive, ...debug })
     res.json({
       status: 'ok',
       isLive,

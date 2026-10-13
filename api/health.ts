@@ -14,7 +14,6 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
     isBetterBlogLiveEnv: isBetterBlogLiveEnv ?? null,
     handler: 'api/health.ts',
   }
-  console.info('[BetterBlog/health]', { isLive, ...debug })
   res.setHeader('Cache-Control', 'no-store')
   res.status(200).json({ status: 'ok', isLive, debug })
 }

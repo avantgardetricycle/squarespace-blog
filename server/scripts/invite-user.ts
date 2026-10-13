@@ -138,7 +138,7 @@ async function invite (prisma: PrismaClient): Promise<void> {
   const magicLink = `${appUrl}/api/auth/magic?token=${rawToken}`
   await sendInviteEmailViaSendGrid(email, magicLink)
 
-  console.log(`${existingUser ? 'Re-invited' : 'Invited'} ${email} on ${environmentLabel}`)
+  console.log(`${existingUser ? 'Re-invited' : 'Invited'} user on ${environmentLabel}`)
   console.log(`Invite email sent. The link expires in ${TOKEN_EXPIRY_DAYS} days.`)
 }
 

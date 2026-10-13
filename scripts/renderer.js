@@ -758,6 +758,15 @@
       else console.log('[BlogOverlay][debug] ' + label);
     },
 
+    _redactIdentityForLog: function(id) {
+      if (!id || typeof id !== 'object') return null;
+      return {
+        loggedIn: id.loggedIn === true,
+        hasName: Boolean(id.name),
+        hasEmail: Boolean(id.email)
+      };
+    },
+
     _authDebug: function(label, payload) {
       if (!this._isAuthDebugEnabled()) return;
       if (payload !== undefined) console.log('[BlogOverlay][auth-debug] ' + label, payload);
@@ -772,15 +781,7 @@
       else console.log('[BlogOverlay][paywall-debug] ' + label);
     },
 
-    _bbPriceDebug: function(hypothesisId, message, data) {
-      var payload = data || {};
-      try {
-        console.log('[BB paywall price] ' + message, payload);
-      } catch (e0) {}
-      // #region agent log
-      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '50d457' }, body: JSON.stringify({ sessionId: '50d457', location: 'scripts/renderer.js:_bbPriceDebug', message: message, data: payload, timestamp: Date.now(), hypothesisId: hypothesisId }) }).catch(function() {});
-      // #endregion
-    },
+    _bbPriceDebug: function() {},
 
     /** Add ?bbTocDebug=1 to the page URL (or bbPreviewDebug=1) to log Table of Contents wiring. */
     _isTocDebugEnabled: function() {
@@ -880,8 +881,8 @@
       this._authDebug(source || 'snapshot', {
         resolvedMode: resolvedMode,
         contextAvailable: hasContext,
-        contextIdentity: contextIdentity,
-        jsonIdentity: jsonIdentity,
+        contextIdentity: this._redactIdentityForLog(contextIdentity),
+        jsonIdentity: this._redactIdentityForLog(jsonIdentity),
         domMode: domMode,
         paywallMode: cfg.paywallMode || null,
         paywallDetectionState: cfg.paywallDetectionState || null,
@@ -1285,9 +1286,16 @@
       }
       function bbEmailDebug(email) {
         var e = email ? String(email).trim() : '';
-        if (!e) return { hasEmail: false, email: null, domain: null };
-        var at = e.lastIndexOf('@');
-        return { hasEmail: true, email: e, domain: at >= 0 ? e.slice(at + 1) : null };
+        if (!e) return { hasEmail: false };
+        return { hasEmail: true, emailHasPlus: e.indexOf('+') >= 0 };
+      }
+      function bbIdentityDebug(id) {
+        if (!id || typeof id !== 'object') return null;
+        return {
+          loggedIn: id.loggedIn === true,
+          hasName: Boolean(id.name),
+          hasEmail: Boolean(id.email)
+        };
       }
       function bbCommentDebugSummary(c) {
         return {
@@ -1295,7 +1303,6 @@
           display_name: c && c.display_name != null ? String(c.display_name) : null,
           verified_subscriber: Boolean(c && c.verified_subscriber),
           hasEmail: Boolean(c && c.email),
-          email: c && c.email ? String(c.email) : null,
           status: c && c.status != null ? c.status : null,
           bb_legacy_squarespace: Boolean(c && c.bb_legacy_squarespace),
           replyCount: c && c.replies && c.replies.length ? c.replies.length : 0
@@ -1408,7 +1415,7 @@
           bbCommentsLog('verified cookie NOT set', { reason: 'missing-name-or-email', hasName: Boolean(name), hasEmail: Boolean(email) });
           return;
         }
-        bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
+        bbCommentsLog('verified cookie set', { hasName: Boolean(name), hasEmail: Boolean(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
       }
       function bbClearVerifiedIdentity() {
@@ -1659,12 +1666,12 @@
           if (!id) return null;
           return {
             loggedIn: id.loggedIn,
-            name: id.name || null,
-            email: id.email || null
+            hasName: Boolean(id.name),
+            hasEmail: Boolean(id.email)
           };
         })(),
         verifiedCookieName: verifiedCookieName,
-        verifiedIdentity: bbGetVerifiedIdentity()
+        verifiedIdentity: bbIdentityDebug(bbGetVerifiedIdentity())
       });
 
       var renderComments = function(comments, total) {
@@ -1929,7 +1936,7 @@
                 loggedInOptionalEmail: loggedInOptionalEmail,
                 generatedAnonymous: replyGenerated,
                 displayName: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
-                verifiedCookie: verifiedIdentity,
+                verifiedCookie: bbIdentityDebug(verifiedIdentity),
                 emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeReplyOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
                 email: bbEmailDebug(loggedInEmail)
               });
@@ -1974,7 +1981,6 @@
                 parent_id: payload.parent_id,
                 display_name: payload.display_name,
                 hasEmail: Boolean(payload.email),
-                email: payload.email || null,
                 postAsAnonymous: Boolean(replyPostAsAnonymous)
               });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
@@ -2002,7 +2008,6 @@
                     verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
                     status: data && data.status ? data.status : null,
                     hasEmail: Boolean(data && data.email),
-                    email: data && data.email ? data.email : null,
                     willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && rEm)
                   });
                   if (data && data.id) {
@@ -2256,8 +2261,8 @@
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
           generatedAnonymous: generatedAnonymous,
-          squarespaceIdentity: id ? { loggedIn: id.loggedIn, name: id.name || null, email: id.email || null } : null,
-          verifiedIdentity: verifiedIdentity,
+          squarespaceIdentity: id ? bbIdentityDebug(id) : null,
+          verifiedIdentity: bbIdentityDebug(verifiedIdentity),
           nameInputVisible: null,
           emailInputVisible: null
         };
@@ -2328,9 +2333,7 @@
         formModePayload.nameInputVisible = nameInput.style.display !== 'none';
         formModePayload.emailInputVisible = emailInput.style.display !== 'none';
         formModePayload.loggedInIdentityLineVisible = loggedInIdentityLine.style.display !== 'none';
-        formModePayload.loggedInIdentityLineText = loggedInIdentityLine.textContent || '';
         formModePayload.anonymousIdentityLineVisible = anonymousIdentityLine.style.display !== 'none';
-        formModePayload.anonymousIdentityLineText = anonymousIdentityLine.textContent || '';
         var formModeSig = JSON.stringify(formModePayload);
         if (formModeSig !== self._lastCommentsFormModeLogSig) {
           self._lastCommentsFormModeLogSig = formModeSig;
@@ -2339,7 +2342,7 @@
         self._emitAuthDebugSnapshot('comments.formMode');
         self._authDebug('comments.formMode.details', {
           mode: mode,
-          identityName: id && id.name ? id.name : null,
+          identityHasName: Boolean(id && id.name),
           identityEmailPresent: Boolean(id && id.email),
           nameInputVisible: nameInput.style.display !== 'none',
           emailInputVisible: emailInput.style.display !== 'none'
@@ -2423,7 +2426,6 @@
           post_id: payload.post_id,
           display_name: payload.display_name,
           hasEmail: Boolean(payload.email),
-          email: payload.email || null,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
@@ -2452,12 +2454,8 @@
               verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
               status: data && data.status ? data.status : null,
               hasEmail: Boolean(data && data.email),
-              email: data && data.email ? data.email : null,
               willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
             });
-            // #region agent log
-            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'post-fix',hypothesisId:'H6',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous')},timestamp:Date.now()})}).catch(function(){});
-            // #endregion
             if (data && data.id) {
               if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse && !bbUseGeneratedAnonymousName(modeNow)) {
                 bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
@@ -2522,8 +2520,7 @@
             allowAnonymousComments: allowAnonymousComments,
             subscriberCommentsEnabled: subscriberCommentsEnabled,
             generatedAnonymous: true,
-            displayName: anonHandle,
-            email: null
+            hasDisplayName: Boolean(anonHandle)
           });
           submitMainCommentWithEmail(modeNow, anonHandle, body, null);
           return;
@@ -2538,11 +2535,11 @@
             allowAnonymousComments: allowAnonymousComments,
             subscriberCommentsEnabled: subscriberCommentsEnabled,
             loggedInOptionalEmail: loggedInOptionalEmail,
-            verifiedCookie: verifiedIdentity,
-            typedEmail: typedEmail || null,
-            emailOverride: activeMainOverride,
+            verifiedCookie: bbIdentityDebug(verifiedIdentity),
+            hasTypedEmail: Boolean(typedEmail),
+            hasEmailOverride: Boolean(activeMainOverride),
             emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeMainOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
-            useEmail: useEmail || null
+            hasUseEmail: Boolean(useEmail)
           });
           if (loggedInOptionalEmail) {
             submitMainCommentWithEmail(modeNow, name, body, typedEmail || useEmail || null);
@@ -2572,8 +2569,8 @@
           mode: modeNow,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
-          displayName: name || null,
-          email: (emailInput.value || '').trim() || null
+          hasDisplayName: Boolean(name),
+          hasEmail: Boolean((emailInput.value || '').trim())
         });
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
@@ -2649,21 +2646,6 @@
         bbPreview: bbPreview
       });
 
-      // #region agent log
-      var _rendererDbg = {
-        previewMode: previewMode,
-        bbPreview: bbPreview,
-        inIframe: window.parent !== window,
-        pathname: window.location.pathname,
-        href: window.location.href,
-        htmlClasses: document.documentElement ? document.documentElement.className : '(none)',
-        bodyClasses: document.body ? document.body.className : '(none)',
-        hasBbLoadingClass: document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : false,
-        isEditUi: (!previewMode && !bbPreview) ? this._isSquarespaceEditingUi() : 'skipped'
-      };
-      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'renderer.js:init',message:'renderer init state',data:_rendererDbg,timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
-      // #endregion
-
       if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
         this._suppressedByEditorMode = true;
@@ -2676,31 +2658,12 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
-        // #region agent log
-        try {
-          this._ensureBlogRouteHydrated();
-          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.routeGate',message:'init route gate decision',data:{pathname:pathname,blogPath:blogPath,isTransientAccountDrawerRoute:this._isTransientAccountDrawerRoute(pathname),lastBlogRoutePathname:this._lastBlogRoutePathname||null,isOnEffectiveBlogRoute:this._isOnEffectiveBlogRoute()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-        } catch (e) {}
-        // #endregion
+        try { this._ensureBlogRouteHydrated(); } catch (e) {}
         if (!this._isOnEffectiveBlogRoute()) {
-          console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
           // Do not clear bb-loading-blog: another collection on this Squarespace
           // site (or a loader that has not finished) may own the overlay.
           return;
         }
-        // #region agent log
-        try {
-          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.paywallBranch',message:'init paywall branch decision',data:{
-            isPaywalledSite: this._isPaywalledSite(),
-            viewerMode: this._resolveViewerMode(),
-            fullPaywallActive: this._isSquarespaceFullPaywallActive(),
-            isLikelyCollectionIndex: this._isLikelyBlogCollectionIndexView(),
-            hasSquarespacePostListing: this._hasSquarespacePostListing(),
-            selectedIndexFromHash: this._getSelectedIndexFromHash(),
-            pathname: pathname
-          },timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
-        } catch (e) {}
-        // #endregion
         if (this._isSquarespaceFullPaywallActive()) {
           console.log('[BlogOverlay] Full collection paywall (Squarespace owns page); skipping overlay');
           this._paywallFullySuppressed = true;
@@ -2722,7 +2685,6 @@
       this._root = root;
       this._startEditorModeObserver();
       this._suppressedByEditorMode = false;
-      console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
       this._debugLog('init', {
         previewMode: previewMode,
         bbPreview: bbPreview,
@@ -2896,11 +2858,6 @@
       var onRouteChange = function() {
         setTimeout(function() {
           var sig = self._routeSignature();
-          // #region agent log
-          try {
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:onRouteChange',message:'route change observed',data:{sig:sig,lastSig:self._lastRouteSignature,changed:sig!==self._lastRouteSignature,viewerMode:self._resolveViewerMode()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (sig === self._lastRouteSignature) return;
           self._lastRouteSignature = sig;
           var pathname = window.location && window.location.pathname ? window.location.pathname : '/';
@@ -5442,65 +5399,19 @@
     },
 
     _startPaywallAuthObserver: function() {
-      // #region agent log
-      try {
-        var _l1 = {
-          alreadyInstalled: !!this._paywallAuthObserver,
-          previewMode: !!this._previewMode,
-          bbPreview: !!this._bbPreview,
-          isPaywalledSite: this._isPaywalledSite(),
-          paywallDetectionState: this.config && this.config.paywallDetectionState,
-          paywallMode: this.config && this.config.paywallMode,
-          willEarlyReturn: (!!this._paywallAuthObserver || !!this._previewMode || !!this._bbPreview || !this._isPaywalledSite())
-        };
-        fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:_startPaywallAuthObserver',message:'auth observer install decision',data:_l1,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
-      } catch (e) {}
-      // #endregion
       if (this._paywallAuthObserver || this._previewMode || this._bbPreview) return;
       if (!this._isPaywalledSite()) return;
       var self = this;
       this._lastPaywallAuthSnapshot =
         this._resolveViewerMode() + '|' + (this._isSquarespaceFullPaywallActive() ? '1' : '0');
       this._paywallAuthObserver = new MutationObserver(function() {
-        // #region agent log
-        try {
-          if (!self._dbgObserverFiredOnce) {
-            self._dbgObserverFiredOnce = true;
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.fire',message:'auth observer fired (first mutation)',data:{baselineSnapshot:self._lastPaywallAuthSnapshot},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-          }
-        } catch (e) {}
-        // #endregion
         if (self._paywallAuthDebounce) return;
         self._paywallAuthDebounce = setTimeout(function() {
           self._paywallAuthDebounce = null;
           if (self._renderContentInProgress) {
-            // #region agent log
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'skipped: renderContentInProgress',data:{},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-            // #endregion
             return;
           }
           var snap = self._resolveViewerMode() + '|' + (self._isSquarespaceFullPaywallActive() ? '1' : '0');
-          // #region agent log
-          try {
-            var _ctx = (window.Static && window.Static.SQUARESPACE_CONTEXT) || {};
-            var _uac = _ctx.userAccountsContext || {};
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'settled snapshot compare',data:{
-              snap: snap,
-              lastSnapshot: self._lastPaywallAuthSnapshot,
-              snapshotChanged: snap !== self._lastPaywallAuthSnapshot,
-              viewerMode: self._resolveViewerMode(),
-              fullPaywallActive: self._isSquarespaceFullPaywallActive(),
-              fromSquarespaceContext: self._detectViewerModeFromSquarespaceContext(),
-              fromDom: self._detectViewerModeFromDom(),
-              rememberedMode: self._getRememberedViewerModeHint(),
-              memberGatePresent: self._isMemberGatePresent(),
-              hasSquarespacePostListing: self._hasSquarespacePostListing(),
-              ctxAuthenticated: _ctx.authenticated,
-              uacAuthenticated: _uac.authenticated,
-              uacIsAuthenticated: _uac.isAuthenticated
-            },timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (snap === self._lastPaywallAuthSnapshot) return;
           self._lastPaywallAuthSnapshot = snap;
           var fullNow = self._isSquarespaceFullPaywallActive();
@@ -5516,24 +5427,6 @@
           self._paywallFullySuppressed = false;
           var pathname = typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') : '/';
           var blogPath = self._currentBlogPathForRouteMatch();
-          // #region agent log
-          try {
-            var _rootConnected = false;
-            try { _rootConnected = Boolean(self._root && document.documentElement && document.documentElement.contains(self._root)); } catch (eR) {}
-            var _fbc = null;
-            try { var _f = findBlogContainer(); _fbc = _f ? ((_f.tagName||'') + '#' + (_f.id||'') + '.' + (typeof _f.className==='string'?_f.className.slice(0,40):'')) : null; } catch (eF) {}
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'snapshot changed - about to gate/render',data:{
-              pathname: pathname,
-              blogPath: blogPath || null,
-              isOnEffectiveBlogRoute: self._isOnEffectiveBlogRoute(),
-              isTransientAccountDrawerRoute: self._isTransientAccountDrawerRoute(pathname),
-              itemsLength: self.items ? self.items.length : -1,
-              rootConnected: _rootConnected,
-              rootId: self._root ? (self._root.id || '(no id)') : '(no root)',
-              findBlogContainerNow: _fbc
-            },timestamp:Date.now(),hypothesisId:'H3,H4'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (!self._isOnEffectiveBlogRoute()) {
             self._debugLog('paywall auth observer skipped outside blog route', { path: pathname, blogPath: blogPath || null });
             return;
@@ -8435,7 +8328,6 @@
           result = url.replace(/ /g, '%20');
         }
       }
-      console.log('[BlogOverlay] _encodeShareUrl: in=', JSON.stringify(url), 'out=', JSON.stringify(result));
       return result;
     },
 
@@ -8451,10 +8343,8 @@
      */
     _createShareLinks: function(shareUrl, title, platforms, baseUrl, imageUrl, lightVariant) {
       if (!platforms || platforms.length === 0) return null;
-      console.log('[BlogOverlay] _createShareLinks: shareUrl (input)=', JSON.stringify(shareUrl));
       var normalized = this._normalizeShareUrl(shareUrl || '');
       var encodedShareUrl = this._encodeShareUrl(normalized);
-      console.log('[BlogOverlay] _createShareLinks: normalized=', JSON.stringify(normalized), 'encodedShareUrl=', JSON.stringify(encodedShareUrl));
       var encTitle = encodeURIComponent(title || '');
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-share-links' + (lightVariant ? ' blog-overlay-share-links--on-dark' : '');
@@ -8466,7 +8356,6 @@
         else if (platform === 'x') href = 'https://twitter.com/intent/tweet?url=' + encodedShareUrl + '&text=' + encTitle;
         else if (platform === 'email') {
           href = 'mailto:?subject=' + encTitle + '&body=' + encodedShareUrl;
-          console.log('[BlogOverlay] _createShareLinks: email body (raw, browser will encode)=', encodedShareUrl);
         }
         else if (platform === 'reddit') href = 'https://reddit.com/submit?url=' + encodedShareUrl + '&title=' + encTitle;
         else if (platform === 'linkedin') href = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodedShareUrl;
@@ -8475,7 +8364,6 @@
         }
         else if (platform === 'whatsapp') href = 'https://api.whatsapp.com/send?text=' + encodedShareUrl;
         else continue;
-        console.log('[BlogOverlay] _createShareLinks: platform=', platform, 'href (first 120 chars)=', href ? href.substring(0, 120) + (href.length > 120 ? '...' : '') : '');
         var a = document.createElement('a');
         a.href = href;
         a.target = '_blank';
@@ -8679,22 +8567,13 @@
         }
         postPath = postPath.replace(/\/+$/, '') || '/';
         var postPathNorm = this._normalizePathForMatch(postPath);
-        if (pathnameNorm === postPathNorm) {
-          console.log('[BlogOverlay] _getSelectedIndexFromPath: matched pathname', pathnameNorm, 'to post', i);
-          return i;
-        }
+        if (pathnameNorm === postPathNorm) return i;
       }
       var tail = this._getPostPathTailAfterBlogPrefix(pathnameNorm);
       if (tail) {
         for (var j = 0; j < items.length; j++) {
-          if (this._postMatchesPathTail(items[j], tail)) {
-            console.log('[BlogOverlay] _getSelectedIndexFromPath: matched path tail', JSON.stringify(tail), 'to post', j);
-            return j;
-          }
+          if (this._postMatchesPathTail(items[j], tail)) return j;
         }
-      }
-      if (pathname.indexOf('/') !== pathname.lastIndexOf('/')) {
-        console.log('[BlogOverlay] _getSelectedIndexFromPath: no match. pathname=', JSON.stringify(pathname), 'pathnameNorm=', JSON.stringify(pathnameNorm), 'first post fullUrl=', items[0] ? JSON.stringify(items[0].fullUrl) : '');
       }
       return -1;
     },
@@ -8754,10 +8633,7 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
-        if (!this._isOnEffectiveBlogRoute()) {
-          console.log('[BlogOverlay] Skipping render: not on blog route');
-          return;
-        }
+        if (!this._isOnEffectiveBlogRoute()) return;
       }
 
       var root = this._root || this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
@@ -8852,7 +8728,7 @@
                   isSignedIn: json.userAccountsContext.isSignedIn
                 }
               : null,
-          extractedJsonIdentity: self._squarespaceJsonIdentity
+          extractedJsonIdentity: self._redactIdentityForLog(self._squarespaceJsonIdentity)
         });
         self._emitAuthDebugSnapshot('render.afterJsonIdentity');
         var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);

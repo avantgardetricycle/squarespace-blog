@@ -17,7 +17,7 @@ import {
   formatMajorAmount,
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
-import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
+import { BUILD_TIME_IS_LIVE, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
 import { PUBLIC_PRICING_TIERS, annualSavingsPercent, annualSavingsAmount } from "@/lib/pricingTiers";
 import {
   billingPeriod,
@@ -94,19 +94,8 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    console.info("[BetterBlog/LandingPage] mount", {
-      buildTimeRaw: BUILD_TIME_RAW,
-      buildTimeIsLive: BUILD_TIME_IS_LIVE,
-    });
-    resolveIsBetterBlogLive().then((live) => {
-      console.info("[BetterBlog/LandingPage] isLive state →", live);
-      setIsLive(live);
-    });
+    resolveIsBetterBlogLive().then(setIsLive);
   }, []);
-
-  useEffect(() => {
-    console.info("[BetterBlog/LandingPage] UI mode: interest modal + login", { isLive });
-  }, [isLive]);
 
   useEffect(() => {
     fetchPublicPlanPrices()
