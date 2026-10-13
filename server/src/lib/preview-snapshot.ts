@@ -3,38 +3,19 @@ import {
   POST_SNAPSHOT_CAP,
   SNAPSHOT_FRESH_MS,
   SNAPSHOT_MAX_BYTES,
-  buildSubstituteFontCss,
-  collectStylesheetUrls,
   applyPreviewFetchUrl,
   decorateServedSnapshot,
-  extractLockedFontFamilies,
-  googleFontsStylesheetQuery,
-  inlineStyleText,
+  typekitConfigFontCss,
+  typekitKitScriptUrls,
   resolveSnapshotPageUrl,
   sanitizeSnapshotHtml,
   scoreSnapshotHtml,
-  type LockedFontFamily,
   type SnapshotQuality,
   type SnapshotView
 } from './preview-snapshot-html.js'
 
 const PAGE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 const RAW_HTML_LIMIT = 5_000_000
-const STYLESHEET_LIMIT = 1_500_000
-
-const GOOGLE_FAMILY_AXIS: Record<string, string> = {
-  Montserrat: 'Montserrat:wght@400;600;700',
-  'Nunito Sans': 'Nunito+Sans:wght@400;600;700',
-  Inter: 'Inter:wght@400;600;700',
-  'Source Sans 3': 'Source+Sans+3:wght@400;600;700',
-  'Source Serif 4': 'Source+Serif+4:wght@400;600;700',
-  'IBM Plex Mono': 'IBM+Plex+Mono:wght@400;600',
-  'EB Garamond': 'EB+Garamond:wght@400;600;700',
-  'Libre Baskerville': 'Libre+Baskerville:wght@400;700',
-  Poppins: 'Poppins:wght@400;600;700'
-}
-
-const googleCssCache = new Map<string, string>()
 
 export class SnapshotCaptureError extends Error {
   status: number
@@ -150,60 +131,19 @@ export async function fetchBrowserlessHtml (pageUrl: string): Promise<string | n
   }
 }
 
-async function fetchStylesheetCss (urls: string[], pageUrl: string): Promise<Array<{ url: string; css: string }>> {
-  const sheets: Array<{ url: string; css: string }> = []
-  for (const url of urls) {
-    try {
-      const result = await fetchText(url, pageUrl, 8_000)
-      if (!result.ok || result.text.length > STYLESHEET_LIMIT) continue
-      sheets.push({ url, css: result.text })
-    } catch {
-      // A missing stylesheet should not fail the snapshot.
-    }
-  }
-  return sheets
-}
-
-async function fetchGoogleFontCss (family: string): Promise<string | null> {
-  const cached = googleCssCache.get(family)
-  if (cached) return cached
-  const axis = GOOGLE_FAMILY_AXIS[family]
-  if (!axis) return null
-  try {
-    const res = await fetch(`https://fonts.googleapis.com/css2?family=${axis}&display=swap`, {
-      headers: { 'User-Agent': PAGE_UA },
-      signal: AbortSignal.timeout(8_000)
-    })
-    if (!res.ok) return null
-    const css = await res.text()
-    if (!css.includes('@font-face')) return null
-    googleCssCache.set(family, css)
-    return css
-  } catch {
-    return null
-  }
-}
-
 async function fontCssForPage (rawHtml: string, pageUrl: string): Promise<string> {
-  const families = new Map<string, LockedFontFamily>()
-  const add = (found: LockedFontFamily[]) => {
-    for (const family of found) {
-      const key = family.family.toLowerCase()
-      const prev = families.get(key)
-      if (!prev || (prev.generic === 'sans' && family.generic !== 'sans')) families.set(key, family)
+  const chunks: string[] = []
+  for (const kitUrl of typekitKitScriptUrls(rawHtml, pageUrl)) {
+    try {
+      const result = await fetchText(kitUrl, pageUrl, 8_000)
+      if (!result.ok || !result.text.includes('Typekit.config')) continue
+      const css = typekitConfigFontCss(result.text)
+      if (css) chunks.push(css)
+    } catch {
+      // A missing kit should not fail the snapshot. Site CSS still loads.
     }
   }
-  add(extractLockedFontFamilies(inlineStyleText(rawHtml)))
-  const sheets = await fetchStylesheetCss(collectStylesheetUrls(rawHtml, pageUrl), pageUrl)
-  for (const sheet of sheets) add(extractLockedFontFamilies(sheet.css, sheet.url))
-  const list = [...families.values()]
-  if (list.length === 0) return ''
-  const googleCssByFamily: Record<string, string> = {}
-  for (const name of googleFontsStylesheetQuery(list)) {
-    const css = await fetchGoogleFontCss(name)
-    if (css) googleCssByFamily[name] = css
-  }
-  return buildSubstituteFontCss(list, googleCssByFamily)
+  return chunks.join('\n')
 }
 
 export async function captureSnapshotHtml (

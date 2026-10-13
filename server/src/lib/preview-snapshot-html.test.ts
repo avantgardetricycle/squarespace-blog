@@ -3,6 +3,9 @@ import test from 'node:test'
 import {
   applyPreviewFetchUrl,
   buildSubstituteFontCss,
+  typekitConfigFontCss,
+  typekitKitScriptUrls,
+  typekitWoff2Url,
   decorateServedSnapshot,
   extractLockedFontFamilies,
   resolveSnapshotPageUrl,
@@ -128,6 +131,25 @@ test('locked font families are substituted under the original family name', () =
   assert.match(substituted, /fonts\.gstatic\.com\/s\/montserrat\/v1\/a\.woff2/)
   assert.equal(/font-family:\s*'Montserrat'/.test(substituted), false)
   assert.equal(rewriteGoogleFontCss(google, 'futura-pt').includes('"futura-pt"'), true)
+})
+
+test('typekit kit script becomes the real woff2 faces', () => {
+  const html = `<html><head>
+    <script src="//use.typekit.net/ik/abc.js"></script>
+  </head><body><header></header><main><article class="blog-item">Hello blog</article></main></body></html>`
+  assert.deepEqual(typekitKitScriptUrls(html, 'https://customer.example/blog'), [
+    'https://use.typekit.net/ik/abc.js'
+  ])
+  const kit = `window.Typekit.config={"fc":[
+    {"family":"proxima-nova","src":"https://use.typekit.net/af/4b22bb/00000000000000007735e601/31/{format}{?primer,subset_id,fvd,v}","descriptors":{"weight":"400","style":"normal","subset_id":2}},
+    {"family":"proxima-nova","src":"https://use.typekit.net/af/6eb0e3/00000000000000007758cf8f/31/{format}{?primer,subset_id,fvd,v}","descriptors":{"weight":"400","style":"italic","subset_id":2}}
+  ]};`
+  const css = typekitConfigFontCss(kit)
+  assert.match(css, /font-family:"proxima-nova"/)
+  assert.match(css, /use\.typekit\.net\/af\/4b22bb\/00000000000000007735e601\/31\/l\?subset_id=2&fvd=n4/)
+  assert.match(css, /fvd=i4/)
+  assert.match(css, /format\("woff2"\)/)
+  assert.equal(typekitWoff2Url('https://evil.example/{format}', 2, 'n4'), null)
 })
 
 test('applyPreviewFetchUrl points a post snapshot at that post JSON', () => {
