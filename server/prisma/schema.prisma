@@ -67,6 +67,7 @@ model Site {
   blogAuthors           BlogAuthor[]
   analyticsEvents       AnalyticsEvent[]
   googleAnalytics       SiteGoogleAnalytics?
+  fathomAnalytics       SiteFathomAnalytics?
   leadCaptures          LeadCapture[]
   blogCommentSettings   BlogCommentSettings?
   emailIntegrations     SiteEmailIntegration[]
@@ -76,6 +77,7 @@ model Site {
   comments              Comment[]
   supportConversations  SupportConversation[]
   supportTickets        SupportTicket[]
+  previewSnapshots      PreviewSnapshot[]
 
   @@index([siteKey])
   @@index([userId])
@@ -95,6 +97,19 @@ model SiteGoogleAnalytics {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_google_analytics")
+}
+
+model SiteFathomAnalytics {
+  id             String   @id @default(uuid())
+  siteId         String   @unique @map("site_id")
+  fathomSiteId   String   @map("fathom_site_id") // public Site ID from Fathom Settings → Sites
+  metricsEnabled String[] @map("metrics_enabled") // traffic_sources | top_referrers | new_vs_returning
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_fathom_analytics")
 }
 
 model AnalyticsEvent {
@@ -318,6 +333,23 @@ model LeadCapture {
   @@index([siteId, type])
   @@index([siteId, createdAt])
   @@map("lead_captures")
+}
+
+model PreviewSnapshot {
+  id         String   @id @default(uuid())
+  siteId     String   @map("site_id")
+  pageKind   String   @map("page_kind") // collection | post
+  sourcePath String   @map("source_path")
+  html       String   @db.Text
+  quality    String // http | http-sparse | browser
+  byteSize   Int      @map("byte_size")
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, pageKind, sourcePath])
+  @@index([siteId, fetchedAt])
+  @@map("preview_snapshots")
 }
 
 model CachedPost {

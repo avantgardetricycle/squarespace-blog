@@ -69,7 +69,7 @@ test.describe("post layout contract", () => {
       const h1 = await cssNumber(page, ".blog-overlay-body h1", "font-size");
       const h6 = await cssNumber(page, ".blog-overlay-body h6", "font-size");
       expectPx(h6, 12);
-      if (mobile) expectPx(h1, name === "writer" ? 29 : 24);
+      if (mobile) expectPx(h1, 24);
       else expectPx(h1, 48);
 
       const footerGapSel =
@@ -118,6 +118,70 @@ test.describe("post layout contract", () => {
     });
   }
 
+  test("a drawer sidebar keeps footer copies on the page", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const cfg = structuredClone(postTemplates.publisher) as Record<string, any>;
+    cfg.rightSidebar.modules = ["authorProfiles", "popularPosts", "relevantPosts", "filterByCategory"];
+    cfg.rightSidebar.moduleOrder = cfg.rightSidebar.modules.slice();
+    cfg.rightSidebar.mobileDisplay = "drawer";
+    cfg.footerContent.modules = ["authorProfiles", "relevantPosts", "prevNextArticle"];
+    cfg.footerContent.moduleOrder = cfg.footerContent.modules.slice();
+    await mountRenderer(page, { postConfig: cfg });
+
+    const flags = await page.evaluate(() => {
+      const hidden = (sel: string) => {
+        const el = document.querySelector(sel);
+        return el ? el.classList.contains("bb-mobile-duplicate-hidden") : null;
+      };
+      const top = (sel: string) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        const box = el.getBoundingClientRect();
+        return box.height > 0 ? box.top : null;
+      };
+      return {
+        footerAuthorHidden: hidden('[data-bb-zone="footer"][data-bb-module="authorProfiles"]'),
+        footerRelatedHidden: hidden('[data-bb-zone="footer"][data-bb-module="relevantPosts"]'),
+        drawerAuthor: !!document.querySelector('.bb-mobile-drawer [data-bb-module="authorProfiles"]'),
+        drawerRelated: !!document.querySelector('.bb-mobile-drawer [data-bb-module="relevantPosts"]'),
+        comments: top("#bb-comments"),
+        author: top('[data-bb-zone="footer"][data-bb-module="authorProfiles"]'),
+        related: top('[data-bb-zone="footer"][data-bb-module="relevantPosts"]'),
+      };
+    });
+
+    expect(flags.footerAuthorHidden).toBe(false);
+    expect(flags.footerRelatedHidden).toBe(false);
+    if (mobile) {
+      expect(flags.drawerAuthor).toBe(true);
+      expect(flags.drawerRelated).toBe(true);
+      expect(flags.comments).not.toBeNull();
+      expect(flags.author).not.toBeNull();
+      expect(flags.related).not.toBeNull();
+      expect(flags.comments!).toBeLessThan(flags.author!);
+      expect(flags.author!).toBeLessThan(flags.related!);
+    }
+  });
+
+  test("a stacked right sidebar still wins over a duplicated footer module", async ({ page }, testInfo) => {
+    const mobile = isMobileProject(testInfo);
+    const cfg = structuredClone(postTemplates.publisher) as Record<string, any>;
+    cfg.rightSidebar.modules = ["authorProfiles", "popularPosts", "relevantPosts", "filterByCategory"];
+    cfg.rightSidebar.moduleOrder = cfg.rightSidebar.modules.slice();
+    cfg.rightSidebar.mobileDisplay = "hidden";
+    cfg.footerContent.modules = ["authorProfiles", "relevantPosts", "prevNextArticle"];
+    cfg.footerContent.moduleOrder = cfg.footerContent.modules.slice();
+    await mountRenderer(page, { postConfig: cfg });
+
+    const hidden = await page.evaluate(() => {
+      return ["authorProfiles", "relevantPosts"].map((id) => {
+        const el = document.querySelector(`[data-bb-zone="footer"][data-bb-module="${id}"]`);
+        return el ? el.classList.contains("bb-mobile-duplicate-hidden") : null;
+      });
+    });
+    expect(hidden).toEqual([mobile, mobile]);
+  });
+
   test("sidebar copy wins over a duplicated footer module on mobile", async ({ page }, testInfo) => {
     const mobile = isMobileProject(testInfo);
     await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
@@ -147,8 +211,24 @@ test.describe("post layout contract", () => {
     await expect(bio("footer", "Literal Author")).toHaveText("Footer literal stays **bold**");
 
     const markdown = bio("sidebar", "Markdown Author");
+    const markdownCard = markdown.locator("xpath=ancestor::*[contains(@class,'blog-overlay-author-unit')]");
+    await expect(markdownCard.locator('a[aria-label="Instagram"]')).toHaveAttribute(
+      "href",
+      "https://instagram.com/salaamssalaams",
+    );
+    await expect(markdownCard.locator('a[aria-label="Facebook"]')).toHaveAttribute(
+      "href",
+      "https://www.facebook.com/ada",
+    );
+    await expect(markdownCard.locator('a[aria-label="Linkedin"]')).toHaveAttribute(
+      "href",
+      "https://linkedin.com/in/ada",
+    );
+    await expect(markdownCard.locator('a[aria-label="X"]')).toHaveAttribute("href", "https://www.x.com/ada");
+    await expect(markdownCard.locator('a[aria-label="Website"]')).toHaveCount(0);
     await expect(markdown.locator("strong")).toHaveText("first");
-    await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    await expect(markdown.locator('a[href="https://example.invalid/notes"]')).toHaveAttribute("title", "Maya's notes");
+    await expect(markdown.locator('a[href="https://example.invalid/oak"]')).toHaveText("https://example.invalid/oak");
     await expect(markdown.locator("li")).toHaveText(["Ada", "Code"]);
     const markdownFooter = bio("footer", "Markdown Author");
     await expect(markdownFooter.locator("strong")).toHaveText("long");
@@ -405,6 +485,103 @@ test.describe("post layout contract", () => {
       expect(stuck.top).toBeGreaterThan(0);
     }
   });
+
+  test("post header font choices use the Squarespace heading and paragraph sizes", async ({ page }, testInfo) => {
+    const config = zoneOrderPostConfig("feature");
+    const header = {
+      ...(config.postHeader as Record<string, unknown>),
+      titleFont: "h2",
+      deckFont: "p1",
+      metaFont: "p3",
+    };
+    await mountRenderer(page, {
+      postConfig: { ...config, postHeader: header },
+      extraCss: `
+        :root {
+          --heading-2-font-font-size: 36px;
+          --heading-2-font-font-family: Georgia, serif;
+          --paragraph-1-font-font-size: 22px;
+          --paragraph-3-font-font-size: 11px;
+        }
+      `,
+    });
+
+    const fonts = await page.evaluate(() => {
+      const list = document.getElementById("blog-overlay-list");
+      const read = (selector: string) => {
+        const el = document.querySelector(selector);
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { size: cs.fontSize, family: cs.fontFamily };
+      };
+      return {
+        titleFont: list?.getAttribute("data-bb-title-font"),
+        deckFont: list?.getAttribute("data-bb-deck-font"),
+        metaFont: list?.getAttribute("data-bb-meta-font"),
+        title: read(".blog-overlay-post-title"),
+        deck: read(".blog-overlay-post-deck"),
+        meta: read(".blog-overlay-meta"),
+      };
+    });
+
+    expect(fonts.titleFont).toBe("h2");
+    expect(fonts.deckFont).toBe("p1");
+    expect(fonts.metaFont).toBe("p3");
+    expect(fonts.title).not.toBeNull();
+    expect(fonts.deck).not.toBeNull();
+    expect(fonts.meta).not.toBeNull();
+    expectPx(parseFloat(fonts.title!.size), 36);
+    expectPx(parseFloat(fonts.deck!.size), 22);
+    expectPx(parseFloat(fonts.meta!.size), 11);
+    expect(fonts.title!.family.toLowerCase()).toContain("georgia");
+
+    if (isMobileProject(testInfo)) {
+      expectPx(await cssNumber(page, ".blog-overlay-body h1", "font-size"), 31);
+    }
+  });
+
+  test("post header font choices use distinct Squarespace element sizes", async ({ page }) => {
+    const config = zoneOrderPostConfig("feature");
+    const header = {
+      ...(config.postHeader as Record<string, unknown>),
+      titleFont: "h3",
+      deckFont: "p1",
+      metaFont: "p3",
+    };
+    await mountRenderer(page, {
+      postConfig: { ...config, postHeader: header },
+      extraCss: `
+        h1 { font-size: 50px; }
+        h2 { font-size: 33px; }
+        h3 { font-size: 27px; }
+        h4 { font-size: 19px; }
+        p.sqsrte-large { font-size: 21px; }
+        p { font-size: 16px; }
+        p.sqsrte-small { font-size: 12px; }
+      `,
+    });
+    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), 27);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), 21);
+    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), 12);
+  });
+
+  test("post header font choices fall back when every site step is the same size", async ({ page }, testInfo) => {
+    const config = zoneOrderPostConfig("feature");
+    const header = {
+      ...(config.postHeader as Record<string, unknown>),
+      titleFont: "h4",
+      deckFont: "p1",
+      metaFont: "p3",
+    };
+    await mountRenderer(page, {
+      postConfig: { ...config, postHeader: header },
+      extraCss: "h1,h2,h3,h4,p,.sqsrte-large,.sqsrte-small{font-size:15px !important}",
+    });
+    const mobile = isMobileProject(testInfo);
+    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 18 : 22);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 14 : 20);
+    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 12 : 14);
+  });
 });
 
 test.describe("post updated at", () => {
@@ -542,7 +719,7 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
     const rule = await cssNumber(page, ".blog-overlay-writer-rule", "width");
     expectPx(rule, 40, 2);
     if (mobile) {
-      expectPx(title, 34);
+      expectPx(title, 28);
       expectPx(pad, 18.75, 1);
     } else {
       expect(pad).toBeGreaterThan(80);

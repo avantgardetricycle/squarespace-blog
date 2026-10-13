@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-10-11-mobile-bleed";
+const RENDERER_VERSION = "2026-10-12-drawer-tab-type";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -125,14 +125,24 @@ export default function BlogPreviewRenderer({
       }
     };
 
-    if (window.BlogOverlayRenderer && typeof window.BlogOverlayRenderer.init === "function") {
+    const versionedSrc = `${RENDERER_URL}?v=${encodeURIComponent(RENDERER_VERSION)}`;
+    const existing = document.querySelector('script[data-bb-renderer="1"]');
+    const renderer = window.BlogOverlayRenderer;
+    const scriptIsCurrent =
+      existing instanceof HTMLScriptElement &&
+      existing.src.indexOf(encodeURIComponent(RENDERER_VERSION)) !== -1;
+    if (renderer && scriptIsCurrent && typeof renderer.init === "function") {
       initRenderer();
       return;
     }
 
+    if (existing?.parentNode) existing.parentNode.removeChild(existing);
+    delete window.BlogOverlayRenderer;
+
     const script = document.createElement("script");
-    script.src = `${RENDERER_URL}?v=${encodeURIComponent(RENDERER_VERSION)}`;
+    script.src = versionedSrc;
     script.async = true;
+    script.dataset.bbRenderer = "1";
     script.onload = initRenderer;
     script.onerror = () => {
       setError("Failed to load renderer");

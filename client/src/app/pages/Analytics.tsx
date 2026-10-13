@@ -31,6 +31,7 @@ import {
   ExternalLink,
   Clock,
   BarChart3,
+  LineChart,
   Settings,
   CheckCircle2,
   AlertCircle,
@@ -40,6 +41,7 @@ import {
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { GoogleAnalyticsModal, type GAConfig } from "@/app/components/GoogleAnalyticsModal";
+import { FathomAnalyticsModal, type FathomConfig } from "@/app/components/FathomAnalyticsModal";
 
 interface AnalyticsData {
   keyMetrics: {
@@ -127,6 +129,8 @@ export default function Analytics() {
   const [postLimit, setPostLimit] = useState<number | "all">(5);
   const [gaConfig, setGaConfig] = useState<GAConfig | null>(null);
   const [gaModalOpen, setGaModalOpen] = useState(false);
+  const [fathomConfig, setFathomConfig] = useState<FathomConfig | null>(null);
+  const [fathomModalOpen, setFathomModalOpen] = useState(false);
   const [leadsData, setLeadsData] = useState<{
     summary: { totalNewsletter: number; totalLeadMagnet: number; total: number };
     leads: Array<{ id: string; email: string; name: string | null; type: string; resourceTitle: string | null; createdAt: string }>;
@@ -184,6 +188,14 @@ export default function Analytics() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setGaConfig(data ?? { connected: false, measurementId: null, metricsEnabled: [] }))
       .catch(() => setGaConfig({ connected: false, measurementId: null, metricsEnabled: [] }));
+  }, [siteKey]);
+
+  useEffect(() => {
+    if (!siteKey) return;
+    fetch(`/api/analytics/fathom/${encodeURIComponent(siteKey)}`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setFathomConfig(data ?? { connected: false, fathomSiteId: null, metricsEnabled: [] }))
+      .catch(() => setFathomConfig({ connected: false, fathomSiteId: null, metricsEnabled: [] }));
   }, [siteKey]);
 
   useEffect(() => {
@@ -358,6 +370,86 @@ export default function Analytics() {
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => setGaConfig(data ?? { connected: false, measurementId: null, metricsEnabled: [] }))
             .catch(() => setGaConfig({ connected: false, measurementId: null, metricsEnabled: [] }));
+        }}
+      />
+
+      <Card className="bg-white border-[#e4e3de] p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-lg bg-[#f7f6f3] flex items-center justify-center shrink-0">
+              <LineChart className="w-6 h-6 text-[#5B4FE8]" />
+            </div>
+            <div>
+              <h3 className="font-heading text-xl text-[#0a0a0a] mb-1">
+                Fathom Analytics Integration
+              </h3>
+              <p className="text-sm text-[#6b6b6b] mb-3">
+                {fathomConfig?.connected
+                  ? "Your Fathom site is connected. Stats stay in Fathom and do not appear in the BetterBlog charts."
+                  : "Connect Fathom to see Traffic Sources, Top Referrers, and New vs. Returning Visitors there. Fathom is cookieless, so readers are not shown an extra consent banner."}
+              </p>
+              {fathomConfig?.connected ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-[#10B981]">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="font-medium">Connected</span>
+                  </div>
+                  <div className="text-sm text-[#6b6b6b] font-mono">
+                    {fathomConfig.fathomSiteId}
+                  </div>
+                  {fathomConfig.metricsEnabled.length > 0 && (
+                    <div className="text-xs text-[#6b6b6b] mt-1">
+                      Tracking: {fathomConfig.metricsEnabled.map((m) => {
+                        if (m === "traffic_sources") return "Traffic Sources";
+                        if (m === "top_referrers") return "Top Referrers";
+                        if (m === "new_vs_returning") return "New vs. Returning";
+                        return m;
+                      }).join(", ")}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-[#6b6b6b]">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Not connected</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <Button
+            onClick={() => setFathomModalOpen(true)}
+            className={
+              fathomConfig?.connected
+                ? "bg-[#f7f6f3] text-[#6b6b6b] hover:bg-[#e4e3de] border border-[#e4e3de] shrink-0"
+                : "bg-[#5B4FE8] text-white hover:bg-[#4a3fd4] shrink-0"
+            }
+          >
+            {fathomConfig?.connected ? (
+              <>
+                <Settings className="w-4 h-4 mr-2" />
+                Edit
+              </>
+            ) : (
+              <>
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Connect Fathom
+              </>
+            )}
+          </Button>
+        </div>
+      </Card>
+
+      <FathomAnalyticsModal
+        open={fathomModalOpen}
+        onOpenChange={setFathomModalOpen}
+        siteKey={siteKey ?? ""}
+        config={fathomConfig}
+        onSaved={() => {
+          if (!siteKey) return;
+          fetch(`/api/analytics/fathom/${encodeURIComponent(siteKey)}`, { credentials: "include" })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => setFathomConfig(data ?? { connected: false, fathomSiteId: null, metricsEnabled: [] }))
+            .catch(() => setFathomConfig({ connected: false, fathomSiteId: null, metricsEnabled: [] }));
         }}
       />
 

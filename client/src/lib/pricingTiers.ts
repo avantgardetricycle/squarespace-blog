@@ -53,7 +53,7 @@ export const PUBLIC_PRICING_TIERS = [
       "Multiple authors and author management",
       "Image styles per blog",
       "Saved post templates",
-      "Advanced analytics (Google Analytics connection, click tracking, on-blog search terms, per-author performance)",
+      "Advanced analytics (Google Analytics or Fathom connection, click tracking, on-blog search terms, per-author performance)",
     ],
     highlight: false,
   },

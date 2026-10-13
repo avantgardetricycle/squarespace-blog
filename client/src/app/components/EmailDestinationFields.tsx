@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import { Pencil } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -383,6 +385,63 @@ type EmailDestinationFieldsProps = {
   tagsError: string | null;
 };
 
+function ApiKeyField({
+  value,
+  onChange,
+}: {
+  value: EmailDestinationState;
+  onChange: (next: EmailDestinationState) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const previousKey = useRef(value.apiKey);
+  const savedAndIdle = value.hasApiKey && value.apiKey.trim() === "";
+
+  useEffect(() => {
+    if (previousKey.current.trim() !== "" && value.apiKey.trim() === "" && value.hasApiKey) {
+      setEditing(false);
+    }
+    previousKey.current = value.apiKey;
+  }, [value.apiKey, value.hasApiKey]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  return (
+    <div className="space-y-2" key={`${value.provider}-key`}>
+      <Label className="text-xs text-[#6b6b6b]">API key</Label>
+      {savedAndIdle && !editing ? (
+        <div className="flex items-center gap-2">
+          <span className="text-sm italic text-[#6b6b6b]">Saved</span>
+          <button
+            type="button"
+            className="text-[#6b6b6b] hover:text-[#1a1a1a]"
+            aria-label="Edit API key"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <Input
+          ref={inputRef}
+          type="password"
+          autoComplete="new-password"
+          value={value.apiKey}
+          placeholder={value.hasApiKey ? "Paste a new API key" : "Paste API key"}
+          onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
+        />
+      )}
+      {value.provider === "mailchimp" && (
+        <p className="text-[10px] text-[#6b6b6b]">
+          The API key includes the datacenter suffix, such as -us21.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function EmailDestinationFields({
   value,
   savedKeys,
@@ -430,21 +489,7 @@ export function EmailDestinationFields({
       </div>
       {external && (
         <>
-          <div className="space-y-2" key={`${value.provider}-key`}>
-            <Label className="text-xs text-[#6b6b6b]">API key</Label>
-            <Input
-              type="password"
-              autoComplete="new-password"
-              value={value.apiKey}
-              placeholder={value.hasApiKey ? "Saved" : "Paste API key"}
-              onChange={(e) => onChange({ ...value, apiKey: e.target.value })}
-            />
-            {value.provider === "mailchimp" && (
-              <p className="text-[10px] text-[#6b6b6b]">
-                The API key includes the datacenter suffix, such as -us21.
-              </p>
-            )}
-          </div>
+          <ApiKeyField key={value.provider} value={value} onChange={onChange} />
           {value.provider === "kit" ? (
             <KitDestinationFields
               value={value}

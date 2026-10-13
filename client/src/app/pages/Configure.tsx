@@ -6,6 +6,7 @@ import {
   Smartphone,
   Save,
   Undo2,
+  RefreshCw,
   Plus,
   X,
   Pencil,
@@ -48,10 +49,9 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import BlogPreviewIframe, {
-  buildBlogPreviewUrl,
-  isSquarespaceUrl,
+  buildSnapshotPreviewUrl,
+  postPathFromFullUrl,
 } from "@/app/components/BlogPreviewIframe";
-import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { AuthorBioPreview } from "@/app/components/AuthorBioPreview";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
@@ -244,6 +244,24 @@ export type PostHeaderContentVerticalAlignment = "top" | "center" | "bottom";
 
 export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 
+/** Squarespace heading styles for the post title. */
+export type PostHeaderHeadingFont = "h1" | "h2" | "h3" | "h4";
+/** Squarespace paragraph styles for the deck and meta line. */
+export type PostHeaderParagraphFont = "p1" | "p2" | "p3";
+
+export const POST_HEADER_HEADING_FONTS: { value: PostHeaderHeadingFont; label: string }[] = [
+  { value: "h1", label: "H1" },
+  { value: "h2", label: "H2" },
+  { value: "h3", label: "H3" },
+  { value: "h4", label: "H4" },
+];
+
+export const POST_HEADER_PARAGRAPH_FONTS: { value: PostHeaderParagraphFont; label: string }[] = [
+  { value: "p1", label: "P1" },
+  { value: "p2", label: "P2" },
+  { value: "p3", label: "P3" },
+];
+
 export interface PostHeaderConfig {
   imagePosition: PostHeaderImagePosition;
   contentAlignment: PostHeaderContentAlignment;
@@ -258,6 +276,12 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
+  /** Squarespace heading style for the post title. Default H1. */
+  titleFont?: PostHeaderHeadingFont;
+  /** Squarespace paragraph style for the author/date line. Default P2. */
+  metaFont?: PostHeaderParagraphFont;
+  /** Squarespace paragraph style for the deck (post byline). Default P1. */
+  deckFont?: PostHeaderParagraphFont;
   /** Decorative accent rule above/between header elements (template-specific styling). */
   showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
@@ -595,6 +619,9 @@ const defaultPostHeader: PostHeaderConfig = {
   showCategories: false,
   showByline: false,
   showDecorativeAccentLine: false,
+  titleFont: "h1",
+  metaFont: "p2",
+  deckFont: "p1",
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
@@ -1368,6 +1395,41 @@ function resolveCollectionTemplateConfig(
   return parseLevelConfig(t.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
 }
 
+function PostHeaderFontSelect<T extends string>({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <Label className="text-xs text-[#6b6b6b]">{label}</Label>
+        <p className="text-[10px] text-[#6b6b6b]">{description}</p>
+      </div>
+      <Select value={value} onValueChange={(v) => onChange(v as T)}>
+        <SelectTrigger className="w-[88px] shrink-0" aria-label={label}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 /** Horizontal label + control row; hidden when locked on a template. */
 function LockedControlRow({
   locked,
@@ -1994,6 +2056,10 @@ function parseLevelConfig(
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
   const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
+  const validPostHeaderHeadingFont = (v: unknown): PostHeaderHeadingFont =>
+    v === "h1" || v === "h2" || v === "h3" || v === "h4" ? v : "h1";
+  const validPostHeaderParagraphFont = (v: unknown, fallback: PostHeaderParagraphFont): PostHeaderParagraphFont =>
+    v === "p1" || v === "p2" || v === "p3" ? v : fallback;
   const postHeaderBackgroundColor = validPostHeaderBackgroundColor(phRaw?.backgroundColor);
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
@@ -2011,6 +2077,9 @@ function parseLevelConfig(
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
         showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
+        titleFont: validPostHeaderHeadingFont(phRaw.titleFont),
+        metaFont: validPostHeaderParagraphFont(phRaw.metaFont, "p2"),
+        deckFont: validPostHeaderParagraphFont(phRaw.deckFont, "p1"),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -2281,7 +2350,10 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showCategories ?? false) === (phB.showCategories ?? false) &&
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
-      (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "");
+      (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "") &&
+      (phA.titleFont ?? "h1") === (phB.titleFont ?? "h1") &&
+      (phA.metaFont ?? "p2") === (phB.metaFont ?? "p2") &&
+      (phA.deckFont ?? "p1") === (phB.deckFont ?? "p1");
     const updatedAtEqual =
       Boolean((a as PostLevelConfig).showPostUpdatedAt) === Boolean((b as PostLevelConfig).showPostUpdatedAt);
     return base && pa.show === pb.show && phEqual && updatedAtEqual;
@@ -2335,6 +2407,11 @@ export default function Configure() {
   const [loading, setLoading] = useState(true);
   const [configLoading, setConfigLoading] = useState(true);
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [previewAudience, setPreviewAudience] = useState<"paywalled" | "loggedIn">("paywalled");
+  const [snapshotRevision, setSnapshotRevision] = useState(0);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshotSparse, setSnapshotSparse] = useState(false);
+  const [snapshotRefreshing, setSnapshotRefreshing] = useState(false);
   const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [saving, setSaving] = useState(false);
@@ -2495,31 +2572,6 @@ export default function Configure() {
       ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
-
-  // Sites can block framing (Squarespace's Clickjack protection sends X-Frame-Options: SAMEORIGIN),
-  // which renders the iframe as a browser error page. Only the server can read that header.
-  const [previewBlockedBy, setPreviewBlockedBy] = useState<
-    "x-frame-options" | "frame-ancestors" | null | "pending"
-  >("pending");
-  useEffect(() => {
-    if (!effectiveSiteKey) return;
-    let cancelled = false;
-    setPreviewBlockedBy("pending");
-    fetch(`/api/config/preview-embeddable/${encodeURIComponent(effectiveSiteKey)}`, {
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        setPreviewBlockedBy(data?.blockedBy ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setPreviewBlockedBy(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveSiteKey]);
 
   const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
   const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
@@ -3271,6 +3323,7 @@ export default function Configure() {
       siteId: effectiveSite?.id ?? undefined,
       paywallMode: effectiveSite?.paywallMode ?? "auto",
       paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
+      viewerMode: previewAudience === "loggedIn" ? "loggedIn" : "loggedOut",
       paywallSettings:
         shouldShowViewerModeToggle
           ? {
@@ -3291,6 +3344,7 @@ export default function Configure() {
     authors,
     effectiveSiteKey,
     effectiveSite,
+    previewAudience,
     previewSelectedPostIndex,
     previewDebugEnabled,
     device,
@@ -3310,6 +3364,7 @@ export default function Configure() {
         collection: config.collectionConfig,
         paywallMode: effectiveSite?.paywallMode ?? "auto",
         paywallDetection: effectiveSite?.paywallDetectionState ?? "unknown",
+        previewAudience,
         paywallForm: shouldShowViewerModeToggle
           ? {
               subscribeUrl: paywallForm.subscribeUrl,
@@ -3326,6 +3381,7 @@ export default function Configure() {
       config.collectionConfig,
       effectiveSite?.paywallMode,
       effectiveSite?.paywallDetectionState,
+      previewAudience,
       shouldShowViewerModeToggle,
       paywallForm.subscribeUrl,
       paywallForm.footerDescription,
@@ -3806,14 +3862,73 @@ export default function Configure() {
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
     if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
+    if (path === "postHeader.titleFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleFont: value as PostHeaderHeadingFont } };
+    if (path === "postHeader.metaFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaFont: value as PostHeaderParagraphFont } };
+    if (path === "postHeader.deckFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckFont: value as PostHeaderParagraphFont } };
     return cfg;
   }
+
+  const snapshotAutoRefreshKey = useRef<string | null>(null);
+  useEffect(() => {
+    setSnapshotError(null);
+    setSnapshotSparse(false);
+    setSnapshotRevision(0);
+    snapshotAutoRefreshKey.current = null;
+  }, [effectiveSiteKey]);
+  const refreshPreviewSnapshot = useCallback(async () => {
+    if (!effectiveSiteKey || !effectiveSite?.url) return;
+    const postPath =
+      selectedLevel === "post"
+        ? postPathFromFullUrl(blogItems[previewSelectedPostIndex]?.fullUrl, effectiveSite.url)
+        : null;
+    const view = selectedLevel === "post" && postPath ? "post" : "collection";
+    setSnapshotRefreshing(true);
+    try {
+      const res = await fetch(
+        `/api/config/preview-snapshot/${encodeURIComponent(effectiveSiteKey)}/refresh`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ view, path: postPath }),
+        }
+      );
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setSnapshotError(typeof data?.error === "string" ? data.error : "Could not refresh the preview.");
+        return;
+      }
+      setSnapshotError(null);
+      setSnapshotRevision((n) => n + 1);
+    } catch {
+      setSnapshotError("Could not refresh the preview.");
+    } finally {
+      setSnapshotRefreshing(false);
+    }
+  }, [effectiveSiteKey, effectiveSite?.url, selectedLevel, blogItems, previewSelectedPostIndex]);
+
+  const handleSnapshotDocument = useCallback(
+    (doc: Document | null) => {
+      if (!doc) return;
+      const error = doc.querySelector('meta[name="bb-snapshot-error"]')?.getAttribute("content");
+      const quality = doc.querySelector('meta[name="bb-snapshot-quality"]')?.getAttribute("content");
+      const stale = doc.querySelector('meta[name="bb-snapshot-stale"]')?.getAttribute("content") === "1";
+      const fetchedAt = doc.querySelector('meta[name="bb-snapshot-fetched-at"]')?.getAttribute("content") || "";
+      setSnapshotError(error && error.trim() ? error : null);
+      setSnapshotSparse(quality === "http-sparse");
+      if (stale && fetchedAt && snapshotAutoRefreshKey.current !== fetchedAt) {
+        snapshotAutoRefreshKey.current = fetchedAt;
+        void refreshPreviewSnapshot();
+      }
+    },
+    [refreshPreviewSnapshot]
+  );
 
   const handleBlogChange = (newSiteKey: string) => {
     setSearchParams({ siteKey: newSiteKey });
   };
 
-  // Listen for selected post: hashchange (BlogPreviewRenderer) or postMessage (BlogPreviewIframe)
+  // Listen for selected post from the snapshot iframe.
   useEffect(() => {
     const fromHash = () => {
       const m = (window.location.hash || "").match(/^#post-(\d+)$/);
@@ -4917,6 +5032,27 @@ export default function Configure() {
                                 )}
                               </div>
                             )}
+                            <PostHeaderFontSelect
+                              label="Post title"
+                              description="Squarespace heading size"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleFont ?? "h1"}
+                              options={POST_HEADER_HEADING_FONTS}
+                              onChange={(v) => updateLevelConfigPath("postHeader.titleFont", v)}
+                            />
+                            <PostHeaderFontSelect
+                              label="Meta"
+                              description="Squarespace paragraph size"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaFont ?? "p2"}
+                              options={POST_HEADER_PARAGRAPH_FONTS}
+                              onChange={(v) => updateLevelConfigPath("postHeader.metaFont", v)}
+                            />
+                            <PostHeaderFontSelect
+                              label="Deck"
+                              description="Squarespace paragraph size for the lead line"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckFont ?? "p1"}
+                              options={POST_HEADER_PARAGRAPH_FONTS}
+                              onChange={(v) => updateLevelConfigPath("postHeader.deckFont", v)}
+                            />
                             <div className="flex items-center justify-between">
                               <div>
                                 <Label className="text-xs text-[#6b6b6b]">Show breadcrumbs</Label>
@@ -5699,12 +5835,14 @@ export default function Configure() {
                                               : "text-[#6b6b6b] hover:text-[#0a0a0a]"
                                           }`}
                                         >
-                                          {mode === "hidden" ? "Hidden" : "Drawer"}
+                                          {mode === "hidden" ? (side === "right" ? "Below content" : "Hidden") : "Drawer"}
                                         </button>
                                       ))}
                                     </div>
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      On phones, Hidden keeps today’s layout. Drawer adds a tab on the right edge that opens this sidebar.
+                                      {side === "right"
+                                        ? "On phones, Below content stacks this sidebar under the article. Drawer adds a tab that opens it, and footer copies of the same modules stay on the page."
+                                        : "On phones, Hidden removes this sidebar. Drawer adds a tab on the right edge that opens it."}
                                     </p>
                                   </div>
                                   <div className="space-y-2">
@@ -6556,6 +6694,43 @@ export default function Configure() {
           </div>
         </div>
 
+        <div className="border-b border-[#e5e4e0] bg-white px-4 py-2 flex flex-wrap items-center gap-3">
+          <div className="flex items-center bg-[#f7f6f3] rounded-lg p-1" role="group" aria-label="Preview as">
+            {(
+              [
+                ["paywalled", "Paywalled"],
+                ["loggedIn", "Logged in"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPreviewAudience(value)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  previewAudience === value ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={snapshotRefreshing || !effectiveSite?.url}
+            onClick={() => void refreshPreviewSnapshot()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${snapshotRefreshing ? "animate-spin" : ""}`} />
+            {snapshotRefreshing ? "Refreshing…" : "Refresh preview"}
+          </Button>
+          {snapshotSparse && (
+            <span className="text-xs text-[#6b6b6b]">
+              This page is mostly rendered by JavaScript, so the preview is using the server HTML.
+            </span>
+          )}
+        </div>
+
         <div className="flex-1 overflow-auto p-8 flex items-start justify-center">
           <div
             className={`bg-white shadow-xl transition-all duration-300 origin-top overflow-hidden
@@ -6574,54 +6749,50 @@ export default function Configure() {
                   typeof window !== "undefined" &&
                   (window.location.search.includes("bbPreviewDebug=1") ||
                     sessionStorage.getItem("bbPreviewDebug") === "1");
-                const previewUrl = buildBlogPreviewUrl(effectiveSite, undefined, previewDebug);
-                if (!previewUrl) {
+                if (!effectiveSite.url) {
                   return (
                     <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
                       Add your blog URL in the dashboard to see a live preview.
                     </div>
                   );
                 }
-                if (previewBlockedBy === "pending" && !isSquarespaceUrl(previewUrl)) {
+                const postPath =
+                  selectedLevel === "post"
+                    ? postPathFromFullUrl(blogItems[previewSelectedPostIndex]?.fullUrl, effectiveSite.url)
+                    : null;
+                const snapshotView = selectedLevel === "post" && postPath ? "post" : "collection";
+                const previewUrl = buildSnapshotPreviewUrl({
+                  siteKey: effectiveSite.siteKey,
+                  view: snapshotView,
+                  path: postPath,
+                  revision: snapshotRevision,
+                  debug: previewDebug,
+                });
+                if (snapshotError) {
                   return (
-                    <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
-                      Loading preview…
-                    </div>
-                  );
-                }
-                if (isSquarespaceUrl(previewUrl) || previewBlockedBy !== null) {
-                  return (
-                    <div className="flex flex-col h-full">
-                      <p className="text-xs text-[#6b6b6b] px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
-                        {previewBlockedBy === "x-frame-options" ? (
-                          <>
-                            Your site blocks embedding, so we're showing a simplified preview. For the full live
-                            preview, turn off Clickjack protection in Squarespace under Settings → Developer Tools →
-                            Website Protection.
-                          </>
-                        ) : (
-                          "Squarespace blocks iframe embedding. Using a simplified preview."
-                        )}
-                      </p>
-                      <div className="flex-1 min-h-0 overflow-y-auto">
-                        <BlogPreviewRenderer
-                          siteKey={effectiveSite.siteKey}
-                          config={rendererConfig}
-                          configSignature={configSignature}
-                          className="min-h-full"
-                        />
-                      </div>
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-[#6b6b6b] p-8 text-center">
+                      <p className="text-sm max-w-md">{snapshotError}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={snapshotRefreshing}
+                        onClick={() => void refreshPreviewSnapshot()}
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${snapshotRefreshing ? "animate-spin" : ""}`} />
+                        Refresh preview
+                      </Button>
                     </div>
                   );
                 }
                 return (
                   <BlogPreviewIframe
-                    key={effectiveSite.siteKey}
+                    key={previewUrl}
                     blogUrl={previewUrl}
                     config={rendererConfig}
                     configSignature={configSignature}
                     selectPostIndex={previewSelectedPostIndex}
                     viewSyncToken={previewViewSyncToken}
+                    onDocumentLoad={handleSnapshotDocument}
                     className="min-h-full"
                   />
                 );

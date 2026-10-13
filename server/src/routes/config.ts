@@ -7,6 +7,9 @@ import {
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { SnapshotCaptureError, getServedSnapshot, storeSnapshot } from '../lib/preview-snapshot.js'
+import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/preview-snapshot-html.js'
+import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
 import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
 import { resolveDefaultPostTemplate } from './templates.js'
 
@@ -357,6 +360,25 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
         : null
     annotateSquarespaceFeaturedOnItems(allItems, collForFeatured)
 
+    const postPath = firstQueryString(req.query.postPath)
+    if (postPath && site.url) {
+      const postJsonUrl = publicPostJsonUrl(site.url, postPath)
+      if (postJsonUrl) {
+        try {
+          const postRes = await fetch(appendPasswordToUrl(postJsonUrl, site.blogPassword), {
+            signal: AbortSignal.timeout(8000),
+            headers: { Accept: 'application/json' }
+          })
+          if (postRes.ok) {
+            const postJson = await postRes.json() as unknown
+            mergePublicPostBody(allItems, postPath, postJson, new URL(site.url).origin)
+          }
+        } catch (err) {
+          console.warn('[blog-preview] public post JSON unavailable', err)
+        }
+      }
+    }
+
     const debugFeatured = String(req.query.bbFeaturedDebug ?? '') === '1'
     if (debugFeatured) {
       const refs = collectionFeaturedRefs(collForFeatured)
@@ -465,6 +487,79 @@ router.get('/preview-embeddable/:siteKey', async (req: Request, res: Response) =
     console.error('Preview embeddability probe error:', err)
     // Unknown means "let the iframe try" — never downgrade a working preview because a probe failed.
     res.json({ embeddable: true, blockedBy: null, status: null })
+  }
+})
+
+function snapshotViewFrom (raw: unknown): SnapshotView | null {
+  if (raw == null || raw === '' || raw === 'collection') return 'collection'
+  if (raw === 'post') return 'post'
+  return null
+}
+
+function firstQueryString (value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0]
+  return null
+}
+
+async function siteOwnedBySession (req: Request): Promise<{ site: Awaited<ReturnType<typeof prisma.site.findFirst>>; missing: boolean }> {
+  const { user } = req as Request & { user: SessionUser }
+  const siteKey = req.params.siteKey as string
+  const site = await prisma.site.findFirst({
+    where: { siteKey, userId: user.id, deletedAt: null }
+  })
+  return { site, missing: !site }
+}
+
+// GET /api/config/preview-snapshot/:siteKey - Same-origin HTML snapshot for the customizer iframe
+router.get('/preview-snapshot/:siteKey', requireSession, async (req: Request, res: Response) => {
+  const { site, missing } = await siteOwnedBySession(req)
+  if (missing || !site) {
+    res.status(404).type('html').send(snapshotErrorHtml('Site not found'))
+    return
+  }
+  const view = snapshotViewFrom(firstQueryString(req.query.view))
+  if (!view) {
+    res.status(400).type('html').send(snapshotErrorHtml('Preview view must be collection or post.'))
+    return
+  }
+  try {
+    const served = await getServedSnapshot(site, view, firstQueryString(req.query.path))
+    res.setHeader('Content-Security-Policy', SNAPSHOT_CSP)
+    res.setHeader('Cache-Control', 'private, no-store')
+    res.setHeader('X-Snapshot-Quality', served.quality)
+    res.setHeader('X-Snapshot-Fetched-At', served.fetchedAt.toISOString())
+    res.type('html').send(served.html)
+  } catch (err) {
+    const status = err instanceof SnapshotCaptureError ? err.status : 502
+    const message = err instanceof SnapshotCaptureError ? err.message : 'Failed to capture preview snapshot'
+    if (!(err instanceof SnapshotCaptureError)) console.error('[preview-snapshot] GET failed', err)
+    res.status(status).type('html').send(snapshotErrorHtml(message))
+  }
+})
+
+// POST /api/config/preview-snapshot/:siteKey/refresh - Recapture a snapshot on demand
+router.post('/preview-snapshot/:siteKey/refresh', requireSession, async (req: Request, res: Response) => {
+  const { site, missing } = await siteOwnedBySession(req)
+  if (missing || !site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const body = (req.body ?? {}) as { view?: unknown; path?: unknown }
+  const view = snapshotViewFrom(body.view ?? firstQueryString(req.query.view))
+  if (!view) {
+    res.status(400).json({ error: 'Preview view must be collection or post.' })
+    return
+  }
+  const path = typeof body.path === 'string' ? body.path : firstQueryString(req.query.path)
+  try {
+    const stored = await storeSnapshot(site, view, path)
+    res.json({ ok: true, fetchedAt: stored.fetchedAt.toISOString(), quality: stored.quality })
+  } catch (err) {
+    const status = err instanceof SnapshotCaptureError ? err.status : 502
+    const message = err instanceof SnapshotCaptureError ? err.message : 'Failed to refresh preview snapshot'
+    if (!(err instanceof SnapshotCaptureError)) console.error('[preview-snapshot] refresh failed', err)
+    res.status(status).json({ error: message })
   }
 })
 
@@ -632,7 +727,8 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         }
       },
       blogCommentSettings: true,
-      sitePaywallSettings: true
+      sitePaywallSettings: true,
+      fathomAnalytics: true
     }
   })
 
@@ -879,7 +975,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       recentPostsCount: 3,
       baseUrl,
       commentSettings,
-      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {})
+      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {}),
+      ...(site.fathomAnalytics
+        ? {
+            fathom: {
+              siteId: site.fathomAnalytics.fathomSiteId,
+              metricsEnabled: site.fathomAnalytics.metricsEnabled
+            }
+          }
+        : {})
     }
 
     console.log(`[config] GET ${siteKey} ok (${reqId})`, {

@@ -19,6 +19,10 @@
       "destination": "/api/cron/ping-squarespace-api-keys"
     },
     {
+      "source": "/api/cron/refresh-preview-snapshots",
+      "destination": "/api/cron/refresh-preview-snapshots"
+    },
+    {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
     },
@@ -47,6 +51,10 @@
       "maxDuration": 10
     },
     "api/cron/ping-squarespace-api-keys.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**"
+    },
+    "api/cron/refresh-preview-snapshots.ts": {
       "maxDuration": 60,
       "includeFiles": "server/dist/**"
     },
@@ -105,6 +113,10 @@
     {
       "path": "/api/cron/ping-squarespace-api-keys",
       "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-preview-snapshots",
+      "schedule": "30 15 * * *"
     }
   ]
 }
