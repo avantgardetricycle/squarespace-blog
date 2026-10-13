@@ -8613,23 +8613,28 @@
     },
 
     /**
-     * Get selected post index: path first (actual post URLs), then hash (legacy)
+     * Get selected post index: hash (in-preview post clicks), then an explicit
+     * preview post, then the page path.
+     * previewSelectedPostIndex of -1 means the Collection tab, not "ignore a click".
      */
     _getSelectedIndex: function(items) {
+      var fromHash = this._getSelectedIndexFromHash();
+      if (fromHash >= 0) {
+        if (!items || items.length === 0) return 0;
+        return Math.min(fromHash, items.length - 1);
+      }
       var cfg = this.config || {};
-      if (this._previewMode && typeof cfg.previewSelectedPostIndex === 'number') {
-        var p = cfg.previewSelectedPostIndex;
+      var forced = cfg.previewSelectedPostIndex;
+      if ((this._previewMode || this._bbPreview) && typeof forced === 'number' && forced >= 0) {
         this._debugLog('selected index from previewSelectedPostIndex', {
-          previewSelectedPostIndex: p,
+          previewSelectedPostIndex: forced,
           itemCount: items && items.length ? items.length : 0
         });
-        if (p < 0) return -1;
         if (!items || items.length === 0) return 0;
-        return Math.min(Math.max(0, p), items.length - 1);
+        return Math.min(forced, items.length - 1);
       }
-      var fromPath = this._getSelectedIndexFromPath(items);
-      if (fromPath >= 0) return fromPath;
-      return this._getSelectedIndexFromHash();
+      if (this._previewMode && typeof forced === 'number') return -1;
+      return this._getSelectedIndexFromPath(items);
     },
 
     /**
