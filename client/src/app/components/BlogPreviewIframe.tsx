@@ -17,7 +17,6 @@ export interface RendererConfig {
   recentPostsCount?: number;
   paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
   viewerMode?: "loggedOut" | "loggedIn";
-  previewForcePostsOnlyPaywall?: boolean;
   paywallDetectionState?: string;
 }
 

@@ -20,7 +20,7 @@
     "db:studio": "prisma studio",
     "generate-email-logo": "tsx scripts/generate-email-logo.ts",
     "invite-user": "tsx scripts/invite-user.ts",
-    "test": "tsx --test src/lib/anonymous-comment-identity.test.ts src/lib/email-providers.test.ts src/lib/email-sync.test.ts src/lib/preview-snapshot-html.test.ts"
+    "test": "tsx --test src/lib/anonymous-comment-identity.test.ts src/lib/email-providers.test.ts src/lib/email-sync.test.ts src/lib/preview-snapshot-html.test.ts src/lib/squarespace-public-post.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

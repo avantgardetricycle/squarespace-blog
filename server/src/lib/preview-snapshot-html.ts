@@ -240,6 +240,12 @@ export function snapshotErrorHtml (message: string): string {
   return `<!doctype html><html data-bb-snapshot="1"><head><meta charset="utf-8"><meta name="bb-snapshot-error" content="${escapeAttr(message)}"></head><body><p>${safeText}</p></body></html>`
 }
 
+export function applyPreviewFetchUrl (html: string, previewFetchUrl: string): string {
+  const encoded = JSON.stringify(previewFetchUrl)
+  if (!/"previewFetchUrl"\s*:/.test(html)) return html
+  return html.replace(/"previewFetchUrl"\s*:\s*"(?:\\.|[^"\\])*"/, `"previewFetchUrl":${encoded}`)
+}
+
 export function decorateServedSnapshot (
   html: string,
   opts: { quality: string; stale: boolean; fetchedAt: string }
