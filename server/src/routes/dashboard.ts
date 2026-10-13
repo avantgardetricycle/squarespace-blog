@@ -24,6 +24,7 @@ import {
   usableStripeCustomerId
 } from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
+import { AccountDeletionError, deleteUserAccount } from '../lib/delete-account.js'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 import {
   buildBlogJsonUrl,
@@ -1128,6 +1129,29 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
   } catch (err) {
     console.error('Delete site error:', err)
     res.status(500).json({ error: 'Failed to delete site' })
+  }
+})
+
+// DELETE /api/dashboard/me - Permanently delete the signed-in account and its data
+router.delete('/me', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const confirmEmail = (req.body as { confirmEmail?: unknown } | undefined)?.confirmEmail
+
+  if (typeof confirmEmail !== 'string' || !confirmEmail.trim()) {
+    res.status(400).json({ error: 'Email confirmation is required' })
+    return
+  }
+
+  try {
+    await deleteUserAccount({ userId: user.id, confirmEmail })
+    res.clearCookie('session', { path: '/' }).status(204).send()
+  } catch (err) {
+    if (err instanceof AccountDeletionError) {
+      res.status(err.statusCode).json({ error: err.message })
+      return
+    }
+    console.error('Delete account error:', err)
+    res.status(500).json({ error: 'Failed to delete account' })
   }
 })
 
