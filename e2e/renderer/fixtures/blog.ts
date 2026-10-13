@@ -81,11 +81,17 @@ export const authorProfiles = {
   markdown: {
     name: "Markdown Author",
     imageUrl: null,
-    bio: "Wrote the **first** algorithm. [Notes](https://example.invalid/notes)\n- Ada\n- Code",
+    bio: "Wrote the **first** algorithm. [Notes](https://example.invalid/notes \"Maya's notes\") <https://example.invalid/oak>\n- Ada\n- Code",
     bioLong: "Footer **long** bio. [More](https://example.invalid/long)",
     bioFormat: "markdown" as const,
     email: null,
-    socialLinks: {},
+    socialLinks: {
+      instagram: "instagram.com/salaamssalaams",
+      facebook: "www.facebook.com/ada",
+      linkedin: "https://linkedin.com/in/ada",
+      x: "https://www.x.com/ada",
+      website: "javascript:alert(1)",
+    },
   },
   html: {
     name: "HTML Author",

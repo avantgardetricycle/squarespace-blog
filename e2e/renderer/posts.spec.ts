@@ -211,8 +211,24 @@ test.describe("post layout contract", () => {
     await expect(bio("footer", "Literal Author")).toHaveText("Footer literal stays **bold**");
 
     const markdown = bio("sidebar", "Markdown Author");
+    const markdownCard = markdown.locator("xpath=ancestor::*[contains(@class,'blog-overlay-author-unit')]");
+    await expect(markdownCard.locator('a[aria-label="Instagram"]')).toHaveAttribute(
+      "href",
+      "https://instagram.com/salaamssalaams",
+    );
+    await expect(markdownCard.locator('a[aria-label="Facebook"]')).toHaveAttribute(
+      "href",
+      "https://www.facebook.com/ada",
+    );
+    await expect(markdownCard.locator('a[aria-label="Linkedin"]')).toHaveAttribute(
+      "href",
+      "https://linkedin.com/in/ada",
+    );
+    await expect(markdownCard.locator('a[aria-label="X"]')).toHaveAttribute("href", "https://www.x.com/ada");
+    await expect(markdownCard.locator('a[aria-label="Website"]')).toHaveCount(0);
     await expect(markdown.locator("strong")).toHaveText("first");
-    await expect(markdown.locator("a")).toHaveAttribute("href", "https://example.invalid/notes");
+    await expect(markdown.locator('a[href="https://example.invalid/notes"]')).toHaveAttribute("title", "Maya's notes");
+    await expect(markdown.locator('a[href="https://example.invalid/oak"]')).toHaveText("https://example.invalid/oak");
     await expect(markdown.locator("li")).toHaveText(["Ada", "Code"]);
     const markdownFooter = bio("footer", "Markdown Author");
     await expect(markdownFooter.locator("strong")).toHaveText("long");
