@@ -551,10 +551,8 @@ export default function Comments() {
     try {
       if (t.mode === "single") {
         const r = await fetch(`/api/dashboard/comments/${t.comment.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          method: "DELETE",
           credentials: "include",
-          body: JSON.stringify({ status: "deleted" }),
         });
         if (r.ok) {
           toast.success("Comment deleted");
@@ -571,10 +569,8 @@ export default function Comments() {
         const results = await Promise.all(
           ids.map((id) =>
             fetch(`/api/dashboard/comments/${id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
+              method: "DELETE",
               credentials: "include",
-              body: JSON.stringify({ status: "deleted" }),
             })
           )
         );

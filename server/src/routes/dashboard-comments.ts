@@ -22,6 +22,19 @@ async function getCommentWithAuth(commentId: string, userId: number) {
   return comment
 }
 
+/** Remove the comment row. Direct replies move up to this comment's parent. */
+async function hardDeleteComment(id: string, parentId: string | null) {
+  const nextParentId = parentId && parentId !== id ? parentId : null
+  await prisma.$transaction([
+    prisma.commentLike.deleteMany({ where: { commentId: id } }),
+    prisma.comment.updateMany({
+      where: { parentId: id },
+      data: { parentId: nextParentId },
+    }),
+    prisma.comment.delete({ where: { id } }),
+  ])
+}
+
 // GET /api/dashboard/comments?siteKey=xxx&statuses=pending,approved&status=approved (legacy)&auth=all|authenticated|anonymous&postId=&page=&per_page=&search=
 router.get('/', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
@@ -228,8 +241,14 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   })
 
   const body = req.body as { status?: string; body?: string }
+  if (body.status === 'deleted') {
+    await hardDeleteComment(comment.id, comment.parentId)
+    res.json({ id: comment.id, deleted: true })
+    return
+  }
+
   const updates: Record<string, unknown> = {}
-  if (['approved', 'spam', 'deleted', 'hidden'].includes(body.status ?? '')) {
+  if (['approved', 'spam', 'hidden'].includes(body.status ?? '')) {
     updates.status = body.status
   }
   if (typeof body.body === 'string') {
@@ -241,7 +260,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     return
   }
 
-  if (siteRow && (updates.status === 'spam' || updates.status === 'deleted' || updates.status === 'hidden')) {
+  if (siteRow && (updates.status === 'spam' || updates.status === 'hidden')) {
     await ensureSquarespaceThreadImportedForModeration(prisma, siteRow, {
       postId: comment.postId,
       parentId: comment.parentId,
@@ -283,6 +302,25 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   })
 
   res.json(updated)
+})
+
+// DELETE /api/dashboard/comments/:id — permanent removal
+router.delete('/:id', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+  if (!id) {
+    res.status(400).json({ error: 'Comment id required' })
+    return
+  }
+
+  const comment = await getCommentWithAuth(id, user.id)
+  if (!comment) {
+    res.status(404).json({ error: 'Comment not found' })
+    return
+  }
+
+  await hardDeleteComment(comment.id, comment.parentId)
+  res.json({ id: comment.id, deleted: true })
 })
 
 // POST /api/dashboard/comments/:id/reply
