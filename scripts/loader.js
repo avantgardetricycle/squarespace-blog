@@ -34,20 +34,6 @@
   }
 
   function isSquarespaceEditingUi() {
-    // #region agent log
-    var _dbg = { hypothesisId: 'H1', location: 'loader.js:isSquarespaceEditingUi' };
-    try {
-      _dbg.isPreview = isExplicitPreviewContext();
-      _dbg.htmlClasses = document.documentElement ? document.documentElement.className : '(no html)';
-      _dbg.bodyClasses = document.body ? document.body.className : '(no body)';
-      _dbg.bodyExists = !!document.body;
-      _dbg.hasEditClassHtml = hasEditClass(document.documentElement);
-      _dbg.hasEditClassBody = hasEditClass(document.body);
-      _dbg.inIframe = window.parent !== window;
-      _dbg.pathname = window.location.pathname;
-      _dbg.href = window.location.href;
-    } catch (e) { _dbg.earlyErr = String(e); }
-    // #endregion
     if (isExplicitPreviewContext()) return false;
     if (hasEditClass(document.documentElement) || hasEditClass(document.body)) return true;
     var markers = [
@@ -57,21 +43,11 @@
       '[data-sqs-editor]',
       '[data-sqs-edit-mode]'
     ];
-    // #region agent log
-    _dbg.markerResults = {};
-    // #endregion
     for (var i = 0; i < markers.length; i++) {
       try {
-        // #region agent log
-        _dbg.markerResults[markers[i]] = !!document.querySelector(markers[i]);
-        // #endregion
         if (document.querySelector(markers[i])) return true;
       } catch (e) {}
     }
-    // #region agent log
-    _dbg.result = false;
-    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'loader.js:isSquarespaceEditingUi',message:'edit detection result',data:_dbg,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
-    // #endregion
     return false;
   }
 

@@ -117,28 +117,6 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   ])
 
   const postTitleMap = new Map(cachedPosts.map((p) => [p.externalPostId, p.title]))
-  console.log('[dashboard-comments] list', {
-    userId: user.id,
-    siteKey,
-    siteId: site.id,
-    statuses: statusIn ?? 'all',
-    auth: authFilter,
-    postIds: postIdsRaw || postIdRaw || null,
-    search: search ?? null,
-    total,
-    returned: comments.length,
-    verifiedCount: comments.filter((c) => c.verifiedSubscriber === true).length,
-    anonymousCount: comments.filter((c) => c.verifiedSubscriber !== true).length,
-    comments: comments.map((c) => ({
-      id: c.id,
-      displayName: c.displayName,
-      verifiedSubscriber: c.verifiedSubscriber,
-      hasEmail: Boolean(c.email),
-      email: c.email,
-      squarespaceProfileId: c.squarespaceProfileId,
-      status: c.status,
-    })),
-  })
 
   res.json({
     comments: comments.map((c) => ({
