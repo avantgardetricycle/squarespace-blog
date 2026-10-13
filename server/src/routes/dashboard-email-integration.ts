@@ -10,7 +10,7 @@ import {
   type EmailProviderName,
   type KitDestinationKind,
 } from '../lib/email-providers.js'
-import { EMAIL_MODULES, ensureEmailIntegrationModules, writeLegacyEmailDestination, type EmailModuleKey } from '../lib/email-sync.js'
+import { EMAIL_MODULES, ensureEmailIntegrationModules, propagatePlatformKeys, writeLegacyEmailDestination, type EmailModuleKey } from '../lib/email-sync.js'
 
 const router = Router()
 
@@ -430,7 +430,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
     })
   }
 
-  const moduleReady = await ensureEmailIntegrationModules()
+  await ensureEmailIntegrationModules()
   try {
     await prisma.$transaction(async (tx) => {
       for (const write of writes) {
@@ -458,14 +458,12 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
         })
       }
     })
+    await propagatePlatformKeys(site.id, writes)
   } catch (err) {
     console.error('[email-integration] Save failed', err)
     try {
       for (const write of writes) await writeLegacyEmailDestination(site.id, write)
-      // #region agent log
-      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d73ac'},body:JSON.stringify({sessionId:'5d73ac',runId:'post-fix',hypothesisId:'G',location:'dashboard-email-integration.ts:PUT',message:'saved destination with sql',data:{moduleReady:moduleReady.moduleReady,modules:writes.map((write)=>({module:write.module,provider:write.provider,hasKey:Boolean(write.apiKeyEnc),hasDestination:Boolean(write.destinationId)}))},timestamp:Date.now()})}).catch(()=>{});
-      console.error('[capture-debug]', JSON.stringify({hypothesisId:'G',location:'dashboard-email-integration.ts:PUT',message:'saved destination with sql',moduleReady:moduleReady.moduleReady,modules:writes.map((write)=>({module:write.module,provider:write.provider,hasKey:Boolean(write.apiKeyEnc),hasDestination:Boolean(write.destinationId)}))}))
-      // #endregion
+      await propagatePlatformKeys(site.id, writes)
     } catch (legacyErr) {
       console.error('[email-integration] Save failed', legacyErr)
       res.status(500).json({ error: 'Failed to save email destinations' })
