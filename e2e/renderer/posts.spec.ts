@@ -459,6 +459,49 @@ test.describe("post layout contract", () => {
       expectPx(await cssNumber(page, ".blog-overlay-body h1", "font-size"), 31);
     }
   });
+
+  test("post header font choices use distinct Squarespace element sizes", async ({ page }) => {
+    const config = zoneOrderPostConfig("feature");
+    const header = {
+      ...(config.postHeader as Record<string, unknown>),
+      titleFont: "h3",
+      deckFont: "p1",
+      metaFont: "p3",
+    };
+    await mountRenderer(page, {
+      postConfig: { ...config, postHeader: header },
+      extraCss: `
+        h1 { font-size: 50px; }
+        h2 { font-size: 33px; }
+        h3 { font-size: 27px; }
+        h4 { font-size: 19px; }
+        p.sqsrte-large { font-size: 21px; }
+        p { font-size: 16px; }
+        p.sqsrte-small { font-size: 12px; }
+      `,
+    });
+    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), 27);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), 21);
+    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), 12);
+  });
+
+  test("post header font choices fall back when every site step is the same size", async ({ page }, testInfo) => {
+    const config = zoneOrderPostConfig("feature");
+    const header = {
+      ...(config.postHeader as Record<string, unknown>),
+      titleFont: "h4",
+      deckFont: "p1",
+      metaFont: "p3",
+    };
+    await mountRenderer(page, {
+      postConfig: { ...config, postHeader: header },
+      extraCss: "h1,h2,h3,h4,p,.sqsrte-large,.sqsrte-small{font-size:15px !important}",
+    });
+    const mobile = isMobileProject(testInfo);
+    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 18 : 22);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 14 : 20);
+    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 12 : 14);
+  });
 });
 
 test.describe("post updated at", () => {

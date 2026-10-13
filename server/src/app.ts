@@ -38,7 +38,11 @@ export function createApp(options: CreateAppOptions = {}): Express {
       req.url = forwarded.includes('?') ? forwarded : `${forwarded}${query}`
     } else {
       const pathOnly = req.path || '/'
-      if (!pathOnly.startsWith('/api/') && pathOnly !== '/api') {
+      // loader.js and renderer.js are site scripts, not API routes. Prefixing
+      // them would miss app.get('/renderer.js') and the Configure preview
+      // would keep running a stale cached file.
+      const isSiteScript = pathOnly === '/renderer.js' || pathOnly === '/loader.js'
+      if (!isSiteScript && !pathOnly.startsWith('/api/') && pathOnly !== '/api') {
         req.url = `/api${pathOnly === '/' ? '' : pathOnly}${query}`
       }
     }
