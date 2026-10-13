@@ -49,6 +49,23 @@ export async function getDashboardMe(): Promise<DashboardMe | null> {
   return res.json()
 }
 
+export async function deleteAccount(
+  confirmEmail: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const res = await fetch(`${API}/dashboard/me`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ confirmEmail })
+  })
+  if (res.ok) return { success: true }
+  const data = await res.json().catch(() => ({}))
+  return {
+    success: false,
+    error: typeof data?.error === 'string' ? data.error : 'Failed to delete account'
+  }
+}
+
 export async function updateProfile(data: { name?: string | null }): Promise<{ id: number; email: string; name: string | null; createdAt: string } | null> {
   const res = await fetch(`${API}/dashboard/me`, {
     method: 'PATCH',
