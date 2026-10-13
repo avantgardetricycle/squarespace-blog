@@ -12251,8 +12251,10 @@
 
     /**
      * Mobile (<768): hide every left sidebar rail unless that sidebar's
-     * mobile display is Drawer. If a pairable module is in the right sidebar
-     * and duplicated in the footer, hide the footer copy (sidebar-wins).
+     * mobile display is Drawer. If a pairable module is in a right sidebar
+     * that stacks under the article (Below content) and is also in the
+     * footer, hide the footer copy (sidebar-wins). A Drawer is off the page,
+     * so it does not hide footer copies; the drawer keeps its own modules.
      * Left-sidebar copies do not count — a footer copy of a left-only module
      * is shown. Footer-only modules keep rendering but get sidebar chrome.
      * Tags/Categories invert that: the sidebar copy is always hidden on
@@ -12309,7 +12311,7 @@
         var id = pairIds[i];
         var isFilter = !!filterIds[id];
         var sidebarHas = !!wrapper.querySelector(
-          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+          '.blog-overlay-sidebar-anchor[data-bb-sidebar-side="right"]:not([data-bb-mobile-display="drawer"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
         );
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {
