@@ -23,6 +23,10 @@
       "destination": "/api/cron/refresh-preview-snapshots"
     },
     {
+      "source": "/api/cron/trial-day-four-reminder",
+      "destination": "/api/cron/trial-day-four-reminder"
+    },
+    {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
     },
@@ -55,6 +59,10 @@
       "includeFiles": "server/dist/**"
     },
     "api/cron/refresh-preview-snapshots.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**"
+    },
+    "api/cron/trial-day-four-reminder.ts": {
       "maxDuration": 60,
       "includeFiles": "server/dist/**"
     },
@@ -117,6 +125,10 @@
     {
       "path": "/api/cron/refresh-preview-snapshots",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/cron/trial-day-four-reminder",
+      "schedule": "59 23 * * *"
     }
   ]
 }
