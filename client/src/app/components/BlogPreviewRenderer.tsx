@@ -127,11 +127,11 @@ export default function BlogPreviewRenderer({
 
     const versionedSrc = `${RENDERER_URL}?v=${encodeURIComponent(RENDERER_VERSION)}`;
     const existing = document.querySelector('script[data-bb-renderer="1"]');
-    const current =
-      window.BlogOverlayRenderer &&
+    const renderer = window.BlogOverlayRenderer;
+    const scriptIsCurrent =
       existing instanceof HTMLScriptElement &&
       existing.src.indexOf(encodeURIComponent(RENDERER_VERSION)) !== -1;
-    if (current && typeof window.BlogOverlayRenderer.init === "function") {
+    if (renderer && scriptIsCurrent && typeof renderer.init === "function") {
       initRenderer();
       return;
     }
