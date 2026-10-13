@@ -36,6 +36,10 @@ test.describe("Iframe preview flow", () => {
   test("initial load sync: show date stays in sync across repeated toggles", async ({ page }) => {
     await openConfigure(page);
     await waitForListView(page);
+    const iframe = page.locator('iframe[title="Blog preview"]');
+    const src = await iframe.getAttribute("src");
+    expect(src).toContain("view=collection");
+    expect(src).toContain("bbPreview=1");
 
     for (let i = 0; i < 10; i++) {
       await showDateSwitch(page).click();
@@ -44,19 +48,26 @@ test.describe("Iframe preview flow", () => {
         .poll(async () => (await frame(page).locator(".blog-overlay-meta").count()) > 0, { timeout: 10_000 })
         .toBe(expectedVisible);
     }
+    await expect(iframe).toHaveAttribute("src", src!);
   });
 
   test("collection/post transitions restore correct iframe mode", async ({ page }) => {
     await openConfigure(page);
     await waitForListView(page);
+    const iframe = page.locator('iframe[title="Blog preview"]');
+    await expect(iframe).toHaveAttribute("src", /view=collection/);
 
     await frame(page).locator("article h2 a").first().click();
     await waitForSinglePostView(page);
+    await expect(iframe).toHaveAttribute("src", /view=collection/);
 
     await page.getByRole("button", { name: "Collection", exact: true }).click();
     await waitForListView(page);
+    await expect(iframe).toHaveAttribute("src", /view=collection/);
 
     await page.getByRole("button", { name: "Post", exact: true }).click();
+    await expect(iframe).toHaveAttribute("src", /view=post/);
+    await expect(iframe).toHaveAttribute("src", /fixture-post-1/);
     await waitForSinglePostView(page);
   });
 
@@ -64,15 +75,19 @@ test.describe("Iframe preview flow", () => {
     await openConfigure(page);
     await waitForListView(page);
 
+    const iframe = page.locator('iframe[title="Blog preview"]');
+    const srcBefore = await iframe.getAttribute("src");
     await frame(page).locator("#blog-nav-link").click();
 
-    const iframe = page.locator('iframe[title="Blog preview"]');
+    await expect(iframe).toHaveAttribute("src", srcBefore!);
     await expect
       .poll(async () => {
-        const src = await iframe.getAttribute("src");
-        return typeof src === "string" && src.includes("bbPreview=1");
+        return page.evaluate(() => {
+          const frameEl = document.querySelector('iframe[title="Blog preview"]') as HTMLIFrameElement | null;
+          return frameEl?.contentWindow?.location.pathname ?? "";
+        });
       })
-      .toBeTruthy();
+      .toContain("/api/config/preview-snapshot/");
 
     await showDateSwitch(page).click();
     await expect

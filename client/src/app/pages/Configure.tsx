@@ -6,6 +6,7 @@ import {
   Smartphone,
   Save,
   Undo2,
+  RefreshCw,
   Plus,
   X,
   Pencil,
@@ -48,10 +49,9 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import BlogPreviewIframe, {
-  buildBlogPreviewUrl,
-  isSquarespaceUrl,
+  buildSnapshotPreviewUrl,
+  postPathFromFullUrl,
 } from "@/app/components/BlogPreviewIframe";
-import BlogPreviewRenderer from "@/app/components/BlogPreviewRenderer";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { AuthorBioPreview } from "@/app/components/AuthorBioPreview";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
@@ -2407,6 +2407,11 @@ export default function Configure() {
   const [loading, setLoading] = useState(true);
   const [configLoading, setConfigLoading] = useState(true);
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [previewAudience, setPreviewAudience] = useState<"loggedOut" | "member" | "postsOnly">("loggedOut");
+  const [snapshotRevision, setSnapshotRevision] = useState(0);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshotSparse, setSnapshotSparse] = useState(false);
+  const [snapshotRefreshing, setSnapshotRefreshing] = useState(false);
   const [config, setConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [savedConfig, setSavedConfig] = useState<SiteConfigForm>(defaultSiteConfig);
   const [saving, setSaving] = useState(false);
@@ -2567,31 +2572,6 @@ export default function Configure() {
       ? me.sites.find((s) => s.siteKey === siteKey) ?? me.sites[0]
       : null;
   const effectiveSiteKey = effectiveSite?.siteKey ?? null;
-
-  // Sites can block framing (Squarespace's Clickjack protection sends X-Frame-Options: SAMEORIGIN),
-  // which renders the iframe as a browser error page. Only the server can read that header.
-  const [previewBlockedBy, setPreviewBlockedBy] = useState<
-    "x-frame-options" | "frame-ancestors" | null | "pending"
-  >("pending");
-  useEffect(() => {
-    if (!effectiveSiteKey) return;
-    let cancelled = false;
-    setPreviewBlockedBy("pending");
-    fetch(`/api/config/preview-embeddable/${encodeURIComponent(effectiveSiteKey)}`, {
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        setPreviewBlockedBy(data?.blockedBy ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setPreviewBlockedBy(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [effectiveSiteKey]);
 
   const paywallDetectionState = (effectiveSite?.paywallDetectionState ?? "unknown") as PaywallDetectionState;
   const shouldShowViewerModeToggle = paywallDetectionState === "detected_paywalled";
@@ -3342,7 +3322,12 @@ export default function Configure() {
       siteKey: effectiveSiteKey ?? undefined,
       siteId: effectiveSite?.id ?? undefined,
       paywallMode: effectiveSite?.paywallMode ?? "auto",
-      paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
+      paywallDetectionState:
+        previewAudience === "postsOnly"
+          ? "detected_paywalled"
+          : (effectiveSite?.paywallDetectionState ?? "unknown"),
+      viewerMode: previewAudience === "member" ? "loggedIn" : "loggedOut",
+      previewForcePostsOnlyPaywall: previewAudience === "postsOnly",
       paywallSettings:
         shouldShowViewerModeToggle
           ? {
@@ -3363,6 +3348,7 @@ export default function Configure() {
     authors,
     effectiveSiteKey,
     effectiveSite,
+    previewAudience,
     previewSelectedPostIndex,
     previewDebugEnabled,
     device,
@@ -3382,6 +3368,7 @@ export default function Configure() {
         collection: config.collectionConfig,
         paywallMode: effectiveSite?.paywallMode ?? "auto",
         paywallDetection: effectiveSite?.paywallDetectionState ?? "unknown",
+        previewAudience,
         paywallForm: shouldShowViewerModeToggle
           ? {
               subscribeUrl: paywallForm.subscribeUrl,
@@ -3398,6 +3385,7 @@ export default function Configure() {
       config.collectionConfig,
       effectiveSite?.paywallMode,
       effectiveSite?.paywallDetectionState,
+      previewAudience,
       shouldShowViewerModeToggle,
       paywallForm.subscribeUrl,
       paywallForm.footerDescription,
@@ -3884,11 +3872,67 @@ export default function Configure() {
     return cfg;
   }
 
+  const snapshotAutoRefreshKey = useRef<string | null>(null);
+  useEffect(() => {
+    setSnapshotError(null);
+    setSnapshotSparse(false);
+    setSnapshotRevision(0);
+    snapshotAutoRefreshKey.current = null;
+  }, [effectiveSiteKey]);
+  const refreshPreviewSnapshot = useCallback(async () => {
+    if (!effectiveSiteKey || !effectiveSite?.url) return;
+    const postPath =
+      selectedLevel === "post"
+        ? postPathFromFullUrl(blogItems[previewSelectedPostIndex]?.fullUrl, effectiveSite.url)
+        : null;
+    const view = selectedLevel === "post" && postPath ? "post" : "collection";
+    setSnapshotRefreshing(true);
+    try {
+      const res = await fetch(
+        `/api/config/preview-snapshot/${encodeURIComponent(effectiveSiteKey)}/refresh`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ view, path: postPath }),
+        }
+      );
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setSnapshotError(typeof data?.error === "string" ? data.error : "Could not refresh the preview.");
+        return;
+      }
+      setSnapshotError(null);
+      setSnapshotRevision((n) => n + 1);
+    } catch {
+      setSnapshotError("Could not refresh the preview.");
+    } finally {
+      setSnapshotRefreshing(false);
+    }
+  }, [effectiveSiteKey, effectiveSite?.url, selectedLevel, blogItems, previewSelectedPostIndex]);
+
+  const handleSnapshotDocument = useCallback(
+    (doc: Document | null) => {
+      if (!doc) return;
+      const error = doc.querySelector('meta[name="bb-snapshot-error"]')?.getAttribute("content");
+      const quality = doc.querySelector('meta[name="bb-snapshot-quality"]')?.getAttribute("content");
+      const stale = doc.querySelector('meta[name="bb-snapshot-stale"]')?.getAttribute("content") === "1";
+      const fetchedAt = doc.querySelector('meta[name="bb-snapshot-fetched-at"]')?.getAttribute("content") || "";
+      setSnapshotError(error && error.trim() ? error : null);
+      setSnapshotSparse(quality === "http-sparse");
+      if (stale && fetchedAt && snapshotAutoRefreshKey.current !== fetchedAt) {
+        snapshotAutoRefreshKey.current = fetchedAt;
+        void refreshPreviewSnapshot();
+      }
+    },
+    [refreshPreviewSnapshot]
+  );
+
   const handleBlogChange = (newSiteKey: string) => {
     setSearchParams({ siteKey: newSiteKey });
   };
 
-  // Listen for selected post: hashchange (BlogPreviewRenderer) or postMessage (BlogPreviewIframe)
+  // Listen for selected post from the snapshot iframe.
   useEffect(() => {
     const fromHash = () => {
       const m = (window.location.hash || "").match(/^#post-(\d+)$/);
@@ -6652,6 +6696,50 @@ export default function Configure() {
           </div>
         </div>
 
+        <div className="border-b border-[#e5e4e0] bg-white px-4 py-2 flex flex-wrap items-center gap-3">
+          <div className="flex items-center bg-[#f7f6f3] rounded-lg p-1" role="group" aria-label="Preview as">
+            {(
+              [
+                ["loggedOut", "Logged-out reader"],
+                ["member", "Member"],
+                ["postsOnly", "Posts-only paywall"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPreviewAudience(value)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  previewAudience === value ? "bg-white text-[#0a0a0a] shadow-sm" : "text-[#6b6b6b] hover:text-[#0a0a0a]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            disabled={snapshotRefreshing || !effectiveSite?.url}
+            onClick={() => void refreshPreviewSnapshot()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${snapshotRefreshing ? "animate-spin" : ""}`} />
+            {snapshotRefreshing ? "Refreshing…" : "Refresh preview"}
+          </Button>
+          {previewAudience === "member" && (
+            <span className="text-xs text-[#6b6b6b]">Layout only. Paywalled post text is not loaded.</span>
+          )}
+          {previewAudience === "postsOnly" && (
+            <span className="text-xs text-[#6b6b6b]">Shows the posts-only paywall treatment for a logged-out reader.</span>
+          )}
+          {snapshotSparse && (
+            <span className="text-xs text-[#6b6b6b]">
+              This page is mostly rendered by JavaScript, so the preview is using the server HTML.
+            </span>
+          )}
+        </div>
+
         <div className="flex-1 overflow-auto p-8 flex items-start justify-center">
           <div
             className={`bg-white shadow-xl transition-all duration-300 origin-top overflow-hidden
@@ -6670,54 +6758,50 @@ export default function Configure() {
                   typeof window !== "undefined" &&
                   (window.location.search.includes("bbPreviewDebug=1") ||
                     sessionStorage.getItem("bbPreviewDebug") === "1");
-                const previewUrl = buildBlogPreviewUrl(effectiveSite, undefined, previewDebug);
-                if (!previewUrl) {
+                if (!effectiveSite.url) {
                   return (
                     <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
                       Add your blog URL in the dashboard to see a live preview.
                     </div>
                   );
                 }
-                if (previewBlockedBy === "pending" && !isSquarespaceUrl(previewUrl)) {
+                const postPath =
+                  selectedLevel === "post"
+                    ? postPathFromFullUrl(blogItems[previewSelectedPostIndex]?.fullUrl, effectiveSite.url)
+                    : null;
+                const snapshotView = selectedLevel === "post" && postPath ? "post" : "collection";
+                const previewUrl = buildSnapshotPreviewUrl({
+                  siteKey: effectiveSite.siteKey,
+                  view: snapshotView,
+                  path: postPath,
+                  revision: snapshotRevision,
+                  debug: previewDebug,
+                });
+                if (snapshotError) {
                   return (
-                    <div className="flex items-center justify-center h-full text-[#6b6b6b] p-8 text-center">
-                      Loading preview…
-                    </div>
-                  );
-                }
-                if (isSquarespaceUrl(previewUrl) || previewBlockedBy !== null) {
-                  return (
-                    <div className="flex flex-col h-full">
-                      <p className="text-xs text-[#6b6b6b] px-4 py-2 bg-amber-50 border-b border-amber-100 shrink-0">
-                        {previewBlockedBy === "x-frame-options" ? (
-                          <>
-                            Your site blocks embedding, so we're showing a simplified preview. For the full live
-                            preview, turn off Clickjack protection in Squarespace under Settings → Developer Tools →
-                            Website Protection.
-                          </>
-                        ) : (
-                          "Squarespace blocks iframe embedding. Using a simplified preview."
-                        )}
-                      </p>
-                      <div className="flex-1 min-h-0 overflow-y-auto">
-                        <BlogPreviewRenderer
-                          siteKey={effectiveSite.siteKey}
-                          config={rendererConfig}
-                          configSignature={configSignature}
-                          className="min-h-full"
-                        />
-                      </div>
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-[#6b6b6b] p-8 text-center">
+                      <p className="text-sm max-w-md">{snapshotError}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={snapshotRefreshing}
+                        onClick={() => void refreshPreviewSnapshot()}
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${snapshotRefreshing ? "animate-spin" : ""}`} />
+                        Refresh preview
+                      </Button>
                     </div>
                   );
                 }
                 return (
                   <BlogPreviewIframe
-                    key={effectiveSite.siteKey}
+                    key={previewUrl}
                     blogUrl={previewUrl}
                     config={rendererConfig}
                     configSignature={configSignature}
                     selectPostIndex={previewSelectedPostIndex}
                     viewSyncToken={previewViewSyncToken}
+                    onDocumentLoad={handleSnapshotDocument}
                     className="min-h-full"
                   />
                 );

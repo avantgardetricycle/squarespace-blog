@@ -2897,6 +2897,10 @@
       } catch (e) {
         return;
       }
+      var snapshot = false;
+      try {
+        snapshot = document.documentElement && document.documentElement.getAttribute('data-bb-snapshot') === '1';
+      } catch (eSnap) {}
       var currentPassword = current.searchParams.get('password');
       var debug = current.searchParams.get('bbPreviewDebug') === '1';
       document.addEventListener('click', function(e) {
@@ -2904,10 +2908,14 @@
         var el = e.target;
         while (el && el.tagName !== 'A') el = el.parentElement;
         if (!el) return;
-        if (el.target && el.target !== '_self') return;
+        if (!snapshot && el.target && el.target !== '_self') return;
         var rawHref = el.getAttribute('href');
         if (!rawHref || rawHref.indexOf('#') === 0) return;
         if (/^(mailto:|tel:|javascript:)/i.test(rawHref)) return;
+        if (snapshot) {
+          e.preventDefault();
+          return;
+        }
         var url = null;
         try {
           url = new URL(rawHref, window.location.href);
@@ -3261,6 +3269,7 @@
     },
 
     _isPaywalledSite: function() {
+      if (this.config && this.config.previewForcePostsOnlyPaywall) return true;
       return Boolean(this.config && this.config.paywallDetectionState === 'detected_paywalled');
     },
 

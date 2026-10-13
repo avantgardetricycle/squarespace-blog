@@ -1,8 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bb-snapshot="1">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="bb-snapshot-quality" content="http" />
+    <meta name="bb-snapshot-stale" content="0" />
+    <meta name="bb-snapshot-fetched-at" content="2026-01-01T00:00:00.000Z" />
     <title>Iframe Blog Fixture</title>
     <style>
       body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
@@ -108,9 +111,6 @@
         var nav = document.getElementById("blog-nav-link");
         nav.addEventListener("click", function(e) {
           e.preventDefault();
-          var target = new URL(this.href, window.location.href);
-          target.searchParams.set("bbPreview", "1");
-          window.location.assign(target.toString());
         });
 
         render();

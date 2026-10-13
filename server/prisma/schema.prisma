@@ -77,6 +77,7 @@ model Site {
   comments              Comment[]
   supportConversations  SupportConversation[]
   supportTickets        SupportTicket[]
+  previewSnapshots      PreviewSnapshot[]
 
   @@index([siteKey])
   @@index([userId])
@@ -332,6 +333,23 @@ model LeadCapture {
   @@index([siteId, type])
   @@index([siteId, createdAt])
   @@map("lead_captures")
+}
+
+model PreviewSnapshot {
+  id         String   @id @default(uuid())
+  siteId     String   @map("site_id")
+  pageKind   String   @map("page_kind") // collection | post
+  sourcePath String   @map("source_path")
+  html       String   @db.Text
+  quality    String // http | http-sparse | browser
+  byteSize   Int      @map("byte_size")
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, pageKind, sourcePath])
+  @@index([siteId, fetchedAt])
+  @@map("preview_snapshots")
 }
 
 model CachedPost {
