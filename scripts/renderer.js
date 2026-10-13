@@ -2355,14 +2355,14 @@
         if (label && logout && label.textContent === labelText && loggedInIdentityLine.style.display !== 'none') return;
         loggedInIdentityLine.textContent = '';
         loggedInIdentityLine.style.display = 'block';
-        label = document.createElement('div');
+        label = document.createElement('span');
         label.className = 'bb-comment-logged-in-label';
         label.textContent = labelText;
         logout = document.createElement('button');
         logout.type = 'button';
         logout.className = 'bb-comment-logout';
         logout.textContent = 'Logout';
-        logout.style.cssText = 'display:block;margin:4px 0 0;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:0.9rem;text-align:left';
+        logout.style.cssText = 'display:inline;margin:0 0 0 10px;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:inherit;vertical-align:baseline';
         logout.onclick = function() {
           mainEmailOverride = null;
           bbClearVerifiedIdentity();
