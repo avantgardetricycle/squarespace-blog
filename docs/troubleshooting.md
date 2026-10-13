@@ -41,27 +41,18 @@ This is expected. BetterBlog intentionally does not activate inside the Squaresp
 
 ---
 
-## Live preview issues
+## Live preview
 
-The BetterBlog customizer shows a live preview of your blog as you adjust settings. It works by loading your actual blog in an iframe. In some cases Squarespace prevents this, and BetterBlog falls back to a simulated render instead. When the iframe is blocked, the preview panel shows a message explaining the situation and directing you to check your live blog directly.
+The customizer preview is a snapshot of your published blog, loaded from BetterBlog rather than framed from Squarespace. Squarespace clickjack protection and `.squarespace.com` frame headers do not affect it. Changing a setting re-renders the preview immediately. The snapshot itself refreshes when you open Customize Blog (if it is more than a few hours old), when you pick a different post, or when you click **Refresh preview**.
 
-**The preview panel shows a message saying it can't display my blog.**
-This is almost always caused by one of two things:
+**The preview looks slightly different from the live site.**
+The snapshot uses your real Squarespace CSS, header, and post HTML. Adobe Fonts (Typekit) kits are locked to your domain, so those files often do not load inside BetterBlog. The preview substitutes a close Google or system font for those families. Layout, colors, and button styles still come from your theme.
 
-**1. You're using a default Squarespace domain (yoursite.squarespace.com)**
-Squarespace sets security headers (X-Frame-Options / Content-Security-Policy) on default `.squarespace.com` domains that prevent other sites — including BetterBlog — from loading them in an iframe. These headers are not present on custom domains.
+**Member preview does not show paywalled post text.**
+The preview audience control can show a logged-out reader, a member, or the posts-only paywall treatment. Snapshots are always taken as a logged-out visitor, so gated post bodies are never stored. Member preview shows the member layout using the public text a logged-out visitor can already see.
 
-If your site is still on a Squarespace subdomain and you have a custom domain available, connecting it in Squarespace will resolve the preview issue. Go to Squarespace → Settings → Domains and connect your domain. Once connected, update your blog URL in BetterBlog (edit the blog row in the dashboard) to use the custom domain URL.
-
-If you don't have a custom domain, the live preview will not work on a `.squarespace.com` URL. Use the **Check live site** link in the preview panel to open your blog directly in a new tab — your changes are still applied live even though the preview can't display them in the iframe.
-
-**2. Your site has clickjack protection enabled**
-Squarespace allows site owners to enable additional clickjack protection, which sets stricter security headers that block iframe embedding regardless of whether you're on a custom domain. This is found in Squarespace → Settings → Advanced → SSL.
-
-If you have clickjack protection enabled and need the BetterBlog preview to work, you would need to disable it. If you'd prefer to keep it on, use the **Check live site** link in the preview panel to review your changes in a new tab instead.
-
-**My changes aren't showing in the live preview.**
-Try clicking the refresh button in the preview panel to reload the iframe. If the preview is in simulated render mode (because the iframe was blocked), it may lag slightly behind live changes — always verify on the actual live blog for a definitive view.
+**Refresh preview failed, or the page looks empty.**
+Click **Refresh preview**. If your blog is password protected, add the blog password in the dashboard and refresh again. Pages that Squarespace only fills in with JavaScript may look sparse until a headless render is configured; the preview says so when that happens. Your live blog still uses the installed snippet and is not limited by the snapshot.
 
 ---
 
@@ -77,7 +68,7 @@ Applying a template overwrites your settings for that level (collection or post)
 Confirm the BetterBlog snippet is still installed in Squarespace Code Injection (it's possible it was accidentally removed if someone else edited the site). Also try a hard refresh on your live blog (Cmd+Shift+R / Ctrl+Shift+R).
 
 **The live blog looks different from the preview.**
-The preview uses your real blog content loaded in an iframe (or a simulated render if the iframe is blocked). Color, typography, and some spacing inherit from your Squarespace site's CSS, so the live result will always look more finished than any preview. If there's a structural difference — a zone in the wrong position, a module missing — confirm the template and module order in Customize Blog match what you expect, then hard-refresh the live site.
+The preview is a logged-out snapshot of your Squarespace page, including your theme CSS. Typekit fonts may be substituted. Member preview is layout-only and does not reveal gated post text. If a zone or module is in the wrong place, confirm the template and module order in Customize Blog, then hard-refresh the live site.
 
 **My sidebar is overlapping the header.**
 A sticky sidebar can slide up under your Squarespace site header if there is not enough offset. On the Collection tab, open the sidebar section and increase **Space above**, or turn off **Sticky (move with scroll)**. On the Post tab, turn sticky off (Post sidebars do not expose a space-above control). If the overlap is your Squarespace header covering BetterBlog content, that header is controlled by Squarespace, not BetterBlog — adjust header height or position in the Squarespace site styles.

@@ -16,11 +16,14 @@ export interface RendererConfig {
   headerContent?: { show?: boolean; modules?: string[]; height?: number };
   recentPostsCount?: number;
   paywallMode?: "auto" | "force_logged_out" | "force_logged_in";
+  viewerMode?: "loggedOut" | "loggedIn";
+  previewForcePostsOnlyPaywall?: boolean;
+  paywallDetectionState?: string;
 }
 
 interface BlogPreviewIframeProps {
   blogUrl: string;
-  config: RendererConfig;
+  config: Record<string, unknown>;
   /** Stable string that changes when config changes; ensures effect runs on every config update */
   configSignature?: string;
   /** When set, tells the iframe to switch to single-post view for this index (e.g. when editing post-level config) */
@@ -28,6 +31,8 @@ interface BlogPreviewIframeProps {
   /** Bumped to re-send selectPostIndex when the parent re-selects the same view (e.g. Collection tab re-click). */
   viewSyncToken?: number;
   className?: string;
+  /** Fired when the snapshot document finishes loading. Same-origin, so the parent can read meta tags. */
+  onDocumentLoad?: (doc: Document | null) => void;
 }
 
 const MESSAGE_TYPE_READY = "BETTERBLOG_PREVIEW_READY";
@@ -39,52 +44,41 @@ const DEBUG =
   typeof window !== "undefined" &&
   (window.location.search.includes("bbPreviewDebug=1") || sessionStorage.getItem("bbPreviewDebug") === "1");
 
-/**
- * Returns true if the URL is a Squarespace subdomain (*.squarespace.com).
- * Squarespace sets X-Frame-Options: SAMEORIGIN, so these URLs cannot be embedded in iframes.
- */
-export function isSquarespaceUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return host.endsWith(".squarespace.com");
-  } catch {
-    return false;
-  }
+export function buildSnapshotPreviewUrl(opts: {
+  siteKey: string;
+  view: "collection" | "post";
+  path?: string | null;
+  revision?: number;
+  debug?: boolean;
+}): string {
+  const params = new URLSearchParams();
+  params.set("view", opts.view);
+  params.set("bbPreview", "1");
+  if (opts.view === "post" && opts.path) params.set("path", opts.path);
+  if (opts.debug) params.set("bbPreviewDebug", "1");
+  if (opts.revision) params.set("v", String(opts.revision));
+  return `/api/config/preview-snapshot/${encodeURIComponent(opts.siteKey)}?${params.toString()}`;
 }
 
-/**
- * Builds the blog page URL with bbPreview=1 and optional password.
- * @param debug - When true, adds bbPreviewDebug=1 for renderer console logging
- */
-export function buildBlogPreviewUrl(
-  site: { url: string | null; blogPath: string | null },
-  blogPassword?: string,
-  debug?: boolean
-): string | null {
-  if (!site.url) return null;
+/** Pathname of a Squarespace post, or null when the item has no on-site URL. */
+export function postPathFromFullUrl(fullUrl: string | undefined, siteUrl: string | null): string | null {
+  if (!fullUrl || !fullUrl.trim()) return null;
   try {
-    const parsed = new URL(site.url);
-    const hasPath = parsed.pathname && parsed.pathname !== "/";
-    const base = site.url.replace(/\/$/, "");
-    const blogPageUrl = hasPath ? base : parsed.origin + (site.blogPath || "/blog");
-
-    const url = new URL(blogPageUrl);
-    url.searchParams.set("bbPreview", "1");
-    if (blogPassword?.trim()) {
-      url.searchParams.set("password", blogPassword.trim());
+    const base = siteUrl && siteUrl.trim() ? siteUrl : "https://preview.local";
+    const parsed = new URL(fullUrl, base);
+    if (siteUrl) {
+      const site = new URL(siteUrl);
+      if (parsed.origin !== site.origin && fullUrl.startsWith("http")) return null;
     }
-    if (debug) {
-      url.searchParams.set("bbPreviewDebug", "1");
-    }
-    return url.toString();
+    return parsed.pathname || null;
   } catch {
     return null;
   }
 }
 
 /**
- * Renders the blog in an iframe with bbPreview=1.
- * Sends config updates to the iframe via postMessage when settings change.
+ * Renders a same-origin snapshot of the customer's blog.
+ * Config edits are postMessage updates; the iframe reloads only when its src changes.
  */
 export default function BlogPreviewIframe({
   blogUrl,
@@ -93,95 +87,43 @@ export default function BlogPreviewIframe({
   selectPostIndex,
   viewSyncToken,
   className = "",
+  onDocumentLoad,
 }: BlogPreviewIframeProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
   const selectPostIndexRef = useRef(selectPostIndex);
   selectPostIndexRef.current = selectPostIndex;
-  /** Set when we receive READY; iframe may redirect www↔non-www so we use its actual origin for postMessage */
-  const resolvedTargetOriginRef = useRef<string | null>(null);
+  const onDocumentLoadRef = useRef(onDocumentLoad);
+  onDocumentLoadRef.current = onDocumentLoad;
+  const readyRef = useRef(false);
 
-  const getTargetOrigin = () => {
+  const targetOrigin = () => (typeof window !== "undefined" ? window.location.origin : "");
+
+  const configForPostMessage = (c: Record<string, unknown>) => {
+    const { configUpdateCallback, ...rest } = c;
     try {
-      return new URL(blogUrl).origin;
+      return JSON.parse(JSON.stringify(rest)) as Record<string, unknown>;
     } catch {
-      return "*";
+      return rest;
     }
   };
 
-  // Same domain (www vs non-www); blogUrl may be agtricycle.me but iframe redirects to www.agtricycle.me
-  const originsMatch = (a: string, b: string) => {
-    if (a === b) return true;
-    try {
-      const hostA = new URL(a).hostname.replace(/^www\./, "") || new URL(a).hostname;
-      const hostB = new URL(b).hostname.replace(/^www\./, "") || new URL(b).hostname;
-      return hostA === hostB;
-    } catch {
-      return false;
-    }
-  };
-
-  // Strip non-serializable values and ensure clean serialization for postMessage.
-  // postMessage uses structured clone; JSON round-trip guarantees no functions/circular refs.
-  // When parent is localhost and iframe is on a different origin, omit baseUrl so the iframe
-  // doesn't try to fetch localhost (blocked by Private Network Access).
-  const configForPostMessage = (c: RendererConfig) => {
-    const { configUpdateCallback, ...rest } = c as RendererConfig & { configUpdateCallback?: unknown };
-    try {
-      const serialized = JSON.parse(JSON.stringify(rest)) as Record<string, unknown>;
-      try {
-        const parentOrigin = typeof window !== "undefined" ? window.location.origin : "";
-        const iframeOrigin = getTargetOrigin();
-        const parentHost = parentOrigin ? new URL(parentOrigin).hostname : "";
-        const isLocalParent = parentHost === "localhost" || parentHost === "127.0.0.1";
-        if (
-          parentOrigin &&
-          iframeOrigin !== "*" &&
-          isLocalParent &&
-          new URL(parentOrigin).hostname !== new URL(iframeOrigin).hostname
-        ) {
-          delete serialized.baseUrl;
-        }
-      } catch {
-        // keep baseUrl if origin check fails
-      }
-      return serialized;
-    } catch {
-      return rest as Record<string, unknown>;
-    }
-  };
-
-  // Listen for READY from iframe and send config.
-  // Use useLayoutEffect so listener is attached before iframe can load and send READY (avoids race after nav/reload).
-  // Use event.source (the iframe window that sent READY) for reliable delivery.
   useLayoutEffect(() => {
+    readyRef.current = false;
     const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== targetOrigin()) return;
       if (event.data?.type !== MESSAGE_TYPE_READY) return;
-      const expectedOrigin = getTargetOrigin();
-      if (expectedOrigin !== "*" && !originsMatch(event.origin, expectedOrigin)) return;
-
-      const target = event.source as Window | null;
-      if (!target || typeof target.postMessage !== "function") return;
-      resolvedTargetOriginRef.current = event.origin;
-      const latestConfig = configForPostMessage({
-        ...configRef.current,
-      });
-      const targetOrigin = event.origin || expectedOrigin || "*";
-      if (DEBUG) console.log("[BlogPreviewIframe] READY received, sending config", { targetOrigin });
-      target.postMessage(
-        { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
-        targetOrigin
-      );
+      const iframeWindow = iframeRef.current?.contentWindow;
+      if (!iframeWindow || event.source !== iframeWindow) return;
+      readyRef.current = true;
+      const latestConfig = configForPostMessage({ ...configRef.current });
+      if (DEBUG) console.log("[BlogPreviewIframe] READY received, sending config");
+      iframeWindow.postMessage({ type: MESSAGE_TYPE_CONFIG, config: latestConfig }, targetOrigin());
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [blogUrl]);
-
-  // Use resolved origin from READY when available (iframe may redirect www↔non-www).
-  // When null (e.g. missed READY after nav/reload), use "*" so config still gets through.
-  const getEffectiveTargetOrigin = () =>
-    resolvedTargetOriginRef.current ?? "*";
 
   const sendSelectPostIndex = useCallback(() => {
     const postIndex = selectPostIndexRef.current;
@@ -190,32 +132,22 @@ export default function BlogPreviewIframe({
     if (!iframe?.contentWindow) return;
     iframe.contentWindow.postMessage(
       { type: MESSAGE_TYPE_SELECT_POST, postIndex },
-      getEffectiveTargetOrigin()
+      targetOrigin()
     );
   }, [blogUrl]);
 
-  // Tell iframe to switch views when selectPostIndex changes.
-  // -1 => collection/list view, >=0 => single-post view
   useEffect(() => {
     sendSelectPostIndex();
   }, [selectPostIndex, blogUrl, viewSyncToken, sendSelectPostIndex]);
-
-  // Reset resolved origin when blogUrl changes (e.g. user switched sites)
-  useEffect(() => {
-    resolvedTargetOriginRef.current = null;
-  }, [blogUrl]);
 
   const sendConfig = useCallback(() => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     try {
-      const targetOrigin = resolvedTargetOriginRef.current ?? "*";
-      const latestConfig = configForPostMessage({
-        ...configRef.current,
-      });
+      const latestConfig = configForPostMessage({ ...configRef.current });
       iframe.contentWindow.postMessage(
         { type: MESSAGE_TYPE_CONFIG, config: latestConfig },
-        targetOrigin
+        targetOrigin()
       );
       if (DEBUG) console.log("[BlogPreviewIframe] sent config");
     } catch {
@@ -227,37 +159,34 @@ export default function BlogPreviewIframe({
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
     try {
-      iframe.contentWindow.postMessage({ type: MESSAGE_TYPE_REQUEST_READY }, "*");
+      iframe.contentWindow.postMessage({ type: MESSAGE_TYPE_REQUEST_READY }, targetOrigin());
       if (DEBUG) console.log("[BlogPreviewIframe] sent REQUEST_READY");
     } catch {
       // ignore
     }
   }, []);
 
-  // Send config whenever it changes. Use configSignature so effect reliably runs on every config update.
-  // When we don't have resolved origin, request READY first so iframe responds and we can use correct origin.
   useEffect(() => {
-    if (!resolvedTargetOriginRef.current) requestReady();
+    if (!readyRef.current) requestReady();
     sendConfig();
     const delays = [100, 250, 500, 900, 1500, 2500];
     const timeouts = delays.map((d) => window.setTimeout(() => {
-      if (!resolvedTargetOriginRef.current) requestReady();
+      if (!readyRef.current) requestReady();
       sendConfig();
     }, d));
     return () => timeouts.forEach((t) => window.clearTimeout(t));
   }, [config, configSignature, blogUrl, sendConfig, requestReady]);
 
-  // Re-send config when page becomes visible (e.g. bfcache restore, tab focus). Fixes iframe not updating after nav-back.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
-        if (!resolvedTargetOriginRef.current) requestReady();
+        if (!readyRef.current) requestReady();
         sendConfig();
       }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        if (!resolvedTargetOriginRef.current) requestReady();
+        if (!readyRef.current) requestReady();
         sendConfig();
       }
     };
@@ -269,11 +198,13 @@ export default function BlogPreviewIframe({
     };
   }, [sendConfig, requestReady]);
 
-  // Send config when iframe loads (renderer may not be ready yet, so READY will trigger another send)
   const handleIframeLoad = () => {
     if (DEBUG) console.log("[BlogPreviewIframe] iframe onLoad, sending config");
+    readyRef.current = false;
     sendConfig();
     sendSelectPostIndex();
+    const doc = iframeRef.current?.contentDocument ?? null;
+    onDocumentLoadRef.current?.(doc);
   };
 
   return (
