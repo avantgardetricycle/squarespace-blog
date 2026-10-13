@@ -1,6 +1,6 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail } from '../emails/index.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail, renderTrialDayFourEmail } from '../emails/index.js'
 import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
 import { getAppUrl, getSupportPortalUrl } from './url.js'
 
@@ -349,6 +349,60 @@ export async function sendProfilesApiAlertEmail(
       const { attachments: _, ...msgWithoutLogo } = msg
       await sgMail.send(msgWithoutLogo)
     }
+  }
+}
+
+/** Day-4 free-trial reminder. Throws when SendGrid rejects the message so the cron can retry. */
+export async function sendTrialDayFourEmail(
+  to: string,
+  details: {
+    trialEndDate: string
+    loginUrl: string
+    recipientName?: string | null
+  }
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(
+      `[Trial] SENDGRID_API_KEY not set. Day-4 reminder for ${to}; trial ends ${details.trialEndDate}; login ${details.loginUrl}`
+    )
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+  const html = await renderTrialDayFourEmail({
+    trialEndDate: details.trialEndDate,
+    loginUrl: details.loginUrl,
+    supportUrl: getSupportPortalUrl(),
+    recipientName: details.recipientName,
+  })
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `Your BetterBlog free trial ends on ${details.trialEndDate}`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[Trial] SendGrid error sending day-4 reminder:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+      return
+    }
+    throw err
   }
 }
 

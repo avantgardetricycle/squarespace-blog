@@ -6,6 +6,7 @@ import { InviteEmail } from './InviteEmail.js'
 import { MagicLinkEmail } from './MagicLinkEmail.js'
 import { CommentNotificationEmail } from './CommentNotificationEmail.js'
 import { ProfilesApiAlertEmail } from './ProfilesApiAlertEmail.js'
+import { TrialDayFourEmail } from './TrialDayFourEmail.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const logoPath = join(__dirname, 'logo-email.png')
@@ -35,6 +36,15 @@ export async function renderCommentNotificationEmail(props: {
   hideUrl: string
 }): Promise<string> {
   return render(CommentNotificationEmail(props))
+}
+
+export async function renderTrialDayFourEmail(props: {
+  trialEndDate: string
+  loginUrl: string
+  supportUrl?: string
+  recipientName?: string | null
+}): Promise<string> {
+  return render(TrialDayFourEmail(props))
 }
 
 export async function renderProfilesApiAlertEmail(props: {
