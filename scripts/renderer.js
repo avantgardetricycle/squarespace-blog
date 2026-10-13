@@ -9606,6 +9606,226 @@
       return out;
     },
 
+    /**
+     * Post-header type. Title is a Squarespace heading (H1–H4, default H1).
+     * Deck and meta are paragraph styles (P1–P3, defaults P1 and P2).
+     * When the site style can be read, that size is used at every viewport.
+     * Otherwise the fallback below is the size for that choice.
+     */
+    _postHeaderFontFallbacks: {
+      h1: { desktop: '40px', mobile: '28px' },
+      h2: { desktop: '32px', mobile: '24px' },
+      h3: { desktop: '26px', mobile: '22px' },
+      h4: { desktop: '22px', mobile: '18px' },
+      p1: { desktop: '20px', mobile: '14px' },
+      p2: { desktop: '16px', mobile: '13px' },
+      p3: { desktop: '14px', mobile: '12px' }
+    },
+
+    _normalizePostHeaderFont: function(value, kind) {
+      var v = typeof value === 'string' ? value.toLowerCase() : '';
+      if (kind === 'heading') {
+        if (v === 'h1' || v === 'h2' || v === 'h3' || v === 'h4') return v;
+        return 'h1';
+      }
+      if (v === 'p1' || v === 'p2' || v === 'p3') return v;
+      return kind === 'deck' ? 'p1' : 'p2';
+    },
+
+    _cssLengthFromCustomProp: function(raw) {
+      if (!raw) return '';
+      raw = String(raw).trim();
+      if (!raw || raw === 'none' || raw === 'normal' || raw === 'inherit' || raw === 'initial') return '';
+      if (/^-?[\d.]+$/.test(raw)) return raw + 'rem';
+      if (/[0-9]/.test(raw) && (
+        raw.indexOf('px') !== -1 || raw.indexOf('rem') !== -1 || raw.indexOf('em') !== -1 ||
+        raw.indexOf('vw') !== -1 || raw.indexOf('clamp(') !== -1 || raw.indexOf('calc(') !== -1 ||
+        raw.indexOf('var(') === 0
+      )) return raw;
+      return '';
+    },
+
+    /** Squarespace heading/paragraph size: fluid min/max, then a single size variable. */
+    _squarespaceFluidSize: function(prefix) {
+      if (typeof document === 'undefined' || !document.documentElement) return '';
+      var root = document.documentElement;
+      var min = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-min-font-size'));
+      var max = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-max-font-size'));
+      if (min && max) {
+        return 'clamp(' + min + ', (' + max + ' - ' + min + ') * ((100vw - 375px) / 1065) + ' + min + ', ' + max + ')';
+      }
+      var names = [
+        prefix + '-font-font-size',
+        prefix + '-font-size',
+        prefix + '-size',
+        prefix + '-font-size-value',
+        prefix + '-size-value',
+        prefix + '-max-font-size'
+      ];
+      for (var i = 0; i < names.length; i++) {
+        var v = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, names[i]));
+        if (v) return v;
+      }
+      return '';
+    },
+
+    _readSquarespaceFontFace: function(kind, index) {
+      if (typeof document === 'undefined' || !document.documentElement) {
+        return { family: '', weight: '', lineHeight: '', tracking: '' };
+      }
+      var root = document.documentElement;
+      var prefix = (kind === 'heading' ? '--heading-' : '--paragraph-') + index;
+      var familyNames = kind === 'heading'
+        ? [prefix + '-font-font-family', '--heading-font-font-family', '--headings-font-family', '--header-font-family']
+        : [prefix + '-font-font-family', '--paragraph-font-font-family', '--body-font-font-family', '--primary-font-font-family'];
+      var weightNames = kind === 'heading'
+        ? [prefix + '-font-font-weight', '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight']
+        : [prefix + '-font-font-weight', '--paragraph-font-font-weight', '--body-font-font-weight', '--primary-font-font-weight'];
+      var lineNames = kind === 'heading'
+        ? [prefix + '-font-line-height', '--heading-font-line-height', '--headings-line-height']
+        : [prefix + '-font-line-height', '--paragraph-font-line-height', '--body-font-line-height'];
+      var trackNames = kind === 'heading'
+        ? [prefix + '-font-letter-spacing', '--heading-font-letter-spacing', '--headings-letter-spacing']
+        : [prefix + '-font-letter-spacing', '--paragraph-font-letter-spacing', '--body-font-letter-spacing'];
+      var read = function(names) {
+        for (var i = 0; i < names.length; i++) {
+          var raw = this._readCssVarFromEl(root, names[i]);
+          if (raw && raw !== 'inherit' && raw !== 'initial' && raw !== 'normal') return raw;
+        }
+        return '';
+      }.bind(this);
+      return {
+        family: read(familyNames),
+        weight: read(weightNames),
+        lineHeight: read(lineNames),
+        tracking: read(trackNames)
+      };
+    },
+
+    /**
+     * Hidden element so site h1–h4 / .sqsrte-* rules apply. Ignore the browser
+     * default size — that means Squarespace has not styled this step.
+     */
+    _probeSquarespaceFont: function(tag, className) {
+      if (typeof document === 'undefined' || !document.body || !window.getComputedStyle) return null;
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      el.setAttribute('data-bb-type-probe', '1');
+      el.setAttribute('aria-hidden', 'true');
+      el.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;margin:0;width:auto;height:auto;';
+      document.body.appendChild(el);
+      var cs;
+      try { cs = window.getComputedStyle(el); } catch (eProbe) { cs = null; }
+      var fontSize = cs ? cs.fontSize : '';
+      var fontFamily = cs ? cs.fontFamily : '';
+      var fontWeight = cs ? cs.fontWeight : '';
+      var lineHeight = cs ? cs.lineHeight : '';
+      var letterSpacing = cs ? cs.letterSpacing : '';
+      if (el.parentNode) el.parentNode.removeChild(el);
+      var px = parseFloat(fontSize);
+      if (!isFinite(px)) return null;
+      var rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+      var ua = [rootPx];
+      var t = String(tag || '').toLowerCase();
+      if (t === 'h1') ua = [rootPx * 2];
+      else if (t === 'h2') ua = [rootPx * 1.5];
+      else if (t === 'h3') ua = [rootPx * 1.17, rootPx * 1.2];
+      else if (t === 'h4') ua = [rootPx];
+      for (var i = 0; i < ua.length; i++) {
+        if (Math.abs(px - ua[i]) < 1) return null;
+      }
+      return {
+        size: fontSize,
+        family: fontFamily || '',
+        weight: fontWeight || '',
+        lineHeight: lineHeight && lineHeight !== 'normal' ? lineHeight : '',
+        tracking: letterSpacing && letterSpacing !== 'normal' && letterSpacing !== '0px' ? letterSpacing : ''
+      };
+    },
+
+    _resolveSquarespaceFont: function(key) {
+      if (!this._sqFontCache) this._sqFontCache = {};
+      var widthBucket = typeof window !== 'undefined' ? Math.round((window.innerWidth || 0) / 40) : 0;
+      var cacheKey = key + ':' + widthBucket;
+      if (this._sqFontCache[cacheKey]) return this._sqFontCache[cacheKey];
+      var heading = key.charAt(0) === 'h';
+      var index = key.charAt(1);
+      var prefix = (heading ? '--heading-' : '--paragraph-') + index;
+      var size = this._squarespaceFluidSize(prefix);
+      var face = this._readSquarespaceFontFace(heading ? 'heading' : 'paragraph', index);
+      if (!size) {
+        var probe = heading
+          ? this._probeSquarespaceFont('h' + index, '')
+          : this._probeSquarespaceFont('p', index === '1' ? 'sqsrte-large' : (index === '3' ? 'sqsrte-small' : ''));
+        if (probe) {
+          size = probe.size;
+          if (!face.family) face.family = probe.family;
+          if (!face.weight) face.weight = probe.weight;
+          if (!face.lineHeight) face.lineHeight = probe.lineHeight;
+          if (!face.tracking) face.tracking = probe.tracking;
+        }
+      }
+      var resolved = {
+        size: size || '',
+        family: face.family || '',
+        weight: face.weight || '',
+        lineHeight: face.lineHeight || '',
+        tracking: face.tracking || ''
+      };
+      this._sqFontCache[cacheKey] = resolved;
+      return resolved;
+    },
+
+    _setOptionalStyleProp: function(el, name, value) {
+      if (!el || !el.style) return;
+      if (value) el.style.setProperty(name, value);
+      else el.style.removeProperty(name);
+    },
+
+    _setRoleFontVars: function(el, role, key) {
+      var fb = this._postHeaderFontFallbacks[key] || this._postHeaderFontFallbacks.h1;
+      var resolved = this._resolveSquarespaceFont(key);
+      var desktop = resolved.size || fb.desktop;
+      var mobile = resolved.size || fb.mobile;
+      el.style.setProperty('--bb-' + role + '-size', desktop);
+      el.style.setProperty('--bb-' + role + '-size-mobile', mobile);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-family', resolved.family);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-weight', resolved.weight);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-line-height', resolved.lineHeight);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-tracking', resolved.tracking);
+    },
+
+    /** Apply the Post Header title / deck / meta font choices onto the overlay root. */
+    _applyPostHeaderTypeScale: function(wrapper, postHeaderCfg) {
+      if (!wrapper || !wrapper.style) return;
+      var ph = postHeaderCfg && typeof postHeaderCfg === 'object' ? postHeaderCfg : (this._postHeaderFontCfg || {});
+      this._postHeaderFontCfg = ph;
+      var title = this._normalizePostHeaderFont(ph.titleFont, 'heading');
+      var deck = this._normalizePostHeaderFont(ph.deckFont, 'deck');
+      var meta = this._normalizePostHeaderFont(ph.metaFont, 'paragraph');
+      wrapper.setAttribute('data-bb-title-font', title);
+      wrapper.setAttribute('data-bb-deck-font', deck);
+      wrapper.setAttribute('data-bb-meta-font', meta);
+      this._setRoleFontVars(wrapper, 'title', title);
+      this._setRoleFontVars(wrapper, 'deck', deck);
+      this._setRoleFontVars(wrapper, 'meta', meta);
+    },
+
+    _clearPostHeaderTypeScale: function(wrapper) {
+      if (!wrapper) return;
+      this._postHeaderFontCfg = null;
+      wrapper.removeAttribute('data-bb-title-font');
+      wrapper.removeAttribute('data-bb-deck-font');
+      wrapper.removeAttribute('data-bb-meta-font');
+      var roles = ['title', 'deck', 'meta'];
+      var parts = ['size', 'size-mobile', 'family', 'weight', 'line-height', 'tracking'];
+      for (var r = 0; r < roles.length; r++) {
+        for (var p = 0; p < parts.length; p++) {
+          wrapper.style.removeProperty('--bb-' + roles[r] + '-' + parts[p]);
+        }
+      }
+    },
+
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
         var prim = null;
@@ -10006,12 +10226,12 @@
         s + ' .blog-overlay-post-header-categories span,' +
         s + ' .blog-overlay-post-category--feature{margin-bottom:0!important;}' +
         stack + ' .blog-overlay-post-title,' +
-        stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
+        stack + ' .blog-overlay-title.bb-title--post{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
         stack + ' .blog-overlay-post-deck,' +
-        stack + ' .blog-overlay-post-deck--feature{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);text-align:center;}' +
-        stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
-        stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
-        stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
+        stack + ' .blog-overlay-post-deck--feature{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);text-align:center;}' +
+        stack + ' .blog-overlay-meta-row{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);text-align:center;width:100%;}' +
+        stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);}' +
+        stack + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;}' +
         s + ' .blog-overlay-share-row--feature .blog-overlay-share-link,' +
         s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
@@ -10096,7 +10316,7 @@
      * Writer mobile (<768). Wider than the desktop 8vw literary inset: wrapper
      * padding matches other post templates (pagePadding + 2vw → 18.75px at
      * 375). Header zone extra 24px pad is removed so title/body share one
-     * column. Title is 34px because Writer has no featured image.
+     * column. Title, deck, and meta use the Post Header font choices.
      */
     _writerMobileCss: function(s) {
       return (
@@ -10111,12 +10331,12 @@
         s + ' .blog-overlay-post-header-categories .bb-category-label,' +
         s + ' .blog-overlay-post-category--writer{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);margin-bottom:0!important;}' +
         s + ' .blog-overlay-post-title,' +
-        s + ' .blog-overlay-title.bb-title--post{font-size:34px!important;line-height:1.15;margin:0 0 12px 0!important;}' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);margin:0 0 12px 0!important;}' +
         s + ' .blog-overlay-post-deck,' +
-        s + ' .blog-overlay-post-deck--writer{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-excerpt,#666);margin:0 0 24px 0!important;}' +
+        s + ' .blog-overlay-post-deck--writer{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);color:var(--bb-excerpt,#666);margin:0 0 24px 0!important;}' +
         s + ' .blog-overlay-writer-rule{width:40px;height:1px;margin:0 auto 24px auto!important;}' +
-        s + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);}' +
-        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .blog-overlay-meta-row{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
         s + ' .blog-overlay-body{margin-bottom:-80px!important;}' +
         s + ' .blog-overlay-footer-content{gap:56px!important;}' +
         s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
@@ -10165,13 +10385,13 @@
         s + ' .blog-overlay-story-info-panel .blog-overlay-post-title,' +
         s + ' .blog-overlay-post-title,' +
         s + ' .blog-overlay-title.bb-title--post,' +
-        s + ' .bb-title--on-dark{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:' + ink + '!important;text-shadow:none!important;}' +
+        s + ' .bb-title--on-dark{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);margin:0 0 8px 0!important;color:' + ink + '!important;text-shadow:none!important;}' +
         s + ' .blog-overlay-post-deck,' +
-        s + ' .blog-overlay-post-deck--on-dark-solid{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);margin:0 0 16px 0!important;color:' + ink80 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-post-deck--on-dark-solid{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);margin:0 0 16px 0!important;color:' + ink80 + '!important;text-shadow:none!important;}' +
         s + ' .blog-overlay-story-rule{width:100%;height:0;border:none;border-top:1px solid ' + ink15 + ';background:none!important;margin:12px 0!important;}' +
         s + ' .blog-overlay-meta-row,' +
-        s + ' .bb-post-meta--on-dark{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:' + ink60 + '!important;text-shadow:none!important;}' +
-        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);color:inherit;}' +
+        s + ' .bb-post-meta--on-dark{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);color:' + ink60 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));color:inherit;}' +
         s + ' .blog-overlay-share-row,' +
         s + ' .blog-overlay-share-row--story{display:flex!important;gap:0!important;margin:12px 0 0 0!important;justify-content:flex-start!important;width:100%;}' +
         s + ' .blog-overlay-share-links,' +
@@ -10202,10 +10422,10 @@
         ribbon + '{display:inline-flex!important;align-items:center;justify-content:center;line-height:1;padding:7px 12px!important;font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin:0!important;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);width:fit-content;max-width:100%;}' +
         s + ' .blog-overlay-post-title,' +
         s + ' .blog-overlay-title.bb-title--post,' +
-        s + ' .bb-title--on-image{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:#fff!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .bb-title--on-image{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);margin:0 0 8px 0!important;color:#fff!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
         s + ' .blog-overlay-meta-row,' +
-        s + ' .bb-post-meta--on-image{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-meta-on-image,rgba(255,255,255,0.78))!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
-        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .bb-post-meta--on-image{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);color:var(--bb-meta-on-image,rgba(255,255,255,0.78))!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
         s + ' .blog-overlay-post-deck,' +
         s + ' .blog-overlay-post-breadcrumbs,' +
         s + ' .blog-overlay-share-row{display:none!important;}' +
@@ -10241,11 +10461,11 @@
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
         s + ' .blog-overlay-post-title,' +
-        s + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
-        s + ' .blog-overlay-post-deck--reporter{font-size:14px!important;line-height:1.4;font-family:inherit;margin-top:-5px!important;margin-bottom:0!important;}' +
-        s + ' .blog-overlay-meta-row{font-size:13px;line-height:1.4;font-family:inherit;font-weight:var(--bb-heading-font-weight,inherit);margin-top:8px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);}' +
+        s + ' .blog-overlay-post-deck--reporter{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);margin-top:-5px!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-meta-row{font-size:var(--bb-meta-size-mobile,13px);line-height:var(--bb-meta-line-height,1.4);font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);margin-top:8px!important;margin-bottom:12px!important;}' +
         s + ' .blog-overlay-meta,' +
-        s + ' .bb-post-meta--on-bg{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.4;}' +
+        s + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
         s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
@@ -10332,16 +10552,16 @@
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-deck{max-width:700px;margin-left:auto;margin-right:auto;}' +
-        '#blog-overlay-list .bb-title--post{font-size:40px;}' +
-        '#blog-overlay-list .blog-overlay-post-deck{font-size:20px;line-height:1.4;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .bb-title--post{font-size:var(--bb-title-size,40px)!important;font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));line-height:var(--bb-title-line-height,1.15);letter-spacing:var(--bb-title-tracking,normal);}' +
+        '#blog-overlay-list .blog-overlay-post-deck{font-size:var(--bb-deck-size,20px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-post-deck--reporter{margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-deck--writer{font-style:italic;text-align:center;max-width:600px;margin-left:auto;margin-right:auto;}' +
         '#blog-overlay-list .blog-overlay-post-deck--feature{text-align:center;max-width:700px;margin-left:auto;margin-right:auto;}' +
-        '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
-        '#blog-overlay-list .blog-overlay-post-deck--on-dark-solid{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));}' +
-        '#blog-overlay-list .bb-post-meta--on-bg{font-size:16px;color:var(--bb-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
-        '#blog-overlay-list .bb-post-meta--on-image{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
-        '#blog-overlay-list .bb-post-meta--on-dark{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:var(--bb-deck-size,18px)!important;line-height:var(--bb-deck-line-height,1.5);color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark-solid{font-size:var(--bb-deck-size,18px)!important;line-height:var(--bb-deck-line-height,1.5);color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));}' +
+        '#blog-overlay-list .bb-post-meta--on-bg{font-size:var(--bb-meta-size,16px)!important;line-height:var(--bb-meta-line-height,1.4);letter-spacing:var(--bb-meta-tracking,normal);color:var(--bb-muted,#888);font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
+        '#blog-overlay-list .bb-post-meta--on-image{font-size:var(--bb-meta-size,16px)!important;line-height:var(--bb-meta-line-height,1.4);letter-spacing:var(--bb-meta-tracking,normal);color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-post-meta--on-dark{font-size:var(--bb-meta-size,16px)!important;line-height:var(--bb-meta-line-height,1.4);letter-spacing:var(--bb-meta-tracking,normal);color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs{font-size:14px;line-height:1.4;color:var(--bb-muted,#888);}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
@@ -10826,6 +11046,8 @@
         el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
       }
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
+      /* Post titles take family/weight from the selected heading style. */
+      if (opts.size === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
       if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
@@ -10839,6 +11061,8 @@
       } else {
         el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
       }
+      /* Post meta takes family/weight from the selected paragraph style. */
+      if (opts.variant === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
       if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
@@ -12005,6 +12229,9 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      if (wrapper.getAttribute('data-bb-title-font')) {
+        this._applyPostHeaderTypeScale(wrapper, this._postHeaderFontCfg);
+      }
       this._lockMobilePageAxis(narrow);
       var filterIds = {
         filterByCategory: true,
@@ -12121,13 +12348,30 @@
     },
 
     /**
-     * Mobile (<768): cap in-article h1–h6 at post-title × 0.85 so customer
-     * heading scales cannot exceed the headline. Cap only — never enlarge.
-     * Writer title is 34px → 29px; other post templates 28px → 24px.
+     * Mobile (<768): cap in-article h1–h6 at the computed post-title size × 0.85
+     * so customer heading scales cannot exceed the headline. Cap only — never enlarge.
+     * The default H1 phone fallback is 28px, so the cap is 24px until a larger
+     * Squarespace heading size is in use.
      */
+    _postTitleFontSizePx: function(wrapper, narrow) {
+      var fallback = narrow ? 28 : 40;
+      if (!wrapper) return fallback;
+      if (wrapper.isConnected && window.getComputedStyle) {
+        var titleEl = wrapper.querySelector('.blog-overlay-post-title, .bb-title--post');
+        if (titleEl) {
+          var measured = parseFloat(window.getComputedStyle(titleEl).fontSize);
+          if (isFinite(measured) && measured > 0) return measured;
+        }
+      }
+      var raw = wrapper.style.getPropertyValue(narrow ? '--bb-title-size-mobile' : '--bb-title-size') || '';
+      var fromVar = parseFloat(raw);
+      if (isFinite(fromVar) && fromVar > 0 && /px\s*$/.test(String(raw).trim())) return fromVar;
+      return fallback;
+    },
+
     _capMobileBodyHeadings: function(wrapper, narrow) {
       if (!wrapper || !wrapper.querySelectorAll) return;
-      var titlePx = wrapper.getAttribute('data-bb-writer-layout') === '1' ? 34 : 28;
+      var titlePx = this._postTitleFontSizePx(wrapper, narrow);
       var capPx = Math.round(titlePx * 0.85);
       var headings = wrapper.querySelectorAll('.blog-overlay-body h1, .blog-overlay-body h2, .blog-overlay-body h3, .blog-overlay-body h4, .blog-overlay-body h5, .blog-overlay-body h6');
       for (var i = 0; i < headings.length; i++) {
@@ -15080,11 +15324,13 @@
         } else {
           wrapper.removeAttribute('data-bb-publisher-layout');
         }
+        self._applyPostHeaderTypeScale(wrapper, cfg && cfg.postHeader);
       } else {
         wrapper.removeAttribute('data-bb-spec-horizontal-padding');
         wrapper.removeAttribute('data-bb-writer-layout');
         wrapper.removeAttribute('data-bb-story-layout');
         wrapper.removeAttribute('data-bb-publisher-layout');
+        self._clearPostHeaderTypeScale(wrapper);
       }
       self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
@@ -17654,6 +17900,7 @@
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
           if (deferOverlayCommit) {
             root.prepend(overlayFragment);
+            self._capMobileBodyHeadings(wrapper, self._isNarrowCollectionViewport());
           }
 
           if (!isSinglePost) {
