@@ -209,6 +209,12 @@ test.describe("verified comment failure", () => {
     expect(linkStyles.textDecorationLine).toContain("underline");
     expect(linkStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
     expect(linkStyles.borderTopWidth).toBe("0px");
+    const identityBox = await identity.boundingBox();
+    const logoutBox = await logout.boundingBox();
+    expect(identityBox).toBeTruthy();
+    expect(logoutBox).toBeTruthy();
+    expect(Math.abs((identityBox!.y + identityBox!.height / 2) - (logoutBox!.y + logoutBox!.height / 2))).toBeLessThanOrEqual(2);
+    expect(logoutBox!.x).toBeGreaterThan(identityBox!.x + identityBox!.width - 2);
 
     await expect.poll(async () => {
       const cookies = await page.context().cookies();
