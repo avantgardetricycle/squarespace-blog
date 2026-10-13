@@ -205,6 +205,122 @@ export function buildSubstituteFontCss (
   return chunks.join('\n')
 }
 
+export function typekitKitScriptUrls (html: string, pageUrl: string): string[] {
+  const urls: string[] = []
+  const re = /<script\b[^>]*\bsrc\s*=\s*["']([^"']*use\.typekit\.net\/[^"']+\.js(?:\?[^"']*)?)["']/gi
+  let match: RegExpExecArray | null
+  while ((match = re.exec(html))) {
+    const raw = match[1]
+    if (!raw) continue
+    try {
+      const abs = new URL(raw, pageUrl)
+      if (abs.protocol !== 'https:' && abs.protocol !== 'http:') continue
+      abs.protocol = 'https:'
+      const href = stripPasswordParam(abs.toString())
+      if (!urls.includes(href)) urls.push(href)
+    } catch {
+      // ignore unparseable kit urls
+    }
+  }
+  return urls.slice(0, 4)
+}
+
+function extractJsonObject (text: string, start: number): string | null {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const char = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') depth += 1
+    else if (char === '}') {
+      depth -= 1
+      if (depth === 0) return text.slice(start, i + 1)
+    }
+  }
+  return null
+}
+
+function typekitFvd (weight: string, style: string): string {
+  const styleChar = style === 'italic' ? 'i' : style === 'oblique' ? 'o' : 'n'
+  const numeric = Number.parseInt(weight, 10)
+  const digit = Number.isFinite(numeric)
+    ? String(Math.min(9, Math.max(1, Math.round(numeric / 100))))
+    : '4'
+  return `${styleChar}${digit}`
+}
+
+/** Typekit's kit script templates the file URL. `l` is woff2. */
+export function typekitWoff2Url (srcTemplate: string, subsetId: number | undefined, fvd: string): string | null {
+  if (!srcTemplate.includes('{format}')) return null
+  const withFormat = srcTemplate
+    .replace('{format}{?primer,subset_id,fvd,v}', 'l')
+    .replace('{format}', 'l')
+  try {
+    const url = new URL(withFormat)
+    if (url.protocol !== 'https:' || url.hostname !== 'use.typekit.net') return null
+    if (subsetId != null && Number.isFinite(subsetId)) url.searchParams.set('subset_id', String(subsetId))
+    url.searchParams.set('fvd', fvd)
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Squarespace loads site fonts by running a Typekit kit script. Snapshots strip
+ * scripts, so turn the kit config into @font-face rules that point at the same woff2 files.
+ */
+export function typekitConfigFontCss (kitJs: string): string {
+  const marker = kitJs.indexOf('Typekit.config=')
+  if (marker < 0) return ''
+  const jsonStart = kitJs.indexOf('{', marker)
+  if (jsonStart < 0) return ''
+  const jsonText = extractJsonObject(kitJs, jsonStart)
+  if (!jsonText) return ''
+  let config: { fc?: unknown }
+  try {
+    config = JSON.parse(jsonText) as { fc?: unknown }
+  } catch {
+    return ''
+  }
+  if (!Array.isArray(config.fc)) return ''
+  const chunks: string[] = []
+  const seen = new Set<string>()
+  for (const face of config.fc) {
+    if (!face || typeof face !== 'object') continue
+    const record = face as Record<string, unknown>
+    const family = typeof record.family === 'string' ? record.family.trim() : ''
+    const src = typeof record.src === 'string' ? record.src : ''
+    const descriptors = record.descriptors && typeof record.descriptors === 'object'
+      ? record.descriptors as Record<string, unknown>
+      : {}
+    const weight = descriptors.weight != null ? String(descriptors.weight) : '400'
+    const style = typeof descriptors.style === 'string' ? descriptors.style : 'normal'
+    const subsetId = typeof descriptors.subset_id === 'number' ? descriptors.subset_id : undefined
+    if (!family || !src) continue
+    const key = `${family.toLowerCase()}|${weight}|${style}`
+    if (seen.has(key)) continue
+    const fileUrl = typekitWoff2Url(src, subsetId, typekitFvd(weight, style))
+    if (!fileUrl) continue
+    seen.add(key)
+    chunks.push(
+      `@font-face{font-family:${JSON.stringify(family)};src:url(${JSON.stringify(fileUrl)}) format("woff2");font-weight:${weight};font-style:${style};font-display:swap;}`
+    )
+    if (chunks.length >= 40) break
+  }
+  return chunks.join('\n')
+}
+
 export function googleFontsStylesheetQuery (families: LockedFontFamily[]): string[] {
   const queries = new Set<string>()
   for (const { family, generic } of families) {
