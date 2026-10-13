@@ -1352,6 +1352,7 @@
       }
       var refreshBetterBlogCommentsList = function() {};
       var verifiedCookieName = 'bb_verified_commenter_' + String(siteKey || 'site');
+      var verifiedCommenterEpoch = 0;
       function bbReadCookie(name) {
         try {
           var all = document.cookie ? document.cookie.split(';') : [];
@@ -1371,6 +1372,14 @@
           bbCommentsLog('cookie write', { name: name, maxAgeSeconds: maxAge, valueLen: String(value || '').length });
         } catch (e) {
           bbCommentsLog('cookie write failed', { name: name, error: String(e && e.message || e) });
+        }
+      }
+      function bbClearCookie(name) {
+        try {
+          document.cookie = name + '=; Path=/; Max-Age=0; SameSite=Lax';
+          bbCommentsLog('cookie cleared', { name: name });
+        } catch (e) {
+          bbCommentsLog('cookie clear failed', { name: name, error: String(e && e.message || e) });
         }
       }
       function bbGetVerifiedIdentity() {
@@ -1401,6 +1410,14 @@
         }
         bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
+      }
+      function bbClearVerifiedIdentity() {
+        bbClearCookie(verifiedCookieName);
+        verifiedCommenterEpoch += 1;
+        bbCommentsLog('verified commenter logged out', { epoch: verifiedCommenterEpoch });
+      }
+      function bbEmailOverrideStillValid(epoch, override) {
+        return epoch === verifiedCommenterEpoch ? override : null;
       }
       var anonymousCookieName = 'bb_anon_commenter_' + String(siteKey || 'site');
       var ANONYMOUS_HANDLE_RE = /^Anonymous\d{4}$/;
@@ -1855,6 +1872,7 @@
             replyFormShell.appendChild(rError);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
+            var replyEmailEpoch = verifiedCommenterEpoch;
             var replyPostAsAnonymous = false;
             var replyAnonymousRetryToken = '';
             replyBtn.onclick = function() {
@@ -1900,9 +1918,10 @@
               var replyGenerated = bbUseGeneratedAnonymousName(modeNow);
               var replyHandle = replyGenerated ? bbGetOrCreateAnonymousHandle() : '';
               var verifiedIdentity = bbGetVerifiedIdentity();
+              var activeReplyOverride = bbEmailOverrideStillValid(replyEmailEpoch, replyEmailOverride);
               var loggedInEmail = replyGenerated
                 ? null
-                : (verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null));
+                : (verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (activeReplyOverride || (rEmail.value || '').trim() || null));
               bbCommentsLog('reply submit start', {
                 mode: modeNow,
                 allowAnonymousComments: allowAnonymousComments,
@@ -1911,7 +1930,7 @@
                 generatedAnonymous: replyGenerated,
                 displayName: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
                 verifiedCookie: verifiedIdentity,
-                emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
+                emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeReplyOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
                 email: bbEmailDebug(loggedInEmail)
               });
               if (!replyGenerated && modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
@@ -1927,6 +1946,7 @@
                   }
                   if (!result.email) return;
                   replyEmailOverride = result.email;
+                  replyEmailEpoch = verifiedCommenterEpoch;
                   rSubmit.onclick();
                 });
                 return;
@@ -2284,9 +2304,7 @@
           identityNote.style.display = 'none';
           identityNote.textContent = '';
           if (verifiedIdentity) {
-            loggedInIdentityLine.style.display = 'block';
-            loggedInIdentityLine.textContent =
-              'Logged in as ' + verifiedIdentity.name + ' (' + verifiedIdentity.email + ')';
+            bbRenderLoggedInIdentityLine(verifiedIdentity);
           } else {
             loggedInIdentityLine.style.display = 'none';
             loggedInIdentityLine.textContent = '';
@@ -2328,6 +2346,32 @@
         });
       }
 
+      var mainEmailOverride = null;
+      var mainEmailEpoch = verifiedCommenterEpoch;
+      function bbRenderLoggedInIdentityLine(identity) {
+        var labelText = 'Logged in as ' + identity.email;
+        var label = loggedInIdentityLine.querySelector('.bb-comment-logged-in-label');
+        var logout = loggedInIdentityLine.querySelector('.bb-comment-logout');
+        if (label && logout && label.textContent === labelText && loggedInIdentityLine.style.display !== 'none') return;
+        loggedInIdentityLine.textContent = '';
+        loggedInIdentityLine.style.display = 'block';
+        label = document.createElement('div');
+        label.className = 'bb-comment-logged-in-label';
+        label.textContent = labelText;
+        logout = document.createElement('button');
+        logout.type = 'button';
+        logout.className = 'bb-comment-logout';
+        logout.textContent = 'Logout';
+        logout.style.cssText = 'display:block;margin:4px 0 0;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:0.9rem;text-align:left';
+        logout.onclick = function() {
+          mainEmailOverride = null;
+          bbClearVerifiedIdentity();
+          applyCommentIdentityMode();
+        };
+        loggedInIdentityLine.appendChild(label);
+        loggedInIdentityLine.appendChild(logout);
+      }
+
       nameInput.oninput = emailInput.oninput = bodyArea.oninput = mainFormSync;
       applyCommentIdentityMode();
       // Auth UI can mount asynchronously; probe a few times, then stop.
@@ -2356,7 +2400,6 @@
           });
       };
 
-      var mainEmailOverride = null;
       function submitMainCommentWithEmail(modeNow, name, body, emailToUse, postAsAnonymous, anonymousRetryToken) {
         submitBtn.disabled = true;
         submitBtn.style.opacity = '0.55';
@@ -2488,7 +2531,8 @@
         if (modeNow === 'loggedIn') {
           var verifiedIdentity = bbGetVerifiedIdentity();
           var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
-          var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : mainEmailOverride;
+          var activeMainOverride = bbEmailOverrideStillValid(mainEmailEpoch, mainEmailOverride);
+          var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : activeMainOverride;
           bbCommentsLog('main submit start', {
             mode: modeNow,
             allowAnonymousComments: allowAnonymousComments,
@@ -2496,8 +2540,8 @@
             loggedInOptionalEmail: loggedInOptionalEmail,
             verifiedCookie: verifiedIdentity,
             typedEmail: typedEmail || null,
-            emailOverride: mainEmailOverride,
-            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (mainEmailOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
+            emailOverride: activeMainOverride,
+            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeMainOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
             useEmail: useEmail || null
           });
           if (loggedInOptionalEmail) {
@@ -2516,6 +2560,7 @@
               }
               if (!result.email) return;
               mainEmailOverride = result.email;
+              mainEmailEpoch = verifiedCommenterEpoch;
               submitMainCommentWithEmail(modeNow, name, body, result.email);
             });
             return;
