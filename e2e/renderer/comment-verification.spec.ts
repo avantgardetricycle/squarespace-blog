@@ -169,4 +169,61 @@ test.describe("verified comment failure", () => {
     await expect(error).toBeHidden();
     expect(posts).toBe(2);
   });
+
+  test("logout clears the verified email and asks again", async ({ page }) => {
+    let posts = 0;
+    const nextPost = (): PostPayload => {
+      posts += 1;
+      return {
+        status: 201,
+        json: {
+          id: `comment-${posts}`,
+          display_name: "Member",
+          verified_subscriber: true,
+          status: "approved",
+        },
+      };
+    };
+
+    await mountLoggedInComments(page, nextPost);
+    const form = page.locator("#bb-comments .bb-comment-form-wrap");
+    const button = form.locator(".bb-comment-submit");
+    const cookieName = "bb_verified_commenter_renderer-layout";
+
+    await form.locator("textarea").fill("A verified comment");
+    await button.click();
+    await confirmEmail(page, "reader@example.com");
+
+    const identity = form.locator(".bb-comment-logged-in-label");
+    const logout = form.getByRole("button", { name: "Logout" });
+    await expect(identity).toHaveText("Logged in as reader@example.com");
+    await expect(logout).toBeVisible();
+    const linkStyles = await logout.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        textDecorationLine: cs.textDecorationLine,
+        backgroundColor: cs.backgroundColor,
+        borderTopWidth: cs.borderTopWidth,
+      };
+    });
+    expect(linkStyles.textDecorationLine).toContain("underline");
+    expect(linkStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    expect(linkStyles.borderTopWidth).toBe("0px");
+
+    await expect.poll(async () => {
+      const cookies = await page.context().cookies();
+      return cookies.some((item) => item.name === cookieName);
+    }).toBe(true);
+
+    await logout.click();
+    await expect(identity).toBeHidden();
+    await expect(logout).toBeHidden();
+    const cookies = await page.context().cookies();
+    expect(cookies.some((item) => item.name === cookieName)).toBe(false);
+
+    await form.locator("textarea").fill("Need to verify again");
+    await button.click();
+    await expect(page.getByText("Confirm your email")).toBeVisible();
+    expect(posts).toBe(1);
+  });
 });
