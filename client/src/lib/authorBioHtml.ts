@@ -37,13 +37,46 @@ function safeBioHref(url: string): string {
   return "";
 }
 
+function unescapeHtml(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+/** Split a CommonMark destination into the URL and an optional "title" or 'title'. */
+function splitMarkdownLink(destination: string): { href: string; title: string } {
+  const raw = destination.trim();
+  let href = raw;
+  let title = "";
+  const match = raw.match(/^(.*?)\s+(?:"([^"]*)"|'([^']*)'|&quot;([\s\S]*?)&quot;)\s*$/);
+  if (match) {
+    href = match[1].trim();
+    title = match[2] ?? match[3] ?? match[4] ?? "";
+  }
+  const angled = href.match(/^<(.*)>$/) || href.match(/^&lt;([\s\S]*)&gt;$/);
+  if (angled) href = angled[1];
+  return { href, title };
+}
+
 function applyInlineMarkdown(escaped: string): string {
   const withLinks = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label: string, url: string) => {
-    const href = safeBioHref(url);
+    const parts = splitMarkdownLink(url);
+    const href = safeBioHref(parts.href);
     if (!href) return label;
-    return `<a href="${escapeHtml(href)}">${label}</a>`;
+    const titleAttr = parts.title.trim()
+      ? ` title="${escapeHtml(unescapeHtml(parts.title))}"`
+      : "";
+    return `<a href="${escapeHtml(href)}"${titleAttr}>${label}</a>`;
   });
-  const withBold = withLinks
+  const withAutolinks = withLinks.replace(/&lt;((?:https?:\/\/|mailto:)[^<\s]*?)&gt;/gi, (match, url: string) => {
+    const href = safeBioHref(unescapeHtml(url));
+    if (!href) return match;
+    const text = escapeHtml(href);
+    return `<a href="${text}">${text}</a>`;
+  });
+  const withBold = withAutolinks
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>");
   const withItalic = withBold.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
@@ -108,6 +141,8 @@ function appendSanitized(source: Node, target: Node): void {
       }
       const link = document.createElement("a");
       link.setAttribute("href", href);
+      const title = element.getAttribute("title");
+      if (title) link.setAttribute("title", title);
       if (/^https?:\/\//i.test(href)) {
         link.setAttribute("target", "_blank");
         link.setAttribute("rel", "noopener noreferrer");
