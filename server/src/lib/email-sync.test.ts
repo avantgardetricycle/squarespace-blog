@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { emailModuleForLead, persistAndForwardLead, selectStoredIntegration, type EmailSyncDeps } from './email-sync.js'
+import { emailModuleForLead, persistAndForwardLead, platformKeyFromRows, selectStoredIntegration, type EmailSyncDeps } from './email-sync.js'
 
 const lead = {
   siteId: 'site-1',
@@ -43,6 +43,21 @@ test('a legacy destination row without a module is used for post newsletter', ()
   assert.equal(stored?.apiKeyEnc, 'enc')
   assert.equal(stored?.destinationId, 'audience-1')
   assert.equal(stored?.tagName, 'Readers')
+})
+
+test('a module without its own key uses the platform key from another module', () => {
+  const rows = [
+    { module: 'collection_newsletter', provider: 'kit', api_key_enc: 'kit-enc', destination_id: 'form-1' },
+    { module: 'post_newsletter', provider: 'kit', api_key_enc: null, destination_id: 'form-2' },
+    { module: 'post_lead_magnet', provider: 'mailchimp', api_key_enc: 'mc-enc', destination_id: 'aud-1' },
+  ]
+  assert.equal(platformKeyFromRows(rows, 'kit'), 'kit-enc')
+  assert.equal(platformKeyFromRows(rows, 'mailchimp'), 'mc-enc')
+  const post = selectStoredIntegration(rows, 'post_newsletter')
+  assert.equal(post?.provider, 'kit')
+  assert.equal(post?.destinationId, 'form-2')
+  assert.equal(post?.apiKeyEnc, null)
+  assert.equal(platformKeyFromRows(rows, post?.provider ?? ''), 'kit-enc')
 })
 
 test('per-module rows do not share another module destination', () => {
