@@ -12037,7 +12037,7 @@
       return (
         d + '{position:fixed!important;top:0;right:0;bottom:0;left:0;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;contain:paint;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
         open + '{z-index:1001!important;}' +
-        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
+        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
         open + '>.bb-mobile-drawer-tab{right:var(--bb-drawer-panel-width,280px);background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);}' +
         rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:0;bottom:0;left:auto;width:var(--bb-drawer-panel-width,86%)!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(100%);transition:transform .22s ease;}' +
         open + '>.blog-overlay-sidebar-rail{visibility:visible;pointer-events:auto;transform:translateX(0);}' +
@@ -12253,8 +12253,10 @@
 
     /**
      * Mobile (<768): hide every left sidebar rail unless that sidebar's
-     * mobile display is Drawer. If a pairable module is in the right sidebar
-     * and duplicated in the footer, hide the footer copy (sidebar-wins).
+     * mobile display is Drawer. If a pairable module is in a right sidebar
+     * that stacks under the article (Below content) and is also in the
+     * footer, hide the footer copy (sidebar-wins). A Drawer is off the page,
+     * so it does not hide footer copies; the drawer keeps its own modules.
      * Left-sidebar copies do not count — a footer copy of a left-only module
      * is shown. Footer-only modules keep rendering but get sidebar chrome.
      * Tags/Categories invert that: the sidebar copy is always hidden on
@@ -12311,7 +12313,7 @@
         var id = pairIds[i];
         var isFilter = !!filterIds[id];
         var sidebarHas = !!wrapper.querySelector(
-          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+          '.blog-overlay-sidebar-anchor[data-bb-sidebar-side="right"]:not([data-bb-mobile-display="drawer"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
         );
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {

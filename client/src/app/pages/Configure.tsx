@@ -5835,12 +5835,14 @@ export default function Configure() {
                                               : "text-[#6b6b6b] hover:text-[#0a0a0a]"
                                           }`}
                                         >
-                                          {mode === "hidden" ? "Hidden" : "Drawer"}
+                                          {mode === "hidden" ? (side === "right" ? "Below content" : "Hidden") : "Drawer"}
                                         </button>
                                       ))}
                                     </div>
                                     <p className="text-[10px] text-[#6b6b6b]">
-                                      On phones, Hidden keeps today’s layout. Drawer adds a tab on the right edge that opens this sidebar.
+                                      {side === "right"
+                                        ? "On phones, Below content stacks this sidebar under the article. Drawer adds a tab that opens it, and footer copies of the same modules stay on the page."
+                                        : "On phones, Hidden removes this sidebar. Drawer adds a tab on the right edge that opens it."}
                                     </p>
                                   </div>
                                   <div className="space-y-2">
