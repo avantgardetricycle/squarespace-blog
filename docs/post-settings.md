@@ -42,7 +42,7 @@ Settings a template owns are hidden. If a control is missing, your current post 
 
 **Deck** — How large the lead line under the title is. The menu is **P1**, **P2**, and **P3**. The default choice is **P1**. The deck is the line shown when **Show post byline** is on.
 
-If BetterBlog cannot read your Squarespace styles, it still uses the choice you picked, with a built-in size for that style. The built-in phone sizes are 28px for H1, 14px for P1, and 13px for P2.
+If BetterBlog cannot read your Squarespace styles, or every style in that menu is the same size, it still uses the choice you picked, with a built-in size for that style. The built-in phone sizes are 28px for H1, 14px for P1, and 13px for P2.
 
 **Show breadcrumbs** — A trail above the post title (typically Home → collection → post).
 
