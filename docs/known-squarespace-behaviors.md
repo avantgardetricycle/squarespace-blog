@@ -26,29 +26,17 @@ These two systems do not share session state. A user can be authenticated as a c
 
 ## Iframe embedding restrictions on .squarespace.com domains
 
-Squarespace sets security headers on default `.squarespace.com` domains that prevent other sites from embedding them in an iframe. This affects BetterBlog's live preview, which works by loading your actual blog in an iframe inside the customizer.
+Squarespace sets security headers on default `.squarespace.com` domains that prevent other sites from embedding those pages in an iframe. Squarespace sends `X-Frame-Options: SAMEORIGIN` (and sometimes `Content-Security-Policy: frame-ancestors 'self'`) on `.squarespace.com` responses. Custom domains usually omit those headers.
 
-**The technical cause:** Squarespace sends an `X-Frame-Options: SAMEORIGIN` header (and in some cases a `Content-Security-Policy: frame-ancestors 'self'` directive) on responses from `.squarespace.com` subdomains. These headers instruct browsers to refuse iframe embedding from any origin other than the same domain. BetterBlog's customizer is served from `app.betterblog.co`, which is a different origin — so the browser blocks the iframe silently.
-
-This restriction is not present on custom domains connected to Squarespace. When a site has a custom domain, Squarespace's response headers allow iframe embedding from external origins, which is why the BetterBlog preview works correctly for sites on custom domains.
-
-**What you'll see:** when the iframe is blocked, BetterBlog's preview panel shows a message explaining that the preview couldn't load, with a link to open your live blog directly. BetterBlog attempts the iframe first and falls back to a simulated render if the iframe fails. Changes you make in the customizer are still applied to the live blog in real time — the iframe block only affects the preview, not the actual rendering for your readers.
-
-**The fix:** connect a custom domain to your Squarespace site. Once connected, update your blog URL in the BetterBlog dashboard to the custom domain URL. The preview will work immediately after the URL is updated.
-
-If you're in early development and not ready to use a custom domain, use the live blog link in the preview panel to check your changes in a new tab.
+BetterBlog's customizer does not frame the Squarespace page. It stores a logged-out HTML snapshot and shows that snapshot from the BetterBlog origin, so these headers do not block the preview. The headers still apply to any other site that tries to embed the Squarespace page itself.
 
 ---
 
 ## Clickjack protection and iframe embedding
 
-Squarespace offers an optional clickjack protection setting that sets stricter iframe embedding restrictions, regardless of whether the site is on a custom domain or a `.squarespace.com` subdomain.
+Squarespace can enable clickjack protection under Settings → Advanced → SSL. That setting sends `X-Frame-Options: DENY` on page responses, which blocks iframe embedding from every origin, including a custom domain.
 
-**The technical cause:** enabling clickjack protection in Squarespace → Settings → Advanced → SSL causes Squarespace to send `X-Frame-Options: DENY` on all page responses. Unlike `SAMEORIGIN` (which allows same-domain embedding), `DENY` blocks iframe embedding from any origin including the same domain. This makes the restriction absolute — connecting a custom domain will not resolve it when clickjack protection is on.
-
-**What you'll see:** the same preview panel message as the `.squarespace.com` domain case. The symptom is identical; the cause is different.
-
-**The fix:** if you need the BetterBlog live preview to work and have clickjack protection enabled, you'll need to disable it in Squarespace. If you prefer to keep clickjack protection on for security reasons, use the live blog link to review your changes instead. The BetterBlog overlay still runs correctly for your readers regardless of this setting — it is injected as a script, not an iframe.
+That setting does not affect the BetterBlog customizer. The preview uses a same-origin snapshot, not a frame of the Squarespace response. Leave clickjack protection on if you want it. The BetterBlog overlay on the live site is an injected script, not an iframe, so readers are unaffected either way.
 
 ---
 

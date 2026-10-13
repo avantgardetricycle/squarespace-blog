@@ -125,4 +125,4 @@ Paywall copy is site-level, not a Collection-tab setting. If BetterBlog detects 
 
 ## Saving and preview
 
-Changes apply when you click **Save**. The customizer preview updates as you edit; if the iframe cannot load (common on `.squarespace.com` domains), use **Check live site**. See [Troubleshooting](troubleshooting.md) and [Known Squarespace Behaviors](known-squarespace-behaviors.md).
+Changes apply when you click **Save**. The customizer preview updates as you edit. It uses a snapshot of your blog, so Squarespace frame headers do not block it. Click **Refresh preview** if the snapshot looks stale. See [Troubleshooting](troubleshooting.md) and [Known Squarespace Behaviors](known-squarespace-behaviors.md).

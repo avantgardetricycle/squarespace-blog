@@ -230,53 +230,98 @@
     return '';
   }
 
+  /**
+   * Social fields are saved as the author typed them (instagram.com/name, www.facebook.com/name).
+   * A scheme-less host is a relative URL, so prefix https:// when http(s) is missing.
+   * www is optional and left as entered. Other schemes are dropped.
+   */
+  function bbNormalizeSocialHref(url) {
+    var trimmed = String(url || '').replace(/^\s+|\s+$/g, '');
+    if (!trimmed) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return '';
+    if (trimmed.indexOf('//') === 0) return 'https:' + trimmed;
+    if (/^(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[\/?#].*)?$/i.test(trimmed)) {
+      return 'https://' + trimmed;
+    }
+    return '';
+  }
+
+  function bbUnescapeHtml(s) {
+    return String(s)
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
+
+  /** Split a CommonMark destination into the URL and an optional "title" or 'title'. */
+  function bbSplitMarkdownLink(destination) {
+    var raw = String(destination || '').replace(/^\s+|\s+$/g, '');
+    var href = raw;
+    var title = '';
+    var match = raw.match(/^(.*?)\s+(?:"([^"]*)"|'([^']*)'|&quot;([\s\S]*?)&quot;)\s*$/);
+    if (match) {
+      href = match[1].replace(/^\s+|\s+$/g, '');
+      title = match[2] != null ? match[2] : (match[3] != null ? match[3] : match[4]);
+    }
+    var angled = href.match(/^<(.*)>$/) || href.match(/^&lt;([\s\S]*)&gt;$/);
+    if (angled) href = angled[1];
+    return { href: href, title: title };
+  }
+
   function bbApplyInlineMarkdown(escaped) {
     var withLinks = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, label, url) {
-      var href = bbSafeBioHref(url);
+      var parts = bbSplitMarkdownLink(url);
+      var href = bbSafeBioHref(parts.href);
       if (!href) return label;
-      return '<a href="' + bbEscapeHtml(href) + '">' + label + '</a>';
+      var html = '<a href="' + bbEscapeHtml(href) + '"';
+      if (parts.title && String(parts.title).replace(/^\s+|\s+$/g, '')) {
+        html += ' title="' + bbEscapeHtml(bbUnescapeHtml(parts.title)) + '"';
+      }
+      return html + '>' + label + '</a>';
     });
-    var withBold = withLinks.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    var withAutolinks = withLinks.replace(/&lt;((?:https?:\/\/|mailto:)[^<\s]*?)&gt;/gi, function(match, url) {
+      var href = bbSafeBioHref(bbUnescapeHtml(url));
+      if (!href) return match;
+      var text = bbEscapeHtml(href);
+      return '<a href="' + text + '">' + text + '</a>';
+    });
+    var withBold = withAutolinks.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
     var withItalic = withBold.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
     return withItalic.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, '$1<em>$2</em>');
   }
 
   function bbBioListKind(line) {
-    if (/^\s*[-*]\s+\S/.test(line)) return 'ul';
+    if (/^\s*(?:[-–—•]\s*|\*\s+)\S/.test(line)) return 'ul';
     if (/^\s*\d+\.\s+\S/.test(line)) return 'ol';
     return '';
   }
 
   function bbMarkdownToBioHtml(src) {
     var text = String(src).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    var blocks = text.split(/\n{2,}/);
+    var lines = text.split('\n');
     var html = [];
-    var b, li, lines, kind, uniform, k, items, itemText, parts;
-    for (b = 0; b < blocks.length; b++) {
-      if (!blocks[b].replace(/^\s+|\s+$/g, '')) continue;
-      lines = blocks[b].split('\n');
-      kind = '';
-      uniform = true;
-      for (li = 0; li < lines.length; li++) {
-        if (!lines[li].replace(/^\s+|\s+$/g, '')) continue;
-        k = bbBioListKind(lines[li]);
-        if (!k || (kind && kind !== k)) { uniform = false; break; }
-        kind = k;
-      }
-      if (uniform && kind) {
+    var i = 0;
+    var kind, items, itemText, parts;
+    while (i < lines.length) {
+      if (!lines[i].replace(/^\s+|\s+$/g, '')) { i++; continue; }
+      kind = bbBioListKind(lines[i]);
+      if (kind) {
         items = [];
-        for (li = 0; li < lines.length; li++) {
-          if (!lines[li].replace(/^\s+|\s+$/g, '')) continue;
-          itemText = lines[li].replace(/^\s*(?:[-*]|\d+\.)\s+/, '');
+        while (i < lines.length && bbBioListKind(lines[i]) === kind) {
+          itemText = lines[i].replace(/^\s*(?:[-–—•]\s*|\*\s+|\d+\.\s+)/, '');
           items.push('<li>' + bbApplyInlineMarkdown(bbEscapeHtml(itemText)) + '</li>');
+          i++;
         }
         html.push('<' + kind + '>' + items.join('') + '</' + kind + '>');
       } else {
         parts = [];
-        for (li = 0; li < lines.length; li++) {
-          parts.push(bbApplyInlineMarkdown(bbEscapeHtml(lines[li])));
+        while (i < lines.length && lines[i].replace(/^\s+|\s+$/g, '') && !bbBioListKind(lines[i])) {
+          parts.push(bbApplyInlineMarkdown(bbEscapeHtml(lines[i])));
+          i++;
         }
-        html.push('<p>' + parts.join('<br>') + '</p>');
+        if (parts.length) html.push('<p>' + parts.join('<br>') + '</p>');
       }
     }
     return html.join('');
@@ -307,6 +352,7 @@
         }
         el = document.createElement('a');
         el.setAttribute('href', href);
+        if (node.getAttribute('title')) el.setAttribute('title', node.getAttribute('title'));
         if (/^https?:\/\//i.test(href)) {
           el.setAttribute('target', '_blank');
           el.setAttribute('rel', 'noopener noreferrer');
@@ -597,6 +643,8 @@
     _infiniteScrollLoaded: 0,
     _lastInfiniteScrollSignature: '',
     _analyticsQueue: [],
+    _fathomQueue: [],
+    _fathomScriptRequested: false,
     _analyticsFlushScheduled: null,
     _analyticsSearchDebounce: null,
     _pageLoadTime: null,
@@ -1304,6 +1352,7 @@
       }
       var refreshBetterBlogCommentsList = function() {};
       var verifiedCookieName = 'bb_verified_commenter_' + String(siteKey || 'site');
+      var verifiedCommenterEpoch = 0;
       function bbReadCookie(name) {
         try {
           var all = document.cookie ? document.cookie.split(';') : [];
@@ -1323,6 +1372,14 @@
           bbCommentsLog('cookie write', { name: name, maxAgeSeconds: maxAge, valueLen: String(value || '').length });
         } catch (e) {
           bbCommentsLog('cookie write failed', { name: name, error: String(e && e.message || e) });
+        }
+      }
+      function bbClearCookie(name) {
+        try {
+          document.cookie = name + '=; Path=/; Max-Age=0; SameSite=Lax';
+          bbCommentsLog('cookie cleared', { name: name });
+        } catch (e) {
+          bbCommentsLog('cookie clear failed', { name: name, error: String(e && e.message || e) });
         }
       }
       function bbGetVerifiedIdentity() {
@@ -1353,6 +1410,14 @@
         }
         bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
+      }
+      function bbClearVerifiedIdentity() {
+        bbClearCookie(verifiedCookieName);
+        verifiedCommenterEpoch += 1;
+        bbCommentsLog('verified commenter logged out', { epoch: verifiedCommenterEpoch });
+      }
+      function bbEmailOverrideStillValid(epoch, override) {
+        return epoch === verifiedCommenterEpoch ? override : null;
       }
       var anonymousCookieName = 'bb_anon_commenter_' + String(siteKey || 'site');
       var ANONYMOUS_HANDLE_RE = /^Anonymous\d{4}$/;
@@ -1807,6 +1872,7 @@
             replyFormShell.appendChild(rError);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
+            var replyEmailEpoch = verifiedCommenterEpoch;
             var replyPostAsAnonymous = false;
             var replyAnonymousRetryToken = '';
             replyBtn.onclick = function() {
@@ -1852,9 +1918,10 @@
               var replyGenerated = bbUseGeneratedAnonymousName(modeNow);
               var replyHandle = replyGenerated ? bbGetOrCreateAnonymousHandle() : '';
               var verifiedIdentity = bbGetVerifiedIdentity();
+              var activeReplyOverride = bbEmailOverrideStillValid(replyEmailEpoch, replyEmailOverride);
               var loggedInEmail = replyGenerated
                 ? null
-                : (verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (replyEmailOverride || (rEmail.value || '').trim() || null));
+                : (verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (activeReplyOverride || (rEmail.value || '').trim() || null));
               bbCommentsLog('reply submit start', {
                 mode: modeNow,
                 allowAnonymousComments: allowAnonymousComments,
@@ -1863,7 +1930,7 @@
                 generatedAnonymous: replyGenerated,
                 displayName: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
                 verifiedCookie: verifiedIdentity,
-                emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (replyEmailOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
+                emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeReplyOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
                 email: bbEmailDebug(loggedInEmail)
               });
               if (!replyGenerated && modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
@@ -1879,6 +1946,7 @@
                   }
                   if (!result.email) return;
                   replyEmailOverride = result.email;
+                  replyEmailEpoch = verifiedCommenterEpoch;
                   rSubmit.onclick();
                 });
                 return;
@@ -2236,9 +2304,7 @@
           identityNote.style.display = 'none';
           identityNote.textContent = '';
           if (verifiedIdentity) {
-            loggedInIdentityLine.style.display = 'block';
-            loggedInIdentityLine.textContent =
-              'Logged in as ' + verifiedIdentity.name + ' (' + verifiedIdentity.email + ')';
+            bbRenderLoggedInIdentityLine(verifiedIdentity);
           } else {
             loggedInIdentityLine.style.display = 'none';
             loggedInIdentityLine.textContent = '';
@@ -2280,6 +2346,32 @@
         });
       }
 
+      var mainEmailOverride = null;
+      var mainEmailEpoch = verifiedCommenterEpoch;
+      function bbRenderLoggedInIdentityLine(identity) {
+        var labelText = 'Logged in as ' + identity.email;
+        var label = loggedInIdentityLine.querySelector('.bb-comment-logged-in-label');
+        var logout = loggedInIdentityLine.querySelector('.bb-comment-logout');
+        if (label && logout && label.textContent === labelText && loggedInIdentityLine.style.display !== 'none') return;
+        loggedInIdentityLine.textContent = '';
+        loggedInIdentityLine.style.display = 'block';
+        label = document.createElement('span');
+        label.className = 'bb-comment-logged-in-label';
+        label.textContent = labelText;
+        logout = document.createElement('button');
+        logout.type = 'button';
+        logout.className = 'bb-comment-logout';
+        logout.textContent = 'Logout';
+        logout.style.cssText = 'display:inline;margin:0 0 0 10px;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:inherit;vertical-align:baseline';
+        logout.onclick = function() {
+          mainEmailOverride = null;
+          bbClearVerifiedIdentity();
+          applyCommentIdentityMode();
+        };
+        loggedInIdentityLine.appendChild(label);
+        loggedInIdentityLine.appendChild(logout);
+      }
+
       nameInput.oninput = emailInput.oninput = bodyArea.oninput = mainFormSync;
       applyCommentIdentityMode();
       // Auth UI can mount asynchronously; probe a few times, then stop.
@@ -2308,7 +2400,6 @@
           });
       };
 
-      var mainEmailOverride = null;
       function submitMainCommentWithEmail(modeNow, name, body, emailToUse, postAsAnonymous, anonymousRetryToken) {
         submitBtn.disabled = true;
         submitBtn.style.opacity = '0.55';
@@ -2440,7 +2531,8 @@
         if (modeNow === 'loggedIn') {
           var verifiedIdentity = bbGetVerifiedIdentity();
           var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
-          var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : mainEmailOverride;
+          var activeMainOverride = bbEmailOverrideStillValid(mainEmailEpoch, mainEmailOverride);
+          var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : activeMainOverride;
           bbCommentsLog('main submit start', {
             mode: modeNow,
             allowAnonymousComments: allowAnonymousComments,
@@ -2448,8 +2540,8 @@
             loggedInOptionalEmail: loggedInOptionalEmail,
             verifiedCookie: verifiedIdentity,
             typedEmail: typedEmail || null,
-            emailOverride: mainEmailOverride,
-            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (mainEmailOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
+            emailOverride: activeMainOverride,
+            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeMainOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
             useEmail: useEmail || null
           });
           if (loggedInOptionalEmail) {
@@ -2468,6 +2560,7 @@
               }
               if (!result.email) return;
               mainEmailOverride = result.email;
+              mainEmailEpoch = verifiedCommenterEpoch;
               submitMainCommentWithEmail(modeNow, name, body, result.email);
             });
             return;
@@ -2901,6 +2994,10 @@
       } catch (e) {
         return;
       }
+      var snapshot = false;
+      try {
+        snapshot = document.documentElement && document.documentElement.getAttribute('data-bb-snapshot') === '1';
+      } catch (eSnap) {}
       var currentPassword = current.searchParams.get('password');
       var debug = current.searchParams.get('bbPreviewDebug') === '1';
       document.addEventListener('click', function(e) {
@@ -2908,10 +3005,14 @@
         var el = e.target;
         while (el && el.tagName !== 'A') el = el.parentElement;
         if (!el) return;
-        if (el.target && el.target !== '_self') return;
+        if (!snapshot && el.target && el.target !== '_self') return;
         var rawHref = el.getAttribute('href');
         if (!rawHref || rawHref.indexOf('#') === 0) return;
         if (/^(mailto:|tel:|javascript:)/i.test(rawHref)) return;
+        if (snapshot) {
+          e.preventDefault();
+          return;
+        }
         var url = null;
         try {
           url = new URL(rawHref, window.location.href);
@@ -3807,6 +3908,9 @@
      */
     _isPaywallPublicPreviewPost: function(post) {
       if (this._isExplicitPaywallPublicPreviewPost(post)) return true;
+      // Collection JSON omitted this body. Preview filled it from the public post
+      // JSON so logged-in layout can show it; logged-out readers stay gated.
+      if (post && post.bbCollectionBodyGated === true) return false;
       var body = post && post.body != null ? String(post.body) : '';
       var plainBody = this._stripHtml(body).replace(/\s+/g, ' ').trim();
       return plainBody.length >= 40;
@@ -5972,6 +6076,75 @@
       this._analyticsFlush();
     },
 
+    _fathomConfig: function() {
+      var fathom = this.config && this.config.fathom;
+      if (!fathom || typeof fathom.siteId !== 'string' || !fathom.siteId) return null;
+      return fathom;
+    },
+
+    _fathomEnsure: function() {
+      if (this._fathomScriptRequested) return;
+      var fathom = this._fathomConfig();
+      if (!fathom || typeof document === 'undefined') return;
+      this._fathomScriptRequested = true;
+      var self = this;
+      var script = document.createElement('script');
+      script.src = 'https://cdn.usefathom.com/script.js';
+      script.async = true;
+      script.setAttribute('data-site', fathom.siteId);
+      script.setAttribute('data-auto', 'false');
+      script.onload = function() {
+        self._fathomFlushQueue();
+      };
+      var parent = document.head || document.documentElement;
+      if (parent) parent.appendChild(script);
+    },
+
+    _fathomFlushQueue: function() {
+      var api = typeof window !== 'undefined' ? window.fathom : null;
+      if (!api || !this._fathomQueue || this._fathomQueue.length === 0) return;
+      var queued = this._fathomQueue.splice(0, this._fathomQueue.length);
+      for (var i = 0; i < queued.length; i++) {
+        try { queued[i](); } catch (e) { /* ignore */ }
+      }
+    },
+
+    _fathomForward: function(type) {
+      var fathom = this._fathomConfig();
+      if (!fathom || type === 'render_perf') return;
+      var allowed = {
+        page_view: 1,
+        scroll_depth: 1,
+        click: 1,
+        search: 1,
+        search_click: 1,
+        time_on_page: 1
+      };
+      if (!allowed[type]) return;
+      if (!this._fathomQueue) this._fathomQueue = [];
+      var metrics = Array.isArray(fathom.metricsEnabled) ? fathom.metricsEnabled : [];
+      var includeReferrer = metrics.length === 0
+        || metrics.indexOf('top_referrers') !== -1
+        || metrics.indexOf('traffic_sources') !== -1;
+      var siteCode = fathom.siteId;
+      this._fathomQueue.push(function() {
+        var api = window.fathom;
+        if (!api) return;
+        if (typeof api.setSite === 'function') api.setSite(siteCode);
+        if (type === 'page_view' && typeof api.trackPageview === 'function') {
+          var opts = { url: window.location.href };
+          // Fathom falls back to document.referrer when this is omitted, so
+          // unchecking referrer metrics cannot fully strip it the way GA can.
+          if (includeReferrer && document.referrer) opts.referrer = document.referrer;
+          api.trackPageview(opts);
+        } else if (type !== 'page_view' && typeof api.trackEvent === 'function') {
+          api.trackEvent(type);
+        }
+      });
+      this._fathomEnsure();
+      this._fathomFlushQueue();
+    },
+
     _analyticsTrack: function(type, payload, postId, postIndex) {
       if (this._bbPreview || (this.config && this.config.previewMode)) return;
       var siteKey = this.config && this.config.siteKey;
@@ -5984,6 +6157,7 @@
         payload: payload || {}
       });
       this._analyticsScheduleFlush();
+      this._fathomForward(type);
     },
 
     _analyticsScheduleFlush: function() {
@@ -8168,7 +8342,7 @@
         linksWrap.style.alignItems = 'center';
         for (var j = 0; j < platforms.length; j++) {
           var platform = platforms[j];
-          var url = platform === 'email' ? (email ? 'mailto:' + email : null) : (socialLinks[platform] || null);
+          var url = platform === 'email' ? (email ? 'mailto:' + email : null) : bbNormalizeSocialHref(socialLinks[platform]);
           if (url && typeof url === 'string') {
             var a = document.createElement('a');
             a.href = url;
@@ -8536,23 +8710,28 @@
     },
 
     /**
-     * Get selected post index: path first (actual post URLs), then hash (legacy)
+     * Get selected post index: hash (in-preview post clicks), then an explicit
+     * preview post, then the page path.
+     * previewSelectedPostIndex of -1 means the Collection tab, not "ignore a click".
      */
     _getSelectedIndex: function(items) {
+      var fromHash = this._getSelectedIndexFromHash();
+      if (fromHash >= 0) {
+        if (!items || items.length === 0) return 0;
+        return Math.min(fromHash, items.length - 1);
+      }
       var cfg = this.config || {};
-      if (this._previewMode && typeof cfg.previewSelectedPostIndex === 'number') {
-        var p = cfg.previewSelectedPostIndex;
+      var forced = cfg.previewSelectedPostIndex;
+      if ((this._previewMode || this._bbPreview) && typeof forced === 'number' && forced >= 0) {
         this._debugLog('selected index from previewSelectedPostIndex', {
-          previewSelectedPostIndex: p,
+          previewSelectedPostIndex: forced,
           itemCount: items && items.length ? items.length : 0
         });
-        if (p < 0) return -1;
         if (!items || items.length === 0) return 0;
-        return Math.min(Math.max(0, p), items.length - 1);
+        return Math.min(forced, items.length - 1);
       }
-      var fromPath = this._getSelectedIndexFromPath(items);
-      if (fromPath >= 0) return fromPath;
-      return this._getSelectedIndexFromHash();
+      if (this._previewMode && typeof forced === 'number') return -1;
+      return this._getSelectedIndexFromPath(items);
     },
 
     /**
@@ -9540,6 +9719,273 @@
       return out;
     },
 
+    /**
+     * Post-header type. Title is a Squarespace heading (H1–H4, default H1).
+     * Deck and meta are paragraph styles (P1–P3, defaults P1 and P2).
+     * When the site style can be read, that size is used at every viewport.
+     * Otherwise the fallback below is the size for that choice.
+     */
+    _postHeaderFontFallbacks: {
+      h1: { desktop: '40px', mobile: '28px' },
+      h2: { desktop: '32px', mobile: '24px' },
+      h3: { desktop: '26px', mobile: '22px' },
+      h4: { desktop: '22px', mobile: '18px' },
+      p1: { desktop: '20px', mobile: '14px' },
+      p2: { desktop: '16px', mobile: '13px' },
+      p3: { desktop: '14px', mobile: '12px' }
+    },
+
+    _normalizePostHeaderFont: function(value, kind) {
+      var v = typeof value === 'string' ? value.toLowerCase() : '';
+      if (kind === 'heading') {
+        if (v === 'h1' || v === 'h2' || v === 'h3' || v === 'h4') return v;
+        return 'h1';
+      }
+      if (v === 'p1' || v === 'p2' || v === 'p3') return v;
+      return kind === 'deck' ? 'p1' : 'p2';
+    },
+
+    _cssLengthFromCustomProp: function(raw) {
+      if (!raw) return '';
+      raw = String(raw).trim();
+      if (!raw || raw === 'none' || raw === 'normal' || raw === 'inherit' || raw === 'initial') return '';
+      if (/^-?[\d.]+$/.test(raw)) return raw + 'rem';
+      if (/[0-9]/.test(raw) && (
+        raw.indexOf('px') !== -1 || raw.indexOf('rem') !== -1 || raw.indexOf('em') !== -1 ||
+        raw.indexOf('vw') !== -1 || raw.indexOf('clamp(') !== -1 || raw.indexOf('calc(') !== -1 ||
+        raw.indexOf('var(') === 0
+      )) return raw;
+      return '';
+    },
+
+    /** Squarespace heading/paragraph size: fluid min/max, then a single size variable. */
+    _squarespaceFluidSize: function(prefix) {
+      if (typeof document === 'undefined' || !document.documentElement) return '';
+      var root = document.documentElement;
+      var min = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-min-font-size'));
+      var max = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-max-font-size'));
+      if (min && max) {
+        return 'clamp(' + min + ', (' + max + ' - ' + min + ') * ((100vw - 375px) / 1065) + ' + min + ', ' + max + ')';
+      }
+      var names = [
+        prefix + '-font-font-size',
+        prefix + '-font-size',
+        prefix + '-size',
+        prefix + '-font-size-value',
+        prefix + '-size-value',
+        prefix + '-max-font-size'
+      ];
+      for (var i = 0; i < names.length; i++) {
+        var v = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, names[i]));
+        if (v) return v;
+      }
+      return '';
+    },
+
+    _readSquarespaceFontFace: function(kind, index) {
+      if (typeof document === 'undefined' || !document.documentElement) {
+        return { family: '', weight: '', lineHeight: '', tracking: '' };
+      }
+      var root = document.documentElement;
+      var prefix = (kind === 'heading' ? '--heading-' : '--paragraph-') + index;
+      var familyNames = kind === 'heading'
+        ? [prefix + '-font-font-family', '--heading-font-font-family', '--headings-font-family', '--header-font-family']
+        : [prefix + '-font-font-family', '--paragraph-font-font-family', '--body-font-font-family', '--primary-font-font-family'];
+      var weightNames = kind === 'heading'
+        ? [prefix + '-font-font-weight', '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight']
+        : [prefix + '-font-font-weight', '--paragraph-font-font-weight', '--body-font-font-weight', '--primary-font-font-weight'];
+      var lineNames = kind === 'heading'
+        ? [prefix + '-font-line-height', '--heading-font-line-height', '--headings-line-height']
+        : [prefix + '-font-line-height', '--paragraph-font-line-height', '--body-font-line-height'];
+      var trackNames = kind === 'heading'
+        ? [prefix + '-font-letter-spacing', '--heading-font-letter-spacing', '--headings-letter-spacing']
+        : [prefix + '-font-letter-spacing', '--paragraph-font-letter-spacing', '--body-font-letter-spacing'];
+      var read = function(names) {
+        for (var i = 0; i < names.length; i++) {
+          var raw = this._readCssVarFromEl(root, names[i]);
+          if (raw && raw !== 'inherit' && raw !== 'initial' && raw !== 'normal') return raw;
+        }
+        return '';
+      }.bind(this);
+      return {
+        family: read(familyNames),
+        weight: read(weightNames),
+        lineHeight: read(lineNames),
+        tracking: read(trackNames)
+      };
+    },
+
+    /**
+     * Hidden element so site h1–h4 / .sqsrte-* rules apply. Ignore the browser
+     * default size — that means Squarespace has not styled this step.
+     */
+    _probeSquarespaceFont: function(tag, className) {
+      if (typeof document === 'undefined' || !document.body || !window.getComputedStyle) return null;
+      var el = document.createElement(tag);
+      if (className) el.className = className;
+      el.setAttribute('data-bb-type-probe', '1');
+      el.setAttribute('aria-hidden', 'true');
+      el.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;margin:0;width:auto;height:auto;';
+      document.body.appendChild(el);
+      var cs;
+      try { cs = window.getComputedStyle(el); } catch (eProbe) { cs = null; }
+      var fontSize = cs ? cs.fontSize : '';
+      var fontFamily = cs ? cs.fontFamily : '';
+      var fontWeight = cs ? cs.fontWeight : '';
+      var lineHeight = cs ? cs.lineHeight : '';
+      var letterSpacing = cs ? cs.letterSpacing : '';
+      if (el.parentNode) el.parentNode.removeChild(el);
+      var px = parseFloat(fontSize);
+      if (!isFinite(px)) return null;
+      var rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+      var ua = [rootPx];
+      var t = String(tag || '').toLowerCase();
+      if (t === 'h1') ua = [rootPx * 2];
+      else if (t === 'h2') ua = [rootPx * 1.5];
+      else if (t === 'h3') ua = [rootPx * 1.17, rootPx * 1.2];
+      else if (t === 'h4') ua = [rootPx];
+      for (var i = 0; i < ua.length; i++) {
+        if (Math.abs(px - ua[i]) < 1) return null;
+      }
+      return {
+        size: fontSize,
+        family: fontFamily || '',
+        weight: fontWeight || '',
+        lineHeight: lineHeight && lineHeight !== 'normal' ? lineHeight : '',
+        tracking: letterSpacing && letterSpacing !== 'normal' && letterSpacing !== '0px' ? letterSpacing : ''
+      };
+    },
+
+    _resolveSquarespaceFont: function(key) {
+      if (!this._sqFontCache) this._sqFontCache = {};
+      var widthBucket = typeof window !== 'undefined' ? Math.round((window.innerWidth || 0) / 40) : 0;
+      var cacheKey = key + ':' + widthBucket;
+      if (this._sqFontCache[cacheKey]) return this._sqFontCache[cacheKey];
+      var heading = key.charAt(0) === 'h';
+      var index = key.charAt(1);
+      var prefix = (heading ? '--heading-' : '--paragraph-') + index;
+      var size = this._squarespaceFluidSize(prefix);
+      var face = this._readSquarespaceFontFace(heading ? 'heading' : 'paragraph', index);
+      if (!size) {
+        var probe = heading
+          ? this._probeSquarespaceFont('h' + index, '')
+          : this._probeSquarespaceFont('p', index === '1' ? 'sqsrte-large' : (index === '3' ? 'sqsrte-small' : ''));
+        if (probe) {
+          size = probe.size;
+          if (!face.family) face.family = probe.family;
+          if (!face.weight) face.weight = probe.weight;
+          if (!face.lineHeight) face.lineHeight = probe.lineHeight;
+          if (!face.tracking) face.tracking = probe.tracking;
+        }
+      }
+      var resolved = {
+        size: size || '',
+        family: face.family || '',
+        weight: face.weight || '',
+        lineHeight: face.lineHeight || '',
+        tracking: face.tracking || ''
+      };
+      this._sqFontCache[cacheKey] = resolved;
+      return resolved;
+    },
+
+    _setOptionalStyleProp: function(el, name, value) {
+      if (!el || !el.style) return;
+      if (value) el.style.setProperty(name, value);
+      else el.style.removeProperty(name);
+    },
+
+    _postHeaderChoiceKeys: function(key) {
+      return key && key.charAt(0) === 'h' ? ['h1', 'h2', 'h3', 'h4'] : ['p1', 'p2', 'p3'];
+    },
+
+    _fontSizeToPx: function(size) {
+      var n = parseFloat(size);
+      if (!isFinite(n)) return null;
+      var s = String(size);
+      if (s.indexOf('px') !== -1) return n;
+      if (s.indexOf('rem') !== -1) {
+        var rootPx = 16;
+        try {
+          rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+        } catch (ePx) { /* ignore */ }
+        return n * rootPx;
+      }
+      return null;
+    },
+
+    /**
+     * A size shared with another step in the menu is not that step's style
+     * (Squarespace often sets one size on h1–h4). Drop it so the choice's
+     * own fallback is used and the menu still changes the type.
+     */
+    _postHeaderStepSize: function(key) {
+      var resolved = this._resolveSquarespaceFont(key);
+      var size = resolved.size || '';
+      if (!size) return { size: '', resolved: resolved };
+      var keys = this._postHeaderChoiceKeys(key);
+      var selfPx = this._fontSizeToPx(size);
+      var matches = 0;
+      for (var i = 0; i < keys.length; i++) {
+        var other = this._resolveSquarespaceFont(keys[i]).size || '';
+        if (!other) continue;
+        if (selfPx != null) {
+          var otherPx = this._fontSizeToPx(other);
+          if (otherPx != null && Math.abs(selfPx - otherPx) < 1) matches++;
+          else if (otherPx == null && other === size) matches++;
+        } else if (other === size) {
+          matches++;
+        }
+      }
+      if (matches > 1) return { size: '', resolved: resolved };
+      return { size: size, resolved: resolved };
+    },
+
+    _setRoleFontVars: function(el, role, key) {
+      var fb = this._postHeaderFontFallbacks[key] || this._postHeaderFontFallbacks.h1;
+      var picked = this._postHeaderStepSize(key);
+      var resolved = picked.resolved;
+      var desktop = picked.size || fb.desktop;
+      var mobile = picked.size || fb.mobile;
+      el.style.setProperty('--bb-' + role + '-size', desktop);
+      el.style.setProperty('--bb-' + role + '-size-mobile', mobile);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-family', resolved.family);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-weight', resolved.weight);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-line-height', resolved.lineHeight);
+      this._setOptionalStyleProp(el, '--bb-' + role + '-tracking', resolved.tracking);
+    },
+
+    /** Apply the Post Header title / deck / meta font choices onto the overlay root. */
+    _applyPostHeaderTypeScale: function(wrapper, postHeaderCfg) {
+      if (!wrapper || !wrapper.style) return;
+      var ph = postHeaderCfg && typeof postHeaderCfg === 'object' ? postHeaderCfg : (this._postHeaderFontCfg || {});
+      this._postHeaderFontCfg = ph;
+      var title = this._normalizePostHeaderFont(ph.titleFont, 'heading');
+      var deck = this._normalizePostHeaderFont(ph.deckFont, 'deck');
+      var meta = this._normalizePostHeaderFont(ph.metaFont, 'paragraph');
+      wrapper.setAttribute('data-bb-title-font', title);
+      wrapper.setAttribute('data-bb-deck-font', deck);
+      wrapper.setAttribute('data-bb-meta-font', meta);
+      this._setRoleFontVars(wrapper, 'title', title);
+      this._setRoleFontVars(wrapper, 'deck', deck);
+      this._setRoleFontVars(wrapper, 'meta', meta);
+    },
+
+    _clearPostHeaderTypeScale: function(wrapper) {
+      if (!wrapper) return;
+      this._postHeaderFontCfg = null;
+      wrapper.removeAttribute('data-bb-title-font');
+      wrapper.removeAttribute('data-bb-deck-font');
+      wrapper.removeAttribute('data-bb-meta-font');
+      var roles = ['title', 'deck', 'meta'];
+      var parts = ['size', 'size-mobile', 'family', 'weight', 'line-height', 'tracking'];
+      for (var r = 0; r < roles.length; r++) {
+        for (var p = 0; p < parts.length; p++) {
+          wrapper.style.removeProperty('--bb-' + roles[r] + '-' + parts[p]);
+        }
+      }
+    },
+
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
         var prim = null;
@@ -9940,12 +10386,12 @@
         s + ' .blog-overlay-post-header-categories span,' +
         s + ' .blog-overlay-post-category--feature{margin-bottom:0!important;}' +
         stack + ' .blog-overlay-post-title,' +
-        stack + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
+        stack + ' .blog-overlay-title.bb-title--post{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);text-align:center!important;width:100%;margin:0 0 8px 0!important;}' +
         stack + ' .blog-overlay-post-deck,' +
-        stack + ' .blog-overlay-post-deck--feature{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);text-align:center;}' +
-        stack + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-align:center;width:100%;}' +
-        stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
-        stack + ' .bb-post-meta--on-bg{font-size:13px!important;}' +
+        stack + ' .blog-overlay-post-deck--feature{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);text-align:center;}' +
+        stack + ' .blog-overlay-meta-row{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);text-align:center;width:100%;}' +
+        stack + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);}' +
+        stack + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;}' +
         s + ' .blog-overlay-share-row--feature .blog-overlay-share-link,' +
         s + ' .blog-overlay-share-link{width:32px!important;height:32px!important;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;}' +
         s + ' .blog-overlay-share-link svg{width:18px!important;height:18px!important;display:block;}' +
@@ -10016,8 +10462,10 @@
         s + ' .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
         s + ' .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
         s + ' .blog-overlay-author-card-bio ul,' + s + ' .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
-        s + ' .blog-overlay-author-card-bio li{margin:0;}' +
-        s + ' .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
+        s + ' .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
+        s + ' .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
+        s + ' .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
+        s + ' .blog-overlay-author-card-bio a{color:var(--paragraphLinkColor, inherit);text-decoration:underline;text-underline-offset:0.2em;}' +
         s + ' .blog-overlay-author-card-social{order:3;flex:0 0 100%!important;display:flex!important;flex-wrap:wrap;align-items:center;gap:12px!important;}' +
         s + ' .blog-overlay-author-card-social a{width:20px!important;height:20px!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}' +
         s + ' .blog-overlay-author-card-social svg{width:18px!important;height:18px!important;display:block;}'
@@ -10028,7 +10476,7 @@
      * Writer mobile (<768). Wider than the desktop 8vw literary inset: wrapper
      * padding matches other post templates (pagePadding + 2vw → 18.75px at
      * 375). Header zone extra 24px pad is removed so title/body share one
-     * column. Title is 34px because Writer has no featured image.
+     * column. Title, deck, and meta use the Post Header font choices.
      */
     _writerMobileCss: function(s) {
       return (
@@ -10043,12 +10491,12 @@
         s + ' .blog-overlay-post-header-categories .bb-category-label,' +
         s + ' .blog-overlay-post-category--writer{font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--bb-accent,#5B4FE8);margin-bottom:0!important;}' +
         s + ' .blog-overlay-post-title,' +
-        s + ' .blog-overlay-title.bb-title--post{font-size:34px!important;line-height:1.15;margin:0 0 12px 0!important;}' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);margin:0 0 12px 0!important;}' +
         s + ' .blog-overlay-post-deck,' +
-        s + ' .blog-overlay-post-deck--writer{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-excerpt,#666);margin:0 0 24px 0!important;}' +
+        s + ' .blog-overlay-post-deck--writer{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);color:var(--bb-excerpt,#666);margin:0 0 24px 0!important;}' +
         s + ' .blog-overlay-writer-rule{width:40px;height:1px;margin:0 auto 24px auto!important;}' +
-        s + ' .blog-overlay-meta-row{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);}' +
-        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .blog-overlay-meta-row{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
         s + ' .blog-overlay-body{margin-bottom:-80px!important;}' +
         s + ' .blog-overlay-footer-content{gap:56px!important;}' +
         s + ' .blog-overlay-footer-module{margin-top:0!important;margin-bottom:0!important;}' +
@@ -10097,13 +10545,13 @@
         s + ' .blog-overlay-story-info-panel .blog-overlay-post-title,' +
         s + ' .blog-overlay-post-title,' +
         s + ' .blog-overlay-title.bb-title--post,' +
-        s + ' .bb-title--on-dark{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:' + ink + '!important;text-shadow:none!important;}' +
+        s + ' .bb-title--on-dark{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);margin:0 0 8px 0!important;color:' + ink + '!important;text-shadow:none!important;}' +
         s + ' .blog-overlay-post-deck,' +
-        s + ' .blog-overlay-post-deck--on-dark-solid{font-size:14px!important;line-height:1.4;font-family:var(--bb-p1-font-family,inherit);margin:0 0 16px 0!important;color:' + ink80 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-post-deck--on-dark-solid{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);margin:0 0 16px 0!important;color:' + ink80 + '!important;text-shadow:none!important;}' +
         s + ' .blog-overlay-story-rule{width:100%;height:0;border:none;border-top:1px solid ' + ink15 + ';background:none!important;margin:12px 0!important;}' +
         s + ' .blog-overlay-meta-row,' +
-        s + ' .bb-post-meta--on-dark{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:' + ink60 + '!important;text-shadow:none!important;}' +
-        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);color:inherit;}' +
+        s + ' .bb-post-meta--on-dark{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);color:' + ink60 + '!important;text-shadow:none!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));color:inherit;}' +
         s + ' .blog-overlay-share-row,' +
         s + ' .blog-overlay-share-row--story{display:flex!important;gap:0!important;margin:12px 0 0 0!important;justify-content:flex-start!important;width:100%;}' +
         s + ' .blog-overlay-share-links,' +
@@ -10134,10 +10582,10 @@
         ribbon + '{display:inline-flex!important;align-items:center;justify-content:center;line-height:1;padding:7px 12px!important;font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin:0!important;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);width:fit-content;max-width:100%;}' +
         s + ' .blog-overlay-post-title,' +
         s + ' .blog-overlay-title.bb-title--post,' +
-        s + ' .bb-title--on-image{font-size:28px!important;line-height:1.15;margin:0 0 8px 0!important;color:#fff!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .bb-title--on-image{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);margin:0 0 8px 0!important;color:#fff!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
         s + ' .blog-overlay-meta-row,' +
-        s + ' .bb-post-meta--on-image{font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);color:var(--bb-meta-on-image,rgba(255,255,255,0.78))!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
-        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);}' +
+        s + ' .bb-post-meta--on-image{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);color:var(--bb-meta-on-image,rgba(255,255,255,0.78))!important;text-shadow:0 1px 3px rgba(0,0,0,0.5)!important;}' +
+        s + ' .blog-overlay-meta-row .blog-overlay-meta{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
         s + ' .blog-overlay-post-deck,' +
         s + ' .blog-overlay-post-breadcrumbs,' +
         s + ' .blog-overlay-share-row{display:none!important;}' +
@@ -10173,11 +10621,11 @@
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
         s + ' .blog-overlay-post-title,' +
-        s + ' .blog-overlay-title.bb-title--post{font-size:28px!important;line-height:1.15;text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
-        s + ' .blog-overlay-post-deck--reporter{font-size:14px!important;line-height:1.4;font-family:inherit;margin-top:-5px!important;margin-bottom:0!important;}' +
-        s + ' .blog-overlay-meta-row{font-size:13px;line-height:1.4;font-family:inherit;font-weight:var(--bb-heading-font-weight,inherit);margin-top:8px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-title.bb-title--post{font-size:var(--bb-title-size-mobile,28px)!important;line-height:var(--bb-title-line-height,1.15);text-align:left!important;width:100%!important;margin-top:10px!important;margin-bottom:5px!important;font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));letter-spacing:var(--bb-title-tracking,normal);}' +
+        s + ' .blog-overlay-post-deck--reporter{font-size:var(--bb-deck-size-mobile,14px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);margin-top:-5px!important;margin-bottom:0!important;}' +
+        s + ' .blog-overlay-meta-row{font-size:var(--bb-meta-size-mobile,13px);line-height:var(--bb-meta-line-height,1.4);font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);margin-top:8px!important;margin-bottom:12px!important;}' +
         s + ' .blog-overlay-meta,' +
-        s + ' .bb-post-meta--on-bg{font-size:13px!important;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);line-height:1.4;}' +
+        s + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
         s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
@@ -10264,16 +10712,16 @@
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-title{text-align:center;width:100%;}' +
         '#blog-overlay-list .blog-overlay-feature-header-stack .blog-overlay-post-deck{max-width:700px;margin-left:auto;margin-right:auto;}' +
-        '#blog-overlay-list .bb-title--post{font-size:40px;}' +
-        '#blog-overlay-list .blog-overlay-post-deck{font-size:20px;line-height:1.4;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
+        '#blog-overlay-list .bb-title--post{font-size:var(--bb-title-size,40px)!important;font-family:var(--bb-title-family,var(--bb-heading-font-family,inherit));font-weight:var(--bb-title-weight,var(--bb-heading-font-weight,inherit));line-height:var(--bb-title-line-height,1.15);letter-spacing:var(--bb-title-tracking,normal);}' +
+        '#blog-overlay-list .blog-overlay-post-deck{font-size:var(--bb-deck-size,20px)!important;line-height:var(--bb-deck-line-height,1.4);font-family:var(--bb-deck-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-deck-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-deck-tracking,normal);color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
         '#blog-overlay-list .blog-overlay-post-deck--reporter{margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-post-deck--writer{font-style:italic;text-align:center;max-width:600px;margin-left:auto;margin-right:auto;}' +
         '#blog-overlay-list .blog-overlay-post-deck--feature{text-align:center;max-width:700px;margin-left:auto;margin-right:auto;}' +
-        '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
-        '#blog-overlay-list .blog-overlay-post-deck--on-dark-solid{font-size:18px;line-height:1.5;color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));}' +
-        '#blog-overlay-list .bb-post-meta--on-bg{font-size:16px;color:var(--bb-muted,#888);font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
-        '#blog-overlay-list .bb-post-meta--on-image{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
-        '#blog-overlay-list .bb-post-meta--on-dark{font-size:16px;color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark{font-size:var(--bb-deck-size,18px)!important;line-height:var(--bb-deck-line-height,1.5);color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .blog-overlay-post-deck--on-dark-solid{font-size:var(--bb-deck-size,18px)!important;line-height:var(--bb-deck-line-height,1.5);color:var(--bb-on-dark-deck,rgba(255,255,255,0.85));}' +
+        '#blog-overlay-list .bb-post-meta--on-bg{font-size:var(--bb-meta-size,16px)!important;line-height:var(--bb-meta-line-height,1.4);letter-spacing:var(--bb-meta-tracking,normal);color:var(--bb-muted,#888);font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
+        '#blog-overlay-list .bb-post-meta--on-image{font-size:var(--bb-meta-size,16px)!important;line-height:var(--bb-meta-line-height,1.4);letter-spacing:var(--bb-meta-tracking,normal);color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
+        '#blog-overlay-list .bb-post-meta--on-dark{font-size:var(--bb-meta-size,16px)!important;line-height:var(--bb-meta-line-height,1.4);letter-spacing:var(--bb-meta-tracking,normal);color:var(--bb-meta-on-image,rgba(255,255,255,0.78));font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs{font-size:14px;line-height:1.4;color:var(--bb-muted,#888);}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs a{color:inherit;text-decoration:none;}' +
         '#blog-overlay-list .blog-overlay-post-breadcrumbs--on-dark{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));text-shadow:0 1px 2px rgba(0,0,0,0.5);}' +
@@ -10330,8 +10778,10 @@
         '#blog-overlay-list .blog-overlay-author-card-bio p{margin:0 0 0.35em;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio p:last-child{margin-bottom:0;}' +
         '#blog-overlay-list .blog-overlay-author-card-bio ul,#blog-overlay-list .blog-overlay-author-card-bio ol{margin:0.2em 0 0.35em;padding-left:1.2em;}' +
-        '#blog-overlay-list .blog-overlay-author-card-bio li{margin:0;}' +
-        '#blog-overlay-list .blog-overlay-author-card-bio a{color:inherit;text-decoration:underline;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ul{list-style:disc outside!important;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio ol{list-style:decimal outside!important;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio li{display:list-item!important;margin:0;}' +
+        '#blog-overlay-list .blog-overlay-author-card-bio a{color:var(--paragraphLinkColor, inherit);text-decoration:underline;text-underline-offset:0.2em;}' +
         '#blog-overlay-list .bb-lead-magnet-card{background:transparent;border:1px solid var(--bb-border,#e5e4e0);border-radius:var(--bb-card-radius,20px);padding:30px;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-lead-magnet-header{font-size:24px;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);color:var(--bb-body,#111);margin:0 0 6px 0;}' +
         '#blog-overlay-list .bb-lead-magnet-subtitle{font-size:18px;line-height:1.5;color:var(--bb-excerpt,#666);margin:0 0 16px 0;}' +
@@ -10442,6 +10892,15 @@
         '#blog-overlay-list .bb-mobile-empty-hidden{display:none!important;}' +
         '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"]{display:none!important;}}' +
         '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"]{display:none!important;}' +
+        '@media (max-width:767px){#blog-overlay-list [data-bb-sidebar-side="left"].bb-mobile-drawer{display:block!important;}}' +
+        '#blog-overlay-list.bb-narrow-viewport [data-bb-sidebar-side="left"].bb-mobile-drawer{display:block!important;}' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-anchor:not(.bb-mobile-drawer),' +
+        '#blog-overlay-list.bb-narrow-viewport .blog-overlay-main-row{min-width:0!important;max-width:100%!important;}' +
+        '@media (max-width:767px){#blog-overlay-list .blog-overlay-sidebar-anchor:not(.bb-mobile-drawer),#blog-overlay-list .blog-overlay-main-row{min-width:0!important;max-width:100%!important;}}' +
+        '#blog-overlay-list .bb-mobile-drawer-tab{display:none;}' +
+        '#blog-overlay-list .bb-mobile-drawer-backdrop{display:none;}' +
+        this._mobileSidebarDrawerCss('#blog-overlay-list.bb-narrow-viewport') +
+        '@media (max-width:767px){' + this._mobileSidebarDrawerCss('#blog-overlay-list') + '}' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>aside,' +
         '#blog-overlay-list.bb-narrow-viewport .blog-overlay-sidebar-section>nav,' +
@@ -10572,7 +11031,7 @@
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-title{font-size:18px!important;line-height:1.25!important;font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .blog-overlay-meta-row{font-weight:var(--bb-heading-font-weight,inherit)!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="listRows"] article.blog-overlay-list-rows-row .bb-category-label:not(.bb-category-label--on-image){font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);}' +
-          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;width:100vw!important;max-width:100vw!important;}' +
+          '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero{margin-top:0!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero>div,' +
           '#blog-overlay-list[data-bb-collection-layout="grid"] .blog-overlay-featured-hero img{border-radius:0!important;}' +
@@ -10602,9 +11061,8 @@
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-posts{padding-left:0!important;padding-right:0!important;row-gap:4px!important;column-gap:16px!important;gap:4px 16px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article{margin-top:0!important;padding-bottom:0!important;margin-bottom:-10px!important;}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image{' +
-            'margin-top:0!important;margin-left:-19px!important;margin-right:-19px!important;margin-bottom:12px!important;' +
-            'width:100vw!important;max-width:100vw!important;position:relative;overflow:hidden;' +
-            'border-radius:0!important;' +
+            'margin-top:0!important;margin-bottom:12px!important;' +
+            'position:relative;overflow:hidden;border-radius:0!important;' +
           '}' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image>div,' +
           '#blog-overlay-list[data-bb-collection-layout="digest"] .blog-overlay-digest-featured-article .blog-overlay-featured-image img{border-radius:0!important;}' +
@@ -10748,6 +11206,8 @@
         el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
       }
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
+      /* Post titles take family/weight from the selected heading style. */
+      if (opts.size === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
       if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
@@ -10761,6 +11221,8 @@
       } else {
         el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
       }
+      /* Post meta takes family/weight from the selected paragraph style. */
+      if (opts.variant === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
       if (tokens && tokens.headingFontWeight) el.style.fontWeight = tokens.headingFontWeight;
@@ -11381,14 +11843,41 @@
       return this._finishSiteContentInsets('default-zero', zero, root, null);
     },
 
-    /** Break out to the viewport width (full-bleed images only). */
+    /**
+     * Configure's phone/tablet frame is a column inside a wider window.
+     * 100vw is that window, so a full-bleed image forces the column to scroll sideways.
+     */
+    _containedBleedHost: function() {
+      var vw = (typeof window !== 'undefined' && window.innerWidth) || 0;
+      var root = this._root;
+      if (!root || !root.getBoundingClientRect || !vw) return null;
+      var r;
+      try { r = root.getBoundingClientRect(); } catch (eHost) { return null; }
+      if (!r || r.width < 200 || r.width >= vw - 40) return null;
+      return { left: r.left, right: r.right, width: r.width };
+    },
+
+    /**
+     * Layout viewport width. 100vw is wider than this on phones (it includes
+     * the scrollbar gutter), which is what lets the page pan sideways.
+     */
+    _layoutViewportWidth: function() {
+      var doc = typeof document !== 'undefined' ? document.documentElement : null;
+      var cw = doc && doc.clientWidth ? doc.clientWidth : 0;
+      if (cw > 0) return cw;
+      return (typeof window !== 'undefined' && window.innerWidth) || 0;
+    },
+
+    /** Break out to the screen edges without using 100vw. */
     _applyViewportFullBleed: function(el) {
       if (!el || !el.style) return;
-      el.style.width = '100vw';
-      el.style.maxWidth = '100vw';
-      el.style.marginLeft = 'calc(50% - 50vw)';
-      el.style.marginRight = 'calc(50% - 50vw)';
       el.style.boxSizing = 'border-box';
+      el.style.width = '100%';
+      el.style.maxWidth = '100%';
+      el.style.marginLeft = '0';
+      el.style.marginRight = '0';
+      el.setAttribute('data-bb-viewport-bleed', '1');
+      this._scheduleViewportBleeds();
     },
 
     /**
@@ -11412,42 +11901,69 @@
     },
 
     /**
-     * After layout: extend el to the viewport left/right edges using measured gaps.
-     * @param {Element} el - element to widen
-     * @param {Element} [refEl] - box to measure (defaults to el)
+     * After layout: extend el to the screen edges. Uses the layout viewport,
+     * not 100vw, so the image stays edge to edge without widening the page.
      * @returns {boolean} true when bleed styles were applied
      */
-    _applyMeasuredViewportHorizontalBleed: function(el, refEl) {
+    _applyMeasuredViewportHorizontalBleed: function(el) {
       if (!el || !el.style || typeof window === 'undefined') return false;
-      var vw = window.innerWidth || document.documentElement.clientWidth || 0;
-      if (!vw) return false;
-      var ref = refEl && refEl.getBoundingClientRect ? refEl : el;
-      var rect;
-      try { rect = ref.getBoundingClientRect(); } catch (eRect) { return false; }
-      if (!rect) return false;
-      var leftGap = Math.max(0, Math.round(rect.left));
-      var rightGap = Math.max(0, Math.round(vw - rect.right));
-      if (leftGap < 1 && rightGap < 1) return false;
-      el.style.width = 'calc(100% + ' + (leftGap + rightGap) + 'px)';
-      el.style.maxWidth = 'none';
-      el.style.marginLeft = (-leftGap) + 'px';
-      el.style.marginRight = (-rightGap) + 'px';
-      el.style.boxSizing = 'border-box';
+      var host = this._containedBleedHost();
+      var edgeLeft = host ? host.left : 0;
+      var edgeRight = host ? host.right : this._layoutViewportWidth();
+      if (!(edgeRight > edgeLeft + 1)) return false;
+      var parent = el.parentElement;
+      if (!parent || !parent.getBoundingClientRect) return false;
+      el.style.setProperty('box-sizing', 'border-box', 'important');
+      el.style.setProperty('width', '100%', 'important');
+      el.style.setProperty('max-width', '100%', 'important');
+      el.style.setProperty('margin-left', '0', 'important');
+      el.style.setProperty('margin-right', '0', 'important');
+      var pr;
+      try { pr = parent.getBoundingClientRect(); } catch (eRect) { return false; }
+      if (!pr || pr.width < 2) return false;
+      var pullLeft = Math.max(0, pr.left - edgeLeft);
+      var pullRight = Math.max(0, edgeRight - pr.right);
+      var marginLeft = -Math.floor(pullLeft);
+      var marginRight = -Math.floor(pullRight);
+      var pxWidth = Math.floor(pr.width - marginLeft - marginRight);
+      var maxWidth = Math.floor(edgeRight - edgeLeft);
+      if (pxWidth > maxWidth) pxWidth = maxWidth;
+      if (pxWidth < 1) return false;
+      el.style.setProperty('width', pxWidth + 'px', 'important');
+      el.style.setProperty('max-width', pxWidth + 'px', 'important');
+      el.style.setProperty('margin-left', marginLeft + 'px', 'important');
+      el.style.setProperty('margin-right', marginRight + 'px', 'important');
       return true;
+    },
+
+    _scheduleViewportBleeds: function() {
+      var self = this;
+      if (self._viewportBleedScheduled) return;
+      self._viewportBleedScheduled = true;
+      var seq = self._renderSeq;
+      var run = function() {
+        self._viewportBleedScheduled = false;
+        if (self._renderSeq !== seq) return;
+        var wrapper = document.getElementById('blog-overlay-list');
+        if (wrapper) self._syncViewportBleeds(wrapper);
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { requestAnimationFrame(run); });
+      } else {
+        run();
+      }
+    },
+
+    _syncViewportBleeds: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var nodes = wrapper.querySelectorAll('[data-bb-viewport-bleed], [data-digest-viewport-bleed]');
+      var i;
+      for (i = 0; i < nodes.length; i++) this._applyMeasuredViewportHorizontalBleed(nodes[i]);
     },
 
     /** Digest mobile featured hero: measure and bleed to viewport after the overlay is in the DOM. */
     _syncDigestMobileFeaturedImageBleed: function(wrapper) {
-      if (!wrapper || !wrapper.querySelector) return;
-      var imgs = wrapper.querySelectorAll('.blog-overlay-digest-featured-article .blog-overlay-featured-image[data-digest-viewport-bleed]');
-      for (var i = 0; i < imgs.length; i++) {
-        var fiWrap = imgs[i];
-        fiWrap.style.width = '';
-        fiWrap.style.maxWidth = '';
-        fiWrap.style.marginLeft = '';
-        fiWrap.style.marginRight = '';
-        this._applyMeasuredViewportHorizontalBleed(fiWrap, fiWrap);
-      }
+      this._syncViewportBleeds(wrapper);
     },
 
     _scheduleDigestMobileFeaturedImageBleed: function(vs) {
@@ -11612,20 +12128,273 @@
     },
 
     /**
-     * Mobile (<768): hide every left sidebar rail. If a pairable module is in
-     * the right sidebar and duplicated in the footer, hide the footer copy
-     * (sidebar-wins). Left-sidebar copies do not count — a footer copy of a
-     * left-only module is shown. Footer-only modules keep rendering but get
-     * sidebar chrome. Tags/Categories invert that: the sidebar copy is always
-     * hidden on mobile, even when enabled; a footer copy (if any) is shown
-     * instead. Hide Table of Contents on mobile for every post template.
+     * Phone drawer chrome. Scoped either to .bb-narrow-viewport (Configure's
+     * phone frame on a wide window) or inside a max-width:767px query.
+     */
+    _mobileSidebarDrawerCss: function(s) {
+      var d = s + ' .bb-mobile-drawer';
+      var tab = d + '>.bb-mobile-drawer-tab';
+      var rail = d + '>.blog-overlay-sidebar-rail';
+      var open = d + '.bb-mobile-drawer-open';
+      return (
+        d + '{position:fixed!important;top:0;right:0;bottom:0;left:0;width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;contain:paint;pointer-events:none;z-index:1000;flex:none!important;align-self:auto!important;box-sizing:border-box;}' +
+        open + '{z-index:1001!important;}' +
+        tab + '{display:flex;align-items:center;justify-content:center;pointer-events:auto;position:absolute;right:0;top:36%;width:32px;min-height:96px;padding:16px 0;box-sizing:border-box;border:none;border-radius:8px 0 0 8px;background:var(--bb-body,#111);color:var(--bb-surface,#fff);font-family:var(--bb-heading-font-family,inherit);font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;line-height:1;writing-mode:vertical-rl;cursor:pointer;box-shadow:-2px 2px 12px rgba(0,0,0,.18);z-index:2;-webkit-appearance:none;appearance:none;touch-action:manipulation;transition:right .22s ease;}' +
+        open + '>.bb-mobile-drawer-tab{right:var(--bb-drawer-panel-width,280px);background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);}' +
+        rail + '{visibility:hidden;pointer-events:none;position:absolute!important;top:0;right:0;bottom:0;left:auto;width:var(--bb-drawer-panel-width,86%)!important;max-width:none!important;height:auto!important;margin:0!important;box-sizing:border-box;overflow-x:hidden;overflow-y:auto;padding:24px 18px 32px;-webkit-overflow-scrolling:touch;background:var(--bb-surface,#fff);color:var(--bb-body,#111);box-shadow:-12px 0 32px rgba(0,0,0,.18);z-index:1;transform:translateX(100%);transition:transform .22s ease;}' +
+        open + '>.blog-overlay-sidebar-rail{visibility:visible;pointer-events:auto;transform:translateX(0);}' +
+        s + '.bb-mobile-drawer-has-open>.bb-mobile-drawer-backdrop{display:block;position:fixed;background:rgba(17,17,17,.35);z-index:999;border:none;padding:0;margin:0;cursor:pointer;-webkit-appearance:none;appearance:none;}'
+      );
+    },
+
+    _mobileDrawerHostRect: function(wrapper) {
+      var vw = this._layoutViewportWidth();
+      var vh = (typeof window !== 'undefined' && window.innerHeight) || 0;
+      var viewport = { top: 0, left: 0, right: vw, bottom: vh, width: vw, height: vh };
+      if (this._previewMode) {
+        var scroller = this._getScrollContainer();
+        if (scroller && scroller.getBoundingClientRect) {
+          var sr = scroller.getBoundingClientRect();
+          if (sr.width >= 200 && sr.height >= 200 && sr.width < vw - 40) {
+            return { top: sr.top, left: sr.left, right: sr.right, bottom: sr.bottom, width: sr.width, height: sr.height };
+          }
+        }
+        var boxEl = wrapper || this._root;
+        if (boxEl && boxEl.getBoundingClientRect) {
+          var br = boxEl.getBoundingClientRect();
+          if (br.width >= 200 && br.width < vw - 40) {
+            var top = br.top;
+            var bottom = br.bottom;
+            if (br.height > vh) {
+              top = Math.max(0, br.top);
+              bottom = Math.min(vh, br.bottom);
+              if (bottom - top < 160) {
+                top = 0;
+                bottom = vh;
+              }
+            }
+            return {
+              top: top,
+              left: br.left,
+              right: br.right,
+              bottom: bottom,
+              width: br.width,
+              height: Math.max(0, bottom - top)
+            };
+          }
+        }
+      }
+      var topInset = 0;
+      if (wrapper && !this._previewMode && !this._bbPreview) {
+        var navH = parseFloat(wrapper.style.getPropertyValue('--bb-nav-height')) || 0;
+        if (navH > 0 && navH < vh * 0.45) topInset = navH;
+      }
+      return {
+        top: viewport.top + topInset,
+        left: viewport.left,
+        right: viewport.right,
+        bottom: viewport.bottom,
+        width: viewport.width,
+        height: Math.max(0, viewport.height - topInset)
+      };
+    },
+
+    _positionMobileDrawers: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var drawers = wrapper.querySelectorAll('.bb-mobile-drawer');
+      if (!drawers.length) return;
+      var rect = this._mobileDrawerHostRect(wrapper);
+      var tabH = 96;
+      var gap = 10;
+      var stackH = drawers.length * tabH + Math.max(0, drawers.length - 1) * gap;
+      var start = Math.max(64, Math.round((rect.height - stackH) / 2));
+      var i;
+      for (i = 0; i < drawers.length; i++) {
+        var el = drawers[i];
+        el.style.setProperty('top', Math.round(rect.top) + 'px', 'important');
+        el.style.setProperty('left', Math.round(rect.left) + 'px', 'important');
+        el.style.setProperty('width', Math.round(rect.width) + 'px', 'important');
+        el.style.setProperty('height', Math.round(rect.height) + 'px', 'important');
+        el.style.setProperty('right', 'auto', 'important');
+        el.style.setProperty('bottom', 'auto', 'important');
+        var tab = el.querySelector(':scope > .bb-mobile-drawer-tab');
+        if (tab) tab.style.top = (start + i * (tabH + gap)) + 'px';
+        var rail = el.querySelector(':scope > .blog-overlay-sidebar-rail');
+        if (rail) {
+          var configured = parseInt(el.getAttribute('data-bb-sidebar-width'), 10);
+          if (!configured || configured < 160) configured = 280;
+          var panelW = Math.max(200, Math.min(configured, Math.round(rect.width * 0.86), Math.round(rect.width - 44)));
+          el.style.setProperty('--bb-drawer-panel-width', panelW + 'px');
+          rail.setAttribute('data-bb-drawer-width', '1');
+          rail.style.setProperty('width', panelW + 'px', 'important');
+          rail.style.setProperty('right', '0', 'important');
+        }
+      }
+      var backdrop = wrapper.querySelector(':scope > .bb-mobile-drawer-backdrop');
+      if (backdrop) {
+        backdrop.style.setProperty('top', rect.top + 'px', 'important');
+        backdrop.style.setProperty('left', rect.left + 'px', 'important');
+        backdrop.style.setProperty('width', rect.width + 'px', 'important');
+        backdrop.style.setProperty('height', rect.height + 'px', 'important');
+      }
+    },
+
+    _ensureMobileDrawerTracking: function() {
+      if (this._mobileDrawerTracking) return;
+      this._mobileDrawerTracking = true;
+      var self = this;
+      this._mobileDrawerOnViewport = function() {
+        var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
+        if (!wrap) return;
+        if (wrap.querySelector('.bb-mobile-drawer')) self._positionMobileDrawers(wrap);
+        if (wrap.querySelector('[data-bb-viewport-bleed], [data-digest-viewport-bleed]')) self._syncViewportBleeds(wrap);
+      };
+      window.addEventListener('resize', this._mobileDrawerOnViewport);
+      window.addEventListener('scroll', this._mobileDrawerOnViewport, true);
+      window.addEventListener('keydown', function(e) {
+        if (!e || e.key !== 'Escape' || !self._mobileDrawerOpen) return;
+        if (!self._mobileDrawerOpen.left && !self._mobileDrawerOpen.right) return;
+        self._mobileDrawerOpen.left = false;
+        self._mobileDrawerOpen.right = false;
+        var wrap = self._root && self._root.querySelector ? self._root.querySelector('#blog-overlay-list') : document.getElementById('blog-overlay-list');
+        if (wrap) self._syncMobileSidebarDrawers(wrap, self._isNarrowCollectionViewport());
+      });
+    },
+
+    /**
+     * Narrow viewports: sidebars set to Drawer become a tab on the right edge.
+     * Hidden (the default) keeps the existing mobile rules.
+     */
+    _syncMobileSidebarDrawers: function(wrapper, narrow) {
+      if (!wrapper) return;
+      var self = this;
+      if (!self._mobileDrawerOpen) self._mobileDrawerOpen = { left: false, right: false };
+      var anchors = wrapper.querySelectorAll('.blog-overlay-sidebar-anchor');
+      var active = [];
+      var i;
+      for (i = 0; i < anchors.length; i++) {
+        var anchor = anchors[i];
+        var side = anchor.getAttribute('data-bb-sidebar-side') === 'right' ? 'right' : 'left';
+        var rail = anchor.querySelector(':scope > .blog-overlay-sidebar-rail');
+        var want = !!narrow && anchor.getAttribute('data-bb-mobile-display') === 'drawer' && !!rail;
+        if (!want) {
+          anchor.classList.remove('bb-mobile-drawer', 'bb-mobile-drawer-open');
+          var stale = anchor.querySelector(':scope > .bb-mobile-drawer-tab');
+          if (stale) stale.remove();
+          if (rail && rail.getAttribute('data-bb-drawer-width') === '1') {
+            rail.style.removeProperty('width');
+            rail.style.width = '100%';
+            rail.removeAttribute('data-bb-drawer-width');
+          }
+          continue;
+        }
+        anchor.classList.add('bb-mobile-drawer');
+        anchor.classList.toggle('bb-mobile-drawer-open', !!self._mobileDrawerOpen[side]);
+        var tab = anchor.querySelector(':scope > .bb-mobile-drawer-tab');
+        if (!tab) {
+          tab = document.createElement('button');
+          tab.type = 'button';
+          tab.className = 'bb-mobile-drawer-tab';
+          anchor.insertBefore(tab, anchor.firstChild);
+          tab.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var host = ev.currentTarget && ev.currentTarget.parentElement;
+            if (!host) return;
+            var hostSide = host.getAttribute('data-bb-sidebar-side') === 'right' ? 'right' : 'left';
+            var nextOpen = !self._mobileDrawerOpen[hostSide];
+            self._mobileDrawerOpen.left = false;
+            self._mobileDrawerOpen.right = false;
+            self._mobileDrawerOpen[hostSide] = nextOpen;
+            var live = host.closest ? host.closest('#blog-overlay-list') : wrapper;
+            self._syncMobileSidebarDrawers(live || wrapper, self._isNarrowCollectionViewport());
+          });
+        }
+        tab.textContent = 'More';
+        var open = !!self._mobileDrawerOpen[side];
+        tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+        tab.setAttribute('aria-label', open ? 'Close sidebar' : 'Open sidebar');
+        if (!rail.id) rail.id = 'bb-mobile-drawer-panel-' + side;
+        tab.setAttribute('aria-controls', rail.id);
+        rail.setAttribute('aria-hidden', open ? 'false' : 'true');
+        var concealed = anchor.querySelectorAll('.bb-mobile-sidebar-filter-hidden, .bb-mobile-toc-hidden');
+        var c;
+        for (c = 0; c < concealed.length; c++) {
+          concealed[c].classList.remove('bb-mobile-sidebar-filter-hidden', 'bb-mobile-toc-hidden');
+          concealed[c].setAttribute('aria-hidden', 'false');
+        }
+        active.push(anchor);
+      }
+      var anyOpen = false;
+      for (i = 0; i < active.length; i++) {
+        if (active[i].classList.contains('bb-mobile-drawer-open')) anyOpen = true;
+      }
+      wrapper.classList.toggle('bb-mobile-drawer-has-open', anyOpen && !!narrow);
+      var backdrop = wrapper.querySelector(':scope > .bb-mobile-drawer-backdrop');
+      if (active.length) {
+        if (!backdrop) {
+          backdrop = document.createElement('button');
+          backdrop.type = 'button';
+          backdrop.className = 'bb-mobile-drawer-backdrop';
+          backdrop.setAttribute('aria-label', 'Close sidebar');
+          wrapper.insertBefore(backdrop, wrapper.firstChild);
+          backdrop.addEventListener('click', function() {
+            self._mobileDrawerOpen.left = false;
+            self._mobileDrawerOpen.right = false;
+            self._syncMobileSidebarDrawers(wrapper, self._isNarrowCollectionViewport());
+          });
+        }
+      } else if (backdrop) {
+        backdrop.remove();
+      }
+      if (active.length) {
+        this._positionMobileDrawers(wrapper);
+        this._ensureMobileDrawerTracking();
+      }
+    },
+
+    /**
+     * Mobile (<768): hide every left sidebar rail unless that sidebar's
+     * mobile display is Drawer. If a pairable module is in a right sidebar
+     * that stacks under the article (Below content) and is also in the
+     * footer, hide the footer copy (sidebar-wins). A Drawer is off the page,
+     * so it does not hide footer copies; the drawer keeps its own modules.
+     * Left-sidebar copies do not count — a footer copy of a left-only module
+     * is shown. Footer-only modules keep rendering but get sidebar chrome.
+     * Tags/Categories invert that: the sidebar copy is always hidden on
+     * mobile, even when enabled; a footer copy (if any) is shown instead.
+     * Hide Table of Contents on mobile for every post template.
+     * Drawer sidebars keep those modules inside the panel.
      * Comments are footer-only and exempt.
      */
+    /** Stop the phone page from panning sideways. Live site only; Configure preview stays in its column. */
+    _lockMobilePageAxis: function(narrow) {
+      var html = document.documentElement;
+      var body = document.body;
+      if (!html || !body) return;
+      var lock = !!narrow && !this._previewMode;
+      if (lock) {
+        html.style.setProperty('overflow-x', 'clip');
+        body.style.setProperty('overflow-x', 'clip');
+        html.style.setProperty('overscroll-behavior-x', 'none');
+        body.style.setProperty('overscroll-behavior-x', 'none');
+      } else {
+        html.style.removeProperty('overflow-x');
+        body.style.removeProperty('overflow-x');
+        html.style.removeProperty('overscroll-behavior-x');
+        body.style.removeProperty('overscroll-behavior-x');
+      }
+    },
+
     _applyMobileSidebarFooterRule: function(wrapper, opts) {
       if (!wrapper) return;
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
+      if (wrapper.getAttribute('data-bb-title-font')) {
+        this._applyPostHeaderTypeScale(wrapper, this._postHeaderFontCfg);
+      }
+      this._lockMobilePageAxis(narrow);
       var filterIds = {
         filterByCategory: true,
         filterByTag: true,
@@ -11646,7 +12415,7 @@
         var id = pairIds[i];
         var isFilter = !!filterIds[id];
         var sidebarHas = !!wrapper.querySelector(
-          '.blog-overlay-sidebar-anchor:not([data-bb-sidebar-side="left"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
+          '.blog-overlay-sidebar-anchor[data-bb-sidebar-side="right"]:not([data-bb-mobile-display="drawer"]) [data-bb-zone="sidebar"][data-bb-module="' + id + '"]'
         );
         var footerNodes = wrapper.querySelectorAll('[data-bb-zone="footer"][data-bb-module="' + id + '"]');
         for (var f = 0; f < footerNodes.length; f++) {
@@ -11691,7 +12460,10 @@
         var railMods = rail.querySelectorAll('[data-bb-module]');
         var hideRail = false;
         var isLeftRail = rail.getAttribute('data-bb-sidebar-side') === 'left';
-        if (narrow && isLeftRail) {
+        var useDrawer = narrow && rail.getAttribute('data-bb-mobile-display') === 'drawer' && rail.querySelector('.blog-overlay-sidebar-rail');
+        if (useDrawer) {
+          hideRail = false;
+        } else if (narrow && isLeftRail) {
           hideRail = true;
         } else if (narrow && railMods.length > 0) {
           hideRail = true;
@@ -11734,16 +12506,34 @@
       if (!opts.featurePostLayout) {
         this._applyMobileAuthorCardLayout(wrapper, narrow);
       }
+      this._syncMobileSidebarDrawers(wrapper, narrow);
     },
 
     /**
-     * Mobile (<768): cap in-article h1–h6 at post-title × 0.85 so customer
-     * heading scales cannot exceed the headline. Cap only — never enlarge.
-     * Writer title is 34px → 29px; other post templates 28px → 24px.
+     * Mobile (<768): cap in-article h1–h6 at the computed post-title size × 0.85
+     * so customer heading scales cannot exceed the headline. Cap only — never enlarge.
+     * The default H1 phone fallback is 28px, so the cap is 24px until a larger
+     * Squarespace heading size is in use.
      */
+    _postTitleFontSizePx: function(wrapper, narrow) {
+      var fallback = narrow ? 28 : 40;
+      if (!wrapper) return fallback;
+      if (wrapper.isConnected && window.getComputedStyle) {
+        var titleEl = wrapper.querySelector('.blog-overlay-post-title, .bb-title--post');
+        if (titleEl) {
+          var measured = parseFloat(window.getComputedStyle(titleEl).fontSize);
+          if (isFinite(measured) && measured > 0) return measured;
+        }
+      }
+      var raw = wrapper.style.getPropertyValue(narrow ? '--bb-title-size-mobile' : '--bb-title-size') || '';
+      var fromVar = parseFloat(raw);
+      if (isFinite(fromVar) && fromVar > 0 && /px\s*$/.test(String(raw).trim())) return fromVar;
+      return fallback;
+    },
+
     _capMobileBodyHeadings: function(wrapper, narrow) {
       if (!wrapper || !wrapper.querySelectorAll) return;
-      var titlePx = wrapper.getAttribute('data-bb-writer-layout') === '1' ? 34 : 28;
+      var titlePx = this._postTitleFontSizePx(wrapper, narrow);
       var capPx = Math.round(titlePx * 0.85);
       var headings = wrapper.querySelectorAll('.blog-overlay-body h1, .blog-overlay-body h2, .blog-overlay-body h3, .blog-overlay-body h4, .blog-overlay-body h5, .blog-overlay-body h6');
       for (var i = 0; i < headings.length; i++) {
@@ -14696,11 +15486,13 @@
         } else {
           wrapper.removeAttribute('data-bb-publisher-layout');
         }
+        self._applyPostHeaderTypeScale(wrapper, cfg && cfg.postHeader);
       } else {
         wrapper.removeAttribute('data-bb-spec-horizontal-padding');
         wrapper.removeAttribute('data-bb-writer-layout');
         wrapper.removeAttribute('data-bb-story-layout');
         wrapper.removeAttribute('data-bb-publisher-layout');
+        self._clearPostHeaderTypeScale(wrapper);
       }
       self._applySiteContentInsetsToWrapper(wrapper, wrapperPadTop);
       if (collectionMobileGridNarrow) {
@@ -15547,7 +16339,7 @@
             fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email }),
+              body: JSON.stringify({ siteKey: siteKey, type: 'newsletter', email: email, surface: isSinglePost ? 'post' : 'collection' }),
               credentials: 'omit'
             }).then(function(res) {
               return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -15742,7 +16534,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle, surface: isSinglePost ? 'post' : 'collection' }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -15836,7 +16628,7 @@
           fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle }),
+            body: JSON.stringify({ siteKey: siteKey, type: 'lead_magnet', email: email, resourceTitle: resourceTitle, surface: isSinglePost ? 'post' : 'collection' }),
             credentials: 'omit'
           }).then(function(res) {
             return res.json().then(function(data) { return { ok: res.ok, data: data }; });
@@ -16432,6 +17224,8 @@
           var leftSidebarWrapEl = document.createElement('div');
           leftSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
           leftSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'left');
+          leftSidebarWrapEl.setAttribute('data-bb-mobile-display', leftSidebarCfg && leftSidebarCfg.mobileDisplay === 'drawer' ? 'drawer' : 'hidden');
+          leftSidebarWrapEl.setAttribute('data-bb-sidebar-width', String(leftSidebarWidth));
           leftSidebarWrapEl.style.flexShrink = '0';
           leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
           leftSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -16458,6 +17252,8 @@
           var rightSidebarWrapEl = document.createElement('div');
           rightSidebarWrapEl.className = 'blog-overlay-sidebar-anchor';
           rightSidebarWrapEl.setAttribute('data-bb-sidebar-side', 'right');
+          rightSidebarWrapEl.setAttribute('data-bb-mobile-display', rightSidebarCfg && rightSidebarCfg.mobileDisplay === 'drawer' ? 'drawer' : 'hidden');
+          rightSidebarWrapEl.setAttribute('data-bb-sidebar-width', String(rightSidebarWidth));
           rightSidebarWrapEl.style.flexShrink = '0';
           rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
           rightSidebarWrapEl.style.alignSelf = 'flex-start';
@@ -16519,6 +17315,7 @@
                 leftSidebarWrapEl.style.order = '1';
                 leftSidebarWrapEl.style.width = '100%';
                 leftSidebarWrapEl.style.maxWidth = '100%';
+                leftSidebarWrapEl.style.minWidth = '0';
                 leftSidebarWrapEl.style.flexShrink = '1';
                 leftSidebarWrapEl.style.alignSelf = 'stretch';
                 leftSidebarEl.removeAttribute('data-bb-sticky-rail');
@@ -16531,6 +17328,7 @@
                 rightSidebarWrapEl.style.order = '2';
                 rightSidebarWrapEl.style.width = '100%';
                 rightSidebarWrapEl.style.maxWidth = '100%';
+                rightSidebarWrapEl.style.minWidth = '0';
                 rightSidebarWrapEl.style.flexShrink = '1';
                 rightSidebarWrapEl.style.alignSelf = 'stretch';
                 rightSidebarEl.removeAttribute('data-bb-sticky-rail');
@@ -16563,6 +17361,7 @@
                 leftSidebarWrapEl.style.order = '';
                 leftSidebarWrapEl.style.width = leftSidebarWidth + 'px';
                 leftSidebarWrapEl.style.maxWidth = '';
+                leftSidebarWrapEl.style.minWidth = '';
                 leftSidebarWrapEl.style.flexShrink = '0';
                 leftSidebarWrapEl.style.alignSelf = 'flex-start';
                 if (leftSticky) {
@@ -16582,6 +17381,7 @@
                 rightSidebarWrapEl.style.order = '';
                 rightSidebarWrapEl.style.width = rightSidebarWidth + 'px';
                 rightSidebarWrapEl.style.maxWidth = '';
+                rightSidebarWrapEl.style.minWidth = '';
                 rightSidebarWrapEl.style.flexShrink = '0';
                 rightSidebarWrapEl.style.alignSelf = 'flex-start';
                 if (rightSticky) {
@@ -17262,6 +18062,7 @@
           /* Commit overlay in one DOM operation when still on the cold-load path (#8). */
           if (deferOverlayCommit) {
             root.prepend(overlayFragment);
+            self._capMobileBodyHeadings(wrapper, self._isNarrowCollectionViewport());
           }
 
           if (!isSinglePost) {

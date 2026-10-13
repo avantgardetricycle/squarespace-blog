@@ -36,6 +36,14 @@ Settings a template owns are hidden. If a control is missing, your current post 
 
 **Vertical post info alignment** — Top, Center, or Bottom when the image sits beside the post info.
 
+**Post title** — How large the post title is. The menu is your Squarespace heading styles: **H1**, **H2**, **H3**, and **H4**. The default choice is **H1**. BetterBlog uses that style’s size, font, and weight from your site.
+
+**Meta** — How large the author, date, and reading-time line is. The menu is your Squarespace paragraph styles: **P1**, **P2**, and **P3**. The default choice is **P2**.
+
+**Deck** — How large the lead line under the title is. The menu is **P1**, **P2**, and **P3**. The default choice is **P1**. The deck is the line shown when **Show post byline** is on.
+
+If BetterBlog cannot read your Squarespace styles, or every style in that menu is the same size, it still uses the choice you picked, with a built-in size for that style. The built-in phone sizes are 28px for H1, 14px for P1, and 13px for P2.
+
 **Show breadcrumbs** — A trail above the post title (typically Home → collection → post).
 
 **Show Tags & Categories** — Checkboxes for **Tags** and **Categories**, shown after breadcrumbs and before the title. Locked on all current post templates.
@@ -114,8 +122,8 @@ Authors are managed from **Show Author(s)** on either the Collection or Post tab
 - **Longer bio** (max 1000 characters) — used in the footer
 - **Bio format** — Text, Markdown, or HTML. One format applies to both bios. New authors default to Markdown. Authors saved before this option stay on Text until you change it, so existing copy is shown exactly as typed. Switching format does not convert the text already in the fields. Character limits count the source.
   - **Text** — shown exactly as typed.
-  - **Markdown** — `**bold**`, `*italic*`, `[links](url)`, and lists.
-  - **HTML** — paragraphs, bold, italic, links, and lists (`p`, `br`, `strong`, `em`, `a`, `ul`, `ol`, `li`). Other tags are removed. Links must use `http`, `https`, or `mailto`.
+  - **Markdown** — `**bold**`, `*italic*`, `[links](url)`, and lists. Use **Raw text** / **Preview** to check formatting.
+  - **HTML** — paragraphs, bold, italic, links, and lists (`p`, `br`, `strong`, `em`, `a`, `ul`, `ol`, `li`). Other tags are removed. Links must use `http`, `https`, or `mailto`. Use **Raw text** / **Preview** to check formatting.
 - **Email**
 - Optional social links: Instagram, Facebook, LinkedIn
 - **Default author** checkbox — also add to site defaults

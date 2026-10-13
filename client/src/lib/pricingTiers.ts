@@ -7,7 +7,7 @@ export const PUBLIC_PRICING_TIERS = [
     capacity: "1 website · 1 blog",
     features: [
       "4 templates: Showcase and Digest (blog page), Feature and Reporter (post)",
-      "Sidebars",
+      "Sidebars, with a slide-out drawer on phones",
       "Header image formatting",
       "Table of contents",
       "Related, recent and popular posts",
@@ -55,7 +55,7 @@ export const PUBLIC_PRICING_TIERS = [
       "Multiple authors and author management",
       "Image styles per blog",
       "Saved post templates",
-      "Advanced analytics (Google Analytics connection, click tracking, on-blog search terms, per-author performance)",
+      "Advanced analytics (Google Analytics or Fathom connection, click tracking, on-blog search terms, per-author performance)",
     ],
     highlight: false,
   },

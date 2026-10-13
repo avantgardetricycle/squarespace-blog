@@ -29,6 +29,7 @@ const IC: Record<string, string> = {
   paywall:'<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1.2"/>',
   email:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2.5 6 12 13 21.5 6"/>',
   magnet:'<path d="M6 3v9a6 6 0 0 0 12 0V3"/><line x1="3" y1="3" x2="9" y2="3"/><line x1="15" y1="3" x2="21" y2="3"/><line x1="6" y1="10" x2="9" y2="10"/><line x1="15" y1="10" x2="18" y2="10"/>',
+  mobilesb:'<rect x="6" y="2" width="12" height="20" rx="2"/><line x1="13" y1="5" x2="13" y2="19"/><line x1="10.5" y1="18.5" x2="10.5" y2="18.5"/>',
   updated:'<path d="M21 12a9 9 0 1 1-2.6-6.4"/><polyline points="21 3 21 9 15 9"/><polyline points="12 7 12 12 15 14"/>',
   sync:'<rect x="2" y="5" width="8" height="14" rx="1.5"/><rect x="14" y="5" width="8" height="6" rx="1.5"/><rect x="14" y="13" width="8" height="6" rx="1.5"/><path d="M10 12h2v-4h2M12 12v4h2"/>',
   popular:'<path d="M12 2s4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.6-2.8 1.3-4"/><path d="M12 22a7 7 0 0 1-7-7c0-2 1-3.6 2.2-5A6.9 6.9 0 0 0 12 22a6.9 6.9 0 0 0 4.8-12c1.2 1.4 2.2 3 2.2 5a7 7 0 0 1-7 7z"/>'
@@ -46,6 +47,7 @@ const CATS: Record<string, { label: string; tag: string; badge: string }> = {
 interface Feat { id: string; c: string; n: string; i: string; d: string; s?: string; isNew?: boolean }
 const F: Feat[] = [
   {id:'sidebars',c:'layout',n:'Sidebars',i:'sidebars',d:'Sidebars are built into certain templates. Fill them with recent posts, categories, a newsletter signup, your author bio, or anything else you need. Configured from your dashboard, no code required.',s:'Sidebars'},
+  {id:'mobilesidebar',c:'layout',n:'Sidebars on Phones',i:'mobilesb',isNew:true,d:"Choose how each sidebar shows up on phones. Put it in a drawer that readers open from a tab on the edge of the screen, or let the right sidebar stack below the post. Your related posts, sign-up form and author bio stay one tap away instead of disappearing.",s:'Phone Sidebars'},
   {id:'header',c:'layout',n:'Post Headers',i:'header',d:'Your header treatment comes with the template you pick: full-bleed, overlay, beside-the-title, or text-only. From there, choose what appears in it — breadcrumbs, byline, share icons, a caption.',s:'Post Headers'},
   {id:'collection',c:'layout',n:'Multiple Blogs',i:'collection',d:"Run several blogs on one site and style each one separately — its own template, its own sidebars, its own settings. "+"A recipe archive and a travel journal don't have to look alike.",s:'Multiple Blogs'},
   {id:'search',c:'nav',n:'Post Search',i:'search',d:"Full-text search across all your posts with live results and keyword highlights. So nothing you've ever written gets lost in your archive.",s:'Search'},
@@ -69,7 +71,7 @@ const F: Feat[] = [
   {id:'email',c:'growth',n:'Email Capture',i:'email',d:'Drop a newsletter signup anywhere on your blog — sidebar, post footer, or collection page. Subscribers land in your dashboard, ready to download, or go straight to Kit or Mailchimp.',s:'Email Capture'},
   {id:'magnet',c:'growth',n:'Lead Magnet',i:'magnet',d:'Offer a freebie in exchange for an email. Guides, checklists, templates — delivered automatically, tracked alongside your newsletter signups.',s:'Lead Magnet'},
   {id:'integrations',c:'growth',n:'Kit & Mailchimp',i:'sync',isNew:true,d:"Connect Kit or Mailchimp once and every newsletter sign-up and lead-magnet request on your blog goes straight to your list. Lead-magnet sign-ups are tagged with the freebie's name, so you know who came for what.",s:'Kit & Mailchimp'},
-  {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics and your blog events forward straight into GA4, so traffic sources, top referrers and new vs. returning show up in your GA reports.',s:'Analytics'}
+  {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics or Fathom and your blog events forward into that account, so traffic sources, top referrers and new vs. returning show up there.',s:'Analytics'}
 ];
 
 const shell = (inner: string) => `<div class="stage-mb">
@@ -288,6 +290,28 @@ function stage(f: Feat): string {
             <span style="color:#d2d2d8">&middot;</span> <span style="color:var(--violet);font-weight:700">4 min read</span></div>
         </div>
       </div>
+    </div>`,
+    mobilesidebar:`<div style="width:100%;max-width:640px;margin:0 auto;display:flex;justify-content:center;gap:34px;align-items:flex-start;flex-wrap:wrap">
+      ${[['Drawer closed',false],['Drawer open',true]].map(([label,open])=>`<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+        <div style="width:190px;height:340px;border:7px solid #1a1a1a;border-radius:26px;background:#fff;position:relative;overflow:hidden;box-shadow:0 10px 30px rgba(26,26,42,.15)">
+          <div style="padding:16px 14px 0">
+            <div style="font-size:.42rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:6px">LIFESTYLE</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:.8rem;line-height:1.2;color:#1a1a1a;margin-bottom:10px">Finding balance in a busy creative life</div>
+            <div class="af-hero" style="height:66px;margin-bottom:10px"></div>${lines(7)}</div>
+          ${open?`<div style="position:absolute;inset:0;background:rgba(17,17,17,.35)"></div>
+          <div style="position:absolute;top:0;right:0;bottom:0;width:72%;background:#fff;box-shadow:-10px 0 24px rgba(0,0,0,.18);padding:16px 12px">
+            <div style="font-size:.5rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">Related posts</div>
+            <div style="display:flex;gap:7px;margin-bottom:7px"><div style="width:34px;height:26px;border-radius:3px;background:linear-gradient(135deg,#ded8f8,#b9afee)"></div><div style="flex:1;font-size:.44rem;color:#555;line-height:1.3">The case for slow living</div></div>
+            <div style="display:flex;gap:7px;margin-bottom:12px"><div style="width:34px;height:26px;border-radius:3px;background:linear-gradient(135deg,#f6dfe9,#e4b8cc)"></div><div style="flex:1;font-size:.44rem;color:#555;line-height:1.3">Morning pages, a year in</div></div>
+            <div style="border:1px solid rgba(122,45,94,.2);background:#fdf8fb;border-radius:6px;padding:9px;text-align:center">
+              <div style="font-size:.5rem;color:#1a1a1a;margin-bottom:6px;font-weight:600">The weekly letter</div>
+              <div style="background:#fff;border:1px solid #e4dae2;border-radius:3px;height:14px;margin-bottom:4px"></div>
+              <div style="background:var(--plum);border-radius:3px;height:15px"></div></div>
+          </div>`:''}
+          <div style="position:absolute;top:44%;right:${open?'72%':'0'};width:20px;height:58px;border-radius:7px 0 0 7px;background:${open?'var(--violet)':'#fff'};border:1px solid ${open?'var(--violet)':'#e2e0ea'};border-right:none;box-shadow:-3px 2px 10px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${open?'#fff':'var(--violet)'}" stroke-width="2.5" stroke-linecap="round"><polyline points="${open?'9 18 15 12 9 6':'15 18 9 12 15 6'}"/></svg></div>
+        </div>
+        <div style="font-size:.6rem;color:var(--mid)">${label}</div></div>`).join('')}
     </div>`,
     updated:`<div style="width:100%;max-width:640px;margin:0 auto">
       <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">In the post header, next to the publish date</div>
@@ -735,10 +759,17 @@ function stage(f: Feat): string {
           <span style="font-size:.44rem;color:#9a9aa4;font-family:ui-monospace,Menlo,monospace">G-XXXXXXXXXX</span>
           <span style="margin-left:auto;font-size:.44rem;color:#9a9aa4">Tracking: Traffic Sources <span style="color:#dcdce2">&middot;</span> Top Referrers <span style="color:#dcdce2">&middot;</span> New vs. Returning</span>
         </div>
+        <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #f0f0f0;border-radius:7px;padding:9px 11px;margin-top:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:#10B981;flex-shrink:0"></span>
+          <span style="font-size:.54rem;font-weight:600;color:#1a1a1a">Fathom</span>
+          <span style="font-size:.44rem;color:#0f7a58;font-weight:700;background:rgba(16,185,129,.12);border-radius:100px;padding:2px 7px">Connected</span>
+          <span style="font-size:.44rem;color:#9a9aa4;font-family:ui-monospace,Menlo,monospace">CDBUGS</span>
+          <span style="margin-left:auto;font-size:.44rem;color:#9a9aa4">Tracking: Traffic Sources <span style="color:#dcdce2">&middot;</span> Top Referrers <span style="color:#dcdce2">&middot;</span> New vs. Returning</span>
+        </div>
       </div>`
   }[f.id] as string | undefined;
 
-  if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting','updated','integrations'].includes(f.id)) return body as string;
+  if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting','updated','integrations','mobilesidebar'].includes(f.id)) return body as string;
   if(body) return shell(body);
   // generic fallback
   return shell(`${blogNav}<div style="padding:16px 18px">
@@ -1045,7 +1076,7 @@ export function FeatureGrid() {
 
 const WORDS: Record<number, string> = {
   20: 'Twenty', 21: 'Twenty-one', 22: 'Twenty-two', 23: 'Twenty-three',
-  24: 'Twenty-four', 25: 'Twenty-five', 26: 'Twenty-six',
+  24: 'Twenty-four', 25: 'Twenty-five', 26: 'Twenty-six', 27: 'Twenty-seven', 28: 'Twenty-eight', 29: 'Twenty-nine', 30: 'Thirty',
 };
 function numberWord(n: number) {
   return WORDS[n] ?? String(n);

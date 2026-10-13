@@ -89,6 +89,23 @@ If the card says connected but the BetterBlog charts are empty, the snippet may 
 
 ---
 
+## Connecting Fathom
+
+The **Fathom Analytics Integration** card sends BetterBlog page views and reader events to your Fathom site. It does **not** import Fathom data into the BetterBlog dashboard. Traffic Sources, Top Referrers, and New vs. Returning Visitors are viewed in Fathom itself. Fathom is cookieless, so connecting it does not add a consent banner on your blog.
+
+1. Click **Connect Fathom**.
+2. Enter your Fathom **Site ID** (for example `CDBUGS`) from Fathom → Settings → Sites.
+3. Choose metrics to forward: **Traffic Sources**, **Top Referrers**, **New vs. Returning Visitors**.
+4. Click **Connect**.
+
+Use **Edit** to change the Site ID or metrics, or **Disconnect** to stop forwarding.
+
+Page views are sent from the reader’s browser only on collection and post pages where BetterBlog is running. Preview does not send events.
+
+If the card says connected but the BetterBlog charts are empty, the snippet may not be collecting BetterBlog’s own events yet. See [Troubleshooting](troubleshooting.md).
+
+---
+
 ## Leads & Subscribers
 
 **Leads & Subscribers** lists newsletter and lead-magnet signups from Email Capture and Lead Magnet modules.

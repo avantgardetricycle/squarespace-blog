@@ -394,6 +394,7 @@ The following is the complete outline of documentation that must exist for the c
 - Search Analytics **[EXISTS]**
 - Per-Author Analytics **[EXISTS]**
 - Connecting Google Analytics **[EXISTS]**
+- Connecting Fathom **[EXISTS]**
 - Leads & Subscribers: email capture and lead magnet signups **[EXISTS]**
 - Downloading the leads CSV **[EXISTS]**
 

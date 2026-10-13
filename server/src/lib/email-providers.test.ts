@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   forwardSubscriber,
+  listEmailCatalog,
   mailchimpDatacenter,
   mailchimpSubscriberHash,
   redactSubscriberText,
@@ -26,7 +27,8 @@ test('mailchimp subscriber hash is the md5 of the lowercase address', () => {
 test('destination ids are checked before a request', () => {
   assert.equal(validateDestinationId('kit', '42'), null)
   assert.equal(validateDestinationId('kit', 'form-1'), 'Kit form ID should be a number.')
-  assert.equal(validateDestinationId('mailchimp', ''), 'Audience ID is required.')
+  assert.equal(validateDestinationId('mailchimp', ''), 'Choose a Mailchimp audience.')
+  assert.equal(validateDestinationId('kit', '', 'tag'), 'Choose a Kit tag.')
   assert.equal(validateDestinationId('mailchimp', 'abc123def0'), null)
 })
 
@@ -224,6 +226,128 @@ test('test connection checks the kit form and the mailchimp audience', async () 
     },
   })
   assert.deepEqual(mailchimp, { ok: false, error: 'Mailchimp rejected this API key.' })
+})
+
+test('kit tag subscribe creates the subscriber and posts to the tag', async () => {
+  const calls: string[] = []
+  const fetchImpl: FetchLike = async (url, init) => {
+    calls.push(`${init?.method ?? 'GET'} ${url}`)
+    return new Response(JSON.stringify({ subscriber: { id: 1 } }), { status: 201 })
+  }
+  const result = await forwardSubscriber({
+    provider: 'kit',
+    apiKey: 'kit-secret',
+    destinationId: '9',
+    destinationKind: 'tag',
+    email: 'reader@example.com',
+    fetchImpl,
+  })
+  assert.deepEqual(result, { ok: true })
+  assert.deepEqual(calls, [
+    'POST https://api.kit.com/v4/subscribers',
+    'POST https://api.kit.com/v4/tags/9/subscribers',
+  ])
+})
+
+test('mailchimp connection tag is applied with the lead magnet tag', async () => {
+  let tagBody: unknown = null
+  const fetchImpl: FetchLike = async (url, init) => {
+    if (url.endsWith('/tags')) tagBody = JSON.parse(String(init?.body))
+    return new Response('{}', { status: 200 })
+  }
+  const result = await forwardSubscriber({
+    provider: 'mailchimp',
+    apiKey: 'secret-us21',
+    destinationId: 'abc123def0',
+    tagName: 'Newsletter',
+    email: 'user@example.com',
+    leadMagnetTitle: 'Free guide',
+    fetchImpl,
+  })
+  assert.deepEqual(result, { ok: true })
+  assert.deepEqual(tagBody, {
+    tags: [
+      { name: 'Newsletter', status: 'active' },
+      { name: 'Free guide', status: 'active' },
+    ],
+  })
+})
+
+test('list catalog loads kit forms and tags, and mailchimp audiences and tags', async () => {
+  const kit = await listEmailCatalog({
+    provider: 'kit',
+    apiKey: 'kit-secret',
+    fetchImpl: async (url) => {
+      if (url.startsWith('https://api.kit.com/v4/forms')) {
+        return new Response(JSON.stringify({ forms: [{ id: 42, name: 'Newsletter' }] }), { status: 200 })
+      }
+      if (url.startsWith('https://api.kit.com/v4/tags')) {
+        return new Response(JSON.stringify({ tags: [{ id: 7, name: 'VIP' }] }), { status: 200 })
+      }
+      return new Response('unexpected', { status: 500 })
+    },
+  })
+  assert.deepEqual(kit, {
+    ok: true,
+    provider: 'kit',
+    forms: [{ id: '42', name: 'Newsletter' }],
+    tags: [{ id: '7', name: 'VIP' }],
+  })
+
+  const mailchimp = await listEmailCatalog({
+    provider: 'mailchimp',
+    apiKey: 'secret-us21',
+    audienceId: 'abc123def0',
+    fetchImpl: async (url) => {
+      if (url.includes('/lists?')) {
+        return new Response(JSON.stringify({ lists: [{ id: 'abc123def0', name: 'Main list' }], total_items: 1 }), {
+          status: 200,
+        })
+      }
+      if (url.includes('/segments?')) {
+        return new Response(JSON.stringify({ segments: [{ id: 15, name: 'Customers' }], total_items: 1 }), {
+          status: 200,
+        })
+      }
+      return new Response('unexpected', { status: 500 })
+    },
+  })
+  assert.deepEqual(mailchimp, {
+    ok: true,
+    provider: 'mailchimp',
+    audiences: [{ id: 'abc123def0', name: 'Main list' }],
+    tags: [{ id: '15', name: 'Customers' }],
+  })
+})
+
+test('test connection checks a kit tag and a mailchimp tag', async () => {
+  const kit = await testEmailProvider({
+    provider: 'kit',
+    apiKey: 'kit-secret',
+    destinationId: '7',
+    destinationKind: 'tag',
+    fetchImpl: async (url) => {
+      assert.equal(url, 'https://api.kit.com/v4/tags?per_page=500')
+      return new Response(JSON.stringify({ tags: [{ id: 7, name: 'VIP' }] }), { status: 200 })
+    },
+  })
+  assert.deepEqual(kit, { ok: true })
+
+  const calls: string[] = []
+  const mailchimp = await testEmailProvider({
+    provider: 'mailchimp',
+    apiKey: 'secret-us21',
+    destinationId: 'abc123def0',
+    tagId: '15',
+    fetchImpl: async (url) => {
+      calls.push(url)
+      if (url.endsWith('/segments/15')) return new Response('{}', { status: 404 })
+      return new Response('{}', { status: 200 })
+    },
+  })
+  assert.deepEqual(mailchimp, { ok: false, error: 'Mailchimp tag was not found.' })
+  assert.equal(calls[0], 'https://us21.api.mailchimp.com/3.0/lists/abc123def0')
+  assert.equal(calls[1], 'https://us21.api.mailchimp.com/3.0/lists/abc123def0/segments/15')
 })
 
 test('redactSubscriberText hides addresses', () => {

@@ -243,6 +243,18 @@ export async function setupApiMocks(page: Page, options?: ApiMockOptions): Promi
     if (method === "GET" && path === `/api/config/${siteKey}`) return json(route, 200, configResponse);
     if (method === "POST" && path === "/api/config") return json(route, 200, { ok: true });
     if (method === "GET" && path === `/api/config/blog-preview/${siteKey}`) return json(route, 200, configurePreviewResponse);
+    if (method === "GET" && path === `/api/config/preview-snapshot/${siteKey}`) {
+      const fixture = await route.fetch({ url: new URL("/e2e/iframe-blog.html", url.origin).toString() });
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: await fixture.text(),
+      });
+      return;
+    }
+    if (method === "POST" && path === `/api/config/preview-snapshot/${siteKey}/refresh`) {
+      return json(route, 200, { ok: true, fetchedAt: "2026-01-02T00:00:00.000Z", quality: "http" });
+    }
     if (method === "GET" && path === `/api/blog-authors/${siteKey}`) return json(route, 200, authorsResponse);
     if (method === "POST" && path === "/api/blog-authors") return json(route, 200, authorsResponse[0]);
     if (method === "PATCH" && path.startsWith("/api/blog-authors/")) return json(route, 200, authorsResponse[0]);

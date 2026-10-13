@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { persistAndForwardLead, type EmailSyncDeps } from './email-sync.js'
+import { emailModuleForLead, persistAndForwardLead, platformKeyFromRows, selectStoredIntegration, type EmailSyncDeps } from './email-sync.js'
 
 const lead = {
   siteId: 'site-1',
@@ -34,6 +34,50 @@ function deps(overrides: Partial<EmailSyncDeps> = {}): EmailSyncDeps & { calls: 
   }
 }
 
+test('a legacy destination row without a module is used for post newsletter', () => {
+  const stored = selectStoredIntegration(
+    [{ provider: 'mailchimp', api_key_enc: 'enc', destination_id: 'audience-1', tag_name: 'Readers' }],
+    'post_newsletter'
+  )
+  assert.equal(stored?.provider, 'mailchimp')
+  assert.equal(stored?.apiKeyEnc, 'enc')
+  assert.equal(stored?.destinationId, 'audience-1')
+  assert.equal(stored?.tagName, 'Readers')
+})
+
+test('a module without its own key uses the platform key from another module', () => {
+  const rows = [
+    { module: 'collection_newsletter', provider: 'kit', api_key_enc: 'kit-enc', destination_id: 'form-1' },
+    { module: 'post_newsletter', provider: 'kit', api_key_enc: null, destination_id: 'form-2' },
+    { module: 'post_lead_magnet', provider: 'mailchimp', api_key_enc: 'mc-enc', destination_id: 'aud-1' },
+  ]
+  assert.equal(platformKeyFromRows(rows, 'kit'), 'kit-enc')
+  assert.equal(platformKeyFromRows(rows, 'mailchimp'), 'mc-enc')
+  const post = selectStoredIntegration(rows, 'post_newsletter')
+  assert.equal(post?.provider, 'kit')
+  assert.equal(post?.destinationId, 'form-2')
+  assert.equal(post?.apiKeyEnc, null)
+  assert.equal(platformKeyFromRows(rows, post?.provider ?? ''), 'kit-enc')
+})
+
+test('per-module rows do not share another module destination', () => {
+  const rows = [
+    { module: 'collection_newsletter', provider: 'mailchimp', api_key_enc: 'enc', destination_id: 'audience-1' },
+    { module: 'post_newsletter', provider: 'kit', api_key_enc: 'enc', destination_id: 'form-9', destination_kind: 'form' },
+  ]
+  const post = selectStoredIntegration(rows, 'post_newsletter')
+  assert.equal(post?.provider, 'kit')
+  assert.equal(post?.destinationId, 'form-9')
+  assert.equal(selectStoredIntegration(rows, 'post_lead_magnet'), null)
+})
+
+test('signup modules keep collection and post destinations apart', () => {
+  assert.equal(emailModuleForLead('newsletter', 'collection'), 'collection_newsletter')
+  assert.equal(emailModuleForLead('newsletter', 'post'), 'post_newsletter')
+  assert.equal(emailModuleForLead('lead_magnet', 'collection'), 'collection_lead_magnet')
+  assert.equal(emailModuleForLead('lead_magnet', 'post'), 'post_lead_magnet')
+})
+
 test('a failed provider call still keeps the local lead and records lastError', async () => {
   let recorded: { lastError: string | null } | null = null
   const harness = deps({
@@ -41,7 +85,7 @@ test('a failed provider call still keeps the local lead and records lastError', 
       harness.calls.push('forward')
       return { ok: false, error: 'Kit rejected this API key.' }
     },
-    saveStatus: async (_siteId, status) => {
+    saveStatus: async (_siteId, _module, status) => {
       harness.calls.push('status')
       recorded = { lastError: status.lastError }
     },
@@ -59,7 +103,7 @@ test('a thrown provider error is recorded without the address and does not rejec
     forward: async () => {
       throw new Error('network down for reader@example.com')
     },
-    saveStatus: async (_siteId, status) => {
+    saveStatus: async (_siteId, _module, status) => {
       recorded = status.lastError
     },
   })

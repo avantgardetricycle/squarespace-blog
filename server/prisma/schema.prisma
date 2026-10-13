@@ -67,14 +67,17 @@ model Site {
   blogAuthors           BlogAuthor[]
   analyticsEvents       AnalyticsEvent[]
   googleAnalytics       SiteGoogleAnalytics?
+  fathomAnalytics       SiteFathomAnalytics?
   leadCaptures          LeadCapture[]
   blogCommentSettings   BlogCommentSettings?
-  emailIntegration      SiteEmailIntegration?
+  emailIntegrations     SiteEmailIntegration[]
+  emailCredentials      SiteEmailCredential[]
   sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
   supportConversations  SupportConversation[]
   supportTickets        SupportTicket[]
+  previewSnapshots      PreviewSnapshot[]
 
   @@index([siteKey])
   @@index([userId])
@@ -94,6 +97,19 @@ model SiteGoogleAnalytics {
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("site_google_analytics")
+}
+
+model SiteFathomAnalytics {
+  id             String   @id @default(uuid())
+  siteId         String   @unique @map("site_id")
+  fathomSiteId   String   @map("fathom_site_id") // public Site ID from Fathom Settings → Sites
+  metricsEnabled String[] @map("metrics_enabled") // traffic_sources | top_referrers | new_vs_returning
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@map("site_fathom_analytics")
 }
 
 model AnalyticsEvent {
@@ -319,6 +335,23 @@ model LeadCapture {
   @@map("lead_captures")
 }
 
+model PreviewSnapshot {
+  id         String   @id @default(uuid())
+  siteId     String   @map("site_id")
+  pageKind   String   @map("page_kind") // collection | post
+  sourcePath String   @map("source_path")
+  html       String   @db.Text
+  quality    String // http | http-sparse | browser
+  byteSize   Int      @map("byte_size")
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, pageKind, sourcePath])
+  @@index([siteId, fetchedAt])
+  @@map("preview_snapshots")
+}
+
 model CachedPost {
   siteId        String   @map("site_id")
   externalPostId String  @map("external_post_id") // Squarespace post ID or fullUrl
@@ -398,18 +431,35 @@ model BlogCommentSettings {
 }
 
 model SiteEmailIntegration {
-  siteId        String    @id @map("site_id")
-  provider      String    @default("betterblog") // betterblog | kit | mailchimp
-  apiKeyEnc     String?   @map("api_key_enc") @db.Text
-  destinationId String?   @map("destination_id") // Kit form id or Mailchimp audience id
-  lastError     String?   @map("last_error") @db.Text
-  lastErrorAt   DateTime? @map("last_error_at")
-  lastSuccessAt DateTime? @map("last_success_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  siteId          String    @map("site_id")
+  module          String    @default("collection_newsletter") // collection_newsletter | post_newsletter | collection_lead_magnet | post_lead_magnet
+  provider        String    @default("betterblog") // betterblog | kit | mailchimp
+  apiKeyEnc       String?   @map("api_key_enc") @db.Text
+  destinationId   String?   @map("destination_id") // Kit form/tag id or Mailchimp audience id
+  destinationKind String?   @map("destination_kind") // kit: form | tag
+  tagId           String?   @map("tag_id") // Mailchimp tag (static segment) id
+  tagName         String?   @map("tag_name") // Mailchimp tag name, applied on subscribe
+  lastError       String?   @map("last_error") @db.Text
+  lastErrorAt     DateTime? @map("last_error_at")
+  lastSuccessAt   DateTime? @map("last_success_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
+  @@id([siteId, module])
   @@map("site_email_integrations")
+}
+
+model SiteEmailCredential {
+  siteId    String   @map("site_id")
+  provider  String // kit | mailchimp
+  apiKeyEnc String   @map("api_key_enc") @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([siteId, provider])
+  @@map("site_email_credentials")
 }
 
 model SitePaywallSettings {
