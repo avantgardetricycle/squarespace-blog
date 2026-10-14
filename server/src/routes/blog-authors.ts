@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import {
   AUTHOR_PHOTO_MAX_BYTES,
   deleteAuthorPhotoIfOwned,
@@ -84,7 +85,7 @@ function handlePhotoUpload(req: Request, res: Response, next: NextFunction): voi
 }
 
 // POST /api/blog-authors/photo - Upload author photo to Supabase Storage
-router.post('/photo', requireSession, handlePhotoUpload, async (req: Request, res: Response) => {
+router.post('/photo', requireSession, requireEditableSubscription, handlePhotoUpload, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = typeof req.body?.siteKey === 'string' ? req.body.siteKey : ''
   const previousImageUrl = typeof req.body?.previousImageUrl === 'string' ? req.body.previousImageUrl : null
@@ -124,7 +125,7 @@ router.post('/photo', requireSession, handlePhotoUpload, async (req: Request, re
 })
 
 // DELETE /api/blog-authors/photo - Best-effort delete of a stored author photo
-router.delete('/photo', requireSession, async (req: Request, res: Response) => {
+router.delete('/photo', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; imageUrl?: string }
   const siteKey = typeof body.siteKey === 'string' ? body.siteKey : ''
@@ -171,7 +172,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
 })
 
 // POST /api/blog-authors - Add a new author (requires auth, must own site)
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as {
     siteKey?: string
@@ -230,7 +231,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
 })
 
 // PATCH /api/blog-authors/:id - Update author profile (requires auth, must own site)
-router.patch('/:id', requireSession, async (req: Request, res: Response) => {
+router.patch('/:id', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const authorId = req.params.id as string
   const body = req.body as {

@@ -2,7 +2,7 @@ import Stripe from 'stripe'
 import prisma from '../db/index.js'
 import { normalizePlanKey } from './planKeys.js'
 import { getStripeEnvironment } from './stripeEnvironment.js'
-import { isActiveSubscriptionStatus, isBetaCustomerId, isBetaSubscription, usableStripeCustomerId } from './subscriptionStatus.js'
+import { isActiveSubscriptionStatus, isBetaCustomerId, isBetaSubscription, nextPaymentFailedAt, usableStripeCustomerId } from './subscriptionStatus.js'
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -108,6 +108,10 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
     : null
   const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
   const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
+  const paymentFailedAt = nextPaymentFailedAt(
+    { status: existingSub?.status, paymentFailedAt: existingSub?.paymentFailedAt ?? null },
+    status
+  )
 
   await prisma.subscription.upsert({
     where: { stripeCustomerId },
@@ -120,7 +124,8 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
       status,
       maxSites,
       currentPeriodEnd,
-      cancelAtPeriodEnd
+      cancelAtPeriodEnd,
+      paymentFailedAt
     },
     update: {
       stripeSubscriptionId: stripeSubscription.id,
@@ -129,7 +134,8 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
       status,
       maxSites,
       currentPeriodEnd,
-      cancelAtPeriodEnd
+      cancelAtPeriodEnd,
+      paymentFailedAt
     }
   })
 }

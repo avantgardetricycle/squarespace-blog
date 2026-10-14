@@ -5,6 +5,7 @@ import prisma, {
   type AuthorSettings,
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 
 const router = Router()
 
@@ -254,7 +255,7 @@ router.get('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
 })
 
 // PUT /api/analytics/ga/:siteKey - Save Google Analytics config (requires auth)
-router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) => {
+router.put('/ga/:siteKey', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const body = req.body as { measurementId?: string; metricsEnabled?: string[] }
@@ -301,7 +302,7 @@ router.put('/ga/:siteKey', requireSession, async (req: Request, res: Response) =
 })
 
 // DELETE /api/analytics/ga/:siteKey - Disconnect Google Analytics (requires auth)
-router.delete('/ga/:siteKey', requireSession, async (req: Request, res: Response) => {
+router.delete('/ga/:siteKey', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const site = await prisma.site.findFirst({
@@ -345,7 +346,7 @@ router.get('/fathom/:siteKey', requireSession, async (req: Request, res: Respons
 })
 
 // PUT /api/analytics/fathom/:siteKey - Save Fathom config (requires auth)
-router.put('/fathom/:siteKey', requireSession, async (req: Request, res: Response) => {
+router.put('/fathom/:siteKey', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const body = req.body as { fathomSiteId?: string; metricsEnabled?: string[] }
@@ -392,7 +393,7 @@ router.put('/fathom/:siteKey', requireSession, async (req: Request, res: Respons
 })
 
 // DELETE /api/analytics/fathom/:siteKey - Disconnect Fathom (requires auth)
-router.delete('/fathom/:siteKey', requireSession, async (req: Request, res: Response) => {
+router.delete('/fathom/:siteKey', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = req.params.siteKey as string
   const site = await prisma.site.findFirst({
