@@ -458,6 +458,92 @@ test.describe("post layout contract", () => {
     expect(Math.abs(narrow.zoneWidth - narrow.clientWidth)).toBeLessThan(2);
   });
 
+  test("applying publisher drops a stacked header left over from the previous template", async ({ page }, testInfo) => {
+    test.skip(isMobileProject(testInfo), "publisher mobile hero is a separate frame");
+    await mountRenderer(page, { postConfig: structuredClone(postTemplates.feature) });
+    await expect(page.locator(".blog-overlay-featured-image-stacked-fullbleed")).toBeVisible();
+
+    await page.evaluate((publisher) => {
+      const renderer = (window as unknown as { BlogOverlayRenderer: { updateConfig: (cfg: unknown) => void } }).BlogOverlayRenderer;
+      renderer.updateConfig({ postConfig: publisher });
+    }, structuredClone(postTemplates.publisher));
+
+    await expect(page.locator(".blog-overlay-post-header-fullbleed--publisher")).toBeVisible();
+    const placed = await page.evaluate(() => {
+      const hero = document.querySelector(".blog-overlay-post-header-fullbleed--publisher");
+      const title = document.querySelector(".blog-overlay-post-title");
+      if (!hero || !title) return null;
+      const heroBox = hero.getBoundingClientRect();
+      const titleBox = title.getBoundingClientRect();
+      return {
+        inside: hero.contains(title),
+        titleAboveHero: titleBox.bottom < heroBox.top + 1,
+        heroHeight: heroBox.height,
+        stacked: !!document.querySelector(".blog-overlay-featured-image-stacked-fullbleed"),
+      };
+    });
+    expect(placed).not.toBeNull();
+    expect(placed!.stacked).toBe(false);
+    expect(placed!.inside).toBe(true);
+    expect(placed!.titleAboveHero).toBe(false);
+    expect(placed!.heroHeight).toBeGreaterThan(400);
+  });
+
+  test("publisher desktop header text wraps inside the hero as the window narrows", async ({ page }, testInfo) => {
+    test.skip(isMobileProject(testInfo), "publisher mobile hero stays a fixed 500px frame");
+    const title = "SpaceX Starship: The Vehicle That Could Change Everything";
+    const items = blogJson.items.map((item, index) => ({
+      ...item,
+      title: index === 1 ? title : item.title,
+    }));
+    await mountRenderer(page, {
+      postConfig: structuredClone(postTemplates.publisher),
+      blogItems: items,
+    });
+
+    const frame = () =>
+      page.evaluate(() => {
+        const hero = document.querySelector(".blog-overlay-post-header-fullbleed--publisher");
+        const heading = document.querySelector(".blog-overlay-post-title");
+        if (!hero || !heading) return null;
+        const heroBox = hero.getBoundingClientRect();
+        const titleBox = heading.getBoundingClientRect();
+        const heroStyle = getComputedStyle(hero);
+        const titleStyle = getComputedStyle(heading);
+        const lineHeight = parseFloat(titleStyle.lineHeight) || titleBox.height;
+        return {
+          heroWidth: heroBox.width,
+          clientWidth: document.documentElement.clientWidth,
+          padLeft: parseFloat(heroStyle.paddingLeft) || 0,
+          padRight: parseFloat(heroStyle.paddingRight) || 0,
+          insetLeft: titleBox.left - heroBox.left,
+          insetRight: heroBox.right - titleBox.right,
+          lines: Math.round(titleBox.height / lineHeight),
+          scrollOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+    const wide = await frame();
+    expect(wide).not.toBeNull();
+    expect(Math.abs(wide!.heroWidth - wide!.clientWidth)).toBeLessThan(2);
+    expect(wide!.insetLeft).toBeGreaterThan(wide!.padLeft - 2);
+    expect(wide!.insetRight).toBeGreaterThan(wide!.padRight - 2);
+
+    await page.setViewportSize({ width: 900, height: 800 });
+    await expect.poll(async () => {
+      const next = await frame();
+      if (!next) return 9999;
+      return Math.abs(next.heroWidth - next.clientWidth);
+    }, { timeout: 2000 }).toBeLessThan(2);
+    const narrow = await frame();
+    expect(narrow).not.toBeNull();
+    expect(narrow!.clientWidth).toBeLessThan(950);
+    expect(narrow!.insetLeft).toBeGreaterThan(narrow!.padLeft - 2);
+    expect(narrow!.insetRight).toBeGreaterThan(narrow!.padRight - 2);
+    expect(narrow!.lines).toBeGreaterThan(wide!.lines);
+    expect(narrow!.scrollOverflow).toBeLessThan(2);
+  });
+
   test("sidebar subscribe and get-it-free use compact desktop padding", async ({ page }, testInfo) => {
     const mobile = isMobileProject(testInfo);
     const cfg = structuredClone(postTemplates.reporter) as Record<string, any>;
