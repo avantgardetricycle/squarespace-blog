@@ -38,7 +38,7 @@ export function ResubscribePlanModal({
   const [isAnnual, setIsAnnual] = useState(defaultCadence !== "monthly");
   const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
   const [pricesLoadError, setPricesLoadError] = useState(false);
-  const [checkoutPlanKey, setCheckoutPlanKey] = useState<PublicPlanKey | null>(null);
+  const [checkoutPlanKey, setCheckoutPlanKey] = useState<PublicPlanKey | "studio" | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -62,7 +62,22 @@ export function ResubscribePlanModal({
     return annualSavingsPercent(tier.monthly.perMonth, tier.annual.perYear);
   }, [stripePrices]);
 
-  const handleChoosePlan = async (planKey: PublicPlanKey) => {
+  const tiers = defaultPlanKey === "studio"
+    ? [
+        ...PUBLIC_PRICING_TIERS,
+        {
+          name: "Studio",
+          tier: "Studio",
+          planKey: "studio" as const,
+          description: "For designers and agencies.",
+          capacity: "10 websites, then $7/mo each · 3 blogs per website",
+          features: ["Everything in Publication, on every client website"],
+          highlight: false as const,
+        },
+      ]
+    : PUBLIC_PRICING_TIERS;
+
+  const handleChoosePlan = async (planKey: PublicPlanKey | "studio") => {
     if (checkoutPlanKey || pricesLoadError || !stripePrices) return;
     setCheckoutPlanKey(planKey);
     try {
@@ -130,8 +145,8 @@ export function ResubscribePlanModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-2">
-          {PUBLIC_PRICING_TIERS.map((tier) => {
+        <div className={cn("grid grid-cols-1 gap-3.5 pt-2", defaultPlanKey === "studio" ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3")}>
+          {tiers.map((tier) => {
             const tierStripe = stripePrices?.plans?.[tier.planKey];
             const perMo =
               tierStripe == null

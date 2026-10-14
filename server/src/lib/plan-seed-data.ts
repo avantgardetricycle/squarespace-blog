@@ -3,31 +3,39 @@ import { buildStripePriceLabel } from './planLabels.js'
 import type { StripePlanEnvironment } from './stripeEnvironment.js'
 
 export type PlanSeedRow = {
-  planKey: 'essentials' | 'professional' | 'publication'
+  planKey: 'essentials' | 'professional' | 'publication' | 'studio'
   cadence: 'monthly' | 'annual'
   stripePriceId: string
   maxSites: number | null
+  maxWebsites: number | null
+  maxBlogsPerWebsite: number | null
 }
 
 /** Staging / local — STRIPE_ENVIRONMENT=sandbox */
 export const SANDBOX_PLANS: readonly PlanSeedRow[] = [
-  { planKey: 'essentials', cadence: 'monthly', stripePriceId: 'price_1TEaw1FNhpDahMYtkTRXKh6q', maxSites: 1 },
-  { planKey: 'essentials', cadence: 'annual', stripePriceId: 'price_1TEbDwFNhpDahMYtRctRNNaK', maxSites: 1 },
-  { planKey: 'professional', cadence: 'monthly', stripePriceId: 'price_1TEbF1FNhpDahMYtETj6pLFZ', maxSites: 3 },
-  { planKey: 'professional', cadence: 'annual', stripePriceId: 'price_1TEbFWFNhpDahMYtVN7ItqqY', maxSites: 3 },
-  { planKey: 'publication', cadence: 'monthly', stripePriceId: 'price_1TEbGEFNhpDahMYtW1NRSMNP', maxSites: null },
-  { planKey: 'publication', cadence: 'annual', stripePriceId: 'price_1TEbGhFNhpDahMYt5ghEqi90', maxSites: null },
+  { planKey: 'essentials', cadence: 'monthly', stripePriceId: 'price_1TEaw1FNhpDahMYtkTRXKh6q', maxSites: 1, maxWebsites: 1, maxBlogsPerWebsite: 1 },
+  { planKey: 'essentials', cadence: 'annual', stripePriceId: 'price_1TEbDwFNhpDahMYtRctRNNaK', maxSites: 1, maxWebsites: 1, maxBlogsPerWebsite: 1 },
+  { planKey: 'professional', cadence: 'monthly', stripePriceId: 'price_1TEbF1FNhpDahMYtETj6pLFZ', maxSites: 2, maxWebsites: 1, maxBlogsPerWebsite: 2 },
+  { planKey: 'professional', cadence: 'annual', stripePriceId: 'price_1TEbFWFNhpDahMYtVN7ItqqY', maxSites: 2, maxWebsites: 1, maxBlogsPerWebsite: 2 },
+  { planKey: 'publication', cadence: 'monthly', stripePriceId: 'price_1TEbGEFNhpDahMYtW1NRSMNP', maxSites: 3, maxWebsites: 1, maxBlogsPerWebsite: 3 },
+  { planKey: 'publication', cadence: 'annual', stripePriceId: 'price_1TEbGhFNhpDahMYt5ghEqi90', maxSites: 3, maxWebsites: 1, maxBlogsPerWebsite: 3 },
 ] as const
 
 /** Production — STRIPE_ENVIRONMENT=live */
 export const LIVE_PLANS: readonly PlanSeedRow[] = [
-  { planKey: 'essentials', cadence: 'monthly', stripePriceId: 'price_1TZdhDF6YDk2mKyqP0zb5ZJk', maxSites: 1 },
-  { planKey: 'essentials', cadence: 'annual', stripePriceId: 'price_1TZdhEF6YDk2mKyq4EE8g6ky', maxSites: 1 },
-  { planKey: 'professional', cadence: 'monthly', stripePriceId: 'price_1TZdhDF6YDk2mKyqf4UDoSVI', maxSites: 3 },
-  { planKey: 'professional', cadence: 'annual', stripePriceId: 'price_1TZdhFF6YDk2mKyqlCWDDtCp', maxSites: 3 },
-  { planKey: 'publication', cadence: 'monthly', stripePriceId: 'price_1TZdhHF6YDk2mKyqzDJOFcly', maxSites: null },
-  { planKey: 'publication', cadence: 'annual', stripePriceId: 'price_1TZdhFF6YDk2mKyqh0y5lDBu', maxSites: null },
+  { planKey: 'essentials', cadence: 'monthly', stripePriceId: 'price_1TZdhDF6YDk2mKyqP0zb5ZJk', maxSites: 1, maxWebsites: 1, maxBlogsPerWebsite: 1 },
+  { planKey: 'essentials', cadence: 'annual', stripePriceId: 'price_1TZdhEF6YDk2mKyq4EE8g6ky', maxSites: 1, maxWebsites: 1, maxBlogsPerWebsite: 1 },
+  { planKey: 'professional', cadence: 'monthly', stripePriceId: 'price_1TZdhDF6YDk2mKyqf4UDoSVI', maxSites: 2, maxWebsites: 1, maxBlogsPerWebsite: 2 },
+  { planKey: 'professional', cadence: 'annual', stripePriceId: 'price_1TZdhFF6YDk2mKyqlCWDDtCp', maxSites: 2, maxWebsites: 1, maxBlogsPerWebsite: 2 },
+  { planKey: 'publication', cadence: 'monthly', stripePriceId: 'price_1TZdhHF6YDk2mKyqzDJOFcly', maxSites: 3, maxWebsites: 1, maxBlogsPerWebsite: 3 },
+  { planKey: 'publication', cadence: 'annual', stripePriceId: 'price_1TZdhFF6YDk2mKyqh0y5lDBu', maxSites: 3, maxWebsites: 1, maxBlogsPerWebsite: 3 },
 ] as const
+
+/**
+ * Studio is a real plan (10 websites, then a $7/mo extra-website add-on, 3 blogs
+ * each) but its Stripe price IDs are not in the repo yet. Checkout returns a
+ * clear error until those rows are added here. Entitlements still resolve studio.
+ */
 
 export type { StripePlanEnvironment }
 
@@ -79,12 +87,16 @@ export async function seedPlans(
           stripePriceId: p.stripePriceId,
           stripePriceLabel,
           maxSites: p.maxSites,
+          maxWebsites: p.maxWebsites,
+          maxBlogsPerWebsite: p.maxBlogsPerWebsite,
           stripeEnvironment,
         },
         update: {
           stripePriceId: p.stripePriceId,
           stripePriceLabel,
           maxSites: p.maxSites,
+          maxWebsites: p.maxWebsites,
+          maxBlogsPerWebsite: p.maxBlogsPerWebsite,
         },
       })
     }

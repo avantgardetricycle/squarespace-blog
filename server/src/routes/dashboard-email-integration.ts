@@ -12,6 +12,7 @@ import {
   type KitDestinationKind,
 } from '../lib/email-providers.js'
 import { EMAIL_MODULES, ensureEmailIntegrationModules, propagatePlatformKeys, writeLegacyEmailDestination, type EmailModuleKey } from '../lib/email-sync.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 
 const router = Router()
 
@@ -370,6 +371,16 @@ router.put('/', requireSession, requireEditableSubscription, async (req: Request
   const site = await getSiteForUser(siteKey, user.id)
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const plan = await loadUserPlanContext(user.id)
+  if (!plan.entitlements.features.emailCapture) {
+    res.status(403).json({ error: `Email sign-up requires the ${plan.entitlements.requiredPlan.emailCapture} plan.` })
+    return
+  }
+  const usesSync = JSON.stringify(modulesBody).includes('"kit"') || JSON.stringify(modulesBody).includes('"mailchimp"')
+  if (usesSync && !plan.entitlements.features.kitMailchimp) {
+    res.status(403).json({ error: `Kit and Mailchimp sync require the ${plan.entitlements.requiredPlan.kitMailchimp} plan.` })
     return
   }
 

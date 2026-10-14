@@ -6,8 +6,17 @@ import prisma, {
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { requireEditableSubscription } from '../middleware/editableSubscription.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
+import type { PlanFeature } from '../lib/planEntitlements.js'
 
 const router = Router()
+
+async function requirePlanFeature (userId: number, feature: PlanFeature, res: Response): Promise<boolean> {
+  const plan = await loadUserPlanContext(userId)
+  if (plan.entitlements.features[feature]) return true
+  res.status(403).json({ error: `This feature requires the ${plan.entitlements.requiredPlan[feature]} plan.` })
+  return false
+}
 
 const EVENT_TYPES = ['page_view', 'scroll_depth', 'click', 'search', 'search_click', 'time_on_page', 'render_perf'] as const
 
@@ -275,6 +284,7 @@ router.put('/ga/:siteKey', requireSession, requireEditableSubscription, async (r
     res.status(404).json({ error: 'Site not found' })
     return
   }
+  if (!(await requirePlanFeature(user.id, 'advancedAnalytics', res))) return
 
   try {
     if (site.googleAnalytics) {
@@ -366,6 +376,7 @@ router.put('/fathom/:siteKey', requireSession, requireEditableSubscription, asyn
     res.status(404).json({ error: 'Site not found' })
     return
   }
+  if (!(await requirePlanFeature(user.id, 'advancedAnalytics', res))) return
 
   try {
     if (site.fathomAnalytics) {
@@ -459,6 +470,7 @@ router.get('/:siteKey/leads', requireSession, async (req: Request, res: Response
     res.status(404).json({ error: 'Site not found' })
     return
   }
+  if (!(await requirePlanFeature(user.id, 'emailCapture', res))) return
 
   const { since } = parseLeadsTimeRange(timeRange)
 
@@ -524,6 +536,11 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
   })
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const analyticsPlan = await loadUserPlanContext(user.id)
+  if (!analyticsPlan.entitlements.features.basicAnalytics) {
+    res.status(403).json({ error: `Analytics require the ${analyticsPlan.entitlements.requiredPlan.basicAnalytics} plan.` })
     return
   }
 
@@ -751,9 +768,9 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
       },
       pageViewsData,
       perPostAnalytics,
-      clickTrackingData,
-      searchAnalyticsData,
-      authorAnalyticsData,
+      clickTrackingData: analyticsPlan.entitlements.features.advancedAnalytics ? clickTrackingData : [],
+      searchAnalyticsData: analyticsPlan.entitlements.features.advancedAnalytics ? searchAnalyticsData : [],
+      authorAnalyticsData: analyticsPlan.entitlements.features.advancedAnalytics ? authorAnalyticsData : [],
       readPercentDistribution
     })
   } catch (err) {

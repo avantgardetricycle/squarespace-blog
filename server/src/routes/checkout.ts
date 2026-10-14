@@ -84,7 +84,11 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
     })
 
     if (!plan) {
-      res.status(404).json({ error: 'Plan not found' })
+      res.status(404).json({
+        error: normalizedPlanKey === 'studio'
+          ? 'Studio checkout is not available yet. Stripe prices for Studio have not been configured.'
+          : 'Plan not found'
+      })
       return
     }
 

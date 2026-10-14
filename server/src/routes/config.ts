@@ -6,14 +6,16 @@ import {
   upsertSiteConfig,
   type SiteConfigData
 } from '../db/index.js'
-import { requireSession, SessionUser } from '../middleware/session.js'
+import { optionalSession, requireSession, SessionUser } from '../middleware/session.js'
 import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { SnapshotCaptureError, getServedSnapshot, storeSnapshot } from '../lib/preview-snapshot.js'
 import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/preview-snapshot-html.js'
 import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
 import { canRenderSubscription } from '../lib/subscriptionStatus.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
-import { resolveDefaultPostTemplate } from './templates.js'
+import { newlyLockedViolations, resolveEntitlements, stripServedConfig } from '../lib/planEntitlements.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
+import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 
@@ -709,7 +711,16 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
 
 // GET /api/config/:siteKey - Public endpoint for loader.js
 // Uses internal subscription record only (no Stripe API calls) - gated on status
-router.get('/:siteKey', async (req: Request, res: Response) => {
+async function templateKeyFor (id: string | null, level: 'collection' | 'post'): Promise<string | null> {
+  if (!id) return null
+  const row = await prisma.templateConfig.findFirst({
+    where: { id, level },
+    select: { templateKey: true }
+  })
+  return row?.templateKey ?? null
+}
+
+router.get('/:siteKey', optionalSession, async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
   const viewerMode = parseViewerModeQuery(req.query.viewerMode)
   try {
@@ -951,7 +962,14 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         }
 
     const pw = site.sitePaywallSettings
-    const paywallSettings = pw
+    let servedDefaultAuthorIds = defaultAuthorIds
+    let servedOverrides: Record<string, string[]> = authorSettings.postAuthorOverrides ?? {}
+    let servedAuthorMap: Record<string, string> = authorMap
+    let servedAuthorProfiles = authorProfiles
+    let servedCollection: Record<string, unknown> = cc
+    let servedPost = resolvedPostConfig
+    let servedComments: { commentsEnabled: boolean; [key: string]: unknown } = commentSettings
+    let servedPaywall = pw
       ? {
           subscribeUrl: pw.subscribeUrl,
           footerDescription: pw.footerDescription,
@@ -960,30 +978,88 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           featureItems: pw.featureItems
         }
       : null
+    let servedPaywallMode = site.paywallMode
+    let servedCollectionTemplateId = siteConfigTyped.collectionTemplateId ?? null
+    let servedPostTemplateId = postTemplateId
+    let includeFathom = Boolean(site.fathomAnalytics)
+    let includePostViews = Object.keys(postViewCounts).length > 0
+
+    const sessionUser = (req as Request & { user?: SessionUser }).user
+    const editorView = req.query.editor === '1' && sessionUser?.id === site.userId
+    if (!editorView) {
+      const entitlements = resolveEntitlements({
+        plan: activeSubscription.plan,
+        stored: {
+          maxSites: activeSubscription.maxSites,
+          maxWebsites: activeSubscription.maxWebsites,
+          maxBlogsPerWebsite: activeSubscription.maxBlogsPerWebsite
+        }
+      })
+      const [collectionTemplateKey, postTemplateKey] = await Promise.all([
+        templateKeyFor(servedCollectionTemplateId, 'collection'),
+        templateKeyFor(servedPostTemplateId, 'post')
+      ])
+      const stripped = stripServedConfig(entitlements, {
+        collectionConfig: servedCollection,
+        postConfig: servedPost,
+        collectionTemplateKey,
+        postTemplateKey,
+        defaultAuthorIds: servedDefaultAuthorIds,
+        postAuthorOverrides: servedOverrides
+      })
+      servedCollection = stripped.collectionConfig
+      servedPost = stripped.postConfig
+      servedDefaultAuthorIds = stripped.defaultAuthorIds
+      servedOverrides = stripped.postAuthorOverrides
+      if (stripped.collectionTemplateDisallowed) {
+        const fallback = await resolveDefaultCollectionTemplate()
+        servedCollectionTemplateId = fallback?.id ?? null
+      }
+      if (stripped.postTemplateDisallowed) {
+        const fallback = await resolveDefaultPostTemplate()
+        servedPostTemplateId = fallback?.id ?? null
+        if (fallback) servedPost = mergeProgressBarIntoPostConfig(fallback.postConfig, progressBar)
+      }
+      const allowedAuthors = new Set([
+        ...servedDefaultAuthorIds,
+        ...Object.values(servedOverrides).flat()
+      ])
+      servedAuthorMap = Object.fromEntries(Object.entries(authorMap).filter(([id]) => allowedAuthors.has(id)))
+      servedAuthorProfiles = Object.fromEntries(
+        Object.entries(authorProfiles).filter(([id]) => allowedAuthors.has(id))
+      ) as typeof authorProfiles
+      if (!entitlements.features.comments) servedComments = { commentsEnabled: false }
+      if (!entitlements.features.paywall) {
+        servedPaywall = null
+        servedPaywallMode = 'auto'
+      }
+      if (!entitlements.features.advancedAnalytics) includeFathom = false
+      if (!entitlements.features.sorting) includePostViews = false
+    }
 
     const configData = {
       siteKey,
       siteId: site.id,
       blogPath: site.blogPath ?? null,
       rendererUrl,
-      defaultAuthorIds,
-      postAuthorOverrides: authorSettings.postAuthorOverrides ?? {},
-      authorMap,
-      authorProfiles,
-      collectionConfig: cc,
-      postConfig: resolvedPostConfig,
-      paywallMode: site.paywallMode,
+      defaultAuthorIds: servedDefaultAuthorIds,
+      postAuthorOverrides: servedOverrides,
+      authorMap: servedAuthorMap,
+      authorProfiles: servedAuthorProfiles,
+      collectionConfig: servedCollection,
+      postConfig: servedPost,
+      paywallMode: servedPaywallMode,
       paywallDetectionState: site.paywallDetectionState,
       paywallDetectionSource: site.paywallDetectionSource ?? null,
-      paywallSettings,
+      paywallSettings: servedPaywall,
       ...(viewerMode ? { viewerMode } : {}),
-      collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
-      postTemplateId,
+      collectionTemplateId: servedCollectionTemplateId,
+      postTemplateId: servedPostTemplateId,
       recentPostsCount: 3,
       baseUrl,
-      commentSettings,
-      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {}),
-      ...(site.fathomAnalytics
+      commentSettings: servedComments,
+      ...(includePostViews ? { postViewCounts } : {}),
+      ...(includeFathom && site.fathomAnalytics
         ? {
             fathom: {
               siteId: site.fathomAnalytics.fathomSiteId,
@@ -1066,6 +1142,39 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
         : {}
     }
 
+    const planContext = await loadUserPlanContext(user.id)
+    const existingAuthor = (existing?.authorSettings ?? null) as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> } | null
+    const existingRowTyped = existing as { collectionTemplateId?: string | null; postTemplateId?: string | null; collectionConfig?: unknown; postConfig?: unknown } | null
+    const [incomingCollectionKey, incomingPostKey, existingCollectionKey, existingPostKey] = await Promise.all([
+      templateKeyFor(collectionTemplateId, 'collection'),
+      templateKeyFor(postTemplateId, 'post'),
+      templateKeyFor(typeof existingRowTyped?.collectionTemplateId === 'string' ? existingRowTyped.collectionTemplateId : null, 'collection'),
+      templateKeyFor(typeof existingRowTyped?.postTemplateId === 'string' ? existingRowTyped.postTemplateId : null, 'post')
+    ])
+    const violations = newlyLockedViolations(
+      planContext.entitlements,
+      {
+        collectionConfig: collectionRaw,
+        postConfig: postRaw,
+        collectionTemplateKey: incomingCollectionKey,
+        postTemplateKey: incomingPostKey,
+        defaultAuthorIds: authorSettings.defaultAuthorIds,
+        postAuthorOverrides: authorSettings.postAuthorOverrides
+      },
+      {
+        collectionConfig: existingRowTyped?.collectionConfig,
+        postConfig: existingRowTyped?.postConfig,
+        collectionTemplateKey: existingCollectionKey,
+        postTemplateKey: existingPostKey,
+        defaultAuthorIds: existingAuthor?.defaultAuthorIds ?? [],
+        postAuthorOverrides: existingAuthor?.postAuthorOverrides ?? {}
+      }
+    )
+    if (violations.length > 0) {
+      res.status(403).json({ error: violations[0] })
+      return
+    }
+
     const data: SiteConfigData = {
       showDate,
       showAuthor,
@@ -1096,7 +1205,9 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
 
     await upsertSiteConfig(site.id, data)
 
-    const paywallNorm = normalizePaywallSettingsPayload(body.paywallSettings)
+    const paywallNorm = planContext.entitlements.features.paywall
+      ? normalizePaywallSettingsPayload(body.paywallSettings)
+      : null
     if (paywallNorm) {
       await prisma.sitePaywallSettings.upsert({
         where: { siteId: site.id },

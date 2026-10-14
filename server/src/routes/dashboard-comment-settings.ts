@@ -3,6 +3,7 @@ import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { encrypt } from '../lib/encryption.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 
 const router = Router()
 
@@ -105,6 +106,12 @@ router.put('/', requireSession, requireEditableSubscription, async (req: Request
   const site = await getSiteForUser(siteKey, user.id)
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const plan = await loadUserPlanContext(user.id)
+  const turningOn = (body.commentsEnabled ?? site.blogCommentSettings?.commentsEnabled ?? true) !== false
+  if (turningOn && !plan.entitlements.features.comments) {
+    res.status(403).json({ error: `Comments require the ${plan.entitlements.requiredPlan.comments} plan.` })
     return
   }
   const legacyApiKey = (site.blogCommentSettings as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null

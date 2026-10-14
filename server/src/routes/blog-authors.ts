@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import {
   AUTHOR_PHOTO_MAX_BYTES,
@@ -208,6 +209,15 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
   if (existing) {
     res.json(authorJson(existing))
     return
+  }
+
+  const plan = await loadUserPlanContext(user.id)
+  if (!plan.entitlements.features.multipleAuthors) {
+    const authorCount = await prisma.blogAuthor.count({ where: { siteId: site.id } })
+    if (authorCount >= 1) {
+      res.status(403).json({ error: `Multiple authors require the ${plan.entitlements.requiredPlan.multipleAuthors} plan.` })
+      return
+    }
   }
 
   const fromIngestion = ingestedFrom === 'SQUARESPACE'

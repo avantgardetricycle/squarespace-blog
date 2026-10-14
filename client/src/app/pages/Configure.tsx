@@ -64,6 +64,7 @@ import {
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
 import { getDashboardMe, createPaymentMethodUpdateSession, type DashboardMe } from "@/api/auth";
+import { featureAllowed, requiredPlanName, stripPreviewConfig } from "@/lib/servedConfig";
 import { formatSubscriptionDate, isInPaymentGrace, paymentGraceEndsAt } from "@/lib/subscription";
 import {
   EmailDestinationFields,
@@ -2575,7 +2576,7 @@ export default function Configure() {
   useEffect(() => {
     if (!siteKey) return;
     setConfigLoading(true);
-    fetch(`/api/config/${siteKey}`, { credentials: "include" })
+    fetch(`/api/config/${siteKey}?editor=1`, { credentials: "include" })
       .then((res) => {
         if (!res.ok) return null;
         return res.json();
@@ -3328,8 +3329,27 @@ export default function Configure() {
     const idx = blogItems.findIndex((item, i) => getFeaturedPostKey(item, i) === trimmed);
     return idx >= 0 ? getFeaturedPostKey(blogItems[idx], idx) : FEATURED_POST_SELECT_AUTO;
   }, [config.collectionConfig, blogItems, getFeaturedPostKey]);
+  const entitlements = me?.entitlements ?? null;
+  const planLoaded = me != null;
   const rendererConfig = useMemo(() => {
-    const base = configToRendererConfig(config);
+    let previewConfig = config;
+    if (entitlements) {
+      previewConfig = {
+        ...config,
+        collectionConfig: stripPreviewConfig(config.collectionConfig, entitlements),
+        postConfig: stripPreviewConfig(config.postConfig, entitlements),
+      };
+      if (
+        activePostTemplateKey &&
+        !entitlements.templates.post.includes(activePostTemplateKey)
+      ) {
+        const reporter = templateCatalogPost.find((template) => template.templateKey === "reporter");
+        if (reporter?.postConfig) {
+          previewConfig = { ...previewConfig, postConfig: reporter.postConfig as SiteConfigForm["postConfig"] };
+        }
+      }
+    }
+    const base = configToRendererConfig(previewConfig);
     const authorMap: Record<string, string> = {};
     const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; bioLong: string | null; bioFormat: AuthorBioFormat; email: string | null; socialLinks: Record<string, string> }> = {};
     for (const a of authors) {
@@ -3355,7 +3375,7 @@ export default function Configure() {
       paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
       viewerMode: previewAudience === "loggedIn" ? "loggedIn" : "loggedOut",
       paywallSettings:
-        shouldShowViewerModeToggle
+        shouldShowViewerModeToggle && featureAllowed(entitlements, "paywall", planLoaded)
           ? {
               subscribeUrl: paywallForm.subscribeUrl.trim() || null,
               footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
@@ -3371,6 +3391,10 @@ export default function Configure() {
     };
   }, [
     config,
+    entitlements,
+    planLoaded,
+    activePostTemplateKey,
+    templateCatalogPost,
     authors,
     effectiveSiteKey,
     effectiveSite,
@@ -4072,14 +4096,22 @@ export default function Configure() {
               Clear all settings
             </Button>
             {shouldShowViewerModeToggle && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => setPaywallSettingsModalOpen(true)}
-              >
-                Paywall Settings
-              </Button>
+              <div className="space-y-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  disabled={!featureAllowed(entitlements, "paywall", planLoaded)}
+                  onClick={() => setPaywallSettingsModalOpen(true)}
+                >
+                  Paywall Settings
+                </Button>
+                {!featureAllowed(entitlements, "paywall", planLoaded) && (
+                  <p className="text-[11px] text-[#6b6b6b]">
+                    Included on the {requiredPlanName(entitlements, "paywall")} plan.
+                  </p>
+                )}
+              </div>
             )}
             <Dialog
               open={clearSettingsModalOpen}
@@ -4200,6 +4232,8 @@ export default function Configure() {
             initialLevel={selectedLevel}
             collectionTemplateId={config.collectionTemplateId}
             postTemplateId={config.postTemplateId}
+            allowedTemplateKeys={planLoaded ? entitlements?.templates ?? { collection: [], post: [] } : null}
+            requiredPlan={entitlements?.requiredPlan}
           />
           {shouldShowViewerModeToggle && (
             <PaywallSettingsModal
@@ -4342,13 +4376,22 @@ export default function Configure() {
                     )}
 
                     {selectedLevel === "collection" && (
-                    <div className="min-w-0 border-b border-[#e5e4e0]">
+                    <div className={featureAllowed(entitlements, "featuredAndPinned", planLoaded) ? "min-w-0 border-b border-[#e5e4e0]" : "min-w-0 border-b border-[#e5e4e0] pointer-events-none opacity-60"}>
                       <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Featured Article</span>
+                        <span className="font-medium">
+                          Featured Article
+                          {!featureAllowed(entitlements, "featuredAndPinned", planLoaded) && (
+                            <span className="ml-2 text-[11px] font-normal text-[#6b6b6b]">
+                              Included on the {requiredPlanName(entitlements, "featuredAndPinned")} plan.
+                            </span>
+                          )}
+                        </span>
                         <div className="flex items-center gap-1">
                           <Switch
+                            disabled={!featureAllowed(entitlements, "featuredAndPinned", planLoaded)}
                             checked={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).show}
                             onCheckedChange={(v) => {
+                              if (!featureAllowed(entitlements, "featuredAndPinned", planLoaded)) return;
                               updateLevelConfigPath("featuredArticle.show", v);
                               setSectionExpanded((p) => ({ ...p, featuredArticle: v }));
                             }}
@@ -4717,12 +4760,17 @@ export default function Configure() {
                     {selectedLevel === "post" && (
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
                       Comments
+                      {!featureAllowed(entitlements, "comments", planLoaded) && (
+                        <span className="ml-2 normal-case tracking-normal font-medium text-[#6b6b6b]">
+                          Included on the {requiredPlanName(entitlements, "comments")} plan.
+                        </span>
+                      )}
                     </div>
                     )}
                     {selectedLevel === "post" && (commentSettingsLoading ? (
                       <div className="border-b border-[#e5e4e0] py-4 text-sm text-[#6b6b6b]">Loading comment settings…</div>
                     ) : commentSettings && (
-                    <div className="border-b border-[#e5e4e0] pb-4">
+                    <div className={featureAllowed(entitlements, "comments", planLoaded) ? "border-b border-[#e5e4e0] pb-4" : "border-b border-[#e5e4e0] pb-4 pointer-events-none opacity-60"}>
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Show Comments</span>
                         <div className="flex items-center gap-1">
@@ -5980,6 +6028,12 @@ export default function Configure() {
                           <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#1a7a5e] border-b border-[rgba(26,122,94,0.2)]">
                             Navigation & Discovery
                           </div>
+                          {planLoaded && (!featureAllowed(entitlements, "search", planLoaded) || !featureAllowed(entitlements, "emailCapture", planLoaded)) && (
+                            <p className="text-[11px] text-[#6b6b6b] pt-2">
+                              {!featureAllowed(entitlements, "search", planLoaded) && `Search, filters, and sorting are on the ${requiredPlanName(entitlements, "search")} plan. `}
+                              {!featureAllowed(entitlements, "emailCapture", planLoaded) && `Email sign-up and lead magnets are on the ${requiredPlanName(entitlements, "emailCapture")} plan.`}
+                            </p>
+                          )}
                           {selectedLevel === "collection" && (
                             <>
                               <ModuleSettingSectionCollapseOnly

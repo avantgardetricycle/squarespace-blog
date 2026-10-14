@@ -13,9 +13,8 @@ import { PrismaClient } from '../src/generated/prisma/client.js'
 import { getDatabaseUrl, getSslConfig } from '../src/lib/db-connection.js'
 import { generateToken, hashToken } from '../src/lib/auth.js'
 import { sendInviteEmailViaSendGrid } from '../src/lib/email.js'
+import { planCapacity } from '../src/lib/planEntitlements.js'
 import { isActiveSubscriptionStatus } from '../src/lib/subscriptionStatus.js'
-import type { StripePlanEnvironment } from '../src/lib/stripeEnvironment.js'
-
 const TOKEN_EXPIRY_DAYS = 14
 const COMPLIMENTARY_PLAN = 'professional'
 
@@ -44,24 +43,13 @@ function requireHttpsAppUrl (): void {
   process.env.APP_URL = raw.replace(/\/$/, '')
 }
 
-function stripeEnvironment (): StripePlanEnvironment {
-  return process.env.INVITE_STRIPE_ENVIRONMENT === 'live' ? 'live' : 'sandbox'
-}
-
 function complimentaryCustomerId (email: string): string {
   const hash = createHash('sha256').update(email).digest('hex').slice(0, 24)
   return `beta_invite_${hash}`
 }
 
-async function complimentaryMaxSites (prisma: PrismaClient): Promise<number | null> {
-  const plan = await prisma.plan.findFirst({
-    where: {
-      planKey: COMPLIMENTARY_PLAN,
-      cadence: 'monthly',
-      stripeEnvironment: stripeEnvironment()
-    }
-  })
-  return plan?.maxSites ?? 3
+function complimentaryCaps () {
+  return planCapacity(COMPLIMENTARY_PLAN)
 }
 
 async function main (): Promise<void> {
@@ -97,7 +85,7 @@ async function invite (prisma: PrismaClient): Promise<void> {
   const alreadyActive = subscriptions.some((subscription) => isActiveSubscriptionStatus(subscription.status))
 
   if (!alreadyActive) {
-    const maxSites = await complimentaryMaxSites(prisma)
+    const caps = complimentaryCaps()
     await prisma.subscription.upsert({
       where: { stripeCustomerId: complimentaryCustomerId(email) },
       create: {
@@ -105,17 +93,21 @@ async function invite (prisma: PrismaClient): Promise<void> {
         stripeCustomerId: complimentaryCustomerId(email),
         plan: COMPLIMENTARY_PLAN,
         status: 'active',
-        maxSites
+        maxSites: caps.maxSites,
+        maxWebsites: caps.maxWebsites,
+        maxBlogsPerWebsite: caps.maxBlogsPerWebsite
       },
       update: {
         userId: user.id,
         plan: COMPLIMENTARY_PLAN,
         status: 'active',
-        maxSites,
+        maxSites: caps.maxSites,
+        maxWebsites: caps.maxWebsites,
+        maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
         cancelAtPeriodEnd: false
       }
     })
-    const siteLimit = maxSites === null ? 'unlimited sites' : `${maxSites} site${maxSites === 1 ? '' : 's'}`
+    const siteLimit = caps.maxSites === null ? 'unlimited sites' : `${caps.maxSites} site${caps.maxSites === 1 ? '' : 's'}`
     console.log(`Granted complimentary ${COMPLIMENTARY_PLAN} access (${siteLimit})`)
   } else {
     console.log('User already has an active subscription; access was left unchanged')

@@ -122,7 +122,7 @@ To add another blog to your BetterBlog account, click **+ Add Blog** from the da
 
 **Adding a blog on a different Squarespace domain:** You'll need to install a separate snippet on that site. Each Squarespace site has its own Code Injection field and requires its own snippet.
 
-Your plan determines how many blogs you can connect in total — 1 for Essentials, 3 for Professional, unlimited for Publication. The dashboard shows your current usage (e.g. "2 of 3 blogs on your Professional plan").
+Your plan determines how many websites and blogs you can connect — 1 website and 1 blog on Essentials, 1 website and 2 blogs on Professional, 1 website and 3 blogs on Publication, and 10 websites (then $7/month each) with 3 blogs per website on Studio. The dashboard shows your current usage (e.g. "1 of 2 blogs on your Professional plan").
 
 ---
 

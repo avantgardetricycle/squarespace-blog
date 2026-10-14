@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
 import prisma from '../db/index.js'
 import { decrypt } from '../lib/encryption.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
 import { markSquarespaceApiKeyInvalid } from '../lib/profiles-api-alert.js'
 import {
@@ -397,6 +398,12 @@ router.post('/', async (req: Request, res: Response) => {
   const site = await getSiteWithSubscription(siteToken)
   if (!site) {
     res.status(404).json({ error: 'Site not found or subscription required' })
+    return
+  }
+
+  const ownerPlan = await loadUserPlanContext(site.userId)
+  if (!ownerPlan.entitlements.features.comments) {
+    res.status(403).json({ error: 'Comments require the Professional plan.' })
     return
   }
 
