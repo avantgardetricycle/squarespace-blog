@@ -843,6 +843,15 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
       expect(accent.visible).toBe(1);
       expect(accent.aboveHidden).toBe(true);
       expect(accent.belowMeta).toBe(true);
+      const accentBodyGap = await page.evaluate(() => {
+        const line = Array.from(document.querySelectorAll("hr.blog-overlay-reporter-accent-rule")).find(
+          (el) => getComputedStyle(el).display !== "none",
+        );
+        const body = document.querySelector(".blog-overlay-body");
+        if (!line || !body) return NaN;
+        return body.getBoundingClientRect().top - line.getBoundingClientRect().bottom;
+      });
+      expectPx(accentBodyGap, 10, 1);
       await expectArticleCommentsGap(page, 8);
       const listMargin = await cssNumber(page, ".bb-comments-list", "margin-bottom");
       expectPx(listMargin, 24, 4);
