@@ -1,5 +1,5 @@
 /**
- * AES-256-GCM encryption for sensitive data at rest (e.g. Squarespace API keys).
+ * AES-256-GCM encryption for sensitive data at rest (Squarespace API keys, blog passwords).
  * Requires ENCRYPTION_KEY env var: 32-byte hex string (64 chars).
  */
 import crypto from 'crypto'
