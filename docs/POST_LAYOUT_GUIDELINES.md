@@ -60,10 +60,10 @@ On mobile, cap `h1–h6` inside `.blog-overlay-body` at the computed post-title 
 - No element may overlap the header regardless of sticky state
 
 **Post title, deck, and meta type**
-- One Post Header control, **Size**, scales the title, deck, and meta together. It is post-level only. Choices are Small, Medium, Large, and XL. The default is Medium.
+- Three Post Header controls, post level only: **Post title**, **Meta**, and **Deck**. Each has its own size: Small, Medium, Large, or XL. The default for each is Medium.
 - Font family stays the site heading font for the title and the site paragraph font for the deck and meta. Only the size changes.
 - Small is about 85% of Medium. Large is about 120%. XL is about 140%.
-- Desktop / phone sizes:
+- Desktop / phone sizes for that field:
   - Small: title 34px / 24px, deck 17px / 13px, meta 14px / 12px
   - Medium: title 40px / 28px, deck 20px / 14px, meta 16px / 13px
   - Large: title 48px / 34px, deck 24px / 17px, meta 19px / 15px
