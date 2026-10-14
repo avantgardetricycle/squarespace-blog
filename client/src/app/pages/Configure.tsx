@@ -63,7 +63,8 @@ import {
   PAYWALL_HEADLINE_MAX,
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
-import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, createPaymentMethodUpdateSession, type DashboardMe } from "@/api/auth";
+import { formatSubscriptionDate, isInPaymentGrace, paymentGraceEndsAt } from "@/lib/subscription";
 import {
   EmailDestinationFields,
   EMAIL_MODULE_KEYS,
@@ -244,22 +245,14 @@ export type PostHeaderContentVerticalAlignment = "top" | "center" | "bottom";
 
 export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 
-/** Squarespace heading styles for the post title. */
-export type PostHeaderHeadingFont = "h1" | "h2" | "h3" | "h4";
-/** Squarespace paragraph styles for the deck and meta line. */
-export type PostHeaderParagraphFont = "p1" | "p2" | "p3";
+/** Post Header type size. One choice scales the title, deck, and meta. */
+export type PostHeaderTypeSize = "s" | "m" | "l" | "xl";
 
-export const POST_HEADER_HEADING_FONTS: { value: PostHeaderHeadingFont; label: string }[] = [
-  { value: "h1", label: "H1" },
-  { value: "h2", label: "H2" },
-  { value: "h3", label: "H3" },
-  { value: "h4", label: "H4" },
-];
-
-export const POST_HEADER_PARAGRAPH_FONTS: { value: PostHeaderParagraphFont; label: string }[] = [
-  { value: "p1", label: "P1" },
-  { value: "p2", label: "P2" },
-  { value: "p3", label: "P3" },
+export const POST_HEADER_TYPE_SIZES: { value: PostHeaderTypeSize; label: string }[] = [
+  { value: "m", label: "Medium" },
+  { value: "s", label: "Small" },
+  { value: "l", label: "Large" },
+  { value: "xl", label: "XL" },
 ];
 
 export interface PostHeaderConfig {
@@ -276,12 +269,12 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
-  /** Squarespace heading style for the post title. Default H1. */
-  titleFont?: PostHeaderHeadingFont;
-  /** Squarespace paragraph style for the author/date line. Default P2. */
-  metaFont?: PostHeaderParagraphFont;
-  /** Squarespace paragraph style for the deck (post byline). Default P1. */
-  deckFont?: PostHeaderParagraphFont;
+  /** Post title size. Default Medium. */
+  titleSize?: PostHeaderTypeSize;
+  /** Author, date, and reading-time size. Default Medium. */
+  metaSize?: PostHeaderTypeSize;
+  /** Deck (lead line) size. Default Medium. */
+  deckSize?: PostHeaderTypeSize;
   /** Decorative accent rule above/between header elements (template-specific styling). */
   showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
@@ -619,9 +612,9 @@ const defaultPostHeader: PostHeaderConfig = {
   showCategories: false,
   showByline: false,
   showDecorativeAccentLine: false,
-  titleFont: "h1",
-  metaFont: "p2",
-  deckFont: "p1",
+  titleSize: "m",
+  metaSize: "m",
+  deckSize: "m",
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
@@ -1408,15 +1401,16 @@ function PostHeaderFontSelect<T extends string>({
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
+  const selected = options.find((opt) => opt.value === value) ?? options.find((opt) => opt.value === "m") ?? options[0];
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
         <Label className="text-xs text-[#6b6b6b]">{label}</Label>
         <p className="text-[10px] text-[#6b6b6b]">{description}</p>
       </div>
-      <Select value={value} onValueChange={(v) => onChange(v as T)}>
-        <SelectTrigger className="w-[88px] shrink-0" aria-label={label}>
-          <SelectValue />
+      <Select value={selected.value} onValueChange={(v) => onChange(v as T)}>
+        <SelectTrigger className="w-[132px] shrink-0" aria-label={label}>
+          <SelectValue placeholder="Medium">{selected.label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((opt) => (
@@ -2056,10 +2050,8 @@ function parseLevelConfig(
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
   const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
-  const validPostHeaderHeadingFont = (v: unknown): PostHeaderHeadingFont =>
-    v === "h1" || v === "h2" || v === "h3" || v === "h4" ? v : "h1";
-  const validPostHeaderParagraphFont = (v: unknown, fallback: PostHeaderParagraphFont): PostHeaderParagraphFont =>
-    v === "p1" || v === "p2" || v === "p3" ? v : fallback;
+  const validPostHeaderTypeSize = (v: unknown): PostHeaderTypeSize =>
+    v === "s" || v === "m" || v === "l" || v === "xl" ? v : "m";
   const postHeaderBackgroundColor = validPostHeaderBackgroundColor(phRaw?.backgroundColor);
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
@@ -2077,9 +2069,9 @@ function parseLevelConfig(
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
         showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
-        titleFont: validPostHeaderHeadingFont(phRaw.titleFont),
-        metaFont: validPostHeaderParagraphFont(phRaw.metaFont, "p2"),
-        deckFont: validPostHeaderParagraphFont(phRaw.deckFont, "p1"),
+        titleSize: validPostHeaderTypeSize(phRaw.titleSize ?? phRaw.typeSize),
+        metaSize: validPostHeaderTypeSize(phRaw.metaSize ?? phRaw.typeSize),
+        deckSize: validPostHeaderTypeSize(phRaw.deckSize ?? phRaw.typeSize),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -2351,9 +2343,9 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "") &&
-      (phA.titleFont ?? "h1") === (phB.titleFont ?? "h1") &&
-      (phA.metaFont ?? "p2") === (phB.metaFont ?? "p2") &&
-      (phA.deckFont ?? "p1") === (phB.deckFont ?? "p1");
+      (phA.titleSize ?? "m") === (phB.titleSize ?? "m") &&
+      (phA.metaSize ?? "m") === (phB.metaSize ?? "m") &&
+      (phA.deckSize ?? "m") === (phB.deckSize ?? "m");
     const updatedAtEqual =
       Boolean((a as PostLevelConfig).showPostUpdatedAt) === Boolean((b as PostLevelConfig).showPostUpdatedAt);
     return base && pa.show === pb.show && phEqual && updatedAtEqual;
@@ -2397,6 +2389,44 @@ function emptyModuleCatalogs(): Record<EmailModuleKey, ModuleCatalog> {
     collection_lead_magnet: emptyCatalogSlot(),
     post_lead_magnet: emptyCatalogSlot(),
   };
+}
+
+function PaymentGraceBanner({ endsAt }: { endsAt: Date }) {
+  const [opening, setOpening] = useState(false);
+  const endsLabel = formatSubscriptionDate(endsAt.toISOString()) ?? "the end of the grace period";
+
+  const openPaymentUpdate = async () => {
+    setOpening(true);
+    try {
+      const { url, error } = await createPaymentMethodUpdateSession();
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      toast.error(error ?? "Failed to open payment update");
+      setOpening(false);
+    } catch {
+      toast.error("Failed to open payment update");
+      setOpening(false);
+    }
+  };
+
+  return (
+    <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <p>
+        Your payment method failed. Your blog will keep working until{" "}
+        <span className="font-medium">{endsLabel}</span>, but settings can&apos;t be changed until the payment method is updated.
+      </p>
+      <button
+        type="button"
+        onClick={() => void openPaymentUpdate()}
+        disabled={opening}
+        className="mt-1 font-medium text-[#5B4FE8] hover:underline disabled:opacity-60"
+      >
+        {opening ? "Opening…" : "Update payment method"}
+      </button>
+    </div>
+  );
 }
 
 export default function Configure() {
@@ -3408,6 +3438,7 @@ export default function Configure() {
   }, [previewDebugEnabled, selectedLevel, selectedPostIndex, previewSelectedPostIndex, configSignature, config.collectionConfig, config.postConfig]);
 
   const handleSave = useCallback(async () => {
+    if (isInPaymentGrace(me?.subscription)) return;
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
     setSaving(true);
@@ -3546,6 +3577,7 @@ export default function Configure() {
     paywallForm.featureItems,
     emailDestinations,
     savedEmailDestinations,
+    me,
   ]);
 
   const handleReset = () => {
@@ -3862,9 +3894,9 @@ export default function Configure() {
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
     if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
-    if (path === "postHeader.titleFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleFont: value as PostHeaderHeadingFont } };
-    if (path === "postHeader.metaFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaFont: value as PostHeaderParagraphFont } };
-    if (path === "postHeader.deckFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckFont: value as PostHeaderParagraphFont } };
+    if (path === "postHeader.titleSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.metaSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.deckSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckSize: value as PostHeaderTypeSize } };
     return cfg;
   }
 
@@ -3963,10 +3995,15 @@ export default function Configure() {
     return <NoBlogsPlaceholder />;
   }
 
+  const settingsLocked = isInPaymentGrace(me.subscription);
+  const graceEnds = paymentGraceEndsAt(me.subscription);
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f7f6f3]">
+    <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f7f6f3]">
+      {settingsLocked && graceEnds ? <PaymentGraceBanner endsAt={graceEnds} /> : null}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Configuration Sidebar */}
-      <aside className="relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm">
+      <aside className={`relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm ${settingsLocked ? "pointer-events-none select-none opacity-60" : ""}`}>
         <div className="p-4 border-b border-[#e5e4e0] space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-[#6b6b6b]">Customizing</Label>
@@ -5034,24 +5071,24 @@ export default function Configure() {
                             )}
                             <PostHeaderFontSelect
                               label="Post title"
-                              description="Squarespace heading size"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleFont ?? "h1"}
-                              options={POST_HEADER_HEADING_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.titleFont", v)}
+                              description="Title size"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.titleSize", v)}
                             />
                             <PostHeaderFontSelect
                               label="Meta"
-                              description="Squarespace paragraph size"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaFont ?? "p2"}
-                              options={POST_HEADER_PARAGRAPH_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.metaFont", v)}
+                              description="Author, date, and reading time"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.metaSize", v)}
                             />
                             <PostHeaderFontSelect
                               label="Deck"
-                              description="Squarespace paragraph size for the lead line"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckFont ?? "p1"}
-                              options={POST_HEADER_PARAGRAPH_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.deckFont", v)}
+                              description="Lead line under the title"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.deckSize", v)}
                             />
                             <div className="flex items-center justify-between">
                               <div>
@@ -6656,7 +6693,7 @@ export default function Configure() {
                   <Undo2 className="h-4 w-4 mr-1.5" />
                   Undo
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button size="sm" onClick={handleSave} disabled={saving || settingsLocked}>
                   <Save className="h-4 w-4 mr-1.5" />
                   {saving ? "Saving…" : "Save"}
                 </Button>
@@ -6801,6 +6838,7 @@ export default function Configure() {
           </div>
         </div>
       </main>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { decrypt, encrypt } from '../lib/encryption.js'
 import {
   listEmailCatalog,
@@ -352,7 +353,7 @@ type ModuleWrite = {
 }
 
 // PUT /api/dashboard/settings/email-integration
-router.put('/', requireSession, async (req: Request, res: Response) => {
+router.put('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: unknown; modules?: unknown }
   const siteKey = typeof body.siteKey === 'string' ? body.siteKey.trim() : ''

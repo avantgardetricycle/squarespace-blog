@@ -1,9 +1,18 @@
 export const ACTIVE_SUBSCRIPTION_STATUSES = ['trialing', 'active'] as const
 
+export const PAYMENT_FAILED_STATUSES = ['past_due', 'unpaid'] as const
+
+/** Live blog keeps rendering this long after the first failed payment. Settings stay locked. */
+export const PAYMENT_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
+
 export const BETA_SUBSCRIPTION_SOURCE = 'beta'
 
 export function isActiveSubscriptionStatus(status: string | null | undefined): boolean {
   return status === 'trialing' || status === 'active'
+}
+
+export function isPaymentFailedStatus(status: string | null | undefined): boolean {
+  return status === 'past_due' || status === 'unpaid'
 }
 
 /** Fully ended subscriptions that can start a new Checkout (not past_due / unpaid). */
@@ -25,12 +34,74 @@ export type SubscriptionEntitlementInput = {
   status?: string | null
   source?: string | null
   currentPeriodEnd?: Date | string | null
+  paymentFailedAt?: Date | string | null
 }
 
 export function isBetaSubscription(
   sub: { source?: string | null } | null | undefined
 ): boolean {
   return sub?.source === BETA_SUBSCRIPTION_SOURCE
+}
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * End of the render-only window. The clock starts at paymentFailedAt and is not
+ * reset by later past_due or unpaid updates.
+ */
+export function paymentGraceEndsAt(
+  sub: SubscriptionEntitlementInput | null | undefined
+): Date | null {
+  if (!sub || isBetaSubscription(sub) || !isPaymentFailedStatus(sub.status)) return null
+  const start = toDate(sub.paymentFailedAt)
+  if (!start) return null
+  return new Date(start.getTime() + PAYMENT_GRACE_PERIOD_MS)
+}
+
+export function isInPaymentGrace(
+  sub: SubscriptionEntitlementInput | null | undefined,
+  now: Date = new Date()
+): boolean {
+  const ends = paymentGraceEndsAt(sub)
+  return ends != null && ends.getTime() > now.getTime()
+}
+
+/** Public blog rendering. Full subscribers and in-grace failed payments. */
+export function canRenderSubscription(
+  sub: SubscriptionEntitlementInput | null | undefined,
+  now: Date = new Date()
+): boolean {
+  return isEntitledSubscription(sub, now) || isInPaymentGrace(sub, now)
+}
+
+/**
+ * Keep the original failure time while the subscription stays past_due or unpaid.
+ * A later return to a failed status starts a new window. Recovery clears it.
+ */
+export function nextPaymentFailedAt(
+  existing: { status?: string | null; paymentFailedAt?: Date | null },
+  nextStatus: string,
+  now: Date = new Date()
+): Date | null {
+  if (isPaymentFailedStatus(nextStatus)) {
+    if (isPaymentFailedStatus(existing.status) && existing.paymentFailedAt) {
+      return existing.paymentFailedAt
+    }
+    return now
+  }
+  if (
+    nextStatus === 'active' ||
+    nextStatus === 'trialing' ||
+    nextStatus === 'canceled' ||
+    nextStatus === 'incomplete_expired'
+  ) {
+    return null
+  }
+  return existing.paymentFailedAt ?? null
 }
 
 /**

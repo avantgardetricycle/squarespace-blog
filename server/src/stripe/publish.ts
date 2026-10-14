@@ -2,11 +2,15 @@ import { send } from '@vercel/queue'
 import {
   dispatchStripeEvent,
   type CheckoutSessionCompletedPayload,
+  type InvoiceSubscriptionPayload,
   type SubscriptionUpdatedPayload
 } from './handlers.js'
 import { stripeEventToTopic } from './topics.js'
 
-export type StripeQueuePayload = CheckoutSessionCompletedPayload | SubscriptionUpdatedPayload
+export type StripeQueuePayload =
+  | CheckoutSessionCompletedPayload
+  | SubscriptionUpdatedPayload
+  | InvoiceSubscriptionPayload
 
 /** Publish a Stripe webhook payload to Vercel Queues. */
 export async function publishStripeEvent(

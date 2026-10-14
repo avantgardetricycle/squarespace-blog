@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express'
 import Stripe from 'stripe'
-import prisma from '../db/index.js'
+import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
+import { sealBlogPassword } from '../lib/blog-password.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
 import dashboardEmailIntegrationRoutes from './dashboard-email-integration.js'
 import dashboardCommentsRoutes from './dashboard-comments.js'
@@ -16,6 +18,7 @@ import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isAdminEmail } from '../lib/admin-team.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
+import { stampPaymentFailure } from '../lib/paymentGrace.js'
 import {
   effectiveSubscriptionStatus,
   isEntitledSubscription,
@@ -24,6 +27,7 @@ import {
   usableStripeCustomerId
 } from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
+import { AccountDeletionError, deleteUserAccount } from '../lib/delete-account.js'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 import {
   buildBlogJsonUrl,
@@ -153,7 +157,12 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
       return
     }
 
-    const subscription = pickDisplaySubscription(userWithRelations.subscriptions)
+    await Promise.all(
+      userWithRelations.sites.map((s) => migrateBlogPasswordAtRest(s.id, s.blogPassword))
+    )
+
+    const pickedSubscription = pickDisplaySubscription(userWithRelations.subscriptions)
+    const subscription = pickedSubscription ? await stampPaymentFailure(pickedSubscription) : null
     const subscriptionActive = isEntitledSubscription(subscription)
     const reportedStatus = subscription ? effectiveSubscriptionStatus(subscription) : null
     const betaActive = subscription?.source === 'beta' && subscriptionActive
@@ -208,7 +217,8 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             source: subscription.source,
             maxSites: subscription.maxSites,
             currentPeriodEnd: subscription.currentPeriodEnd,
-            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd
+            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+            paymentFailedAt: subscription.paymentFailedAt
           }
         : null,
       sites: userWithRelations.sites.map((s) => ({
@@ -369,11 +379,23 @@ router.post('/subscription/portal', requireSession, async (req: Request, res: Re
       return
     }
 
+    const flow = req.body?.flow === 'payment_method_update' ? 'payment_method_update' : null
     const stripe = getStripe()
     const appUrl = getAppUrl()
     const session = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${appUrl}/dashboard/account`
+      return_url: `${appUrl}${flow ? '/dashboard/configure' : '/dashboard/account'}`,
+      ...(flow
+        ? {
+            flow_data: {
+              type: 'payment_method_update' as const,
+              after_completion: {
+                type: 'redirect' as const,
+                redirect: { return_url: `${appUrl}/dashboard/configure` }
+              }
+            }
+          }
+        : {})
     })
 
     res.json({ url: session.url })
@@ -876,7 +898,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
 })
 
 // PATCH /api/dashboard/sites/by-key/:siteKey - Update site by siteKey (e.g. blog password)
-router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
+router.patch('/sites/by-key/:siteKey', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = Array.isArray(req.params.siteKey) ? req.params.siteKey[0] : req.params.siteKey ?? ''
   const { blogPassword, paywallMode, paywallDetectionState, paywallDetectionSource, name } = req.body ?? {}
@@ -928,7 +950,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
     }
     if ('blogPassword' in req.body) {
-      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+      updates.blogPassword = sealBlogPassword(typeof blogPassword === 'string' ? blogPassword : null)
     }
     if ('paywallMode' in req.body) {
       if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
@@ -1015,7 +1037,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 })
 
 // PATCH /api/dashboard/sites/:id - Update site by id (e.g. blog password)
-router.patch('/sites/:id', requireSession, async (req: Request, res: Response) => {
+router.patch('/sites/:id', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
   const { blogPassword, paywallMode, paywallDetectionState, name } = req.body ?? {}
@@ -1046,7 +1068,7 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
       updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
     }
     if ('blogPassword' in req.body) {
-      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+      updates.blogPassword = sealBlogPassword(typeof blogPassword === 'string' ? blogPassword : null)
     }
     if ('paywallMode' in req.body) {
       if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
@@ -1128,6 +1150,29 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
   } catch (err) {
     console.error('Delete site error:', err)
     res.status(500).json({ error: 'Failed to delete site' })
+  }
+})
+
+// DELETE /api/dashboard/me - Permanently delete the signed-in account and its data
+router.delete('/me', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const confirmEmail = (req.body as { confirmEmail?: unknown } | undefined)?.confirmEmail
+
+  if (typeof confirmEmail !== 'string' || !confirmEmail.trim()) {
+    res.status(400).json({ error: 'Email confirmation is required' })
+    return
+  }
+
+  try {
+    await deleteUserAccount({ userId: user.id, confirmEmail })
+    res.clearCookie('session', { path: '/' }).status(204).send()
+  } catch (err) {
+    if (err instanceof AccountDeletionError) {
+      res.status(err.statusCode).json({ error: err.message })
+      return
+    }
+    console.error('Delete account error:', err)
+    res.status(500).json({ error: 'Failed to delete account' })
   }
 })
 

@@ -21,6 +21,8 @@ export interface DashboardMe {
     maxSites: number | null
     currentPeriodEnd: string | null
     cancelAtPeriodEnd: boolean
+    /** Set when a renewal payment first fails. Starts the 7-day render-only grace window. */
+    paymentFailedAt?: string | null
   } | null
   sites: Array<{
     id: string
@@ -47,6 +49,23 @@ export async function getDashboardMe(): Promise<DashboardMe | null> {
   const res = await fetch(`${API}/dashboard/me`, { credentials: 'include' })
   if (!res.ok) return null
   return res.json()
+}
+
+export async function deleteAccount(
+  confirmEmail: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const res = await fetch(`${API}/dashboard/me`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ confirmEmail })
+  })
+  if (res.ok) return { success: true }
+  const data = await res.json().catch(() => ({}))
+  return {
+    success: false,
+    error: typeof data?.error === 'string' ? data.error : 'Failed to delete account'
+  }
 }
 
 export async function updateProfile(data: { name?: string | null }): Promise<{ id: number; email: string; name: string | null; createdAt: string } | null> {
@@ -190,9 +209,22 @@ export async function deleteSite(siteId: string): Promise<boolean> {
 }
 
 export async function createPortalSession(): Promise<{ url?: string; error?: string }> {
+  return createBillingPortalSession()
+}
+
+/** Opens Stripe's payment-method update flow and returns to Customize. */
+export async function createPaymentMethodUpdateSession(): Promise<{ url?: string; error?: string }> {
+  return createBillingPortalSession('payment_method_update')
+}
+
+async function createBillingPortalSession(
+  flow?: 'payment_method_update'
+): Promise<{ url?: string; error?: string }> {
   const res = await fetch(`${API}/dashboard/subscription/portal`, {
     method: 'POST',
-    credentials: 'include'
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(flow ? { flow } : {})
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {

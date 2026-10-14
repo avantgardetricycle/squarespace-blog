@@ -758,6 +758,15 @@
       else console.log('[BlogOverlay][debug] ' + label);
     },
 
+    _redactIdentityForLog: function(id) {
+      if (!id || typeof id !== 'object') return null;
+      return {
+        loggedIn: id.loggedIn === true,
+        hasName: Boolean(id.name),
+        hasEmail: Boolean(id.email)
+      };
+    },
+
     _authDebug: function(label, payload) {
       if (!this._isAuthDebugEnabled()) return;
       if (payload !== undefined) console.log('[BlogOverlay][auth-debug] ' + label, payload);
@@ -772,15 +781,7 @@
       else console.log('[BlogOverlay][paywall-debug] ' + label);
     },
 
-    _bbPriceDebug: function(hypothesisId, message, data) {
-      var payload = data || {};
-      try {
-        console.log('[BB paywall price] ' + message, payload);
-      } catch (e0) {}
-      // #region agent log
-      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '50d457' }, body: JSON.stringify({ sessionId: '50d457', location: 'scripts/renderer.js:_bbPriceDebug', message: message, data: payload, timestamp: Date.now(), hypothesisId: hypothesisId }) }).catch(function() {});
-      // #endregion
-    },
+    _bbPriceDebug: function() {},
 
     /** Add ?bbTocDebug=1 to the page URL (or bbPreviewDebug=1) to log Table of Contents wiring. */
     _isTocDebugEnabled: function() {
@@ -880,8 +881,8 @@
       this._authDebug(source || 'snapshot', {
         resolvedMode: resolvedMode,
         contextAvailable: hasContext,
-        contextIdentity: contextIdentity,
-        jsonIdentity: jsonIdentity,
+        contextIdentity: this._redactIdentityForLog(contextIdentity),
+        jsonIdentity: this._redactIdentityForLog(jsonIdentity),
         domMode: domMode,
         paywallMode: cfg.paywallMode || null,
         paywallDetectionState: cfg.paywallDetectionState || null,
@@ -1285,9 +1286,16 @@
       }
       function bbEmailDebug(email) {
         var e = email ? String(email).trim() : '';
-        if (!e) return { hasEmail: false, email: null, domain: null };
-        var at = e.lastIndexOf('@');
-        return { hasEmail: true, email: e, domain: at >= 0 ? e.slice(at + 1) : null };
+        if (!e) return { hasEmail: false };
+        return { hasEmail: true, emailHasPlus: e.indexOf('+') >= 0 };
+      }
+      function bbIdentityDebug(id) {
+        if (!id || typeof id !== 'object') return null;
+        return {
+          loggedIn: id.loggedIn === true,
+          hasName: Boolean(id.name),
+          hasEmail: Boolean(id.email)
+        };
       }
       function bbCommentDebugSummary(c) {
         return {
@@ -1295,7 +1303,6 @@
           display_name: c && c.display_name != null ? String(c.display_name) : null,
           verified_subscriber: Boolean(c && c.verified_subscriber),
           hasEmail: Boolean(c && c.email),
-          email: c && c.email ? String(c.email) : null,
           status: c && c.status != null ? c.status : null,
           bb_legacy_squarespace: Boolean(c && c.bb_legacy_squarespace),
           replyCount: c && c.replies && c.replies.length ? c.replies.length : 0
@@ -1408,7 +1415,7 @@
           bbCommentsLog('verified cookie NOT set', { reason: 'missing-name-or-email', hasName: Boolean(name), hasEmail: Boolean(email) });
           return;
         }
-        bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
+        bbCommentsLog('verified cookie set', { hasName: Boolean(name), hasEmail: Boolean(email) });
         bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
       }
       function bbClearVerifiedIdentity() {
@@ -1659,12 +1666,12 @@
           if (!id) return null;
           return {
             loggedIn: id.loggedIn,
-            name: id.name || null,
-            email: id.email || null
+            hasName: Boolean(id.name),
+            hasEmail: Boolean(id.email)
           };
         })(),
         verifiedCookieName: verifiedCookieName,
-        verifiedIdentity: bbGetVerifiedIdentity()
+        verifiedIdentity: bbIdentityDebug(bbGetVerifiedIdentity())
       });
 
       var renderComments = function(comments, total) {
@@ -1929,7 +1936,7 @@
                 loggedInOptionalEmail: loggedInOptionalEmail,
                 generatedAnonymous: replyGenerated,
                 displayName: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
-                verifiedCookie: verifiedIdentity,
+                verifiedCookie: bbIdentityDebug(verifiedIdentity),
                 emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeReplyOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
                 email: bbEmailDebug(loggedInEmail)
               });
@@ -1974,7 +1981,6 @@
                 parent_id: payload.parent_id,
                 display_name: payload.display_name,
                 hasEmail: Boolean(payload.email),
-                email: payload.email || null,
                 postAsAnonymous: Boolean(replyPostAsAnonymous)
               });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
@@ -2002,7 +2008,6 @@
                     verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
                     status: data && data.status ? data.status : null,
                     hasEmail: Boolean(data && data.email),
-                    email: data && data.email ? data.email : null,
                     willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && rEm)
                   });
                   if (data && data.id) {
@@ -2256,8 +2261,8 @@
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
           generatedAnonymous: generatedAnonymous,
-          squarespaceIdentity: id ? { loggedIn: id.loggedIn, name: id.name || null, email: id.email || null } : null,
-          verifiedIdentity: verifiedIdentity,
+          squarespaceIdentity: id ? bbIdentityDebug(id) : null,
+          verifiedIdentity: bbIdentityDebug(verifiedIdentity),
           nameInputVisible: null,
           emailInputVisible: null
         };
@@ -2328,9 +2333,7 @@
         formModePayload.nameInputVisible = nameInput.style.display !== 'none';
         formModePayload.emailInputVisible = emailInput.style.display !== 'none';
         formModePayload.loggedInIdentityLineVisible = loggedInIdentityLine.style.display !== 'none';
-        formModePayload.loggedInIdentityLineText = loggedInIdentityLine.textContent || '';
         formModePayload.anonymousIdentityLineVisible = anonymousIdentityLine.style.display !== 'none';
-        formModePayload.anonymousIdentityLineText = anonymousIdentityLine.textContent || '';
         var formModeSig = JSON.stringify(formModePayload);
         if (formModeSig !== self._lastCommentsFormModeLogSig) {
           self._lastCommentsFormModeLogSig = formModeSig;
@@ -2339,7 +2342,7 @@
         self._emitAuthDebugSnapshot('comments.formMode');
         self._authDebug('comments.formMode.details', {
           mode: mode,
-          identityName: id && id.name ? id.name : null,
+          identityHasName: Boolean(id && id.name),
           identityEmailPresent: Boolean(id && id.email),
           nameInputVisible: nameInput.style.display !== 'none',
           emailInputVisible: emailInput.style.display !== 'none'
@@ -2423,7 +2426,6 @@
           post_id: payload.post_id,
           display_name: payload.display_name,
           hasEmail: Boolean(payload.email),
-          email: payload.email || null,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
@@ -2452,12 +2454,8 @@
               verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
               status: data && data.status ? data.status : null,
               hasEmail: Boolean(data && data.email),
-              email: data && data.email ? data.email : null,
               willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
             });
-            // #region agent log
-            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'post-fix',hypothesisId:'H6',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous')},timestamp:Date.now()})}).catch(function(){});
-            // #endregion
             if (data && data.id) {
               if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse && !bbUseGeneratedAnonymousName(modeNow)) {
                 bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
@@ -2522,8 +2520,7 @@
             allowAnonymousComments: allowAnonymousComments,
             subscriberCommentsEnabled: subscriberCommentsEnabled,
             generatedAnonymous: true,
-            displayName: anonHandle,
-            email: null
+            hasDisplayName: Boolean(anonHandle)
           });
           submitMainCommentWithEmail(modeNow, anonHandle, body, null);
           return;
@@ -2538,11 +2535,11 @@
             allowAnonymousComments: allowAnonymousComments,
             subscriberCommentsEnabled: subscriberCommentsEnabled,
             loggedInOptionalEmail: loggedInOptionalEmail,
-            verifiedCookie: verifiedIdentity,
-            typedEmail: typedEmail || null,
-            emailOverride: activeMainOverride,
+            verifiedCookie: bbIdentityDebug(verifiedIdentity),
+            hasTypedEmail: Boolean(typedEmail),
+            hasEmailOverride: Boolean(activeMainOverride),
             emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeMainOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
-            useEmail: useEmail || null
+            hasUseEmail: Boolean(useEmail)
           });
           if (loggedInOptionalEmail) {
             submitMainCommentWithEmail(modeNow, name, body, typedEmail || useEmail || null);
@@ -2572,8 +2569,8 @@
           mode: modeNow,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
-          displayName: name || null,
-          email: (emailInput.value || '').trim() || null
+          hasDisplayName: Boolean(name),
+          hasEmail: Boolean((emailInput.value || '').trim())
         });
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
@@ -2649,21 +2646,6 @@
         bbPreview: bbPreview
       });
 
-      // #region agent log
-      var _rendererDbg = {
-        previewMode: previewMode,
-        bbPreview: bbPreview,
-        inIframe: window.parent !== window,
-        pathname: window.location.pathname,
-        href: window.location.href,
-        htmlClasses: document.documentElement ? document.documentElement.className : '(none)',
-        bodyClasses: document.body ? document.body.className : '(none)',
-        hasBbLoadingClass: document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : false,
-        isEditUi: (!previewMode && !bbPreview) ? this._isSquarespaceEditingUi() : 'skipped'
-      };
-      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'renderer.js:init',message:'renderer init state',data:_rendererDbg,timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
-      // #endregion
-
       if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
         this._suppressedByEditorMode = true;
@@ -2676,31 +2658,12 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
-        // #region agent log
-        try {
-          this._ensureBlogRouteHydrated();
-          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.routeGate',message:'init route gate decision',data:{pathname:pathname,blogPath:blogPath,isTransientAccountDrawerRoute:this._isTransientAccountDrawerRoute(pathname),lastBlogRoutePathname:this._lastBlogRoutePathname||null,isOnEffectiveBlogRoute:this._isOnEffectiveBlogRoute()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-        } catch (e) {}
-        // #endregion
+        try { this._ensureBlogRouteHydrated(); } catch (e) {}
         if (!this._isOnEffectiveBlogRoute()) {
-          console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
           // Do not clear bb-loading-blog: another collection on this Squarespace
           // site (or a loader that has not finished) may own the overlay.
           return;
         }
-        // #region agent log
-        try {
-          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.paywallBranch',message:'init paywall branch decision',data:{
-            isPaywalledSite: this._isPaywalledSite(),
-            viewerMode: this._resolveViewerMode(),
-            fullPaywallActive: this._isSquarespaceFullPaywallActive(),
-            isLikelyCollectionIndex: this._isLikelyBlogCollectionIndexView(),
-            hasSquarespacePostListing: this._hasSquarespacePostListing(),
-            selectedIndexFromHash: this._getSelectedIndexFromHash(),
-            pathname: pathname
-          },timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
-        } catch (e) {}
-        // #endregion
         if (this._isSquarespaceFullPaywallActive()) {
           console.log('[BlogOverlay] Full collection paywall (Squarespace owns page); skipping overlay');
           this._paywallFullySuppressed = true;
@@ -2722,7 +2685,6 @@
       this._root = root;
       this._startEditorModeObserver();
       this._suppressedByEditorMode = false;
-      console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
       this._debugLog('init', {
         previewMode: previewMode,
         bbPreview: bbPreview,
@@ -2896,11 +2858,6 @@
       var onRouteChange = function() {
         setTimeout(function() {
           var sig = self._routeSignature();
-          // #region agent log
-          try {
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:onRouteChange',message:'route change observed',data:{sig:sig,lastSig:self._lastRouteSignature,changed:sig!==self._lastRouteSignature,viewerMode:self._resolveViewerMode()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (sig === self._lastRouteSignature) return;
           self._lastRouteSignature = sig;
           var pathname = window.location && window.location.pathname ? window.location.pathname : '/';
@@ -5442,65 +5399,19 @@
     },
 
     _startPaywallAuthObserver: function() {
-      // #region agent log
-      try {
-        var _l1 = {
-          alreadyInstalled: !!this._paywallAuthObserver,
-          previewMode: !!this._previewMode,
-          bbPreview: !!this._bbPreview,
-          isPaywalledSite: this._isPaywalledSite(),
-          paywallDetectionState: this.config && this.config.paywallDetectionState,
-          paywallMode: this.config && this.config.paywallMode,
-          willEarlyReturn: (!!this._paywallAuthObserver || !!this._previewMode || !!this._bbPreview || !this._isPaywalledSite())
-        };
-        fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:_startPaywallAuthObserver',message:'auth observer install decision',data:_l1,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
-      } catch (e) {}
-      // #endregion
       if (this._paywallAuthObserver || this._previewMode || this._bbPreview) return;
       if (!this._isPaywalledSite()) return;
       var self = this;
       this._lastPaywallAuthSnapshot =
         this._resolveViewerMode() + '|' + (this._isSquarespaceFullPaywallActive() ? '1' : '0');
       this._paywallAuthObserver = new MutationObserver(function() {
-        // #region agent log
-        try {
-          if (!self._dbgObserverFiredOnce) {
-            self._dbgObserverFiredOnce = true;
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.fire',message:'auth observer fired (first mutation)',data:{baselineSnapshot:self._lastPaywallAuthSnapshot},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-          }
-        } catch (e) {}
-        // #endregion
         if (self._paywallAuthDebounce) return;
         self._paywallAuthDebounce = setTimeout(function() {
           self._paywallAuthDebounce = null;
           if (self._renderContentInProgress) {
-            // #region agent log
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'skipped: renderContentInProgress',data:{},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-            // #endregion
             return;
           }
           var snap = self._resolveViewerMode() + '|' + (self._isSquarespaceFullPaywallActive() ? '1' : '0');
-          // #region agent log
-          try {
-            var _ctx = (window.Static && window.Static.SQUARESPACE_CONTEXT) || {};
-            var _uac = _ctx.userAccountsContext || {};
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'settled snapshot compare',data:{
-              snap: snap,
-              lastSnapshot: self._lastPaywallAuthSnapshot,
-              snapshotChanged: snap !== self._lastPaywallAuthSnapshot,
-              viewerMode: self._resolveViewerMode(),
-              fullPaywallActive: self._isSquarespaceFullPaywallActive(),
-              fromSquarespaceContext: self._detectViewerModeFromSquarespaceContext(),
-              fromDom: self._detectViewerModeFromDom(),
-              rememberedMode: self._getRememberedViewerModeHint(),
-              memberGatePresent: self._isMemberGatePresent(),
-              hasSquarespacePostListing: self._hasSquarespacePostListing(),
-              ctxAuthenticated: _ctx.authenticated,
-              uacAuthenticated: _uac.authenticated,
-              uacIsAuthenticated: _uac.isAuthenticated
-            },timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (snap === self._lastPaywallAuthSnapshot) return;
           self._lastPaywallAuthSnapshot = snap;
           var fullNow = self._isSquarespaceFullPaywallActive();
@@ -5516,24 +5427,6 @@
           self._paywallFullySuppressed = false;
           var pathname = typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') : '/';
           var blogPath = self._currentBlogPathForRouteMatch();
-          // #region agent log
-          try {
-            var _rootConnected = false;
-            try { _rootConnected = Boolean(self._root && document.documentElement && document.documentElement.contains(self._root)); } catch (eR) {}
-            var _fbc = null;
-            try { var _f = findBlogContainer(); _fbc = _f ? ((_f.tagName||'') + '#' + (_f.id||'') + '.' + (typeof _f.className==='string'?_f.className.slice(0,40):'')) : null; } catch (eF) {}
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'snapshot changed - about to gate/render',data:{
-              pathname: pathname,
-              blogPath: blogPath || null,
-              isOnEffectiveBlogRoute: self._isOnEffectiveBlogRoute(),
-              isTransientAccountDrawerRoute: self._isTransientAccountDrawerRoute(pathname),
-              itemsLength: self.items ? self.items.length : -1,
-              rootConnected: _rootConnected,
-              rootId: self._root ? (self._root.id || '(no id)') : '(no root)',
-              findBlogContainerNow: _fbc
-            },timestamp:Date.now(),hypothesisId:'H3,H4'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (!self._isOnEffectiveBlogRoute()) {
             self._debugLog('paywall auth observer skipped outside blog route', { path: pathname, blogPath: blogPath || null });
             return;
@@ -8435,7 +8328,6 @@
           result = url.replace(/ /g, '%20');
         }
       }
-      console.log('[BlogOverlay] _encodeShareUrl: in=', JSON.stringify(url), 'out=', JSON.stringify(result));
       return result;
     },
 
@@ -8451,10 +8343,8 @@
      */
     _createShareLinks: function(shareUrl, title, platforms, baseUrl, imageUrl, lightVariant) {
       if (!platforms || platforms.length === 0) return null;
-      console.log('[BlogOverlay] _createShareLinks: shareUrl (input)=', JSON.stringify(shareUrl));
       var normalized = this._normalizeShareUrl(shareUrl || '');
       var encodedShareUrl = this._encodeShareUrl(normalized);
-      console.log('[BlogOverlay] _createShareLinks: normalized=', JSON.stringify(normalized), 'encodedShareUrl=', JSON.stringify(encodedShareUrl));
       var encTitle = encodeURIComponent(title || '');
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-share-links' + (lightVariant ? ' blog-overlay-share-links--on-dark' : '');
@@ -8466,7 +8356,6 @@
         else if (platform === 'x') href = 'https://twitter.com/intent/tweet?url=' + encodedShareUrl + '&text=' + encTitle;
         else if (platform === 'email') {
           href = 'mailto:?subject=' + encTitle + '&body=' + encodedShareUrl;
-          console.log('[BlogOverlay] _createShareLinks: email body (raw, browser will encode)=', encodedShareUrl);
         }
         else if (platform === 'reddit') href = 'https://reddit.com/submit?url=' + encodedShareUrl + '&title=' + encTitle;
         else if (platform === 'linkedin') href = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodedShareUrl;
@@ -8475,7 +8364,6 @@
         }
         else if (platform === 'whatsapp') href = 'https://api.whatsapp.com/send?text=' + encodedShareUrl;
         else continue;
-        console.log('[BlogOverlay] _createShareLinks: platform=', platform, 'href (first 120 chars)=', href ? href.substring(0, 120) + (href.length > 120 ? '...' : '') : '');
         var a = document.createElement('a');
         a.href = href;
         a.target = '_blank';
@@ -8679,22 +8567,13 @@
         }
         postPath = postPath.replace(/\/+$/, '') || '/';
         var postPathNorm = this._normalizePathForMatch(postPath);
-        if (pathnameNorm === postPathNorm) {
-          console.log('[BlogOverlay] _getSelectedIndexFromPath: matched pathname', pathnameNorm, 'to post', i);
-          return i;
-        }
+        if (pathnameNorm === postPathNorm) return i;
       }
       var tail = this._getPostPathTailAfterBlogPrefix(pathnameNorm);
       if (tail) {
         for (var j = 0; j < items.length; j++) {
-          if (this._postMatchesPathTail(items[j], tail)) {
-            console.log('[BlogOverlay] _getSelectedIndexFromPath: matched path tail', JSON.stringify(tail), 'to post', j);
-            return j;
-          }
+          if (this._postMatchesPathTail(items[j], tail)) return j;
         }
-      }
-      if (pathname.indexOf('/') !== pathname.lastIndexOf('/')) {
-        console.log('[BlogOverlay] _getSelectedIndexFromPath: no match. pathname=', JSON.stringify(pathname), 'pathnameNorm=', JSON.stringify(pathnameNorm), 'first post fullUrl=', items[0] ? JSON.stringify(items[0].fullUrl) : '');
       }
       return -1;
     },
@@ -8754,10 +8633,7 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
-        if (!this._isOnEffectiveBlogRoute()) {
-          console.log('[BlogOverlay] Skipping render: not on blog route');
-          return;
-        }
+        if (!this._isOnEffectiveBlogRoute()) return;
       }
 
       var root = this._root || this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
@@ -8852,7 +8728,7 @@
                   isSignedIn: json.userAccountsContext.isSignedIn
                 }
               : null,
-          extractedJsonIdentity: self._squarespaceJsonIdentity
+          extractedJsonIdentity: self._redactIdentityForLog(self._squarespaceJsonIdentity)
         });
         self._emitAuthDebugSnapshot('render.afterJsonIdentity');
         var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);
@@ -9719,264 +9595,94 @@
       return out;
     },
 
+
     /**
-     * Post-header type. Title is a Squarespace heading (H1–H4, default H1).
-     * Deck and meta are paragraph styles (P1–P3, defaults P1 and P2).
-     * When the site style can be read, that size is used at every viewport.
-     * Otherwise the fallback below is the size for that choice.
+     * Post Header sizes. Title, deck, and meta each pick Small, Medium, Large, or XL.
+     * Medium matches the previous fixed spec.
      */
-    _postHeaderFontFallbacks: {
-      h1: { desktop: '40px', mobile: '28px' },
-      h2: { desktop: '32px', mobile: '24px' },
-      h3: { desktop: '26px', mobile: '22px' },
-      h4: { desktop: '22px', mobile: '18px' },
-      p1: { desktop: '20px', mobile: '14px' },
-      p2: { desktop: '16px', mobile: '13px' },
-      p3: { desktop: '14px', mobile: '12px' }
+    _postHeaderTypeScale: {
+      s: {
+        title: { desktop: '34px', mobile: '24px' },
+        deck: { desktop: '17px', mobile: '13px' },
+        meta: { desktop: '14px', mobile: '12px' }
+      },
+      m: {
+        title: { desktop: '40px', mobile: '28px' },
+        deck: { desktop: '20px', mobile: '14px' },
+        meta: { desktop: '16px', mobile: '13px' }
+      },
+      l: {
+        title: { desktop: '48px', mobile: '34px' },
+        deck: { desktop: '24px', mobile: '17px' },
+        meta: { desktop: '19px', mobile: '15px' }
+      },
+      xl: {
+        title: { desktop: '56px', mobile: '40px' },
+        deck: { desktop: '28px', mobile: '19px' },
+        meta: { desktop: '22px', mobile: '17px' }
+      }
     },
 
-    _normalizePostHeaderFont: function(value, kind) {
+    _normalizePostHeaderTypeSize: function(value) {
       var v = typeof value === 'string' ? value.toLowerCase() : '';
-      if (kind === 'heading') {
-        if (v === 'h1' || v === 'h2' || v === 'h3' || v === 'h4') return v;
-        return 'h1';
-      }
-      if (v === 'p1' || v === 'p2' || v === 'p3') return v;
-      return kind === 'deck' ? 'p1' : 'p2';
+      if (v === 's' || v === 'small') return 's';
+      if (v === 'l' || v === 'large') return 'l';
+      if (v === 'xl') return 'xl';
+      return 'm';
     },
 
-    _cssLengthFromCustomProp: function(raw) {
-      if (!raw) return '';
-      raw = String(raw).trim();
-      if (!raw || raw === 'none' || raw === 'normal' || raw === 'inherit' || raw === 'initial') return '';
-      if (/^-?[\d.]+$/.test(raw)) return raw + 'rem';
-      if (/[0-9]/.test(raw) && (
-        raw.indexOf('px') !== -1 || raw.indexOf('rem') !== -1 || raw.indexOf('em') !== -1 ||
-        raw.indexOf('vw') !== -1 || raw.indexOf('clamp(') !== -1 || raw.indexOf('calc(') !== -1 ||
-        raw.indexOf('var(') === 0
-      )) return raw;
-      return '';
-    },
-
-    /** Squarespace heading/paragraph size: fluid min/max, then a single size variable. */
-    _squarespaceFluidSize: function(prefix) {
-      if (typeof document === 'undefined' || !document.documentElement) return '';
-      var root = document.documentElement;
-      var min = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-min-font-size'));
-      var max = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-max-font-size'));
-      if (min && max) {
-        return 'clamp(' + min + ', (' + max + ' - ' + min + ') * ((100vw - 375px) / 1065) + ' + min + ', ' + max + ')';
-      }
-      var names = [
-        prefix + '-font-font-size',
-        prefix + '-font-size',
-        prefix + '-size',
-        prefix + '-font-size-value',
-        prefix + '-size-value',
-        prefix + '-max-font-size'
-      ];
-      for (var i = 0; i < names.length; i++) {
-        var v = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, names[i]));
-        if (v) return v;
-      }
-      return '';
-    },
-
-    _readSquarespaceFontFace: function(kind, index) {
-      if (typeof document === 'undefined' || !document.documentElement) {
-        return { family: '', weight: '', lineHeight: '', tracking: '' };
-      }
-      var root = document.documentElement;
-      var prefix = (kind === 'heading' ? '--heading-' : '--paragraph-') + index;
-      var familyNames = kind === 'heading'
-        ? [prefix + '-font-font-family', '--heading-font-font-family', '--headings-font-family', '--header-font-family']
-        : [prefix + '-font-font-family', '--paragraph-font-font-family', '--body-font-font-family', '--primary-font-font-family'];
-      var weightNames = kind === 'heading'
-        ? [prefix + '-font-font-weight', '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight']
-        : [prefix + '-font-font-weight', '--paragraph-font-font-weight', '--body-font-font-weight', '--primary-font-font-weight'];
-      var lineNames = kind === 'heading'
-        ? [prefix + '-font-line-height', '--heading-font-line-height', '--headings-line-height']
-        : [prefix + '-font-line-height', '--paragraph-font-line-height', '--body-font-line-height'];
-      var trackNames = kind === 'heading'
-        ? [prefix + '-font-letter-spacing', '--heading-font-letter-spacing', '--headings-letter-spacing']
-        : [prefix + '-font-letter-spacing', '--paragraph-font-letter-spacing', '--body-font-letter-spacing'];
-      var read = function(names) {
-        for (var i = 0; i < names.length; i++) {
-          var raw = this._readCssVarFromEl(root, names[i]);
-          if (raw && raw !== 'inherit' && raw !== 'initial' && raw !== 'normal') return raw;
-        }
-        return '';
-      }.bind(this);
-      return {
-        family: read(familyNames),
-        weight: read(weightNames),
-        lineHeight: read(lineNames),
-        tracking: read(trackNames)
+    _paintPostHeaderElementSizes: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var ph = this._postHeaderFontCfg || {};
+      var narrow = this._isNarrowCollectionViewport();
+      var self = this;
+      var pxFor = function(field, role) {
+        var step = self._normalizePostHeaderTypeSize(ph[field]);
+        var scale = self._postHeaderTypeScale[step] || self._postHeaderTypeScale.m;
+        var pair = scale[role];
+        return narrow ? pair.mobile : pair.desktop;
       };
-    },
-
-    /**
-     * Hidden element so site h1–h4 / .sqsrte-* rules apply. Ignore the browser
-     * default size — that means Squarespace has not styled this step.
-     */
-    _probeSquarespaceFont: function(tag, className) {
-      if (typeof document === 'undefined' || !document.body || !window.getComputedStyle) return null;
-      var el = document.createElement(tag);
-      if (className) el.className = className;
-      el.setAttribute('data-bb-type-probe', '1');
-      el.setAttribute('aria-hidden', 'true');
-      el.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;margin:0;width:auto;height:auto;';
-      document.body.appendChild(el);
-      var cs;
-      try { cs = window.getComputedStyle(el); } catch (eProbe) { cs = null; }
-      var fontSize = cs ? cs.fontSize : '';
-      var fontFamily = cs ? cs.fontFamily : '';
-      var fontWeight = cs ? cs.fontWeight : '';
-      var lineHeight = cs ? cs.lineHeight : '';
-      var letterSpacing = cs ? cs.letterSpacing : '';
-      if (el.parentNode) el.parentNode.removeChild(el);
-      var px = parseFloat(fontSize);
-      if (!isFinite(px)) return null;
-      var rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-      var ua = [rootPx];
-      var t = String(tag || '').toLowerCase();
-      if (t === 'h1') ua = [rootPx * 2];
-      else if (t === 'h2') ua = [rootPx * 1.5];
-      else if (t === 'h3') ua = [rootPx * 1.17, rootPx * 1.2];
-      else if (t === 'h4') ua = [rootPx];
-      for (var i = 0; i < ua.length; i++) {
-        if (Math.abs(px - ua[i]) < 1) return null;
-      }
-      return {
-        size: fontSize,
-        family: fontFamily || '',
-        weight: fontWeight || '',
-        lineHeight: lineHeight && lineHeight !== 'normal' ? lineHeight : '',
-        tracking: letterSpacing && letterSpacing !== 'normal' && letterSpacing !== '0px' ? letterSpacing : ''
-      };
-    },
-
-    _resolveSquarespaceFont: function(key) {
-      if (!this._sqFontCache) this._sqFontCache = {};
-      var widthBucket = typeof window !== 'undefined' ? Math.round((window.innerWidth || 0) / 40) : 0;
-      var cacheKey = key + ':' + widthBucket;
-      if (this._sqFontCache[cacheKey]) return this._sqFontCache[cacheKey];
-      var heading = key.charAt(0) === 'h';
-      var index = key.charAt(1);
-      var prefix = (heading ? '--heading-' : '--paragraph-') + index;
-      var size = this._squarespaceFluidSize(prefix);
-      var face = this._readSquarespaceFontFace(heading ? 'heading' : 'paragraph', index);
-      if (!size) {
-        var probe = heading
-          ? this._probeSquarespaceFont('h' + index, '')
-          : this._probeSquarespaceFont('p', index === '1' ? 'sqsrte-large' : (index === '3' ? 'sqsrte-small' : ''));
-        if (probe) {
-          size = probe.size;
-          if (!face.family) face.family = probe.family;
-          if (!face.weight) face.weight = probe.weight;
-          if (!face.lineHeight) face.lineHeight = probe.lineHeight;
-          if (!face.tracking) face.tracking = probe.tracking;
+      var paint = function(list, size) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && list[i].style) list[i].style.setProperty('font-size', size, 'important');
         }
-      }
-      var resolved = {
-        size: size || '',
-        family: face.family || '',
-        weight: face.weight || '',
-        lineHeight: face.lineHeight || '',
-        tracking: face.tracking || ''
       };
-      this._sqFontCache[cacheKey] = resolved;
-      return resolved;
+      paint(wrapper.querySelectorAll('.bb-title--post'), pxFor('titleSize', 'title'));
+      paint(wrapper.querySelectorAll('.blog-overlay-post-deck'), pxFor('deckSize', 'deck'));
+      paint(wrapper.querySelectorAll('.bb-post-meta--on-bg, .bb-post-meta--on-image, .bb-post-meta--on-dark'), pxFor('metaSize', 'meta'));
     },
 
-    _setOptionalStyleProp: function(el, name, value) {
-      if (!el || !el.style) return;
-      if (value) el.style.setProperty(name, value);
-      else el.style.removeProperty(name);
-    },
-
-    _postHeaderChoiceKeys: function(key) {
-      return key && key.charAt(0) === 'h' ? ['h1', 'h2', 'h3', 'h4'] : ['p1', 'p2', 'p3'];
-    },
-
-    _fontSizeToPx: function(size) {
-      var n = parseFloat(size);
-      if (!isFinite(n)) return null;
-      var s = String(size);
-      if (s.indexOf('px') !== -1) return n;
-      if (s.indexOf('rem') !== -1) {
-        var rootPx = 16;
-        try {
-          rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-        } catch (ePx) { /* ignore */ }
-        return n * rootPx;
-      }
-      return null;
-    },
-
-    /**
-     * A size shared with another step in the menu is not that step's style
-     * (Squarespace often sets one size on h1–h4). Drop it so the choice's
-     * own fallback is used and the menu still changes the type.
-     */
-    _postHeaderStepSize: function(key) {
-      var resolved = this._resolveSquarespaceFont(key);
-      var size = resolved.size || '';
-      if (!size) return { size: '', resolved: resolved };
-      var keys = this._postHeaderChoiceKeys(key);
-      var selfPx = this._fontSizeToPx(size);
-      var matches = 0;
-      for (var i = 0; i < keys.length; i++) {
-        var other = this._resolveSquarespaceFont(keys[i]).size || '';
-        if (!other) continue;
-        if (selfPx != null) {
-          var otherPx = this._fontSizeToPx(other);
-          if (otherPx != null && Math.abs(selfPx - otherPx) < 1) matches++;
-          else if (otherPx == null && other === size) matches++;
-        } else if (other === size) {
-          matches++;
-        }
-      }
-      if (matches > 1) return { size: '', resolved: resolved };
-      return { size: size, resolved: resolved };
-    },
-
-    _setRoleFontVars: function(el, role, key) {
-      var fb = this._postHeaderFontFallbacks[key] || this._postHeaderFontFallbacks.h1;
-      var picked = this._postHeaderStepSize(key);
-      var resolved = picked.resolved;
-      var desktop = picked.size || fb.desktop;
-      var mobile = picked.size || fb.mobile;
-      el.style.setProperty('--bb-' + role + '-size', desktop);
-      el.style.setProperty('--bb-' + role + '-size-mobile', mobile);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-family', resolved.family);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-weight', resolved.weight);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-line-height', resolved.lineHeight);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-tracking', resolved.tracking);
-    },
-
-    /** Apply the Post Header title / deck / meta font choices onto the overlay root. */
+    /** Apply each Post Header size onto the overlay root and the title, deck, and meta. */
     _applyPostHeaderTypeScale: function(wrapper, postHeaderCfg) {
       if (!wrapper || !wrapper.style) return;
       var ph = postHeaderCfg && typeof postHeaderCfg === 'object' ? postHeaderCfg : (this._postHeaderFontCfg || {});
       this._postHeaderFontCfg = ph;
-      var title = this._normalizePostHeaderFont(ph.titleFont, 'heading');
-      var deck = this._normalizePostHeaderFont(ph.deckFont, 'deck');
-      var meta = this._normalizePostHeaderFont(ph.metaFont, 'paragraph');
-      wrapper.setAttribute('data-bb-title-font', title);
-      wrapper.setAttribute('data-bb-deck-font', deck);
-      wrapper.setAttribute('data-bb-meta-font', meta);
-      this._setRoleFontVars(wrapper, 'title', title);
-      this._setRoleFontVars(wrapper, 'deck', deck);
-      this._setRoleFontVars(wrapper, 'meta', meta);
+      var title = this._normalizePostHeaderTypeSize(ph.titleSize);
+      var deck = this._normalizePostHeaderTypeSize(ph.deckSize);
+      var meta = this._normalizePostHeaderTypeSize(ph.metaSize);
+      wrapper.setAttribute('data-bb-title-size', title);
+      wrapper.setAttribute('data-bb-deck-size', deck);
+      wrapper.setAttribute('data-bb-meta-size', meta);
+      wrapper.removeAttribute('data-bb-type-size');
+      var chosen = { title: title, deck: deck, meta: meta };
+      var roles = ['title', 'deck', 'meta'];
+      for (var i = 0; i < roles.length; i++) {
+        var role = roles[i];
+        var scale = this._postHeaderTypeScale[chosen[role]] || this._postHeaderTypeScale.m;
+        var step = scale[role];
+        wrapper.style.setProperty('--bb-' + role + '-size', step.desktop);
+        wrapper.style.setProperty('--bb-' + role + '-size-mobile', step.mobile);
+      }
+      this._paintPostHeaderElementSizes(wrapper);
     },
 
     _clearPostHeaderTypeScale: function(wrapper) {
       if (!wrapper) return;
       this._postHeaderFontCfg = null;
-      wrapper.removeAttribute('data-bb-title-font');
-      wrapper.removeAttribute('data-bb-deck-font');
-      wrapper.removeAttribute('data-bb-meta-font');
+      wrapper.removeAttribute('data-bb-type-size');
+      wrapper.removeAttribute('data-bb-title-size');
+      wrapper.removeAttribute('data-bb-deck-size');
+      wrapper.removeAttribute('data-bb-meta-size');
       var roles = ['title', 'deck', 'meta'];
       var parts = ['size', 'size-mobile', 'family', 'weight', 'line-height', 'tracking'];
       for (var r = 0; r < roles.length; r++) {
@@ -9985,6 +9691,7 @@
         }
       }
     },
+
 
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
@@ -11206,7 +10913,7 @@
         el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
       }
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
-      /* Post titles take family/weight from the selected heading style. */
+      /* Post title size comes from the Post Header scale; family stays the site heading font. */
       if (opts.size === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -11221,7 +10928,7 @@
       } else {
         el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
       }
-      /* Post meta takes family/weight from the selected paragraph style. */
+      /* Post meta size comes from the Post Header scale; family stays the site paragraph font. */
       if (opts.variant === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -12391,7 +12098,7 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
-      if (wrapper.getAttribute('data-bb-title-font')) {
+      if (wrapper.getAttribute('data-bb-title-size')) {
         this._applyPostHeaderTypeScale(wrapper, this._postHeaderFontCfg);
       }
       this._lockMobilePageAxis(narrow);
@@ -12512,8 +12219,8 @@
     /**
      * Mobile (<768): cap in-article h1–h6 at the computed post-title size × 0.85
      * so customer heading scales cannot exceed the headline. Cap only — never enlarge.
-     * The default H1 phone fallback is 28px, so the cap is 24px until a larger
-     * Squarespace heading size is in use.
+     * The default Medium phone title is 28px, so the cap is 24px until the
+     * customer picks Large or XL.
      */
     _postTitleFontSizePx: function(wrapper, narrow) {
       var fallback = narrow ? 28 : 40;

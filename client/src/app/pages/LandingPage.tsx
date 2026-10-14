@@ -17,7 +17,7 @@ import {
   formatMajorAmount,
   type PublicPlanPricesResponse,
 } from "@/api/planPrices";
-import { BUILD_TIME_IS_LIVE, BUILD_TIME_RAW, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
+import { BUILD_TIME_IS_LIVE, resolveIsBetterBlogLive } from "@/lib/isBetterBlogLive";
 import { PUBLIC_PRICING_TIERS, annualSavingsPercent, annualSavingsAmount } from "@/lib/pricingTiers";
 import {
   billingPeriod,
@@ -80,6 +80,11 @@ export default function LandingPage() {
     });
   }, [isAnnual, isLive]);
 
+  const checkoutHref = useCallback(
+    (plan: string) => `/checkout?plan=${plan}&billing=${isAnnual ? "annual" : "monthly"}`,
+    [isAnnual]
+  );
+
   useEffect(() => {
     getDashboardMe().then((me) => setIsAuthenticated(!!me));
   }, []);
@@ -94,19 +99,8 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    console.info("[BetterBlog/LandingPage] mount", {
-      buildTimeRaw: BUILD_TIME_RAW,
-      buildTimeIsLive: BUILD_TIME_IS_LIVE,
-    });
-    resolveIsBetterBlogLive().then((live) => {
-      console.info("[BetterBlog/LandingPage] isLive state →", live);
-      setIsLive(live);
-    });
+    resolveIsBetterBlogLive().then(setIsLive);
   }, []);
-
-  useEffect(() => {
-    console.info("[BetterBlog/LandingPage] UI mode: interest modal + login", { isLive });
-  }, [isLive]);
 
   useEffect(() => {
     fetchPublicPlanPrices()
@@ -224,16 +218,29 @@ export default function LandingPage() {
               </Button>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  onClick={() => trackCtaClick("header_login", "/login")}
-                  className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block"
-                >
-                  Log in
-                </Link>
-                <Button onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.headerGetStarted)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
-                  Get Started
-                </Button>
+                {isLive ? (
+                  <Link
+                    to="/login"
+                    onClick={() => trackCtaClick("header_login", "/login")}
+                    className="text-sm font-medium text-neutral-600 hover:text-[#5B4FE8] transition-colors hidden sm:block"
+                  >
+                    Log in
+                  </Link>
+                ) : null}
+                {isLive ? (
+                  <Button asChild className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
+                    <Link
+                      to={checkoutHref("professional")}
+                      onClick={() => trackCtaClick("header_get_started", checkoutHref("professional"))}
+                    >
+                      Get Started
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.headerGetStarted)} className="bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full px-6">
+                    Get Started
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -269,6 +276,15 @@ export default function LandingPage() {
               {isAuthenticated ? (
                 <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
                   <Link to="/dashboard">Go to Dashboard</Link>
+                </Button>
+              ) : isLive ? (
+                <Button size="lg" className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto" asChild>
+                  <Link
+                    to={checkoutHref("professional")}
+                    onClick={() => trackCtaClick("hero_start_trial", checkoutHref("professional"))}
+                  >
+                    Start Free Trial
+                  </Link>
                 </Button>
               ) : (
                 <Button size="lg" onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.heroStartTrial)} className="h-12 px-8 text-base bg-[#5B4FE8] hover:bg-[#4a3fd4] rounded-full w-full sm:w-auto">
@@ -514,20 +530,39 @@ export default function LandingPage() {
                 </ul>
 
                 {/* CTA */}
-                <Button
-                  onClick={() => {
-                    trackPricingTierCta(tier.planKey);
-                    openInterestModal(tierModalSources[tier.planKey]);
-                  }}
-                  className={cn(
-                    "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
-                    tier.highlight
-                      ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
-                      : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
-                  )}
-                >
-                  Start free trial
-                </Button>
+                {isLive ? (
+                  <Button
+                    asChild
+                    className={cn(
+                      "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
+                      tier.highlight
+                        ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
+                        : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
+                    )}
+                  >
+                    <Link
+                      to={isAuthenticated ? "/dashboard" : checkoutHref(tier.planKey)}
+                      onClick={() => trackPricingTierCta(tier.planKey)}
+                    >
+                      Start free trial
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      trackPricingTierCta(tier.planKey);
+                      openInterestModal(tierModalSources[tier.planKey]);
+                    }}
+                    className={cn(
+                      "w-full h-auto py-3 px-3 rounded-[6px] text-[13.5px] font-semibold transition-all border-[1.5px] tracking-[0.01em]",
+                      tier.highlight
+                        ? "bg-[#5B4FE8] border-[#5B4FE8] text-white shadow-[0_3px_12px_rgba(91,79,232,0.28)] hover:bg-[#4a3fd4] hover:border-[#4a3fd4] hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(91,79,232,0.35)]"
+                        : "bg-transparent border-neutral-200 text-[#0a0a0a] hover:border-[#5B4FE8] hover:text-[#5B4FE8] hover:bg-[#f2f2fd]"
+                    )}
+                  >
+                    Start free trial
+                  </Button>
+                )}
               </motion.div>
             );
             })}
@@ -604,15 +639,32 @@ export default function LandingPage() {
             </ul>
 
             <div className="flex items-center justify-center relative z-10">
-              <Button
-                onClick={() => {
-                  trackStudioCta();
-                  openInterestModal(INTEREST_MODAL_SOURCES.pricingStudioContact);
-                }}
-                className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
-              >
-                Contact us
-              </Button>
+              {isLive ? (
+                <Button
+                  asChild
+                  className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
+                >
+                  <Link
+                    to={isAuthenticated ? "/dashboard" : "/login"}
+                    onClick={() => {
+                      trackStudioCta();
+                      trackCtaClick("pricing_studio_contact", isAuthenticated ? "/dashboard" : "/login");
+                    }}
+                  >
+                    Contact us
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => {
+                    trackStudioCta();
+                    openInterestModal(INTEREST_MODAL_SOURCES.pricingStudioContact);
+                  }}
+                  className="inline-block py-3 px-8 bg-transparent text-[#f4f4f7] border-[1.5px] border-[#f4f4f7]/25 rounded-[6px] text-[13.5px] font-semibold cursor-pointer whitespace-nowrap transition-all tracking-[0.01em] hover:bg-[#f4f4f7]/8 hover:border-[#f4f4f7]/50 hover:-translate-y-0.5"
+                >
+                  Contact us
+                </Button>
+              )}
             </div>
           </motion.div>
 
@@ -639,9 +691,20 @@ export default function LandingPage() {
             <span className="text-neutral-400">You don't need a stack of plugins.</span><br />
             <span className="text-white">You just need BetterBlog.</span>
           </h2>
-          <Button size="lg" onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.bottomGetStarted)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">
-            Get Started for Free
-          </Button>
+          {isLive ? (
+            <Button size="lg" className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10" asChild>
+              <Link
+                to={checkoutHref("professional")}
+                onClick={() => trackCtaClick("bottom_get_started", checkoutHref("professional"))}
+              >
+                Get Started for Free
+              </Link>
+            </Button>
+          ) : (
+            <Button size="lg" onClick={() => openInterestModal(INTEREST_MODAL_SOURCES.bottomGetStarted)} className="h-14 px-10 text-lg bg-[#5B4FE8] hover:bg-[#4a3fd4] text-white rounded-full mt-10">
+              Get Started for Free
+            </Button>
+          )}
           <p className="mt-6 text-sm text-neutral-500">7-day free trial, card required.</p>
         </div>
       </section>

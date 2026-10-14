@@ -1,4 +1,5 @@
 import prisma from '../db/index.js'
+import { readBlogPassword } from './blog-password.js'
 import {
   POST_SNAPSHOT_CAP,
   SNAPSHOT_FRESH_MS,
@@ -43,9 +44,10 @@ export interface ServedSnapshot {
 }
 
 function appendPassword (url: string, password: string | null | undefined): string {
-  if (!password?.trim()) return url
+  const plain = readBlogPassword(password)
+  if (!plain) return url
   const parsed = new URL(url)
-  parsed.searchParams.set('password', password.trim())
+  parsed.searchParams.set('password', plain)
   return parsed.toString()
 }
 

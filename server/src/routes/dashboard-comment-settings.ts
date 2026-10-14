@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { encrypt } from '../lib/encryption.js'
 
 const router = Router()
@@ -73,23 +74,11 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
     sortOrder: (s?.sortOrder ?? DEFAULT_SETTINGS.sortOrder) as 'newest' | 'oldest' | 'most_liked',
   }
 
-  console.log('[dashboard-comment-settings] GET', {
-    userId: user.id,
-    siteKey,
-    siteId: site.id,
-    allowAnonymousComments: settings.allowAnonymousComments,
-    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
-    apiKeyVerified: settings.apiKeyVerified,
-    apiKeyInvalid: settings.apiKeyInvalid,
-    commentsEnabled: settings.commentsEnabled,
-    allowNewComments: settings.allowNewComments,
-  })
-
   res.json(settings)
 })
 
 // PUT /api/dashboard/settings/comments
-router.put('/', requireSession, async (req: Request, res: Response) => {
+router.put('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as {
     siteKey?: string
@@ -238,7 +227,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
 })
 
 // POST /api/dashboard/settings/comments/verify-api-key
-router.post('/verify-api-key', requireSession, async (req: Request, res: Response) => {
+router.post('/verify-api-key', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; apiKey?: string }
 
@@ -275,8 +264,6 @@ router.post('/verify-api-key', requireSession, async (req: Request, res: Respons
     }
 
     const auth = (await resAuth.json()) as Record<string, unknown>
-    const authForLog = JSON.stringify(auth, null, 2)
-    console.log('[comment-settings] Squarespace authorization response:', authForLog)
 
     // Support both API key flows: Developer Tools (newer) and Advanced (older).
     // Permissions may be in different shapes: permissions[], scopes[], or nested [{ api, level }].

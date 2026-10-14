@@ -3,14 +3,18 @@ import prisma from '../db/index.js'
 import {
   getSiteBySiteKey,
   getActiveSiteConfig,
+  migrateBlogPasswordAtRest,
   upsertSiteConfig,
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { SnapshotCaptureError, getServedSnapshot, storeSnapshot } from '../lib/preview-snapshot.js'
 import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/preview-snapshot-html.js'
 import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
-import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
+import { canRenderSubscription } from '../lib/subscriptionStatus.js'
+import { stampPaymentFailure } from '../lib/paymentGrace.js'
+import { readBlogPassword } from '../lib/blog-password.js'
 import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
@@ -199,10 +203,11 @@ function buildDefaultPostConfig (
 }
 
 function appendPasswordToUrl (url: string, password: string | null | undefined): string {
-  if (!password || !password.trim()) return url
+  const plain = readBlogPassword(password)
+  if (!plain) return url
   try {
     const u = new URL(url)
-    u.searchParams.set('password', password.trim())
+    u.searchParams.set('password', plain)
     return u.toString()
   } catch {
     return url
@@ -299,9 +304,8 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
-
   try {
+    const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
     const allItems: unknown[] = []
     let nextUrl: string | null = urlWithPassword
     let firstJson: Record<string, unknown> | null = null
@@ -508,6 +512,7 @@ async function siteOwnedBySession (req: Request): Promise<{ site: Awaited<Return
   const site = await prisma.site.findFirst({
     where: { siteKey, userId: user.id, deletedAt: null }
   })
+  if (site) await migrateBlogPasswordAtRest(site.id, site.blogPassword)
   return { site, missing: !site }
 }
 
@@ -710,8 +715,6 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
 router.get('/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
   const viewerMode = parseViewerModeQuery(req.query.viewerMode)
-  const reqId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  console.log(`[config] GET ${siteKey} start (${reqId})`)
   try {
 
   const site = await prisma.site.findFirst({
@@ -720,7 +723,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       user: {
         include: {
           subscriptions: {
-            where: { status: { in: ['trialing', 'active'] } },
+            where: { status: { in: ['trialing', 'active', 'past_due', 'unpaid'] } },
             orderBy: { updatedAt: 'desc' },
             take: 10
           }
@@ -742,8 +745,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const activeSubscription =
-    site.user?.subscriptions?.find((sub) => isEntitledSubscription(sub)) ?? null
+  const subscriptions = site.user?.subscriptions ?? []
+  let activeSubscription: (typeof subscriptions)[number] | null = null
+  for (const sub of subscriptions) {
+    const stamped = await stampPaymentFailure(sub)
+    if (canRenderSubscription(stamped)) {
+      activeSubscription = stamped
+      break
+    }
+  }
   if (!activeSubscription) {
     res.status(403).json({ error: 'Subscription required' })
     return
@@ -986,19 +996,13 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         : {})
     }
 
-    console.log(`[config] GET ${siteKey} ok (${reqId})`, {
-      allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
-      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
-      commentsEnabled: commentSettings.commentsEnabled,
-      allowNewComments: 'allowNewComments' in commentSettings ? commentSettings.allowNewComments : null,
-    })
     res.json(configData)
   } catch (err) {
-    console.error(`[config] GET ${siteKey} error (${reqId}):`, err)
+    console.error(`[config] GET ${siteKey} error:`, err)
     res.status(500).json({ error: 'Invalid config data' })
   }
   } catch (err) {
-    console.error(`[config] GET ${siteKey} unhandled (${reqId}):`, err)
+    console.error(`[config] GET ${siteKey} unhandled:`, err)
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to load config' })
     }
@@ -1006,7 +1010,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 })
 
 // POST /api/config - Save/update site config (requires auth, must own site)
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; config?: unknown; paywallSettings?: unknown }
   const { siteKey, config } = body

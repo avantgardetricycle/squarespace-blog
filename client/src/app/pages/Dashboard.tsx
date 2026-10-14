@@ -51,7 +51,7 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { getPlanDisplayName } from "@/lib/planLabels";
-import { formatSubscriptionDate, hasActiveSubscription } from "@/lib/subscription";
+import { formatSubscriptionDate, hasActiveSubscription, isInPaymentGrace } from "@/lib/subscription";
 import {
   InstallationInstructionsBody,
   InstallationInstructionsModal,
@@ -113,6 +113,7 @@ export default function Dashboard() {
       ? me.subscription.planDisplay ?? getPlanDisplayName(me.subscription.plan)
       : "Professional";
   const subscriptionActive = hasActiveSubscription(me?.subscription);
+  const canCustomize = subscriptionActive || isInPaymentGrace(me?.subscription);
   const subscriptionEndDate = formatSubscriptionDate(me?.subscription?.currentPeriodEnd);
   const sites = me?.sites ?? [];
 
@@ -915,7 +916,7 @@ export default function Dashboard() {
                             >
                               <Link
                                 to={
-                                  subscriptionActive
+                                  canCustomize
                                     ? `/dashboard/configure?siteKey=${site.siteKey}`
                                     : "/dashboard/account"
                                 }
@@ -992,7 +993,7 @@ export default function Dashboard() {
             <CardDescription>Get straight to what matters.</CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
-            <Link to={subscriptionActive ? "/dashboard/configure" : "/dashboard/account"} className="block group">
+            <Link to={canCustomize ? "/dashboard/configure" : "/dashboard/account"} className="block group">
               <div className="border border-[#e5e4e0] rounded-xl p-6 hover:border-[#5B4FE8] hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-[#5B4FE8]/5">
                 <div className="bg-[#5B4FE8]/10 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-[#5B4FE8] group-hover:text-white transition-colors text-[#5B4FE8]">
                   <Settings className="w-6 h-6" />
