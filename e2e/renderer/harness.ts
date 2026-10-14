@@ -65,7 +65,15 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     await route.fulfill({ status: 200, contentType: "application/json", body: '{"comments":[]}' });
   });
   await page.route("**/api/comments**", async (route) => {
-    if (route.request().method() !== "GET") {
+    const requestUrl = route.request().url();
+    let path = "";
+    try {
+      path = new URL(requestUrl).pathname.replace(/\/+$/, "");
+    } catch {
+      path = "";
+    }
+    const isCommentCreate = route.request().method() === "POST" && path.endsWith("/api/comments");
+    if (isCommentCreate) {
       const payload = options.commentPostResponse
         ? options.commentPostResponse()
         : { status: 200, json: {} };
@@ -74,6 +82,10 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
         contentType: "application/json",
         body: JSON.stringify(payload.json),
       });
+      return;
+    }
+    if (route.request().method() !== "GET") {
+      await route.fulfill({ status: 204, body: "" });
       return;
     }
     await route.fulfill({

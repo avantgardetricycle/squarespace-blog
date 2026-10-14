@@ -75,6 +75,7 @@ model Site {
   sitePaywallSettings   SitePaywallSettings?
   cachedPosts           CachedPost[]
   comments              Comment[]
+  commentVerificationTokens CommentVerificationToken[]
   supportConversations  SupportConversation[]
   supportTickets        SupportTicket[]
   previewSnapshots      PreviewSnapshot[]
@@ -403,6 +404,23 @@ model Comment {
   @@index([status])
   @@index([createdAt])
   @@map("comments")
+}
+
+/// Opaque member-comment session. The browser stores the token, not the email.
+model CommentVerificationToken {
+  token       String   @id
+  siteId      String   @map("site_id")
+  email       String   @db.Text
+  displayName String   @map("display_name")
+  customName  Boolean  @default(false) @map("custom_name")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@index([expiresAt])
+  @@map("comment_verification_tokens")
 }
 
 model CommentLike {

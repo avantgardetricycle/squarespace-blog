@@ -19,6 +19,12 @@ import {
   finalizeCommentIdentity,
   profileCommentDisplayName,
 } from '../lib/anonymous-comment-identity.js'
+import { applyVerificationSession } from '../lib/comment-verification-session.js'
+import {
+  deleteCommentVerificationSession,
+  readCommentVerificationSession,
+  saveCommentVerificationSession,
+} from '../lib/comment-verification-token.js'
 import { redactSubscriberText } from '../lib/email-providers.js'
 import { canRenderSubscription } from '../lib/subscriptionStatus.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
@@ -376,8 +382,6 @@ router.get('/', async (req: Request, res: Response) => {
       created_at: createdIso(c.createdAt),
       replies: kids.map((k) => formatNode(k, nextSeen)),
     }
-    const emailNorm = c.email && typeof c.email === 'string' ? c.email.trim() : ''
-    if (emailNorm) out.email = emailNorm
     if (ext) out.external_comment_id = ext
     if (c.importedFromSquarespace) out.imported_from_squarespace = true
     return out
@@ -480,7 +484,7 @@ router.post('/', async (req: Request, res: Response) => {
   const displayNameRaw = typeof body.display_name === 'string' ? body.display_name.trim() : ''
   // Optional name from the member email modal. Kept off display_name so a typed
   // name still counts as a member verification attempt when the form name is blank.
-  const subscriberDisplayNameRaw =
+  let subscriberDisplayNameRaw =
     typeof body.subscriber_display_name === 'string' ? body.subscriber_display_name.trim() : ''
   const commentBody = typeof body.body === 'string' ? body.body.trim() : ''
   if (!commentBody || commentBody.length > MAX_BODY) {
@@ -497,6 +501,31 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'display_name must be at most 100 characters' })
     return
   }
+
+  const verificationCookieToken =
+    typeof body.verification_cookie_token === 'string' ? body.verification_cookie_token.trim() : ''
+  let reuseVerificationToken: string | null = null
+  let nameChosenByReader = subscriberDisplayNameRaw.length > 0
+  if (verificationCookieToken && !email && !postAsAnonymous) {
+    const session = await readCommentVerificationSession(verificationCookieToken, site.id)
+    if (!session) {
+      res.status(400).json({
+        code: 'verification_expired',
+        error: 'Please confirm your email again.',
+      })
+      return
+    }
+    const applied = applyVerificationSession({
+      email,
+      subscriberDisplayName: subscriberDisplayNameRaw,
+      session,
+    })
+    email = applied.email
+    subscriberDisplayNameRaw = applied.subscriberDisplayName.slice(0, MAX_DISPLAY_NAME)
+    nameChosenByReader = applied.customName
+    reuseVerificationToken = verificationCookieToken
+  }
+
   if (postAsAnonymous && !settings.allowAnonymousComments) {
     res.status(403).json({
       error:
@@ -795,8 +824,18 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
 
-  const createdEmailNorm =
+  const createdEmail =
     comment.email && typeof comment.email === 'string' ? comment.email.trim() : ''
+  let verificationToken: string | null = null
+  if (comment.verifiedSubscriber && createdEmail) {
+    verificationToken = await saveCommentVerificationSession({
+      existingToken: reuseVerificationToken,
+      siteId: site.id,
+      email: createdEmail,
+      displayName: comment.displayName,
+      customName: nameChosenByReader,
+    })
+  }
   res.status(201).json({
     id: comment.id,
     display_name: comment.displayName,
@@ -806,8 +845,29 @@ router.post('/', async (req: Request, res: Response) => {
     like_count: 0,
     created_at: comment.createdAt.toISOString(),
     replies: [],
-    ...(createdEmailNorm ? { email: createdEmailNorm } : {}),
+    ...(verificationToken ? { verification_token: verificationToken } : {}),
   })
+})
+
+// POST /api/comments/verification/logout
+router.post('/verification/logout', async (req: Request, res: Response) => {
+  const siteToken = getSiteToken(req)
+  if (!siteToken) {
+    res.status(400).json({ error: 'Site token required' })
+    return
+  }
+  const site = await prisma.site.findFirst({
+    where: { siteKey: siteToken, deletedAt: null },
+    select: { id: true },
+  })
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const token =
+    typeof req.body?.verification_cookie_token === 'string' ? req.body.verification_cookie_token.trim() : ''
+  if (token) await deleteCommentVerificationSession(token, site.id)
+  res.status(204).end()
 })
 
 // POST /api/comments/:id/like
