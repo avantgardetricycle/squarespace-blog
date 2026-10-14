@@ -249,8 +249,8 @@ export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 export type PostHeaderTypeSize = "s" | "m" | "l" | "xl";
 
 export const POST_HEADER_TYPE_SIZES: { value: PostHeaderTypeSize; label: string }[] = [
-  { value: "s", label: "Small" },
   { value: "m", label: "Medium" },
+  { value: "s", label: "Small" },
   { value: "l", label: "Large" },
   { value: "xl", label: "XL" },
 ];
@@ -1401,15 +1401,16 @@ function PostHeaderFontSelect<T extends string>({
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
+  const selected = options.find((opt) => opt.value === value) ?? options.find((opt) => opt.value === "m") ?? options[0];
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
         <Label className="text-xs text-[#6b6b6b]">{label}</Label>
         <p className="text-[10px] text-[#6b6b6b]">{description}</p>
       </div>
-      <Select value={value} onValueChange={(v) => onChange(v as T)}>
+      <Select value={selected.value} onValueChange={(v) => onChange(v as T)}>
         <SelectTrigger className="w-[132px] shrink-0" aria-label={label}>
-          <SelectValue />
+          <SelectValue placeholder="Medium">{selected.label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((opt) => (
