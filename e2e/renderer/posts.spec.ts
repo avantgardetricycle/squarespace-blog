@@ -395,6 +395,69 @@ test.describe("post layout contract", () => {
     expect(fullScreen.commentsWidth).toBeGreaterThan(postBody.commentsWidth + 40);
   });
 
+  test("story desktop image height stays between 4:3 and square", async ({ page }, testInfo) => {
+    test.skip(isMobileProject(testInfo), "mobile story image stays 16:10");
+    const pixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    const items = blogJson.items.map((item, index) => ({
+      ...item,
+      assetUrl: pixel,
+      mediaFocalPoint: { x: 0.2, y: 0.8 },
+      title: index === 1 ? "Short" : item.title,
+      excerpt: index === 1 ? "A short deck." : item.excerpt,
+    }));
+    const base = structuredClone(postTemplates.story) as Record<string, any>;
+    base.postHeader = { ...base.postHeader, contentVerticalAlignment: "top" };
+    await mountRenderer(page, { postConfig: base, blogItems: items });
+    const topAligned = await storyHeaderFrame(page);
+    expect(topAligned.objectFit).toBe("cover");
+    expect(topAligned.objectPosition).toBe("20% 80%");
+    expect(topAligned.widthShare).toBeGreaterThan(0.55);
+    expect(topAligned.widthShare).toBeLessThan(0.61);
+    expect(Math.abs(topAligned.ratio - 0.75)).toBeLessThan(0.04);
+    expect(Math.abs(topAligned.heightDelta)).toBeLessThan(2);
+    expect(topAligned.shareGap).toBeGreaterThan(40);
+
+    base.postHeader = { ...base.postHeader, contentVerticalAlignment: "bottom" };
+    await mountRenderer(page, { postConfig: base, blogItems: items });
+    const bottomAligned = await storyHeaderFrame(page);
+    expect(Math.abs(bottomAligned.ratio - 0.75)).toBeLessThan(0.04);
+    expect(bottomAligned.shareGap).toBeGreaterThan(32);
+    expect(bottomAligned.shareGap).toBeLessThan(48);
+    expect(topAligned.shareGap - bottomAligned.shareGap).toBeGreaterThan(40);
+
+    const tall = blogJson.items.map((item, index) => ({
+      ...item,
+      assetUrl: pixel,
+      title: index === 1 ? "Tall header line ".repeat(40) : item.title,
+      excerpt: index === 1 ? "Deck line. ".repeat(20) : item.excerpt,
+    }));
+    base.postHeader = { ...base.postHeader, contentVerticalAlignment: "top" };
+    await mountRenderer(page, { postConfig: base, blogItems: tall });
+    const capped = await storyHeaderFrame(page);
+    expect(Math.abs(capped.ratio - 1)).toBeLessThan(0.04);
+    expect(Math.abs(capped.topDelta)).toBeLessThan(2);
+    expect(capped.heightDelta).toBeGreaterThan(24);
+    expect(Math.abs(capped.textOverflow)).toBeLessThan(2);
+    expect(Math.abs(capped.zoneLeft)).toBeLessThan(2);
+    expect(Math.abs(capped.zoneRightGap)).toBeLessThan(2);
+
+    await page.setViewportSize({ width: 1461, height: 900 });
+    const wide = await storyHeaderFrame(page);
+    expect(wide.clientWidth).toBeGreaterThan(1400);
+    expect(Math.abs(wide.zoneLeft)).toBeLessThan(2);
+    expect(Math.abs(wide.zoneRightGap)).toBeLessThan(2);
+    expect(Math.abs(wide.zoneWidth - wide.clientWidth)).toBeLessThan(2);
+    expect(Math.abs(wide.rowInsetLeft - wide.pagePad)).toBeLessThan(2);
+    expect(Math.abs(wide.rowInsetRight - wide.pagePad)).toBeLessThan(2);
+    expect(Math.abs(wide.textOverflow)).toBeLessThan(2);
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    const narrow = await storyHeaderFrame(page);
+    expect(narrow.clientWidth).toBeLessThan(1200);
+    expect(Math.abs(narrow.zoneLeft)).toBeLessThan(2);
+    expect(Math.abs(narrow.zoneWidth - narrow.clientWidth)).toBeLessThan(2);
+  });
+
   test("sidebar subscribe and get-it-free use compact desktop padding", async ({ page }, testInfo) => {
     const mobile = isMobileProject(testInfo);
     const cfg = structuredClone(postTemplates.reporter) as Record<string, any>;
@@ -548,6 +611,49 @@ test.describe("post updated at", () => {
     await expect(meta).not.toContainText("Updated");
   });
 });
+
+async function storyHeaderFrame(page: Page) {
+  return page.evaluate(() => {
+    const box = document.querySelector(".blog-overlay-story-featured-image > div");
+    const col = document.querySelector(".blog-overlay-story-info-col");
+    const wrap = document.querySelector(".blog-overlay-story-featured-image");
+    const row = document.querySelector(".blog-overlay-story-header-row");
+    const img = document.querySelector(".blog-overlay-story-featured-image img");
+    const title = document.querySelector(".blog-overlay-post-title");
+    const share = document.querySelector(".blog-overlay-share-row");
+    if (!box || !col || !wrap || !row || !title || !share) {
+      throw new Error("story header frame is missing");
+    }
+    const zone = document.querySelector(".blog-overlay-single-post-header-zone--story");
+    const wrapper = document.getElementById("blog-overlay-list");
+    if (!zone || !wrapper) throw new Error("story header strip is missing");
+    const b = box.getBoundingClientRect();
+    const c = col.getBoundingClientRect();
+    const w = wrap.getBoundingClientRect();
+    const r = row.getBoundingClientRect();
+    const z = zone.getBoundingClientRect();
+    const clientWidth = document.documentElement.clientWidth;
+    const pagePad = parseFloat(getComputedStyle(wrapper).paddingLeft) || 0;
+    return {
+      ratio: b.height / b.width,
+      widthShare: w.width / r.width,
+      topDelta: b.top - c.top,
+      heightDelta: c.height - b.height,
+      shareGap: b.bottom - share.getBoundingClientRect().bottom,
+      titleTop: title.getBoundingClientRect().top,
+      objectFit: img ? getComputedStyle(img).objectFit : getComputedStyle(box).backgroundSize,
+      objectPosition: img ? getComputedStyle(img).objectPosition : "",
+      zoneLeft: z.left,
+      zoneRightGap: clientWidth - z.right,
+      zoneWidth: z.width,
+      clientWidth,
+      rowInsetLeft: r.left,
+      rowInsetRight: clientWidth - r.right,
+      pagePad,
+      textOverflow: c.right - r.right,
+    };
+  });
+}
 
 async function storyCommentsFooterBox(page: Page) {
   return page.evaluate(() => {
@@ -704,6 +810,14 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
       expectPx(title, 28);
       const ratio = await cssValue(page, ".blog-overlay-story-featured-image > div", "aspect-ratio");
       expect(ratio === "16 / 10" || ratio === "1.6").toBe(true);
+      const boxRatio = await page.evaluate(() => {
+        const box = document.querySelector(".blog-overlay-story-featured-image > div");
+        if (!box) return NaN;
+        const b = box.getBoundingClientRect();
+        return b.width / b.height;
+      });
+      expect(boxRatio).toBeGreaterThan(1.5);
+      expect(boxRatio).toBeLessThan(1.7);
       const crumbsAbove = await page.evaluate(() => {
         const crumbs = document.querySelector(".blog-overlay-post-breadcrumbs");
         const image = document.querySelector(".blog-overlay-story-featured-image");
@@ -714,6 +828,19 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
     } else {
       expect(direction).toBe("row");
       await expect(page.locator(".blog-overlay-more-to-read")).toBeVisible();
+      const frame = await storyHeaderFrame(page);
+      expect(frame.widthShare).toBeGreaterThan(0.55);
+      expect(frame.widthShare).toBeLessThan(0.61);
+      expect(frame.ratio).toBeGreaterThan(0.72);
+      expect(frame.ratio).toBeLessThan(1.03);
+      expect(Math.abs(frame.topDelta)).toBeLessThan(2);
+      expect(frame.heightDelta).toBeGreaterThan(-2);
+      expect(frame.objectFit).toBe("cover");
+      expect(Math.abs(frame.zoneLeft)).toBeLessThan(2);
+      expect(Math.abs(frame.zoneRightGap)).toBeLessThan(2);
+      expect(Math.abs(frame.rowInsetLeft - frame.pagePad)).toBeLessThan(2);
+      expect(Math.abs(frame.rowInsetRight - frame.pagePad)).toBeLessThan(2);
+      expect(Math.abs(frame.textOverflow)).toBeLessThan(2);
     }
     expect(await page.locator(".blog-overlay-relevant-posts--footer").count()).toBeGreaterThan(0);
     await assertMoreToReadAndThumbs(page, mobile);
