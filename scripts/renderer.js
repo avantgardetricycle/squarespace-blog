@@ -9595,261 +9595,70 @@
       return out;
     },
 
+
     /**
-     * Post-header type. Title is a Squarespace heading (H1–H4, default H1).
-     * Deck and meta are paragraph styles (P1–P3, defaults P1 and P2).
-     * When the site style can be read, that size is used at every viewport.
-     * Otherwise the fallback below is the size for that choice.
+     * Post Header size. One choice scales the title, deck, and meta together.
+     * Medium is the default and matches the previous fixed spec.
      */
-    _postHeaderFontFallbacks: {
-      h1: { desktop: '40px', mobile: '28px' },
-      h2: { desktop: '32px', mobile: '24px' },
-      h3: { desktop: '26px', mobile: '22px' },
-      h4: { desktop: '22px', mobile: '18px' },
-      p1: { desktop: '20px', mobile: '14px' },
-      p2: { desktop: '16px', mobile: '13px' },
-      p3: { desktop: '14px', mobile: '12px' }
+    _postHeaderTypeScale: {
+      s: {
+        title: { desktop: '34px', mobile: '24px' },
+        deck: { desktop: '17px', mobile: '13px' },
+        meta: { desktop: '14px', mobile: '12px' }
+      },
+      m: {
+        title: { desktop: '40px', mobile: '28px' },
+        deck: { desktop: '20px', mobile: '14px' },
+        meta: { desktop: '16px', mobile: '13px' }
+      },
+      l: {
+        title: { desktop: '48px', mobile: '34px' },
+        deck: { desktop: '24px', mobile: '17px' },
+        meta: { desktop: '19px', mobile: '15px' }
+      },
+      xl: {
+        title: { desktop: '56px', mobile: '40px' },
+        deck: { desktop: '28px', mobile: '19px' },
+        meta: { desktop: '22px', mobile: '17px' }
+      }
     },
 
-    _normalizePostHeaderFont: function(value, kind) {
+    _normalizePostHeaderTypeSize: function(value) {
       var v = typeof value === 'string' ? value.toLowerCase() : '';
-      if (kind === 'heading') {
-        if (v === 'h1' || v === 'h2' || v === 'h3' || v === 'h4') return v;
-        return 'h1';
-      }
-      if (v === 'p1' || v === 'p2' || v === 'p3') return v;
-      return kind === 'deck' ? 'p1' : 'p2';
+      if (v === 's' || v === 'small') return 's';
+      if (v === 'l' || v === 'large') return 'l';
+      if (v === 'xl') return 'xl';
+      return 'm';
     },
 
-    _cssLengthFromCustomProp: function(raw) {
-      if (!raw) return '';
-      raw = String(raw).trim();
-      if (!raw || raw === 'none' || raw === 'normal' || raw === 'inherit' || raw === 'initial') return '';
-      if (/^-?[\d.]+$/.test(raw)) return raw + 'rem';
-      if (/[0-9]/.test(raw) && (
-        raw.indexOf('px') !== -1 || raw.indexOf('rem') !== -1 || raw.indexOf('em') !== -1 ||
-        raw.indexOf('vw') !== -1 || raw.indexOf('clamp(') !== -1 || raw.indexOf('calc(') !== -1 ||
-        raw.indexOf('var(') === 0
-      )) return raw;
-      return '';
-    },
-
-    /** Squarespace heading/paragraph size: fluid min/max, then a single size variable. */
-    _squarespaceFluidSize: function(prefix) {
-      if (typeof document === 'undefined' || !document.documentElement) return '';
-      var root = document.documentElement;
-      var min = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-min-font-size'));
-      var max = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-max-font-size'));
-      if (min && max) {
-        return 'clamp(' + min + ', (' + max + ' - ' + min + ') * ((100vw - 375px) / 1065) + ' + min + ', ' + max + ')';
-      }
-      var names = [
-        prefix + '-font-font-size',
-        prefix + '-font-size',
-        prefix + '-size',
-        prefix + '-font-size-value',
-        prefix + '-size-value',
-        prefix + '-max-font-size'
-      ];
-      for (var i = 0; i < names.length; i++) {
-        var v = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, names[i]));
-        if (v) return v;
-      }
-      return '';
-    },
-
-    _readSquarespaceFontFace: function(kind, index) {
-      if (typeof document === 'undefined' || !document.documentElement) {
-        return { family: '', weight: '', lineHeight: '', tracking: '' };
-      }
-      var root = document.documentElement;
-      var prefix = (kind === 'heading' ? '--heading-' : '--paragraph-') + index;
-      var familyNames = kind === 'heading'
-        ? [prefix + '-font-font-family', '--heading-font-font-family', '--headings-font-family', '--header-font-family']
-        : [prefix + '-font-font-family', '--paragraph-font-font-family', '--body-font-font-family', '--primary-font-font-family'];
-      var weightNames = kind === 'heading'
-        ? [prefix + '-font-font-weight', '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight']
-        : [prefix + '-font-font-weight', '--paragraph-font-font-weight', '--body-font-font-weight', '--primary-font-font-weight'];
-      var lineNames = kind === 'heading'
-        ? [prefix + '-font-line-height', '--heading-font-line-height', '--headings-line-height']
-        : [prefix + '-font-line-height', '--paragraph-font-line-height', '--body-font-line-height'];
-      var trackNames = kind === 'heading'
-        ? [prefix + '-font-letter-spacing', '--heading-font-letter-spacing', '--headings-letter-spacing']
-        : [prefix + '-font-letter-spacing', '--paragraph-font-letter-spacing', '--body-font-letter-spacing'];
-      var read = function(names) {
-        for (var i = 0; i < names.length; i++) {
-          var raw = this._readCssVarFromEl(root, names[i]);
-          if (raw && raw !== 'inherit' && raw !== 'initial' && raw !== 'normal') return raw;
-        }
-        return '';
-      }.bind(this);
-      return {
-        family: read(familyNames),
-        weight: read(weightNames),
-        lineHeight: read(lineNames),
-        tracking: read(trackNames)
-      };
-    },
-
-    /**
-     * Hidden element so site h1–h4 / .sqsrte-* rules apply. Ignore the browser
-     * default size — that means Squarespace has not styled this step.
-     */
-    _probeSquarespaceFont: function(tag, className) {
-      if (typeof document === 'undefined' || !document.body || !window.getComputedStyle) return null;
-      var el = document.createElement(tag);
-      if (className) el.className = className;
-      el.setAttribute('data-bb-type-probe', '1');
-      el.setAttribute('aria-hidden', 'true');
-      el.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;margin:0;width:auto;height:auto;';
-      document.body.appendChild(el);
-      var cs;
-      try { cs = window.getComputedStyle(el); } catch (eProbe) { cs = null; }
-      var fontSize = cs ? cs.fontSize : '';
-      var fontFamily = cs ? cs.fontFamily : '';
-      var fontWeight = cs ? cs.fontWeight : '';
-      var lineHeight = cs ? cs.lineHeight : '';
-      var letterSpacing = cs ? cs.letterSpacing : '';
-      if (el.parentNode) el.parentNode.removeChild(el);
-      var px = parseFloat(fontSize);
-      if (!isFinite(px)) return null;
-      var rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-      var ua = [rootPx];
-      var t = String(tag || '').toLowerCase();
-      if (t === 'h1') ua = [rootPx * 2];
-      else if (t === 'h2') ua = [rootPx * 1.5];
-      else if (t === 'h3') ua = [rootPx * 1.17, rootPx * 1.2];
-      else if (t === 'h4') ua = [rootPx];
-      for (var i = 0; i < ua.length; i++) {
-        if (Math.abs(px - ua[i]) < 1) return null;
-      }
-      return {
-        size: fontSize,
-        family: fontFamily || '',
-        weight: fontWeight || '',
-        lineHeight: lineHeight && lineHeight !== 'normal' ? lineHeight : '',
-        tracking: letterSpacing && letterSpacing !== 'normal' && letterSpacing !== '0px' ? letterSpacing : ''
-      };
-    },
-
-    _resolveSquarespaceFont: function(key) {
-      if (!this._sqFontCache) this._sqFontCache = {};
-      var widthBucket = typeof window !== 'undefined' ? Math.round((window.innerWidth || 0) / 40) : 0;
-      var cacheKey = key + ':' + widthBucket;
-      if (this._sqFontCache[cacheKey]) return this._sqFontCache[cacheKey];
-      var heading = key.charAt(0) === 'h';
-      var index = key.charAt(1);
-      var prefix = (heading ? '--heading-' : '--paragraph-') + index;
-      var size = this._squarespaceFluidSize(prefix);
-      var face = this._readSquarespaceFontFace(heading ? 'heading' : 'paragraph', index);
-      if (!size) {
-        var probe = heading
-          ? this._probeSquarespaceFont('h' + index, '')
-          : this._probeSquarespaceFont('p', index === '1' ? 'sqsrte-large' : (index === '3' ? 'sqsrte-small' : ''));
-        if (probe) {
-          size = probe.size;
-          if (!face.family) face.family = probe.family;
-          if (!face.weight) face.weight = probe.weight;
-          if (!face.lineHeight) face.lineHeight = probe.lineHeight;
-          if (!face.tracking) face.tracking = probe.tracking;
-        }
-      }
-      var resolved = {
-        size: size || '',
-        family: face.family || '',
-        weight: face.weight || '',
-        lineHeight: face.lineHeight || '',
-        tracking: face.tracking || ''
-      };
-      this._sqFontCache[cacheKey] = resolved;
-      return resolved;
-    },
-
-    _setOptionalStyleProp: function(el, name, value) {
-      if (!el || !el.style) return;
-      if (value) el.style.setProperty(name, value);
-      else el.style.removeProperty(name);
-    },
-
-    _postHeaderChoiceKeys: function(key) {
-      return key && key.charAt(0) === 'h' ? ['h1', 'h2', 'h3', 'h4'] : ['p1', 'p2', 'p3'];
-    },
-
-    _fontSizeToPx: function(size) {
-      var n = parseFloat(size);
-      if (!isFinite(n)) return null;
-      var s = String(size);
-      if (s.indexOf('px') !== -1) return n;
-      if (s.indexOf('rem') !== -1) {
-        var rootPx = 16;
-        try {
-          rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-        } catch (ePx) { /* ignore */ }
-        return n * rootPx;
-      }
-      return null;
-    },
-
-    /**
-     * A size shared with another step in the menu is not that step's style
-     * (Squarespace often sets one size on h1–h4). Drop it so the choice's
-     * own fallback is used and the menu still changes the type.
-     */
-    _postHeaderStepSize: function(key) {
-      var resolved = this._resolveSquarespaceFont(key);
-      var size = resolved.size || '';
-      if (!size) return { size: '', resolved: resolved };
-      var keys = this._postHeaderChoiceKeys(key);
-      var selfPx = this._fontSizeToPx(size);
-      var matches = 0;
-      for (var i = 0; i < keys.length; i++) {
-        var other = this._resolveSquarespaceFont(keys[i]).size || '';
-        if (!other) continue;
-        if (selfPx != null) {
-          var otherPx = this._fontSizeToPx(other);
-          if (otherPx != null && Math.abs(selfPx - otherPx) < 1) matches++;
-          else if (otherPx == null && other === size) matches++;
-        } else if (other === size) {
-          matches++;
-        }
-      }
-      if (matches > 1) return { size: '', resolved: resolved };
-      return { size: size, resolved: resolved };
-    },
-
-    _setRoleFontVars: function(el, role, key) {
-      var fb = this._postHeaderFontFallbacks[key] || this._postHeaderFontFallbacks.h1;
-      var picked = this._postHeaderStepSize(key);
-      var resolved = picked.resolved;
-      var desktop = picked.size || fb.desktop;
-      var mobile = picked.size || fb.mobile;
-      el.style.setProperty('--bb-' + role + '-size', desktop);
-      el.style.setProperty('--bb-' + role + '-size-mobile', mobile);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-family', resolved.family);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-weight', resolved.weight);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-line-height', resolved.lineHeight);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-tracking', resolved.tracking);
-    },
-
-    /** Apply the Post Header title / deck / meta font choices onto the overlay root. */
+    /** Apply the Post Header size onto the overlay root. */
     _applyPostHeaderTypeScale: function(wrapper, postHeaderCfg) {
       if (!wrapper || !wrapper.style) return;
       var ph = postHeaderCfg && typeof postHeaderCfg === 'object' ? postHeaderCfg : (this._postHeaderFontCfg || {});
       this._postHeaderFontCfg = ph;
-      var title = this._normalizePostHeaderFont(ph.titleFont, 'heading');
-      var deck = this._normalizePostHeaderFont(ph.deckFont, 'deck');
-      var meta = this._normalizePostHeaderFont(ph.metaFont, 'paragraph');
-      wrapper.setAttribute('data-bb-title-font', title);
-      wrapper.setAttribute('data-bb-deck-font', deck);
-      wrapper.setAttribute('data-bb-meta-font', meta);
-      this._setRoleFontVars(wrapper, 'title', title);
-      this._setRoleFontVars(wrapper, 'deck', deck);
-      this._setRoleFontVars(wrapper, 'meta', meta);
+      var size = this._normalizePostHeaderTypeSize(ph.typeSize);
+      var scale = this._postHeaderTypeScale[size] || this._postHeaderTypeScale.m;
+      wrapper.setAttribute('data-bb-type-size', size);
+      wrapper.removeAttribute('data-bb-title-font');
+      wrapper.removeAttribute('data-bb-deck-font');
+      wrapper.removeAttribute('data-bb-meta-font');
+      var roles = ['title', 'deck', 'meta'];
+      for (var i = 0; i < roles.length; i++) {
+        var role = roles[i];
+        var step = scale[role];
+        wrapper.style.setProperty('--bb-' + role + '-size', step.desktop);
+        wrapper.style.setProperty('--bb-' + role + '-size-mobile', step.mobile);
+        wrapper.style.removeProperty('--bb-' + role + '-family');
+        wrapper.style.removeProperty('--bb-' + role + '-weight');
+        wrapper.style.removeProperty('--bb-' + role + '-line-height');
+        wrapper.style.removeProperty('--bb-' + role + '-tracking');
+      }
     },
 
     _clearPostHeaderTypeScale: function(wrapper) {
       if (!wrapper) return;
       this._postHeaderFontCfg = null;
+      wrapper.removeAttribute('data-bb-type-size');
       wrapper.removeAttribute('data-bb-title-font');
       wrapper.removeAttribute('data-bb-deck-font');
       wrapper.removeAttribute('data-bb-meta-font');
@@ -9861,6 +9670,7 @@
         }
       }
     },
+
 
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
@@ -11082,7 +10892,7 @@
         el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
       }
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
-      /* Post titles take family/weight from the selected heading style. */
+      /* Post title size comes from the Post Header scale; family stays the site heading font. */
       if (opts.size === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -11097,7 +10907,7 @@
       } else {
         el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
       }
-      /* Post meta takes family/weight from the selected paragraph style. */
+      /* Post meta size comes from the Post Header scale; family stays the site paragraph font. */
       if (opts.variant === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -12267,7 +12077,7 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
-      if (wrapper.getAttribute('data-bb-title-font')) {
+      if (wrapper.getAttribute('data-bb-type-size')) {
         this._applyPostHeaderTypeScale(wrapper, this._postHeaderFontCfg);
       }
       this._lockMobilePageAxis(narrow);
@@ -12388,8 +12198,8 @@
     /**
      * Mobile (<768): cap in-article h1–h6 at the computed post-title size × 0.85
      * so customer heading scales cannot exceed the headline. Cap only — never enlarge.
-     * The default H1 phone fallback is 28px, so the cap is 24px until a larger
-     * Squarespace heading size is in use.
+     * The default Medium phone title is 28px, so the cap is 24px until the
+     * customer picks Large or XL.
      */
     _postTitleFontSizePx: function(wrapper, narrow) {
       var fallback = narrow ? 28 : 40;
