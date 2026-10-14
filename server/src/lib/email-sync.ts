@@ -139,7 +139,7 @@ export async function propagatePlatformKeys(
     )
     try {
       await executeSql(
-        `INSERT INTO ${quotedIdent(table.schema)}.${quotedIdent('site_email_credentials')} (${quotedIdent('site_id')}, ${quotedIdent('provider')}, ${quotedIdent('api_key_enc')}) VALUES ($1, $2, $3) ON CONFLICT (${quotedIdent('site_id')}, ${quotedIdent('provider')}) DO UPDATE SET ${quotedIdent('api_key_enc')} = EXCLUDED.${quotedIdent('api_key_enc')}`,
+        `INSERT INTO ${quotedIdent(table.schema)}.${quotedIdent('site_email_credentials')} (${quotedIdent('site_id')}, ${quotedIdent('provider')}, ${quotedIdent('api_key_enc')}, ${quotedIdent('updated_at')}) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) ON CONFLICT (${quotedIdent('site_id')}, ${quotedIdent('provider')}) DO UPDATE SET ${quotedIdent('api_key_enc')} = EXCLUDED.${quotedIdent('api_key_enc')}, ${quotedIdent('updated_at')} = CURRENT_TIMESTAMP`,
         [siteId, write.provider, write.apiKeyEnc]
       )
     } catch {

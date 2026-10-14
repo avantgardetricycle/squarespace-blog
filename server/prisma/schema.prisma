@@ -48,7 +48,7 @@ model Site {
   name                String?
   url                 String?
   blogPath            String?  @map("blog_path") // e.g. /blog, /journal - path where blog lives
-  blogPassword        String?  @map("blog_password") // for password-protected Squarespace blogs (?password=)
+  blogPassword        String?  @map("blog_password") @db.Text // AES-256-GCM ciphertext (enc:v1:); Squarespace blog password
   squarespaceApiKeyEnc String? @map("squarespace_api_key_enc") @db.Text // encrypted Squarespace Profiles API key
   squarespaceApiKeyInvalidAt DateTime? @map("squarespace_api_key_invalid_at")
   squarespaceApiKeyAlertEmailSentAt DateTime? @map("squarespace_api_key_alert_email_sent_at")
@@ -460,7 +460,7 @@ model SiteEmailCredential {
   siteId    String   @map("site_id")
   provider  String // kit | mailchimp
   apiKeyEnc String   @map("api_key_enc") @db.Text
-  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 

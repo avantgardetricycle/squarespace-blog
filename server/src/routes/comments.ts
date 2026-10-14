@@ -4,7 +4,7 @@
  */
 import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
-import prisma from '../db/index.js'
+import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
 import { decrypt } from '../lib/encryption.js'
 import { loadUserPlanContext } from '../lib/planAccess.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
@@ -126,6 +126,7 @@ async function getSiteWithSubscription(siteToken: string) {
     }
   }
   if (!site || !entitled) return null
+  await migrateBlogPasswordAtRest(site.id, site.blogPassword)
   return site
 }
 

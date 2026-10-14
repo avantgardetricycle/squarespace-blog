@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import Stripe from 'stripe'
-import prisma from '../db/index.js'
+import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
+import { sealBlogPassword } from '../lib/blog-password.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
@@ -169,6 +170,10 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
       res.status(404).json({ error: 'User not found' })
       return
     }
+
+    await Promise.all(
+      userWithRelations.sites.map((s) => migrateBlogPasswordAtRest(s.id, s.blogPassword))
+    )
 
     const pickedSubscription = pickDisplaySubscription(userWithRelations.subscriptions)
     const subscription = pickedSubscription ? await stampPaymentFailure(pickedSubscription) : null
@@ -1017,7 +1022,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, requireEditableSubscripti
       updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
     }
     if ('blogPassword' in req.body) {
-      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+      updates.blogPassword = sealBlogPassword(typeof blogPassword === 'string' ? blogPassword : null)
     }
     if ('paywallMode' in req.body) {
       if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
@@ -1135,7 +1140,7 @@ router.patch('/sites/:id', requireSession, requireEditableSubscription, async (r
       updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
     }
     if ('blogPassword' in req.body) {
-      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+      updates.blogPassword = sealBlogPassword(typeof blogPassword === 'string' ? blogPassword : null)
     }
     if ('paywallMode' in req.body) {
       if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {

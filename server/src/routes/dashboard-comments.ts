@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../db/index.js'
+import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
 import { resolveParentIdForReply } from '../lib/comment-thread-depth.js'
@@ -248,6 +248,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     where: { id: comment.siteId },
     select: { id: true, url: true, blogPassword: true },
   })
+  if (siteRow) await migrateBlogPasswordAtRest(siteRow.id, siteRow.blogPassword)
 
   const body = req.body as { status?: string; body?: string }
   if (body.status === 'deleted') {

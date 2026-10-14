@@ -3,6 +3,7 @@ import prisma from '../db/index.js'
 import {
   getSiteBySiteKey,
   getActiveSiteConfig,
+  migrateBlogPasswordAtRest,
   upsertSiteConfig,
   type SiteConfigData
 } from '../db/index.js'
@@ -15,6 +16,7 @@ import { canRenderSubscription } from '../lib/subscriptionStatus.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
 import { newlyLockedViolations, resolveEntitlements, stripServedConfig } from '../lib/planEntitlements.js'
 import { loadUserPlanContext } from '../lib/planAccess.js'
+import { readBlogPassword } from '../lib/blog-password.js'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
@@ -203,10 +205,11 @@ function buildDefaultPostConfig (
 }
 
 function appendPasswordToUrl (url: string, password: string | null | undefined): string {
-  if (!password || !password.trim()) return url
+  const plain = readBlogPassword(password)
+  if (!plain) return url
   try {
     const u = new URL(url)
-    u.searchParams.set('password', password.trim())
+    u.searchParams.set('password', plain)
     return u.toString()
   } catch {
     return url
@@ -303,9 +306,8 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
-
   try {
+    const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
     const allItems: unknown[] = []
     let nextUrl: string | null = urlWithPassword
     let firstJson: Record<string, unknown> | null = null
@@ -512,6 +514,7 @@ async function siteOwnedBySession (req: Request): Promise<{ site: Awaited<Return
   const site = await prisma.site.findFirst({
     where: { siteKey, userId: user.id, deletedAt: null }
   })
+  if (site) await migrateBlogPasswordAtRest(site.id, site.blogPassword)
   return { site, missing: !site }
 }
 

@@ -13,6 +13,7 @@
     "db:migrate": "bash scripts/apply-sql-migrations.sh",
     "db:sync": "npm run db:push && npm run db:migrate",
     "db:check": "tsx scripts/check-db-connection.ts",
+    "db:encrypt-blog-passwords": "tsx scripts/encrypt-blog-passwords.ts",
     "db:seed-plans": "tsx scripts/seed-plans.ts",
     "db:seed": "prisma db seed --",
     "db:seed:staging": "prisma db seed -- --target=staging",
@@ -20,7 +21,7 @@
     "db:studio": "prisma studio",
     "generate-email-logo": "tsx scripts/generate-email-logo.ts",
     "invite-user": "tsx scripts/invite-user.ts",
-    "test": "tsx --test src/lib/anonymous-comment-identity.test.ts src/lib/delete-account.test.ts src/lib/email-providers.test.ts src/lib/email-sync.test.ts src/lib/expired-account-cleanup.test.ts src/lib/planEntitlements.test.ts src/lib/preview-snapshot-html.test.ts src/lib/squarespace-public-post.test.ts src/lib/subscriptionStatus.test.ts src/lib/trial-day-reminder.test.ts src/stripe/subscriptionEvent.test.ts"
+    "test": "tsx --test src/lib/anonymous-comment-identity.test.ts src/lib/blog-password.test.ts src/lib/delete-account.test.ts src/lib/email-providers.test.ts src/lib/email-sync.test.ts src/lib/expired-account-cleanup.test.ts src/lib/planEntitlements.test.ts src/lib/preview-snapshot-html.test.ts src/lib/squarespace-public-post.test.ts src/lib/subscriptionStatus.test.ts src/lib/trial-day-reminder.test.ts src/stripe/subscriptionEvent.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
