@@ -3,6 +3,7 @@ import prisma from '../db/index.js'
 import { getSiteBySiteKey } from '../db/index.js'
 import { sendNewSubscriberNotification, sendNewLeadMagnetNotification } from '../lib/email.js'
 import { createEmailSyncDeps, persistAndForwardLead } from '../lib/email-sync.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 
 const router = Router()
 
@@ -102,6 +103,11 @@ router.post('/', async (req: Request, res: Response) => {
     const site = await getSiteBySiteKey(siteKey)
     if (!site || site.status !== 'active') {
       res.status(404).json({ error: 'Site not found or inactive' })
+      return
+    }
+    const plan = await loadUserPlanContext(site.userId)
+    if (!plan.entitlements.features.emailCapture) {
+      res.status(403).json({ error: 'Email sign-up requires the Publication plan.' })
       return
     }
 

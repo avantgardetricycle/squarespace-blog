@@ -1,5 +1,5 @@
 /** Canonical plan keys: DB, API, Stripe checkout metadata `plan_key`. */
-export const VALID_PLAN_KEYS = ['essentials', 'professional', 'publication'] as const
+export const VALID_PLAN_KEYS = ['essentials', 'professional', 'publication', 'studio'] as const
 export type PlanKey = (typeof VALID_PLAN_KEYS)[number]
 
 export const DEFAULT_PLAN_KEY: PlanKey = 'professional'

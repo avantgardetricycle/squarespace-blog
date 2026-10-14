@@ -6,13 +6,16 @@ Manage your BetterBlog profile and subscription from **Account** in the dashboar
 
 ## Plans
 
-All plans include the full feature set. The only difference is how many Squarespace blogs you can connect:
+Each plan includes a different set of features and a different website and blog limit:
 
-| Plan | Blogs |
-|---|---|
-| **Essentials** | 1 |
-| **Professional** | 3 |
-| **Publication** | Unlimited |
+| Plan | Websites | Blogs |
+|---|---|---|
+| **Essentials** | 1 | 1 |
+| **Professional** | 1 | 2 |
+| **Publication** | 1 | 3 |
+| **Studio** | 10, then $7/month per extra website | 3 per website |
+
+Studio includes everything in Publication on every client website. It is not listed on the pricing page yet. Support is the same on every plan. Annual plans include a 30-day refund.
 
 Monthly and annual billing are available. Annual billing is discounted. You can change or cancel from Account at any time.
 
@@ -20,7 +23,7 @@ Monthly and annual billing are available. Annual billing is discounted. You can 
 
 ## Starting a free trial
 
-Every new signup includes a **7-day free trial**. Your card is not charged until the trial ends. Choose a plan at checkout (Stripe). BetterBlog never stores card numbers.
+Every new signup includes a **7-day free trial**. A card is required at signup and is not charged until the trial ends. Choose a plan at checkout (Stripe). BetterBlog never stores card numbers. Annual plans can be refunded within 30 days.
 
 If you cancel before the trial ends, you will not be charged.
 
@@ -38,7 +41,7 @@ Magic links expire after **24 hours**. Requesting a new link invalidates earlier
 
 Your **email address cannot be changed** in the dashboard. Contact the team from Support if you need the account moved to a different email. You can update your **Full Name** on the Account page and click **Save Changes**.
 
-BetterBlog does not offer teammate seats or a Studio plan. One login per account.
+BetterBlog does not offer teammate seats. Studio is a plan for designers and agencies (10 websites, then $7/month each, 3 blogs per website). One login per account.
 
 ---
 
@@ -46,7 +49,7 @@ BetterBlog does not offer teammate seats or a Studio plan. One login per account
 
 On Account, under **Current Plan**, click **Change Plan**. That opens the Stripe billing portal, where you can switch plans and billing cadence.
 
-If you cannot add another blog, you have reached the plan limit (1 on Essentials, 3 on Professional). Upgrade from Account.
+If you cannot add another blog, you have reached the plan limit (1 blog on Essentials, 2 on Professional, 3 on Publication, 3 per website on Studio). Essentials, Professional, and Publication also include only one website. Upgrade from Account.
 
 ---
 

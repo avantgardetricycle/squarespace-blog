@@ -52,7 +52,7 @@ export const SUPPORT_FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Can I use BetterBlog on more than one site?",
-        a: "Yes. Your plan sets the limit: 1 blog on Essentials, 3 on Professional, and unlimited on Publication. Each Squarespace domain gets its own snippet; multiple blogs on the same domain share one snippet.",
+        a: "Your plan sets the limit: Essentials is 1 website and 1 blog, Professional is 1 website and 2 blogs, and Publication is 1 website and 3 blogs. Studio is 10 websites (then $7/month each) with 3 blogs per website. Each Squarespace domain gets its own snippet; multiple blogs on the same domain share one snippet.",
       },
       {
         q: "Does the snippet slow my site down?",
@@ -92,7 +92,7 @@ export const SUPPORT_FAQ_CATEGORIES: FaqCategory[] = [
     items: [
       {
         q: "Is there a free trial?",
-        a: "Yes, every plan starts with a 7-day free trial. No card is charged until the trial ends, and you can cancel anytime before then from Account.",
+        a: "Yes, every plan starts with a 7-day free trial. A card is required at signup and is not charged until the trial ends. You can cancel anytime before then from Account. Annual plans include a 30-day refund. Support is the same on every plan.",
       },
       {
         q: "How do I upgrade or downgrade my plan?",

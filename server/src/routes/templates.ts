@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
+import { templateRequiredPlan } from '../lib/planEntitlements.js'
 
 const router = Router()
 
@@ -867,7 +868,10 @@ router.get('/', async (req: Request, res: Response) => {
         previewLayout: true,
       },
     })
-    const normalized = templates.map((t) => normalizeTemplateForResponse(t, level))
+    const normalized = templates.map((t) => ({
+      ...normalizeTemplateForResponse(t, level),
+      requiredPlan: templateRequiredPlan(t.templateKey)
+    }))
     res.json({ templates: normalized })
   } catch (err) {
     console.error('[templates] GET error:', err)

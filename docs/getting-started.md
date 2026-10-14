@@ -61,21 +61,22 @@ You need at least one blog page added to your Squarespace site. BetterBlog only 
 
 **BetterBlog plan**
 
-A BetterBlog subscription is required to use the app. A 7-day free trial is included when you sign up — no credit card charged during the trial.
+A BetterBlog subscription is required to use the app. Every plan starts with a 7-day free trial. A card is required at signup and is not charged until the trial ends. Annual plans include a 30-day refund. Support is the same on every plan. BetterBlog requires Squarespace 7.1 on the Core plan or higher.
 
 ---
 
 ## Plans
 
-BetterBlog offers three plans.
+BetterBlog offers four plans. Essentials, Professional, and Publication are on the pricing page. Studio is for designers and agencies and is not listed there yet.
 
-| Plan | Blogs included | Best for |
-|---|---|---|
-| **Essentials** | 1 blog | Single-blog personal sites |
-| **Professional** | 3 blogs | Multi-blog creators and freelancers |
-| **Publication** | Unlimited | Studios and agencies |
+| Plan | Websites | Blogs | Templates |
+|---|---|---|---|
+| **Essentials** | 1 | 1 | 4 (Showcase, Digest, Feature, Reporter) |
+| **Professional** | 1 | 2 | 8, plus search, filters, comments, and basic analytics |
+| **Publication** | 1 | 3 | All 10, plus paywall, email, Kit and Mailchimp, multiple authors, and advanced analytics |
+| **Studio** | 10, then $7/month each | 3 per website | Everything in Publication, on every client website |
 
-All plans include the full feature set. The only difference between plans is the number of Squarespace blogs you can connect. Annual billing is available at a discount on all plans.
+Features on a lower plan stay saved if you upgrade later, and they stop rendering on the live blog while the plan does not include them. Annual billing is available at a discount on all plans.
 
 You can change or cancel your plan at any time from the Account section of the BetterBlog dashboard.
 

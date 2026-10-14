@@ -135,7 +135,7 @@ The Sign in button triggers Squarespace's native login flow. If it's not respond
 Magic links expire after 24 hours. If yours has expired, return to the BetterBlog login page and request a new one. If a fresh link also isn't working, check your spam folder, and confirm you're clicking the link in the most recent email (requesting a new link invalidates previous ones).
 
 **I can't add another blog — the option is blocked.**
-You've reached your plan's blog limit (1 for Essentials, 3 for Professional). To add more blogs, upgrade your plan from the Account section of the dashboard.
+You've reached your plan's limit (1 blog on Essentials, 2 on Professional, 3 on Publication, or 3 blogs on one Studio website). Essentials, Professional, and Publication also include only one website. To add more, upgrade your plan from the Account section of the dashboard.
 
 **I canceled my subscription but I'm still being charged.**
 Canceling in BetterBlog schedules the cancellation at the end of your current billing period — it doesn't cancel immediately. You'll retain access until the period ends and won't be charged again after that. If you believe you've been charged incorrectly, contact the team from the Support tab.
