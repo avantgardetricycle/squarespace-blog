@@ -5,7 +5,7 @@ import { sendInviteEmailViaSendGrid } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
 import { normalizePlanKey } from '../lib/planKeys.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
-import { isActiveSubscriptionStatus } from '../lib/subscriptionStatus.js'
+import { isActiveSubscriptionStatus, nextPaymentFailedAt } from '../lib/subscriptionStatus.js'
 
 const TOKEN_EXPIRY_HOURS = 24
 
@@ -188,6 +188,10 @@ async function syncSubscriptionRow(input: SubscriptionSyncInput): Promise<Subscr
 
   const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
   const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
+  const paymentFailedAt = nextPaymentFailedAt(
+    { status: existingSub?.status, paymentFailedAt: existingSub?.paymentFailedAt ?? null },
+    input.status
+  )
 
   if (existingSub) {
     await prisma.subscription.update({
@@ -199,7 +203,8 @@ async function syncSubscriptionRow(input: SubscriptionSyncInput): Promise<Subscr
         status: input.status,
         maxSites,
         currentPeriodEnd: input.currentPeriodEnd,
-        cancelAtPeriodEnd: input.cancelAtPeriodEnd
+        cancelAtPeriodEnd: input.cancelAtPeriodEnd,
+        paymentFailedAt
       }
     })
     return 'applied'
@@ -220,7 +225,8 @@ async function syncSubscriptionRow(input: SubscriptionSyncInput): Promise<Subscr
       status: input.status,
       maxSites,
       currentPeriodEnd: input.currentPeriodEnd,
-      cancelAtPeriodEnd: input.cancelAtPeriodEnd
+      cancelAtPeriodEnd: input.cancelAtPeriodEnd,
+      paymentFailedAt
     }
   })
   return 'applied'
@@ -395,6 +401,7 @@ export async function handleCheckoutSessionCompleted(
         maxSites,
         currentPeriodEnd,
         cancelAtPeriodEnd: false,
+        paymentFailedAt: null,
         source: 'stripe'
       }
     })

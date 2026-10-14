@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { encrypt } from '../lib/encryption.js'
 
 const router = Router()
@@ -77,7 +78,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
 })
 
 // PUT /api/dashboard/settings/comments
-router.put('/', requireSession, async (req: Request, res: Response) => {
+router.put('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as {
     siteKey?: string
@@ -226,7 +227,7 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
 })
 
 // POST /api/dashboard/settings/comments/verify-api-key
-router.post('/verify-api-key', requireSession, async (req: Request, res: Response) => {
+router.post('/verify-api-key', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; apiKey?: string }
 

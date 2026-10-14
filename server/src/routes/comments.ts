@@ -15,7 +15,8 @@ import {
 import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
 import { decideAnonymousCommentIdentity, finalizeCommentIdentity } from '../lib/anonymous-comment-identity.js'
 import { redactSubscriberText } from '../lib/email-providers.js'
-import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
+import { canRenderSubscription } from '../lib/subscriptionStatus.js'
+import { stampPaymentFailure } from '../lib/paymentGrace.js'
 
 const router = Router()
 
@@ -104,17 +105,25 @@ async function getSiteWithSubscription(siteToken: string) {
           id: true,
           email: true,
           subscriptions: {
-            where: { status: { in: ['trialing', 'active'] } },
+            where: { status: { in: ['trialing', 'active', 'past_due', 'unpaid'] } },
             orderBy: { updatedAt: 'desc' },
             take: 10,
-            select: { id: true, status: true, source: true, currentPeriodEnd: true, updatedAt: true },
+            select: { id: true, status: true, source: true, currentPeriodEnd: true, paymentFailedAt: true, updatedAt: true },
           },
         },
       },
       blogCommentSettings: true,
     },
   })
-  const entitled = site?.user?.subscriptions?.find((sub) => isEntitledSubscription(sub))
+  const subscriptions = site?.user?.subscriptions ?? []
+  let entitled: (typeof subscriptions)[number] | undefined
+  for (const sub of subscriptions) {
+    const stamped = await stampPaymentFailure(sub)
+    if (canRenderSubscription(stamped)) {
+      entitled = stamped
+      break
+    }
+  }
   if (!site || !entitled) return null
   return site
 }

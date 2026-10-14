@@ -3,7 +3,7 @@ import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, Life
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
 import type { DashboardMe } from "@/api/auth";
-import { hasActiveSubscription } from "@/lib/subscription";
+import { hasActiveSubscription, isInPaymentGrace } from "@/lib/subscription";
 
 const EXPIRED_REDIRECT_PATHS = [
   "/dashboard/comments",
@@ -21,11 +21,15 @@ export default function Layout() {
   const isSupport = location.pathname === "/dashboard/support";
   const invalidSites = me.sites.filter((site) => site.squarespaceApiKeyInvalid);
   const subscriptionActive = hasActiveSubscription(me.subscription);
+  const inPaymentGrace = isInPaymentGrace(me.subscription);
   const shouldRedirectExpired = EXPIRED_REDIRECT_PATHS.some(
     (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
   );
+  const graceAllowsConfigure =
+    inPaymentGrace &&
+    (location.pathname === "/dashboard/configure" || location.pathname.startsWith("/dashboard/configure/"));
 
-  if (!subscriptionActive && shouldRedirectExpired) {
+  if (!subscriptionActive && shouldRedirectExpired && !graceAllowsConfigure) {
     return <Navigate to="/dashboard/account" replace />;
   }
 

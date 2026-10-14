@@ -63,7 +63,8 @@ import {
   PAYWALL_HEADLINE_MAX,
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
-import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, createPaymentMethodUpdateSession, type DashboardMe } from "@/api/auth";
+import { formatSubscriptionDate, isInPaymentGrace, paymentGraceEndsAt } from "@/lib/subscription";
 import {
   EmailDestinationFields,
   EMAIL_MODULE_KEYS,
@@ -2399,6 +2400,44 @@ function emptyModuleCatalogs(): Record<EmailModuleKey, ModuleCatalog> {
   };
 }
 
+function PaymentGraceBanner({ endsAt }: { endsAt: Date }) {
+  const [opening, setOpening] = useState(false);
+  const endsLabel = formatSubscriptionDate(endsAt.toISOString()) ?? "the end of the grace period";
+
+  const openPaymentUpdate = async () => {
+    setOpening(true);
+    try {
+      const { url, error } = await createPaymentMethodUpdateSession();
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      toast.error(error ?? "Failed to open payment update");
+      setOpening(false);
+    } catch {
+      toast.error("Failed to open payment update");
+      setOpening(false);
+    }
+  };
+
+  return (
+    <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <p>
+        Your payment method failed. Your blog will keep working until{" "}
+        <span className="font-medium">{endsLabel}</span>, but settings can&apos;t be changed until the payment method is updated.
+      </p>
+      <button
+        type="button"
+        onClick={() => void openPaymentUpdate()}
+        disabled={opening}
+        className="mt-1 font-medium text-[#5B4FE8] hover:underline disabled:opacity-60"
+      >
+        {opening ? "Opening…" : "Update payment method"}
+      </button>
+    </div>
+  );
+}
+
 export default function Configure() {
   const [searchParams, setSearchParams] = useSearchParams();
   const revalidator = useRevalidator();
@@ -3408,6 +3447,7 @@ export default function Configure() {
   }, [previewDebugEnabled, selectedLevel, selectedPostIndex, previewSelectedPostIndex, configSignature, config.collectionConfig, config.postConfig]);
 
   const handleSave = useCallback(async () => {
+    if (isInPaymentGrace(me?.subscription)) return;
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
     setSaving(true);
@@ -3546,6 +3586,7 @@ export default function Configure() {
     paywallForm.featureItems,
     emailDestinations,
     savedEmailDestinations,
+    me,
   ]);
 
   const handleReset = () => {
@@ -3963,10 +4004,15 @@ export default function Configure() {
     return <NoBlogsPlaceholder />;
   }
 
+  const settingsLocked = isInPaymentGrace(me.subscription);
+  const graceEnds = paymentGraceEndsAt(me.subscription);
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f7f6f3]">
+    <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f7f6f3]">
+      {settingsLocked && graceEnds ? <PaymentGraceBanner endsAt={graceEnds} /> : null}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Configuration Sidebar */}
-      <aside className="relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm">
+      <aside className={`relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm ${settingsLocked ? "pointer-events-none select-none opacity-60" : ""}`}>
         <div className="p-4 border-b border-[#e5e4e0] space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-[#6b6b6b]">Customizing</Label>
@@ -6656,7 +6702,7 @@ export default function Configure() {
                   <Undo2 className="h-4 w-4 mr-1.5" />
                   Undo
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button size="sm" onClick={handleSave} disabled={saving || settingsLocked}>
                   <Save className="h-4 w-4 mr-1.5" />
                   {saving ? "Saving…" : "Save"}
                 </Button>
@@ -6801,6 +6847,7 @@ export default function Configure() {
           </div>
         </div>
       </main>
+      </div>
     </div>
   );
 }

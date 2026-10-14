@@ -7,10 +7,12 @@ import {
   type SiteConfigData
 } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { SnapshotCaptureError, getServedSnapshot, storeSnapshot } from '../lib/preview-snapshot.js'
 import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/preview-snapshot-html.js'
 import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
-import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
+import { canRenderSubscription } from '../lib/subscriptionStatus.js'
+import { stampPaymentFailure } from '../lib/paymentGrace.js'
 import { resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
@@ -718,7 +720,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       user: {
         include: {
           subscriptions: {
-            where: { status: { in: ['trialing', 'active'] } },
+            where: { status: { in: ['trialing', 'active', 'past_due', 'unpaid'] } },
             orderBy: { updatedAt: 'desc' },
             take: 10
           }
@@ -740,8 +742,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const activeSubscription =
-    site.user?.subscriptions?.find((sub) => isEntitledSubscription(sub)) ?? null
+  const subscriptions = site.user?.subscriptions ?? []
+  let activeSubscription: (typeof subscriptions)[number] | null = null
+  for (const sub of subscriptions) {
+    const stamped = await stampPaymentFailure(sub)
+    if (canRenderSubscription(stamped)) {
+      activeSubscription = stamped
+      break
+    }
+  }
   if (!activeSubscription) {
     res.status(403).json({ error: 'Subscription required' })
     return
@@ -998,7 +1007,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 })
 
 // POST /api/config - Save/update site config (requires auth, must own site)
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; config?: unknown; paywallSettings?: unknown }
   const { siteKey, config } = body
