@@ -27,6 +27,10 @@
       "destination": "/api/cron/trial-day-four-reminder"
     },
     {
+      "source": "/api/cron/delete-expired-accounts",
+      "destination": "/api/cron/delete-expired-accounts"
+    },
+    {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
     },
@@ -75,6 +79,10 @@
       "includeFiles": "server/dist/**"
     },
     "api/cron/trial-day-four-reminder.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**"
+    },
+    "api/cron/delete-expired-accounts.ts": {
       "maxDuration": 60,
       "includeFiles": "server/dist/**"
     },
@@ -174,6 +182,10 @@
     {
       "path": "/api/cron/trial-day-four-reminder",
       "schedule": "59 23 * * *"
+    },
+    {
+      "path": "/api/cron/delete-expired-accounts",
+      "schedule": "0 16 * * *"
     }
   ]
 }
