@@ -250,8 +250,8 @@ export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 export type PostHeaderTypeSize = "s" | "m" | "l" | "xl";
 
 export const POST_HEADER_TYPE_SIZES: { value: PostHeaderTypeSize; label: string }[] = [
-  { value: "m", label: "Medium" },
   { value: "s", label: "Small" },
+  { value: "m", label: "Medium" },
   { value: "l", label: "Large" },
   { value: "xl", label: "XL" },
 ];
