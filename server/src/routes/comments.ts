@@ -14,7 +14,11 @@ import {
   resolveParentIdForReply,
 } from '../lib/comment-thread-depth.js'
 import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-import.js'
-import { decideAnonymousCommentIdentity, finalizeCommentIdentity } from '../lib/anonymous-comment-identity.js'
+import {
+  decideAnonymousCommentIdentity,
+  finalizeCommentIdentity,
+  profileCommentDisplayName,
+} from '../lib/anonymous-comment-identity.js'
 import { redactSubscriberText } from '../lib/email-providers.js'
 import { canRenderSubscription } from '../lib/subscriptionStatus.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
@@ -432,6 +436,7 @@ router.post('/', async (req: Request, res: Response) => {
   const body = req.body as {
     post_id?: string
     display_name?: string
+    subscriber_display_name?: string
     email?: string
     body?: string
     parent_id?: string | null
@@ -473,6 +478,10 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const displayNameRaw = typeof body.display_name === 'string' ? body.display_name.trim() : ''
+  // Optional name from the member email modal. Kept off display_name so a typed
+  // name still counts as a member verification attempt when the form name is blank.
+  const subscriberDisplayNameRaw =
+    typeof body.subscriber_display_name === 'string' ? body.subscriber_display_name.trim() : ''
   const commentBody = typeof body.body === 'string' ? body.body.trim() : ''
   if (!commentBody || commentBody.length > MAX_BODY) {
     res.status(400).json({ error: 'body is required (max 5000 characters)' })
@@ -484,7 +493,7 @@ router.post('/', async (req: Request, res: Response) => {
     const t = body.email.trim().toLowerCase()
     if (t) email = t.length > MAX_EMAIL ? t.slice(0, MAX_EMAIL) : t
   }
-  if (displayNameRaw.length > MAX_DISPLAY_NAME) {
+  if (displayNameRaw.length > MAX_DISPLAY_NAME || subscriberDisplayNameRaw.length > MAX_DISPLAY_NAME) {
     res.status(400).json({ error: 'display_name must be at most 100 characters' })
     return
   }
@@ -654,8 +663,9 @@ router.post('/', async (req: Request, res: Response) => {
         if (profile && hasAccount) {
           verifiedSubscriber = true
           squarespaceProfileId = profile.id ?? null
-          if (!displayName && (profile.firstName || profile.first_name)) {
-            displayName = String(profile.firstName || profile.first_name)
+          if (!displayName) {
+            const fromProfile = profileCommentDisplayName(profile)
+            displayName = (subscriberDisplayNameRaw || fromProfile).slice(0, MAX_DISPLAY_NAME)
           }
         }
       } else {

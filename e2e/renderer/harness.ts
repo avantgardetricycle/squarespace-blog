@@ -30,6 +30,8 @@ type MountOptions = {
   loggedInAccount?: { displayName: string; email: string; id: string };
   /** Node-side handler for POST /api/comments. Defaults to an empty 200. */
   commentPostResponse?: () => { status: number; json: unknown };
+  /** Replace the fixture comment list returned by GET /api/comments. */
+  commentsResponse?: unknown;
   /**
    * Host page colors. `section` is the blog section background (removed with native markup).
    * `cssVariable` is --siteBackgroundColor. When only `section` is set, the site variable and
@@ -77,7 +79,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(commentListJson),
+      body: JSON.stringify(options.commentsResponse ?? commentListJson),
     });
   });
   await page.route("**/e2e/renderer-mount", async (route) => {
