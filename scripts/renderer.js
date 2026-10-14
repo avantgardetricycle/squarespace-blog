@@ -10323,8 +10323,10 @@
         s + ' .blog-overlay-reporter-header-row>*{flex:0 0 auto!important;width:100%!important;max-width:100%!important;height:auto!important;min-width:0!important;}' +
         s + ' .blog-overlay-reporter-featured-image,' +
         s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image{width:100%!important;max-width:100%!important;flex:0 0 auto!important;height:auto!important;margin-top:-10px;margin-bottom:15px;}' +
+        s + ' .blog-overlay-single-post-header-inner:has(> .blog-overlay-post-breadcrumbs) .blog-overlay-reporter-featured-image,' +
+        s + ' .blog-overlay-single-post-header-inner:has(> .blog-overlay-post-breadcrumbs) .blog-overlay-reporter-header-row .blog-overlay-featured-image{margin-top:0;}' +
         s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image>div{width:100%!important;height:auto!important;aspect-ratio:16/10!important;max-height:none!important;}' +
-        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%;order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%;order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:15px!important;}' +
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
         s + ' .blog-overlay-post-title,' +
@@ -10335,6 +10337,7 @@
         s + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
         s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-reporter-accent-rule--above-meta{display:none!important;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
         s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:24px;}' +
         s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
@@ -11797,10 +11800,10 @@
       return '#000000';
     },
 
-    /** Reporter post header: full-width decorative rule above meta row. */
+    /** Reporter post header: full-width decorative rule above meta row. Hidden on mobile. */
     _createReporterPostHeaderDivider: function() {
       var hr = document.createElement('hr');
-      hr.className = 'blog-overlay-reporter-accent-rule';
+      hr.className = 'blog-overlay-reporter-accent-rule blog-overlay-reporter-accent-rule--above-meta';
       hr.setAttribute('aria-hidden', 'true');
       return hr;
     },
@@ -13580,7 +13583,9 @@
             rowEl.classList.add('blog-overlay-reporter-header-row');
             contentEl.classList.add('blog-overlay-reporter-header-copy');
           }
-          contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
+          /* Reporter must shrink: 40% + 60% + the column gap overflows, and
+             row-reverse paints that overflow off the left edge. */
+          contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 1 40%' : '1');
           contentEl.style.minWidth = '0';
           if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
             if (storyPostLayout) contentEl.classList.add('blog-overlay-story-info-col');
@@ -13755,7 +13760,7 @@
               fiWrap.style.flex = '0 0 58%';
             } else if (reporterPostHeaderLayout) {
               fiWrap.classList.add('blog-overlay-reporter-featured-image');
-              fiWrap.style.flex = '0 0 60%';
+              fiWrap.style.flex = '0 1 60%';
             } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
               fiWrap.style.width = '80px';

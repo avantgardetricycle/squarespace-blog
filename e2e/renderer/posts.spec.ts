@@ -629,6 +629,28 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
     if (mobile) {
       expectPx(title, 28);
       expect(crumb).toBe("inline");
+      const crumbImageGap = await page.evaluate(() => {
+        const crumbs = document.querySelector(".blog-overlay-post-breadcrumbs");
+        const image = document.querySelector(".blog-overlay-reporter-featured-image");
+        if (!crumbs || !image) return NaN;
+        return image.getBoundingClientRect().top - crumbs.getBoundingClientRect().bottom;
+      });
+      expectPx(crumbImageGap, 15, 1);
+      const accent = await page.evaluate(() => {
+        const rules = Array.from(document.querySelectorAll("hr.blog-overlay-reporter-accent-rule"));
+        const visible = rules.filter((el) => getComputedStyle(el).display !== "none");
+        const meta = document.querySelector(".blog-overlay-meta-row");
+        const above = document.querySelector(".blog-overlay-reporter-accent-rule--above-meta");
+        const line = visible[0];
+        return {
+          visible: visible.length,
+          aboveHidden: Boolean(above && getComputedStyle(above).display === "none"),
+          belowMeta: Boolean(line && meta && meta.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING),
+        };
+      });
+      expect(accent.visible).toBe(1);
+      expect(accent.aboveHidden).toBe(true);
+      expect(accent.belowMeta).toBe(true);
       await expectArticleCommentsGap(page, 8);
       const listMargin = await cssNumber(page, ".bb-comments-list", "margin-bottom");
       expectPx(listMargin, 24, 4);
@@ -639,6 +661,24 @@ async function assertTemplate(page: Page, name: PostTemplateName, mobile: boolea
         return form.getBoundingClientRect().top - list.getBoundingClientRect().bottom;
       });
       expectPx(formGap, 24, 8);
+    } else {
+      const headerAlign = await page.evaluate(() => {
+        const para = document.querySelector(".blog-overlay-body p");
+        const left = (sel: string) => {
+          const el = document.querySelector(sel);
+          return el && para ? el.getBoundingClientRect().left - para.getBoundingClientRect().left : NaN;
+        };
+        return {
+          crumbs: left(".blog-overlay-post-breadcrumbs"),
+          title: left(".blog-overlay-post-title"),
+          deck: left(".blog-overlay-post-deck"),
+          meta: left(".blog-overlay-meta-row"),
+        };
+      });
+      expectPx(headerAlign.crumbs, 0, 1);
+      expectPx(headerAlign.title, 0, 1);
+      expectPx(headerAlign.deck, 0, 1);
+      expectPx(headerAlign.meta, 0, 1);
     }
     await assertMoreToReadAndThumbs(page, mobile);
   }
