@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { Pool } from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../generated/prisma/client.js'
+import { isSealedBlogPassword, sealBlogPassword } from '../lib/blog-password.js'
 import { getDatabaseUrl, getSslConfig } from '../lib/db-connection.js'
 
 let pool: Pool | null = null
@@ -59,10 +60,34 @@ const prisma = new Proxy({} as PrismaClient, {
 // Re-export Prisma types for consumers
 export type { Site, SiteConfig, User, Config } from '../generated/prisma/client.js'
 
+/**
+ * Replace a legacy plaintext blog password with ciphertext.
+ * The WHERE clause matches the value we read, so a concurrent password change is left alone.
+ * Failures are logged and do not block the request; the password still works until the next attempt.
+ */
+export async function migrateBlogPasswordAtRest(siteId: string, stored: string | null | undefined): Promise<void> {
+  if (!stored || isSealedBlogPassword(stored)) return
+  try {
+    const sealed = sealBlogPassword(stored)
+    if (!sealed) return
+    await prisma.site.updateMany({
+      where: { id: siteId, blogPassword: stored },
+      data: { blogPassword: sealed }
+    })
+  } catch (err) {
+    console.error(
+      `Blog password for site ${siteId} is still stored in plaintext:`,
+      err instanceof Error ? err.message : err
+    )
+  }
+}
+
 export async function getSiteBySiteKey(siteKey: string) {
-  return prisma.site.findFirst({
+  const site = await prisma.site.findFirst({
     where: { siteKey, deletedAt: null }
   })
+  if (site) await migrateBlogPasswordAtRest(site.id, site.blogPassword)
+  return site
 }
 
 export async function getActiveSiteConfig(siteId: string) {

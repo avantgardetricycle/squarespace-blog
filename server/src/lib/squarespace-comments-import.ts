@@ -2,6 +2,7 @@
  * Fetch Squarespace GetComments JSON from the customer's published site and lazy-import rows into Comment.
  */
 import type { PrismaClient } from '../generated/prisma/client.js'
+import { readBlogPassword } from './blog-password.js'
 
 type RawRow = Record<string, unknown>
 
@@ -39,10 +40,11 @@ function parseSquarespaceCreatedAt(r: RawRow): Date {
 }
 
 function appendPasswordToUrl(url: string, password: string | null | undefined): string {
-  if (!password || !String(password).trim()) return url
+  const plain = readBlogPassword(password)
+  if (!plain) return url
   try {
     const u = new URL(url)
-    u.searchParams.set('password', String(password).trim())
+    u.searchParams.set('password', plain)
     return u.toString()
   } catch {
     return url

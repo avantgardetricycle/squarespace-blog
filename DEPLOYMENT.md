@@ -52,7 +52,7 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `ANTHROPIC_API_KEY` | Server-only key for the dashboard Support chatbot (`claude-sonnet-4-6`) |
 | `TEAM_SUPPORT_EMAILS` | Comma-separated emails allowed to open `/internal/support` and team support APIs |
 | `ADMIN_EMAILS` | Comma-separated emails allowed to open the dashboard Admin tab and beta-tester APIs |
-| `ENCRYPTION_KEY` | 32-byte hex for comment encryption |
+| `ENCRYPTION_KEY` | 32-byte hex used to encrypt Squarespace API keys and blog passwords at rest |
 | `HCAPTCHA_*` | hCaptcha keys |
 | `IS_BETTER_BLOG_LIVE` | `true` when ready for public CTA (checkout + Log in). Set per environment (e.g. `true` on Preview / staging, `false` on Production). Baked into the client at build time; `/api/health` overrides when reachable. |
 | `VITE_GA_MEASUREMENT_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`) for the marketing landing page. **Production only** — leave unset on Preview/staging. Analytics only loads on `betterblog.co` and `www.betterblog.co`. |
