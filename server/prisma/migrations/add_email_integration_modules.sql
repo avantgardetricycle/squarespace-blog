@@ -41,8 +41,13 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
-INSERT INTO "site_email_credentials" ("site_id", "provider", "api_key_enc")
-SELECT "site_id", "provider", "api_key_enc"
+-- db push creates this table from @updatedAt, which is NOT NULL and has no column default.
+-- CREATE TABLE IF NOT EXISTS does not repair that, so raw inserts must set updated_at.
+ALTER TABLE "site_email_credentials"
+  ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP;
+
+INSERT INTO "site_email_credentials" ("site_id", "provider", "api_key_enc", "updated_at")
+SELECT "site_id", "provider", "api_key_enc", COALESCE("updated_at", CURRENT_TIMESTAMP)
 FROM "site_email_integrations"
 WHERE "api_key_enc" IS NOT NULL
   AND "provider" IN ('kit', 'mailchimp')

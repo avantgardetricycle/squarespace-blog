@@ -456,7 +456,7 @@ model SiteEmailCredential {
   siteId    String   @map("site_id")
   provider  String // kit | mailchimp
   apiKeyEnc String   @map("api_key_enc") @db.Text
-  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
