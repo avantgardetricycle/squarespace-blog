@@ -269,8 +269,12 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
-  /** Scales the post title, deck, and meta together. Default Medium. */
-  typeSize?: PostHeaderTypeSize;
+  /** Post title size. Default Medium. */
+  titleSize?: PostHeaderTypeSize;
+  /** Author, date, and reading-time size. Default Medium. */
+  metaSize?: PostHeaderTypeSize;
+  /** Deck (lead line) size. Default Medium. */
+  deckSize?: PostHeaderTypeSize;
   /** Decorative accent rule above/between header elements (template-specific styling). */
   showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
@@ -608,7 +612,9 @@ const defaultPostHeader: PostHeaderConfig = {
   showCategories: false,
   showByline: false,
   showDecorativeAccentLine: false,
-  typeSize: "m",
+  titleSize: "m",
+  metaSize: "m",
+  deckSize: "m",
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
@@ -2062,7 +2068,9 @@ function parseLevelConfig(
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
         showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
-        typeSize: validPostHeaderTypeSize(phRaw.typeSize),
+        titleSize: validPostHeaderTypeSize(phRaw.titleSize ?? phRaw.typeSize),
+        metaSize: validPostHeaderTypeSize(phRaw.metaSize ?? phRaw.typeSize),
+        deckSize: validPostHeaderTypeSize(phRaw.deckSize ?? phRaw.typeSize),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -2334,7 +2342,9 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "") &&
-      (phA.typeSize ?? "m") === (phB.typeSize ?? "m");
+      (phA.titleSize ?? "m") === (phB.titleSize ?? "m") &&
+      (phA.metaSize ?? "m") === (phB.metaSize ?? "m") &&
+      (phA.deckSize ?? "m") === (phB.deckSize ?? "m");
     const updatedAtEqual =
       Boolean((a as PostLevelConfig).showPostUpdatedAt) === Boolean((b as PostLevelConfig).showPostUpdatedAt);
     return base && pa.show === pb.show && phEqual && updatedAtEqual;
@@ -3883,7 +3893,9 @@ export default function Configure() {
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
     if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
-    if (path === "postHeader.typeSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, typeSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.titleSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.metaSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.deckSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckSize: value as PostHeaderTypeSize } };
     return cfg;
   }
 
@@ -5057,11 +5069,25 @@ export default function Configure() {
                               </div>
                             )}
                             <PostHeaderFontSelect
-                              label="Size"
-                              description="Scales the title, deck, and meta"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.typeSize ?? "m"}
+                              label="Post title"
+                              description="Title size"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleSize ?? "m"}
                               options={POST_HEADER_TYPE_SIZES}
-                              onChange={(v) => updateLevelConfigPath("postHeader.typeSize", v)}
+                              onChange={(v) => updateLevelConfigPath("postHeader.titleSize", v)}
+                            />
+                            <PostHeaderFontSelect
+                              label="Meta"
+                              description="Author, date, and reading time"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.metaSize", v)}
+                            />
+                            <PostHeaderFontSelect
+                              label="Deck"
+                              description="Lead line under the title"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.deckSize", v)}
                             />
                             <div className="flex items-center justify-between">
                               <div>

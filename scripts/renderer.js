@@ -9597,8 +9597,8 @@
 
 
     /**
-     * Post Header size. One choice scales the title, deck, and meta together.
-     * Medium is the default and matches the previous fixed spec.
+     * Post Header sizes. Title, deck, and meta each pick Small, Medium, Large, or XL.
+     * Medium matches the previous fixed spec.
      */
     _postHeaderTypeScale: {
       s: {
@@ -9631,37 +9631,58 @@
       return 'm';
     },
 
-    /** Apply the Post Header size onto the overlay root. */
+    _paintPostHeaderElementSizes: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var ph = this._postHeaderFontCfg || {};
+      var narrow = this._isNarrowCollectionViewport();
+      var self = this;
+      var pxFor = function(field, role) {
+        var step = self._normalizePostHeaderTypeSize(ph[field]);
+        var scale = self._postHeaderTypeScale[step] || self._postHeaderTypeScale.m;
+        var pair = scale[role];
+        return narrow ? pair.mobile : pair.desktop;
+      };
+      var paint = function(list, size) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && list[i].style) list[i].style.setProperty('font-size', size, 'important');
+        }
+      };
+      paint(wrapper.querySelectorAll('.bb-title--post'), pxFor('titleSize', 'title'));
+      paint(wrapper.querySelectorAll('.blog-overlay-post-deck'), pxFor('deckSize', 'deck'));
+      paint(wrapper.querySelectorAll('.bb-post-meta--on-bg, .bb-post-meta--on-image, .bb-post-meta--on-dark'), pxFor('metaSize', 'meta'));
+    },
+
+    /** Apply each Post Header size onto the overlay root and the title, deck, and meta. */
     _applyPostHeaderTypeScale: function(wrapper, postHeaderCfg) {
       if (!wrapper || !wrapper.style) return;
       var ph = postHeaderCfg && typeof postHeaderCfg === 'object' ? postHeaderCfg : (this._postHeaderFontCfg || {});
       this._postHeaderFontCfg = ph;
-      var size = this._normalizePostHeaderTypeSize(ph.typeSize);
-      var scale = this._postHeaderTypeScale[size] || this._postHeaderTypeScale.m;
-      wrapper.setAttribute('data-bb-type-size', size);
-      wrapper.removeAttribute('data-bb-title-font');
-      wrapper.removeAttribute('data-bb-deck-font');
-      wrapper.removeAttribute('data-bb-meta-font');
+      var title = this._normalizePostHeaderTypeSize(ph.titleSize);
+      var deck = this._normalizePostHeaderTypeSize(ph.deckSize);
+      var meta = this._normalizePostHeaderTypeSize(ph.metaSize);
+      wrapper.setAttribute('data-bb-title-size', title);
+      wrapper.setAttribute('data-bb-deck-size', deck);
+      wrapper.setAttribute('data-bb-meta-size', meta);
+      wrapper.removeAttribute('data-bb-type-size');
+      var chosen = { title: title, deck: deck, meta: meta };
       var roles = ['title', 'deck', 'meta'];
       for (var i = 0; i < roles.length; i++) {
         var role = roles[i];
+        var scale = this._postHeaderTypeScale[chosen[role]] || this._postHeaderTypeScale.m;
         var step = scale[role];
         wrapper.style.setProperty('--bb-' + role + '-size', step.desktop);
         wrapper.style.setProperty('--bb-' + role + '-size-mobile', step.mobile);
-        wrapper.style.removeProperty('--bb-' + role + '-family');
-        wrapper.style.removeProperty('--bb-' + role + '-weight');
-        wrapper.style.removeProperty('--bb-' + role + '-line-height');
-        wrapper.style.removeProperty('--bb-' + role + '-tracking');
       }
+      this._paintPostHeaderElementSizes(wrapper);
     },
 
     _clearPostHeaderTypeScale: function(wrapper) {
       if (!wrapper) return;
       this._postHeaderFontCfg = null;
       wrapper.removeAttribute('data-bb-type-size');
-      wrapper.removeAttribute('data-bb-title-font');
-      wrapper.removeAttribute('data-bb-deck-font');
-      wrapper.removeAttribute('data-bb-meta-font');
+      wrapper.removeAttribute('data-bb-title-size');
+      wrapper.removeAttribute('data-bb-deck-size');
+      wrapper.removeAttribute('data-bb-meta-size');
       var roles = ['title', 'deck', 'meta'];
       var parts = ['size', 'size-mobile', 'family', 'weight', 'line-height', 'tracking'];
       for (var r = 0; r < roles.length; r++) {
@@ -12077,7 +12098,7 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
-      if (wrapper.getAttribute('data-bb-type-size')) {
+      if (wrapper.getAttribute('data-bb-title-size')) {
         this._applyPostHeaderTypeScale(wrapper, this._postHeaderFontCfg);
       }
       this._lockMobilePageAxis(narrow);

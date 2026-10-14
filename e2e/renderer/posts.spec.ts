@@ -486,40 +486,30 @@ test.describe("post layout contract", () => {
     }
   });
 
-  test("post header size scales the title, deck, and meta together", async ({ page }, testInfo) => {
+  test("post header sizes are independent for the title, deck, and meta", async ({ page }, testInfo) => {
     const config = zoneOrderPostConfig("feature");
     const header = {
       ...(config.postHeader as Record<string, unknown>),
-      typeSize: "xl",
+      titleSize: "xl",
+      deckSize: "s",
+      metaSize: "l",
     };
     await mountRenderer(page, {
       postConfig: { ...config, postHeader: header },
+      extraCss: "#blog-overlay-list h1.blog-overlay-post-title{font-size:64px !important}#blog-overlay-list .blog-overlay-post-deck{font-size:11px !important}#blog-overlay-list .blog-overlay-meta{font-size:9px !important}",
     });
 
     const mobile = isMobileProject(testInfo);
-    const typeSize = await page.locator("#blog-overlay-list").getAttribute("data-bb-type-size");
-    expect(typeSize).toBe("xl");
+    const list = page.locator("#blog-overlay-list");
+    expect(await list.getAttribute("data-bb-title-size")).toBe("xl");
+    expect(await list.getAttribute("data-bb-deck-size")).toBe("s");
+    expect(await list.getAttribute("data-bb-meta-size")).toBe("l");
     expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 40 : 56);
-    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 19 : 28);
-    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 17 : 22);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 13 : 17);
+    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 15 : 19);
     if (mobile) {
       expectPx(await cssNumber(page, ".blog-overlay-body h1", "font-size"), 34);
     }
-  });
-
-  test("post header small size uses the smaller title, deck, and meta", async ({ page }, testInfo) => {
-    const config = zoneOrderPostConfig("feature");
-    const header = {
-      ...(config.postHeader as Record<string, unknown>),
-      typeSize: "s",
-    };
-    await mountRenderer(page, {
-      postConfig: { ...config, postHeader: header },
-    });
-    const mobile = isMobileProject(testInfo);
-    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 24 : 34);
-    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 13 : 17);
-    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 12 : 14);
   });
 });
 

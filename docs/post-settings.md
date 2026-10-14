@@ -36,16 +36,20 @@ Settings a template owns are hidden. If a control is missing, your current post 
 
 **Vertical post info alignment** — Top, Center, or Bottom when the image sits beside the post info.
 
-**Size** — How large the post title, deck, and meta are. One menu scales all three. Choices are **Small**, **Medium**, **Large**, and **XL**. The default is **Medium**, which is the standard post header. This control is on the post only, in Post Header.
+**Post title** — How large the post title is. Choices are **Small**, **Medium**, **Large**, and **XL**. The default is **Medium**.
 
-Desktop / phone sizes:
+**Meta** — How large the author, date, and reading-time line is. Same size choices. The default is **Medium**.
+
+**Deck** — How large the lead line under the title is. Same size choices. The default is **Medium**. The deck is the line shown when **Show post byline** is on.
+
+These three controls are on the post only, in Post Header. Each one changes only its own field. Desktop / phone sizes:
 
 - **Small** — title 34px / 24px, deck 17px / 13px, meta 14px / 12px
 - **Medium** — title 40px / 28px, deck 20px / 14px, meta 16px / 13px
 - **Large** — title 48px / 34px, deck 24px / 17px, meta 19px / 15px
 - **XL** — title 56px / 40px, deck 28px / 19px, meta 22px / 17px
 
-The title keeps your site’s heading font. The deck and meta keep your site’s paragraph font. The deck is the line shown when **Show post byline** is on.
+The title keeps your site’s heading font. The deck and meta keep your site’s paragraph font.
 
 **Show breadcrumbs** — A trail above the post title (typically Home → collection → post).
 
