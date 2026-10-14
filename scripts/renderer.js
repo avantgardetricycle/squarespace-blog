@@ -10442,7 +10442,7 @@
         s + ' .blog-overlay-meta,' +
         s + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
-        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0 0 49px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .blog-overlay-reporter-accent-rule--above-meta{display:none!important;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
         s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:24px;}' +
