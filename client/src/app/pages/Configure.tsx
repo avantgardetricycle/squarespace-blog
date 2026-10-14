@@ -245,22 +245,14 @@ export type PostHeaderContentVerticalAlignment = "top" | "center" | "bottom";
 
 export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 
-/** Squarespace heading styles for the post title. */
-export type PostHeaderHeadingFont = "h1" | "h2" | "h3" | "h4";
-/** Squarespace paragraph styles for the deck and meta line. */
-export type PostHeaderParagraphFont = "p1" | "p2" | "p3";
+/** Post Header type size. One choice scales the title, deck, and meta. */
+export type PostHeaderTypeSize = "s" | "m" | "l" | "xl";
 
-export const POST_HEADER_HEADING_FONTS: { value: PostHeaderHeadingFont; label: string }[] = [
-  { value: "h1", label: "H1" },
-  { value: "h2", label: "H2" },
-  { value: "h3", label: "H3" },
-  { value: "h4", label: "H4" },
-];
-
-export const POST_HEADER_PARAGRAPH_FONTS: { value: PostHeaderParagraphFont; label: string }[] = [
-  { value: "p1", label: "P1" },
-  { value: "p2", label: "P2" },
-  { value: "p3", label: "P3" },
+export const POST_HEADER_TYPE_SIZES: { value: PostHeaderTypeSize; label: string }[] = [
+  { value: "s", label: "Small" },
+  { value: "m", label: "Medium" },
+  { value: "l", label: "Large" },
+  { value: "xl", label: "XL" },
 ];
 
 export interface PostHeaderConfig {
@@ -277,12 +269,8 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
-  /** Squarespace heading style for the post title. Default H1. */
-  titleFont?: PostHeaderHeadingFont;
-  /** Squarespace paragraph style for the author/date line. Default P2. */
-  metaFont?: PostHeaderParagraphFont;
-  /** Squarespace paragraph style for the deck (post byline). Default P1. */
-  deckFont?: PostHeaderParagraphFont;
+  /** Scales the post title, deck, and meta together. Default Medium. */
+  typeSize?: PostHeaderTypeSize;
   /** Decorative accent rule above/between header elements (template-specific styling). */
   showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
@@ -620,9 +608,7 @@ const defaultPostHeader: PostHeaderConfig = {
   showCategories: false,
   showByline: false,
   showDecorativeAccentLine: false,
-  titleFont: "h1",
-  metaFont: "p2",
-  deckFont: "p1",
+  typeSize: "m",
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
@@ -1416,7 +1402,7 @@ function PostHeaderFontSelect<T extends string>({
         <p className="text-[10px] text-[#6b6b6b]">{description}</p>
       </div>
       <Select value={value} onValueChange={(v) => onChange(v as T)}>
-        <SelectTrigger className="w-[88px] shrink-0" aria-label={label}>
+        <SelectTrigger className="w-[132px] shrink-0" aria-label={label}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -2057,10 +2043,8 @@ function parseLevelConfig(
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
   const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
-  const validPostHeaderHeadingFont = (v: unknown): PostHeaderHeadingFont =>
-    v === "h1" || v === "h2" || v === "h3" || v === "h4" ? v : "h1";
-  const validPostHeaderParagraphFont = (v: unknown, fallback: PostHeaderParagraphFont): PostHeaderParagraphFont =>
-    v === "p1" || v === "p2" || v === "p3" ? v : fallback;
+  const validPostHeaderTypeSize = (v: unknown): PostHeaderTypeSize =>
+    v === "s" || v === "m" || v === "l" || v === "xl" ? v : "m";
   const postHeaderBackgroundColor = validPostHeaderBackgroundColor(phRaw?.backgroundColor);
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
@@ -2078,9 +2062,7 @@ function parseLevelConfig(
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
         showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
-        titleFont: validPostHeaderHeadingFont(phRaw.titleFont),
-        metaFont: validPostHeaderParagraphFont(phRaw.metaFont, "p2"),
-        deckFont: validPostHeaderParagraphFont(phRaw.deckFont, "p1"),
+        typeSize: validPostHeaderTypeSize(phRaw.typeSize),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -2352,9 +2334,7 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "") &&
-      (phA.titleFont ?? "h1") === (phB.titleFont ?? "h1") &&
-      (phA.metaFont ?? "p2") === (phB.metaFont ?? "p2") &&
-      (phA.deckFont ?? "p1") === (phB.deckFont ?? "p1");
+      (phA.typeSize ?? "m") === (phB.typeSize ?? "m");
     const updatedAtEqual =
       Boolean((a as PostLevelConfig).showPostUpdatedAt) === Boolean((b as PostLevelConfig).showPostUpdatedAt);
     return base && pa.show === pb.show && phEqual && updatedAtEqual;
@@ -3903,9 +3883,7 @@ export default function Configure() {
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
     if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
-    if (path === "postHeader.titleFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleFont: value as PostHeaderHeadingFont } };
-    if (path === "postHeader.metaFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaFont: value as PostHeaderParagraphFont } };
-    if (path === "postHeader.deckFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckFont: value as PostHeaderParagraphFont } };
+    if (path === "postHeader.typeSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, typeSize: value as PostHeaderTypeSize } };
     return cfg;
   }
 
@@ -5079,25 +5057,11 @@ export default function Configure() {
                               </div>
                             )}
                             <PostHeaderFontSelect
-                              label="Post title"
-                              description="Squarespace heading size"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleFont ?? "h1"}
-                              options={POST_HEADER_HEADING_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.titleFont", v)}
-                            />
-                            <PostHeaderFontSelect
-                              label="Meta"
-                              description="Squarespace paragraph size"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaFont ?? "p2"}
-                              options={POST_HEADER_PARAGRAPH_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.metaFont", v)}
-                            />
-                            <PostHeaderFontSelect
-                              label="Deck"
-                              description="Squarespace paragraph size for the lead line"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckFont ?? "p1"}
-                              options={POST_HEADER_PARAGRAPH_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.deckFont", v)}
+                              label="Size"
+                              description="Scales the title, deck, and meta"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.typeSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.typeSize", v)}
                             />
                             <div className="flex items-center justify-between">
                               <div>

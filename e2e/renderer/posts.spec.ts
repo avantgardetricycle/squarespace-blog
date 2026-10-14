@@ -486,100 +486,39 @@ test.describe("post layout contract", () => {
     }
   });
 
-  test("post header font choices use the Squarespace heading and paragraph sizes", async ({ page }, testInfo) => {
+  test("post header size scales the title, deck, and meta together", async ({ page }, testInfo) => {
     const config = zoneOrderPostConfig("feature");
     const header = {
       ...(config.postHeader as Record<string, unknown>),
-      titleFont: "h2",
-      deckFont: "p1",
-      metaFont: "p3",
+      typeSize: "xl",
     };
     await mountRenderer(page, {
       postConfig: { ...config, postHeader: header },
-      extraCss: `
-        :root {
-          --heading-2-font-font-size: 36px;
-          --heading-2-font-font-family: Georgia, serif;
-          --paragraph-1-font-font-size: 22px;
-          --paragraph-3-font-font-size: 11px;
-        }
-      `,
     });
 
-    const fonts = await page.evaluate(() => {
-      const list = document.getElementById("blog-overlay-list");
-      const read = (selector: string) => {
-        const el = document.querySelector(selector);
-        if (!el) return null;
-        const cs = getComputedStyle(el);
-        return { size: cs.fontSize, family: cs.fontFamily };
-      };
-      return {
-        titleFont: list?.getAttribute("data-bb-title-font"),
-        deckFont: list?.getAttribute("data-bb-deck-font"),
-        metaFont: list?.getAttribute("data-bb-meta-font"),
-        title: read(".blog-overlay-post-title"),
-        deck: read(".blog-overlay-post-deck"),
-        meta: read(".blog-overlay-meta"),
-      };
-    });
-
-    expect(fonts.titleFont).toBe("h2");
-    expect(fonts.deckFont).toBe("p1");
-    expect(fonts.metaFont).toBe("p3");
-    expect(fonts.title).not.toBeNull();
-    expect(fonts.deck).not.toBeNull();
-    expect(fonts.meta).not.toBeNull();
-    expectPx(parseFloat(fonts.title!.size), 36);
-    expectPx(parseFloat(fonts.deck!.size), 22);
-    expectPx(parseFloat(fonts.meta!.size), 11);
-    expect(fonts.title!.family.toLowerCase()).toContain("georgia");
-
-    if (isMobileProject(testInfo)) {
-      expectPx(await cssNumber(page, ".blog-overlay-body h1", "font-size"), 31);
+    const mobile = isMobileProject(testInfo);
+    const typeSize = await page.locator("#blog-overlay-list").getAttribute("data-bb-type-size");
+    expect(typeSize).toBe("xl");
+    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 40 : 56);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 19 : 28);
+    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 17 : 22);
+    if (mobile) {
+      expectPx(await cssNumber(page, ".blog-overlay-body h1", "font-size"), 34);
     }
   });
 
-  test("post header font choices use distinct Squarespace element sizes", async ({ page }) => {
+  test("post header small size uses the smaller title, deck, and meta", async ({ page }, testInfo) => {
     const config = zoneOrderPostConfig("feature");
     const header = {
       ...(config.postHeader as Record<string, unknown>),
-      titleFont: "h3",
-      deckFont: "p1",
-      metaFont: "p3",
+      typeSize: "s",
     };
     await mountRenderer(page, {
       postConfig: { ...config, postHeader: header },
-      extraCss: `
-        h1 { font-size: 50px; }
-        h2 { font-size: 33px; }
-        h3 { font-size: 27px; }
-        h4 { font-size: 19px; }
-        p.sqsrte-large { font-size: 21px; }
-        p { font-size: 16px; }
-        p.sqsrte-small { font-size: 12px; }
-      `,
-    });
-    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), 27);
-    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), 21);
-    expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), 12);
-  });
-
-  test("post header font choices fall back when every site step is the same size", async ({ page }, testInfo) => {
-    const config = zoneOrderPostConfig("feature");
-    const header = {
-      ...(config.postHeader as Record<string, unknown>),
-      titleFont: "h4",
-      deckFont: "p1",
-      metaFont: "p3",
-    };
-    await mountRenderer(page, {
-      postConfig: { ...config, postHeader: header },
-      extraCss: "h1,h2,h3,h4,p,.sqsrte-large,.sqsrte-small{font-size:15px !important}",
     });
     const mobile = isMobileProject(testInfo);
-    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 18 : 22);
-    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 14 : 20);
+    expectPx(await cssNumber(page, ".blog-overlay-post-title", "font-size"), mobile ? 24 : 34);
+    expectPx(await cssNumber(page, ".blog-overlay-post-deck", "font-size"), mobile ? 13 : 17);
     expectPx(await cssNumber(page, ".blog-overlay-meta", "font-size"), mobile ? 12 : 14);
   });
 });
