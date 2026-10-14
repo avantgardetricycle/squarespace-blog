@@ -39,6 +39,18 @@
       "destination": "/api/queues/stripe-customer-subscription-updated"
     },
     {
+      "source": "/api/queues/stripe-customer-subscription-deleted",
+      "destination": "/api/queues/stripe-customer-subscription-deleted"
+    },
+    {
+      "source": "/api/queues/stripe-invoice-paid",
+      "destination": "/api/queues/stripe-invoice-paid"
+    },
+    {
+      "source": "/api/queues/stripe-invoice-payment-failed",
+      "destination": "/api/queues/stripe-invoice-payment-failed"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api"
     },
@@ -92,6 +104,39 @@
         {
           "type": "queue/v1beta",
           "topic": "stripe.customer.subscription.updated",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-customer-subscription-deleted.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**",
+      "experimentalTriggers": [
+        {
+          "type": "queue/v1beta",
+          "topic": "stripe.customer.subscription.deleted",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-invoice-paid.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**",
+      "experimentalTriggers": [
+        {
+          "type": "queue/v1beta",
+          "topic": "stripe.invoice.paid",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-invoice-payment-failed.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**",
+      "experimentalTriggers": [
+        {
+          "type": "queue/v1beta",
+          "topic": "stripe.invoice.payment_failed",
           "consumer": "default"
         }
       ]

@@ -7,7 +7,7 @@
 | Component | Role |
 | --------- | ---- |
 | **Vercel** | Express API (`api/index.ts`), SPA, `loader.js` / `renderer.js`, Stripe webhook |
-| **Vercel Queues** | Async Stripe jobs (`checkout.session.completed`, `customer.subscription.updated`) |
+| **Vercel Queues** | Async Stripe jobs (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`) |
 | **Supabase** | Postgres for Prisma (`DATABASE_URL` pooler + `DIRECT_URL` for migrations) and Storage for author photos |
 
 There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers are `api/queues/*.ts`.
@@ -58,7 +58,7 @@ There is **no worker dyno**. Stripe webhooks enqueue to Vercel Queues; consumers
 | `VITE_GA_MEASUREMENT_ID` | GA4 Measurement ID (`G-XXXXXXXXXX`) for the marketing landing page. **Production only** — leave unset on Preview/staging. Analytics only loads on `betterblog.co` and `www.betterblog.co`. |
 
 6. Stripe Dashboard → Webhooks → endpoint: `https://your-app.vercel.app/api/webhooks/stripe`  
-   Events: `checkout.session.completed`, `customer.subscription.updated`.
+   Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
 
 ### API 504 / 60s timeouts
 
