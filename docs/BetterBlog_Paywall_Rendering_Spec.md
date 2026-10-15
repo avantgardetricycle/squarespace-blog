@@ -310,11 +310,9 @@ Paywall copy is **site-level**, not nested under Collection or Post. When the si
 │  PAYWALL SETTINGS                                    │
 │  These settings apply to both collection and post.   │
 │                                                      │
-│  Subscribe URL  (optional)                           │
+│  Signup / subscription page URL  (required)          │
 │  [                                        ]          │
-│  Leave blank to send readers to your blog page.      │
-│  Enter a custom URL if you have a dedicated          │
-│  sign-up or membership page.                         │
+│  The URL where readers sign up for your blog.        │
 │                                                      │
 │  Eyebrow  (optional, max 80)                         │
 │  Header text  (optional, max 160, {blogName} ok)     │

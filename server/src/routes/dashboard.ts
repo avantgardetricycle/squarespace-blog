@@ -1061,6 +1061,22 @@ router.patch('/sites/by-key/:siteKey', requireSession, requireEditableSubscripti
       updates.paywallDetectionSource = paywallDetectionSource as PaywallDetectionSource
     }
 
+    const resultingPaywallState = updates.paywallDetectionState ?? site.paywallDetectionState
+    if (resultingPaywallState === 'detected_paywalled') {
+      const settingMembership = updates.paywallDetectionState === 'detected_paywalled'
+      const subscribeTouched = 'subscribeUrl' in req.body || settingMembership
+      if (subscribeTouched) {
+        const effectiveSubscribeUrl =
+          normalizedSubscribePatch !== undefined
+            ? normalizedSubscribePatch
+            : site.sitePaywallSettings?.subscribeUrl ?? null
+        if (!effectiveSubscribeUrl) {
+          res.status(400).json({ error: 'A signup URL is required for membership blogs' })
+          return
+        }
+      }
+    }
+
     if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {
       res.status(400).json({ error: 'No valid updates provided' })
       return

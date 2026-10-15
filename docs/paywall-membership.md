@@ -46,7 +46,7 @@ The live card includes:
 
 Customize it from **Customize Blog → Paywall Settings** (only when a paywall is detected). The button sits below **Clear all settings** because the copy applies to both Collection and Post.
 
-**Subscribe URL (optional)** — Leave blank to send readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+**Signup / subscription page URL (required)** — The URL where readers sign up for your blog.
 
 **Eyebrow (optional, max 80 characters)** — Small label above the headline. Blank defaults to **MEMBER EXCLUSIVE**.
 
