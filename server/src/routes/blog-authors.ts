@@ -169,19 +169,6 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
     orderBy: { name: 'asc' }
   })
 
-  // #region agent log
-  console.warn('[bb-author-sync] stored authors', {
-    hypothesisId: 'C',
-    siteKey,
-    authors: authors.map((a) => ({
-      ingestedFrom: a.ingestedFrom,
-      bioLen: typeof a.bio === 'string' ? a.bio.length : 0,
-      bioLongLen: typeof a.bioLong === 'string' ? a.bioLong.length : 0,
-      hasImage: Boolean(a.imageUrl)
-    }))
-  })
-  // #endregion
-
   res.json(authors.map((a) => authorJson(a)))
 })
 
@@ -223,39 +210,25 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
     const fromIngestion = ingestedFrom === 'SQUARESPACE'
     if (fromIngestion && existing.ingestedFrom === 'SQUARESPACE') {
       const data: {
-        bio?: string
+        bio?: string | null
         bioLong?: string | null
         bioFormat?: BioFormatValue
         imageUrl?: string
       } = {}
-      if (typeof bio === 'string' && bio.trim()) data.bio = bio.trim().slice(0, 200)
-      if (typeof bioLong === 'string' && bioLong.trim()) data.bioLong = bioLong.trim().slice(0, 1000)
-      if (data.bio || data.bioLong) data.bioFormat = parseBioFormat(bioFormat)
+      const incomingShort = typeof bio === 'string' ? bio.trim() : ''
+      const incomingLong = typeof bioLong === 'string' ? bioLong.trim() : ''
+      if (incomingShort || incomingLong) {
+        data.bio = incomingShort.length > 0 && incomingShort.length <= 200 ? incomingShort : null
+        data.bioLong = (incomingLong || incomingShort).slice(0, 1000)
+        data.bioFormat = parseBioFormat(bioFormat)
+      }
       if (typeof imageUrl === 'string' && imageUrl.trim()) data.imageUrl = imageUrl.trim()
       const updated = Object.keys(data).length > 0
         ? await prisma.blogAuthor.update({ where: { id: existing.id }, data })
         : existing
-      // #region agent log
-      console.warn('[bb-author-sync] refresh unedited', {
-        hypothesisId: 'A',
-        incomingBioLen: typeof bio === 'string' ? bio.length : 0,
-        bioLen: typeof updated.bio === 'string' ? updated.bio.length : 0,
-        hasImage: Boolean(updated.imageUrl)
-      })
-      // #endregion
       res.json(authorJson(updated))
       return
     }
-    // #region agent log
-    console.warn('[bb-author-sync] create returned existing', {
-      hypothesisId: 'D',
-      ingestedFrom: existing.ingestedFrom,
-      requestedIngestedFrom: ingestedFrom ?? null,
-      existingBioLen: typeof existing.bio === 'string' ? existing.bio.length : 0,
-      incomingBioLen: typeof bio === 'string' ? bio.length : 0,
-      skippedBecauseEdited: existing.ingestedFrom !== 'SQUARESPACE'
-    })
-    // #endregion
     res.json(authorJson(existing))
     return
   }
@@ -270,16 +243,6 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
   }
 
   const fromIngestion = ingestedFrom === 'SQUARESPACE'
-  // #region agent log
-  console.warn('[bb-author-sync] create author', {
-    hypothesisId: 'D',
-    fromIngestion,
-    bioType: bio === null ? 'null' : typeof bio,
-    bioLen: typeof bio === 'string' ? bio.length : 0,
-    bioLongLen: typeof bioLong === 'string' ? bioLong.length : 0,
-    hasImage: typeof imageUrl === 'string' && imageUrl.length > 0
-  })
-  // #endregion
   const bioLongTrimmed = typeof bioLong === 'string' ? bioLong.slice(0, 1000) : null
   const author = await prisma.blogAuthor.create({
     data: {

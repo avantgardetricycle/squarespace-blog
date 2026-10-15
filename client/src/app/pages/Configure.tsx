@@ -180,8 +180,8 @@ function squarespaceAuthorProfile(au: {
         ? au.avatarAssetUrl.trim()
         : null;
   return {
-    bio: bioRaw ? bioRaw.slice(0, 200) : null,
-    bioLong: bioRaw.length > 200 ? bioRaw.slice(0, 1000) : null,
+    bio: bioRaw.length > 0 && bioRaw.length <= 200 ? bioRaw : null,
+    bioLong: bioRaw ? bioRaw.slice(0, 1000) : null,
     bioFormat: /<\/?[a-z][^>]*>/i.test(bioRaw) ? "html" : "text",
     imageUrl: avatar,
   };
@@ -6277,6 +6277,20 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("authorProfiles", postFeatureSidebarFooterLocations, "authorProfiles")}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full"
+                                      disabled={authors.length === 0}
+                                      onClick={() =>
+                                        openEditAuthorProfiles({
+                                          fallbackAuthorIds: config.defaultAuthorIds,
+                                        })
+                                      }
+                                    >
+                                      Edit Author Profiles
+                                    </Button>
                                   </div>
                                 }
                               />

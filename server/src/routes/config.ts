@@ -276,68 +276,6 @@ function annotateSquarespaceFeaturedOnItems (items: unknown[], collection: Recor
   }
 }
 
-function logSquarespaceAuthorProfileShape (siteKey: string, json: Record<string, unknown>, items: unknown[]): void {
-  const bioPaths: { path: string; kind: string; len: number }[] = []
-  const walk = (node: unknown, path: string, depth: number): void => {
-    if (depth > 5 || bioPaths.length >= 25 || !node || typeof node !== 'object') return
-    if (Array.isArray(node)) {
-      const limit = Math.min(node.length, path === 'items' || path.endsWith('.items') ? 2 : 3)
-      for (let i = 0; i < limit; i++) walk(node[i], `${path}[${i}]`, depth + 1)
-      return
-    }
-    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (/^(body|excerpt|content|html)$/i.test(k)) continue
-      const p = path ? `${path}.${k}` : k
-      if (/bio|avatar|biography/i.test(k)) {
-        bioPaths.push({
-          path: p,
-          kind: v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v,
-          len: typeof v === 'string' ? v.length : -1
-        })
-      }
-      if (v && typeof v === 'object') walk(v, p, depth + 1)
-    }
-  }
-  walk(json, '', 0)
-
-  const seen = new Set<string>()
-  const authorShapes: Array<{ name: string; keys: string[]; interesting: Record<string, { kind: string; len: number }> }> = []
-  for (const raw of items) {
-    if (!raw || typeof raw !== 'object' || authorShapes.length >= 5) break
-    const item = raw as Record<string, unknown>
-    const listed = Array.isArray(item.authors) ? item.authors : []
-    const candidates = [item.author, ...listed]
-    for (const au of candidates) {
-      if (!au || typeof au !== 'object') continue
-      const rec = au as Record<string, unknown>
-      const name = typeof rec.displayName === 'string' ? rec.displayName.trim() : ''
-      if (!name || seen.has(name)) continue
-      seen.add(name)
-      const interesting: Record<string, { kind: string; len: number }> = {}
-      for (const [k, v] of Object.entries(rec)) {
-        if (/bio|avatar|image|website|social|profile|about|description|url/i.test(k)) {
-          interesting[k] = {
-            kind: v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v,
-            len: typeof v === 'string' ? v.length : -1
-          }
-        }
-      }
-      authorShapes.push({ name, keys: Object.keys(rec), interesting })
-    }
-  }
-
-  // #region agent log
-  console.warn('[bb-author-sync] squarespace json', {
-    hypothesisId: 'A,B',
-    siteKey,
-    itemCount: items.length,
-    topKeys: Object.keys(json),
-    authorShapes,
-    bioPaths
-  })
-  // #endregion
-}
-
 // GET /api/blog-preview/:siteKey - Proxy blog JSON for configure page preview
 router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
@@ -483,12 +421,9 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
       if (viewerMode) {
         ;(firstJson as Record<string, unknown>).betterBlogViewerMode = viewerMode
       }
-      logSquarespaceAuthorProfileShape(siteKey, firstJson, allItems)
       res.json(firstJson)
     } else {
-      const payload = { items: allItems, ...(viewerMode ? { betterBlogViewerMode: viewerMode } : {}) }
-      logSquarespaceAuthorProfileShape(siteKey, payload, allItems)
-      res.json(payload)
+      res.json({ items: allItems, ...(viewerMode ? { betterBlogViewerMode: viewerMode } : {}) })
     }
   } catch (err) {
     console.error('Blog preview fetch error:', err)
