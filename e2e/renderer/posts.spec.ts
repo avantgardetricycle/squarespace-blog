@@ -1236,3 +1236,78 @@ test.describe("sidebar mobile drawer", () => {
     }).toBe("ok");
   });
 });
+
+test.describe("reading progress bar", () => {
+  test("snaps to the site header when the window resizes", async ({ page }) => {
+    await mountRenderer(page, {
+      postConfig: structuredClone(postTemplates.reporter),
+      liveSite: true,
+    });
+
+    const place = (height: number, scrollY: number) =>
+      page.evaluate(({ height: nextHeight, scrollY: nextScroll }) => {
+        const header = document.querySelector("header");
+        const article = document.querySelector("#blog-overlay-list article");
+        if (header) header.style.height = nextHeight + "px";
+        if (article) (article as HTMLElement).style.minHeight = "2400px";
+        window.scrollTo(0, nextScroll);
+        window.dispatchEvent(new Event("resize"));
+        const bar = document.getElementById("blog-overlay-progress");
+        const crumbs = document.querySelector(".blog-overlay-post-breadcrumbs");
+        if (!header || !bar || !crumbs) return null;
+        const headerRect = header.getBoundingClientRect();
+        const navbar = headerRect.top < 0 ? headerRect.height : headerRect.bottom;
+        const scroll = window.scrollY || document.documentElement.scrollTop || 0;
+        const barRect = bar.getBoundingClientRect();
+        const crumbRect = crumbs.getBoundingClientRect();
+        return {
+          expectedTop: Math.max(0, navbar - scroll),
+          barTop: barRect.top,
+          barBottom: barRect.bottom,
+          crumbTop: crumbRect.top,
+          scroll,
+          position: getComputedStyle(bar).position,
+        };
+      }, { height, scrollY });
+
+    const rested = await place(96, 0);
+    expect(rested).not.toBeNull();
+    expect(rested!.position).toBe("fixed");
+    expect(Math.abs(rested!.barTop - rested!.expectedTop)).toBeLessThan(2);
+    expect(rested!.crumbTop).toBeGreaterThanOrEqual(rested!.barBottom - 1);
+
+    const scrolled = await place(96, 36);
+    expect(scrolled).not.toBeNull();
+    expect(scrolled!.scroll).toBeGreaterThan(20);
+    expect(Math.abs(scrolled!.barTop - scrolled!.expectedTop)).toBeLessThan(2);
+
+    const grown = await place(140, 36);
+    expect(grown).not.toBeNull();
+    expect(Math.abs(grown!.barTop - grown!.expectedTop)).toBeLessThan(2);
+
+    const shrunk = await place(48, 36);
+    expect(shrunk).not.toBeNull();
+    expect(Math.abs(shrunk!.barTop - shrunk!.expectedTop)).toBeLessThan(2);
+
+    const cleared = await place(48, 0);
+    expect(cleared).not.toBeNull();
+    expect(Math.abs(cleared!.barTop - cleared!.expectedTop)).toBeLessThan(2);
+    expect(cleared!.crumbTop).toBeGreaterThanOrEqual(cleared!.barBottom - 1);
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const header = document.querySelector("header");
+        const bar = document.getElementById("blog-overlay-progress");
+        const crumbs = document.querySelector(".blog-overlay-post-breadcrumbs");
+        if (!header || !bar || !crumbs) return 999;
+        const headerRect = header.getBoundingClientRect();
+        const navbar = headerRect.top < 0 ? headerRect.height : headerRect.bottom;
+        const scroll = window.scrollY || document.documentElement.scrollTop || 0;
+        const barRect = bar.getBoundingClientRect();
+        const crumbRect = crumbs.getBoundingClientRect();
+        if (crumbRect.top < barRect.bottom - 1) return 999;
+        return Math.abs(barRect.top - Math.max(0, navbar - scroll));
+      });
+    }).toBeLessThan(2);
+  });
+});
