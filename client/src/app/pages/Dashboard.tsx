@@ -152,7 +152,11 @@ export default function Dashboard() {
     }
     if (newBlogPaywalled === "yes") {
       const su = newBlogSubscribeUrl.trim();
-      if (su && !isValidSignupPageUrl(su)) {
+      if (!su) {
+        toast.error("Please enter a signup URL");
+        return;
+      }
+      if (!isValidSignupPageUrl(su)) {
         toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
         return;
       }
@@ -606,7 +610,7 @@ export default function Dashboard() {
                 {newBlogPaywalled === "yes" ? (
                   <div className="space-y-2">
                     <Label htmlFor="blog-subscribe-url">
-                      Signup / subscription page URL (optional)
+                      Signup / subscription page URL <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="blog-subscribe-url"
@@ -621,7 +625,7 @@ export default function Dashboard() {
                       }}
                     />
                     <p className="text-xs text-[#6b6b6b]">
-                      Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                      The URL where readers sign up for your blog
                     </p>
                   </div>
                 ) : null}

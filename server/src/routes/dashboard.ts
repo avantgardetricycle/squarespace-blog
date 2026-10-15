@@ -620,6 +620,26 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
 
+    const VALID_PAYWALL_STATES: PaywallDetectionState[] = ['unknown', 'detected_paywalled', 'detected_unpaywalled']
+    const userPaywallState: PaywallDetectionState =
+      VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
+    const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
+
+    if (userPaywallState === 'detected_paywalled') {
+      const subscribeProvided =
+        typeof rawSubscribeForCreate === 'string' && rawSubscribeForCreate.trim().length > 0
+      if (subscribeProvided && !subscribeNormalized) {
+        res.status(400).json({
+          error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+        })
+        return
+      }
+      if (!subscribeNormalized) {
+        res.status(400).json({ error: 'A signup URL is required for membership blogs' })
+        return
+      }
+    }
+
     const activeSameUrl = await prisma.site.findFirst({
       where: {
         userId: user.id,
@@ -737,12 +757,6 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       res.status(500).json({ error: 'Failed to generate unique site key' })
       return
     }
-
-    const VALID_PAYWALL_STATES: PaywallDetectionState[] = ['unknown', 'detected_paywalled', 'detected_unpaywalled']
-    const userPaywallState: PaywallDetectionState =
-      VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
-
-    const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
 
     if (addDecision.needsExtraWebsite && subscription.stripeSubscriptionId) {
       try {
