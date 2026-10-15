@@ -62,7 +62,7 @@ The **Sign in** button uses Squarespace’s native login. If it does nothing, te
 
 ## Members-only teasers on the collection page
 
-For logged-out readers in posts-only mode, gated cards show **MEMBERS ONLY**, a lock on the image, and often a **Subscribe to read** link. Excerpt text is hidden; date and author may still show depending on the template. Sidebar “more to read” / recent post modules use the same treatment.
+For logged-out readers in posts-only mode, gated cards show **MEMBERS ONLY**, a lock on the image, and often a **Subscribe to read** link. Excerpt text is hidden; date and author may still show depending on the template. Reading time is omitted on locked posts, because logged-out JSON has no full body and would otherwise show “0 min read”. Sidebar Popular / Related / Recent cards keep the lock on the thumbnail and omit the **MEMBERS ONLY** row so the title is not clipped. Footer “More to Read” cards still show **MEMBERS ONLY**.
 
 **Public preview** posts (Squarespace posts with a public preview or substantial ungated body) stay readable to logged-out visitors.
 
