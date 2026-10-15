@@ -484,7 +484,7 @@ router.post('/', async (req: Request, res: Response) => {
   const displayNameRaw = typeof body.display_name === 'string' ? body.display_name.trim() : ''
   // Optional name from the member email modal. Kept off display_name so a typed
   // name still counts as a member verification attempt when the form name is blank.
-  let subscriberDisplayNameRaw =
+  const subscriberDisplayNameRaw =
     typeof body.subscriber_display_name === 'string' ? body.subscriber_display_name.trim() : ''
   const commentBody = typeof body.body === 'string' ? body.body.trim() : ''
   if (!commentBody || commentBody.length > MAX_BODY) {
@@ -505,7 +505,6 @@ router.post('/', async (req: Request, res: Response) => {
   const verificationCookieToken =
     typeof body.verification_cookie_token === 'string' ? body.verification_cookie_token.trim() : ''
   let reuseVerificationToken: string | null = null
-  let nameChosenByReader = subscriberDisplayNameRaw.length > 0
   if (verificationCookieToken && !email && !postAsAnonymous) {
     const session = await readCommentVerificationSession(verificationCookieToken, site.id)
     if (!session) {
@@ -515,14 +514,7 @@ router.post('/', async (req: Request, res: Response) => {
       })
       return
     }
-    const applied = applyVerificationSession({
-      email,
-      subscriberDisplayName: subscriberDisplayNameRaw,
-      session,
-    })
-    email = applied.email
-    subscriberDisplayNameRaw = applied.subscriberDisplayName.slice(0, MAX_DISPLAY_NAME)
-    nameChosenByReader = applied.customName
+    email = applyVerificationSession({ email, session }).email
     reuseVerificationToken = verificationCookieToken
   }
 
@@ -693,8 +685,7 @@ router.post('/', async (req: Request, res: Response) => {
           verifiedSubscriber = true
           squarespaceProfileId = profile.id ?? null
           if (!displayName) {
-            const fromProfile = profileCommentDisplayName(profile)
-            displayName = (subscriberDisplayNameRaw || fromProfile).slice(0, MAX_DISPLAY_NAME)
+            displayName = profileCommentDisplayName(profile).slice(0, MAX_DISPLAY_NAME)
           }
         }
       } else {
@@ -833,7 +824,7 @@ router.post('/', async (req: Request, res: Response) => {
       siteId: site.id,
       email: createdEmail,
       displayName: comment.displayName,
-      customName: nameChosenByReader,
+      customName: false,
     })
   }
   res.status(201).json({

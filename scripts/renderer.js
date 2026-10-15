@@ -1586,16 +1586,6 @@
           ? 'We’ll use this to verify your site membership. You can also comment anonymously.'
           : 'We’ll use this to verify your site membership.';
         blurb.style.cssText = 'font-size:0.88rem;color:#555;line-height:1.4;margin-bottom:10px';
-        var nameInputEl = document.createElement('input');
-        nameInputEl.type = 'text';
-        nameInputEl.name = 'bb-subscriber-name';
-        nameInputEl.placeholder = 'Name (optional)';
-        nameInputEl.autocomplete = 'name';
-        nameInputEl.setAttribute('maxlength', '100');
-        nameInputEl.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:6px';
-        var nameNote = document.createElement('div');
-        nameNote.textContent = 'If you leave this blank, we’ll use your Squarespace profile name.';
-        nameNote.style.cssText = 'font-size:0.8rem;color:#555;line-height:1.4;margin-bottom:10px';
         var input = document.createElement('input');
         input.type = 'email';
         input.name = 'email';
@@ -1615,7 +1605,7 @@
         var ok = bbCommentModalButton('Continue', true);
         function close(ret) {
           bbCommentsLog('email prompt closed', ret && ret.email
-            ? Object.assign(bbEmailDebug(ret.email), { hasName: Boolean(ret.name) })
+            ? bbEmailDebug(ret.email)
             : (ret && ret.anonymous ? { anonymous: true } : { cancelled: true }));
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
@@ -1623,13 +1613,12 @@
         cancel.onclick = function() { close(null); };
         ok.onclick = function() {
           var em = (input.value || '').trim();
-          var nm = (nameInputEl.value || '').trim();
           if (!em || em.indexOf('@') < 1) {
             msg.textContent = 'Please enter a valid email.';
             try { input.focus(); } catch (e) {}
             return;
           }
-          close({ email: em, name: nm });
+          close({ email: em });
         };
         overlay.onclick = function(ev) { if (ev.target === overlay) close(null); };
         row.appendChild(cancel);
@@ -1641,8 +1630,6 @@
         row.appendChild(ok);
         modal.appendChild(title);
         modal.appendChild(blurb);
-        modal.appendChild(nameInputEl);
-        modal.appendChild(nameNote);
         modal.appendChild(input);
         modal.appendChild(msg);
         modal.appendChild(row);
