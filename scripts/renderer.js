@@ -5366,7 +5366,9 @@
     },
 
     /**
-     * Sidebar/footer post card. Gated: lock on image, title, Members Only; meta still shown when toggled on.
+     * Sidebar/footer post card. Gated: lock on image and title. Footer cards also show Members Only.
+     * Sidebar cards omit that label — the thumbnail lock is enough, and the extra row is taller than the thumb and clips the title.
+     * Meta still shown when toggled on, except reading time on locked posts.
      * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement, cfg }
      */
     _createModulePostCard: function(post, opts) {
@@ -5459,7 +5461,7 @@
         self._appendModulePostCardListMeta(textHost, post, cardCfg);
       }
 
-      if (gated) {
+      if (gated && variant !== 'list') {
         var mo = self._createMembersOnlyTeaserLabel(false);
         mo.style.marginTop = '0';
         textHost.appendChild(mo);
@@ -5870,7 +5872,7 @@
       var metaLines = [];
       if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaLines.push(cardDateStr); }
       if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaLines.push(cardAuthorStr); }
-      if (cardShowReadingTime) {
+      if (cardShowReadingTime && !this._shouldGateSinglePostBody(post)) {
         var cardMins = this._getReadingTimeMinutes(post.body);
         metaLines.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
       }
@@ -5888,7 +5890,7 @@
         var dateStr = this._getDate(post);
         if (dateStr) lines.push(dateStr);
       }
-      if (cardCfg && cardCfg.showReadingTime) {
+      if (cardCfg && cardCfg.showReadingTime && !this._shouldGateSinglePostBody(post)) {
         var mins = this._getReadingTimeMinutes(post.body);
         lines.push(mins === 1 ? '1 min read' : mins + ' min read');
       }
@@ -13122,8 +13124,6 @@
       var showReadingTime = Boolean(cfg.showReadingTime);
       /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
       var showPostExcerpt = cfg.showPostExcerpt !== false;
-      /** Paywalled logged-out collection JSON often lacks full post body, so reading time cannot be calculated. */
-      if (viewerMode === 'loggedOut' && !isSinglePost && self._isPaywalledSite()) showReadingTime = false;
       var pbCfg = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pbCfg.show != null ? pbCfg.show : cfg.showProgressBar);
       /** Logged-out paywalled readers may see a gated post body — scroll progress is misleading. */
@@ -14297,7 +14297,7 @@
             var updatedAtLabel = self._getUpdatedAtLabel(post);
             if (updatedAtLabel) metaParts.push(updatedAtLabel);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var minsSingle = self._getReadingTimeMinutes(post.body);
             metaParts.push(minsSingle === 1 ? '1 min read' : minsSingle + ' min read');
           }
@@ -14310,7 +14310,7 @@
             var listRowsDateStr = self._getDate(post);
             if (listRowsDateStr) metaParts.push(listRowsDateStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var listRowsMins = self._getReadingTimeMinutes(post.body);
             metaParts.push(listRowsMins === 1 ? '1 min read' : listRowsMins + ' min read');
           }
@@ -14323,7 +14323,7 @@
             var authorStr = self._getAuthorsForPost(post, cfg);
             if (authorStr) metaParts.push(authorStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var mins = self._getReadingTimeMinutes(post.body);
             metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
           }
@@ -14841,7 +14841,7 @@
         var metaParts = [];
         if (showDate) { var ds = self._getDate(post); if (ds) metaParts.push(ds); }
         if (showAuthor) { var as = self._getAuthorsForPost(post, cfg); if (as) metaParts.push(as); }
-        if (showReadingTime) {
+        if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
           var minsShowcase = self._getReadingTimeMinutes(post.body);
           metaParts.push(minsShowcase === 1 ? '1 min read' : minsShowcase + ' min read');
         }
@@ -15713,7 +15713,7 @@
             var heroAuthorStr = self._getAuthorsForPost(featuredPost, cfg);
             if (heroAuthorStr) heroMetaParts.push('By ' + heroAuthorStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(featuredPost)) {
             var heroMins = self._getReadingTimeMinutes(featuredPost.body);
             heroMetaParts.push(heroMins === 1 ? '1 min read' : heroMins + ' min read');
           }
@@ -16821,7 +16821,7 @@
           var metaParts = [];
           if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
           if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(p)) {
             var minsGrid = self._getReadingTimeMinutes(p.body);
             metaParts.push(minsGrid === 1 ? '1 min read' : minsGrid + ' min read');
           }
