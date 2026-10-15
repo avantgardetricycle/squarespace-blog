@@ -33,6 +33,7 @@ import {
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { featureAllowed, requiredPlanName } from "@/lib/servedConfig";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import {
@@ -795,6 +796,17 @@ export default function Comments() {
   const sites = me.sites || [];
   if (sites.length === 0) {
     return <NoBlogsPlaceholder />;
+  }
+
+  if (!featureAllowed(me.entitlements, "comments", true)) {
+    return (
+      <div className="p-8">
+        <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Comments</h1>
+        <p className="text-[#6b6b6b] max-w-xl">
+          Comments and moderation are included on the {requiredPlanName(me.entitlements, "comments")} plan.
+        </p>
+      </div>
+    );
   }
 
   return (

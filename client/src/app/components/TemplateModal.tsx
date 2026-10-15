@@ -80,6 +80,9 @@ interface TemplateModalProps {
   collectionTemplateId?: string | null;
   /** Currently applied post template id (for selection highlight). */
   postTemplateId?: string | null;
+  /** Template keys the current plan can apply. Omitted keys stay visible and locked. */
+  allowedTemplateKeys?: { collection: string[]; post: string[] } | null;
+  requiredPlan?: Record<string, string>;
 }
 
 function sortTemplates(templates: Template[], order: string[]): Template[] {
@@ -98,6 +101,8 @@ export function TemplateModal({
   initialLevel = "collection",
   collectionTemplateId = null,
   postTemplateId = null,
+  allowedTemplateKeys = null,
+  requiredPlan = {},
 }: TemplateModalProps) {
   const [collectionTemplates, setCollectionTemplates] = useState<Template[]>([]);
   const [postTemplates, setPostTemplates] = useState<Template[]>([]);
@@ -158,8 +163,14 @@ export function TemplateModal({
     ? TEMPLATE_DETAILS[previewTemplate.templateKey]
     : undefined;
 
+  const templateLocked = (template: Template, level: "collection" | "post") => {
+    if (!allowedTemplateKeys) return false;
+    return !allowedTemplateKeys[level].includes(template.templateKey);
+  };
+  const previewLocked = previewTemplate ? templateLocked(previewTemplate, activeTab) : false;
+
   const handleUse = () => {
-    if (!previewTemplate) return;
+    if (!previewTemplate || previewLocked) return;
     setPending({ template: previewTemplate, level: activeTab });
   };
 
@@ -286,9 +297,12 @@ export function TemplateModal({
                         <Button
                           type="button"
                           className="h-11 flex-1 rounded-full bg-[#5B4FE8] text-[14.5px] font-semibold hover:bg-[#4339C9]"
+                          disabled={previewLocked}
                           onClick={handleUse}
                         >
-                          Use {previewTemplate.name}
+                          {previewLocked
+                            ? `Included on ${requiredPlan[previewTemplate.templateKey] ?? "a higher plan"}`
+                            : `Use ${previewTemplate.name}`}
                         </Button>
                       </div>
                     </div>

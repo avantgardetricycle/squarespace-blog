@@ -4,8 +4,16 @@ import { requireSession, SessionUser } from '../middleware/session.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
 import { resolveParentIdForReply } from '../lib/comment-thread-depth.js'
 import { ensureSquarespaceThreadImportedForModeration } from '../lib/squarespace-comments-import.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 
 const router = Router()
+
+async function requireComments(userId: number, res: Response): Promise<boolean> {
+  const plan = await loadUserPlanContext(userId)
+  if (plan.entitlements.features.comments) return true
+  res.status(403).json({ error: `Comments require the ${plan.entitlements.requiredPlan.comments} plan.` })
+  return false
+}
 
 async function getSiteForUser(siteKey: string, userId: number) {
   return prisma.site.findFirst({
@@ -234,6 +242,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Comment not found' })
     return
   }
+  if (!(await requireComments(user.id, res))) return
 
   const siteRow = await prisma.site.findUnique({
     where: { id: comment.siteId },
@@ -319,6 +328,7 @@ router.delete('/:id', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Comment not found' })
     return
   }
+  if (!(await requireComments(user.id, res))) return
 
   await hardDeleteComment(comment.id, comment.parentId)
   res.json({ id: comment.id, deleted: true })
@@ -338,6 +348,7 @@ router.post('/:id/reply', requireSession, async (req: Request, res: Response) =>
     res.status(404).json({ error: 'Comment not found' })
     return
   }
+  if (!(await requireComments(user.id, res))) return
 
   const body = req.body as { body?: string; displayName?: string }
   const replyBody = typeof body.body === 'string' ? body.body.trim() : ''

@@ -1,6 +1,8 @@
 import Stripe from 'stripe'
 import prisma from '../db/index.js'
+import { capacityForPlanChange } from './planEntitlements.js'
 import { normalizePlanKey } from './planKeys.js'
+import { basePlanPriceId, extraWebsiteQuantity } from './studioBilling.js'
 import { getStripeEnvironment } from './stripeEnvironment.js'
 import { isActiveSubscriptionStatus, isBetaCustomerId, isBetaSubscription, nextPaymentFailedAt, usableStripeCustomerId } from './subscriptionStatus.js'
 
@@ -81,8 +83,8 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
   if (!stripeSubscription) return
 
   const status = stripeSubscription.status
-  const priceItem = stripeSubscription.items.data[0]
-  const stripePriceId = priceItem?.price?.id ?? null
+  const stripePriceId = basePlanPriceId(stripeSubscription.items.data) ?? stripeSubscription.items.data[0]?.price?.id ?? null
+  const purchasedExtraWebsites = extraWebsiteQuantity(stripeSubscription.items.data)
   const cancelAtPeriodEnd = Boolean(
     (stripeSubscription as unknown as Record<string, unknown>).cancel_at_period_end ??
     stripeSubscription.cancel_at_period_end
@@ -107,7 +109,18 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
       })
     : null
   const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
-  const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
+  const caps = capacityForPlanChange({
+    previousPlanKey: existingSub?.plan,
+    nextPlanKey: planKey,
+    previous: existingSub
+      ? {
+          maxSites: existingSub.maxSites,
+          maxWebsites: existingSub.maxWebsites,
+          maxBlogsPerWebsite: existingSub.maxBlogsPerWebsite
+        }
+      : null,
+    extraWebsites: planKey === 'studio' ? purchasedExtraWebsites : 0
+  })
   const paymentFailedAt = nextPaymentFailedAt(
     { status: existingSub?.status, paymentFailedAt: existingSub?.paymentFailedAt ?? null },
     status
@@ -122,7 +135,9 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
       stripePriceId,
       plan: planKey,
       status,
-      maxSites,
+      maxSites: caps.maxSites,
+      maxWebsites: caps.maxWebsites,
+      maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
       currentPeriodEnd,
       cancelAtPeriodEnd,
       paymentFailedAt
@@ -132,7 +147,9 @@ export async function syncSubscriptionFromStripe(userId: number): Promise<void> 
       stripePriceId,
       plan: planKey,
       status,
-      maxSites,
+      maxSites: caps.maxSites,
+      maxWebsites: caps.maxWebsites,
+      maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
       currentPeriodEnd,
       cancelAtPeriodEnd,
       paymentFailedAt

@@ -3,7 +3,9 @@ import prisma from '../db/index.js'
 import { hashToken, generateToken } from '../lib/auth.js'
 import { sendInviteEmailViaSendGrid } from '../lib/email.js'
 import { getAppUrl } from '../lib/url.js'
+import { capacityForPlanChange } from '../lib/planEntitlements.js'
 import { normalizePlanKey } from '../lib/planKeys.js'
+import { basePlanPriceId, extraWebsiteQuantity } from '../lib/studioBilling.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isActiveSubscriptionStatus, nextPaymentFailedAt } from '../lib/subscriptionStatus.js'
 
@@ -91,14 +93,28 @@ function readInvoiceSubscriptionId(data: InvoiceSubscriptionPayload['data']): st
   return readStripeId(data.parent?.subscription_details?.subscription)
 }
 
-function readPriceId(items: unknown): string | null {
-  if (!items || typeof items !== 'object' || !('data' in items)) return null
+function subscriptionPriceItems (items: unknown): Array<{ quantity?: number | null; price?: { id?: string } | string | null }> {
+  if (!items || typeof items !== 'object' || !('data' in items)) return []
   const data = (items as { data?: unknown }).data
-  const first = Array.isArray(data) ? data[0] : undefined
-  if (!first || typeof first !== 'object') return null
-  const price = (first as { price?: unknown }).price
-  if (typeof price === 'string' && price.length > 0) return price
-  return readStripeId(price)
+  if (!Array.isArray(data)) return []
+  return data.flatMap((row) => {
+    if (!row || typeof row !== 'object') return []
+    const price = (row as { price?: unknown }).price
+    const quantity = (row as { quantity?: unknown }).quantity
+    const priceId = typeof price === 'string' ? price : readStripeId(price)
+    return [{
+      quantity: typeof quantity === 'number' ? quantity : null,
+      price: priceId ? { id: priceId } : null
+    }]
+  })
+}
+
+function readPriceId(items: unknown): string | null {
+  return basePlanPriceId(subscriptionPriceItems(items))
+}
+
+function readExtraWebsites(items: unknown): number {
+  return extraWebsiteQuantity(subscriptionPriceItems(items))
 }
 
 /**
@@ -158,6 +174,7 @@ type SubscriptionSyncInput = {
   stripePriceId: string | null
   currentPeriodEnd: Date | null
   cancelAtPeriodEnd: boolean
+  extraWebsites?: number
 }
 
 type SubscriptionSyncResult = 'applied' | 'stale' | 'no_user'
@@ -187,7 +204,18 @@ async function syncSubscriptionRow(input: SubscriptionSyncInput): Promise<Subscr
   }
 
   const planKey = normalizePlanKey(plan?.planKey ?? existingSub?.plan)
-  const maxSites = plan?.maxSites ?? existingSub?.maxSites ?? null
+  const caps = capacityForPlanChange({
+    previousPlanKey: existingSub?.plan,
+    nextPlanKey: planKey,
+    previous: existingSub
+      ? {
+          maxSites: existingSub.maxSites,
+          maxWebsites: existingSub.maxWebsites,
+          maxBlogsPerWebsite: existingSub.maxBlogsPerWebsite
+        }
+      : null,
+    extraWebsites: planKey === 'studio' ? (input.extraWebsites ?? 0) : 0
+  })
   const paymentFailedAt = nextPaymentFailedAt(
     { status: existingSub?.status, paymentFailedAt: existingSub?.paymentFailedAt ?? null },
     input.status
@@ -201,7 +229,9 @@ async function syncSubscriptionRow(input: SubscriptionSyncInput): Promise<Subscr
         stripePriceId: input.stripePriceId,
         plan: planKey,
         status: input.status,
-        maxSites,
+        maxSites: caps.maxSites,
+        maxWebsites: caps.maxWebsites,
+        maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
         currentPeriodEnd: input.currentPeriodEnd,
         cancelAtPeriodEnd: input.cancelAtPeriodEnd,
         paymentFailedAt
@@ -223,7 +253,9 @@ async function syncSubscriptionRow(input: SubscriptionSyncInput): Promise<Subscr
       stripePriceId: input.stripePriceId,
       plan: planKey,
       status: input.status,
-      maxSites,
+      maxSites: caps.maxSites,
+      maxWebsites: caps.maxWebsites,
+      maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
       currentPeriodEnd: input.currentPeriodEnd,
       cancelAtPeriodEnd: input.cancelAtPeriodEnd,
       paymentFailedAt
@@ -309,12 +341,10 @@ export async function handleCheckoutSessionCompleted(
       throw new Error('Missing customer ID on subscription')
     }
 
-    const priceItem = subscription.items.data[0]
-    const stripePriceId = priceItem?.price?.id ?? null
+    const stripePriceId = basePlanPriceId(subscription.items.data)
 
     const sessionMetadata = ((session.metadata ?? data.metadata) ?? {}) as Record<string, string>
     const subMetadata = (subscription.metadata ?? {}) as Record<string, string>
-    const planKey = normalizePlanKey(subMetadata.plan_key ?? sessionMetadata.plan_key)
     const cadence = subMetadata.cadence ?? sessionMetadata.cadence ?? 'monthly'
     void cadence
 
@@ -344,8 +374,20 @@ export async function handleCheckoutSessionCompleted(
         stripeEnvironment: stripeEnv
       }
     })
-    const maxSites = plan?.maxSites ?? null
-
+    const planKey = normalizePlanKey(subMetadata.plan_key ?? sessionMetadata.plan_key ?? plan?.planKey)
+    const existingSub = await prisma.subscription.findUnique({ where: { stripeCustomerId } })
+    const caps = capacityForPlanChange({
+      previousPlanKey: existingSub?.plan,
+      nextPlanKey: planKey,
+      previous: existingSub
+        ? {
+            maxSites: existingSub.maxSites,
+            maxWebsites: existingSub.maxWebsites,
+            maxBlogsPerWebsite: existingSub.maxBlogsPerWebsite
+          }
+        : null,
+      extraWebsites: planKey === 'studio' ? extraWebsiteQuantity(subscription.items.data) : 0
+    })
     const subRecord = subscription as unknown as Record<string, unknown>
     const periodEnd =
       (typeof subRecord.current_period_end === 'number' ? subRecord.current_period_end : null) ??
@@ -389,7 +431,9 @@ export async function handleCheckoutSessionCompleted(
         stripePriceId,
         plan: planKey,
         status,
-        maxSites,
+        maxSites: caps.maxSites,
+        maxWebsites: caps.maxWebsites,
+        maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
         currentPeriodEnd,
         source: 'stripe'
       },
@@ -398,7 +442,9 @@ export async function handleCheckoutSessionCompleted(
         stripePriceId,
         plan: planKey,
         status,
-        maxSites,
+        maxSites: caps.maxSites,
+        maxWebsites: caps.maxWebsites,
+        maxBlogsPerWebsite: caps.maxBlogsPerWebsite,
         currentPeriodEnd,
         cancelAtPeriodEnd: false,
         paymentFailedAt: null,
@@ -489,7 +535,8 @@ export async function handleSubscriptionUpdated(payload: SubscriptionUpdatedPayl
       status,
       stripePriceId,
       currentPeriodEnd,
-      cancelAtPeriodEnd
+      cancelAtPeriodEnd,
+      extraWebsites: readExtraWebsites(data.items)
     })
 
     if (result === 'stale') {
@@ -554,7 +601,8 @@ export async function handleInvoiceSubscriptionSync(payload: InvoiceSubscription
       status: subscription.status,
       stripePriceId: readPriceId(subscription.items),
       currentPeriodEnd: periodEndToDate(readPeriodEndSeconds(subRecord)),
-      cancelAtPeriodEnd: Boolean(subRecord.cancel_at_period_end ?? subRecord.cancelAtPeriodEnd)
+      cancelAtPeriodEnd: Boolean(subRecord.cancel_at_period_end ?? subRecord.cancelAtPeriodEnd),
+      extraWebsites: readExtraWebsites(subscription.items)
     })
 
     if (result === 'stale') {

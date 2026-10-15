@@ -1,11 +1,12 @@
 /**
- * Plan keys: essentials | professional | publication (see planKeys.ts).
+ * Plan keys: essentials | professional | publication | studio (see planKeys.ts).
  * Legacy keys still map for display when reading old rows.
  */
 const PLAN_DISPLAY_NAMES: Record<string, string> = {
   essentials: 'Essentials',
   professional: 'Professional',
   publication: 'Publication',
+  studio: 'Studio',
   starter: 'Essentials',
   pro: 'Professional',
   agency: 'Publication'
@@ -16,6 +17,7 @@ const PLAN_LABEL_SLUG: Record<string, string> = {
   essentials: 'essentials',
   professional: 'professional',
   publication: 'publication',
+  studio: 'studio',
   starter: 'essentials',
   pro: 'professional',
   agency: 'publication'

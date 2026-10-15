@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { decideAnonymousCommentIdentity, finalizeCommentIdentity } from './anonymous-comment-identity.js'
+import {
+  decideAnonymousCommentIdentity,
+  finalizeCommentIdentity,
+  profileCommentDisplayName,
+} from './anonymous-comment-identity.js'
 
 const base = {
   allowAnonymousComments: true,
@@ -156,6 +160,26 @@ test('an unverified freeform name is not stored when anonymous comments are on a
   })
   assert.equal(saved.displayName, 'Anonymous')
   assert.equal(saved.email, null)
+})
+
+test('a blank subscriber name becomes first name plus last initial', () => {
+  assert.equal(
+    profileCommentDisplayName({ firstName: 'Sarah', lastName: 'Kim' }),
+    'Sarah K.'
+  )
+  assert.equal(
+    profileCommentDisplayName({ first_name: 'Mary Ann', last_name: 'van Der' }),
+    'Mary Ann V.'
+  )
+  assert.equal(
+    profileCommentDisplayName({ firstName: 'José', lastName: 'Ñuñez' }),
+    'José Ñ.'
+  )
+  assert.equal(profileCommentDisplayName({ firstName: '  Sarah  ' }), 'Sarah')
+  assert.equal(profileCommentDisplayName({ lastName: 'Kim' }), 'K.')
+  assert.equal(profileCommentDisplayName({ firstName: 'Sarah', lastName: '...' }), 'Sarah')
+  assert.equal(profileCommentDisplayName(null), '')
+  assert.equal(profileCommentDisplayName({ email: 'sarah@example.com' }), '')
 })
 
 test('anonymous comments off does not accept a generated handle', () => {

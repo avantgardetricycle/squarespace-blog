@@ -13,7 +13,15 @@ import {
   getStripePriceDisplayForPriceId,
   loadPublicPlanPrices
 } from '../lib/stripePlanPrices.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
+import {
+  canCreateAnotherBlog,
+  decideAddBlog,
+  orderedWebsiteHosts,
+  planCapacity
+} from '../lib/planEntitlements.js'
 import { DEFAULT_PLAN_KEY, isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
+import { StudioBillingError, setStudioExtraWebsiteQuantity } from '../lib/studioBilling.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isAdminEmail } from '../lib/admin-team.js'
@@ -39,6 +47,15 @@ const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
 type PaywallMode = (typeof PAYWALL_MODES)[number]
 const PAYWALL_DETECTION_SOURCES = ['json_probe', 'manual'] as const
 type PaywallDetectionSource = (typeof PAYWALL_DETECTION_SOURCES)[number]
+
+async function cadenceForPrice (stripePriceId: string | null): Promise<'monthly' | 'annual'> {
+  if (!stripePriceId) return 'monthly'
+  const plan = await prisma.plan.findFirst({
+    where: { stripePriceId },
+    select: { cadence: true }
+  })
+  return plan?.cadence === 'annual' ? 'annual' : 'monthly'
+}
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -134,8 +151,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
 
   try {
-    const [userWithRelations, siteCount] = await Promise.all([
-      prisma.user.findUnique({
+    const userWithRelations = await prisma.user.findUnique({
         where: { id: user.id },
         include: {
           subscriptions: {
@@ -148,9 +164,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             include: { sitePaywallSettings: true }
           }
         }
-      }),
-      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
-    ])
+      })
 
     if (!userWithRelations) {
       res.status(404).json({ error: 'User not found' })
@@ -166,7 +180,9 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
     const subscriptionActive = isEntitledSubscription(subscription)
     const reportedStatus = subscription ? effectiveSubscriptionStatus(subscription) : null
     const betaActive = subscription?.source === 'beta' && subscriptionActive
-    const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
+    const planContext = await loadUserPlanContext(user.id)
+    const entitlements = planContext.entitlements
+    const allowExtraWebsite = entitlements.planKey === 'studio' && entitlements.extraWebsitesAvailable && Boolean(subscription?.stripeSubscriptionId)
 
     const stripeEnv = getStripeEnvironment()
     const planRecord =
@@ -215,7 +231,9 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             priceDisplay,
             status: reportedStatus ?? subscription.status,
             source: subscription.source,
-            maxSites: subscription.maxSites,
+            maxSites: entitlements.maxSites,
+            maxWebsites: entitlements.maxWebsites,
+            maxBlogsPerWebsite: entitlements.maxBlogsPerWebsite,
             currentPeriodEnd: subscription.currentPeriodEnd,
             cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
             paymentFailedAt: subscription.paymentFailedAt
@@ -239,7 +257,12 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
-      canCreateSite: subscriptionActive && (maxSites === null || siteCount < maxSites),
+      canCreateSite: subscriptionActive && canCreateAnotherBlog({
+        capacity: entitlements,
+        sites: userWithRelations.sites,
+        allowExtraWebsite
+      }),
+      entitlements,
       isSupportTeam: isSupportTeamEmail(userWithRelations.email),
       isAdmin: isAdminEmail(userWithRelations.email)
     })
@@ -467,7 +490,11 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       }
     })
     if (!plan) {
-      res.status(404).json({ error: 'Plan not found' })
+      res.status(404).json({
+        error: normalizedPlanKey === 'studio'
+          ? 'Studio checkout is not available yet. Stripe prices for Studio have not been configured.'
+          : 'Plan not found'
+      })
       return
     }
 
@@ -551,24 +578,17 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
   const rawSubscribeForCreate = rawSubscribeTop !== undefined ? rawSubscribeTop : rawSubscribeFromNested
 
   try {
-    const [subscriptionRows, siteCount] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { userId: user.id, status: { in: ['trialing', 'active'] } },
-        orderBy: { updatedAt: 'desc' },
-        take: 10
-      }),
-      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
+    const [planContext, existingSites] = await Promise.all([
+      loadUserPlanContext(user.id),
+      prisma.site.findMany({
+        where: { userId: user.id, status: 'active', deletedAt: null },
+        select: { url: true, createdAt: true }
+      })
     ])
-    const subscription = subscriptionRows.find((sub) => isEntitledSubscription(sub)) ?? null
+    const subscription = planContext.active ? planContext.subscription : null
 
     if (!subscription) {
       res.status(403).json({ error: 'Subscription required' })
-      return
-    }
-
-    const maxSites = subscription?.maxSites ?? 1
-    if (maxSites !== null && siteCount >= maxSites) {
-      res.status(403).json({ error: 'Site limit reached for your plan' })
       return
     }
 
@@ -580,6 +600,25 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
     const { url: siteUrl, blogPath } = parsed
+
+    const allowExtraWebsite = planContext.entitlements.planKey === 'studio'
+      && planContext.entitlements.extraWebsitesAvailable
+      && Boolean(subscription.stripeSubscriptionId)
+    const addDecision = decideAddBlog({
+      capacity: planContext.entitlements,
+      sites: existingSites,
+      nextUrl: siteUrl,
+      allowExtraWebsite
+    })
+    if (!addDecision.ok) {
+      const studioUnpriced = planContext.entitlements.planKey === 'studio' && !planContext.entitlements.extraWebsitesAvailable
+      res.status(403).json({
+        error: studioUnpriced && addDecision.code === 'website_limit'
+          ? 'Studio extra websites are not available until a Stripe price is configured.'
+          : addDecision.error
+      })
+      return
+    }
 
     const activeSameUrl = await prisma.site.findFirst({
       where: {
@@ -704,6 +743,32 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
 
     const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
+
+    if (addDecision.needsExtraWebsite && subscription.stripeSubscriptionId) {
+      try {
+        const hosts = orderedWebsiteHosts([...existingSites, { url: siteUrl, createdAt: new Date() }])
+        const extras = Math.max(0, hosts.length - planContext.entitlements.includedWebsites)
+        const blogsPer = planContext.entitlements.maxBlogsPerWebsite ?? planCapacity('studio').maxBlogsPerWebsite
+        await setStudioExtraWebsiteQuantity({
+          stripeSubscriptionId: subscription.stripeSubscriptionId,
+          cadence: await cadenceForPrice(subscription.stripePriceId),
+          quantity: extras
+        })
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            maxWebsites: planContext.entitlements.includedWebsites + extras,
+            maxSites: (planContext.entitlements.includedWebsites + extras) * blogsPer
+          }
+        })
+      } catch (err) {
+        if (err instanceof StudioBillingError) {
+          res.status(403).json({ error: err.message })
+          return
+        }
+        throw err
+      }
+    }
 
     const updatedSite = await prisma.site.create({
       data: {
@@ -836,22 +901,29 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       return
     }
 
-    const [subscriptionRows, activeCount] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { userId: user.id, status: { in: ['trialing', 'active'] } },
-        orderBy: { updatedAt: 'desc' },
-        take: 10
-      }),
-      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
+    const [planContext, existingSites] = await Promise.all([
+      loadUserPlanContext(user.id),
+      prisma.site.findMany({
+        where: { userId: user.id, status: 'active', deletedAt: null },
+        select: { url: true, createdAt: true }
+      })
     ])
-    const subscription = subscriptionRows.find((sub) => isEntitledSubscription(sub)) ?? null
+    const subscription = planContext.active ? planContext.subscription : null
     if (!subscription) {
       res.status(403).json({ error: 'Subscription required' })
       return
     }
-    const maxSites = subscription?.maxSites ?? 1
-    if (maxSites !== null && activeCount >= maxSites) {
-      res.status(403).json({ error: 'Site limit reached for your plan' })
+    const allowExtraWebsite = planContext.entitlements.planKey === 'studio'
+      && planContext.entitlements.extraWebsitesAvailable
+      && Boolean(subscription.stripeSubscriptionId)
+    const restoreDecision = decideAddBlog({
+      capacity: planContext.entitlements,
+      sites: existingSites,
+      nextUrl: target.url ?? '',
+      allowExtraWebsite
+    })
+    if (!restoreDecision.ok) {
+      res.status(403).json({ error: restoreDecision.error })
       return
     }
 
@@ -1139,6 +1211,44 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
     if (!site) {
       res.status(404).json({ error: 'Site not found' })
       return
+    }
+
+    const planContext = await loadUserPlanContext(user.id)
+    if (
+      planContext.entitlements.planKey === 'studio' &&
+      planContext.subscription?.stripeSubscriptionId &&
+      planContext.entitlements.extraWebsitesAvailable
+    ) {
+      const activeSites = await prisma.site.findMany({
+        where: { userId: user.id, status: 'active', deletedAt: null },
+        select: { id: true, url: true, createdAt: true }
+      })
+      const included = planContext.entitlements.includedWebsites
+      const before = orderedWebsiteHosts(activeSites).slice(included)
+      const after = orderedWebsiteHosts(activeSites.filter((row) => row.id !== site.id)).slice(included)
+      if (after.length < before.length) {
+        try {
+          const blogsPer = planContext.entitlements.maxBlogsPerWebsite ?? planCapacity('studio').maxBlogsPerWebsite
+          await setStudioExtraWebsiteQuantity({
+            stripeSubscriptionId: planContext.subscription.stripeSubscriptionId,
+            cadence: await cadenceForPrice(planContext.subscription.stripePriceId),
+            quantity: after.length
+          })
+          await prisma.subscription.update({
+            where: { id: planContext.subscription.id },
+            data: {
+              maxWebsites: included + after.length,
+              maxSites: (included + after.length) * blogsPer
+            }
+          })
+        } catch (err) {
+          if (err instanceof StudioBillingError) {
+            res.status(403).json({ error: err.message })
+            return
+          }
+          throw err
+        }
+      }
     }
 
     await prisma.site.update({

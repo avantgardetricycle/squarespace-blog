@@ -8,22 +8,56 @@ export type SitePaywallSettingsJson = {
   featureItems: string[]
 }
 
+export type PlanFeatureFlags = {
+  search: boolean
+  tagCategoryFilters: boolean
+  featuredAndPinned: boolean
+  sorting: boolean
+  comments: boolean
+  basicAnalytics: boolean
+  paywall: boolean
+  emailCapture: boolean
+  kitMailchimp: boolean
+  multipleAuthors: boolean
+  advancedAnalytics: boolean
+}
+
+export interface PlanEntitlements {
+  planKey: string
+  planDisplay: string
+  maxWebsites: number | null
+  maxBlogsPerWebsite: number | null
+  maxSites: number | null
+  includedWebsites: number
+  extraWebsiteMonthlyUsd: number | null
+  extraWebsiteAnnualUsd: number | null
+  extraWebsitesAvailable: boolean
+  templates: { collection: string[]; post: string[] }
+  allowedCollectionLayouts: string[]
+  features: PlanFeatureFlags
+  requiredPlan: Record<string, string>
+  lockedModules: string[]
+}
+
 export interface DashboardMe {
   user: { id: number; email: string; name: string | null; createdAt: string }
   subscription: {
     plan: string
-    /** Display name: Essentials, Professional, Publication (server adds; client falls back if missing) */
+    /** Display name: Essentials, Professional, Publication, Studio (server adds; client falls back if missing) */
     planDisplay?: string
     cadence: string
     priceDisplay: string
     status: string
     source?: string
     maxSites: number | null
+    maxWebsites?: number | null
+    maxBlogsPerWebsite?: number | null
     currentPeriodEnd: string | null
     cancelAtPeriodEnd: boolean
     /** Set when a renewal payment first fails. Starts the 7-day render-only grace window. */
     paymentFailedAt?: string | null
   } | null
+  entitlements?: PlanEntitlements
   sites: Array<{
     id: string
     siteKey: string

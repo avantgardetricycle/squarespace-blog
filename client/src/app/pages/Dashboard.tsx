@@ -107,7 +107,9 @@ export default function Dashboard() {
     });
   }, []);
 
-  const blogLimit = me?.subscription?.maxSites ?? 3;
+  const blogLimit = me?.entitlements?.maxSites ?? me?.subscription?.maxSites ?? null;
+  const websiteLimit = me?.entitlements?.maxWebsites ?? me?.subscription?.maxWebsites ?? null;
+  const showWebsiteCap = me?.entitlements?.planKey === "studio" || (websiteLimit != null && websiteLimit > 1);
   const userPlan =
     me?.subscription != null
       ? me.subscription.planDisplay ?? getPlanDisplayName(me.subscription.plan)
@@ -116,6 +118,22 @@ export default function Dashboard() {
   const canCustomize = subscriptionActive || isInPaymentGrace(me?.subscription);
   const subscriptionEndDate = formatSubscriptionDate(me?.subscription?.currentPeriodEnd);
   const sites = me?.sites ?? [];
+  const websiteCount = new Set(
+    sites.map((site) => {
+      if (!site.url) return "";
+      try {
+        const raw = site.url.startsWith("http") ? site.url : `https://${site.url}`;
+        return new URL(raw).hostname.replace(/^www\./, "").toLowerCase();
+      } catch {
+        return site.url;
+      }
+    }).filter(Boolean)
+  ).size;
+  const usageLabel = showWebsiteCap
+    ? `${websiteCount} of ${websiteLimit ?? "unlimited"} websites · ${sites.length} blogs`
+    : blogLimit == null
+      ? `${sites.length} blogs`
+      : `${sites.length} of ${blogLimit} blog${blogLimit !== 1 ? "s" : ""}`;
 
   const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
 
@@ -172,13 +190,12 @@ export default function Dashboard() {
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = [...prev.sites, site];
-          const maxSites = prev.subscription?.maxSites ?? 1;
+          const limit = prev.entitlements?.maxSites ?? prev.subscription?.maxSites ?? 1;
+          const studioCanAdd = prev.entitlements?.planKey === "studio" && prev.entitlements.extraWebsitesAvailable;
           return {
             ...prev,
             sites: newSites,
-            canCreateSite:
-              prev.subscription?.maxSites === null ||
-              newSites.length < maxSites,
+            canCreateSite: studioCanAdd || limit == null || newSites.length < limit,
           };
         });
         setNewBlogName("");
@@ -331,13 +348,12 @@ export default function Dashboard() {
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = prev.sites.filter((s) => s.id !== siteId);
-          const maxSites = prev.subscription?.maxSites ?? 1;
+          const limit = prev.entitlements?.maxSites ?? prev.subscription?.maxSites ?? 1;
+          const studioCanAdd = prev.entitlements?.planKey === "studio" && prev.entitlements.extraWebsitesAvailable;
           return {
             ...prev,
             sites: newSites,
-            canCreateSite:
-              prev.subscription?.maxSites === null ||
-              newSites.length < maxSites,
+            canCreateSite: studioCanAdd || limit == null || newSites.length < limit,
           };
         });
         setSiteToDelete(null);
@@ -836,7 +852,7 @@ export default function Dashboard() {
             <div>
               <CardTitle>My Blogs</CardTitle>
               <CardDescription>
-                {sites.length} of {blogLimit} blog{blogLimit !== 1 ? "s" : ""}{" "}
+                {usageLabel}{" "}
                 on your {subscriptionActive ? userPlan : `canceled ${userPlan}`} plan
               </CardDescription>
             </div>
