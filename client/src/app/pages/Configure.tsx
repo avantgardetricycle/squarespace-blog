@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { signupPageUrlError } from "@/lib/signupPageUrl";
 import BlogPreviewIframe, {
   buildSnapshotPreviewUrl,
   postPathFromFullUrl,
@@ -3506,6 +3507,14 @@ export default function Configure() {
     if (isInPaymentGrace(me?.subscription)) return;
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
+    if (shouldShowViewerModeToggle) {
+      const signupError = signupPageUrlError(paywallForm.subscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
+        setPaywallSettingsModalOpen(true);
+        return;
+      }
+    }
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
     const dirtyEmailModules = Object.fromEntries(

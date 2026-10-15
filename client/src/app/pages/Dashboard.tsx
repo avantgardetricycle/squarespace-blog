@@ -61,18 +61,7 @@ import {
   sameSquarespaceOrigin,
   squarespaceOriginFromUrl,
 } from "@/lib/squarespaceSiteGroups";
-
-function isValidSignupPageUrl(input: string): boolean {
-  const t = input.trim();
-  if (!t) return false;
-  try {
-    const withScheme = /^https?:\/\//i.test(t) ? t : `https://${t}`;
-    const u = new URL(withScheme);
-    return Boolean(u.hostname);
-  } catch {
-    return false;
-  }
-}
+import { signupPageUrlError } from "@/lib/signupPageUrl";
 
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -151,13 +140,9 @@ export default function Dashboard() {
       return;
     }
     if (newBlogPaywalled === "yes") {
-      const su = newBlogSubscribeUrl.trim();
-      if (!su) {
-        toast.error("Please enter a signup URL");
-        return;
-      }
-      if (!isValidSignupPageUrl(su)) {
-        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+      const signupError = signupPageUrlError(newBlogSubscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
         return;
       }
     }
@@ -289,13 +274,9 @@ export default function Dashboard() {
       return;
     }
     if (editBlogRequiresLogin === "yes") {
-      const su = editBlogSubscribeUrl.trim();
-      if (!su) {
-        toast.error("Please enter a signup URL");
-        return;
-      }
-      if (!isValidSignupPageUrl(su)) {
-        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+      const signupError = signupPageUrlError(editBlogSubscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
         return;
       }
     }
