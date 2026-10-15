@@ -220,13 +220,40 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
     where: { siteId_name: { siteId: site.id, name: trimmedName } }
   })
   if (existing) {
+    const fromIngestion = ingestedFrom === 'SQUARESPACE'
+    if (fromIngestion && existing.ingestedFrom === 'SQUARESPACE') {
+      const data: {
+        bio?: string
+        bioLong?: string | null
+        bioFormat?: BioFormatValue
+        imageUrl?: string
+      } = {}
+      if (typeof bio === 'string' && bio.trim()) data.bio = bio.trim().slice(0, 200)
+      if (typeof bioLong === 'string' && bioLong.trim()) data.bioLong = bioLong.trim().slice(0, 1000)
+      if (data.bio || data.bioLong) data.bioFormat = parseBioFormat(bioFormat)
+      if (typeof imageUrl === 'string' && imageUrl.trim()) data.imageUrl = imageUrl.trim()
+      const updated = Object.keys(data).length > 0
+        ? await prisma.blogAuthor.update({ where: { id: existing.id }, data })
+        : existing
+      // #region agent log
+      console.warn('[bb-author-sync] refresh unedited', {
+        hypothesisId: 'A',
+        incomingBioLen: typeof bio === 'string' ? bio.length : 0,
+        bioLen: typeof updated.bio === 'string' ? updated.bio.length : 0,
+        hasImage: Boolean(updated.imageUrl)
+      })
+      // #endregion
+      res.json(authorJson(updated))
+      return
+    }
     // #region agent log
     console.warn('[bb-author-sync] create returned existing', {
       hypothesisId: 'D',
       ingestedFrom: existing.ingestedFrom,
       requestedIngestedFrom: ingestedFrom ?? null,
       existingBioLen: typeof existing.bio === 'string' ? existing.bio.length : 0,
-      incomingBioLen: typeof bio === 'string' ? bio.length : 0
+      incomingBioLen: typeof bio === 'string' ? bio.length : 0,
+      skippedBecauseEdited: existing.ingestedFrom !== 'SQUARESPACE'
     })
     // #endregion
     res.json(authorJson(existing))
@@ -311,7 +338,9 @@ router.patch('/:id', requireSession, requireEditableSubscription, async (req: Re
     bioFormat?: BioFormatValue
     email?: string | null
     socialLinks?: object
+    ingestedFrom?: 'BETTER_BLOG'
   } = {}
+  data.ingestedFrom = 'BETTER_BLOG'
   if (body.name !== undefined && typeof body.name === 'string' && body.name.trim()) {
     data.name = body.name.trim()
   }
