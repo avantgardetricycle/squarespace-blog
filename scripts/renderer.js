@@ -652,6 +652,7 @@
     _analyticsPageContextPostIndex: null,
     _progressScrollHandler: null,
     _progressScrollTarget: null,
+    _progressResizeHandler: null,
     _tocScrollHandler: null,
     _tocScrollTarget: null,
     _renderSeq: 0,
@@ -10429,7 +10430,7 @@
         s + ' .blog-overlay-meta,' +
         s + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
-        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0 0 49px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
         s + ' .blog-overlay-reporter-accent-rule--above-meta{display:none!important;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
         s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:24px;}' +
@@ -11493,6 +11494,7 @@
            the old early return left that width stuck. Re-measure on every
            resize so the hero shrinks with the window and the title can wrap. */
         if (this._blogOverlayWrapperEl) this._syncViewportBleeds(this._blogOverlayWrapperEl);
+        this._positionFixedProgressBar(true);
         return;
       }
       var prevL = (this._siteContentInsets && this._siteContentInsets.left) || 0;
@@ -12760,6 +12762,28 @@
       }
     },
 
+    /**
+     * Fixed top bar tracks the site header as it scrolls away, then pins to the
+     * viewport. Resize must apply that position immediately: the 50ms top
+     * transition otherwise leaves the bar sitting in the post header.
+     */
+    _positionFixedProgressBar: function(snap) {
+      if (this._previewMode) return;
+      var track = document.getElementById('blog-overlay-progress');
+      if (!track || !track.style || track.style.position !== 'fixed') return;
+      if (track.style.bottom && track.style.bottom !== 'auto') return;
+      var navbarHeight = this._getNavbarOffset();
+      if (!(navbarHeight > 0)) return;
+      var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      if (snap) track.style.transition = 'none';
+      track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
+      track.style.bottom = 'auto';
+      if (snap) {
+        void track.offsetHeight;
+        track.style.transition = 'top 0.05s ease-out';
+      }
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
@@ -12778,9 +12802,7 @@
         postHeight = article.offsetHeight;
       } else {
         scrollY = window.scrollY || document.documentElement.scrollTop;
-        var navbarHeight = this._getNavbarOffset();
-        track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
-        track.style.bottom = 'auto';
+        this._positionFixedProgressBar(false);
         viewportHeight = window.innerHeight;
         var rect = article.getBoundingClientRect();
         postTop = rect.top + scrollY;
@@ -15122,6 +15144,10 @@
         this._progressScrollHandler = null;
         this._progressScrollTarget = null;
       }
+      if (this._progressResizeHandler && window.removeEventListener) {
+        window.removeEventListener('resize', this._progressResizeHandler);
+        this._progressResizeHandler = null;
+      }
       if (this._tocScrollHandler) {
         var tocTarget = this._tocScrollTarget || window;
         tocTarget.removeEventListener('scroll', this._tocScrollHandler, { passive: true });
@@ -15534,6 +15560,12 @@
         this._progressScrollTarget = scrollTarget;
         if (scrollTarget) {
           scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
+        }
+        if (!this._previewMode && window.addEventListener) {
+          this._progressResizeHandler = function() {
+            self._positionFixedProgressBar(true);
+          };
+          window.addEventListener('resize', this._progressResizeHandler, { passive: true });
         }
         /** Fixed top-positioned bar overlays the wrapper; reserve its height so content doesn't sit under it. */
         if (progressBarPosition === 'top' && !this._previewMode && !flushNavHero) {
@@ -17960,10 +17992,6 @@
           : self._wrapperPadTopForNavbar(offset, flushNav);
         self._applySiteContentInsetsToWrapper(wrapper, pad);
         var navTop = mobilePost ? headerH : offset;
-        var progressTrack = document.getElementById('blog-overlay-progress');
-        if (progressTrack && progressTrack.style.position === 'fixed') {
-          progressTrack.style.top = navTop + 'px';
-        }
         var articles = wrapper.querySelectorAll('article');
         for (var a = 0; a < articles.length; a++) {
           articles[a].style.scrollMarginTop = (navTop + 8) + 'px';
@@ -17974,15 +18002,18 @@
         if (self._isMobilePostWrapper(wrapper)) {
           var headerH = self._measureRenderedSiteHeaderHeight();
           if (Math.abs(headerH - lastAppliedHeaderH) >= 1) applyNavbarOffset(headerH);
-          return;
+        } else {
+          var newOffset = self._getNavbarOffset();
+          var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+          if (flushNav) {
+            if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
+          } else if (newOffset > lastAppliedOffset) {
+            applyNavbarOffset(newOffset);
+          }
         }
-        var newOffset = self._getNavbarOffset();
-        var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
-        if (flushNav) {
-          if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
-        } else if (newOffset > lastAppliedOffset) {
-          applyNavbarOffset(newOffset);
-        }
+        /* Header remeasure used to ignore shrinks and reset `top` to the full
+           navbar height, so a resize dropped the bar onto the post header. */
+        self._positionFixedProgressBar(true);
       };
       requestAnimationFrame(function() {
         requestAnimationFrame(scheduleRecheck);
