@@ -207,6 +207,28 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
     where: { siteId_name: { siteId: site.id, name: trimmedName } }
   })
   if (existing) {
+    const fromIngestion = ingestedFrom === 'SQUARESPACE'
+    if (fromIngestion && existing.ingestedFrom === 'SQUARESPACE') {
+      const data: {
+        bio?: string | null
+        bioLong?: string | null
+        bioFormat?: BioFormatValue
+        imageUrl?: string
+      } = {}
+      const incomingShort = typeof bio === 'string' ? bio.trim() : ''
+      const incomingLong = typeof bioLong === 'string' ? bioLong.trim() : ''
+      if (incomingShort || incomingLong) {
+        data.bio = incomingShort.length > 0 && incomingShort.length <= 200 ? incomingShort : null
+        data.bioLong = (incomingLong || incomingShort).slice(0, 1000)
+        data.bioFormat = parseBioFormat(bioFormat)
+      }
+      if (typeof imageUrl === 'string' && imageUrl.trim()) data.imageUrl = imageUrl.trim()
+      const updated = Object.keys(data).length > 0
+        ? await prisma.blogAuthor.update({ where: { id: existing.id }, data })
+        : existing
+      res.json(authorJson(updated))
+      return
+    }
     res.json(authorJson(existing))
     return
   }
@@ -279,7 +301,9 @@ router.patch('/:id', requireSession, requireEditableSubscription, async (req: Re
     bioFormat?: BioFormatValue
     email?: string | null
     socialLinks?: object
+    ingestedFrom?: 'BETTER_BLOG'
   } = {}
+  data.ingestedFrom = 'BETTER_BLOG'
   if (body.name !== undefined && typeof body.name === 'string' && body.name.trim()) {
     data.name = body.name.trim()
   }

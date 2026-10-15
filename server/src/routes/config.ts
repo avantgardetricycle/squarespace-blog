@@ -36,6 +36,30 @@ function isRecord (value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+/** Normalize a required visitor signup URL (https if missing, max 2048). */
+function requiredSignupPageUrl (raw: unknown): { ok: true; url: string } | { ok: false; error: string } {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return { ok: false, error: 'A signup URL is required for membership blogs' }
+  }
+  let toParse = raw.trim()
+  if (!/^https?:\/\//i.test(toParse)) toParse = 'https://' + toParse
+  try {
+    const u = new URL(toParse)
+    if (!u.hostname) {
+      return {
+        ok: false,
+        error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+      }
+    }
+    return { ok: true, url: u.href.length > 2048 ? u.href.slice(0, 2048) : u.href }
+  } catch {
+    return {
+      ok: false,
+      error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+    }
+  }
+}
+
 /** Optional payload with POST /api/config to upsert site_paywall_settings. */
 function optionalTrimmedString (raw: unknown, maxLen: number): string | null {
   if (typeof raw !== 'string') return null
@@ -1178,6 +1202,16 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
       return
     }
 
+    let requiredSignupUrl: string | null = null
+    if (planContext.entitlements.features.paywall && isRecord(body.paywallSettings)) {
+      const checked = requiredSignupPageUrl(body.paywallSettings.subscribeUrl)
+      if (!checked.ok) {
+        res.status(400).json({ error: checked.error })
+        return
+      }
+      requiredSignupUrl = checked.url
+    }
+
     const data: SiteConfigData = {
       showDate,
       showAuthor,
@@ -1216,14 +1250,14 @@ router.post('/', requireSession, requireEditableSubscription, async (req: Reques
         where: { siteId: site.id },
         create: {
           siteId: site.id,
-          subscribeUrl: paywallNorm.subscribeUrl,
+          subscribeUrl: requiredSignupUrl ?? paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
           eyebrowText: paywallNorm.eyebrowText,
           headlineText: paywallNorm.headlineText,
           featureItems: paywallNorm.featureItems
         },
         update: {
-          subscribeUrl: paywallNorm.subscribeUrl,
+          subscribeUrl: requiredSignupUrl ?? paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
           eyebrowText: paywallNorm.eyebrowText,
           headlineText: paywallNorm.headlineText,

@@ -1587,16 +1587,6 @@
           ? 'We’ll use this to verify your site membership. You can also comment anonymously.'
           : 'We’ll use this to verify your site membership.';
         blurb.style.cssText = 'font-size:0.88rem;color:#555;line-height:1.4;margin-bottom:10px';
-        var nameInputEl = document.createElement('input');
-        nameInputEl.type = 'text';
-        nameInputEl.name = 'bb-subscriber-name';
-        nameInputEl.placeholder = 'Name (optional)';
-        nameInputEl.autocomplete = 'name';
-        nameInputEl.setAttribute('maxlength', '100');
-        nameInputEl.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:6px';
-        var nameNote = document.createElement('div');
-        nameNote.textContent = 'If you leave this blank, we’ll use your Squarespace profile name.';
-        nameNote.style.cssText = 'font-size:0.8rem;color:#555;line-height:1.4;margin-bottom:10px';
         var input = document.createElement('input');
         input.type = 'email';
         input.name = 'email';
@@ -1616,7 +1606,7 @@
         var ok = bbCommentModalButton('Continue', true);
         function close(ret) {
           bbCommentsLog('email prompt closed', ret && ret.email
-            ? Object.assign(bbEmailDebug(ret.email), { hasName: Boolean(ret.name) })
+            ? bbEmailDebug(ret.email)
             : (ret && ret.anonymous ? { anonymous: true } : { cancelled: true }));
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
           if (typeof done === 'function') done(ret);
@@ -1624,13 +1614,12 @@
         cancel.onclick = function() { close(null); };
         ok.onclick = function() {
           var em = (input.value || '').trim();
-          var nm = (nameInputEl.value || '').trim();
           if (!em || em.indexOf('@') < 1) {
             msg.textContent = 'Please enter a valid email.';
             try { input.focus(); } catch (e) {}
             return;
           }
-          close({ email: em, name: nm });
+          close({ email: em });
         };
         overlay.onclick = function(ev) { if (ev.target === overlay) close(null); };
         row.appendChild(cancel);
@@ -1642,8 +1631,6 @@
         row.appendChild(ok);
         modal.appendChild(title);
         modal.appendChild(blurb);
-        modal.appendChild(nameInputEl);
-        modal.appendChild(nameNote);
         modal.appendChild(input);
         modal.appendChild(msg);
         modal.appendChild(row);
@@ -5379,7 +5366,9 @@
     },
 
     /**
-     * Sidebar/footer post card. Gated: lock on image, title, Members Only; meta still shown when toggled on.
+     * Sidebar/footer post card. Gated: lock on image and title. Footer cards also show Members Only.
+     * Sidebar cards omit that label — the thumbnail lock is enough, and the extra row is taller than the thumb and clips the title.
+     * Meta still shown when toggled on, except reading time on locked posts.
      * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement, cfg }
      */
     _createModulePostCard: function(post, opts) {
@@ -5472,7 +5461,7 @@
         self._appendModulePostCardListMeta(textHost, post, cardCfg);
       }
 
-      if (gated) {
+      if (gated && variant !== 'list') {
         var mo = self._createMembersOnlyTeaserLabel(false);
         mo.style.marginTop = '0';
         textHost.appendChild(mo);
@@ -5883,7 +5872,7 @@
       var metaLines = [];
       if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaLines.push(cardDateStr); }
       if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaLines.push(cardAuthorStr); }
-      if (cardShowReadingTime) {
+      if (cardShowReadingTime && !this._shouldGateSinglePostBody(post)) {
         var cardMins = this._getReadingTimeMinutes(post.body);
         metaLines.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
       }
@@ -5901,7 +5890,7 @@
         var dateStr = this._getDate(post);
         if (dateStr) lines.push(dateStr);
       }
-      if (cardCfg && cardCfg.showReadingTime) {
+      if (cardCfg && cardCfg.showReadingTime && !this._shouldGateSinglePostBody(post)) {
         var mins = this._getReadingTimeMinutes(post.body);
         lines.push(mins === 1 ? '1 min read' : mins + ' min read');
       }
@@ -13135,8 +13124,6 @@
       var showReadingTime = Boolean(cfg.showReadingTime);
       /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
       var showPostExcerpt = cfg.showPostExcerpt !== false;
-      /** Paywalled logged-out collection JSON often lacks full post body, so reading time cannot be calculated. */
-      if (viewerMode === 'loggedOut' && !isSinglePost && self._isPaywalledSite()) showReadingTime = false;
       var pbCfg = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pbCfg.show != null ? pbCfg.show : cfg.showProgressBar);
       /** Logged-out paywalled readers may see a gated post body — scroll progress is misleading. */
@@ -14310,7 +14297,7 @@
             var updatedAtLabel = self._getUpdatedAtLabel(post);
             if (updatedAtLabel) metaParts.push(updatedAtLabel);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var minsSingle = self._getReadingTimeMinutes(post.body);
             metaParts.push(minsSingle === 1 ? '1 min read' : minsSingle + ' min read');
           }
@@ -14323,7 +14310,7 @@
             var listRowsDateStr = self._getDate(post);
             if (listRowsDateStr) metaParts.push(listRowsDateStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var listRowsMins = self._getReadingTimeMinutes(post.body);
             metaParts.push(listRowsMins === 1 ? '1 min read' : listRowsMins + ' min read');
           }
@@ -14336,7 +14323,7 @@
             var authorStr = self._getAuthorsForPost(post, cfg);
             if (authorStr) metaParts.push(authorStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var mins = self._getReadingTimeMinutes(post.body);
             metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
           }
@@ -14854,7 +14841,7 @@
         var metaParts = [];
         if (showDate) { var ds = self._getDate(post); if (ds) metaParts.push(ds); }
         if (showAuthor) { var as = self._getAuthorsForPost(post, cfg); if (as) metaParts.push(as); }
-        if (showReadingTime) {
+        if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
           var minsShowcase = self._getReadingTimeMinutes(post.body);
           metaParts.push(minsShowcase === 1 ? '1 min read' : minsShowcase + ' min read');
         }
@@ -15726,7 +15713,7 @@
             var heroAuthorStr = self._getAuthorsForPost(featuredPost, cfg);
             if (heroAuthorStr) heroMetaParts.push('By ' + heroAuthorStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(featuredPost)) {
             var heroMins = self._getReadingTimeMinutes(featuredPost.body);
             heroMetaParts.push(heroMins === 1 ? '1 min read' : heroMins + ' min read');
           }
@@ -16834,7 +16821,7 @@
           var metaParts = [];
           if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
           if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(p)) {
             var minsGrid = self._getReadingTimeMinutes(p.body);
             metaParts.push(minsGrid === 1 ? '1 min read' : minsGrid + ' min read');
           }

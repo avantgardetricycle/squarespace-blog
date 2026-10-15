@@ -61,18 +61,7 @@ import {
   sameSquarespaceOrigin,
   squarespaceOriginFromUrl,
 } from "@/lib/squarespaceSiteGroups";
-
-function isValidSignupPageUrl(input: string): boolean {
-  const t = input.trim();
-  if (!t) return false;
-  try {
-    const withScheme = /^https?:\/\//i.test(t) ? t : `https://${t}`;
-    const u = new URL(withScheme);
-    return Boolean(u.hostname);
-  } catch {
-    return false;
-  }
-}
+import { signupPageUrlError } from "@/lib/signupPageUrl";
 
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -151,9 +140,9 @@ export default function Dashboard() {
       return;
     }
     if (newBlogPaywalled === "yes") {
-      const su = newBlogSubscribeUrl.trim();
-      if (su && !isValidSignupPageUrl(su)) {
-        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+      const signupError = signupPageUrlError(newBlogSubscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
         return;
       }
     }
@@ -285,9 +274,9 @@ export default function Dashboard() {
       return;
     }
     if (editBlogRequiresLogin === "yes") {
-      const su = editBlogSubscribeUrl.trim();
-      if (su && !isValidSignupPageUrl(su)) {
-        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+      const signupError = signupPageUrlError(editBlogSubscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
         return;
       }
     }
@@ -606,7 +595,7 @@ export default function Dashboard() {
                 {newBlogPaywalled === "yes" ? (
                   <div className="space-y-2">
                     <Label htmlFor="blog-subscribe-url">
-                      Signup / subscription page URL (optional)
+                      Signup / subscription page URL <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="blog-subscribe-url"
@@ -621,7 +610,7 @@ export default function Dashboard() {
                       }}
                     />
                     <p className="text-xs text-[#6b6b6b]">
-                      Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                      The URL where readers sign up for your blog
                     </p>
                   </div>
                 ) : null}
@@ -806,7 +795,7 @@ export default function Dashboard() {
             {editBlogRequiresLogin === "yes" ? (
               <div className="space-y-2">
                 <Label htmlFor="edit-blog-subscribe-url">
-                  Signup / subscription page URL (optional)
+                  Signup / subscription page URL <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="edit-blog-subscribe-url"
@@ -821,7 +810,7 @@ export default function Dashboard() {
                   }}
                 />
                 <p className="text-xs text-[#6b6b6b]">
-                  Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                  The URL where readers sign up for your blog
                 </p>
               </div>
             ) : null}

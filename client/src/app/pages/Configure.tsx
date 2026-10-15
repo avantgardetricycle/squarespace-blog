@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { signupPageUrlError } from "@/lib/signupPageUrl";
 import BlogPreviewIframe, {
   buildSnapshotPreviewUrl,
   postPathFromFullUrl,
@@ -160,6 +161,31 @@ const AUTHOR_BIO_PLACEHOLDERS: Record<AuthorBioFormat, { short: string; long: st
 
 function authorBioFormatOf(author: BlogAuthorOption): AuthorBioFormat {
   return author.bioFormat === "markdown" || author.bioFormat === "html" ? author.bioFormat : "text";
+}
+
+function squarespaceAuthorProfile(au: {
+  bio?: unknown;
+  avatarUrl?: unknown;
+  avatarAssetUrl?: unknown;
+}): {
+  bio: string | null;
+  bioLong: string | null;
+  bioFormat: AuthorBioFormat;
+  imageUrl: string | null;
+} {
+  const bioRaw = typeof au.bio === "string" ? au.bio.trim() : "";
+  const avatar =
+    typeof au.avatarUrl === "string" && au.avatarUrl.trim()
+      ? au.avatarUrl.trim()
+      : typeof au.avatarAssetUrl === "string" && au.avatarAssetUrl.trim()
+        ? au.avatarAssetUrl.trim()
+        : null;
+  return {
+    bio: bioRaw.length > 0 && bioRaw.length <= 200 ? bioRaw : null,
+    bioLong: bioRaw ? bioRaw.slice(0, 1000) : null,
+    bioFormat: /<\/?[a-z][^>]*>/i.test(bioRaw) ? "html" : "text",
+    imageUrl: avatar,
+  };
 }
 
 function resolveInitialAuthorForProfileEdit(
@@ -2878,54 +2904,70 @@ export default function Configure() {
   // Fetch blog JSON and sync authors from Squarespace; add ingested authors as default (runs after config loads)
   useEffect(() => {
     if (!effectiveSiteKey || !effectiveSite || configLoading) return;
-    Promise.all([
-      fetch(
-        `/api/config/blog-preview/${encodeURIComponent(effectiveSiteKey)}${previewDebugEnabled ? "?bbFeaturedDebug=1" : ""}`,
-        { credentials: "include" }
-      ).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/blog-authors/${effectiveSiteKey}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])),
-    ])
-      .then(async ([json, existingAuthors]) => {
+    fetch(
+      `/api/config/blog-preview/${encodeURIComponent(effectiveSiteKey)}${previewDebugEnabled ? "?bbFeaturedDebug=1" : ""}`,
+      { credentials: "include" }
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then(async (json) => {
         const rawItems = Array.isArray(json?.items) ? json.items : (json?.collection?.items ?? []);
         // Squarespace can return null entries for member-area-gated posts — filter them out
         // to prevent null-access crashes when a post is selected in the Configure panel.
         const items = rawItems.filter((item: unknown) => item != null && typeof item === 'object');
         setBlogItems(items);
-        const existingList = Array.isArray(existingAuthors) ? existingAuthors : [];
-        const existingByName = new Map(existingList.map((a: { id?: string; name?: string }) => [a?.name ?? "", a?.id ?? ""]));
         const authorNames = new Set<string>();
+        const profiles = new Map<string, ReturnType<typeof squarespaceAuthorProfile>>();
+        const rememberAuthor = (au: { displayName?: string; bio?: unknown; avatarUrl?: unknown; avatarAssetUrl?: unknown } | null | undefined) => {
+          if (!au?.displayName || typeof au.displayName !== "string") return;
+          const name = au.displayName.trim();
+          if (!name) return;
+          authorNames.add(name);
+          const next = squarespaceAuthorProfile(au);
+          const prev = profiles.get(name);
+          if (!prev) {
+            profiles.set(name, next);
+            return;
+          }
+          profiles.set(name, {
+            bio: prev.bio || next.bio,
+            bioLong: prev.bioLong || next.bioLong,
+            bioFormat: prev.bio ? prev.bioFormat : next.bioFormat,
+            imageUrl: prev.imageUrl || next.imageUrl,
+          });
+        };
         for (const item of items) {
           const a = item?.author;
-          if (a?.displayName && typeof a.displayName === "string") authorNames.add(a.displayName.trim());
+          rememberAuthor(a);
           const authorsArr = item?.authors ?? (a ? [a] : []);
-          for (const au of authorsArr) {
-            if (au?.displayName && typeof au.displayName === "string") authorNames.add(au.displayName.trim());
-          }
+          for (const au of authorsArr) rememberAuthor(au);
         }
         const apiBase = typeof window !== "undefined" ? window.location.origin : "";
         const ingestedIds: string[] = [];
         for (const name of authorNames) {
           if (!name) continue;
-          let id = existingByName.get(name);
-          if (!id) {
-            try {
-              const res = await fetch(`${apiBase}/api/blog-authors`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "SQUARESPACE", isDefault: true }),
-              });
-              const data = await res.json();
-              const newId = data?.id;
-              if (typeof newId === "string") {
-                id = newId;
-                existingByName.set(name, newId);
-              }
-            } catch {
-              /* ignore */
-            }
+          const profile = profiles.get(name);
+          try {
+            const res = await fetch(`${apiBase}/api/blog-authors`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                siteKey: effectiveSiteKey,
+                name,
+                ingestedFrom: "SQUARESPACE",
+                isDefault: true,
+                bio: profile?.bio ?? null,
+                bioLong: profile?.bioLong ?? null,
+                bioFormat: profile?.bioFormat ?? "text",
+                imageUrl: profile?.imageUrl ?? null,
+              }),
+            });
+            const data = await res.json();
+            const newId = data?.id;
+            if (typeof newId === "string") ingestedIds.push(newId);
+          } catch {
+            /* ignore */
           }
-          if (id) ingestedIds.push(id);
         }
         const freshAuthors = await fetch(`/api/blog-authors/${effectiveSiteKey}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : []));
         setAuthors(Array.isArray(freshAuthors) ? freshAuthors : []);
@@ -3465,6 +3507,14 @@ export default function Configure() {
     if (isInPaymentGrace(me?.subscription)) return;
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
+    if (shouldShowViewerModeToggle) {
+      const signupError = signupPageUrlError(paywallForm.subscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
+        setPaywallSettingsModalOpen(true);
+        return;
+      }
+    }
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
     const dirtyEmailModules = Object.fromEntries(
@@ -6236,6 +6286,20 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("authorProfiles", postFeatureSidebarFooterLocations, "authorProfiles")}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full"
+                                      disabled={authors.length === 0}
+                                      onClick={() =>
+                                        openEditAuthorProfiles({
+                                          fallbackAuthorIds: config.defaultAuthorIds,
+                                        })
+                                      }
+                                    >
+                                      Edit Author Profiles
+                                    </Button>
                                   </div>
                                 }
                               />

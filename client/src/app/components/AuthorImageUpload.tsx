@@ -2,7 +2,17 @@ import { useState, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/app/components/ui/avatar";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
-import { Upload, X, Loader2 } from "lucide-react";
+import { Upload, Trash2, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
@@ -32,6 +42,7 @@ export function AuthorImageUpload({
 }: AuthorImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +120,7 @@ export function AuthorImageUpload({
             {getInitials(authorName)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-nowrap items-center gap-1.5">
           <input
             ref={fileInputRef}
             type="file"
@@ -138,16 +149,36 @@ export function AuthorImageUpload({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={handleRemove}
+              onClick={() => setConfirmRemoveOpen(true)}
               disabled={disabled || uploading}
-              className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              aria-label="Remove author photo"
+              className="h-8 w-8 px-0 text-red-600 hover:text-red-700 hover:bg-red-50"
             >
-              <X className="h-3.5 w-3.5" />
-              <span className="ml-1">Remove</span>
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
       </div>
+      <AlertDialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove author photo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the photo from the author profile. You can upload a new one later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              className="bg-red-600 text-white hover:bg-red-700"
+              onClick={handleRemove}
+            >
+              Remove photo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {error && (
         <p className="text-xs text-red-600">{error}</p>
       )}
