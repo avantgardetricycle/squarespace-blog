@@ -114,6 +114,16 @@ export function InstallationInstructionsBody({
             .join(", ")}
         </p>
       ) : null}
+      <p className="text-sm text-[#6b6b6b] break-words">
+        Need BetterBlog to work with other custom scripts? We&apos;ve got you.{" "}
+        <a
+          href="mailto:support@betterblog.co"
+          className="text-[#5B4FE8] hover:text-[#4a3fd4] font-medium underline"
+        >
+          Contact us
+        </a>
+        .
+      </p>
       <div className="relative min-w-0">
         <div className="absolute right-2 top-2 z-10">
           <Button
