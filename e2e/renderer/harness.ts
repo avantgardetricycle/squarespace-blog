@@ -45,11 +45,17 @@ type MountOptions = {
   defaultAuthorIds?: string[];
   /** Extra CSS in the host page, before the renderer runs. Used to simulate Squarespace type styles. */
   extraCss?: string;
+  /**
+   * Render as the live embed (fixed progress bar) instead of the Configure preview.
+   * The page URL is the blog route; `#post-N` selects the post.
+   */
+  liveSite?: boolean;
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
   const previewSelectedPostIndex = options.previewSelectedPostIndex ?? 1;
   const rootWidth = options.rootWidth;
+  const liveSite = options.liveSite === true;
 
   await page.route(`**${BLOG_JSON_PATH}*`, async (route) => {
     await route.fulfill({
@@ -139,7 +145,8 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     });
   });
 
-  await page.goto("/e2e/renderer-mount", { waitUntil: "domcontentloaded" });
+  const hash = liveSite && previewSelectedPostIndex >= 0 ? `#post-${previewSelectedPostIndex}` : "";
+  await page.goto(`/e2e/renderer-mount${hash}`, { waitUntil: "domcontentloaded" });
   await page.addScriptTag({ path: RENDERER_PATH });
 
   const profiles = options.authorProfiles ?? fixtureAuthorProfiles;
@@ -149,7 +156,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   );
 
   await page.evaluate(
-    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap }) => {
+    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap, liveSite: live }) => {
       const w = window as unknown as {
         BlogOverlayRenderer: { init: (config: Record<string, unknown>) => void };
         Static?: { SQUARESPACE_CONTEXT: Record<string, unknown> };
@@ -168,12 +175,12 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       }
       const root = document.getElementById("root");
       w.BlogOverlayRenderer.init({
-        previewMode: true,
+        previewMode: !live,
         rootEl: root,
         previewFetchUrl: "/e2e/renderer-blog.json",
         baseUrl: window.location.origin,
         siteKey: "renderer-layout",
-        blogPath: "/e2e/renderer-blog",
+        blogPath: live ? "/e2e/renderer-mount" : "/e2e/renderer-blog",
         previewSelectedPostIndex: selected,
         previewDevice,
         defaultAuthorIds,
@@ -195,6 +202,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       postConfig: options.postConfig,
       previewSelectedPostIndex,
       previewDevice: options.previewDevice,
+      liveSite,
       commentSettings: options.commentSettings,
       loggedInAccount: options.loggedInAccount,
       authorProfiles: profiles,
