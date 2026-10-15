@@ -243,7 +243,7 @@ test.describe("verified comment failure", () => {
     expect(posts).toBe(1);
   });
 
-  test("shows an optional name and keeps a typed name on later comments", async ({ page }) => {
+  test("does not ask for a name and reuses the verification token", async ({ page }) => {
     const bodies: Array<Record<string, unknown>> = [];
     page.on("request", (request) => {
       if (request.method() !== "POST" || !request.url().includes("/api/comments")) return;
@@ -251,60 +251,7 @@ test.describe("verified comment failure", () => {
     });
     const nextPost = (): PostPayload => ({
       status: 201,
-        json: {
-        id: `comment-${bodies.length + 1}`,
-        display_name: "Pat Example",
-        verified_subscriber: true,
-        verification_token: "tok-pat",
-        status: "approved",
-      },
-    });
-
-    await mountLoggedInComments(page, nextPost);
-    const form = page.locator("#bb-comments .bb-comment-form-wrap");
-    const button = form.locator(".bb-comment-submit");
-
-    await form.locator("textarea").fill("A named comment");
-    await button.click();
-    const modal = page.locator("body");
-    await expect(page.getByText("Confirm your email")).toBeVisible();
-    const name = page.locator('input[name="bb-subscriber-name"]');
-    await expect(name).toBeVisible();
-    await expect(name).toHaveAttribute("placeholder", "Name (optional)");
-    await expect(modal.getByText("If you leave this blank, we’ll use your Squarespace profile name.")).toBeVisible();
-    await name.fill("Pat Example");
-    await confirmEmail(page, "reader@example.com");
-
-    await expect.poll(() => bodies.length).toBe(1);
-    expect(bodies[0].display_name).toBe("");
-    expect(bodies[0].subscriber_display_name).toBe("Pat Example");
-    expect(bodies[0].email).toBe("reader@example.com");
-
-    await expect.poll(async () => {
-      const cookies = await page.context().cookies();
-      const raw = cookies.find((item) => item.name === "bb_verified_commenter_renderer-layout");
-      return raw ? JSON.parse(decodeURIComponent(raw.value)) : null;
-    }).toEqual({ name: "Pat Example", token: "tok-pat" });
-
-    await form.locator("textarea").fill("A second comment");
-    await button.click();
-    await expect(page.getByText("Confirm your email")).toBeHidden();
-    await expect.poll(() => bodies.length).toBe(2);
-    expect(bodies[1].display_name).toBe("");
-    expect(bodies[1].verification_cookie_token).toBe("tok-pat");
-    expect(bodies[1]).not.toHaveProperty("email");
-    expect(bodies[1]).not.toHaveProperty("subscriber_display_name");
-  });
-
-  test("leaves a blank name for the Squarespace profile", async ({ page }) => {
-    const bodies: Array<Record<string, unknown>> = [];
-    page.on("request", (request) => {
-      if (request.method() !== "POST" || !request.url().includes("/api/comments")) return;
-      bodies.push(request.postDataJSON() as Record<string, unknown>);
-    });
-    const nextPost = (): PostPayload => ({
-      status: 201,
-        json: {
+      json: {
         id: `comment-${bodies.length + 1}`,
         display_name: "Sarah K.",
         verified_subscriber: true,
@@ -319,12 +266,14 @@ test.describe("verified comment failure", () => {
 
     await form.locator("textarea").fill("Use my profile name");
     await button.click();
-    await expect(page.locator('input[name="bb-subscriber-name"]')).toHaveValue("");
+    await expect(page.getByText("Confirm your email", { exact: true })).toBeVisible();
+    await expect(page.locator('input[name="bb-subscriber-name"]')).toHaveCount(0);
     await confirmEmail(page, "sarah@example.com");
 
     await expect.poll(() => bodies.length).toBe(1);
     expect(bodies[0].display_name).toBe("");
     expect(bodies[0]).not.toHaveProperty("subscriber_display_name");
+    expect(bodies[0].email).toBe("sarah@example.com");
 
     await expect.poll(async () => {
       const cookies = await page.context().cookies();
@@ -334,7 +283,7 @@ test.describe("verified comment failure", () => {
 
     await form.locator("textarea").fill("Still the profile name");
     await button.click();
-    await expect(page.getByText("Confirm your email")).toBeHidden();
+    await expect(page.getByText("Confirm your email", { exact: true })).toBeHidden();
     await expect.poll(() => bodies.length).toBe(2);
     expect(bodies[1].verification_cookie_token).toBe("tok-profile");
     expect(bodies[1]).not.toHaveProperty("subscriber_display_name");
