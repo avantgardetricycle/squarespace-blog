@@ -1,3 +1,5 @@
+import { FEATURE_COUNT } from './FeatureGrid_new';
+
 export function BeforeAfterComparison() {
     return (
       <div className="w-full bg-white">
@@ -718,7 +720,7 @@ export function BeforeAfterComparison() {
   
         <div className="ba-proof-strip">
           <div className="ba-proof-item">
-            <div className="ba-proof-num">23</div>
+            <div className="ba-proof-num">{FEATURE_COUNT}</div>
             <div className="ba-proof-label">Pro blogging features</div>
           </div>
           <div className="ba-proof-sep"></div>

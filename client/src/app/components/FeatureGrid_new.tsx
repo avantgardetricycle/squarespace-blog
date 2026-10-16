@@ -74,6 +74,9 @@ const F: Feat[] = [
   {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics or Fathom and your blog events forward into that account, so traffic sources, top referrers and new vs. returning show up there.',s:'Analytics'}
 ];
 
+/** Number of features shown on the landing page (used by the hero stats too). */
+export const FEATURE_COUNT = F.length;
+
 const shell = (inner: string) => `<div class="stage-mb">
   <div class="mb-top" style="height:30px"><span class="d r"></span><span class="d y"></span><span class="d g"></span>
     <div class="mb-url" style="height:16px;font-size:.55rem">yoursite.squarespace.com/blog</div></div>
