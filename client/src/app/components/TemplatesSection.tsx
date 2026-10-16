@@ -1,57 +1,11 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { AnimatePresence, motion, useInView } from 'motion/react';
+import { TEMPLATE_PICKER_ART } from '@/app/components/template-picker-art';
 
-/* Wireframe helpers + data ported from the approved landing-page design.
-   Markup is static and author-authored; no user input reaches these strings. */
-const L = (n: number, a?: boolean) => Array.from({length:n},(_,i)=>`<div class="wl${a&&i===0?' a':''}" style="width:${[92,78,85,64][i%4]}%"></div>`).join('');
-// shared: a sidebar column (violet dot + lines) and a centered header (dot + title)
-// unified sidebar parts — no background, accent heading + content rows
-const SBH = (w = 64) => `<div class="wl a" style="width:${w}%;height:2px;flex-shrink:0"></div>`;
-const SBROW = () => `<div style="display:flex;gap:3px;align-items:center;flex-shrink:0"><div class="wi" style="width:9px;height:8px"></div><div style="flex:1;display:flex;flex-direction:column;gap:1px"><div class="wl" style="width:92%;height:2px;background:#dcdce4"></div><div class="wl" style="width:56%;height:2px"></div></div></div>`;
-const SBAV = () => `<div style="display:flex;gap:3px;align-items:center;flex-shrink:0"><div class="wi" style="width:8px;height:8px;border-radius:50%"></div><div class="wl" style="width:52%;height:2px"></div></div>`;
-const SB = (n = 2) => `<div class="wsb" style="flex:1;gap:2px">${SBH(62)}${SBAV()}${SBH(54)}${Array.from({length:n},SBROW).join('')}</div>`;
-const OV = (w1 = 70, w2 = 42) => `<div class="wl w" style="width:${w1}%;height:4px"></div><div class="wl w" style="width:${w2}%"></div>`;
-const T: Record<string, string> = {
-  // ── Collection ──
-  showcase:`<div style="display:flex;gap:6px;flex:1"><div class="wi" style="flex:1.5"></div><div style="flex:1;display:flex;flex-direction:column;gap:3px;justify-content:center"><div class="wl a" style="width:35%"></div><div class="wt"></div><div class="wt" style="width:75%"></div>${L(2)}</div></div>
-    <div style="display:flex;gap:6px;flex:1;min-height:0"><div style="flex:1;display:flex;flex-direction:column;gap:3px;justify-content:center"><div class="wl a" style="width:35%"></div><div class="wt"></div><div class="wt" style="width:75%"></div>${L(1)}</div><div class="wi" style="flex:1.5"></div></div>`,
-  newsroom:`<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-shrink:0"><div class="wt" style="width:28%;height:4px"></div><div class="w" style="width:36%;height:9px;border:1px solid #d8d6cf;display:flex;align-items:center;padding:0 3px;gap:2px"><div class="wl" style="width:3px;height:3px;border-radius:50%"></div><div class="wl" style="width:55%;height:2px"></div></div></div>
-    ${[0,1,2,3].map(()=>`<div style="display:flex;gap:5px;flex:1;align-items:center;border-top:1px solid #e6e4de;padding-top:3px"><div class="wi" style="height:100%;aspect-ratio:1"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:3px"><div class="wo" style="width:3px;height:3px"></div><div class="wl a" style="width:22%;height:2px"></div></div><div class="wt" style="height:3px;width:85%"></div><div class="wl" style="width:60%;height:2px"></div></div></div>`).join('')}`,
-  masthead:`<div class="wov" style="flex:2.6;min-height:0;padding:5px 6px;gap:2px"><div style="width:14%;height:4px;border-radius:3px;background:var(--violet)"></div><div class="wl" style="width:20%;height:2px;background:rgba(255,255,255,.6)"></div><div class="wl" style="width:74%;height:4px;background:#fff"></div><div class="wl" style="width:30%;height:2px;background:rgba(255,255,255,.45)"></div></div>
-    <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;padding:1px 0"><div class="wt" style="width:8%;height:3px"></div>${[0,1,2,3].map(()=>`<div class="wl" style="width:10%;height:3px"></div>`).join('')}<div class="w" style="margin-left:auto;width:20%;height:7px;border:1px solid #d8d6cf"></div><div class="w" style="width:11%;height:7px;border:1px solid #d8d6cf"></div></div>
-    <div style="display:flex;gap:5px;flex:1.4;min-height:0">${[0,1,2].map(()=>`<div style="flex:1;display:flex;flex-direction:column;gap:2px;min-height:0"><div class="wi" style="flex:1;min-height:0"></div><div class="wl a" style="width:38%;height:2px;flex-shrink:0"></div><div class="wt" style="height:3px;flex-shrink:0"></div><div class="wl" style="width:55%;height:2px;flex-shrink:0"></div></div>`).join('')}</div>`,
-  editorial:`<div style="display:flex;gap:4px;flex:1"><div class="wov" style="flex:1.7">${OV(72,44)}</div><div style="flex:1;display:flex;flex-direction:column;gap:4px"><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div></div></div>
-    <div style="display:flex;gap:4px;flex:1"><div style="flex:1;display:flex;flex-direction:column;gap:4px"><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div></div><div class="wov" style="flex:1.7">${OV(72,44)}</div></div>`,
-  digest:`<div style="display:flex;align-items:center;gap:3px;flex-shrink:0;padding-bottom:2px;border-bottom:1px solid #e6e4de"><div class="wt" style="width:9%;height:3px"></div>${[0,1,2].map(()=>`<div class="wl" style="width:11%;height:3px"></div>`).join('')}<div class="w" style="margin-left:auto;width:22%;height:7px;border:1px solid #d8d6cf"></div><div class="w" style="width:12%;height:7px;border:1px solid #d8d6cf"></div></div>
-    <div style="display:flex;gap:6px;flex:1"><div style="flex:2.3;display:flex;flex-direction:column;gap:3px">
-      <div class="wi" style="height:26px;flex-shrink:0"></div>
-      <div style="display:flex;align-items:center;gap:3px"><div class="wl a" style="width:16%;height:4px;opacity:1"></div><div class="wl a" style="width:18%;height:2px"></div></div>
-      <div class="wt"></div><div class="wt" style="width:62%"></div><div class="wl" style="width:44%"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:4px;flex:1.5;min-height:0;margin-top:1px">${[0,1,2,3].map(()=>`<div style="display:flex;flex-direction:column;gap:1px;min-height:0"><div class="wi" style="flex:1;min-height:0"></div><div class="wl a" style="width:38%;height:2px;flex-shrink:0"></div><div class="wl" style="width:86%;height:2px;background:#e4e4ea;flex-shrink:0"></div></div>`).join('')}</div></div>
-    <div class="wsb" style="flex:1;gap:2px">
-      ${SBH(58)}${SBAV()}${SBAV()}
-      ${SBH(64)}
-      <div class="w" style="height:6px;border:1px solid #d8d6cf"></div><div style="height:6px;background:var(--violet);opacity:.75;border-radius:2px"></div>
-      ${SBH(50)}${SBROW()}${SBROW()}
-    </div></div>`,
-  // ── Post ──
-  reporter:`<div style="display:flex;gap:6px;flex:1"><div style="flex:1;display:flex;flex-direction:column;gap:3px;justify-content:center"><div style="display:flex;align-items:center;gap:3px"><div class="wo"></div><div class="wl a" style="width:40%"></div></div><div class="wt"></div><div class="wt" style="width:78%"></div><div class="wl" style="width:55%"></div></div><div class="wi" style="flex:1.35"></div></div>
-    <div style="display:flex;gap:6px;flex:1.25;min-height:0"><div style="flex:2.3;display:flex;flex-direction:column;gap:3px">${L(5)}</div>${SB(2)}</div>`,
-  feature:`<div style="display:flex;flex-direction:column;gap:2px;align-items:center;flex-shrink:0;padding:1px 0 3px"><div class="wl" style="width:34%;height:2px"></div><div class="wl a" style="width:12%;height:2px;margin-top:1px"></div><div class="wt" style="width:64%;height:5px"></div><div class="wl" style="width:44%;height:2px"></div><div class="wl" style="width:30%;height:2px"></div><div class="wl" style="width:22%;height:2px;margin-top:1px"></div><div style="display:flex;gap:2px;margin-top:1px">${[0,1,2,3].map(()=>'<div class="wl" style="width:3px;height:3px;border-radius:50%;background:#bbb"></div>').join('')}</div></div>
-    <div class="wi" style="flex:2.4;min-height:0;margin:0 -11px;border-radius:0"></div>
-    <div style="display:flex;gap:5px;flex:2;min-height:0;padding-top:2px"><div class="wsb" style="flex:.8;gap:2px">${SBH(70)}<div class="wl" style="width:92%;height:2px"></div><div class="wl" style="width:62%;height:2px"></div></div><div style="flex:2.3;display:flex;flex-direction:column;gap:3px">${L(5)}</div>${SB(2)}</div>`,
-  writer:`<div style="display:flex;flex-direction:column;gap:3px;align-items:center;padding:7px 0 6px;flex-shrink:0"><div class="wo"></div><div class="wt" style="width:66%"></div><div class="wt" style="width:44%;height:4px"></div><div class="wl" style="width:26%;margin-top:1px"></div></div><div style="display:flex;flex-direction:column;gap:3px;padding:0 15%;flex:1;min-height:0">${L(6)}</div>`,
-  story:`<div style="flex:2.1;min-height:0;display:flex;margin:-11px -11px 0;background:#0b0b0f;padding:8px 10px;gap:8px"><div style="flex:1;display:flex;align-items:center"><div class="wi" style="width:100%;height:82%"></div></div><div style="flex:1.15;display:flex;flex-direction:column;justify-content:center;gap:2px"><div class="wl" style="width:70%;height:2px;background:rgba(255,255,255,.3)"></div><div class="wl" style="width:22%;height:2px;background:var(--violet-lt);margin-top:1px"></div><div class="wl" style="width:92%;height:4px;background:#fff"></div><div class="wl" style="width:64%;height:4px;background:#fff"></div><div class="wl" style="width:88%;height:2px;background:rgba(255,255,255,.55);margin-top:1px"></div><div class="wl" style="width:50%;height:2px;background:rgba(255,255,255,.55)"></div><div style="height:1px;background:rgba(255,255,255,.18);margin:2px 0 1px"></div><div class="wl" style="width:48%;height:2px;background:rgba(255,255,255,.4)"></div><div style="display:flex;gap:2px;margin-top:1px">${[0,1,2,3].map(()=>'<div style="width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.45)"></div>').join('')}</div></div></div>
-    <div style="display:flex;flex-direction:column;gap:3px;padding:6px 20% 0;flex:1.6;min-height:0;justify-content:flex-start">${L(5)}</div>`,
-  publisher:`<div style="flex:2.3;min-height:0;margin:-11px -11px 0;padding:0 8px 6px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;background:linear-gradient(to top,rgba(10,10,25,.92),rgba(10,10,25,.35) 55%,rgba(10,10,25,.1)),linear-gradient(135deg,#7f76d8,#3b3170 70%,#1d1840)"><div style="width:22%;height:5px;border-radius:3px;background:var(--violet)"></div><div class="wl" style="width:84%;height:4px;background:#fff;margin-top:1px"></div><div class="wl" style="width:42%;height:2px;background:rgba(255,255,255,.5)"></div></div>
-    <div style="display:flex;gap:6px;flex:2.4;min-height:0;padding-top:4px"><div style="flex:2.1;display:flex;flex-direction:column;gap:3px">${L(6)}</div>
-    <div class="wsb" style="flex:1;gap:2px;min-height:0">
-      ${SBH(62)}${SBROW()}${SBROW()}
-      ${SBH(55)}${SBROW()}${SBROW()}
-      ${SBH(48)}
-      <div style="display:flex;flex-wrap:wrap;gap:2px">${[34,26,30,22,28].map(w=>`<div class="w" style="width:${w}%;height:5px;border:1px solid #dcdad4"></div>`).join('')}</div>
-    </div></div>`
-};
+/* Blog index and post previews reuse the product's template-picker art, so the
+   landing page and the in-app picker always show the same thing. Footer blocks
+   are wireframes. All markup is static and author-authored; no user input
+   reaches these strings. */
 const TPL: { collection: [string,string,string][]; post: [string,string,string][] } = {
   collection:[
     ['showcase','The Showcase','Large alternating images'],
@@ -84,6 +38,14 @@ const B: Record<string, string> = {
     <div style="width:1px;align-self:stretch;background:#dcdad4"></div>
     <div style="flex:1;display:flex;flex-direction:column;gap:4px;padding-left:12px;align-items:flex-end"><div class="wl" style="width:22%;height:2px"></div><div class="wl a" style="width:30%;height:2px"></div><div class="wt" style="width:92%;height:4px"></div></div></div>`
 };
+// Same photos as the template previews, in place of the gradient squares.
+const FOOTER_PHOTOS = ['bride-window', 'venue-barn', 'couple-walking', 'wedding-arch-dusk', 'reception-table', 'forest-sunbeams', 'golden-hour-ceremony'];
+for (const k of Object.keys(B)) {
+  let i = 0;
+  B[k] = B[k].replace(/<div class="wi" style="/g, () =>
+    `<div class="wi" style="background:#E9E5DF url(/template-photos/${FOOTER_PHOTOS[i++ % FOOTER_PHOTOS.length]}.webp) center/cover no-repeat;`);
+}
+
 const BLK: [string,string,string][] = [
   ['author','Author Profile','Photo, bio, and social links'],
   ['related','Related Posts','What to read next, by tag'],
@@ -95,9 +57,9 @@ const BLK: [string,string,string][] = [
 
 type GroupKey = 'collection' | 'post' | 'footer';
 
-const GROUPS: { key: GroupKey; label: string; hint: string; items: [string, string, string][]; thumbs: Record<string, string>; blk?: boolean }[] = [
-  { key: 'collection', label: 'Blog index', hint: 'How the page listing your posts looks', items: TPL.collection, thumbs: T },
-  { key: 'post', label: 'Post page', hint: 'How each article looks', items: TPL.post, thumbs: T },
+const GROUPS: { key: GroupKey; label: string; hint: string; items: [string, string, string][]; thumbs: Record<string, string>; blk?: boolean; art?: boolean }[] = [
+  { key: 'collection', label: 'Blog index', hint: 'How the page listing your posts looks', items: TPL.collection, thumbs: TEMPLATE_PICKER_ART, art: true },
+  { key: 'post', label: 'Post page', hint: 'How each article looks', items: TPL.post, thumbs: TEMPLATE_PICKER_ART, art: true },
   { key: 'footer', label: 'Footer blocks', hint: 'Stack any of these under a post or collection', items: BLK, thumbs: B, blk: true },
 ];
 
@@ -151,6 +113,17 @@ const STYLES = `.bb-templates{
   .bb-templates .tp-panel{gap:28px;margin-top:28px}
 }
 
+/* product preview art (same as the in-app template picker) */
+.bb-templates .tp-art-big{width:100%;max-width:640px}
+.bb-templates .tp-art-mini{width:84px;flex-shrink:0;pointer-events:none}
+.bb-templates .tp-art{background:#fff;border:1px solid #e6e4de;border-radius:10px;overflow:hidden;box-shadow:0 8px 26px rgba(20,18,16,.08)}
+.bb-templates .tp-art-mini .tp-art{border-radius:6px;box-shadow:none}
+.bb-templates .tp-art-bar{display:flex;align-items:center;gap:4px;height:22px;padding:0 10px;background:#f1efeb;border-bottom:1px solid #e4e2dc}
+.bb-templates .tp-art-bar i{width:6px;height:6px;border-radius:50%;background:#d6d2cb}
+.bb-templates .tp-art-bar span{margin-left:8px;font-size:10px;color:#6b6b6b}
+.bb-templates .tp-art-page{position:relative;aspect-ratio:1280/1000;overflow:hidden;background:#fff}
+.bb-templates .tp-art-scale{position:absolute;top:0;left:0;width:1280px;height:1000px;transform-origin:top left;pointer-events:none;user-select:none}
+
 /* wireframe thumbnail shell */
 .bb-templates .tp-thumb{aspect-ratio:4/3;background:#fff;border:1px solid #e6e6ec;border-radius:9px;padding:11px;overflow:hidden;box-sizing:border-box;
   box-shadow:0 8px 26px rgba(91,79,232,.09);display:flex;flex-direction:column;gap:5px}
@@ -169,6 +142,36 @@ const STYLES = `.bb-templates{
 .bb-templates .wsb{display:flex;flex-direction:column;gap:3px}
 .bb-templates .wov{background:linear-gradient(to top,rgba(18,14,48,.78),rgba(18,14,48,0) 62%),linear-gradient(135deg,#ded8f8,#9b90ec);border-radius:2px;display:flex;flex-direction:column;justify-content:flex-end;padding:4px;gap:2px}`;
 
+/** A product template preview (1280x1000 page) scaled to the box's width. */
+function Art({ html, show, url }: { html: string; show: boolean; url?: boolean }) {
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const fit = () => setScale(el.clientWidth / 1280);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div className="tp-art" aria-hidden="true">
+      {url && (
+        <div className="tp-art-bar">
+          <i /><i /><i />
+          <span>mayaokonkwo.com/journal</span>
+        </div>
+      )}
+      <div className="tp-art-page" ref={pageRef}>
+        {show && scale > 0 && (
+          <div className="tp-art-scale" style={{ transform: `scale(${scale})` }} dangerouslySetInnerHTML={{ __html: html }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Thumb({ html, blk }: { html: string; blk?: boolean }) {
   return <div className={blk ? 'tp-thumb blk' : 'tp-thumb'} aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }} />;
 }
@@ -182,6 +185,9 @@ export default function TemplatesSection() {
   const [tab, setTab] = useState<GroupKey>('collection');
   const [sel, setSel] = useState<Record<GroupKey, number>>({ collection: 0, post: 0, footer: 0 });
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The previews pull in photos; wait until the section is close to view.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const near = useInView(sectionRef, { once: true, margin: '600px 0px' });
 
   const groupIndex = GROUPS.findIndex((g) => g.key === tab);
   const group = GROUPS[groupIndex];
@@ -202,7 +208,7 @@ export default function TemplatesSection() {
   };
 
   return (
-    <section id="templates" className="bb-templates bg-white py-12 md:py-[100px] overflow-hidden">
+    <section ref={sectionRef} id="templates" className="bb-templates bg-white py-12 md:py-[100px] overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <div className="tp-wrap">
         <motion.div
@@ -254,13 +260,17 @@ export default function TemplatesSection() {
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={`${tab}-${key}`}
-                  className={group.blk ? 'tp-big blk' : 'tp-big'}
+                  className={group.art ? 'tp-art-big' : group.blk ? 'tp-big blk' : 'tp-big'}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <Thumb html={group.thumbs[key]} blk={group.blk} />
+                  {group.art ? (
+                    <Art html={group.thumbs[key]} show={near} url />
+                  ) : (
+                    <Thumb html={group.thumbs[key]} blk={group.blk} />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -285,9 +295,15 @@ export default function TemplatesSection() {
                 aria-pressed={i === idx}
                 onClick={() => setSel((s) => ({ ...s, [tab]: i }))}
               >
-                <span className={group.blk ? 'tp-mini blk' : 'tp-mini'}>
-                  <Thumb html={group.thumbs[k]} blk={group.blk} />
-                </span>
+                {group.art ? (
+                  <span className="tp-art-mini">
+                    <Art html={group.thumbs[k]} show={near} />
+                  </span>
+                ) : (
+                  <span className={group.blk ? 'tp-mini blk' : 'tp-mini'}>
+                    <Thumb html={group.thumbs[k]} blk={group.blk} />
+                  </span>
+                )}
                 <span>
                   <span className="tp-opt-name">{n}</span>
                   <span className="tp-opt-desc">{d}</span>
