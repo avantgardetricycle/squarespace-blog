@@ -53,18 +53,18 @@ const F: Feat[] = [
   {id:'search',c:'nav',n:'Post Search',i:'search',d:"Full-text search across all your posts with live results and keyword highlights. So nothing you've ever written gets lost in your archive.",s:'Search'},
   {id:'toc',c:'nav',n:'Table of Contents',i:'toc',d:'Auto-generated from your post headings, and it follows the reader down the page. Three styles to choose from — numbered, connected dots, or bookmark.',s:'Table of Contents'},
   {id:'filters',c:'nav',n:'Tags & Category Filters',i:'filters',d:"Filter by category or tag — as a row above your post grid, as a chip cloud in the sidebar, or both. "+"Readers narrow a long archive down to exactly what they came for.",s:'Tags & Filters'},
-  {id:'related',c:'nav',n:'Related Posts',i:'related',d:'Automatically show readers what to read next, based on tags and categories. More time on site, less work for you.',s:'Related'},
+  {id:'related',c:'nav',n:'Related Posts',i:'related',d:'At the end of every post, automatically show readers what to read next, based on tags and categories. More time on site, less work for you.',s:'Related'},
   {id:'popular',c:'nav',n:'Popular Posts',i:'popular',d:'Surface your best-performing posts automatically, ranked by real reader data. Your strongest work keeps working.',s:'Popular'},
   {id:'social',c:'nav',n:'Social Sharing',i:'social',d:'One-click share buttons for X, Facebook, Pinterest, Reddit, WhatsApp, LinkedIn and more — right on every post. The platforms your readers actually asked for.',s:'Sharing'},
-  {id:'crumbs',c:'nav',n:'Breadcrumbs',i:'crumbs',d:'Show readers exactly where they are and give them an easy path back. A small detail that makes a real difference to navigation and SEO.',s:'Breadcrumbs'},
+  {id:'crumbs',c:'nav',n:'Breadcrumbs',i:'crumbs',d:'Show readers exactly where they are — blog, category, post — with a link at every step back. A small detail that makes a real difference to navigation and SEO.',s:'Breadcrumbs'},
   {id:'prevnext',c:'nav',n:'Previous / Next Post',i:'prevnext',d:'End every post with a link to the one before and the one after. Readers keep moving through your archive instead of stopping at the bottom.',s:'Prev / Next'},
-  {id:'page',c:'nav',n:'Pagination',i:'page',d:"Replace Squarespace's bare arrows with real pagination — numbered pages, or a load-more button that keeps readers on the page. Either way they see how much archive is left.",s:'Pagination'},
+  {id:'page',c:'nav',n:'Pagination',i:'page',d:"Replace Squarespace's bare arrows with real pagination — numbered pages, or a load-more button that keeps readers on the page, set per blog. Either way they see how much archive is left.",s:'Pagination'},
   {id:'progress',c:'reader',n:'Scroll Progress Bar',i:'progress',d:'A thin bar across the top of every post that fills as readers scroll. Subtle, satisfying, and a quiet nudge to keep going.',s:'Progress Bar'},
-  {id:'time',c:'reader',n:'Reading Time',i:'time',d:'Auto-calculate and display estimated reading time. Sets expectations before readers click in.',s:'Reading Time'},
+  {id:'time',c:'reader',n:'Reading Time',i:'time',d:'Auto-calculate and display estimated reading time, on the post itself and on every card in the grid. Sets expectations before readers click in.',s:'Reading Time'},
   {id:'updated',c:'reader',n:'Last Updated Date',i:'updated',isNew:true,d:"Show readers when you last revised a post, right beside the date you published it. It uses the edit date Squarespace already keeps, so there's nothing to maintain. Switch it on from your dashboard.",s:'Updated Date'},
   {id:'comments',c:'reader',n:'Comments',i:'comments',d:'A real comment system on your Squarespace blog — threaded replies, likes, and a full moderation dashboard. Approve, hide, or mark spam, and tell verified subscribers from anonymous readers at a glance.',s:'Comments'},
-  {id:'authors',c:'pub',n:'Multiple Authors',i:'authors',d:'Publish posts under any author name. Add multiple authors to a single post, or assign different contributors across your blog — no workarounds needed.',s:'Multi-Author'},
-  {id:'profiles',c:'pub',n:'Author Profiles',i:'profiles',d:'Display a rich author profile in the sidebar of every post — name, photo, bio, and social links. Write the bio with bold, italics, links and lists. Builds trust with readers.',s:'Author Profiles'},
+  {id:'authors',c:'pub',n:'Multiple Authors',i:'authors',d:'Publish posts under any author name. Add multiple authors to a single post, with every name in the byline, or assign different contributors across your blog — no workarounds needed.',s:'Multi-Author'},
+  {id:'profiles',c:'pub',n:'Author Profiles',i:'profiles',d:'Display a rich author profile on every post — a full block at the foot of the post or a compact one in the sidebar — with name, photo, bio, and social links. Write the bio with bold, italics, links and lists. Builds trust with readers.',s:'Author Profiles'},
   {id:'featured',c:'pub',n:'Featured Posts',i:'featured',d:"Mark any post as Featured and it'll appear at the top of your blog as a hero, no matter when it was published.",s:'Featured'},
   {id:'sorting',c:'pub',n:'Advanced Post Sorting',i:'sorting',d:'Let readers reorder your archive themselves — by date, A–Z, or by what other readers are actually reading. One control, instant results.',s:'Sorting'},
   {id:'paywall',c:'growth',n:'Paywall & Memberships',i:'paywall',d:"Put posts behind your Squarespace membership with a proper paywall overlay for logged-out readers. It stays in sync with Squarespace's own membership settings. BetterBlog takes no cut; Squarespace's own fees apply.",s:'Paywall'},
@@ -201,7 +201,6 @@ function stage(f: Feat): string {
         <div class="sb-row"><div class="sb-th" style="width:26px;height:20px;background:linear-gradient(135deg,#d4f0e8,#a8d8c4)"></div><div class="sb-tt">On slow living</div></div>
         <div class="sb-h">Categories</div><div class="sb-cat">Lifestyle <i>14</i></div><div class="sb-cat">Travel <i>7</i></div></div></div>`,
     filters:`<div style="width:100%;max-width:730px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Put them above the grid, in the sidebar, or both</div>
       <div style="display:grid;grid-template-columns:1fr 168px;gap:14px;align-items:start">
 
         <div>
@@ -239,7 +238,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     toc:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Three styles, same auto-generated headings</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
         ${['Numbered','Connected dots','Bookmark'].map((label,idx)=>`
           <div>
@@ -269,7 +267,6 @@ function stage(f: Feat): string {
         <span style="font-size:.65rem;color:var(--violet);font-weight:700">62% read</span></div>
       ${blogNav}<div style="padding:16px 18px"><div class="af-hero" style="height:84px"><span style="font-size:.9rem">Finding balance in a busy creative life</span></div>${lines(8)}</div>`,
     time:`<div style="width:100%;max-width:740px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">On the post itself, and on every card in the grid</div>
       <div style="display:grid;grid-template-columns:1fr 236px;gap:16px;align-items:start">
         <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:18px 20px 16px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
           <div style="text-align:center">
@@ -314,7 +311,6 @@ function stage(f: Feat): string {
         <div style="font-size:.6rem;color:var(--mid)">${label}</div></div>`).join('')}
     </div>`,
     updated:`<div style="width:100%;max-width:640px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">In the post header, next to the publish date</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:22px 24px 18px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="text-align:center">
           <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">GUIDES</div>
@@ -326,7 +322,6 @@ function stage(f: Feat): string {
         </div>
         ${lines(4)}
       </div>
-      <div style="font-size:.56rem;color:#a5a5ae;margin-top:10px;text-align:center">The date appears in each reader's own local format</div>
     </div>`,
     social:`${blogNav}
       <div style="position:relative;height:138px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 18px 13px;
@@ -349,7 +344,6 @@ function stage(f: Feat): string {
       </div>
       <div style="padding:14px 18px 16px">${lines(6)}</div>`,
     authors:`<div style="width:100%;max-width:640px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Assign as many authors to a post as you need &mdash; every name shows in the byline</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:0 0 18px;box-shadow:0 8px 26px rgba(91,79,232,.09);overflow:hidden">
         <div style="height:74px;background:linear-gradient(135deg,#cfc7f5,#9b90ec)"></div>
         <div style="padding:16px 22px 0">
@@ -364,7 +358,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     profiles:`<div style="width:100%;max-width:730px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">A full profile block at the foot of the post, or a compact one in the sidebar</div>
       <div style="display:grid;grid-template-columns:1fr 194px;gap:15px;align-items:start">
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:15px 17px 17px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="font-size:.46rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#b4b4be;margin-bottom:11px">In the post footer</div>
@@ -409,7 +402,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     sorting:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Readers reorder the archive themselves, right above the post grid</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:14px 16px 16px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="position:relative;display:flex;justify-content:flex-end;margin-bottom:10px;z-index:2">
           <div>
@@ -438,7 +430,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     featured:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Mark any post Featured and it's pulled to the top of the blog as a hero</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="position:relative;height:148px;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:0 16px 14px;margin-bottom:14px;
           background:linear-gradient(to top,rgba(16,12,42,.9),rgba(16,12,42,.45) 55%,rgba(16,12,42,.12)),linear-gradient(135deg,#8f86f0,#2e2660)">
@@ -463,7 +454,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     crumbs:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Blog name → category → post title, linked the whole way back</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:20px 22px 0;box-shadow:0 8px 26px rgba(91,79,232,.09);overflow:hidden">
         <div style="text-align:center;font-size:.62rem;color:#8e8e98;line-height:1.4;margin-bottom:16px">
           <span>Sarah Clarke</span>
@@ -489,7 +479,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     prevnext:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Sits at the bottom of every post, pulling the real titles on either side of it</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:17px 18px 18px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="opacity:.5;margin-bottom:15px">${lines(2)}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;border:1px solid #e6e4df;border-radius:8px;overflow:hidden">
@@ -507,7 +496,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     page:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Two modes, set per blog &mdash; numbered pages or load more</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         ${[['Numbered pages',`
             <div style="display:flex;gap:5px;align-items:center;justify-content:center;margin-bottom:9px">
@@ -616,7 +604,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     related:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Appears at the end of a post, picked from your tags and categories</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:16px 17px 17px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="height:6px;width:26%;background:#ececec;border-radius:3px;margin-bottom:4px"></div>
         <div style="height:4px;width:40%;background:#f5f5f5;border-radius:3px;margin-bottom:16px"></div>
@@ -932,11 +919,77 @@ const STYLES = `.bb-features{
 .bb-features .b-pub{background:var(--amber-f);color:var(--amber)}
 .bb-features .b-analytics{background:var(--slate-f);color:var(--slate)}
 .bb-features .b-growth{background:var(--plum-f);color:var(--plum)}
-.bb-features .ex-stage{flex:1;padding:22px;background:#f5f5f7;min-height:380px}
+.bb-features .ex-stage{flex:none;padding:22px;background:#f5f5f7;min-height:380px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box}
+.bb-features .ex-fit{width:100%;flex-shrink:0;transform-origin:center center}
+.bb-features .ex-fit.shell{width:760px}
+.bb-features .ex-fit.shell>.stage-mb{width:760px;height:400px;position:relative;box-sizing:border-box}
+.bb-features .ex-fit.shell>.stage-mb::after{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;background:linear-gradient(to bottom,rgba(255,255,255,0),#fff);pointer-events:none}
 .bb-features .stage-mb{border:1px solid #dde;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 10px 36px rgba(91,79,232,.11)}
 .bb-features .hl{outline:2px solid var(--violet);outline-offset:2px;border-radius:5px}
 .bb-features .cal{display:inline-flex;align-items:center;gap:5px;font-size:.5rem;font-weight:600;color:var(--violet);
   background:var(--violet-f);padding:3px 9px;border-radius:100px;margin-bottom:7px}`;
+
+/**
+ * Every preview sits in a box of the same height. Browser mock-ups are a fixed
+ * window (SHELL_W x SHELL_H, cut off at the bottom like a real browser) scaled
+ * to fit, so they are always the same size and never touch the box edges.
+ * Smaller diagrams are scaled to fill the box (up to 1.6x) and centered. On
+ * phones everything reflows at its natural size so text stays readable.
+ */
+const SHELL_W = 760;
+const SHELL_H = 400;
+const STAGE_H = 470;
+
+function FitStage({ html }: { html: string }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState<{ scale: number; shell: boolean; height?: number }>({ scale: 1, shell: false });
+
+  useEffect(() => {
+    const box = boxRef.current;
+    const inner = innerRef.current;
+    if (!box || !inner) return;
+    const measure = () => {
+      const child = inner.firstElementChild as HTMLElement | null;
+      if (!child) return;
+      const shell = child.classList.contains('stage-mb');
+      const cs = getComputedStyle(box);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const availW = box.clientWidth - padX;
+      const phone = box.clientWidth < 700;
+      if (shell && !phone) {
+        const s = Math.min(availW / SHELL_W, (STAGE_H - padY) / SHELL_H, 1);
+        setFit({ scale: s, shell: true, height: STAGE_H });
+        return;
+      }
+      if (phone) {
+        setFit({ scale: 1, shell: false });
+        return;
+      }
+      // offsetWidth/offsetHeight ignore transforms, so no need to reset the scale.
+      const w = Math.max(...Array.from(inner.children).map((c) => (c as HTMLElement).offsetWidth), 1);
+      const h = inner.offsetHeight || 1;
+      const s = Math.min(availW / w, (STAGE_H - padY) / h, 1.6);
+      setFit({ scale: Math.round(s * 100) / 100, shell: false, height: STAGE_H });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [html]);
+
+  return (
+    <div className="ex-stage" ref={boxRef} style={{ height: fit.height, minHeight: fit.shell ? 0 : undefined }}>
+      <div
+        className={fit.shell ? 'ex-fit shell' : 'ex-fit'}
+        ref={innerRef}
+        style={{ transform: fit.scale !== 1 ? `scale(${fit.scale})` : undefined }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  );
+}
 
 export function FeatureGrid() {
   const [active, setActive] = useState<string>('sidebars');
@@ -1053,7 +1106,7 @@ export function FeatureGrid() {
             </div>
             <div className={`ex-bd ${cat.badge}`}>{cat.label}</div>
           </div>
-          <div className="ex-stage" dangerouslySetInnerHTML={{ __html: stage(feature) }} />
+          <FitStage html={stage(feature)} />
         </div>
 
         <div className="fg-foot">
