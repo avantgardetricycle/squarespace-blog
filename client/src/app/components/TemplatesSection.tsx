@@ -22,29 +22,65 @@ const TPL: { collection: [string,string,string][]; post: [string,string,string][
 };
 
 /* ── Footer blocks ── */
+/* Footer blocks, drawn like the template previews (same fonts, colors and
+   photos) at a post column's real width (760px), using the renderer's layout:
+   "More to Read" is a 3-column grid of 16:10 cards; Popular Posts is a list
+   with square thumbnails; Previous / Next has no images. */
+const PH = (n: string) => `background:#E9E5DF url(/template-photos/${n}.webp) center / cover no-repeat`;
+const HEAD = (t: string) => `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding-bottom:8px;border-bottom:1px solid #ECE8E2;margin-bottom:16px">${t}</div>`;
+const CAT = (t: string) => `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#A0522D">${t}</div>`;
+const SERIF = "font-family:'DM Serif Display',serif";
+const BLOCK = (inner: string) => `<div style="width:760px;box-sizing:border-box;padding:28px 32px;background:#fff;font-family:'DM Sans',sans-serif;color:#2B2723">${inner}</div>`;
 const B: Record<string, string> = {
-  author:`<div style="display:flex;gap:8px;align-items:center"><div class="wi" style="width:26px;height:26px;border-radius:50%;flex-shrink:0"></div>
-    <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div class="wl a" style="width:28%;height:2px"></div><div class="wt" style="width:46%;height:4px"></div><div class="wl" style="width:92%"></div><div class="wl" style="width:64%"></div>
-    <div style="display:flex;gap:3px;margin-top:2px">${[0,1,2].map(()=>'<div style="width:5px;height:5px;border-radius:50%;background:#c9c7c0"></div>').join('')}</div></div></div>`,
-  related:`<div style="display:flex;flex-direction:column;gap:6px"><div class="wt" style="width:30%;height:5px"></div>
-    <div style="display:flex;gap:6px">${[0,1,2].map(()=>`<div style="flex:1;display:flex;flex-direction:column;gap:3px"><div class="wi" style="height:22px;border-radius:3px"></div><div class="wl a" style="width:52%;height:2px"></div><div class="wt" style="width:96%;height:4px"></div><div class="wt" style="width:62%;height:4px"></div></div>`).join('')}</div></div>`,
-  popular:`<div style="display:flex;flex-direction:column;gap:5px"><div class="wl a" style="width:34%;height:3px"></div>
-    ${[0,1,2].map(()=>`<div style="display:flex;gap:5px;align-items:center"><div class="wi" style="width:18px;height:14px;flex-shrink:0"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div class="wl" style="width:86%;height:3px;background:#dcdce4"></div><div class="wl" style="width:50%"></div></div></div>`).join('')}</div>`,
-  email:`<div style="display:flex;gap:10px;align-items:center"><div class="wt" style="flex:1;width:auto;height:5px"></div>
-    <div style="display:flex;gap:5px;flex:1.25;align-items:center"><div class="w" style="flex:1;height:12px;border:1px solid #d8d6cf;border-radius:3px"></div><div style="width:38%;height:12px;background:var(--violet);border-radius:100px"></div></div></div>`,
-  magnet:`<div style="display:flex;flex-direction:column;gap:4px"><div class="wt" style="width:34%;height:5px"></div><div class="wl" style="width:60%"></div>
-    <div style="display:flex;gap:5px;align-items:center;margin-top:4px"><div class="w" style="flex:1;height:12px;border:1px solid #d8d6cf;border-radius:3px"></div><div style="width:26%;height:12px;background:var(--violet);border-radius:100px"></div></div></div>`,
-  prevnext:`<div style="display:flex;align-items:center"><div style="flex:1;display:flex;flex-direction:column;gap:4px;padding-right:12px"><div class="wl" style="width:30%;height:2px"></div><div class="wl a" style="width:38%;height:2px"></div><div class="wt" style="width:86%;height:4px"></div></div>
-    <div style="width:1px;align-self:stretch;background:#dcdad4"></div>
-    <div style="flex:1;display:flex;flex-direction:column;gap:4px;padding-left:12px;align-items:flex-end"><div class="wl" style="width:22%;height:2px"></div><div class="wl a" style="width:30%;height:2px"></div><div class="wt" style="width:92%;height:4px"></div></div></div>`
+  author: BLOCK(`${HEAD('About the author')}
+    <div style="display:flex;gap:20px;align-items:flex-start">
+      <div style="width:84px;height:84px;border-radius:50%;flex-shrink:0;${PH('bride-window')}"></div>
+      <div><div style="${SERIF};font-size:24px;line-height:1.2;margin-bottom:6px">Maya Okonkwo</div>
+        <div style="font-size:15px;line-height:1.55;color:#5A534C;margin-bottom:12px">Bay Area wedding and portrait photographer. I write about light, planning, and the parts of the day nobody warns you about.</div>
+        <div style="display:flex;gap:14px;font-size:13px;color:#766D64">${['Instagram', 'Pinterest', 'Website'].map((x) => `<span style="border-bottom:1px solid #DCD6CE">${x}</span>`).join('')}</div></div>
+    </div>`),
+  related: BLOCK(`${HEAD('More to read')}
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+      ${[['venue-barn', 'Venues', 'Small Oakland Venues That Feel Like a Dinner Party', 'Six spaces under 100 guests where nobody has to shout.'],
+         ['couple-walking', 'Engagements', 'What to Wear to Your Engagement Session', 'Texture over pattern, every time.'],
+         ['reception-table', 'Planning', 'A Shot List Your Photographer Will Actually Use', 'Keep it to the people only you know about.']]
+        .map(([ph, c, t, d]) => `<div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+          <div style="aspect-ratio:16/10;border-radius:4px;${PH(ph)}"></div>${CAT(c)}
+          <div style="${SERIF};font-size:21px;line-height:1.3;margin-top:-4px">${t}</div>
+          <div style="font-size:13.6px;color:#555;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</div></div>`).join('')}
+    </div>`),
+  popular: BLOCK(`${HEAD('Popular posts')}
+    ${[['forest-sunbeams', 'Elopements: Small Days, Big Feelings', 'Aug 9, 2026 · 5 min read'],
+       ['wedding-arch-dusk', 'Ana &amp; Theo: A Rainy Day at the Redwood Grange', 'Sep 3, 2026 · 4 min read'],
+       ['golden-hour-ceremony', 'How to Plan a Golden-Hour Ceremony', 'Oct 2, 2026 · 6 min read']]
+      .map(([ph, t, m]) => `<div style="display:flex;gap:14px;align-items:center;margin-bottom:14px">
+        <div style="width:80px;height:80px;flex-shrink:0;border-radius:4px;${PH(ph)}"></div>
+        <div><div style="${SERIF};font-size:18px;line-height:1.2;margin-bottom:5px">${t}</div>
+          <div style="font-size:12px;color:#888">${m}</div></div></div>`).join('')}`),
+  email: BLOCK(`<div style="display:flex;gap:28px;align-items:center">
+      <div style="flex:1"><div style="${SERIF};font-size:26px;line-height:1.2;margin-bottom:6px">Get the planning notes</div>
+        <div style="font-size:15px;line-height:1.5;color:#5A534C">One planning email a month: light, timelines, and venues worth seeing.</div></div>
+      <div style="flex:0 0 300px"><div style="height:44px;box-sizing:border-box;border:1px solid #DCD6CE;border-radius:4px;display:flex;align-items:center;padding:0 14px;font-size:15px;color:#766D64;margin-bottom:8px">you@email.com</div>
+        <div style="height:44px;background:#A0522D;color:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">Subscribe</div></div>
+    </div>`),
+  magnet: BLOCK(`<div style="display:flex;gap:24px;align-items:center">
+      <div style="flex:0 0 150px;aspect-ratio:3/4;border-radius:4px;box-shadow:0 8px 22px rgba(43,39,35,.18);${PH('golden-hour-ceremony')};position:relative">
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:10px;background:linear-gradient(to top,rgba(20,14,8,.75),rgba(20,14,8,0));border-radius:0 0 4px 4px;${SERIF};color:#fff;font-size:15px;line-height:1.15">The Golden-Hour Timeline</div></div>
+      <div style="flex:1">${CAT('Free download')}
+        <div style="${SERIF};font-size:26px;line-height:1.2;margin:6px 0">The golden-hour timeline</div>
+        <div style="font-size:15px;line-height:1.5;color:#5A534C;margin-bottom:14px">One page. Work back from sunset to plan your ceremony and portraits.</div>
+        <div style="display:flex;gap:8px"><div style="flex:1;height:44px;box-sizing:border-box;border:1px solid #DCD6CE;border-radius:4px;display:flex;align-items:center;padding:0 14px;font-size:15px;color:#766D64">you@email.com</div>
+          <div style="height:44px;padding:0 20px;background:#A0522D;color:#fff;border-radius:4px;display:flex;align-items:center;font-size:15px;font-weight:600">Send it to me</div></div></div>
+    </div>`),
+  prevnext: BLOCK(`<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #ECE8E2;border-bottom:1px solid #ECE8E2">
+      <div style="padding:22px 24px 22px 0;border-right:1px solid #ECE8E2">
+        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#766D64;margin-bottom:8px">&larr; Previous</div>${CAT('Venues')}
+        <div style="${SERIF};font-size:22px;line-height:1.25;margin-top:6px">Small Oakland Venues That Feel Like a Dinner Party</div></div>
+      <div style="padding:22px 0 22px 24px;text-align:right">
+        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#766D64;margin-bottom:8px">Next &rarr;</div>${CAT('Engagements')}
+        <div style="${SERIF};font-size:22px;line-height:1.25;margin-top:6px">What to Wear to Your Engagement Session</div></div>
+    </div>`),
 };
-// Same photos as the template previews, in place of the gradient squares.
-const FOOTER_PHOTOS = ['bride-window', 'venue-barn', 'couple-walking', 'wedding-arch-dusk', 'reception-table', 'forest-sunbeams', 'golden-hour-ceremony'];
-for (const k of Object.keys(B)) {
-  let i = 0;
-  B[k] = B[k].replace(/<div class="wi" style="/g, () =>
-    `<div class="wi" style="background:#E9E5DF url(/template-photos/${FOOTER_PHOTOS[i++ % FOOTER_PHOTOS.length]}.webp) center/cover no-repeat;`);
-}
 
 const BLK: [string,string,string][] = [
   ['author','Author Profile','Photo, bio, and social links'],
@@ -127,6 +163,10 @@ const STYLES = `.bb-templates{
   .bb-templates .tp-cap-desc{font-size:.85rem}
 }
 
+/* footer blocks: a 760px block scaled to fit */
+.bb-templates .tp-block{position:relative;overflow:hidden;border:1px solid #e6e4de;border-radius:10px;background:#fff;box-shadow:0 8px 26px rgba(20,18,16,.08)}
+.bb-templates .tp-art-mini .tp-block{border-radius:6px;box-shadow:none}
+.bb-templates .tp-block-scale{position:absolute;top:0;left:0;transform-origin:top left;pointer-events:none;user-select:none}
 /* product preview art (same as the in-app template picker) */
 .bb-templates .tp-art-big{width:100%;max-width:640px}
 .bb-templates .tp-art-mini{width:84px;flex-shrink:0;pointer-events:none}
@@ -186,9 +226,33 @@ function Art({ html, show, url }: { html: string; show: boolean; url?: boolean }
   );
 }
 
-function Thumb({ html, blk }: { html: string; blk?: boolean }) {
-  return <div className={blk ? 'tp-thumb blk' : 'tp-thumb'} aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }} />;
+/** A footer block (760px wide) scaled to the box width; height follows. */
+function BlockArt({ html, show }: { html: string; show: boolean }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState({ scale: 0, height: 0 });
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const measure = () => {
+      const s = box.clientWidth / 760;
+      const h = innerRef.current ? innerRef.current.offsetHeight : 0;
+      setFit({ scale: s, height: Math.ceil(h * s) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [html, show]);
+  return (
+    <div className="tp-block" ref={boxRef} aria-hidden="true" style={{ height: fit.height || undefined }}>
+      {show && (
+        <div ref={innerRef} className="tp-block-scale" style={{ transform: `scale(${fit.scale || 0.0001})` }} dangerouslySetInnerHTML={{ __html: html }} />
+      )}
+    </div>
+  );
 }
+
 
 /**
  * One template type at a time (tabs), one large preview, and a short list to
@@ -294,7 +358,7 @@ export default function TemplatesSection() {
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={`${tab}-${key}`}
-                  className={group.art ? 'tp-art-big' : group.blk ? 'tp-big blk' : 'tp-big'}
+                  className={group.art ? 'tp-art-big' : 'tp-art-big tp-block-big'}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
@@ -303,7 +367,7 @@ export default function TemplatesSection() {
                   {group.art ? (
                     <Art html={group.thumbs[key]} show={near} url />
                   ) : (
-                    <Thumb html={group.thumbs[key]} blk={group.blk} />
+                    <BlockArt html={group.thumbs[key]} show={near} />
                   )}
                 </motion.div>
               </AnimatePresence>
@@ -334,8 +398,8 @@ export default function TemplatesSection() {
                     <Art html={group.thumbs[k]} show={near} />
                   </span>
                 ) : (
-                  <span className={group.blk ? 'tp-mini blk' : 'tp-mini'}>
-                    <Thumb html={group.thumbs[k]} blk={group.blk} />
+                  <span className="tp-art-mini">
+                    <BlockArt html={group.thumbs[k]} show={near} />
                   </span>
                 )}
                 <span>
