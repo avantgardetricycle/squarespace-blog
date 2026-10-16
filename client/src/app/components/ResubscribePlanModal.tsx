@@ -21,12 +21,16 @@ import {
   annualSavingsPercent,
   type PublicPlanKey,
 } from "@/lib/pricingTiers";
+import { betaChargeWaitsUntilAccessEnds, formatSubscriptionDate } from "@/lib/subscription";
 
 type ResubscribePlanModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultPlanKey?: string | null;
   defaultCadence?: string | null;
+  /** Active beta access: checkout adds a card and keeps the tester on the chosen plan. */
+  subscribeDuringBeta?: boolean;
+  betaAccessUntil?: string | null;
 };
 
 export function ResubscribePlanModal({
@@ -34,6 +38,8 @@ export function ResubscribePlanModal({
   onOpenChange,
   defaultPlanKey,
   defaultCadence,
+  subscribeDuringBeta = false,
+  betaAccessUntil = null,
 }: ResubscribePlanModalProps) {
   const [isAnnual, setIsAnnual] = useState(defaultCadence !== "monthly");
   const [stripePrices, setStripePrices] = useState<PublicPlanPricesResponse | null>(null);
@@ -77,6 +83,10 @@ export function ResubscribePlanModal({
       ]
     : PUBLIC_PRICING_TIERS;
 
+  const chargeLater = subscribeDuringBeta && betaChargeWaitsUntilAccessEnds(betaAccessUntil);
+  const accessUntilLabel = formatSubscriptionDate(betaAccessUntil);
+  const chooseLabel = subscribeDuringBeta ? "Subscribe" : "Resubscribe";
+
   const handleChoosePlan = async (planKey: PublicPlanKey | "studio") => {
     if (checkoutPlanKey || pricesLoadError || !stripePrices) return;
     setCheckoutPlanKey(planKey);
@@ -105,8 +115,11 @@ export function ResubscribePlanModal({
             Choose a plan
           </DialogTitle>
           <DialogDescription className="text-[#6b6b6b]">
-            Resubscribe to restore BetterBlog on your live site. You&apos;ll be billed today —
-            the free trial is for new signups only.
+            {chargeLater
+              ? `Your beta access runs until ${accessUntilLabel ?? "it ends"}. Pick the plan that continues after that. You'll add a payment method now, and the first charge happens when beta access ends.`
+              : subscribeDuringBeta
+                ? "Pick a plan to continue BetterBlog. You'll add a payment method now and be billed today."
+                : "Resubscribe to restore BetterBlog on your live site. You'll be billed today — the free trial is for new signups only."}
           </DialogDescription>
         </DialogHeader>
 
@@ -188,7 +201,7 @@ export function ResubscribePlanModal({
                   )}
                 >
                   {tier.tier}
-                  {isPrevious ? " · Previous plan" : ""}
+                  {isPrevious ? (subscribeDuringBeta ? " · Current plan" : " · Previous plan") : ""}
                 </p>
                 <h3 className="font-heading text-2xl text-[#0a0a0a] mb-1.5 leading-tight">
                   {tier.name}
@@ -224,7 +237,7 @@ export function ResubscribePlanModal({
                   disabled={Boolean(checkoutPlanKey) || !stripePrices || pricesLoadError}
                   onClick={() => void handleChoosePlan(tier.planKey)}
                 >
-                  {loadingThis ? "Redirecting…" : "Resubscribe"}
+                  {loadingThis ? "Redirecting…" : chooseLabel}
                 </Button>
 
                 <div className="h-px bg-neutral-100 mb-4" />

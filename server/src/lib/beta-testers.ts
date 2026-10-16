@@ -2,8 +2,11 @@ import { randomUUID } from 'crypto'
 import prisma from '../db/index.js'
 import { generateToken, hashToken } from './auth.js'
 import { sendInviteEmailViaSendGrid } from './email.js'
+import { capacityForCheckout } from './planEntitlements.js'
+import { isRecognizedPlanKeyInput, normalizePlanKey, type PlanKey } from './planKeys.js'
 import {
   BETA_SUBSCRIPTION_SOURCE,
+  checkoutBlockReason,
   isEntitledSubscription,
   isResubscribableStatus
 } from './subscriptionStatus.js'
@@ -18,6 +21,7 @@ export type BetaTesterSummary = {
   userId: number
   email: string
   name: string | null
+  plan: string
   inviteStatus: InviteStatus
   accessUntil: string | null
   accessActive: boolean
@@ -191,6 +195,7 @@ const testerInclude = {
 
 type TesterRow = {
   userId: number
+  plan: string
   status: string
   source: string
   currentPeriodEnd: Date | null
@@ -214,6 +219,7 @@ function toSummary(row: TesterRow): BetaTesterSummary {
       hasSession: Boolean(lastLogin),
       unusedTokenExpiresAt: row.user.loginTokens[0]?.expiresAt ?? null
     }),
+    plan: row.plan,
     accessUntil: row.currentPeriodEnd?.toISOString() ?? null,
     accessActive: isEntitledSubscription(row),
     lastLoginAt: lastLogin?.toISOString() ?? null,
@@ -457,6 +463,48 @@ export async function inviteBetaTester(input: {
   })
   await sendBetaMagicLink(user.id, email)
   return { ok: true, created: true, resent: false, userId: user.id }
+}
+
+export async function updateBetaTesterPlan(
+  userId: number,
+  planKey: string
+): Promise<InviteResult> {
+  if (!isRecognizedPlanKeyInput(planKey)) {
+    return { ok: false, status: 400, error: 'Invalid plan' }
+  }
+  const normalized: PlanKey = normalizePlanKey(planKey)
+  const row = await prisma.subscription.findFirst({
+    where: { userId, source: BETA_SUBSCRIPTION_SOURCE },
+    orderBy: { createdAt: 'desc' }
+  })
+  if (!row) return { ok: false, status: 404, error: 'Beta tester not found' }
+
+  const others = await prisma.subscription.findMany({
+    where: { userId, id: { not: row.id } },
+    orderBy: { updatedAt: 'desc' }
+  })
+  if (checkoutBlockReason(others)) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'This account has a Stripe subscription. Plan changes here are only for beta access.'
+    }
+  }
+
+  if (normalizePlanKey(row.plan) !== normalized) {
+    const caps = capacityForCheckout(normalized, 0)
+    await prisma.subscription.update({
+      where: { id: row.id },
+      data: {
+        plan: normalized,
+        maxSites: caps.maxSites,
+        maxWebsites: caps.maxWebsites,
+        maxBlogsPerWebsite: caps.maxBlogsPerWebsite
+      }
+    })
+  }
+
+  return { ok: true, created: false, resent: false, userId }
 }
 
 export async function resendBetaInvite(userId: number): Promise<InviteResult> {

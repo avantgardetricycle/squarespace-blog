@@ -20,6 +20,47 @@ export function isResubscribableStatus(status: string | null | undefined): boole
   return status == null || status === 'canceled' || status === 'incomplete_expired'
 }
 
+/**
+ * Stripe rejects `trial_end` values less than 48 hours away. The extra five
+ * minutes keeps a checkout started near that boundary from being refused.
+ */
+export const BETA_CONVERSION_MIN_TRIAL_MS = 48 * 60 * 60 * 1000 + 5 * 60 * 1000
+
+/**
+ * When a beta tester subscribes, billing waits until complimentary access ends
+ * so the paid plan extends that access. Returns null when the grant has ended
+ * or is too close for Stripe to start a trial — checkout bills immediately.
+ */
+export function betaConversionTrialEnd(
+  sub: SubscriptionEntitlementInput | null | undefined,
+  now: Date = new Date()
+): Date | null {
+  if (!isBetaSubscription(sub) || !isEntitledSubscription(sub, now)) return null
+  const end = toDate(sub?.currentPeriodEnd)
+  if (!end) return null
+  if (end.getTime() < now.getTime() + BETA_CONVERSION_MIN_TRIAL_MS) return null
+  return end
+}
+
+export type CheckoutBlock = 'active_paid' | 'payment_required'
+
+/**
+ * Why Checkout must be refused. Beta grants are not a block: a tester can
+ * start a paid plan while complimentary access is still running. `subscriptions`
+ * should be newest first, but every non-beta row is considered.
+ */
+export function checkoutBlockReason(
+  subscriptions: SubscriptionEntitlementInput[],
+  now: Date = new Date()
+): CheckoutBlock | null {
+  const paid = subscriptions.filter((sub) => !isBetaSubscription(sub))
+  if (paid.some((sub) => isEntitledSubscription(sub, now))) return 'active_paid'
+  if (paid.some((sub) => !isResubscribableStatus(effectiveSubscriptionStatus(sub, now)))) {
+    return 'payment_required'
+  }
+  return null
+}
+
 /** Synthetic customer ids for beta grants. These are not Stripe customers. */
 export function isBetaCustomerId(id: string | null | undefined): boolean {
   return typeof id === 'string' && id.startsWith('beta_')

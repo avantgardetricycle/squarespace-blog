@@ -4,7 +4,8 @@ import {
   getBetaTesterUsage,
   inviteBetaTester,
   listBetaTesters,
-  resendBetaInvite
+  resendBetaInvite,
+  updateBetaTesterPlan
 } from '../lib/beta-testers.js'
 
 const router = Router()
@@ -72,6 +73,36 @@ router.post('/beta-testers/:userId/resend', requireAdminSession, async (req: Req
   } catch (err) {
     console.error('Resend beta invite error:', err)
     res.status(500).json({ error: 'Failed to resend invite' })
+  }
+})
+
+router.post('/beta-testers/:userId/plan', requireAdminSession, async (req: Request, res: Response) => {
+  const userId = paramId(req.params.userId)
+  if (userId == null) {
+    res.status(400).json({ error: 'Invalid user id' })
+    return
+  }
+  const plan = (req.body ?? {}) as { plan?: unknown }
+  if (typeof plan.plan !== 'string') {
+    res.status(400).json({ error: 'Plan is required' })
+    return
+  }
+
+  try {
+    const result = await updateBetaTesterPlan(userId, plan.plan)
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error })
+      return
+    }
+    const usage = await getBetaTesterUsage(userId)
+    if (!usage) {
+      res.status(404).json({ error: 'Beta tester not found' })
+      return
+    }
+    res.json({ tester: usage.tester })
+  } catch (err) {
+    console.error('Update beta tester plan error:', err)
+    res.status(500).json({ error: 'Failed to update plan' })
   }
 })
 
