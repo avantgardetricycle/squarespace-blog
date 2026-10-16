@@ -13,18 +13,19 @@ export function Logo({ size = "md", iconOnly = false, className, ...props }: Log
     lg: "text-4xl",
   };
 
+  // The pen is tall and narrow, so size it by height.
   const iconSizes = {
-    sm: "w-5 h-5",
-    md: "w-8 h-8",
-    lg: "w-12 h-12",
+    sm: "h-6",
+    md: "h-9",
+    lg: "h-14",
   };
 
   return (
     <div className={cn("flex items-center gap-3 font-bold tracking-tight", sizeClasses[size], className)} {...props}>
       <img 
-        src="/logo_new.png" 
-        alt="BetterBlog" 
-        className={cn("shrink-0 rounded-lg", iconSizes[size])}
+        src="/logo-pen.svg"
+        alt="BetterBlog"
+        className={cn("shrink-0 w-auto", iconSizes[size])}
       />
       {!iconOnly && (
         <span className="font-heading bg-gradient-to-r from-[#5B4FE8] to-[#8F86F0] bg-clip-text text-transparent mt-1">

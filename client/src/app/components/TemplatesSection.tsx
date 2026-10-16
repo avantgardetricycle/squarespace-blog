@@ -110,7 +110,21 @@ const STYLES = `.bb-templates{
   .bb-templates .tp-frame{padding:16px;min-height:0}
   .bb-templates .tp-big{zoom:1}
   .bb-templates .tp-big.blk{zoom:1}
-  .bb-templates .tp-panel{gap:28px;margin-top:28px}
+  .bb-templates .tp-panel{gap:14px;margin-top:20px}
+  /* Phones: the chooser becomes a swipeable strip right above the preview, so
+     picking a template and seeing it happen stay on one screen. */
+  .bb-templates .tp-list{order:-1;flex:1 1 100%;flex-direction:row;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;position:relative;padding:2px 2px 6px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+  .bb-templates .tp-list::-webkit-scrollbar{display:none}
+  .bb-templates .tp-hint{display:none}
+  .bb-templates .tp-opt{flex:0 0 auto;width:104px;min-height:0;flex-direction:column;align-items:stretch;gap:6px;padding:6px;scroll-snap-align:center}
+  .bb-templates .tp-opt .tp-art-mini{width:100%}
+  .bb-templates .tp-mini{width:280px;zoom:.32}
+  .bb-templates .tp-opt-name{font-size:.82rem;line-height:1.2}
+  .bb-templates .tp-opt-desc{display:none}
+  .bb-templates .tp-stage{flex-basis:100%;gap:10px}
+  .bb-templates .tp-cap-name{font-size:1.25rem}
+  .bb-templates .tp-cap-desc{font-size:.85rem}
 }
 
 /* product preview art (same as the in-app template picker) */
@@ -188,6 +202,26 @@ export default function TemplatesSection() {
   // The previews pull in photos; wait until the section is close to view.
   const sectionRef = useRef<HTMLElement | null>(null);
   const near = useInView(sectionRef, { once: true, margin: '600px 0px' });
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // Switching tabs: bring that tab's picked item into view in the strip.
+  useEffect(() => {
+    const strip = listRef.current;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    const btn = strip.querySelectorAll<HTMLButtonElement>('.tp-opt')[sel[tab]];
+    strip.scrollLeft = btn ? Math.max(0, btn.offsetLeft - (strip.clientWidth - btn.clientWidth) / 2) : 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // When the list is a horizontal strip (phones), keep the picked item in view
+  // without moving the page vertically.
+  const pick = (i: number, btn: HTMLButtonElement) => {
+    setSel((s) => ({ ...s, [tab]: i }));
+    const strip = listRef.current;
+    if (strip && strip.scrollWidth > strip.clientWidth) {
+      strip.scrollTo({ left: btn.offsetLeft - (strip.clientWidth - btn.clientWidth) / 2, behavior: 'smooth' });
+    }
+  };
 
   const groupIndex = GROUPS.findIndex((g) => g.key === tab);
   const group = GROUPS[groupIndex];
@@ -285,7 +319,7 @@ export default function TemplatesSection() {
             </div>
           </div>
 
-          <div className="tp-list">
+          <div className="tp-list" ref={listRef}>
             <div className="tp-hint">{group.hint}</div>
             {group.items.map(([k, n, d], i) => (
               <button
@@ -293,7 +327,7 @@ export default function TemplatesSection() {
                 type="button"
                 className="tp-opt"
                 aria-pressed={i === idx}
-                onClick={() => setSel((s) => ({ ...s, [tab]: i }))}
+                onClick={(e) => pick(i, e.currentTarget)}
               >
                 {group.art ? (
                   <span className="tp-art-mini">
