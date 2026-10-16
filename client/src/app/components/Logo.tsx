@@ -15,9 +15,9 @@ export function Logo({ size = "md", iconOnly = false, className, ...props }: Log
 
   // The pen is tall and narrow, so size it by height.
   const iconSizes = {
-    sm: "h-6",
-    md: "h-9",
-    lg: "h-14",
+    sm: "h-7 -translate-y-[2px]",
+    md: "h-10 -translate-y-[3px]",
+    lg: "h-16 -translate-y-[4px]",
   };
 
   return (
