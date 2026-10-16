@@ -963,6 +963,8 @@ function FitStage({ html }: { html: string }) {
     const measure = () => {
       const child = inner.firstElementChild as HTMLElement | null;
       if (!child) return;
+      // Clear any crop height left over from the previous feature before measuring.
+      inner.style.height = '';
       const shell = child.classList.contains('stage-mb');
       const cs = getComputedStyle(box);
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
@@ -989,7 +991,9 @@ function FitStage({ html }: { html: string }) {
       // bottom with a fade (like the browser windows) instead of shrinking it.
       const s = Math.min((availW * SHELL_SHARE) / w, 1.6);
       const maxH = (STAGE_H - padY) / s;
-      setFit({ scale: Math.round(s * 100) / 100, shell: false, height: STAGE_H, crop: h > maxH ? Math.floor(maxH) : undefined });
+      const crop = h > maxH ? Math.floor(maxH) : undefined;
+      inner.style.height = crop ? `${crop}px` : '';
+      setFit({ scale: Math.round(s * 100) / 100, shell: false, height: STAGE_H, crop });
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -1002,7 +1006,7 @@ function FitStage({ html }: { html: string }) {
       <div
         className={fit.shell ? 'ex-fit shell' : fit.height ? (fit.crop ? 'ex-fit desk crop' : 'ex-fit desk') : 'ex-fit'}
         ref={innerRef}
-        style={{ transform: fit.scale !== 1 ? `scale(${fit.scale})` : undefined, height: fit.crop }}
+        style={{ transform: fit.scale !== 1 ? `scale(${fit.scale})` : undefined }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
