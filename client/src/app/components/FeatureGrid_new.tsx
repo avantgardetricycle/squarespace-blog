@@ -51,7 +51,7 @@ const F: Feat[] = [
   {id:'header',c:'layout',n:'Post Headers',i:'header',d:'Your header treatment comes with the template you pick: full-bleed, overlay, beside-the-title, or text-only. From there, choose what appears in it — breadcrumbs, byline, share icons, a caption — and set the title, subtitle and byline sizes, from Small to XL.',s:'Post Headers'},
   {id:'collection',c:'layout',n:'Multiple Blogs',i:'collection',d:"Run several blogs on one site and style each one separately — its own template, its own sidebars, its own settings. "+"A recipe archive and a travel journal don't have to look alike.",s:'Multiple Blogs'},
   {id:'search',c:'nav',n:'Post Search',i:'search',d:"Full-text search across all your posts with live results and keyword highlights. So nothing you've ever written gets lost in your archive.",s:'Search'},
-  {id:'toc',c:'nav',n:'Table of Contents',i:'toc',d:'Auto-generated from your post headings, and it follows the reader down the page. Three styles to choose from — numbered, connected dots, or bookmark.',s:'Table of Contents'},
+  {id:'toc',c:'nav',n:'Table of Contents',i:'toc',d:'Auto-generated from your post headings. Place it in a sidebar or above the post, and it highlights the section being read as the reader scrolls. Three styles to choose from — numbered, connected dots, or bookmark.',s:'Table of Contents'},
   {id:'filters',c:'nav',n:'Tags & Category Filters',i:'filters',d:"Filter by category or tag — as a row above your post grid, as a chip cloud in the sidebar, or both. "+"Readers narrow a long archive down to exactly what they came for.",s:'Tags & Filters'},
   {id:'related',c:'nav',n:'Related Posts',i:'related',d:'At the end of every post, automatically show readers what to read next, based on tags and categories. More time on site, less work for you.',s:'Related'},
   {id:'popular',c:'nav',n:'Popular Posts',i:'popular',d:'Surface your best-performing posts automatically, ranked by real reader data. Your strongest work keeps working.',s:'Popular'},
@@ -128,9 +128,6 @@ function stage(f: Feat): string {
             <div style="flex:1;display:flex;flex-direction:column;padding:11px 13px 13px">${inner}</div>
           </div>
         </div>`).join('')}
-      <div style="grid-column:1/-1;text-align:center;font-size:.68rem;color:var(--mid);font-weight:300;margin-top:4px">
-        Same site. Same account. Two completely different blogs.
-      </div>
     </div>`,
     search:`<div style="width:100%;max-width:700px;margin:0 auto">
       <div style="height:38px;border-radius:7px 7px 0 0;background:linear-gradient(to top,rgba(30,22,90,.45),rgba(30,22,90,.05)),linear-gradient(135deg,#cfc7f5,#9b90ec)"></div>
@@ -260,9 +257,6 @@ function stage(f: Feat): string {
               }).join('')}
             </div>
           </div>`).join('')}
-      </div>
-      <div style="text-align:center;font-size:.66rem;color:var(--mid);font-weight:300;margin-top:13px">
-        Sits in a sidebar or above the post, and highlights the section being read.
       </div>
     </div>`,
     progress:`<div style="height:4px;background:#f0f0f0;position:relative"><div style="width:62%;height:100%;background:var(--violet)"></div></div>
@@ -924,7 +918,7 @@ const STYLES = `.bb-features{
 .bb-features .b-growth{background:var(--plum-f);color:var(--plum)}
 .bb-features .ex-stage{flex:none;padding:22px;background:#f5f5f7;min-height:380px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box}
 .bb-features .ex-fit{width:100%;flex-shrink:0;transform-origin:center center}
-.bb-features .ex-fit.shell{width:760px}
+.bb-features .ex-fit.shell,.bb-features .ex-fit.desk{width:760px}
 .bb-features .ex-fit.shell>.stage-mb{width:760px;height:400px;position:relative;box-sizing:border-box}
 .bb-features .ex-fit.shell>.stage-mb::after{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;background:linear-gradient(to bottom,rgba(255,255,255,0),#fff);pointer-events:none}
 .bb-features .stage-mb{border:1px solid #dde;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 10px 36px rgba(91,79,232,.11)}
@@ -935,12 +929,15 @@ const STYLES = `.bb-features{
 /**
  * Every preview sits in a box of the same height. Browser mock-ups are a fixed
  * window (SHELL_W x SHELL_H, cut off at the bottom like a real browser) scaled
- * to fit, so they are always the same size and never touch the box edges.
+ * to SHELL_SHARE of the box width, so they are always the same size and never
+ * fill the box.
  * Smaller diagrams are scaled to fill the box (up to 1.6x) and centered. On
- * phones everything reflows at its natural size so text stays readable.
+ * phones (box under 520px) everything reflows at natural size so text stays
+ * readable.
  */
 const SHELL_W = 760;
 const SHELL_H = 400;
+const SHELL_SHARE = 0.72;
 const STAGE_H = 470;
 
 function FitStage({ html }: { html: string }) {
@@ -960,20 +957,24 @@ function FitStage({ html }: { html: string }) {
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
       const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
       const availW = box.clientWidth - padX;
-      const phone = box.clientWidth < 700;
+      const phone = box.clientWidth < 520;
       if (shell && !phone) {
-        const s = Math.min(availW / SHELL_W, (STAGE_H - padY) / SHELL_H, 1);
+        // Same share of the box at every width: 72% wide, never wider than SHELL_W.
+        const s = Math.min((availW * SHELL_SHARE) / SHELL_W, (STAGE_H - padY) / SHELL_H, 1);
         setFit({ scale: s, shell: true, height: STAGE_H });
         return;
       }
       if (phone) {
+        inner.classList.remove('desk');
         setFit({ scale: 1, shell: false });
         return;
       }
-      // offsetWidth/offsetHeight ignore transforms, so no need to reset the scale.
+      inner.classList.add('desk'); // measure at the design width
+      // Diagrams lay out at the same design width as the browser window, then
+      // scale to the same share of the box. offsetWidth/Height ignore transforms.
       const w = Math.max(...Array.from(inner.children).map((c) => (c as HTMLElement).offsetWidth), 1);
       const h = inner.offsetHeight || 1;
-      const s = Math.min(availW / w, (STAGE_H - padY) / h, 1.6);
+      const s = Math.min((availW * SHELL_SHARE) / w, (STAGE_H - padY) / h, 1.6);
       setFit({ scale: Math.round(s * 100) / 100, shell: false, height: STAGE_H });
     };
     measure();
@@ -985,7 +986,7 @@ function FitStage({ html }: { html: string }) {
   return (
     <div className="ex-stage" ref={boxRef} style={{ height: fit.height, minHeight: fit.shell ? 0 : undefined }}>
       <div
-        className={fit.shell ? 'ex-fit shell' : 'ex-fit'}
+        className={fit.shell ? 'ex-fit shell' : fit.height ? 'ex-fit desk' : 'ex-fit'}
         ref={innerRef}
         style={{ transform: fit.scale !== 1 ? `scale(${fit.scale})` : undefined }}
         dangerouslySetInnerHTML={{ __html: html }}
