@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-12 md:py-[100px] px-4 md:px-16 bg-white overflow-hidden">
+    <section id="how-it-works" className="py-12 md:py-[100px] px-4 md:px-16 bg-[#f3f1fe] overflow-hidden">
       <div className="max-w-[1160px] mx-auto">
         {/* Header */}
         <div className="text-center mb-12 md:mb-20">
@@ -28,14 +28,14 @@ export default function HowItWorks() {
         </div>
 
         {/* Steps */}
-        <div className="flex flex-col lg:grid lg:grid-cols-3 items-stretch gap-8">
+        <div className="flex flex-col lg:grid lg:grid-cols-3 items-stretch gap-8 lg:gap-y-0">
           {/* STEP 1 */}
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.05, duration: 0.5 }}
-            className="flex flex-col gap-0 group bg-white/40 backdrop-blur-sm border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
+            className="flex flex-col gap-0 lg:grid lg:grid-rows-subgrid lg:row-span-5 group bg-white border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
           >
             <div className="font-heading text-[4.5rem] font-normal tracking-tight leading-none text-[#e4e3de] mb-1 select-none transition-colors duration-200 group-hover:text-[rgba(91,79,232,0.2)]">
               01
@@ -50,15 +50,11 @@ export default function HowItWorks() {
               Sign up and your personal script tag is waiting in your BetterBlog dashboard — ready to copy with one click.
             </div>
 
-            <div className="rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
-              <div className="bg-[#f7f6f3] p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-[22px] h-[22px] rounded-[5px] bg-[#5B4FE8] flex items-center justify-center">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
-                      <path d="M12 2L8 8H2l5 4-2 6 7-4 7 4-2-6 5-4h-6z" />
-                    </svg>
-                  </div>
-                  <div className="font-heading text-xs text-[#0a0a0a] tracking-tight">BetterBlog</div>
+            <div className="flex flex-col lg:h-full rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
+              <div className="flex-1 flex flex-col justify-center bg-[#f7f6f3] p-5">
+                <div className="flex items-center gap-[6px] mb-4">
+                  <img src="/logo-pen.svg" alt="" aria-hidden="true" className="h-[20px] w-auto shrink-0 -translate-y-[1px]" />
+                  <div className="font-heading font-bold text-sm tracking-tight bg-gradient-to-r from-[#5B4FE8] to-[#8F86F0] bg-clip-text text-transparent mt-[2px]">BetterBlog</div>
                 </div>
                 <div className="flex gap-[6px] mb-4">
                   <div className="text-[0.52rem] text-[#5B4FE8] font-medium px-[10px] py-1 rounded-md bg-[rgba(91,79,232,0.12)] border border-[rgba(91,79,232,0.2)]">
@@ -74,19 +70,19 @@ export default function HowItWorks() {
                 <div className="text-[0.52rem] font-semibold tracking-[0.1em] uppercase text-[#6b6b6b] mb-2">
                   Your install snippet
                 </div>
-                <div className="bg-[#13121f] rounded-lg p-[14px] px-4 relative">
-                  <div className="absolute top-[10px] right-[10px] bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.12)] rounded-[5px] px-2 py-[3px] text-[0.48rem] text-[rgba(255,255,255,0.4)] font-medium tracking-wider cursor-pointer">
+                <div className="bg-[#f6f5fc] border border-[#e6e3f5] rounded-lg p-[14px] px-4 relative">
+                  <div className="absolute top-[10px] right-[10px] bg-white border border-[#e4e3de] rounded-[5px] px-2 py-[3px] text-[0.48rem] text-[#8a8a94] font-medium tracking-wider cursor-pointer">
                     Copy
                   </div>
-                  <div className="font-mono text-[0.62rem] text-[#a8b0c8] leading-[1.6] whitespace-nowrap overflow-hidden">
-                    <span className="text-[#c792ea]">&lt;script</span>{' '}
-                    <span className="text-[#80cbc4]">src</span>=
-                    <span className="text-[#c3e88d]">"https://cdn.betterblog.co/bb.js"</span>
+                  <div className="font-mono text-[0.62rem] text-[#55556a] leading-[1.6] whitespace-nowrap overflow-hidden">
+                    <span className="text-[#7a3fb8]">&lt;script</span>{' '}
+                    <span className="text-[#1f7a72]">src</span>=
+                    <span className="text-[#4f7a1f]">"https://cdn.betterblog.co/bb.js"</span>
                     <br />
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                    <span className="text-[#80cbc4]">key</span>=
-                    <span className="text-[#c3e88d]">"bb_live_k9x2m..."</span>
-                    <span className="text-[#c792ea]">&gt;&lt;/script&gt;</span>
+                    <span className="text-[#1f7a72]">key</span>=
+                    <span className="text-[#4f7a1f]">"bb_live_k9x2m..."</span>
+                    <span className="text-[#7a3fb8]">&gt;&lt;/script&gt;</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-3">
@@ -105,7 +101,7 @@ export default function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.15, duration: 0.5 }}
-            className="flex flex-col gap-0 group bg-white/40 backdrop-blur-sm border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
+            className="flex flex-col gap-0 lg:grid lg:grid-rows-subgrid lg:row-span-5 group bg-white border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
           >
             <div className="font-heading text-[4.5rem] font-normal tracking-tight leading-none text-[#e4e3de] mb-1 select-none transition-colors duration-200 group-hover:text-[rgba(91,79,232,0.2)]">
               02
@@ -120,21 +116,21 @@ export default function HowItWorks() {
               In Squarespace, go to Settings → Advanced → Code Injection → Header. Paste your snippet. Save. That's the last time you'll touch this screen.
             </div>
 
-            <div className="rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
-              <div className="bg-[#f7f6f3]">
-                <div className="bg-[#1a1a2e] px-4 py-[10px] flex items-center gap-2 border-b border-[rgba(255,255,255,0.06)]">
+            <div className="flex flex-col lg:h-full rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
+              <div className="flex-1 flex flex-col bg-[#f7f6f3]">
+                <div className="bg-[#ecebf2] px-4 py-[10px] flex items-center gap-2 border-b border-[#e4e3de]">
                   <div className="flex gap-1">
                     <div className="w-[7px] h-[7px] rounded-full bg-[#ff5f57]"></div>
                     <div className="w-[7px] h-[7px] rounded-full bg-[#ffbd2e]"></div>
                     <div className="w-[7px] h-[7px] rounded-full bg-[#28c940]"></div>
                   </div>
-                  <div className="flex-1 bg-[rgba(255,255,255,0.07)] rounded h-4 flex items-center px-2">
-                    <div className="font-mono text-[0.48rem] text-[rgba(255,255,255,0.3)] tracking-wide">
+                  <div className="flex-1 bg-white rounded h-4 flex items-center px-2">
+                    <div className="font-mono text-[0.48rem] text-[#9a9aa4] tracking-wide">
                       yoursite.squarespace.com/config/advanced
                     </div>
                   </div>
                 </div>
-                <div className="p-4">
+                <div className="flex-1 flex flex-col justify-center p-4">
                   <div className="flex gap-[5px] items-center text-[0.5rem] text-[#6b6b6b] mb-3">
                     Settings <span className="text-[#ccc]">›</span> Advanced <span className="text-[#ccc]">›</span>{' '}
                     <strong className="text-[#1a1a1a]">Code Injection</strong>
@@ -146,21 +142,21 @@ export default function HowItWorks() {
                     <div className="px-[14px] pt-[10px] pb-1 text-[0.52rem] font-semibold text-[#6b6b6b] uppercase tracking-[0.1em]">
                       Header
                     </div>
-                    <div className="mx-[14px] mb-[10px] bg-[#13121f] rounded-md p-[10px] px-3 font-mono text-[0.58rem] text-[#a8b0c8] leading-[1.7]">
-                      <span className="text-[#c792ea]">&lt;script</span>{' '}
-                      <span className="text-[#80cbc4]">src</span>=
-                      <span className="text-[#c3e88d]">"https://cdn.betterblog.co/bb.js"</span>
+                    <div className="mx-[14px] mb-[10px] bg-[#f6f5fc] border border-[#e6e3f5] rounded-md p-[10px] px-3 font-mono text-[0.58rem] text-[#55556a] leading-[1.7]">
+                      <span className="text-[#7a3fb8]">&lt;script</span>{' '}
+                      <span className="text-[#1f7a72]">src</span>=
+                      <span className="text-[#4f7a1f]">"https://cdn.betterblog.co/bb.js"</span>
                       <br />
                       &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                      <span className="text-[#80cbc4]">key</span>=
-                      <span className="text-[#c3e88d]">"bb_live_k9x2m..."</span>
-                      <span className="text-[#c792ea]">&gt;&lt;/script&gt;</span>
+                      <span className="text-[#1f7a72]">key</span>=
+                      <span className="text-[#4f7a1f]">"bb_live_k9x2m..."</span>
+                      <span className="text-[#7a3fb8]">&gt;&lt;/script&gt;</span>
                     </div>
                     <div className="px-[14px] py-[10px] border-t border-[#e4e3de] flex justify-end gap-[7px]">
                       <div className="text-[0.56rem] text-[#6b6b6b] px-3 py-[5px] rounded-[5px] border border-[#e4e3de] bg-white font-medium">
                         Cancel
                       </div>
-                      <div className="text-[0.56rem] text-white px-[14px] py-[5px] rounded-[5px] bg-[#1a1a2e] font-semibold">
+                      <div className="text-[0.56rem] text-white px-[14px] py-[5px] rounded-[5px] bg-[#4a4858] font-semibold">
                         Save
                       </div>
                     </div>
@@ -176,7 +172,7 @@ export default function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.25, duration: 0.5 }}
-            className="flex flex-col gap-0 group bg-white/40 backdrop-blur-sm border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
+            className="flex flex-col gap-0 lg:grid lg:grid-rows-subgrid lg:row-span-5 group bg-white border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
           >
             <div className="font-heading text-[4.5rem] font-normal tracking-tight leading-none text-[#e4e3de] mb-1 select-none transition-colors duration-200 group-hover:text-[rgba(91,79,232,0.2)]">
               03
@@ -188,11 +184,11 @@ export default function HowItWorks() {
               Format from your dashboard
             </div>
             <div className="text-[0.85rem] text-[#6b6b6b] font-light leading-[1.75] mb-7">
-              Turn features on, tweak settings, choose templates — all from BetterBlog. Every change goes live the moment you hit save.
+              Turn features on, tweak settings, choose templates — all from BetterBlog. Preview every change on your real blog, in your own fonts, on desktop, tablet or phone. It goes live the moment you hit save.
             </div>
 
-            <div className="rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
-              <div className="bg-white px-[18px] pt-4 pb-[18px]">
+            <div className="flex flex-col lg:h-full rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
+              <div className="flex-1 bg-white px-[18px] pt-4 pb-[18px]">
                 <div className="text-[0.48rem] font-bold tracking-[0.14em] uppercase text-[#a85a16] mb-[10px]">
                   Publishing &amp; Management
                 </div>
@@ -252,8 +248,11 @@ export default function HowItWorks() {
           viewport={{ once: true }}
           className="mt-12 md:mt-20 text-center"
         >
-          <p className="text-[0.88rem] text-[#6b6b6b] font-light mb-6 leading-[1.7]">
-            Setup takes under a minute. Your blog looks completely different in under five.
+          <p className="font-heading text-[clamp(1.5rem,2.6vw,2rem)] font-normal tracking-tight text-[#0a0a0a] leading-[1.25] mb-3 max-w-[760px] mx-auto">
+            Five minutes from now, your blog looks <em className="italic text-[#5B4FE8]">custom-built</em>.
+          </p>
+          <p className="text-[0.92rem] text-[#6b6b6b] font-light mb-7 leading-[1.7]">
+            Setup takes about a minute. No designer, no code to maintain.
           </p>
           <a
             href="#pricing"
