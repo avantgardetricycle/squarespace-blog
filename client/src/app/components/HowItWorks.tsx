@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-12 md:py-[100px] px-4 md:px-16 bg-white overflow-hidden">
+    <section id="how-it-works" className="py-12 md:py-[100px] px-4 md:px-16 bg-[#f3f1fe] overflow-hidden">
       <div className="max-w-[1160px] mx-auto">
         {/* Header */}
         <div className="text-center mb-12 md:mb-20">
@@ -35,7 +35,7 @@ export default function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.05, duration: 0.5 }}
-            className="flex flex-col gap-0 group bg-white/40 backdrop-blur-sm border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
+            className="flex flex-col gap-0 group bg-white border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
           >
             <div className="font-heading text-[4.5rem] font-normal tracking-tight leading-none text-[#e4e3de] mb-1 select-none transition-colors duration-200 group-hover:text-[rgba(91,79,232,0.2)]">
               01
@@ -105,7 +105,7 @@ export default function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.15, duration: 0.5 }}
-            className="flex flex-col gap-0 group bg-white/40 backdrop-blur-sm border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
+            className="flex flex-col gap-0 group bg-white border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
           >
             <div className="font-heading text-[4.5rem] font-normal tracking-tight leading-none text-[#e4e3de] mb-1 select-none transition-colors duration-200 group-hover:text-[rgba(91,79,232,0.2)]">
               02
@@ -176,7 +176,7 @@ export default function HowItWorks() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.25, duration: 0.5 }}
-            className="flex flex-col gap-0 group bg-white/40 backdrop-blur-sm border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
+            className="flex flex-col gap-0 group bg-white border border-[#e4e3de]/50 rounded-2xl p-8 shadow-[0_2px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-300 min-w-0"
           >
             <div className="font-heading text-[4.5rem] font-normal tracking-tight leading-none text-[#e4e3de] mb-1 select-none transition-colors duration-200 group-hover:text-[rgba(91,79,232,0.2)]">
               03

@@ -842,7 +842,7 @@ const STYLES = `.bb-features{
 .bb-features .rel-i{height:18px;background:url(/template-photos/forest-sunbeams.webp) center/cover no-repeat}
 .bb-features .rel-t{font-size:.46rem;color:#555;padding:4px;line-height:1.3}
 /* ─── FEATURE GRID ─── */
-.bb-features .fg{background:var(--off);padding:92px 0 100px}
+.bb-features.fg{background:var(--off);padding:92px 0 100px}
 .bb-features .fg-head{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;margin-bottom:56px;flex-wrap:wrap}
 .bb-features .stamp{flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;width:112px;height:112px;
   border-radius:50%;background:var(--violet);color:#fff;box-shadow:0 0 0 11px rgba(91,79,232,.1),0 0 0 22px rgba(91,79,232,.05)}
