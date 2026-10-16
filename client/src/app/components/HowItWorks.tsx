@@ -248,8 +248,11 @@ export default function HowItWorks() {
           viewport={{ once: true }}
           className="mt-12 md:mt-20 text-center"
         >
-          <p className="text-[0.88rem] text-[#6b6b6b] font-light mb-6 leading-[1.7]">
-            Setup takes under a minute. Your blog looks completely different in under five.
+          <p className="font-heading text-[clamp(1.5rem,2.6vw,2rem)] font-normal tracking-tight text-[#0a0a0a] leading-[1.25] mb-3 max-w-[760px] mx-auto">
+            Five minutes from now, your blog looks <em className="italic text-[#5B4FE8]">custom-built</em>.
+          </p>
+          <p className="text-[0.92rem] text-[#6b6b6b] font-light mb-7 leading-[1.7]">
+            Setup takes about a minute. No designer, no code to maintain.
           </p>
           <a
             href="#pricing"
