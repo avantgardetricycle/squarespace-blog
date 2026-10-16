@@ -726,12 +726,12 @@ export function BeforeAfterComparison() {
           <div className="ba-proof-sep"></div>
           <div className="ba-proof-item">
             <div className="ba-proof-num">1</div>
-            <div className="ba-proof-label">Extension. That's it.</div>
+            <div className="ba-proof-label">Extension</div>
           </div>
           <div className="ba-proof-sep"></div>
           <div className="ba-proof-item">
-            <div className="ba-proof-num">0</div>
-            <div className="ba-proof-label">Lines of code required</div>
+            <div className="ba-proof-num">1</div>
+            <div className="ba-proof-label">Line of code to paste</div>
           </div>
           <div className="ba-proof-sep"></div>
           <div className="ba-proof-item">
