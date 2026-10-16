@@ -1,3 +1,5 @@
+import { readBlogPassword } from './blog-password.js'
+
 export type PaywallDetectionState = 'unknown' | 'detected_paywalled' | 'detected_unpaywalled'
 
 export type PaywallProbeResult = {
@@ -103,10 +105,11 @@ export function buildBlogJsonUrl(url: string, blogPath: string | null): string {
 }
 
 function appendPasswordToUrl(url: string, password: string | null | undefined): string {
-  if (!password || !password.trim()) return url
+  const plain = readBlogPassword(password)
+  if (!plain) return url
   try {
     const u = new URL(url)
-    u.searchParams.set('password', password.trim())
+    u.searchParams.set('password', plain)
     return u.toString()
   } catch {
     return url

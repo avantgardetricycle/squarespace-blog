@@ -24,18 +24,23 @@ import { DEFAULT_PLAN_KEY, normalizePlanParam } from "@/lib/planLabels";
 const pricingPlans = {
   essentials: {
     name: "Essentials",
-    description: "Fix the basics on your Squarespace blog",
-    features: ["1 blog", "Core layouts & modules", "Standard support"],
+    description: "Make your blog look right.",
+    features: ["1 website, 1 blog", "4 templates", "Same support on every plan"],
   },
   professional: {
     name: "Professional",
-    description: "A real blog—discoverable, navigable, readable",
-    features: ["Up to 3 blogs", "Advanced customization"],
+    description: "Make your blog findable.",
+    features: ["1 website, 2 blogs", "8 templates", "Search, comments, and basic analytics"],
   },
   publication: {
     name: "Publication",
-    description: "Serious publication tools and higher limits",
-    features: ["Unlimited blogs (fair use)", "Publication-focused features"],
+    description: "Make your blog pay.",
+    features: ["1 website, 3 blogs", "All 10 templates", "Paywall, email, and advanced analytics"],
+  },
+  studio: {
+    name: "Studio",
+    description: "For designers and agencies.",
+    features: ["10 websites, then $7/mo each", "3 blogs per website", "Everything in Publication"],
   },
 } as const;
 

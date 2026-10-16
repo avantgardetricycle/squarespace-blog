@@ -23,6 +23,14 @@
       "destination": "/api/cron/refresh-preview-snapshots"
     },
     {
+      "source": "/api/cron/trial-day-four-reminder",
+      "destination": "/api/cron/trial-day-four-reminder"
+    },
+    {
+      "source": "/api/cron/delete-expired-accounts",
+      "destination": "/api/cron/delete-expired-accounts"
+    },
+    {
       "source": "/api/webhooks/stripe",
       "destination": "/api/webhooks/stripe"
     },
@@ -33,6 +41,18 @@
     {
       "source": "/api/queues/stripe-customer-subscription-updated",
       "destination": "/api/queues/stripe-customer-subscription-updated"
+    },
+    {
+      "source": "/api/queues/stripe-customer-subscription-deleted",
+      "destination": "/api/queues/stripe-customer-subscription-deleted"
+    },
+    {
+      "source": "/api/queues/stripe-invoice-paid",
+      "destination": "/api/queues/stripe-invoice-paid"
+    },
+    {
+      "source": "/api/queues/stripe-invoice-payment-failed",
+      "destination": "/api/queues/stripe-invoice-payment-failed"
     },
     {
       "source": "/api/(.*)",
@@ -55,6 +75,14 @@
       "includeFiles": "server/dist/**"
     },
     "api/cron/refresh-preview-snapshots.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**"
+    },
+    "api/cron/trial-day-four-reminder.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**"
+    },
+    "api/cron/delete-expired-accounts.ts": {
       "maxDuration": 60,
       "includeFiles": "server/dist/**"
     },
@@ -84,6 +112,39 @@
         {
           "type": "queue/v1beta",
           "topic": "stripe.customer.subscription.updated",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-customer-subscription-deleted.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**",
+      "experimentalTriggers": [
+        {
+          "type": "queue/v1beta",
+          "topic": "stripe.customer.subscription.deleted",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-invoice-paid.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**",
+      "experimentalTriggers": [
+        {
+          "type": "queue/v1beta",
+          "topic": "stripe.invoice.paid",
+          "consumer": "default"
+        }
+      ]
+    },
+    "api/queues/stripe-invoice-payment-failed.ts": {
+      "maxDuration": 60,
+      "includeFiles": "server/dist/**",
+      "experimentalTriggers": [
+        {
+          "type": "queue/v1beta",
+          "topic": "stripe.invoice.payment_failed",
           "consumer": "default"
         }
       ]
@@ -117,6 +178,14 @@
     {
       "path": "/api/cron/refresh-preview-snapshots",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/api/cron/trial-day-four-reminder",
+      "schedule": "59 23 * * *"
+    },
+    {
+      "path": "/api/cron/delete-expired-accounts",
+      "schedule": "0 16 * * *"
     }
   ]
 }

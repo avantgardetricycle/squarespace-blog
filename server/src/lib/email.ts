@@ -1,7 +1,8 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail } from '../emails/index.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail, renderTrialDayFourEmail } from '../emails/index.js'
 import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
+import { redactSubscriberText } from './email-providers.js'
 import { getAppUrl, getSupportPortalUrl } from './url.js'
 
 const transporter = nodemailer.createTransport({
@@ -18,10 +19,35 @@ const appName = process.env.APP_NAME ?? 'BetterBlog'
 const mailFrom = process.env.SENDGRID_MAIL_FROM ?? 'BetterBlog <support@betterblog.co>'
 const inviteEmailSubject = 'Your BetterBlog access link'
 
+function describeForLog(value: unknown): string {
+  const text =
+    typeof value === 'string'
+      ? value
+      : value instanceof Error
+        ? value.message
+        : (() => {
+            try {
+              return JSON.stringify(value)
+            } catch {
+              return 'unserializable error'
+            }
+          })()
+  return redactSubscriberText(text || 'unknown error')
+}
+
+/** Local dev can print the link. Production logs must not include the address or the token. */
+function logMagicLinkFallback(label: string, magicLink: string): void {
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`[${label}] not sent (mailer not configured)`)
+    return
+  }
+  console.log(`[${label}] mailer not configured. Magic link: ${magicLink}`)
+}
+
 /** Send invite email via nodemailer (used by manual /api/auth/invite) */
 export async function sendInviteEmail(to: string, magicLink: string): Promise<void> {
   if (!process.env.SMTP_HOST && process.env.NODE_ENV !== 'production') {
-    console.log(`[Invite] Magic link for ${to}: ${magicLink}`)
+    logMagicLinkFallback('Invite', magicLink)
     return
   }
 
@@ -44,7 +70,7 @@ export async function sendInviteEmail(to: string, magicLink: string): Promise<vo
 export async function sendInviteEmailViaSendGrid(to: string, magicLink: string): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
-    console.log(`[Invite] SENDGRID_API_KEY not set. Magic link for ${to}: ${magicLink}`)
+    logMagicLinkFallback('Invite', magicLink)
     return
   }
 
@@ -74,7 +100,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
   } catch (err: unknown) {
     const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
     const errors = res?.body?.errors
-    console.error('[Invite] SendGrid error:', errors ?? err)
+    console.error('[Invite] SendGrid error:', describeForLog(errors ?? err))
     if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
       const { attachments: _, ...msgWithoutLogo } = msg
       await sgMail.send(msgWithoutLogo)
@@ -88,7 +114,7 @@ export async function sendInviteEmailViaSendGrid(to: string, magicLink: string):
 export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: string): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
-    console.log(`[MagicLink] SENDGRID_API_KEY not set. Magic link for ${to}: ${magicLink}`)
+    logMagicLinkFallback('MagicLink', magicLink)
     return
   }
 
@@ -118,7 +144,7 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
   } catch (err: unknown) {
     const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
     const errors = res?.body?.errors
-    console.error('[MagicLink] SendGrid error:', errors ?? err)
+    console.error('[MagicLink] SendGrid error:', describeForLog(errors ?? err))
     if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
       const { attachments: _, ...msgWithoutLogo } = msg
       await sgMail.send(msgWithoutLogo)
@@ -140,7 +166,7 @@ export async function sendNewSubscriberNotification(
   const siteLabel = siteName?.trim() || 'your blog'
 
   if (!apiKey) {
-    console.log(`[Capture] SENDGRID_API_KEY not set. New subscriber for ${siteLabel}: ${displayName}`)
+    console.log(`[Capture] SENDGRID_API_KEY not set. Subscriber notification not sent for ${siteLabel}`)
     return
   }
 
@@ -162,7 +188,7 @@ export async function sendNewSubscriberNotification(
       trackingSettings: { clickTracking: { enable: false } },
     })
   } catch (err) {
-    console.error('[Capture] SendGrid error sending subscriber notification:', err)
+    console.error('[Capture] SendGrid error sending subscriber notification:', describeForLog(err))
   }
 }
 
@@ -179,7 +205,7 @@ export async function sendNewLeadMagnetNotification(
   const siteLabel = siteName?.trim() || 'your blog'
 
   if (!apiKey) {
-    console.log(`[Capture] SENDGRID_API_KEY not set. New lead magnet signup for "${resourceTitle}" on ${siteLabel}: ${displayName}`)
+    console.log(`[Capture] SENDGRID_API_KEY not set. Lead magnet notification not sent for "${resourceTitle}" on ${siteLabel}`)
     return
   }
 
@@ -201,7 +227,7 @@ export async function sendNewLeadMagnetNotification(
       trackingSettings: { clickTracking: { enable: false } },
     })
   } catch (err) {
-    console.error('[Capture] SendGrid error sending lead magnet notification:', err)
+    console.error('[Capture] SendGrid error sending lead magnet notification:', describeForLog(err))
   }
 }
 
@@ -234,7 +260,7 @@ export async function sendCommentNotificationEmail(
 ): Promise<void> {
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
-    console.log(`[Comment] SENDGRID_API_KEY not set. New comment from ${displayName} on "${postTitle}"`)
+    console.log(`[Comment] SENDGRID_API_KEY not set. Comment notification not sent for "${postTitle}"`)
     return
   }
 
@@ -283,7 +309,7 @@ export async function sendCommentNotificationEmail(
   } catch (err: unknown) {
     const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
     const errors = res?.body?.errors
-    console.error('[Comment] SendGrid error sending comment notification:', errors ?? err)
+    console.error('[Comment] SendGrid error sending comment notification:', describeForLog(errors ?? err))
     if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
       const { attachments: _, ...msgWithoutLogo } = msg
       await sgMail.send(msgWithoutLogo)
@@ -344,11 +370,65 @@ export async function sendProfilesApiAlertEmail(
   } catch (err: unknown) {
     const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
     const errors = res?.body?.errors
-    console.error('[BetterBlog alert] SendGrid error sending Profiles API alert:', errors ?? err)
+    console.error('[BetterBlog alert] SendGrid error sending Profiles API alert:', describeForLog(errors ?? err))
     if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
       const { attachments: _, ...msgWithoutLogo } = msg
       await sgMail.send(msgWithoutLogo)
     }
+  }
+}
+
+/** Day-4 free-trial reminder. Throws when SendGrid rejects the message so the cron can retry. */
+export async function sendTrialDayFourEmail(
+  to: string,
+  details: {
+    trialEndDate: string
+    loginUrl: string
+    recipientName?: string | null
+  }
+): Promise<void> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    console.log(
+      `[Trial] SENDGRID_API_KEY not set. Day-4 reminder for ${to}; trial ends ${details.trialEndDate}; login ${details.loginUrl}`
+    )
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+  const html = await renderTrialDayFourEmail({
+    trialEndDate: details.trialEndDate,
+    loginUrl: details.loginUrl,
+    supportUrl: getSupportPortalUrl(),
+    recipientName: details.recipientName,
+  })
+  const logoAttachment = {
+    content: getLogoBase64(),
+    filename: 'logo.png',
+    type: 'image/png',
+    disposition: 'inline' as const,
+    content_id: 'logo',
+  }
+  const msg = {
+    to,
+    from: mailFrom,
+    subject: `Your BetterBlog free trial ends on ${details.trialEndDate}`,
+    html,
+    attachments: [logoAttachment],
+    trackingSettings: { clickTracking: { enable: false } },
+  }
+  try {
+    await sgMail.send(msg)
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err ? (err as { response?: { body?: { errors?: unknown } } }).response : undefined
+    const errors = res?.body?.errors
+    console.error('[Trial] SendGrid error sending day-4 reminder:', errors ?? err)
+    if (res && typeof (res as { statusCode?: number }).statusCode === 'number' && (res as { statusCode: number }).statusCode === 400) {
+      const { attachments: _, ...msgWithoutLogo } = msg
+      await sgMail.send(msgWithoutLogo)
+      return
+    }
+    throw err
   }
 }
 
@@ -405,7 +485,7 @@ export async function sendSupportRequestEmail(payload: SupportRequestPayload): P
 
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
-    console.log(`[Support] SENDGRID_API_KEY not set. New ${modeLabel.toLowerCase()} from ${payload.email}:\n${text}`)
+    console.log(`[Support] SENDGRID_API_KEY not set. ${modeLabel} not sent`)
     return
   }
 
@@ -423,7 +503,7 @@ export async function sendSupportRequestEmail(payload: SupportRequestPayload): P
       trackingSettings: { clickTracking: { enable: false } },
     })
   } catch (err) {
-    console.error('[Support] SendGrid error:', err)
+    console.error('[Support] SendGrid error:', describeForLog(err))
     throw err
   }
 }
@@ -465,7 +545,7 @@ export async function sendSupportTicketEmail(payload: SupportTicketEmailPayload)
 
   const apiKey = process.env.SENDGRID_API_KEY
   if (!apiKey) {
-    console.log(`[Support ticket] SENDGRID_API_KEY not set. Ticket ${payload.ticketId} from ${payload.accountEmail}:\n${text}`)
+    console.log(`[Support ticket] SENDGRID_API_KEY not set. Ticket ${payload.ticketId} not sent`)
     return
   }
 
@@ -482,7 +562,7 @@ export async function sendSupportTicketEmail(payload: SupportTicketEmailPayload)
       trackingSettings: { clickTracking: { enable: false } },
     })
   } catch (err) {
-    console.error('[Support ticket] SendGrid error:', err)
+    console.error('[Support ticket] SendGrid error:', describeForLog(err))
     throw err
   }
 }

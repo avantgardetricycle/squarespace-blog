@@ -30,6 +30,8 @@ type MountOptions = {
   loggedInAccount?: { displayName: string; email: string; id: string };
   /** Node-side handler for POST /api/comments. Defaults to an empty 200. */
   commentPostResponse?: () => { status: number; json: unknown };
+  /** Replace the fixture comment list returned by GET /api/comments. */
+  commentsResponse?: unknown;
   /**
    * Host page colors. `section` is the blog section background (removed with native markup).
    * `cssVariable` is --siteBackgroundColor. When only `section` is set, the site variable and
@@ -43,11 +45,17 @@ type MountOptions = {
   defaultAuthorIds?: string[];
   /** Extra CSS in the host page, before the renderer runs. Used to simulate Squarespace type styles. */
   extraCss?: string;
+  /**
+   * Render as the live embed (fixed progress bar) instead of the Configure preview.
+   * The page URL is the blog route; `#post-N` selects the post.
+   */
+  liveSite?: boolean;
 };
 
 export async function mountRenderer(page: Page, options: MountOptions = {}): Promise<void> {
   const previewSelectedPostIndex = options.previewSelectedPostIndex ?? 1;
   const rootWidth = options.rootWidth;
+  const liveSite = options.liveSite === true;
 
   await page.route(`**${BLOG_JSON_PATH}*`, async (route) => {
     await route.fulfill({
@@ -63,7 +71,15 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     await route.fulfill({ status: 200, contentType: "application/json", body: '{"comments":[]}' });
   });
   await page.route("**/api/comments**", async (route) => {
-    if (route.request().method() !== "GET") {
+    const requestUrl = route.request().url();
+    let path = "";
+    try {
+      path = new URL(requestUrl).pathname.replace(/\/+$/, "");
+    } catch {
+      path = "";
+    }
+    const isCommentCreate = route.request().method() === "POST" && path.endsWith("/api/comments");
+    if (isCommentCreate) {
       const payload = options.commentPostResponse
         ? options.commentPostResponse()
         : { status: 200, json: {} };
@@ -74,10 +90,14 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       });
       return;
     }
+    if (route.request().method() !== "GET") {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(commentListJson),
+      body: JSON.stringify(options.commentsResponse ?? commentListJson),
     });
   });
   await page.route("**/e2e/renderer-mount", async (route) => {
@@ -125,7 +145,8 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     });
   });
 
-  await page.goto("/e2e/renderer-mount", { waitUntil: "domcontentloaded" });
+  const hash = liveSite && previewSelectedPostIndex >= 0 ? `#post-${previewSelectedPostIndex}` : "";
+  await page.goto(`/e2e/renderer-mount${hash}`, { waitUntil: "domcontentloaded" });
   await page.addScriptTag({ path: RENDERER_PATH });
 
   const profiles = options.authorProfiles ?? fixtureAuthorProfiles;
@@ -135,7 +156,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   );
 
   await page.evaluate(
-    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap }) => {
+    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap, liveSite: live }) => {
       const w = window as unknown as {
         BlogOverlayRenderer: { init: (config: Record<string, unknown>) => void };
         Static?: { SQUARESPACE_CONTEXT: Record<string, unknown> };
@@ -154,12 +175,12 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       }
       const root = document.getElementById("root");
       w.BlogOverlayRenderer.init({
-        previewMode: true,
+        previewMode: !live,
         rootEl: root,
         previewFetchUrl: "/e2e/renderer-blog.json",
         baseUrl: window.location.origin,
         siteKey: "renderer-layout",
-        blogPath: "/e2e/renderer-blog",
+        blogPath: live ? "/e2e/renderer-mount" : "/e2e/renderer-blog",
         previewSelectedPostIndex: selected,
         previewDevice,
         defaultAuthorIds,
@@ -181,6 +202,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       postConfig: options.postConfig,
       previewSelectedPostIndex,
       previewDevice: options.previewDevice,
+      liveSite,
       commentSettings: options.commentSettings,
       loggedInAccount: options.loggedInAccount,
       authorProfiles: profiles,

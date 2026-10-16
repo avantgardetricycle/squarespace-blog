@@ -8,20 +8,56 @@ export type SitePaywallSettingsJson = {
   featureItems: string[]
 }
 
+export type PlanFeatureFlags = {
+  search: boolean
+  tagCategoryFilters: boolean
+  featuredAndPinned: boolean
+  sorting: boolean
+  comments: boolean
+  basicAnalytics: boolean
+  paywall: boolean
+  emailCapture: boolean
+  kitMailchimp: boolean
+  multipleAuthors: boolean
+  advancedAnalytics: boolean
+}
+
+export interface PlanEntitlements {
+  planKey: string
+  planDisplay: string
+  maxWebsites: number | null
+  maxBlogsPerWebsite: number | null
+  maxSites: number | null
+  includedWebsites: number
+  extraWebsiteMonthlyUsd: number | null
+  extraWebsiteAnnualUsd: number | null
+  extraWebsitesAvailable: boolean
+  templates: { collection: string[]; post: string[] }
+  allowedCollectionLayouts: string[]
+  features: PlanFeatureFlags
+  requiredPlan: Record<string, string>
+  lockedModules: string[]
+}
+
 export interface DashboardMe {
   user: { id: number; email: string; name: string | null; createdAt: string }
   subscription: {
     plan: string
-    /** Display name: Essentials, Professional, Publication (server adds; client falls back if missing) */
+    /** Display name: Essentials, Professional, Publication, Studio (server adds; client falls back if missing) */
     planDisplay?: string
     cadence: string
     priceDisplay: string
     status: string
     source?: string
     maxSites: number | null
+    maxWebsites?: number | null
+    maxBlogsPerWebsite?: number | null
     currentPeriodEnd: string | null
     cancelAtPeriodEnd: boolean
+    /** Set when a renewal payment first fails. Starts the 7-day render-only grace window. */
+    paymentFailedAt?: string | null
   } | null
+  entitlements?: PlanEntitlements
   sites: Array<{
     id: string
     siteKey: string
@@ -47,6 +83,23 @@ export async function getDashboardMe(): Promise<DashboardMe | null> {
   const res = await fetch(`${API}/dashboard/me`, { credentials: 'include' })
   if (!res.ok) return null
   return res.json()
+}
+
+export async function deleteAccount(
+  confirmEmail: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const res = await fetch(`${API}/dashboard/me`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ confirmEmail })
+  })
+  if (res.ok) return { success: true }
+  const data = await res.json().catch(() => ({}))
+  return {
+    success: false,
+    error: typeof data?.error === 'string' ? data.error : 'Failed to delete account'
+  }
 }
 
 export async function updateProfile(data: { name?: string | null }): Promise<{ id: number; email: string; name: string | null; createdAt: string } | null> {
@@ -190,9 +243,22 @@ export async function deleteSite(siteId: string): Promise<boolean> {
 }
 
 export async function createPortalSession(): Promise<{ url?: string; error?: string }> {
+  return createBillingPortalSession()
+}
+
+/** Opens Stripe's payment-method update flow and returns to Customize. */
+export async function createPaymentMethodUpdateSession(): Promise<{ url?: string; error?: string }> {
+  return createBillingPortalSession('payment_method_update')
+}
+
+async function createBillingPortalSession(
+  flow?: 'payment_method_update'
+): Promise<{ url?: string; error?: string }> {
   const res = await fetch(`${API}/dashboard/subscription/portal`, {
     method: 'POST',
-    credentials: 'include'
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(flow ? { flow } : {})
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {

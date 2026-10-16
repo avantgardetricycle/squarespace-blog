@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,12 +23,13 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { getDashboardMe, updateProfile, cancelSubscription, resumeSubscription, createPortalSession, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, updateProfile, cancelSubscription, resumeSubscription, createPortalSession, deleteAccount, type DashboardMe } from "@/api/auth";
 import { ResubscribePlanModal } from "@/app/components/ResubscribePlanModal";
 import { getPlanDisplayName } from "@/lib/planLabels";
-import { formatSubscriptionDate, hasActiveSubscription, isResubscribableStatus } from "@/lib/subscription";
+import { betaChargeWaitsUntilAccessEnds, formatSubscriptionDate, hasActiveSubscription, isResubscribableStatus } from "@/lib/subscription";
 
 export default function Account() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const checkoutSuccessToastShown = useRef(false);
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -38,6 +39,9 @@ export default function Account() {
   const [canceling, setCanceling] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [showResubscribeModal, setShowResubscribeModal] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalLoadingButton, setPortalLoadingButton] = useState<"changePlan" | "updatePayment" | null>(null);
@@ -125,6 +129,22 @@ export default function Account() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!me) return;
+    setDeletingAccount(true);
+    try {
+      const result = await deleteAccount(confirmEmail.trim());
+      if (result.success) {
+        toast.success("Your account has been deleted.");
+        navigate("/login");
+        return;
+      }
+      toast.error(result.error);
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!me) return;
     setSaving(true);
@@ -170,7 +190,11 @@ export default function Account() {
   const subscriptionExpired = !subscriptionActive;
   const isBeta = me.subscription?.source === "beta";
   const betaActive = Boolean(isBeta && subscriptionActive);
+  const betaChargeLater = betaActive && betaChargeWaitsUntilAccessEnds(me.subscription?.currentPeriodEnd);
+  const openSubscribeModal = () => setShowResubscribeModal(true);
   const canResubscribe = subscriptionExpired && isResubscribableStatus(me.subscription?.status);
+  const deleteEmailMatches =
+    confirmEmail.trim().toLowerCase() === me.user.email.trim().toLowerCase();
 
   return (
     <div className="space-y-6">
@@ -240,7 +264,7 @@ export default function Account() {
               </div>
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-medium leading-none">
-                  {betaActive ? "Beta access" : `${planDisplay} Plan`}
+                  {betaActive ? `${planDisplay} · Beta` : `${planDisplay} Plan`}
                 </p>
                 <p className="text-xs text-[#6b6b6b]">
                   {betaActive
@@ -248,23 +272,24 @@ export default function Account() {
                     : `${cadenceDisplay} • ${priceDisplay} • ${statusDisplay}`}
                 </p>
               </div>
-              {isBeta ? null : (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleOpenPortal("changePlan")}
-                disabled={portalLoading || !me.subscription || subscriptionExpired}
+                onClick={isBeta ? openSubscribeModal : handleOpenPortal("changePlan")}
+                disabled={portalLoading || !me.subscription || (!isBeta && subscriptionExpired)}
               >
                 {portalLoadingButton === "changePlan" ? "Opening…" : "Change Plan"}
               </Button>
-              )}
             </div>
             <div className="text-sm text-[#6b6b6b]">
               {betaActive ? (
                 <>
                   Beta access ends on{" "}
                   <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
-                  The Publication plan is included, with no payment method required.
+                  The {planDisplay} plan is included until then.{" "}
+                  {betaChargeLater
+                    ? "Choose a plan to keep BetterBlog after that date. You won't be charged until beta access ends."
+                    : "Choose a plan to keep BetterBlog. You'll be billed today."}
                 </>
               ) : subscriptionExpired ? (
                 currentPeriodEnd !== "—" ? (
@@ -299,9 +324,7 @@ export default function Account() {
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
             {betaActive ? (
-              <p className="text-sm text-[#6b6b6b]">
-                No payment method is required during beta access.
-              </p>
+              <p className="text-sm text-[#6b6b6b]">No card on file yet.</p>
             ) : subscriptionExpired || scheduledCancel ? (
               <p className="text-sm text-amber-600">
                 {scheduledCancel
@@ -346,7 +369,11 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            {betaActive ? null : scheduledCancel ? (
+            {betaActive ? (
+              <Button onClick={openSubscribeModal} disabled={portalLoading}>
+                Update Payment Method
+              </Button>
+            ) : scheduledCancel ? (
               <Button
                 onClick={() => void handleRestoreSubscription()}
                 disabled={restoring || portalLoading}
@@ -371,12 +398,81 @@ export default function Account() {
             )}
           </CardFooter>
         </Card>
+
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle>Danger zone</CardTitle>
+            <CardDescription>
+              Permanently delete your BetterBlog account and everything stored for it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-[#6b6b6b]">
+              This immediately deletes your blogs, comments, analytics, leads, support history, and
+              billing. Your Squarespace content is not affected. This cannot be undone.
+            </p>
+          </CardContent>
+          <CardFooter className="border-t pt-6">
+            <Button
+              variant="ghost"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={() => setShowDeleteModal(true)}
+              disabled={deletingAccount}
+            >
+              Delete account
+            </Button>
+            <AlertDialog
+              open={showDeleteModal}
+              onOpenChange={(open) => {
+                if (deletingAccount) return;
+                setShowDeleteModal(open);
+                if (!open) setConfirmEmail("");
+              }}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This permanently deletes your blogs, comments, analytics, leads, support
+                    history, and billing. Your Squarespace content stays on Squarespace. This
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="grid gap-2">
+                  <Label htmlFor="confirm-email">Type {me.user.email} to confirm</Label>
+                  <Input
+                    id="confirm-email"
+                    value={confirmEmail}
+                    onChange={(e) => setConfirmEmail(e.target.value)}
+                    autoComplete="off"
+                    disabled={deletingAccount}
+                  />
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deletingAccount}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleDeleteAccount();
+                    }}
+                    disabled={deletingAccount || !deleteEmailMatches}
+                    className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                  >
+                    {deletingAccount ? "Deleting…" : "Delete my account"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardFooter>
+        </Card>
       </div>
       <ResubscribePlanModal
         open={showResubscribeModal}
         onOpenChange={setShowResubscribeModal}
         defaultPlanKey={me.subscription?.plan}
         defaultCadence={me.subscription?.cadence}
+        subscribeDuringBeta={betaActive}
+        betaAccessUntil={me.subscription?.currentPeriodEnd}
       />
     </div>
   );

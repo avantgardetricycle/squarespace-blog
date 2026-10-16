@@ -39,6 +39,7 @@ import {
   Download,
 } from "lucide-react";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { featureAllowed, requiredPlanName } from "@/lib/servedConfig";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { GoogleAnalyticsModal, type GAConfig } from "@/app/components/GoogleAnalyticsModal";
 import { FathomAnalyticsModal, type FathomConfig } from "@/app/components/FathomAnalyticsModal";
@@ -252,6 +253,20 @@ export default function Analytics() {
     return <NoBlogsPlaceholder />;
   }
 
+  if (!featureAllowed(me.entitlements, "basicAnalytics", true)) {
+    return (
+      <div className="min-h-screen bg-[#f7f6f3] p-6">
+        <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
+        <p className="text-[#6b6b6b] max-w-xl">
+          Traffic, top posts, and how far people read are included on the {requiredPlanName(me.entitlements, "basicAnalytics")} plan.
+        </p>
+      </div>
+    );
+  }
+
+  const advancedAnalytics = featureAllowed(me.entitlements, "advancedAnalytics", true);
+  const emailCapture = featureAllowed(me.entitlements, "emailCapture", true);
+
   return (
     <div className="min-h-screen bg-[#f7f6f3] p-6 space-y-6">
       {/* Header */}
@@ -291,6 +306,17 @@ export default function Analytics() {
           </Select>
         </div>
       </div>
+
+      {!advancedAnalytics && (
+        <p className="text-sm text-[#6b6b6b]">
+          Google Analytics, click tracking, search terms, and per-author performance are included on the {requiredPlanName(me.entitlements, "advancedAnalytics")} plan.
+        </p>
+      )}
+      {!emailCapture && (
+        <p className="text-sm text-[#6b6b6b]">
+          The downloadable subscriber list is included on the {requiredPlanName(me.entitlements, "emailCapture")} plan.
+        </p>
+      )}
 
       {/* Google Analytics Integration Card */}
       <Card className="bg-white border-[#e4e3de] p-6">

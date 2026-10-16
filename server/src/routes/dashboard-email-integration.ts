@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { decrypt, encrypt } from '../lib/encryption.js'
 import {
   listEmailCatalog,
@@ -11,6 +12,7 @@ import {
   type KitDestinationKind,
 } from '../lib/email-providers.js'
 import { EMAIL_MODULES, ensureEmailIntegrationModules, propagatePlatformKeys, writeLegacyEmailDestination, type EmailModuleKey } from '../lib/email-sync.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 
 const router = Router()
 
@@ -352,7 +354,7 @@ type ModuleWrite = {
 }
 
 // PUT /api/dashboard/settings/email-integration
-router.put('/', requireSession, async (req: Request, res: Response) => {
+router.put('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: unknown; modules?: unknown }
   const siteKey = typeof body.siteKey === 'string' ? body.siteKey.trim() : ''
@@ -369,6 +371,16 @@ router.put('/', requireSession, async (req: Request, res: Response) => {
   const site = await getSiteForUser(siteKey, user.id)
   if (!site) {
     res.status(404).json({ error: 'Site not found' })
+    return
+  }
+  const plan = await loadUserPlanContext(user.id)
+  if (!plan.entitlements.features.emailCapture) {
+    res.status(403).json({ error: `Email sign-up requires the ${plan.entitlements.requiredPlan.emailCapture} plan.` })
+    return
+  }
+  const usesSync = JSON.stringify(modulesBody).includes('"kit"') || JSON.stringify(modulesBody).includes('"mailchimp"')
+  if (usesSync && !plan.entitlements.features.kitMailchimp) {
+    res.status(403).json({ error: `Kit and Mailchimp sync require the ${plan.entitlements.requiredPlan.kitMailchimp} plan.` })
     return
   }
 

@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { signupPageUrlError } from "@/lib/signupPageUrl";
 import BlogPreviewIframe, {
   buildSnapshotPreviewUrl,
   postPathFromFullUrl,
@@ -63,7 +64,9 @@ import {
   PAYWALL_HEADLINE_MAX,
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
-import { getDashboardMe, type DashboardMe } from "@/api/auth";
+import { getDashboardMe, createPaymentMethodUpdateSession, type DashboardMe } from "@/api/auth";
+import { featureAllowed, requiredPlanName, stripPreviewConfig } from "@/lib/servedConfig";
+import { formatSubscriptionDate, isInPaymentGrace, paymentGraceEndsAt } from "@/lib/subscription";
 import {
   EmailDestinationFields,
   EMAIL_MODULE_KEYS,
@@ -160,6 +163,31 @@ function authorBioFormatOf(author: BlogAuthorOption): AuthorBioFormat {
   return author.bioFormat === "markdown" || author.bioFormat === "html" ? author.bioFormat : "text";
 }
 
+function squarespaceAuthorProfile(au: {
+  bio?: unknown;
+  avatarUrl?: unknown;
+  avatarAssetUrl?: unknown;
+}): {
+  bio: string | null;
+  bioLong: string | null;
+  bioFormat: AuthorBioFormat;
+  imageUrl: string | null;
+} {
+  const bioRaw = typeof au.bio === "string" ? au.bio.trim() : "";
+  const avatar =
+    typeof au.avatarUrl === "string" && au.avatarUrl.trim()
+      ? au.avatarUrl.trim()
+      : typeof au.avatarAssetUrl === "string" && au.avatarAssetUrl.trim()
+        ? au.avatarAssetUrl.trim()
+        : null;
+  return {
+    bio: bioRaw.length > 0 && bioRaw.length <= 200 ? bioRaw : null,
+    bioLong: bioRaw ? bioRaw.slice(0, 1000) : null,
+    bioFormat: /<\/?[a-z][^>]*>/i.test(bioRaw) ? "html" : "text",
+    imageUrl: avatar,
+  };
+}
+
 function resolveInitialAuthorForProfileEdit(
   authorList: BlogAuthorOption[],
   preferredAuthorId: string | undefined,
@@ -244,22 +272,14 @@ export type PostHeaderContentVerticalAlignment = "top" | "center" | "bottom";
 
 export type PostHeaderFullBleedLayout = "overlay" | "stacked";
 
-/** Squarespace heading styles for the post title. */
-export type PostHeaderHeadingFont = "h1" | "h2" | "h3" | "h4";
-/** Squarespace paragraph styles for the deck and meta line. */
-export type PostHeaderParagraphFont = "p1" | "p2" | "p3";
+/** Post Header type size. One choice scales the title, deck, and meta. */
+export type PostHeaderTypeSize = "s" | "m" | "l" | "xl";
 
-export const POST_HEADER_HEADING_FONTS: { value: PostHeaderHeadingFont; label: string }[] = [
-  { value: "h1", label: "H1" },
-  { value: "h2", label: "H2" },
-  { value: "h3", label: "H3" },
-  { value: "h4", label: "H4" },
-];
-
-export const POST_HEADER_PARAGRAPH_FONTS: { value: PostHeaderParagraphFont; label: string }[] = [
-  { value: "p1", label: "P1" },
-  { value: "p2", label: "P2" },
-  { value: "p3", label: "P3" },
+export const POST_HEADER_TYPE_SIZES: { value: PostHeaderTypeSize; label: string }[] = [
+  { value: "s", label: "Small" },
+  { value: "m", label: "Medium" },
+  { value: "l", label: "Large" },
+  { value: "xl", label: "XL" },
 ];
 
 export interface PostHeaderConfig {
@@ -276,12 +296,12 @@ export interface PostHeaderConfig {
   showCategories?: boolean;
   /** Lead sentence / excerpt line after title, before byline meta */
   showByline?: boolean;
-  /** Squarespace heading style for the post title. Default H1. */
-  titleFont?: PostHeaderHeadingFont;
-  /** Squarespace paragraph style for the author/date line. Default P2. */
-  metaFont?: PostHeaderParagraphFont;
-  /** Squarespace paragraph style for the deck (post byline). Default P1. */
-  deckFont?: PostHeaderParagraphFont;
+  /** Post title size. Default Medium. */
+  titleSize?: PostHeaderTypeSize;
+  /** Author, date, and reading-time size. Default Medium. */
+  metaSize?: PostHeaderTypeSize;
+  /** Deck (lead line) size. Default Medium. */
+  deckSize?: PostHeaderTypeSize;
   /** Decorative accent rule above/between header elements (template-specific styling). */
   showDecorativeAccentLine?: boolean;
   /** Story template: full-bleed header zone background (default #000000). */
@@ -619,9 +639,9 @@ const defaultPostHeader: PostHeaderConfig = {
   showCategories: false,
   showByline: false,
   showDecorativeAccentLine: false,
-  titleFont: "h1",
-  metaFont: "p2",
-  deckFont: "p1",
+  titleSize: "m",
+  metaSize: "m",
+  deckSize: "m",
 };
 
 function isStoryPostLayoutConfig(postConfig: PostLevelConfig): boolean {
@@ -1408,15 +1428,16 @@ function PostHeaderFontSelect<T extends string>({
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
+  const selected = options.find((opt) => opt.value === value) ?? options.find((opt) => opt.value === "m") ?? options[0];
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
         <Label className="text-xs text-[#6b6b6b]">{label}</Label>
         <p className="text-[10px] text-[#6b6b6b]">{description}</p>
       </div>
-      <Select value={value} onValueChange={(v) => onChange(v as T)}>
-        <SelectTrigger className="w-[88px] shrink-0" aria-label={label}>
-          <SelectValue />
+      <Select value={selected.value} onValueChange={(v) => onChange(v as T)}>
+        <SelectTrigger className="w-[132px] shrink-0" aria-label={label}>
+          <SelectValue placeholder="Medium">{selected.label}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {options.map((opt) => (
@@ -2056,10 +2077,8 @@ function parseLevelConfig(
   const validFullBleedLayout = (v: unknown): PostHeaderFullBleedLayout | undefined =>
     (v === "stacked" || v === "overlay") ? v : undefined;
   const validSideGap = (v: unknown): number => Math.min(150, Math.max(0, Number(v) || 24));
-  const validPostHeaderHeadingFont = (v: unknown): PostHeaderHeadingFont =>
-    v === "h1" || v === "h2" || v === "h3" || v === "h4" ? v : "h1";
-  const validPostHeaderParagraphFont = (v: unknown, fallback: PostHeaderParagraphFont): PostHeaderParagraphFont =>
-    v === "p1" || v === "p2" || v === "p3" ? v : fallback;
+  const validPostHeaderTypeSize = (v: unknown): PostHeaderTypeSize =>
+    v === "s" || v === "m" || v === "l" || v === "xl" ? v : "m";
   const postHeaderBackgroundColor = validPostHeaderBackgroundColor(phRaw?.backgroundColor);
   const postHeaderForDerive: PostHeaderConfig | undefined = level === "post"
     ? (phRaw ? {
@@ -2077,9 +2096,9 @@ function parseLevelConfig(
         showCategories: Boolean(phRaw.showCategories ?? false),
         showByline: Boolean(phRaw.showByline ?? false),
         showDecorativeAccentLine: Boolean(phRaw.showDecorativeAccentLine ?? false),
-        titleFont: validPostHeaderHeadingFont(phRaw.titleFont),
-        metaFont: validPostHeaderParagraphFont(phRaw.metaFont, "p2"),
-        deckFont: validPostHeaderParagraphFont(phRaw.deckFont, "p1"),
+        titleSize: validPostHeaderTypeSize(phRaw.titleSize ?? phRaw.typeSize),
+        metaSize: validPostHeaderTypeSize(phRaw.metaSize ?? phRaw.typeSize),
+        deckSize: validPostHeaderTypeSize(phRaw.deckSize ?? phRaw.typeSize),
         ...(postHeaderBackgroundColor ? { backgroundColor: postHeaderBackgroundColor } : {}),
       } : defaultPostHeader)
     : undefined;
@@ -2351,9 +2370,9 @@ function levelConfigsEqual(a: BaseLevelConfig, b: BaseLevelConfig): boolean {
       (phA.showByline ?? false) === (phB.showByline ?? false) &&
       (phA.showDecorativeAccentLine ?? false) === (phB.showDecorativeAccentLine ?? false) &&
       (phA.backgroundColor ?? "") === (phB.backgroundColor ?? "") &&
-      (phA.titleFont ?? "h1") === (phB.titleFont ?? "h1") &&
-      (phA.metaFont ?? "p2") === (phB.metaFont ?? "p2") &&
-      (phA.deckFont ?? "p1") === (phB.deckFont ?? "p1");
+      (phA.titleSize ?? "m") === (phB.titleSize ?? "m") &&
+      (phA.metaSize ?? "m") === (phB.metaSize ?? "m") &&
+      (phA.deckSize ?? "m") === (phB.deckSize ?? "m");
     const updatedAtEqual =
       Boolean((a as PostLevelConfig).showPostUpdatedAt) === Boolean((b as PostLevelConfig).showPostUpdatedAt);
     return base && pa.show === pb.show && phEqual && updatedAtEqual;
@@ -2397,6 +2416,44 @@ function emptyModuleCatalogs(): Record<EmailModuleKey, ModuleCatalog> {
     collection_lead_magnet: emptyCatalogSlot(),
     post_lead_magnet: emptyCatalogSlot(),
   };
+}
+
+function PaymentGraceBanner({ endsAt }: { endsAt: Date }) {
+  const [opening, setOpening] = useState(false);
+  const endsLabel = formatSubscriptionDate(endsAt.toISOString()) ?? "the end of the grace period";
+
+  const openPaymentUpdate = async () => {
+    setOpening(true);
+    try {
+      const { url, error } = await createPaymentMethodUpdateSession();
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      toast.error(error ?? "Failed to open payment update");
+      setOpening(false);
+    } catch {
+      toast.error("Failed to open payment update");
+      setOpening(false);
+    }
+  };
+
+  return (
+    <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+      <p>
+        Your payment method failed. Your blog will keep working until{" "}
+        <span className="font-medium">{endsLabel}</span>, but settings can&apos;t be changed until the payment method is updated.
+      </p>
+      <button
+        type="button"
+        onClick={() => void openPaymentUpdate()}
+        disabled={opening}
+        className="mt-1 font-medium text-[#5B4FE8] hover:underline disabled:opacity-60"
+      >
+        {opening ? "Opening…" : "Update payment method"}
+      </button>
+    </div>
+  );
 }
 
 export default function Configure() {
@@ -2545,7 +2602,7 @@ export default function Configure() {
   useEffect(() => {
     if (!siteKey) return;
     setConfigLoading(true);
-    fetch(`/api/config/${siteKey}`, { credentials: "include" })
+    fetch(`/api/config/${siteKey}?editor=1`, { credentials: "include" })
       .then((res) => {
         if (!res.ok) return null;
         return res.json();
@@ -2847,54 +2904,70 @@ export default function Configure() {
   // Fetch blog JSON and sync authors from Squarespace; add ingested authors as default (runs after config loads)
   useEffect(() => {
     if (!effectiveSiteKey || !effectiveSite || configLoading) return;
-    Promise.all([
-      fetch(
-        `/api/config/blog-preview/${encodeURIComponent(effectiveSiteKey)}${previewDebugEnabled ? "?bbFeaturedDebug=1" : ""}`,
-        { credentials: "include" }
-      ).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/blog-authors/${effectiveSiteKey}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : [])),
-    ])
-      .then(async ([json, existingAuthors]) => {
+    fetch(
+      `/api/config/blog-preview/${encodeURIComponent(effectiveSiteKey)}${previewDebugEnabled ? "?bbFeaturedDebug=1" : ""}`,
+      { credentials: "include" }
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then(async (json) => {
         const rawItems = Array.isArray(json?.items) ? json.items : (json?.collection?.items ?? []);
         // Squarespace can return null entries for member-area-gated posts — filter them out
         // to prevent null-access crashes when a post is selected in the Configure panel.
         const items = rawItems.filter((item: unknown) => item != null && typeof item === 'object');
         setBlogItems(items);
-        const existingList = Array.isArray(existingAuthors) ? existingAuthors : [];
-        const existingByName = new Map(existingList.map((a: { id?: string; name?: string }) => [a?.name ?? "", a?.id ?? ""]));
         const authorNames = new Set<string>();
+        const profiles = new Map<string, ReturnType<typeof squarespaceAuthorProfile>>();
+        const rememberAuthor = (au: { displayName?: string; bio?: unknown; avatarUrl?: unknown; avatarAssetUrl?: unknown } | null | undefined) => {
+          if (!au?.displayName || typeof au.displayName !== "string") return;
+          const name = au.displayName.trim();
+          if (!name) return;
+          authorNames.add(name);
+          const next = squarespaceAuthorProfile(au);
+          const prev = profiles.get(name);
+          if (!prev) {
+            profiles.set(name, next);
+            return;
+          }
+          profiles.set(name, {
+            bio: prev.bio || next.bio,
+            bioLong: prev.bioLong || next.bioLong,
+            bioFormat: prev.bio ? prev.bioFormat : next.bioFormat,
+            imageUrl: prev.imageUrl || next.imageUrl,
+          });
+        };
         for (const item of items) {
           const a = item?.author;
-          if (a?.displayName && typeof a.displayName === "string") authorNames.add(a.displayName.trim());
+          rememberAuthor(a);
           const authorsArr = item?.authors ?? (a ? [a] : []);
-          for (const au of authorsArr) {
-            if (au?.displayName && typeof au.displayName === "string") authorNames.add(au.displayName.trim());
-          }
+          for (const au of authorsArr) rememberAuthor(au);
         }
         const apiBase = typeof window !== "undefined" ? window.location.origin : "";
         const ingestedIds: string[] = [];
         for (const name of authorNames) {
           if (!name) continue;
-          let id = existingByName.get(name);
-          if (!id) {
-            try {
-              const res = await fetch(`${apiBase}/api/blog-authors`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ siteKey: effectiveSiteKey, name, ingestedFrom: "SQUARESPACE", isDefault: true }),
-              });
-              const data = await res.json();
-              const newId = data?.id;
-              if (typeof newId === "string") {
-                id = newId;
-                existingByName.set(name, newId);
-              }
-            } catch {
-              /* ignore */
-            }
+          const profile = profiles.get(name);
+          try {
+            const res = await fetch(`${apiBase}/api/blog-authors`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                siteKey: effectiveSiteKey,
+                name,
+                ingestedFrom: "SQUARESPACE",
+                isDefault: true,
+                bio: profile?.bio ?? null,
+                bioLong: profile?.bioLong ?? null,
+                bioFormat: profile?.bioFormat ?? "text",
+                imageUrl: profile?.imageUrl ?? null,
+              }),
+            });
+            const data = await res.json();
+            const newId = data?.id;
+            if (typeof newId === "string") ingestedIds.push(newId);
+          } catch {
+            /* ignore */
           }
-          if (id) ingestedIds.push(id);
         }
         const freshAuthors = await fetch(`/api/blog-authors/${effectiveSiteKey}`, { credentials: "include" }).then((r) => (r.ok ? r.json() : []));
         setAuthors(Array.isArray(freshAuthors) ? freshAuthors : []);
@@ -3298,8 +3371,27 @@ export default function Configure() {
     const idx = blogItems.findIndex((item, i) => getFeaturedPostKey(item, i) === trimmed);
     return idx >= 0 ? getFeaturedPostKey(blogItems[idx], idx) : FEATURED_POST_SELECT_AUTO;
   }, [config.collectionConfig, blogItems, getFeaturedPostKey]);
+  const entitlements = me?.entitlements ?? null;
+  const planLoaded = me != null;
   const rendererConfig = useMemo(() => {
-    const base = configToRendererConfig(config);
+    let previewConfig = config;
+    if (entitlements) {
+      previewConfig = {
+        ...config,
+        collectionConfig: stripPreviewConfig(config.collectionConfig, entitlements),
+        postConfig: stripPreviewConfig(config.postConfig, entitlements),
+      };
+      if (
+        activePostTemplateKey &&
+        !entitlements.templates.post.includes(activePostTemplateKey)
+      ) {
+        const reporter = templateCatalogPost.find((template) => template.templateKey === "reporter");
+        if (reporter?.postConfig) {
+          previewConfig = { ...previewConfig, postConfig: reporter.postConfig as SiteConfigForm["postConfig"] };
+        }
+      }
+    }
+    const base = configToRendererConfig(previewConfig);
     const authorMap: Record<string, string> = {};
     const authorProfiles: Record<string, { name: string; imageUrl: string | null; bio: string | null; bioLong: string | null; bioFormat: AuthorBioFormat; email: string | null; socialLinks: Record<string, string> }> = {};
     for (const a of authors) {
@@ -3325,7 +3417,7 @@ export default function Configure() {
       paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
       viewerMode: previewAudience === "loggedIn" ? "loggedIn" : "loggedOut",
       paywallSettings:
-        shouldShowViewerModeToggle
+        shouldShowViewerModeToggle && featureAllowed(entitlements, "paywall", planLoaded)
           ? {
               subscribeUrl: paywallForm.subscribeUrl.trim() || null,
               footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
@@ -3341,6 +3433,10 @@ export default function Configure() {
     };
   }, [
     config,
+    entitlements,
+    planLoaded,
+    activePostTemplateKey,
+    templateCatalogPost,
     authors,
     effectiveSiteKey,
     effectiveSite,
@@ -3408,8 +3504,17 @@ export default function Configure() {
   }, [previewDebugEnabled, selectedLevel, selectedPostIndex, previewSelectedPostIndex, configSignature, config.collectionConfig, config.postConfig]);
 
   const handleSave = useCallback(async () => {
+    if (isInPaymentGrace(me?.subscription)) return;
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
+    if (shouldShowViewerModeToggle) {
+      const signupError = signupPageUrlError(paywallForm.subscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
+        setPaywallSettingsModalOpen(true);
+        return;
+      }
+    }
     setSaving(true);
     const apiBase = typeof window !== "undefined" ? window.location.origin : "";
     const dirtyEmailModules = Object.fromEntries(
@@ -3546,6 +3651,7 @@ export default function Configure() {
     paywallForm.featureItems,
     emailDestinations,
     savedEmailDestinations,
+    me,
   ]);
 
   const handleReset = () => {
@@ -3862,9 +3968,9 @@ export default function Configure() {
     if (path === "postHeader.showByline" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showByline: value as boolean } };
     if (path === "postHeader.showDecorativeAccentLine" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, showDecorativeAccentLine: value as boolean } };
     if (path === "postHeader.backgroundColor" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, backgroundColor: value as string } };
-    if (path === "postHeader.titleFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleFont: value as PostHeaderHeadingFont } };
-    if (path === "postHeader.metaFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaFont: value as PostHeaderParagraphFont } };
-    if (path === "postHeader.deckFont" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckFont: value as PostHeaderParagraphFont } };
+    if (path === "postHeader.titleSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, titleSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.metaSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, metaSize: value as PostHeaderTypeSize } };
+    if (path === "postHeader.deckSize" && "postHeader" in cfg) return { ...cfg, postHeader: { ...(cfg as PostLevelConfig).postHeader!, deckSize: value as PostHeaderTypeSize } };
     return cfg;
   }
 
@@ -3963,10 +4069,15 @@ export default function Configure() {
     return <NoBlogsPlaceholder />;
   }
 
+  const settingsLocked = isInPaymentGrace(me.subscription);
+  const graceEnds = paymentGraceEndsAt(me.subscription);
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-[#f7f6f3]">
+    <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-[#f7f6f3]">
+      {settingsLocked && graceEnds ? <PaymentGraceBanner endsAt={graceEnds} /> : null}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Configuration Sidebar */}
-      <aside className="relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm">
+      <aside className={`relative z-20 flex w-80 min-w-0 max-w-80 shrink-0 flex-col overflow-x-hidden bg-white border-r border-[#e5e4e0] min-h-0 shadow-sm ${settingsLocked ? "pointer-events-none select-none opacity-60" : ""}`}>
         <div className="p-4 border-b border-[#e5e4e0] space-y-4">
           <div className="space-y-2">
             <Label className="text-xs font-medium text-[#6b6b6b]">Customizing</Label>
@@ -4035,14 +4146,22 @@ export default function Configure() {
               Clear all settings
             </Button>
             {shouldShowViewerModeToggle && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => setPaywallSettingsModalOpen(true)}
-              >
-                Paywall Settings
-              </Button>
+              <div className="space-y-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  disabled={!featureAllowed(entitlements, "paywall", planLoaded)}
+                  onClick={() => setPaywallSettingsModalOpen(true)}
+                >
+                  Paywall Settings
+                </Button>
+                {!featureAllowed(entitlements, "paywall", planLoaded) && (
+                  <p className="text-[11px] text-[#6b6b6b]">
+                    Included on the {requiredPlanName(entitlements, "paywall")} plan.
+                  </p>
+                )}
+              </div>
             )}
             <Dialog
               open={clearSettingsModalOpen}
@@ -4163,6 +4282,8 @@ export default function Configure() {
             initialLevel={selectedLevel}
             collectionTemplateId={config.collectionTemplateId}
             postTemplateId={config.postTemplateId}
+            allowedTemplateKeys={planLoaded ? entitlements?.templates ?? { collection: [], post: [] } : null}
+            requiredPlan={entitlements?.requiredPlan}
           />
           {shouldShowViewerModeToggle && (
             <PaywallSettingsModal
@@ -4305,13 +4426,22 @@ export default function Configure() {
                     )}
 
                     {selectedLevel === "collection" && (
-                    <div className="min-w-0 border-b border-[#e5e4e0]">
+                    <div className={featureAllowed(entitlements, "featuredAndPinned", planLoaded) ? "min-w-0 border-b border-[#e5e4e0]" : "min-w-0 border-b border-[#e5e4e0] pointer-events-none opacity-60"}>
                       <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">Featured Article</span>
+                        <span className="font-medium">
+                          Featured Article
+                          {!featureAllowed(entitlements, "featuredAndPinned", planLoaded) && (
+                            <span className="ml-2 text-[11px] font-normal text-[#6b6b6b]">
+                              Included on the {requiredPlanName(entitlements, "featuredAndPinned")} plan.
+                            </span>
+                          )}
+                        </span>
                         <div className="flex items-center gap-1">
                           <Switch
+                            disabled={!featureAllowed(entitlements, "featuredAndPinned", planLoaded)}
                             checked={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).show}
                             onCheckedChange={(v) => {
+                              if (!featureAllowed(entitlements, "featuredAndPinned", planLoaded)) return;
                               updateLevelConfigPath("featuredArticle.show", v);
                               setSectionExpanded((p) => ({ ...p, featuredArticle: v }));
                             }}
@@ -4680,12 +4810,17 @@ export default function Configure() {
                     {selectedLevel === "post" && (
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
                       Comments
+                      {!featureAllowed(entitlements, "comments", planLoaded) && (
+                        <span className="ml-2 normal-case tracking-normal font-medium text-[#6b6b6b]">
+                          Included on the {requiredPlanName(entitlements, "comments")} plan.
+                        </span>
+                      )}
                     </div>
                     )}
                     {selectedLevel === "post" && (commentSettingsLoading ? (
                       <div className="border-b border-[#e5e4e0] py-4 text-sm text-[#6b6b6b]">Loading comment settings…</div>
                     ) : commentSettings && (
-                    <div className="border-b border-[#e5e4e0] pb-4">
+                    <div className={featureAllowed(entitlements, "comments", planLoaded) ? "border-b border-[#e5e4e0] pb-4" : "border-b border-[#e5e4e0] pb-4 pointer-events-none opacity-60"}>
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Show Comments</span>
                         <div className="flex items-center gap-1">
@@ -5034,24 +5169,24 @@ export default function Configure() {
                             )}
                             <PostHeaderFontSelect
                               label="Post title"
-                              description="Squarespace heading size"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleFont ?? "h1"}
-                              options={POST_HEADER_HEADING_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.titleFont", v)}
+                              description="Title size"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.titleSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.titleSize", v)}
                             />
                             <PostHeaderFontSelect
                               label="Meta"
-                              description="Squarespace paragraph size"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaFont ?? "p2"}
-                              options={POST_HEADER_PARAGRAPH_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.metaFont", v)}
+                              description="Author, date, and reading time"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.metaSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.metaSize", v)}
                             />
                             <PostHeaderFontSelect
                               label="Deck"
-                              description="Squarespace paragraph size for the lead line"
-                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckFont ?? "p1"}
-                              options={POST_HEADER_PARAGRAPH_FONTS}
-                              onChange={(v) => updateLevelConfigPath("postHeader.deckFont", v)}
+                              description="Lead line under the title"
+                              value={(effectiveConfig as PostLevelConfig).postHeader?.deckSize ?? "m"}
+                              options={POST_HEADER_TYPE_SIZES}
+                              onChange={(v) => updateLevelConfigPath("postHeader.deckSize", v)}
                             />
                             <div className="flex items-center justify-between">
                               <div>
@@ -5943,6 +6078,12 @@ export default function Configure() {
                           <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#1a7a5e] border-b border-[rgba(26,122,94,0.2)]">
                             Navigation & Discovery
                           </div>
+                          {planLoaded && (!featureAllowed(entitlements, "search", planLoaded) || !featureAllowed(entitlements, "emailCapture", planLoaded)) && (
+                            <p className="text-[11px] text-[#6b6b6b] pt-2">
+                              {!featureAllowed(entitlements, "search", planLoaded) && `Search, filters, and sorting are on the ${requiredPlanName(entitlements, "search")} plan. `}
+                              {!featureAllowed(entitlements, "emailCapture", planLoaded) && `Email sign-up and lead magnets are on the ${requiredPlanName(entitlements, "emailCapture")} plan.`}
+                            </p>
+                          )}
                           {selectedLevel === "collection" && (
                             <>
                               <ModuleSettingSectionCollapseOnly
@@ -6145,6 +6286,20 @@ export default function Configure() {
                                 content={
                                   <div className="space-y-3">
                                     {renderFeatureLocationControl("authorProfiles", postFeatureSidebarFooterLocations, "authorProfiles")}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full"
+                                      disabled={authors.length === 0}
+                                      onClick={() =>
+                                        openEditAuthorProfiles({
+                                          fallbackAuthorIds: config.defaultAuthorIds,
+                                        })
+                                      }
+                                    >
+                                      Edit Author Profiles
+                                    </Button>
                                   </div>
                                 }
                               />
@@ -6656,7 +6811,7 @@ export default function Configure() {
                   <Undo2 className="h-4 w-4 mr-1.5" />
                   Undo
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button size="sm" onClick={handleSave} disabled={saving || settingsLocked}>
                   <Save className="h-4 w-4 mr-1.5" />
                   {saving ? "Saving…" : "Save"}
                 </Button>
@@ -6801,6 +6956,7 @@ export default function Configure() {
           </div>
         </div>
       </main>
+      </div>
     </div>
   );
 }

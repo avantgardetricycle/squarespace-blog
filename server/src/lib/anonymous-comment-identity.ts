@@ -1,5 +1,35 @@
 export const ANONYMOUS_HANDLE_RE = /^Anonymous\d{4}$/
 
+const PROFILE_INITIAL = /[\p{L}\p{N}]/u
+
+function firstProfileString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function profileLastInitial(lastName: string): string {
+  if (!lastName) return ''
+  for (const char of Array.from(lastName)) {
+    if (PROFILE_INITIAL.test(char)) return char.toLocaleUpperCase()
+  }
+  return ''
+}
+
+/** Public comment name from a Squarespace profile when the reader leaves the name blank. */
+export function profileCommentDisplayName(profile: unknown): string {
+  if (!profile || typeof profile !== 'object') return ''
+  const record = profile as Record<string, unknown>
+  const first = firstProfileString(record.firstName, record.first_name)
+  const last = firstProfileString(record.lastName, record.last_name)
+  const initial = profileLastInitial(last)
+  if (first && initial) return `${first} ${initial}.`
+  if (first) return first
+  if (initial) return `${initial}.`
+  return ''
+}
+
 export type AnonymousIdentityDecision = {
   generatedHandle: string | null
   useAnonymousIdentity: boolean

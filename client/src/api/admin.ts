@@ -6,6 +6,7 @@ export type BetaTesterSummary = {
   userId: number;
   email: string;
   name: string | null;
+  plan: string;
   inviteStatus: InviteStatus;
   accessUntil: string | null;
   accessActive: boolean;
@@ -82,6 +83,22 @@ export async function resendBetaInvite(userId: number): Promise<BetaTesterSummar
   });
   if (!res.ok) throw new Error(await readError(res, "Failed to resend invite"));
   const body = (await res.json()) as { tester: BetaTesterSummary | null };
+  return body.tester;
+}
+
+export async function updateBetaTesterPlan(
+  userId: number,
+  plan: string
+): Promise<BetaTesterSummary> {
+  const res = await fetch(`${API}/admin/beta-testers/${userId}/plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ plan }),
+  });
+  if (!res.ok) throw new Error(await readError(res, "Failed to update plan"));
+  const body = (await res.json()) as { tester: BetaTesterSummary | null };
+  if (!body.tester) throw new Error("Failed to update plan");
   return body.tester;
 }
 

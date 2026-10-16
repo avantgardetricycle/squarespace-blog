@@ -1,14 +1,64 @@
 export const ACTIVE_SUBSCRIPTION_STATUSES = ['trialing', 'active'] as const
 
+export const PAYMENT_FAILED_STATUSES = ['past_due', 'unpaid'] as const
+
+/** Live blog keeps rendering this long after the first failed payment. Settings stay locked. */
+export const PAYMENT_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
+
 export const BETA_SUBSCRIPTION_SOURCE = 'beta'
 
 export function isActiveSubscriptionStatus(status: string | null | undefined): boolean {
   return status === 'trialing' || status === 'active'
 }
 
+export function isPaymentFailedStatus(status: string | null | undefined): boolean {
+  return status === 'past_due' || status === 'unpaid'
+}
+
 /** Fully ended subscriptions that can start a new Checkout (not past_due / unpaid). */
 export function isResubscribableStatus(status: string | null | undefined): boolean {
   return status == null || status === 'canceled' || status === 'incomplete_expired'
+}
+
+/**
+ * Stripe rejects `trial_end` values less than 48 hours away. The extra five
+ * minutes keeps a checkout started near that boundary from being refused.
+ */
+export const BETA_CONVERSION_MIN_TRIAL_MS = 48 * 60 * 60 * 1000 + 5 * 60 * 1000
+
+/**
+ * When a beta tester subscribes, billing waits until complimentary access ends
+ * so the paid plan extends that access. Returns null when the grant has ended
+ * or is too close for Stripe to start a trial — checkout bills immediately.
+ */
+export function betaConversionTrialEnd(
+  sub: SubscriptionEntitlementInput | null | undefined,
+  now: Date = new Date()
+): Date | null {
+  if (!isBetaSubscription(sub) || !isEntitledSubscription(sub, now)) return null
+  const end = toDate(sub?.currentPeriodEnd)
+  if (!end) return null
+  if (end.getTime() < now.getTime() + BETA_CONVERSION_MIN_TRIAL_MS) return null
+  return end
+}
+
+export type CheckoutBlock = 'active_paid' | 'payment_required'
+
+/**
+ * Why Checkout must be refused. Beta grants are not a block: a tester can
+ * start a paid plan while complimentary access is still running. `subscriptions`
+ * should be newest first, but every non-beta row is considered.
+ */
+export function checkoutBlockReason(
+  subscriptions: SubscriptionEntitlementInput[],
+  now: Date = new Date()
+): CheckoutBlock | null {
+  const paid = subscriptions.filter((sub) => !isBetaSubscription(sub))
+  if (paid.some((sub) => isEntitledSubscription(sub, now))) return 'active_paid'
+  if (paid.some((sub) => !isResubscribableStatus(effectiveSubscriptionStatus(sub, now)))) {
+    return 'payment_required'
+  }
+  return null
 }
 
 /** Synthetic customer ids for beta grants. These are not Stripe customers. */
@@ -25,12 +75,74 @@ export type SubscriptionEntitlementInput = {
   status?: string | null
   source?: string | null
   currentPeriodEnd?: Date | string | null
+  paymentFailedAt?: Date | string | null
 }
 
 export function isBetaSubscription(
   sub: { source?: string | null } | null | undefined
 ): boolean {
   return sub?.source === BETA_SUBSCRIPTION_SOURCE
+}
+
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * End of the render-only window. The clock starts at paymentFailedAt and is not
+ * reset by later past_due or unpaid updates.
+ */
+export function paymentGraceEndsAt(
+  sub: SubscriptionEntitlementInput | null | undefined
+): Date | null {
+  if (!sub || isBetaSubscription(sub) || !isPaymentFailedStatus(sub.status)) return null
+  const start = toDate(sub.paymentFailedAt)
+  if (!start) return null
+  return new Date(start.getTime() + PAYMENT_GRACE_PERIOD_MS)
+}
+
+export function isInPaymentGrace(
+  sub: SubscriptionEntitlementInput | null | undefined,
+  now: Date = new Date()
+): boolean {
+  const ends = paymentGraceEndsAt(sub)
+  return ends != null && ends.getTime() > now.getTime()
+}
+
+/** Public blog rendering. Full subscribers and in-grace failed payments. */
+export function canRenderSubscription(
+  sub: SubscriptionEntitlementInput | null | undefined,
+  now: Date = new Date()
+): boolean {
+  return isEntitledSubscription(sub, now) || isInPaymentGrace(sub, now)
+}
+
+/**
+ * Keep the original failure time while the subscription stays past_due or unpaid.
+ * A later return to a failed status starts a new window. Recovery clears it.
+ */
+export function nextPaymentFailedAt(
+  existing: { status?: string | null; paymentFailedAt?: Date | null },
+  nextStatus: string,
+  now: Date = new Date()
+): Date | null {
+  if (isPaymentFailedStatus(nextStatus)) {
+    if (isPaymentFailedStatus(existing.status) && existing.paymentFailedAt) {
+      return existing.paymentFailedAt
+    }
+    return now
+  }
+  if (
+    nextStatus === 'active' ||
+    nextStatus === 'trialing' ||
+    nextStatus === 'canceled' ||
+    nextStatus === 'incomplete_expired'
+  ) {
+    return null
+  }
+  return existing.paymentFailedAt ?? null
 }
 
 /**

@@ -3,15 +3,21 @@ import prisma from '../db/index.js'
 import {
   getSiteBySiteKey,
   getActiveSiteConfig,
+  migrateBlogPasswordAtRest,
   upsertSiteConfig,
   type SiteConfigData
 } from '../db/index.js'
-import { requireSession, SessionUser } from '../middleware/session.js'
+import { optionalSession, requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import { SnapshotCaptureError, getServedSnapshot, storeSnapshot } from '../lib/preview-snapshot.js'
 import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/preview-snapshot-html.js'
 import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
-import { isEntitledSubscription } from '../lib/subscriptionStatus.js'
-import { resolveDefaultPostTemplate } from './templates.js'
+import { canRenderSubscription } from '../lib/subscriptionStatus.js'
+import { stampPaymentFailure } from '../lib/paymentGrace.js'
+import { newlyLockedViolations, resolveEntitlements, stripServedConfig } from '../lib/planEntitlements.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
+import { readBlogPassword } from '../lib/blog-password.js'
+import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 
 const router = Router()
 
@@ -28,6 +34,30 @@ type ViewerMode = 'loggedOut' | 'loggedIn'
 
 function isRecord (value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Normalize a required visitor signup URL (https if missing, max 2048). */
+function requiredSignupPageUrl (raw: unknown): { ok: true; url: string } | { ok: false; error: string } {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return { ok: false, error: 'A signup URL is required for membership blogs' }
+  }
+  let toParse = raw.trim()
+  if (!/^https?:\/\//i.test(toParse)) toParse = 'https://' + toParse
+  try {
+    const u = new URL(toParse)
+    if (!u.hostname) {
+      return {
+        ok: false,
+        error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+      }
+    }
+    return { ok: true, url: u.href.length > 2048 ? u.href.slice(0, 2048) : u.href }
+  } catch {
+    return {
+      ok: false,
+      error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+    }
+  }
 }
 
 /** Optional payload with POST /api/config to upsert site_paywall_settings. */
@@ -199,10 +229,11 @@ function buildDefaultPostConfig (
 }
 
 function appendPasswordToUrl (url: string, password: string | null | undefined): string {
-  if (!password || !password.trim()) return url
+  const plain = readBlogPassword(password)
+  if (!plain) return url
   try {
     const u = new URL(url)
-    u.searchParams.set('password', password.trim())
+    u.searchParams.set('password', plain)
     return u.toString()
   } catch {
     return url
@@ -299,9 +330,8 @@ router.get('/blog-preview/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
-
   try {
+    const urlWithPassword = appendPasswordToUrl(blogUrl, site.blogPassword)
     const allItems: unknown[] = []
     let nextUrl: string | null = urlWithPassword
     let firstJson: Record<string, unknown> | null = null
@@ -508,6 +538,7 @@ async function siteOwnedBySession (req: Request): Promise<{ site: Awaited<Return
   const site = await prisma.site.findFirst({
     where: { siteKey, userId: user.id, deletedAt: null }
   })
+  if (site) await migrateBlogPasswordAtRest(site.id, site.blogPassword)
   return { site, missing: !site }
 }
 
@@ -707,11 +738,18 @@ router.post('/check-placeholder-images', async (req: Request, res: Response) => 
 
 // GET /api/config/:siteKey - Public endpoint for loader.js
 // Uses internal subscription record only (no Stripe API calls) - gated on status
-router.get('/:siteKey', async (req: Request, res: Response) => {
+async function templateKeyFor (id: string | null, level: 'collection' | 'post'): Promise<string | null> {
+  if (!id) return null
+  const row = await prisma.templateConfig.findFirst({
+    where: { id, level },
+    select: { templateKey: true }
+  })
+  return row?.templateKey ?? null
+}
+
+router.get('/:siteKey', optionalSession, async (req: Request, res: Response) => {
   const siteKey = req.params.siteKey as string
   const viewerMode = parseViewerModeQuery(req.query.viewerMode)
-  const reqId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  console.log(`[config] GET ${siteKey} start (${reqId})`)
   try {
 
   const site = await prisma.site.findFirst({
@@ -720,7 +758,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
       user: {
         include: {
           subscriptions: {
-            where: { status: { in: ['trialing', 'active'] } },
+            where: { status: { in: ['trialing', 'active', 'past_due', 'unpaid'] } },
             orderBy: { updatedAt: 'desc' },
             take: 10
           }
@@ -742,8 +780,15 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
     return
   }
 
-  const activeSubscription =
-    site.user?.subscriptions?.find((sub) => isEntitledSubscription(sub)) ?? null
+  const subscriptions = site.user?.subscriptions ?? []
+  let activeSubscription: (typeof subscriptions)[number] | null = null
+  for (const sub of subscriptions) {
+    const stamped = await stampPaymentFailure(sub)
+    if (canRenderSubscription(stamped)) {
+      activeSubscription = stamped
+      break
+    }
+  }
   if (!activeSubscription) {
     res.status(403).json({ error: 'Subscription required' })
     return
@@ -944,7 +989,14 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         }
 
     const pw = site.sitePaywallSettings
-    const paywallSettings = pw
+    let servedDefaultAuthorIds = defaultAuthorIds
+    let servedOverrides: Record<string, string[]> = authorSettings.postAuthorOverrides ?? {}
+    let servedAuthorMap: Record<string, string> = authorMap
+    let servedAuthorProfiles = authorProfiles
+    let servedCollection: Record<string, unknown> = cc
+    let servedPost = resolvedPostConfig
+    let servedComments: { commentsEnabled: boolean; [key: string]: unknown } = commentSettings
+    let servedPaywall = pw
       ? {
           subscribeUrl: pw.subscribeUrl,
           footerDescription: pw.footerDescription,
@@ -953,30 +1005,88 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
           featureItems: pw.featureItems
         }
       : null
+    let servedPaywallMode = site.paywallMode
+    let servedCollectionTemplateId = siteConfigTyped.collectionTemplateId ?? null
+    let servedPostTemplateId = postTemplateId
+    let includeFathom = Boolean(site.fathomAnalytics)
+    let includePostViews = Object.keys(postViewCounts).length > 0
+
+    const sessionUser = (req as Request & { user?: SessionUser }).user
+    const editorView = req.query.editor === '1' && sessionUser?.id === site.userId
+    if (!editorView) {
+      const entitlements = resolveEntitlements({
+        plan: activeSubscription.plan,
+        stored: {
+          maxSites: activeSubscription.maxSites,
+          maxWebsites: activeSubscription.maxWebsites,
+          maxBlogsPerWebsite: activeSubscription.maxBlogsPerWebsite
+        }
+      })
+      const [collectionTemplateKey, postTemplateKey] = await Promise.all([
+        templateKeyFor(servedCollectionTemplateId, 'collection'),
+        templateKeyFor(servedPostTemplateId, 'post')
+      ])
+      const stripped = stripServedConfig(entitlements, {
+        collectionConfig: servedCollection,
+        postConfig: servedPost,
+        collectionTemplateKey,
+        postTemplateKey,
+        defaultAuthorIds: servedDefaultAuthorIds,
+        postAuthorOverrides: servedOverrides
+      })
+      servedCollection = stripped.collectionConfig
+      servedPost = stripped.postConfig
+      servedDefaultAuthorIds = stripped.defaultAuthorIds
+      servedOverrides = stripped.postAuthorOverrides
+      if (stripped.collectionTemplateDisallowed) {
+        const fallback = await resolveDefaultCollectionTemplate()
+        servedCollectionTemplateId = fallback?.id ?? null
+      }
+      if (stripped.postTemplateDisallowed) {
+        const fallback = await resolveDefaultPostTemplate()
+        servedPostTemplateId = fallback?.id ?? null
+        if (fallback) servedPost = mergeProgressBarIntoPostConfig(fallback.postConfig, progressBar)
+      }
+      const allowedAuthors = new Set([
+        ...servedDefaultAuthorIds,
+        ...Object.values(servedOverrides).flat()
+      ])
+      servedAuthorMap = Object.fromEntries(Object.entries(authorMap).filter(([id]) => allowedAuthors.has(id)))
+      servedAuthorProfiles = Object.fromEntries(
+        Object.entries(authorProfiles).filter(([id]) => allowedAuthors.has(id))
+      ) as typeof authorProfiles
+      if (!entitlements.features.comments) servedComments = { commentsEnabled: false }
+      if (!entitlements.features.paywall) {
+        servedPaywall = null
+        servedPaywallMode = 'auto'
+      }
+      if (!entitlements.features.advancedAnalytics) includeFathom = false
+      if (!entitlements.features.sorting) includePostViews = false
+    }
 
     const configData = {
       siteKey,
       siteId: site.id,
       blogPath: site.blogPath ?? null,
       rendererUrl,
-      defaultAuthorIds,
-      postAuthorOverrides: authorSettings.postAuthorOverrides ?? {},
-      authorMap,
-      authorProfiles,
-      collectionConfig: cc,
-      postConfig: resolvedPostConfig,
-      paywallMode: site.paywallMode,
+      defaultAuthorIds: servedDefaultAuthorIds,
+      postAuthorOverrides: servedOverrides,
+      authorMap: servedAuthorMap,
+      authorProfiles: servedAuthorProfiles,
+      collectionConfig: servedCollection,
+      postConfig: servedPost,
+      paywallMode: servedPaywallMode,
       paywallDetectionState: site.paywallDetectionState,
       paywallDetectionSource: site.paywallDetectionSource ?? null,
-      paywallSettings,
+      paywallSettings: servedPaywall,
       ...(viewerMode ? { viewerMode } : {}),
-      collectionTemplateId: siteConfigTyped.collectionTemplateId ?? null,
-      postTemplateId,
+      collectionTemplateId: servedCollectionTemplateId,
+      postTemplateId: servedPostTemplateId,
       recentPostsCount: 3,
       baseUrl,
-      commentSettings,
-      ...(Object.keys(postViewCounts).length > 0 ? { postViewCounts } : {}),
-      ...(site.fathomAnalytics
+      commentSettings: servedComments,
+      ...(includePostViews ? { postViewCounts } : {}),
+      ...(includeFathom && site.fathomAnalytics
         ? {
             fathom: {
               siteId: site.fathomAnalytics.fathomSiteId,
@@ -986,19 +1096,13 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
         : {})
     }
 
-    console.log(`[config] GET ${siteKey} ok (${reqId})`, {
-      allowAnonymousComments: commentSettings.allowAnonymousComments ?? null,
-      subscriberCommentsEnabled: commentSettings.subscriberCommentsEnabled ?? null,
-      commentsEnabled: commentSettings.commentsEnabled,
-      allowNewComments: 'allowNewComments' in commentSettings ? commentSettings.allowNewComments : null,
-    })
     res.json(configData)
   } catch (err) {
-    console.error(`[config] GET ${siteKey} error (${reqId}):`, err)
+    console.error(`[config] GET ${siteKey} error:`, err)
     res.status(500).json({ error: 'Invalid config data' })
   }
   } catch (err) {
-    console.error(`[config] GET ${siteKey} unhandled (${reqId}):`, err)
+    console.error(`[config] GET ${siteKey} unhandled:`, err)
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to load config' })
     }
@@ -1006,7 +1110,7 @@ router.get('/:siteKey', async (req: Request, res: Response) => {
 })
 
 // POST /api/config - Save/update site config (requires auth, must own site)
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; config?: unknown; paywallSettings?: unknown }
   const { siteKey, config } = body
@@ -1065,6 +1169,49 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
         : {}
     }
 
+    const planContext = await loadUserPlanContext(user.id)
+    const existingAuthor = (existing?.authorSettings ?? null) as { defaultAuthorIds?: string[]; postAuthorOverrides?: Record<string, string[]> } | null
+    const existingRowTyped = existing as { collectionTemplateId?: string | null; postTemplateId?: string | null; collectionConfig?: unknown; postConfig?: unknown } | null
+    const [incomingCollectionKey, incomingPostKey, existingCollectionKey, existingPostKey] = await Promise.all([
+      templateKeyFor(collectionTemplateId, 'collection'),
+      templateKeyFor(postTemplateId, 'post'),
+      templateKeyFor(typeof existingRowTyped?.collectionTemplateId === 'string' ? existingRowTyped.collectionTemplateId : null, 'collection'),
+      templateKeyFor(typeof existingRowTyped?.postTemplateId === 'string' ? existingRowTyped.postTemplateId : null, 'post')
+    ])
+    const violations = newlyLockedViolations(
+      planContext.entitlements,
+      {
+        collectionConfig: collectionRaw,
+        postConfig: postRaw,
+        collectionTemplateKey: incomingCollectionKey,
+        postTemplateKey: incomingPostKey,
+        defaultAuthorIds: authorSettings.defaultAuthorIds,
+        postAuthorOverrides: authorSettings.postAuthorOverrides
+      },
+      {
+        collectionConfig: existingRowTyped?.collectionConfig,
+        postConfig: existingRowTyped?.postConfig,
+        collectionTemplateKey: existingCollectionKey,
+        postTemplateKey: existingPostKey,
+        defaultAuthorIds: existingAuthor?.defaultAuthorIds ?? [],
+        postAuthorOverrides: existingAuthor?.postAuthorOverrides ?? {}
+      }
+    )
+    if (violations.length > 0) {
+      res.status(403).json({ error: violations[0] })
+      return
+    }
+
+    let requiredSignupUrl: string | null = null
+    if (planContext.entitlements.features.paywall && isRecord(body.paywallSettings)) {
+      const checked = requiredSignupPageUrl(body.paywallSettings.subscribeUrl)
+      if (!checked.ok) {
+        res.status(400).json({ error: checked.error })
+        return
+      }
+      requiredSignupUrl = checked.url
+    }
+
     const data: SiteConfigData = {
       showDate,
       showAuthor,
@@ -1095,20 +1242,22 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
 
     await upsertSiteConfig(site.id, data)
 
-    const paywallNorm = normalizePaywallSettingsPayload(body.paywallSettings)
+    const paywallNorm = planContext.entitlements.features.paywall
+      ? normalizePaywallSettingsPayload(body.paywallSettings)
+      : null
     if (paywallNorm) {
       await prisma.sitePaywallSettings.upsert({
         where: { siteId: site.id },
         create: {
           siteId: site.id,
-          subscribeUrl: paywallNorm.subscribeUrl,
+          subscribeUrl: requiredSignupUrl ?? paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
           eyebrowText: paywallNorm.eyebrowText,
           headlineText: paywallNorm.headlineText,
           featureItems: paywallNorm.featureItems
         },
         update: {
-          subscribeUrl: paywallNorm.subscribeUrl,
+          subscribeUrl: requiredSignupUrl ?? paywallNorm.subscribeUrl,
           footerDescription: paywallNorm.footerDescription,
           eyebrowText: paywallNorm.eyebrowText,
           headlineText: paywallNorm.headlineText,

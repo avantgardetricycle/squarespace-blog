@@ -5,7 +5,10 @@ import { publishStripeEventWithFallback, type StripeQueuePayload } from './publi
 /** Stripe event types processed asynchronously via Vercel Queues */
 export const HANDLED_STRIPE_EVENT_TYPES = new Set([
   'checkout.session.completed',
-  'customer.subscription.updated'
+  'customer.subscription.updated',
+  'customer.subscription.deleted',
+  'invoice.paid',
+  'invoice.payment_failed'
 ])
 
 function getStripe(): Stripe {
@@ -48,42 +51,46 @@ export async function processStripeWebhook(
   const existing = await prisma.stripeWebhookEvent.findUnique({
     where: { stripeEventId: event.id }
   })
-  if (existing) {
+  if (existing?.status === 'processed') {
     return { status: 200, body: { received: true } }
   }
 
   const isHandled = HANDLED_STRIPE_EVENT_TYPES.has(event.type)
 
-  await prisma.stripeWebhookEvent.create({
-    data: {
-      stripeEventId: event.id,
-      type: event.type,
-      status: isHandled ? 'pending' : 'processed'
-    }
-  })
-
-  if (isHandled) {
-    try {
-      const queuePayload: StripeQueuePayload = {
+  if (!existing) {
+    await prisma.stripeWebhookEvent.create({
+      data: {
         stripeEventId: event.id,
         type: event.type,
-        data: event.data.object as unknown as StripeQueuePayload['data']
+        status: isHandled ? 'pending' : 'processed'
       }
-      const result = await publishStripeEventWithFallback(event.type, queuePayload)
-      console.log('[webhook] Stripe event dispatched', {
-        eventType: event.type,
-        stripeEventId: event.id,
-        mode: result.mode,
-        id: result.id
-      })
-    } catch (err) {
-      console.error('Failed to dispatch Stripe event:', err)
-      await prisma.stripeWebhookEvent.update({
-        where: { stripeEventId: event.id },
-        data: { status: 'failed', error: String(err) }
-      })
-      return { status: 500, body: { error: 'Failed to queue event' } }
+    })
+  }
+
+  if (!isHandled) {
+    return { status: 200, body: { received: true } }
+  }
+
+  try {
+    const queuePayload: StripeQueuePayload = {
+      stripeEventId: event.id,
+      type: event.type,
+      data: event.data.object as unknown as StripeQueuePayload['data']
     }
+    const result = await publishStripeEventWithFallback(event.type, queuePayload)
+    console.log('[webhook] Stripe event dispatched', {
+      eventType: event.type,
+      stripeEventId: event.id,
+      mode: result.mode,
+      id: result.id
+    })
+  } catch (err) {
+    console.error('Failed to dispatch Stripe event:', err)
+    await prisma.stripeWebhookEvent.update({
+      where: { stripeEventId: event.id },
+      data: { status: 'failed', error: String(err) }
+    })
+    return { status: 500, body: { error: 'Failed to queue event' } }
   }
 
   return { status: 200, body: { received: true } }

@@ -51,7 +51,7 @@ import {
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
 import { getPlanDisplayName } from "@/lib/planLabels";
-import { formatSubscriptionDate, hasActiveSubscription } from "@/lib/subscription";
+import { formatSubscriptionDate, hasActiveSubscription, isInPaymentGrace } from "@/lib/subscription";
 import {
   InstallationInstructionsBody,
   InstallationInstructionsModal,
@@ -61,18 +61,7 @@ import {
   sameSquarespaceOrigin,
   squarespaceOriginFromUrl,
 } from "@/lib/squarespaceSiteGroups";
-
-function isValidSignupPageUrl(input: string): boolean {
-  const t = input.trim();
-  if (!t) return false;
-  try {
-    const withScheme = /^https?:\/\//i.test(t) ? t : `https://${t}`;
-    const u = new URL(withScheme);
-    return Boolean(u.hostname);
-  } catch {
-    return false;
-  }
-}
+import { signupPageUrlError } from "@/lib/signupPageUrl";
 
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -107,14 +96,33 @@ export default function Dashboard() {
     });
   }, []);
 
-  const blogLimit = me?.subscription?.maxSites ?? 3;
+  const blogLimit = me?.entitlements?.maxSites ?? me?.subscription?.maxSites ?? null;
+  const websiteLimit = me?.entitlements?.maxWebsites ?? me?.subscription?.maxWebsites ?? null;
+  const showWebsiteCap = me?.entitlements?.planKey === "studio" || (websiteLimit != null && websiteLimit > 1);
   const userPlan =
     me?.subscription != null
       ? me.subscription.planDisplay ?? getPlanDisplayName(me.subscription.plan)
       : "Professional";
   const subscriptionActive = hasActiveSubscription(me?.subscription);
+  const canCustomize = subscriptionActive || isInPaymentGrace(me?.subscription);
   const subscriptionEndDate = formatSubscriptionDate(me?.subscription?.currentPeriodEnd);
   const sites = me?.sites ?? [];
+  const websiteCount = new Set(
+    sites.map((site) => {
+      if (!site.url) return "";
+      try {
+        const raw = site.url.startsWith("http") ? site.url : `https://${site.url}`;
+        return new URL(raw).hostname.replace(/^www\./, "").toLowerCase();
+      } catch {
+        return site.url;
+      }
+    }).filter(Boolean)
+  ).size;
+  const usageLabel = showWebsiteCap
+    ? `${websiteCount} of ${websiteLimit ?? "unlimited"} websites · ${sites.length} blogs`
+    : blogLimit == null
+      ? `${sites.length} blogs`
+      : `${sites.length} of ${blogLimit} blog${blogLimit !== 1 ? "s" : ""}`;
 
   const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
 
@@ -132,9 +140,9 @@ export default function Dashboard() {
       return;
     }
     if (newBlogPaywalled === "yes") {
-      const su = newBlogSubscribeUrl.trim();
-      if (su && !isValidSignupPageUrl(su)) {
-        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+      const signupError = signupPageUrlError(newBlogSubscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
         return;
       }
     }
@@ -171,13 +179,12 @@ export default function Dashboard() {
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = [...prev.sites, site];
-          const maxSites = prev.subscription?.maxSites ?? 1;
+          const limit = prev.entitlements?.maxSites ?? prev.subscription?.maxSites ?? 1;
+          const studioCanAdd = prev.entitlements?.planKey === "studio" && prev.entitlements.extraWebsitesAvailable;
           return {
             ...prev,
             sites: newSites,
-            canCreateSite:
-              prev.subscription?.maxSites === null ||
-              newSites.length < maxSites,
+            canCreateSite: studioCanAdd || limit == null || newSites.length < limit,
           };
         });
         setNewBlogName("");
@@ -267,9 +274,9 @@ export default function Dashboard() {
       return;
     }
     if (editBlogRequiresLogin === "yes") {
-      const su = editBlogSubscribeUrl.trim();
-      if (su && !isValidSignupPageUrl(su)) {
-        toast.error("Enter a valid signup URL (e.g. https://yoursite.com/subscribe).");
+      const signupError = signupPageUrlError(editBlogSubscribeUrl);
+      if (signupError) {
+        toast.error(signupError);
         return;
       }
     }
@@ -330,13 +337,12 @@ export default function Dashboard() {
         setMe((prev) => {
           if (!prev) return prev;
           const newSites = prev.sites.filter((s) => s.id !== siteId);
-          const maxSites = prev.subscription?.maxSites ?? 1;
+          const limit = prev.entitlements?.maxSites ?? prev.subscription?.maxSites ?? 1;
+          const studioCanAdd = prev.entitlements?.planKey === "studio" && prev.entitlements.extraWebsitesAvailable;
           return {
             ...prev,
             sites: newSites,
-            canCreateSite:
-              prev.subscription?.maxSites === null ||
-              newSites.length < maxSites,
+            canCreateSite: studioCanAdd || limit == null || newSites.length < limit,
           };
         });
         setSiteToDelete(null);
@@ -589,7 +595,7 @@ export default function Dashboard() {
                 {newBlogPaywalled === "yes" ? (
                   <div className="space-y-2">
                     <Label htmlFor="blog-subscribe-url">
-                      Signup / subscription page URL (optional)
+                      Signup / subscription page URL <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="blog-subscribe-url"
@@ -604,7 +610,7 @@ export default function Dashboard() {
                       }}
                     />
                     <p className="text-xs text-[#6b6b6b]">
-                      Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                      The URL where readers sign up for your blog
                     </p>
                   </div>
                 ) : null}
@@ -789,7 +795,7 @@ export default function Dashboard() {
             {editBlogRequiresLogin === "yes" ? (
               <div className="space-y-2">
                 <Label htmlFor="edit-blog-subscribe-url">
-                  Signup / subscription page URL (optional)
+                  Signup / subscription page URL <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="edit-blog-subscribe-url"
@@ -804,7 +810,7 @@ export default function Dashboard() {
                   }}
                 />
                 <p className="text-xs text-[#6b6b6b]">
-                  Leave blank to link readers to your blog collection URL. Use a custom URL for a dedicated signup or membership page.
+                  The URL where readers sign up for your blog
                 </p>
               </div>
             ) : null}
@@ -835,7 +841,7 @@ export default function Dashboard() {
             <div>
               <CardTitle>My Blogs</CardTitle>
               <CardDescription>
-                {sites.length} of {blogLimit} blog{blogLimit !== 1 ? "s" : ""}{" "}
+                {usageLabel}{" "}
                 on your {subscriptionActive ? userPlan : `canceled ${userPlan}`} plan
               </CardDescription>
             </div>
@@ -915,7 +921,7 @@ export default function Dashboard() {
                             >
                               <Link
                                 to={
-                                  subscriptionActive
+                                  canCustomize
                                     ? `/dashboard/configure?siteKey=${site.siteKey}`
                                     : "/dashboard/account"
                                 }
@@ -992,7 +998,7 @@ export default function Dashboard() {
             <CardDescription>Get straight to what matters.</CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
-            <Link to={subscriptionActive ? "/dashboard/configure" : "/dashboard/account"} className="block group">
+            <Link to={canCustomize ? "/dashboard/configure" : "/dashboard/account"} className="block group">
               <div className="border border-[#e5e4e0] rounded-xl p-6 hover:border-[#5B4FE8] hover:shadow-md transition-all duration-200 h-full flex flex-col bg-white hover:bg-[#5B4FE8]/5">
                 <div className="bg-[#5B4FE8]/10 w-12 h-12 rounded-full flex items-center justify-center mb-4 group-hover:bg-[#5B4FE8] group-hover:text-white transition-colors text-[#5B4FE8]">
                   <Settings className="w-6 h-6" />

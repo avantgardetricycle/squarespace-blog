@@ -1,5 +1,6 @@
 import prisma from '../db/index.js'
 import { decrypt } from './encryption.js'
+import { redactSubscriberText } from './email-providers.js'
 import { sendProfilesApiAlertEmail } from './email.js'
 
 export type ProfilesApiKeyInvalidReason = 'profiles_unauthorized' | 'profiles_forbidden'
@@ -58,7 +59,7 @@ export async function markSquarespaceApiKeyInvalid(opts: {
     siteUrl: opts.siteUrl,
     status: opts.status,
     reason: opts.reason,
-    errorBodySnippet: opts.errorBodySnippet ?? null,
+    errorBodySnippet: opts.errorBodySnippet ? redactSubscriberText(opts.errorBodySnippet) : null,
   }
   console.error('[BetterBlog alert] squarespace-profiles-api', payload)
 

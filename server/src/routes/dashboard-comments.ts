@@ -1,11 +1,19 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../db/index.js'
+import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
 import { resolveParentIdForReply } from '../lib/comment-thread-depth.js'
 import { ensureSquarespaceThreadImportedForModeration } from '../lib/squarespace-comments-import.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
 
 const router = Router()
+
+async function requireComments(userId: number, res: Response): Promise<boolean> {
+  const plan = await loadUserPlanContext(userId)
+  if (plan.entitlements.features.comments) return true
+  res.status(403).json({ error: `Comments require the ${plan.entitlements.requiredPlan.comments} plan.` })
+  return false
+}
 
 async function getSiteForUser(siteKey: string, userId: number) {
   return prisma.site.findFirst({
@@ -20,6 +28,19 @@ async function getCommentWithAuth(commentId: string, userId: number) {
   })
   if (!comment || comment.site.userId !== userId) return null
   return comment
+}
+
+/** Remove the comment row. Direct replies move up to this comment's parent. */
+async function hardDeleteComment(id: string, parentId: string | null) {
+  const nextParentId = parentId && parentId !== id ? parentId : null
+  await prisma.$transaction([
+    prisma.commentLike.deleteMany({ where: { commentId: id } }),
+    prisma.comment.updateMany({
+      where: { parentId: id },
+      data: { parentId: nextParentId },
+    }),
+    prisma.comment.delete({ where: { id } }),
+  ])
 }
 
 // GET /api/dashboard/comments?siteKey=xxx&statuses=pending,approved&status=approved (legacy)&auth=all|authenticated|anonymous&postId=&page=&per_page=&search=
@@ -117,28 +138,6 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
   ])
 
   const postTitleMap = new Map(cachedPosts.map((p) => [p.externalPostId, p.title]))
-  console.log('[dashboard-comments] list', {
-    userId: user.id,
-    siteKey,
-    siteId: site.id,
-    statuses: statusIn ?? 'all',
-    auth: authFilter,
-    postIds: postIdsRaw || postIdRaw || null,
-    search: search ?? null,
-    total,
-    returned: comments.length,
-    verifiedCount: comments.filter((c) => c.verifiedSubscriber === true).length,
-    anonymousCount: comments.filter((c) => c.verifiedSubscriber !== true).length,
-    comments: comments.map((c) => ({
-      id: c.id,
-      displayName: c.displayName,
-      verifiedSubscriber: c.verifiedSubscriber,
-      hasEmail: Boolean(c.email),
-      email: c.email,
-      squarespaceProfileId: c.squarespaceProfileId,
-      status: c.status,
-    })),
-  })
 
   res.json({
     comments: comments.map((c) => ({
@@ -243,15 +242,23 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Comment not found' })
     return
   }
+  if (!(await requireComments(user.id, res))) return
 
   const siteRow = await prisma.site.findUnique({
     where: { id: comment.siteId },
     select: { id: true, url: true, blogPassword: true },
   })
+  if (siteRow) await migrateBlogPasswordAtRest(siteRow.id, siteRow.blogPassword)
 
   const body = req.body as { status?: string; body?: string }
+  if (body.status === 'deleted') {
+    await hardDeleteComment(comment.id, comment.parentId)
+    res.json({ id: comment.id, deleted: true })
+    return
+  }
+
   const updates: Record<string, unknown> = {}
-  if (['approved', 'spam', 'deleted', 'hidden'].includes(body.status ?? '')) {
+  if (['approved', 'spam', 'hidden'].includes(body.status ?? '')) {
     updates.status = body.status
   }
   if (typeof body.body === 'string') {
@@ -263,7 +270,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     return
   }
 
-  if (siteRow && (updates.status === 'spam' || updates.status === 'deleted' || updates.status === 'hidden')) {
+  if (siteRow && (updates.status === 'spam' || updates.status === 'hidden')) {
     await ensureSquarespaceThreadImportedForModeration(prisma, siteRow, {
       postId: comment.postId,
       parentId: comment.parentId,
@@ -307,6 +314,26 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   res.json(updated)
 })
 
+// DELETE /api/dashboard/comments/:id — permanent removal
+router.delete('/:id', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+  if (!id) {
+    res.status(400).json({ error: 'Comment id required' })
+    return
+  }
+
+  const comment = await getCommentWithAuth(id, user.id)
+  if (!comment) {
+    res.status(404).json({ error: 'Comment not found' })
+    return
+  }
+  if (!(await requireComments(user.id, res))) return
+
+  await hardDeleteComment(comment.id, comment.parentId)
+  res.json({ id: comment.id, deleted: true })
+})
+
 // POST /api/dashboard/comments/:id/reply
 router.post('/:id/reply', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
@@ -321,6 +348,7 @@ router.post('/:id/reply', requireSession, async (req: Request, res: Response) =>
     res.status(404).json({ error: 'Comment not found' })
     return
   }
+  if (!(await requireComments(user.id, res))) return
 
   const body = req.body as { body?: string; displayName?: string }
   const replyBody = typeof body.body === 'string' ? body.body.trim() : ''

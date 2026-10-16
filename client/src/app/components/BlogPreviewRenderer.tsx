@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const RENDERER_URL = "/renderer.js";
-const RENDERER_VERSION = "2026-10-12-drawer-tab-type";
+const RENDERER_VERSION = "2026-10-13-post-header-fields";
 
 /** Config shape expected by renderer.js - supports collectionConfig/postConfig or legacy flat */
 interface RendererConfigOverrides {
@@ -158,7 +158,7 @@ export default function BlogPreviewRenderer({
         root.querySelector("#blog-overlay-progress")?.remove();
       }
     };
-  }, [siteKey]);
+  }, [siteKey, RENDERER_VERSION]);
 
   // Live preview: push config updates to renderer without full re-init.
   // Use configSignature so effect runs on every config change. pushConfig uses configRef

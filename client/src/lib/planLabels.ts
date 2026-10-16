@@ -1,8 +1,9 @@
-/** Matches server plan keys: essentials | professional | publication */
+/** Matches server plan keys: essentials | professional | publication | studio */
 const PLAN_DISPLAY_NAMES: Record<string, string> = {
   essentials: "Essentials",
   professional: "Professional",
   publication: "Publication",
+  studio: "Studio",
   starter: "Essentials",
   pro: "Professional",
   agency: "Publication",
@@ -10,7 +11,7 @@ const PLAN_DISPLAY_NAMES: Record<string, string> = {
 
 export const DEFAULT_PLAN_KEY = "professional" as const;
 
-const KNOWN_PLAN_KEYS = new Set(["essentials", "professional", "publication"]);
+const KNOWN_PLAN_KEYS = new Set(["essentials", "professional", "publication", "studio"]);
 
 const LEGACY_TO_CURRENT: Record<string, string> = {
   starter: "essentials",

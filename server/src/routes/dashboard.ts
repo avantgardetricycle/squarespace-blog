@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express'
 import Stripe from 'stripe'
-import prisma from '../db/index.js'
+import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
+import { sealBlogPassword } from '../lib/blog-password.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
 import dashboardEmailIntegrationRoutes from './dashboard-email-integration.js'
 import dashboardCommentsRoutes from './dashboard-comments.js'
@@ -11,19 +13,31 @@ import {
   getStripePriceDisplayForPriceId,
   loadPublicPlanPrices
 } from '../lib/stripePlanPrices.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
+import {
+  canCreateAnotherBlog,
+  decideAddBlog,
+  orderedWebsiteHosts,
+  planCapacity
+} from '../lib/planEntitlements.js'
 import { DEFAULT_PLAN_KEY, isRecognizedPlanKeyInput, normalizePlanKey } from '../lib/planKeys.js'
+import { StudioBillingError, setStudioExtraWebsiteQuantity } from '../lib/studioBilling.js'
 import { getAppUrl } from '../lib/url.js'
 import { getStripeEnvironment } from '../lib/stripeEnvironment.js'
 import { isAdminEmail } from '../lib/admin-team.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
+import { stampPaymentFailure } from '../lib/paymentGrace.js'
 import {
+  betaConversionTrialEnd,
+  checkoutBlockReason,
   effectiveSubscriptionStatus,
+  isBetaSubscription,
   isEntitledSubscription,
-  isResubscribableStatus,
   pickDisplaySubscription,
   usableStripeCustomerId
 } from '../lib/subscriptionStatus.js'
 import { randomBytes } from 'crypto'
+import { AccountDeletionError, deleteUserAccount } from '../lib/delete-account.js'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
 import {
   buildBlogJsonUrl,
@@ -35,6 +49,15 @@ const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
 type PaywallMode = (typeof PAYWALL_MODES)[number]
 const PAYWALL_DETECTION_SOURCES = ['json_probe', 'manual'] as const
 type PaywallDetectionSource = (typeof PAYWALL_DETECTION_SOURCES)[number]
+
+async function cadenceForPrice (stripePriceId: string | null): Promise<'monthly' | 'annual'> {
+  if (!stripePriceId) return 'monthly'
+  const plan = await prisma.plan.findFirst({
+    where: { stripePriceId },
+    select: { cadence: true }
+  })
+  return plan?.cadence === 'annual' ? 'annual' : 'monthly'
+}
 
 function getStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
@@ -130,8 +153,7 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
 
   try {
-    const [userWithRelations, siteCount] = await Promise.all([
-      prisma.user.findUnique({
+    const userWithRelations = await prisma.user.findUnique({
         where: { id: user.id },
         include: {
           subscriptions: {
@@ -144,20 +166,25 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             include: { sitePaywallSettings: true }
           }
         }
-      }),
-      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
-    ])
+      })
 
     if (!userWithRelations) {
       res.status(404).json({ error: 'User not found' })
       return
     }
 
-    const subscription = pickDisplaySubscription(userWithRelations.subscriptions)
+    await Promise.all(
+      userWithRelations.sites.map((s) => migrateBlogPasswordAtRest(s.id, s.blogPassword))
+    )
+
+    const pickedSubscription = pickDisplaySubscription(userWithRelations.subscriptions)
+    const subscription = pickedSubscription ? await stampPaymentFailure(pickedSubscription) : null
     const subscriptionActive = isEntitledSubscription(subscription)
     const reportedStatus = subscription ? effectiveSubscriptionStatus(subscription) : null
     const betaActive = subscription?.source === 'beta' && subscriptionActive
-    const maxSites = subscription?.maxSites ?? 1 // default 1 site for users without subscription
+    const planContext = await loadUserPlanContext(user.id)
+    const entitlements = planContext.entitlements
+    const allowExtraWebsite = entitlements.planKey === 'studio' && entitlements.extraWebsitesAvailable && Boolean(subscription?.stripeSubscriptionId)
 
     const stripeEnv = getStripeEnvironment()
     const planRecord =
@@ -206,9 +233,12 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
             priceDisplay,
             status: reportedStatus ?? subscription.status,
             source: subscription.source,
-            maxSites: subscription.maxSites,
+            maxSites: entitlements.maxSites,
+            maxWebsites: entitlements.maxWebsites,
+            maxBlogsPerWebsite: entitlements.maxBlogsPerWebsite,
             currentPeriodEnd: subscription.currentPeriodEnd,
-            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd
+            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+            paymentFailedAt: subscription.paymentFailedAt
           }
         : null,
       sites: userWithRelations.sites.map((s) => ({
@@ -229,7 +259,12 @@ router.get('/me', requireSession, async (req: Request, res: Response) => {
           ? paywallSettingsJson(s.sitePaywallSettings)
           : null
       })),
-      canCreateSite: subscriptionActive && (maxSites === null || siteCount < maxSites),
+      canCreateSite: subscriptionActive && canCreateAnotherBlog({
+        capacity: entitlements,
+        sites: userWithRelations.sites,
+        allowExtraWebsite
+      }),
+      entitlements,
       isSupportTeam: isSupportTeamEmail(userWithRelations.email),
       isAdmin: isAdminEmail(userWithRelations.email)
     })
@@ -369,11 +404,23 @@ router.post('/subscription/portal', requireSession, async (req: Request, res: Re
       return
     }
 
+    const flow = req.body?.flow === 'payment_method_update' ? 'payment_method_update' : null
     const stripe = getStripe()
     const appUrl = getAppUrl()
     const session = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${appUrl}/dashboard/account`
+      return_url: `${appUrl}${flow ? '/dashboard/configure' : '/dashboard/account'}`,
+      ...(flow
+        ? {
+            flow_data: {
+              type: 'payment_method_update' as const,
+              after_completion: {
+                type: 'redirect' as const,
+                redirect: { return_url: `${appUrl}/dashboard/configure` }
+              }
+            }
+          }
+        : {})
     })
 
     res.json({ url: session.url })
@@ -421,19 +468,21 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       return
     }
 
-    const entitled = subscriptions.find((sub) => isEntitledSubscription(sub))
-    if (entitled) {
+    const block = checkoutBlockReason(subscriptions)
+    if (block === 'active_paid') {
       res.status(409).json({ error: 'You already have an active subscription.' })
       return
     }
-
-    const subscription = subscriptions[0] ?? null
-    if (!isResubscribableStatus(effectiveSubscriptionStatus(subscription))) {
+    if (block === 'payment_required') {
       res.status(409).json({
         error: 'Update your payment method to continue this subscription.'
       })
       return
     }
+
+    const betaGrant =
+      subscriptions.find((sub) => isBetaSubscription(sub) && isEntitledSubscription(sub)) ?? null
+    const trialEnd = betaConversionTrialEnd(betaGrant)
 
     const plan = await prisma.plan.findUnique({
       where: {
@@ -445,14 +494,19 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       }
     })
     if (!plan) {
-      res.status(404).json({ error: 'Plan not found' })
+      res.status(404).json({
+        error: normalizedPlanKey === 'studio'
+          ? 'Studio checkout is not available yet. Stripe prices for Studio have not been configured.'
+          : 'Plan not found'
+      })
       return
     }
 
     const stripe = getStripe()
+    const paidSubscription = subscriptions.find((sub) => !isBetaSubscription(sub)) ?? null
     let stripeCustomerId =
       usableStripeCustomerId(dbUser.stripeCustomerId) ??
-      usableStripeCustomerId(subscription?.source === 'beta' ? null : subscription?.stripeCustomerId)
+      usableStripeCustomerId(paidSubscription?.stripeCustomerId)
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: dbUser.email,
@@ -471,8 +525,9 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       plan_key: normalizedPlanKey,
       cadence,
       stripe_price_label: plan.stripePriceLabel,
-      resubscribe: 'true'
+      resubscribe: betaGrant ? 'false' : 'true'
     }
+    if (betaGrant) metadata.beta_conversion = 'true'
     if (dbUser.name) {
       metadata.customer_name = dbUser.name
     }
@@ -482,7 +537,13 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       customer: stripeCustomerId,
       customer_update: { name: 'auto' },
       line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-      subscription_data: { metadata },
+      subscription_data: {
+        metadata,
+        ...(trialEnd ? { trial_end: Math.floor(trialEnd.getTime() / 1000) } : {})
+      },
+      // A beta conversion can start with a trial. Always collect a card so the
+      // subscription continues when complimentary access ends.
+      ...(trialEnd ? { payment_method_collection: 'always' as const } : {}),
       metadata,
       success_url: `${appUrl}/dashboard/account?checkout=success`,
       cancel_url: `${appUrl}/dashboard/account`
@@ -500,7 +561,9 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
           cadence,
           stripePriceLabel: plan.stripePriceLabel,
           maxSites: plan.maxSites,
-          resubscribe: true,
+          resubscribe: !betaGrant,
+          betaConversion: Boolean(betaGrant),
+          trialEnd: trialEnd?.toISOString(),
           customerName: dbUser.name ?? undefined
         })
       }
@@ -529,24 +592,17 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
   const rawSubscribeForCreate = rawSubscribeTop !== undefined ? rawSubscribeTop : rawSubscribeFromNested
 
   try {
-    const [subscriptionRows, siteCount] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { userId: user.id, status: { in: ['trialing', 'active'] } },
-        orderBy: { updatedAt: 'desc' },
-        take: 10
-      }),
-      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
+    const [planContext, existingSites] = await Promise.all([
+      loadUserPlanContext(user.id),
+      prisma.site.findMany({
+        where: { userId: user.id, status: 'active', deletedAt: null },
+        select: { url: true, createdAt: true }
+      })
     ])
-    const subscription = subscriptionRows.find((sub) => isEntitledSubscription(sub)) ?? null
+    const subscription = planContext.active ? planContext.subscription : null
 
     if (!subscription) {
       res.status(403).json({ error: 'Subscription required' })
-      return
-    }
-
-    const maxSites = subscription?.maxSites ?? 1
-    if (maxSites !== null && siteCount >= maxSites) {
-      res.status(403).json({ error: 'Site limit reached for your plan' })
       return
     }
 
@@ -558,6 +614,45 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
     const { url: siteUrl, blogPath } = parsed
+
+    const allowExtraWebsite = planContext.entitlements.planKey === 'studio'
+      && planContext.entitlements.extraWebsitesAvailable
+      && Boolean(subscription.stripeSubscriptionId)
+    const addDecision = decideAddBlog({
+      capacity: planContext.entitlements,
+      sites: existingSites,
+      nextUrl: siteUrl,
+      allowExtraWebsite
+    })
+    if (!addDecision.ok) {
+      const studioUnpriced = planContext.entitlements.planKey === 'studio' && !planContext.entitlements.extraWebsitesAvailable
+      res.status(403).json({
+        error: studioUnpriced && addDecision.code === 'website_limit'
+          ? 'Studio extra websites are not available until a Stripe price is configured.'
+          : addDecision.error
+      })
+      return
+    }
+
+    const VALID_PAYWALL_STATES: PaywallDetectionState[] = ['unknown', 'detected_paywalled', 'detected_unpaywalled']
+    const userPaywallState: PaywallDetectionState =
+      VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
+    const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
+
+    if (userPaywallState === 'detected_paywalled') {
+      const subscribeProvided =
+        typeof rawSubscribeForCreate === 'string' && rawSubscribeForCreate.trim().length > 0
+      if (subscribeProvided && !subscribeNormalized) {
+        res.status(400).json({
+          error: 'Invalid signup page URL. Use a full address like https://yoursite.com/subscribe'
+        })
+        return
+      }
+      if (!subscribeNormalized) {
+        res.status(400).json({ error: 'A signup URL is required for membership blogs' })
+        return
+      }
+    }
 
     const activeSameUrl = await prisma.site.findFirst({
       where: {
@@ -677,11 +772,31 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
       return
     }
 
-    const VALID_PAYWALL_STATES: PaywallDetectionState[] = ['unknown', 'detected_paywalled', 'detected_unpaywalled']
-    const userPaywallState: PaywallDetectionState =
-      VALID_PAYWALL_STATES.includes(rawPaywallState) ? rawPaywallState : 'unknown'
-
-    const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
+    if (addDecision.needsExtraWebsite && subscription.stripeSubscriptionId) {
+      try {
+        const hosts = orderedWebsiteHosts([...existingSites, { url: siteUrl, createdAt: new Date() }])
+        const extras = Math.max(0, hosts.length - planContext.entitlements.includedWebsites)
+        const blogsPer = planContext.entitlements.maxBlogsPerWebsite ?? planCapacity('studio').maxBlogsPerWebsite
+        await setStudioExtraWebsiteQuantity({
+          stripeSubscriptionId: subscription.stripeSubscriptionId,
+          cadence: await cadenceForPrice(subscription.stripePriceId),
+          quantity: extras
+        })
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            maxWebsites: planContext.entitlements.includedWebsites + extras,
+            maxSites: (planContext.entitlements.includedWebsites + extras) * blogsPer
+          }
+        })
+      } catch (err) {
+        if (err instanceof StudioBillingError) {
+          res.status(403).json({ error: err.message })
+          return
+        }
+        throw err
+      }
+    }
 
     const updatedSite = await prisma.site.create({
       data: {
@@ -814,22 +929,29 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
       return
     }
 
-    const [subscriptionRows, activeCount] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { userId: user.id, status: { in: ['trialing', 'active'] } },
-        orderBy: { updatedAt: 'desc' },
-        take: 10
-      }),
-      prisma.site.count({ where: { userId: user.id, status: 'active', deletedAt: null } })
+    const [planContext, existingSites] = await Promise.all([
+      loadUserPlanContext(user.id),
+      prisma.site.findMany({
+        where: { userId: user.id, status: 'active', deletedAt: null },
+        select: { url: true, createdAt: true }
+      })
     ])
-    const subscription = subscriptionRows.find((sub) => isEntitledSubscription(sub)) ?? null
+    const subscription = planContext.active ? planContext.subscription : null
     if (!subscription) {
       res.status(403).json({ error: 'Subscription required' })
       return
     }
-    const maxSites = subscription?.maxSites ?? 1
-    if (maxSites !== null && activeCount >= maxSites) {
-      res.status(403).json({ error: 'Site limit reached for your plan' })
+    const allowExtraWebsite = planContext.entitlements.planKey === 'studio'
+      && planContext.entitlements.extraWebsitesAvailable
+      && Boolean(subscription.stripeSubscriptionId)
+    const restoreDecision = decideAddBlog({
+      capacity: planContext.entitlements,
+      sites: existingSites,
+      nextUrl: target.url ?? '',
+      allowExtraWebsite
+    })
+    if (!restoreDecision.ok) {
+      res.status(403).json({ error: restoreDecision.error })
       return
     }
 
@@ -876,7 +998,7 @@ router.post('/sites/:id/restore', requireSession, async (req: Request, res: Resp
 })
 
 // PATCH /api/dashboard/sites/by-key/:siteKey - Update site by siteKey (e.g. blog password)
-router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res: Response) => {
+router.patch('/sites/by-key/:siteKey', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = Array.isArray(req.params.siteKey) ? req.params.siteKey[0] : req.params.siteKey ?? ''
   const { blogPassword, paywallMode, paywallDetectionState, paywallDetectionSource, name } = req.body ?? {}
@@ -928,7 +1050,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
     }
     if ('blogPassword' in req.body) {
-      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+      updates.blogPassword = sealBlogPassword(typeof blogPassword === 'string' ? blogPassword : null)
     }
     if ('paywallMode' in req.body) {
       if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
@@ -951,6 +1073,22 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
       PAYWALL_DETECTION_SOURCES.includes(paywallDetectionSource as PaywallDetectionSource)
     ) {
       updates.paywallDetectionSource = paywallDetectionSource as PaywallDetectionSource
+    }
+
+    const resultingPaywallState = updates.paywallDetectionState ?? site.paywallDetectionState
+    if (resultingPaywallState === 'detected_paywalled') {
+      const settingMembership = updates.paywallDetectionState === 'detected_paywalled'
+      const subscribeTouched = 'subscribeUrl' in req.body || settingMembership
+      if (subscribeTouched) {
+        const effectiveSubscribeUrl =
+          normalizedSubscribePatch !== undefined
+            ? normalizedSubscribePatch
+            : site.sitePaywallSettings?.subscribeUrl ?? null
+        if (!effectiveSubscribeUrl) {
+          res.status(400).json({ error: 'A signup URL is required for membership blogs' })
+          return
+        }
+      }
     }
 
     if (Object.keys(updates).length === 0 && normalizedSubscribePatch === undefined) {
@@ -1015,7 +1153,7 @@ router.patch('/sites/by-key/:siteKey', requireSession, async (req: Request, res:
 })
 
 // PATCH /api/dashboard/sites/:id - Update site by id (e.g. blog password)
-router.patch('/sites/:id', requireSession, async (req: Request, res: Response) => {
+router.patch('/sites/:id', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? ''
   const { blogPassword, paywallMode, paywallDetectionState, name } = req.body ?? {}
@@ -1046,7 +1184,7 @@ router.patch('/sites/:id', requireSession, async (req: Request, res: Response) =
       updates.name = typeof name === 'string' && name.trim() ? name.trim() : null
     }
     if ('blogPassword' in req.body) {
-      updates.blogPassword = typeof blogPassword === 'string' && blogPassword.trim() ? blogPassword.trim() : null
+      updates.blogPassword = sealBlogPassword(typeof blogPassword === 'string' ? blogPassword : null)
     }
     if ('paywallMode' in req.body) {
       if (typeof paywallMode !== 'string' || !PAYWALL_MODES.includes(paywallMode as PaywallMode)) {
@@ -1119,6 +1257,44 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
       return
     }
 
+    const planContext = await loadUserPlanContext(user.id)
+    if (
+      planContext.entitlements.planKey === 'studio' &&
+      planContext.subscription?.stripeSubscriptionId &&
+      planContext.entitlements.extraWebsitesAvailable
+    ) {
+      const activeSites = await prisma.site.findMany({
+        where: { userId: user.id, status: 'active', deletedAt: null },
+        select: { id: true, url: true, createdAt: true }
+      })
+      const included = planContext.entitlements.includedWebsites
+      const before = orderedWebsiteHosts(activeSites).slice(included)
+      const after = orderedWebsiteHosts(activeSites.filter((row) => row.id !== site.id)).slice(included)
+      if (after.length < before.length) {
+        try {
+          const blogsPer = planContext.entitlements.maxBlogsPerWebsite ?? planCapacity('studio').maxBlogsPerWebsite
+          await setStudioExtraWebsiteQuantity({
+            stripeSubscriptionId: planContext.subscription.stripeSubscriptionId,
+            cadence: await cadenceForPrice(planContext.subscription.stripePriceId),
+            quantity: after.length
+          })
+          await prisma.subscription.update({
+            where: { id: planContext.subscription.id },
+            data: {
+              maxWebsites: included + after.length,
+              maxSites: (included + after.length) * blogsPer
+            }
+          })
+        } catch (err) {
+          if (err instanceof StudioBillingError) {
+            res.status(403).json({ error: err.message })
+            return
+          }
+          throw err
+        }
+      }
+    }
+
     await prisma.site.update({
       where: { id: siteId },
       data: { deletedAt: new Date() }
@@ -1128,6 +1304,29 @@ router.delete('/sites/:id', requireSession, async (req: Request, res: Response) 
   } catch (err) {
     console.error('Delete site error:', err)
     res.status(500).json({ error: 'Failed to delete site' })
+  }
+})
+
+// DELETE /api/dashboard/me - Permanently delete the signed-in account and its data
+router.delete('/me', requireSession, async (req: Request, res: Response) => {
+  const { user } = req as Request & { user: SessionUser }
+  const confirmEmail = (req.body as { confirmEmail?: unknown } | undefined)?.confirmEmail
+
+  if (typeof confirmEmail !== 'string' || !confirmEmail.trim()) {
+    res.status(400).json({ error: 'Email confirmation is required' })
+    return
+  }
+
+  try {
+    await deleteUserAccount({ userId: user.id, confirmEmail })
+    res.clearCookie('session', { path: '/' }).status(204).send()
+  } catch (err) {
+    if (err instanceof AccountDeletionError) {
+      res.status(err.statusCode).json({ error: err.message })
+      return
+    }
+    console.error('Delete account error:', err)
+    res.status(500).json({ error: 'Failed to delete account' })
   }
 })
 

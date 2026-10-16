@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import prisma from '../db/index.js'
 import { requireSession, SessionUser } from '../middleware/session.js'
+import { loadUserPlanContext } from '../lib/planAccess.js'
+import { requireEditableSubscription } from '../middleware/editableSubscription.js'
 import {
   AUTHOR_PHOTO_MAX_BYTES,
   deleteAuthorPhotoIfOwned,
@@ -84,7 +86,7 @@ function handlePhotoUpload(req: Request, res: Response, next: NextFunction): voi
 }
 
 // POST /api/blog-authors/photo - Upload author photo to Supabase Storage
-router.post('/photo', requireSession, handlePhotoUpload, async (req: Request, res: Response) => {
+router.post('/photo', requireSession, requireEditableSubscription, handlePhotoUpload, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const siteKey = typeof req.body?.siteKey === 'string' ? req.body.siteKey : ''
   const previousImageUrl = typeof req.body?.previousImageUrl === 'string' ? req.body.previousImageUrl : null
@@ -124,7 +126,7 @@ router.post('/photo', requireSession, handlePhotoUpload, async (req: Request, re
 })
 
 // DELETE /api/blog-authors/photo - Best-effort delete of a stored author photo
-router.delete('/photo', requireSession, async (req: Request, res: Response) => {
+router.delete('/photo', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as { siteKey?: string; imageUrl?: string }
   const siteKey = typeof body.siteKey === 'string' ? body.siteKey : ''
@@ -171,7 +173,7 @@ router.get('/:siteKey', requireSession, async (req: Request, res: Response) => {
 })
 
 // POST /api/blog-authors - Add a new author (requires auth, must own site)
-router.post('/', requireSession, async (req: Request, res: Response) => {
+router.post('/', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const body = req.body as {
     siteKey?: string
@@ -205,8 +207,39 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
     where: { siteId_name: { siteId: site.id, name: trimmedName } }
   })
   if (existing) {
+    const fromIngestion = ingestedFrom === 'SQUARESPACE'
+    if (fromIngestion && existing.ingestedFrom === 'SQUARESPACE') {
+      const data: {
+        bio?: string | null
+        bioLong?: string | null
+        bioFormat?: BioFormatValue
+        imageUrl?: string
+      } = {}
+      const incomingShort = typeof bio === 'string' ? bio.trim() : ''
+      const incomingLong = typeof bioLong === 'string' ? bioLong.trim() : ''
+      if (incomingShort || incomingLong) {
+        data.bio = incomingShort.length > 0 && incomingShort.length <= 200 ? incomingShort : null
+        data.bioLong = (incomingLong || incomingShort).slice(0, 1000)
+        data.bioFormat = parseBioFormat(bioFormat)
+      }
+      if (typeof imageUrl === 'string' && imageUrl.trim()) data.imageUrl = imageUrl.trim()
+      const updated = Object.keys(data).length > 0
+        ? await prisma.blogAuthor.update({ where: { id: existing.id }, data })
+        : existing
+      res.json(authorJson(updated))
+      return
+    }
     res.json(authorJson(existing))
     return
+  }
+
+  const plan = await loadUserPlanContext(user.id)
+  if (!plan.entitlements.features.multipleAuthors) {
+    const authorCount = await prisma.blogAuthor.count({ where: { siteId: site.id } })
+    if (authorCount >= 1) {
+      res.status(403).json({ error: `Multiple authors require the ${plan.entitlements.requiredPlan.multipleAuthors} plan.` })
+      return
+    }
   }
 
   const fromIngestion = ingestedFrom === 'SQUARESPACE'
@@ -230,7 +263,7 @@ router.post('/', requireSession, async (req: Request, res: Response) => {
 })
 
 // PATCH /api/blog-authors/:id - Update author profile (requires auth, must own site)
-router.patch('/:id', requireSession, async (req: Request, res: Response) => {
+router.patch('/:id', requireSession, requireEditableSubscription, async (req: Request, res: Response) => {
   const { user } = req as Request & { user: SessionUser }
   const authorId = req.params.id as string
   const body = req.body as {
@@ -268,7 +301,9 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
     bioFormat?: BioFormatValue
     email?: string | null
     socialLinks?: object
+    ingestedFrom?: 'BETTER_BLOG'
   } = {}
+  data.ingestedFrom = 'BETTER_BLOG'
   if (body.name !== undefined && typeof body.name === 'string' && body.name.trim()) {
     data.name = body.name.trim()
   }

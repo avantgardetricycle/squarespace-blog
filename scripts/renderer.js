@@ -652,6 +652,7 @@
     _analyticsPageContextPostIndex: null,
     _progressScrollHandler: null,
     _progressScrollTarget: null,
+    _progressResizeHandler: null,
     _tocScrollHandler: null,
     _tocScrollTarget: null,
     _renderSeq: 0,
@@ -758,6 +759,15 @@
       else console.log('[BlogOverlay][debug] ' + label);
     },
 
+    _redactIdentityForLog: function(id) {
+      if (!id || typeof id !== 'object') return null;
+      return {
+        loggedIn: id.loggedIn === true,
+        hasName: Boolean(id.name),
+        hasEmail: Boolean(id.email)
+      };
+    },
+
     _authDebug: function(label, payload) {
       if (!this._isAuthDebugEnabled()) return;
       if (payload !== undefined) console.log('[BlogOverlay][auth-debug] ' + label, payload);
@@ -772,15 +782,7 @@
       else console.log('[BlogOverlay][paywall-debug] ' + label);
     },
 
-    _bbPriceDebug: function(hypothesisId, message, data) {
-      var payload = data || {};
-      try {
-        console.log('[BB paywall price] ' + message, payload);
-      } catch (e0) {}
-      // #region agent log
-      fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '50d457' }, body: JSON.stringify({ sessionId: '50d457', location: 'scripts/renderer.js:_bbPriceDebug', message: message, data: payload, timestamp: Date.now(), hypothesisId: hypothesisId }) }).catch(function() {});
-      // #endregion
-    },
+    _bbPriceDebug: function() {},
 
     /** Add ?bbTocDebug=1 to the page URL (or bbPreviewDebug=1) to log Table of Contents wiring. */
     _isTocDebugEnabled: function() {
@@ -880,8 +882,8 @@
       this._authDebug(source || 'snapshot', {
         resolvedMode: resolvedMode,
         contextAvailable: hasContext,
-        contextIdentity: contextIdentity,
-        jsonIdentity: jsonIdentity,
+        contextIdentity: this._redactIdentityForLog(contextIdentity),
+        jsonIdentity: this._redactIdentityForLog(jsonIdentity),
         domMode: domMode,
         paywallMode: cfg.paywallMode || null,
         paywallDetectionState: cfg.paywallDetectionState || null,
@@ -1285,9 +1287,16 @@
       }
       function bbEmailDebug(email) {
         var e = email ? String(email).trim() : '';
-        if (!e) return { hasEmail: false, email: null, domain: null };
-        var at = e.lastIndexOf('@');
-        return { hasEmail: true, email: e, domain: at >= 0 ? e.slice(at + 1) : null };
+        if (!e) return { hasEmail: false };
+        return { hasEmail: true, emailHasPlus: e.indexOf('+') >= 0 };
+      }
+      function bbIdentityDebug(id) {
+        if (!id || typeof id !== 'object') return null;
+        return {
+          loggedIn: id.loggedIn === true,
+          hasName: Boolean(id.name),
+          hasEmail: Boolean(id.email)
+        };
       }
       function bbCommentDebugSummary(c) {
         return {
@@ -1295,7 +1304,6 @@
           display_name: c && c.display_name != null ? String(c.display_name) : null,
           verified_subscriber: Boolean(c && c.verified_subscriber),
           hasEmail: Boolean(c && c.email),
-          email: c && c.email ? String(c.email) : null,
           status: c && c.status != null ? c.status : null,
           bb_legacy_squarespace: Boolean(c && c.bb_legacy_squarespace),
           replyCount: c && c.replies && c.replies.length ? c.replies.length : 0
@@ -1382,39 +1390,81 @@
           bbCommentsLog('cookie clear failed', { name: name, error: String(e && e.message || e) });
         }
       }
+      function bbEraseVerifiedCookie() {
+        bbClearCookie(verifiedCookieName);
+      }
+      function bbParseVerifiedCookie(raw) {
+        try {
+          return JSON.parse(decodeURIComponent(raw));
+        } catch (e) {
+          try { return JSON.parse(raw); } catch (e2) { return null; }
+        }
+      }
       function bbGetVerifiedIdentity() {
         try {
           var raw = bbReadCookie(verifiedCookieName);
           if (!raw) return null;
-          var parsed = JSON.parse(raw);
+          var parsed = bbParseVerifiedCookie(raw);
           if (!parsed || typeof parsed !== 'object') {
+            bbEraseVerifiedCookie();
             bbCommentsLog('verified cookie parse skipped', { reason: 'not-an-object', rawLen: raw.length });
             return null;
           }
-          var n = parsed.name ? String(parsed.name).trim() : '';
-          var e = parsed.email ? String(parsed.email).trim() : '';
-          if (!n || !e) {
-            bbCommentsLog('verified cookie incomplete', { hasName: Boolean(n), hasEmail: Boolean(e) });
+          var token = parsed.token ? String(parsed.token).trim() : '';
+          if (!token) {
+            bbEraseVerifiedCookie();
+            bbCommentsLog('verified cookie cleared', { reason: parsed.email ? 'legacy-email' : 'missing-token' });
             return null;
           }
-          return { name: n, email: e };
+          var n = parsed.name ? String(parsed.name).trim() : '';
+          if (!n) n = 'Member';
+          if (parsed.email) {
+            bbWriteCookie(verifiedCookieName, JSON.stringify({ name: n, token: token }), 30);
+          }
+          return { name: n, token: token };
         } catch (e) {
           bbCommentsLog('verified cookie parse failed', { error: String(e && e.message || e) });
           return null;
         }
       }
-      function bbSetVerifiedIdentity(name, email) {
-        if (!name || !email) {
-          bbCommentsLog('verified cookie NOT set', { reason: 'missing-name-or-email', hasName: Boolean(name), hasEmail: Boolean(email) });
+      function bbSetVerifiedIdentity(name, token) {
+        if (!name || !token) {
+          bbCommentsLog('verified cookie NOT set', { reason: 'missing-name-or-token', hasName: Boolean(name), hasToken: Boolean(token) });
           return;
         }
-        bbCommentsLog('verified cookie set', { name: String(name), email: String(email) });
-        bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), email: String(email) }), 30);
+        bbCommentsLog('verified cookie set', { hasName: Boolean(name), hasToken: Boolean(token) });
+        bbWriteCookie(verifiedCookieName, JSON.stringify({ name: String(name), token: String(token) }), 30);
+      }
+      function bbRevokeVerificationToken(token) {
+        if (!token) return;
+        try {
+          fetch(apiUrl + '/verification/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+            body: JSON.stringify({ siteKey: siteKey, verification_cookie_token: String(token) }),
+            credentials: 'omit',
+            keepalive: true
+          }).catch(function() {});
+        } catch (e) {}
+      }
+      function bbSubscriberDisplayName(identity, typedName) {
+        var typed = typedName ? String(typedName).trim() : '';
+        if (typed) return typed;
+        return '';
       }
       function bbClearVerifiedIdentity() {
-        bbClearCookie(verifiedCookieName);
+        var identity = null;
+        try { identity = bbGetVerifiedIdentity(); } catch (e) { identity = null; }
+        bbEraseVerifiedCookie();
         verifiedCommenterEpoch += 1;
-        bbCommentsLog('verified commenter logged out', { epoch: verifiedCommenterEpoch });
+        if (identity && identity.token) bbRevokeVerificationToken(identity.token);
+        bbCommentsLog('verified commenter logged out', { epoch: verifiedCommenterEpoch, hasToken: Boolean(identity && identity.token) });
+        try { applyCommentIdentityMode(); } catch (e2) {}
+      }
+      function bbConsumeVerificationExpired(data) {
+        if (!data || data.code !== 'verification_expired') return false;
+        bbClearVerifiedIdentity();
+        return true;
       }
       function bbEmailOverrideStillValid(epoch, override) {
         return epoch === verifiedCommenterEpoch ? override : null;
@@ -1659,12 +1709,12 @@
           if (!id) return null;
           return {
             loggedIn: id.loggedIn,
-            name: id.name || null,
-            email: id.email || null
+            hasName: Boolean(id.name),
+            hasEmail: Boolean(id.email)
           };
         })(),
         verifiedCookieName: verifiedCookieName,
-        verifiedIdentity: bbGetVerifiedIdentity()
+        verifiedIdentity: bbIdentityDebug(bbGetVerifiedIdentity())
       });
 
       var renderComments = function(comments, total) {
@@ -1721,14 +1771,6 @@
               verSpan.style.fontSize = '11px';
               verSpan.textContent = ' \u2713';
               meta.appendChild(verSpan);
-            }
-            var commentEmailRaw = c.email != null ? String(c.email).trim() : '';
-            if (commentEmailRaw) {
-              var emailSpanEl = document.createElement('span');
-              emailSpanEl.style.color = '#666';
-              emailSpanEl.style.fontSize = '0.85em';
-              emailSpanEl.textContent = ' (' + commentEmailRaw + ')';
-              meta.appendChild(emailSpanEl);
             }
           }
           var time = document.createElement('span');
@@ -1872,6 +1914,7 @@
             replyFormShell.appendChild(rError);
             var parentCommentId = String(c.id);
             var replyEmailOverride = null;
+            var replyNameOverride = null;
             var replyEmailEpoch = verifiedCommenterEpoch;
             var replyPostAsAnonymous = false;
             var replyAnonymousRetryToken = '';
@@ -1919,9 +1962,16 @@
               var replyHandle = replyGenerated ? bbGetOrCreateAnonymousHandle() : '';
               var verifiedIdentity = bbGetVerifiedIdentity();
               var activeReplyOverride = bbEmailOverrideStillValid(replyEmailEpoch, replyEmailOverride);
-              var loggedInEmail = replyGenerated
+              var activeReplyName = bbEmailOverrideStillValid(replyEmailEpoch, replyNameOverride);
+              var loggedInToken = (!replyGenerated && !loggedInOptionalEmail && verifiedIdentity && verifiedIdentity.token)
+                ? verifiedIdentity.token
+                : null;
+              var loggedInEmail = (replyGenerated || loggedInToken)
                 ? null
-                : (verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : (activeReplyOverride || (rEmail.value || '').trim() || null));
+                : (activeReplyOverride || (rEmail.value || '').trim() || null);
+              var replySubscriberName = (replyGenerated || loggedInToken)
+                ? ''
+                : bbSubscriberDisplayName(verifiedIdentity, activeReplyName);
               bbCommentsLog('reply submit start', {
                 mode: modeNow,
                 allowAnonymousComments: allowAnonymousComments,
@@ -1929,11 +1979,12 @@
                 loggedInOptionalEmail: loggedInOptionalEmail,
                 generatedAnonymous: replyGenerated,
                 displayName: replyGenerated ? replyHandle : (modeNow === 'loggedIn' ? '' : nm),
-                verifiedCookie: verifiedIdentity,
-                emailSource: replyGenerated ? 'none' : (verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeReplyOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
-                email: bbEmailDebug(loggedInEmail)
+                verifiedCookie: bbIdentityDebug(verifiedIdentity),
+                emailSource: replyGenerated ? 'none' : (loggedInToken ? 'verification-token' : (activeReplyOverride ? 'email-prompt' : ((rEmail.value || '').trim() ? 'reply-email-input' : 'none'))),
+                email: bbEmailDebug(loggedInEmail),
+                hasVerificationToken: Boolean(loggedInToken)
               });
-              if (!replyGenerated && modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !replyPostAsAnonymous) {
+              if (!replyGenerated && modeNow === 'loggedIn' && !loggedInOptionalEmail && !loggedInEmail && !loggedInToken && !replyPostAsAnonymous) {
                 bbCommentsLog('reply submit waiting for email prompt', { mode: modeNow });
                 bbPromptForEmail(rEmail.value || (emailInput && emailInput.value) || '', {
                   allowAnonymousChoice: allowAnonymousComments && subscriberCommentsEnabled
@@ -1946,6 +1997,7 @@
                   }
                   if (!result.email) return;
                   replyEmailOverride = result.email;
+                  replyNameOverride = (result.name || '').trim();
                   replyEmailEpoch = verifiedCommenterEpoch;
                   rSubmit.onclick();
                 });
@@ -1969,12 +2021,15 @@
               if (replyPostAsAnonymous) payload.post_as_anonymous = true;
               if (replyPostAsAnonymous && replyAnonymousRetryToken) payload.anonymous_retry_token = replyAnonymousRetryToken;
               if (rEm) payload.email = rEm;
+              if (loggedInToken) payload.verification_cookie_token = loggedInToken;
+              if (!replyGenerated && !replyPostAsAnonymous && modeNow === 'loggedIn' && replySubscriberName && !loggedInToken) {
+                payload.subscriber_display_name = replySubscriberName;
+              }
               bbCommentsLog('reply POST payload', {
                 post_id: payload.post_id,
                 parent_id: payload.parent_id,
                 display_name: payload.display_name,
                 hasEmail: Boolean(payload.email),
-                email: payload.email || null,
                 postAsAnonymous: Boolean(replyPostAsAnonymous)
               });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
@@ -2002,12 +2057,13 @@
                     verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
                     status: data && data.status ? data.status : null,
                     hasEmail: Boolean(data && data.email),
-                    email: data && data.email ? data.email : null,
-                    willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && rEm)
+                    willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && data.verification_token)
                   });
                   if (data && data.id) {
-                    if (modeNow === 'loggedIn' && data.verified_subscriber && rEm) {
-                      bbSetVerifiedIdentity(data.display_name || 'Member', rEm);
+                    var replyIssuedToken = data && data.verification_token ? String(data.verification_token) : '';
+                    if (modeNow === 'loggedIn' && data.verified_subscriber && replyIssuedToken) {
+                      bbSetVerifiedIdentity(data.display_name || 'Member', replyIssuedToken);
+                      replyNameOverride = null;
                     } else if (modeNow === 'loggedIn') {
                       bbCommentsLog('reply verified cookie NOT set', {
                         reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
@@ -2037,13 +2093,19 @@
                     replyAnonymousRetryToken = retryToken || '';
                     rSubmit.onclick();
                   })) {
-                    if (bbIsVerificationPostFailure(data)) replyEmailOverride = null;
+                    if (bbIsVerificationPostFailure(data) || bbConsumeVerificationExpired(data)) {
+                      replyEmailOverride = null;
+                      replyNameOverride = null;
+                    }
                     bbSetCommentError(rError, (data && data.error) || 'Failed to post');
                     rSubmit.textContent = 'Post reply';
                     rReplySync();
                   } else {
                     var err = (data && data.error) || 'Failed to post';
-                    if (bbIsVerificationPostFailure(data)) replyEmailOverride = null;
+                    if (bbIsVerificationPostFailure(data) || bbConsumeVerificationExpired(data)) {
+                      replyEmailOverride = null;
+                      replyNameOverride = null;
+                    }
                     bbSetCommentError(rError, err);
                     rSubmit.textContent = 'Post reply';
                     rReplySync();
@@ -2256,8 +2318,8 @@
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
           generatedAnonymous: generatedAnonymous,
-          squarespaceIdentity: id ? { loggedIn: id.loggedIn, name: id.name || null, email: id.email || null } : null,
-          verifiedIdentity: verifiedIdentity,
+          squarespaceIdentity: id ? bbIdentityDebug(id) : null,
+          verifiedIdentity: bbIdentityDebug(verifiedIdentity),
           nameInputVisible: null,
           emailInputVisible: null
         };
@@ -2328,9 +2390,7 @@
         formModePayload.nameInputVisible = nameInput.style.display !== 'none';
         formModePayload.emailInputVisible = emailInput.style.display !== 'none';
         formModePayload.loggedInIdentityLineVisible = loggedInIdentityLine.style.display !== 'none';
-        formModePayload.loggedInIdentityLineText = loggedInIdentityLine.textContent || '';
         formModePayload.anonymousIdentityLineVisible = anonymousIdentityLine.style.display !== 'none';
-        formModePayload.anonymousIdentityLineText = anonymousIdentityLine.textContent || '';
         var formModeSig = JSON.stringify(formModePayload);
         if (formModeSig !== self._lastCommentsFormModeLogSig) {
           self._lastCommentsFormModeLogSig = formModeSig;
@@ -2339,7 +2399,7 @@
         self._emitAuthDebugSnapshot('comments.formMode');
         self._authDebug('comments.formMode.details', {
           mode: mode,
-          identityName: id && id.name ? id.name : null,
+          identityHasName: Boolean(id && id.name),
           identityEmailPresent: Boolean(id && id.email),
           nameInputVisible: nameInput.style.display !== 'none',
           emailInputVisible: emailInput.style.display !== 'none'
@@ -2347,9 +2407,10 @@
       }
 
       var mainEmailOverride = null;
+      var mainNameOverride = null;
       var mainEmailEpoch = verifiedCommenterEpoch;
       function bbRenderLoggedInIdentityLine(identity) {
-        var labelText = 'Logged in as ' + identity.email;
+        var labelText = 'Logged in as ' + identity.name;
         var label = loggedInIdentityLine.querySelector('.bb-comment-logged-in-label');
         var logout = loggedInIdentityLine.querySelector('.bb-comment-logout');
         if (label && logout && label.textContent === labelText && loggedInIdentityLine.style.display !== 'none') return;
@@ -2365,6 +2426,7 @@
         logout.style.cssText = 'display:inline;margin:0 0 0 10px;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:inherit;vertical-align:baseline';
         logout.onclick = function() {
           mainEmailOverride = null;
+          mainNameOverride = null;
           bbClearVerifiedIdentity();
           applyCommentIdentityMode();
         };
@@ -2400,12 +2462,15 @@
           });
       };
 
-      function submitMainCommentWithEmail(modeNow, name, body, emailToUse, postAsAnonymous, anonymousRetryToken) {
+      function submitMainCommentWithEmail(modeNow, name, body, emailToUse, postAsAnonymous, anonymousRetryToken, subscriberDisplayName, verificationToken) {
         submitBtn.disabled = true;
         submitBtn.style.opacity = '0.55';
         submitBtn.style.cursor = 'not-allowed';
         submitBtn.textContent = 'Posting…';
         var generatedNow = bbUseGeneratedAnonymousName(modeNow);
+        var chosenSubscriberName = (!generatedNow && !postAsAnonymous && !verificationToken && modeNow === 'loggedIn' && subscriberDisplayName)
+          ? String(subscriberDisplayName).trim()
+          : '';
         var payload = {
           post_id: postId,
           display_name: generatedNow ? bbGetOrCreateAnonymousHandle() : (modeNow === 'loggedIn' ? '' : name),
@@ -2417,13 +2482,16 @@
         };
         if (postAsAnonymous) payload.post_as_anonymous = true;
         if (postAsAnonymous && anonymousRetryToken) payload.anonymous_retry_token = anonymousRetryToken;
-        if (!generatedNow && !postAsAnonymous && emailToUse) payload.email = emailToUse;
+        if (!generatedNow && !postAsAnonymous && emailToUse && !verificationToken) payload.email = emailToUse;
+        if (!generatedNow && !postAsAnonymous && verificationToken) payload.verification_cookie_token = verificationToken;
+        if (chosenSubscriberName) payload.subscriber_display_name = chosenSubscriberName;
         bbCommentsLog('main POST payload', {
           mode: modeNow,
           post_id: payload.post_id,
           display_name: payload.display_name,
+          hasSubscriberName: Boolean(chosenSubscriberName),
           hasEmail: Boolean(payload.email),
-          email: payload.email || null,
+          hasVerificationToken: Boolean(payload.verification_cookie_token),
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
           loggedInOptionalEmail: loggedInOptionalEmail,
@@ -2452,21 +2520,19 @@
               verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
               status: data && data.status ? data.status : null,
               hasEmail: Boolean(data && data.email),
-              email: data && data.email ? data.email : null,
-              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && emailToUse)
+              willSetVerifiedCookie: Boolean(modeNow === 'loggedIn' && data && data.verified_subscriber && data.verification_token)
             });
-            // #region agent log
-            fetch('http://127.0.0.1:7454/ingest/babef855-2138-46ca-93cf-7acd45e00ee4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d05d9c'},body:JSON.stringify({sessionId:'d05d9c',runId:'post-fix',hypothesisId:'H6',location:'renderer.js:main POST response',message:'comment POST response',data:{verified_subscriber:Boolean(data&&data.verified_subscriber),displayNameIsAnonymous:Boolean(data&&data.display_name==='Anonymous')},timestamp:Date.now()})}).catch(function(){});
-            // #endregion
             if (data && data.id) {
-              if (modeNow === 'loggedIn' && data.verified_subscriber && emailToUse && !bbUseGeneratedAnonymousName(modeNow)) {
-                bbSetVerifiedIdentity(data.display_name || 'Member', emailToUse);
+              var issuedToken = data && data.verification_token ? String(data.verification_token) : '';
+              if (modeNow === 'loggedIn' && data.verified_subscriber && issuedToken && !bbUseGeneratedAnonymousName(modeNow)) {
+                bbSetVerifiedIdentity(data.display_name || 'Member', issuedToken);
+                mainNameOverride = null;
               } else if (modeNow === 'loggedIn' && !bbUseGeneratedAnonymousName(modeNow)) {
                 bbCommentsLog('main verified cookie NOT set', {
-                  reason: data && data.verified_subscriber ? 'missing-email' : 'server-returned-unverified',
+                  reason: data && data.verified_subscriber ? 'missing-token' : 'server-returned-unverified',
                   display_name: data && data.display_name ? data.display_name : null,
                   verified_subscriber: data ? Boolean(data.verified_subscriber) : null,
-                  hasEmail: Boolean(emailToUse)
+                  hasToken: Boolean(issuedToken)
                 });
               }
               bbSetCommentError(mainCommentError, '');
@@ -2490,13 +2556,19 @@
             } else if (bbHandleVerificationPostError(data, function(retryToken) {
               submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
             })) {
-              if (bbIsVerificationPostFailure(data)) mainEmailOverride = null;
+              if (bbIsVerificationPostFailure(data) || bbConsumeVerificationExpired(data)) {
+                mainEmailOverride = null;
+                mainNameOverride = null;
+              }
               bbSetCommentError(mainCommentError, (data && data.error) || 'Failed to post');
               submitBtn.textContent = 'Post Comment';
               mainFormSync();
             } else {
               var err = (data && data.error) || 'Failed to post';
-              if (bbIsVerificationPostFailure(data)) mainEmailOverride = null;
+              if (bbIsVerificationPostFailure(data) || bbConsumeVerificationExpired(data)) {
+                mainEmailOverride = null;
+                mainNameOverride = null;
+              }
               bbSetCommentError(mainCommentError, err);
               submitBtn.textContent = 'Post Comment';
               mainFormSync();
@@ -2522,8 +2594,7 @@
             allowAnonymousComments: allowAnonymousComments,
             subscriberCommentsEnabled: subscriberCommentsEnabled,
             generatedAnonymous: true,
-            displayName: anonHandle,
-            email: null
+            hasDisplayName: Boolean(anonHandle)
           });
           submitMainCommentWithEmail(modeNow, anonHandle, body, null);
           return;
@@ -2532,20 +2603,28 @@
           var verifiedIdentity = bbGetVerifiedIdentity();
           var typedEmail = (emailInput && emailInput.value) ? (emailInput.value || '').trim() : '';
           var activeMainOverride = bbEmailOverrideStillValid(mainEmailEpoch, mainEmailOverride);
-          var useEmail = verifiedIdentity && verifiedIdentity.email ? verifiedIdentity.email : activeMainOverride;
+          var activeMainName = bbEmailOverrideStillValid(mainEmailEpoch, mainNameOverride);
+          var useToken = (!loggedInOptionalEmail && verifiedIdentity && verifiedIdentity.token) ? verifiedIdentity.token : null;
+          var useEmail = useToken ? null : activeMainOverride;
+          var subscriberName = useToken ? '' : bbSubscriberDisplayName(verifiedIdentity, activeMainName);
           bbCommentsLog('main submit start', {
             mode: modeNow,
             allowAnonymousComments: allowAnonymousComments,
             subscriberCommentsEnabled: subscriberCommentsEnabled,
             loggedInOptionalEmail: loggedInOptionalEmail,
-            verifiedCookie: verifiedIdentity,
-            typedEmail: typedEmail || null,
-            emailOverride: activeMainOverride,
-            emailSource: verifiedIdentity && verifiedIdentity.email ? 'verified-cookie' : (activeMainOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
-            useEmail: useEmail || null
+            verifiedCookie: bbIdentityDebug(verifiedIdentity),
+            hasTypedEmail: Boolean(typedEmail),
+            hasEmailOverride: Boolean(activeMainOverride),
+            emailSource: useToken ? 'verification-token' : (activeMainOverride ? 'email-prompt' : (loggedInOptionalEmail && typedEmail ? 'email-input' : 'none')),
+            hasUseEmail: Boolean(useEmail),
+            hasVerificationToken: Boolean(useToken)
           });
           if (loggedInOptionalEmail) {
-            submitMainCommentWithEmail(modeNow, name, body, typedEmail || useEmail || null);
+            submitMainCommentWithEmail(modeNow, name, body, typedEmail || null);
+            return;
+          }
+          if (useToken) {
+            submitMainCommentWithEmail(modeNow, name, body, null, false, '', '', useToken);
             return;
           }
           if (!useEmail) {
@@ -2560,20 +2639,21 @@
               }
               if (!result.email) return;
               mainEmailOverride = result.email;
+              mainNameOverride = (result.name || '').trim();
               mainEmailEpoch = verifiedCommenterEpoch;
-              submitMainCommentWithEmail(modeNow, name, body, result.email);
+              submitMainCommentWithEmail(modeNow, name, body, result.email, false, '', mainNameOverride);
             });
             return;
           }
-          submitMainCommentWithEmail(modeNow, name, body, useEmail);
+          submitMainCommentWithEmail(modeNow, name, body, useEmail, false, '', subscriberName);
           return;
         }
         bbCommentsLog('main submit start', {
           mode: modeNow,
           allowAnonymousComments: allowAnonymousComments,
           subscriberCommentsEnabled: subscriberCommentsEnabled,
-          displayName: name || null,
-          email: (emailInput.value || '').trim() || null
+          hasDisplayName: Boolean(name),
+          hasEmail: Boolean((emailInput.value || '').trim())
         });
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
@@ -2649,21 +2729,6 @@
         bbPreview: bbPreview
       });
 
-      // #region agent log
-      var _rendererDbg = {
-        previewMode: previewMode,
-        bbPreview: bbPreview,
-        inIframe: window.parent !== window,
-        pathname: window.location.pathname,
-        href: window.location.href,
-        htmlClasses: document.documentElement ? document.documentElement.className : '(none)',
-        bodyClasses: document.body ? document.body.className : '(none)',
-        hasBbLoadingClass: document.documentElement ? document.documentElement.classList.contains('bb-loading-blog') : false,
-        isEditUi: (!previewMode && !bbPreview) ? this._isSquarespaceEditingUi() : 'skipped'
-      };
-      fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7918cd'},body:JSON.stringify({sessionId:'7918cd',location:'renderer.js:init',message:'renderer init state',data:_rendererDbg,timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
-      // #endregion
-
       if (!previewMode && !bbPreview && this._isSquarespaceEditingUi()) {
         console.log('[BlogOverlay] Skipping render: Squarespace edit mode active');
         this._suppressedByEditorMode = true;
@@ -2676,31 +2741,12 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
-        // #region agent log
-        try {
-          this._ensureBlogRouteHydrated();
-          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.routeGate',message:'init route gate decision',data:{pathname:pathname,blogPath:blogPath,isTransientAccountDrawerRoute:this._isTransientAccountDrawerRoute(pathname),lastBlogRoutePathname:this._lastBlogRoutePathname||null,isOnEffectiveBlogRoute:this._isOnEffectiveBlogRoute()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-        } catch (e) {}
-        // #endregion
+        try { this._ensureBlogRouteHydrated(); } catch (e) {}
         if (!this._isOnEffectiveBlogRoute()) {
-          console.log('[BlogOverlay] Skipping render: not on blog route (path:', pathname, ', blogPath:', blogPath, ')');
           // Do not clear bb-loading-blog: another collection on this Squarespace
           // site (or a loader that has not finished) may own the overlay.
           return;
         }
-        // #region agent log
-        try {
-          fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:init.paywallBranch',message:'init paywall branch decision',data:{
-            isPaywalledSite: this._isPaywalledSite(),
-            viewerMode: this._resolveViewerMode(),
-            fullPaywallActive: this._isSquarespaceFullPaywallActive(),
-            isLikelyCollectionIndex: this._isLikelyBlogCollectionIndexView(),
-            hasSquarespacePostListing: this._hasSquarespacePostListing(),
-            selectedIndexFromHash: this._getSelectedIndexFromHash(),
-            pathname: pathname
-          },timestamp:Date.now(),hypothesisId:'H1,H2'})}).catch(function(){});
-        } catch (e) {}
-        // #endregion
         if (this._isSquarespaceFullPaywallActive()) {
           console.log('[BlogOverlay] Full collection paywall (Squarespace owns page); skipping overlay');
           this._paywallFullySuppressed = true;
@@ -2722,7 +2768,6 @@
       this._root = root;
       this._startEditorModeObserver();
       this._suppressedByEditorMode = false;
-      console.log('[BlogOverlay] Renderer initialized with config:', this.config, 'showRecentPostsSidebar:', !!this.config.showRecentPostsSidebar);
       this._debugLog('init', {
         previewMode: previewMode,
         bbPreview: bbPreview,
@@ -2896,11 +2941,6 @@
       var onRouteChange = function() {
         setTimeout(function() {
           var sig = self._routeSignature();
-          // #region agent log
-          try {
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:onRouteChange',message:'route change observed',data:{sig:sig,lastSig:self._lastRouteSignature,changed:sig!==self._lastRouteSignature,viewerMode:self._resolveViewerMode()},timestamp:Date.now(),hypothesisId:'H3'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (sig === self._lastRouteSignature) return;
           self._lastRouteSignature = sig;
           var pathname = window.location && window.location.pathname ? window.location.pathname : '/';
@@ -3037,7 +3077,16 @@
         var p = prev && prev[key];
         var n = next && next[key];
         if (p && n && typeof p === 'object' && typeof n === 'object' && !Array.isArray(p) && !Array.isArray(n)) {
-          out[key] = Object.assign({}, p, n);
+          var merged = Object.assign({}, p, n);
+          /* A template switch sends a full post header. JSON drops keys the
+             new template does not set (Publisher has no fullBleedLayout), and
+             Object.assign would otherwise keep the previous template's value.
+             That leaves Feature's stacked header in place until a reload. */
+          if (key === 'postHeader' && typeof n.imagePosition === 'string') {
+            if (!Object.prototype.hasOwnProperty.call(n, 'fullBleedLayout')) delete merged.fullBleedLayout;
+            if (!Object.prototype.hasOwnProperty.call(n, 'backgroundColor')) delete merged.backgroundColor;
+          }
+          out[key] = merged;
         }
       }
       return out;
@@ -5317,7 +5366,9 @@
     },
 
     /**
-     * Sidebar/footer post card. Gated: lock on image, title, Members Only; meta still shown when toggled on.
+     * Sidebar/footer post card. Gated: lock on image and title. Footer cards also show Members Only.
+     * Sidebar cards omit that label — the thumbnail lock is enough, and the extra row is taller than the thumb and clips the title.
+     * Meta still shown when toggled on, except reading time on locked posts.
      * @param {object} opts - { variant: 'footer'|'list', items, itemIndexMap, placeholderMap, postIndex, analyticsElement, cfg }
      */
     _createModulePostCard: function(post, opts) {
@@ -5410,7 +5461,7 @@
         self._appendModulePostCardListMeta(textHost, post, cardCfg);
       }
 
-      if (gated) {
+      if (gated && variant !== 'list') {
         var mo = self._createMembersOnlyTeaserLabel(false);
         mo.style.marginTop = '0';
         textHost.appendChild(mo);
@@ -5442,65 +5493,19 @@
     },
 
     _startPaywallAuthObserver: function() {
-      // #region agent log
-      try {
-        var _l1 = {
-          alreadyInstalled: !!this._paywallAuthObserver,
-          previewMode: !!this._previewMode,
-          bbPreview: !!this._bbPreview,
-          isPaywalledSite: this._isPaywalledSite(),
-          paywallDetectionState: this.config && this.config.paywallDetectionState,
-          paywallMode: this.config && this.config.paywallMode,
-          willEarlyReturn: (!!this._paywallAuthObserver || !!this._previewMode || !!this._bbPreview || !this._isPaywalledSite())
-        };
-        fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:_startPaywallAuthObserver',message:'auth observer install decision',data:_l1,timestamp:Date.now(),hypothesisId:'H1'})}).catch(function(){});
-      } catch (e) {}
-      // #endregion
       if (this._paywallAuthObserver || this._previewMode || this._bbPreview) return;
       if (!this._isPaywalledSite()) return;
       var self = this;
       this._lastPaywallAuthSnapshot =
         this._resolveViewerMode() + '|' + (this._isSquarespaceFullPaywallActive() ? '1' : '0');
       this._paywallAuthObserver = new MutationObserver(function() {
-        // #region agent log
-        try {
-          if (!self._dbgObserverFiredOnce) {
-            self._dbgObserverFiredOnce = true;
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.fire',message:'auth observer fired (first mutation)',data:{baselineSnapshot:self._lastPaywallAuthSnapshot},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-          }
-        } catch (e) {}
-        // #endregion
         if (self._paywallAuthDebounce) return;
         self._paywallAuthDebounce = setTimeout(function() {
           self._paywallAuthDebounce = null;
           if (self._renderContentInProgress) {
-            // #region agent log
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'skipped: renderContentInProgress',data:{},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-            // #endregion
             return;
           }
           var snap = self._resolveViewerMode() + '|' + (self._isSquarespaceFullPaywallActive() ? '1' : '0');
-          // #region agent log
-          try {
-            var _ctx = (window.Static && window.Static.SQUARESPACE_CONTEXT) || {};
-            var _uac = _ctx.userAccountsContext || {};
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'settled snapshot compare',data:{
-              snap: snap,
-              lastSnapshot: self._lastPaywallAuthSnapshot,
-              snapshotChanged: snap !== self._lastPaywallAuthSnapshot,
-              viewerMode: self._resolveViewerMode(),
-              fullPaywallActive: self._isSquarespaceFullPaywallActive(),
-              fromSquarespaceContext: self._detectViewerModeFromSquarespaceContext(),
-              fromDom: self._detectViewerModeFromDom(),
-              rememberedMode: self._getRememberedViewerModeHint(),
-              memberGatePresent: self._isMemberGatePresent(),
-              hasSquarespacePostListing: self._hasSquarespacePostListing(),
-              ctxAuthenticated: _ctx.authenticated,
-              uacAuthenticated: _uac.authenticated,
-              uacIsAuthenticated: _uac.isAuthenticated
-            },timestamp:Date.now(),hypothesisId:'H2'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (snap === self._lastPaywallAuthSnapshot) return;
           self._lastPaywallAuthSnapshot = snap;
           var fullNow = self._isSquarespaceFullPaywallActive();
@@ -5516,24 +5521,6 @@
           self._paywallFullySuppressed = false;
           var pathname = typeof window !== 'undefined' && window.location ? (window.location.pathname || '/') : '/';
           var blogPath = self._currentBlogPathForRouteMatch();
-          // #region agent log
-          try {
-            var _rootConnected = false;
-            try { _rootConnected = Boolean(self._root && document.documentElement && document.documentElement.contains(self._root)); } catch (eR) {}
-            var _fbc = null;
-            try { var _f = findBlogContainer(); _fbc = _f ? ((_f.tagName||'') + '#' + (_f.id||'') + '.' + (typeof _f.className==='string'?_f.className.slice(0,40):'')) : null; } catch (eF) {}
-            fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d12b8c'},body:JSON.stringify({sessionId:'d12b8c',location:'renderer.js:paywallAuthObserver.settle',message:'snapshot changed - about to gate/render',data:{
-              pathname: pathname,
-              blogPath: blogPath || null,
-              isOnEffectiveBlogRoute: self._isOnEffectiveBlogRoute(),
-              isTransientAccountDrawerRoute: self._isTransientAccountDrawerRoute(pathname),
-              itemsLength: self.items ? self.items.length : -1,
-              rootConnected: _rootConnected,
-              rootId: self._root ? (self._root.id || '(no id)') : '(no root)',
-              findBlogContainerNow: _fbc
-            },timestamp:Date.now(),hypothesisId:'H3,H4'})}).catch(function(){});
-          } catch (e) {}
-          // #endregion
           if (!self._isOnEffectiveBlogRoute()) {
             self._debugLog('paywall auth observer skipped outside blog route', { path: pathname, blogPath: blogPath || null });
             return;
@@ -5885,7 +5872,7 @@
       var metaLines = [];
       if (cardShowDate) { var cardDateStr = this._getDate(post); if (cardDateStr) metaLines.push(cardDateStr); }
       if (cardShowAuthor) { var cardAuthorStr = this._getAuthorsForPost(post, cardCfg); if (cardAuthorStr) metaLines.push(cardAuthorStr); }
-      if (cardShowReadingTime) {
+      if (cardShowReadingTime && !this._shouldGateSinglePostBody(post)) {
         var cardMins = this._getReadingTimeMinutes(post.body);
         metaLines.push(cardMins === 1 ? '1 min read' : cardMins + ' min read');
       }
@@ -5903,7 +5890,7 @@
         var dateStr = this._getDate(post);
         if (dateStr) lines.push(dateStr);
       }
-      if (cardCfg && cardCfg.showReadingTime) {
+      if (cardCfg && cardCfg.showReadingTime && !this._shouldGateSinglePostBody(post)) {
         var mins = this._getReadingTimeMinutes(post.body);
         lines.push(mins === 1 ? '1 min read' : mins + ' min read');
       }
@@ -8435,7 +8422,6 @@
           result = url.replace(/ /g, '%20');
         }
       }
-      console.log('[BlogOverlay] _encodeShareUrl: in=', JSON.stringify(url), 'out=', JSON.stringify(result));
       return result;
     },
 
@@ -8451,10 +8437,8 @@
      */
     _createShareLinks: function(shareUrl, title, platforms, baseUrl, imageUrl, lightVariant) {
       if (!platforms || platforms.length === 0) return null;
-      console.log('[BlogOverlay] _createShareLinks: shareUrl (input)=', JSON.stringify(shareUrl));
       var normalized = this._normalizeShareUrl(shareUrl || '');
       var encodedShareUrl = this._encodeShareUrl(normalized);
-      console.log('[BlogOverlay] _createShareLinks: normalized=', JSON.stringify(normalized), 'encodedShareUrl=', JSON.stringify(encodedShareUrl));
       var encTitle = encodeURIComponent(title || '');
       var wrap = document.createElement('div');
       wrap.className = 'blog-overlay-share-links' + (lightVariant ? ' blog-overlay-share-links--on-dark' : '');
@@ -8466,7 +8450,6 @@
         else if (platform === 'x') href = 'https://twitter.com/intent/tweet?url=' + encodedShareUrl + '&text=' + encTitle;
         else if (platform === 'email') {
           href = 'mailto:?subject=' + encTitle + '&body=' + encodedShareUrl;
-          console.log('[BlogOverlay] _createShareLinks: email body (raw, browser will encode)=', encodedShareUrl);
         }
         else if (platform === 'reddit') href = 'https://reddit.com/submit?url=' + encodedShareUrl + '&title=' + encTitle;
         else if (platform === 'linkedin') href = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodedShareUrl;
@@ -8475,7 +8458,6 @@
         }
         else if (platform === 'whatsapp') href = 'https://api.whatsapp.com/send?text=' + encodedShareUrl;
         else continue;
-        console.log('[BlogOverlay] _createShareLinks: platform=', platform, 'href (first 120 chars)=', href ? href.substring(0, 120) + (href.length > 120 ? '...' : '') : '');
         var a = document.createElement('a');
         a.href = href;
         a.target = '_blank';
@@ -8679,22 +8661,13 @@
         }
         postPath = postPath.replace(/\/+$/, '') || '/';
         var postPathNorm = this._normalizePathForMatch(postPath);
-        if (pathnameNorm === postPathNorm) {
-          console.log('[BlogOverlay] _getSelectedIndexFromPath: matched pathname', pathnameNorm, 'to post', i);
-          return i;
-        }
+        if (pathnameNorm === postPathNorm) return i;
       }
       var tail = this._getPostPathTailAfterBlogPrefix(pathnameNorm);
       if (tail) {
         for (var j = 0; j < items.length; j++) {
-          if (this._postMatchesPathTail(items[j], tail)) {
-            console.log('[BlogOverlay] _getSelectedIndexFromPath: matched path tail', JSON.stringify(tail), 'to post', j);
-            return j;
-          }
+          if (this._postMatchesPathTail(items[j], tail)) return j;
         }
-      }
-      if (pathname.indexOf('/') !== pathname.lastIndexOf('/')) {
-        console.log('[BlogOverlay] _getSelectedIndexFromPath: no match. pathname=', JSON.stringify(pathname), 'pathnameNorm=', JSON.stringify(pathnameNorm), 'first post fullUrl=', items[0] ? JSON.stringify(items[0].fullUrl) : '');
       }
       return -1;
     },
@@ -8754,10 +8727,7 @@
         var blogPath = this._currentBlogPathForRouteMatch();
         var pathname = window.location.pathname || '/';
         if (this._isOnBlogRoute(pathname, blogPath)) this._rememberCurrentBlogRoute();
-        if (!this._isOnEffectiveBlogRoute()) {
-          console.log('[BlogOverlay] Skipping render: not on blog route');
-          return;
-        }
+        if (!this._isOnEffectiveBlogRoute()) return;
       }
 
       var root = this._root || this.config.rootEl || findBlogContainer() || document.getElementById('blogga-blogga-root');
@@ -8852,7 +8822,7 @@
                   isSignedIn: json.userAccountsContext.isSignedIn
                 }
               : null,
-          extractedJsonIdentity: self._squarespaceJsonIdentity
+          extractedJsonIdentity: self._redactIdentityForLog(self._squarespaceJsonIdentity)
         });
         self._emitAuthDebugSnapshot('render.afterJsonIdentity');
         var website = json && json.website ? json.website : (json && json.websiteSettings ? { title: json.websiteSettings.title } : null);
@@ -9719,264 +9689,94 @@
       return out;
     },
 
+
     /**
-     * Post-header type. Title is a Squarespace heading (H1–H4, default H1).
-     * Deck and meta are paragraph styles (P1–P3, defaults P1 and P2).
-     * When the site style can be read, that size is used at every viewport.
-     * Otherwise the fallback below is the size for that choice.
+     * Post Header sizes. Title, deck, and meta each pick Small, Medium, Large, or XL.
+     * Medium matches the previous fixed spec.
      */
-    _postHeaderFontFallbacks: {
-      h1: { desktop: '40px', mobile: '28px' },
-      h2: { desktop: '32px', mobile: '24px' },
-      h3: { desktop: '26px', mobile: '22px' },
-      h4: { desktop: '22px', mobile: '18px' },
-      p1: { desktop: '20px', mobile: '14px' },
-      p2: { desktop: '16px', mobile: '13px' },
-      p3: { desktop: '14px', mobile: '12px' }
+    _postHeaderTypeScale: {
+      s: {
+        title: { desktop: '34px', mobile: '24px' },
+        deck: { desktop: '17px', mobile: '13px' },
+        meta: { desktop: '14px', mobile: '12px' }
+      },
+      m: {
+        title: { desktop: '40px', mobile: '28px' },
+        deck: { desktop: '20px', mobile: '14px' },
+        meta: { desktop: '16px', mobile: '13px' }
+      },
+      l: {
+        title: { desktop: '48px', mobile: '34px' },
+        deck: { desktop: '24px', mobile: '17px' },
+        meta: { desktop: '19px', mobile: '15px' }
+      },
+      xl: {
+        title: { desktop: '56px', mobile: '40px' },
+        deck: { desktop: '28px', mobile: '19px' },
+        meta: { desktop: '22px', mobile: '17px' }
+      }
     },
 
-    _normalizePostHeaderFont: function(value, kind) {
+    _normalizePostHeaderTypeSize: function(value) {
       var v = typeof value === 'string' ? value.toLowerCase() : '';
-      if (kind === 'heading') {
-        if (v === 'h1' || v === 'h2' || v === 'h3' || v === 'h4') return v;
-        return 'h1';
-      }
-      if (v === 'p1' || v === 'p2' || v === 'p3') return v;
-      return kind === 'deck' ? 'p1' : 'p2';
+      if (v === 's' || v === 'small') return 's';
+      if (v === 'l' || v === 'large') return 'l';
+      if (v === 'xl') return 'xl';
+      return 'm';
     },
 
-    _cssLengthFromCustomProp: function(raw) {
-      if (!raw) return '';
-      raw = String(raw).trim();
-      if (!raw || raw === 'none' || raw === 'normal' || raw === 'inherit' || raw === 'initial') return '';
-      if (/^-?[\d.]+$/.test(raw)) return raw + 'rem';
-      if (/[0-9]/.test(raw) && (
-        raw.indexOf('px') !== -1 || raw.indexOf('rem') !== -1 || raw.indexOf('em') !== -1 ||
-        raw.indexOf('vw') !== -1 || raw.indexOf('clamp(') !== -1 || raw.indexOf('calc(') !== -1 ||
-        raw.indexOf('var(') === 0
-      )) return raw;
-      return '';
-    },
-
-    /** Squarespace heading/paragraph size: fluid min/max, then a single size variable. */
-    _squarespaceFluidSize: function(prefix) {
-      if (typeof document === 'undefined' || !document.documentElement) return '';
-      var root = document.documentElement;
-      var min = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-min-font-size'));
-      var max = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, prefix + '-max-font-size'));
-      if (min && max) {
-        return 'clamp(' + min + ', (' + max + ' - ' + min + ') * ((100vw - 375px) / 1065) + ' + min + ', ' + max + ')';
-      }
-      var names = [
-        prefix + '-font-font-size',
-        prefix + '-font-size',
-        prefix + '-size',
-        prefix + '-font-size-value',
-        prefix + '-size-value',
-        prefix + '-max-font-size'
-      ];
-      for (var i = 0; i < names.length; i++) {
-        var v = this._cssLengthFromCustomProp(this._readCssVarFromEl(root, names[i]));
-        if (v) return v;
-      }
-      return '';
-    },
-
-    _readSquarespaceFontFace: function(kind, index) {
-      if (typeof document === 'undefined' || !document.documentElement) {
-        return { family: '', weight: '', lineHeight: '', tracking: '' };
-      }
-      var root = document.documentElement;
-      var prefix = (kind === 'heading' ? '--heading-' : '--paragraph-') + index;
-      var familyNames = kind === 'heading'
-        ? [prefix + '-font-font-family', '--heading-font-font-family', '--headings-font-family', '--header-font-family']
-        : [prefix + '-font-font-family', '--paragraph-font-font-family', '--body-font-font-family', '--primary-font-font-family'];
-      var weightNames = kind === 'heading'
-        ? [prefix + '-font-font-weight', '--heading-font-font-weight', '--headings-font-weight', '--header-font-weight']
-        : [prefix + '-font-font-weight', '--paragraph-font-font-weight', '--body-font-font-weight', '--primary-font-font-weight'];
-      var lineNames = kind === 'heading'
-        ? [prefix + '-font-line-height', '--heading-font-line-height', '--headings-line-height']
-        : [prefix + '-font-line-height', '--paragraph-font-line-height', '--body-font-line-height'];
-      var trackNames = kind === 'heading'
-        ? [prefix + '-font-letter-spacing', '--heading-font-letter-spacing', '--headings-letter-spacing']
-        : [prefix + '-font-letter-spacing', '--paragraph-font-letter-spacing', '--body-font-letter-spacing'];
-      var read = function(names) {
-        for (var i = 0; i < names.length; i++) {
-          var raw = this._readCssVarFromEl(root, names[i]);
-          if (raw && raw !== 'inherit' && raw !== 'initial' && raw !== 'normal') return raw;
-        }
-        return '';
-      }.bind(this);
-      return {
-        family: read(familyNames),
-        weight: read(weightNames),
-        lineHeight: read(lineNames),
-        tracking: read(trackNames)
+    _paintPostHeaderElementSizes: function(wrapper) {
+      if (!wrapper || !wrapper.querySelectorAll) return;
+      var ph = this._postHeaderFontCfg || {};
+      var narrow = this._isNarrowCollectionViewport();
+      var self = this;
+      var pxFor = function(field, role) {
+        var step = self._normalizePostHeaderTypeSize(ph[field]);
+        var scale = self._postHeaderTypeScale[step] || self._postHeaderTypeScale.m;
+        var pair = scale[role];
+        return narrow ? pair.mobile : pair.desktop;
       };
-    },
-
-    /**
-     * Hidden element so site h1–h4 / .sqsrte-* rules apply. Ignore the browser
-     * default size — that means Squarespace has not styled this step.
-     */
-    _probeSquarespaceFont: function(tag, className) {
-      if (typeof document === 'undefined' || !document.body || !window.getComputedStyle) return null;
-      var el = document.createElement(tag);
-      if (className) el.className = className;
-      el.setAttribute('data-bb-type-probe', '1');
-      el.setAttribute('aria-hidden', 'true');
-      el.style.cssText = 'position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;margin:0;width:auto;height:auto;';
-      document.body.appendChild(el);
-      var cs;
-      try { cs = window.getComputedStyle(el); } catch (eProbe) { cs = null; }
-      var fontSize = cs ? cs.fontSize : '';
-      var fontFamily = cs ? cs.fontFamily : '';
-      var fontWeight = cs ? cs.fontWeight : '';
-      var lineHeight = cs ? cs.lineHeight : '';
-      var letterSpacing = cs ? cs.letterSpacing : '';
-      if (el.parentNode) el.parentNode.removeChild(el);
-      var px = parseFloat(fontSize);
-      if (!isFinite(px)) return null;
-      var rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-      var ua = [rootPx];
-      var t = String(tag || '').toLowerCase();
-      if (t === 'h1') ua = [rootPx * 2];
-      else if (t === 'h2') ua = [rootPx * 1.5];
-      else if (t === 'h3') ua = [rootPx * 1.17, rootPx * 1.2];
-      else if (t === 'h4') ua = [rootPx];
-      for (var i = 0; i < ua.length; i++) {
-        if (Math.abs(px - ua[i]) < 1) return null;
-      }
-      return {
-        size: fontSize,
-        family: fontFamily || '',
-        weight: fontWeight || '',
-        lineHeight: lineHeight && lineHeight !== 'normal' ? lineHeight : '',
-        tracking: letterSpacing && letterSpacing !== 'normal' && letterSpacing !== '0px' ? letterSpacing : ''
-      };
-    },
-
-    _resolveSquarespaceFont: function(key) {
-      if (!this._sqFontCache) this._sqFontCache = {};
-      var widthBucket = typeof window !== 'undefined' ? Math.round((window.innerWidth || 0) / 40) : 0;
-      var cacheKey = key + ':' + widthBucket;
-      if (this._sqFontCache[cacheKey]) return this._sqFontCache[cacheKey];
-      var heading = key.charAt(0) === 'h';
-      var index = key.charAt(1);
-      var prefix = (heading ? '--heading-' : '--paragraph-') + index;
-      var size = this._squarespaceFluidSize(prefix);
-      var face = this._readSquarespaceFontFace(heading ? 'heading' : 'paragraph', index);
-      if (!size) {
-        var probe = heading
-          ? this._probeSquarespaceFont('h' + index, '')
-          : this._probeSquarespaceFont('p', index === '1' ? 'sqsrte-large' : (index === '3' ? 'sqsrte-small' : ''));
-        if (probe) {
-          size = probe.size;
-          if (!face.family) face.family = probe.family;
-          if (!face.weight) face.weight = probe.weight;
-          if (!face.lineHeight) face.lineHeight = probe.lineHeight;
-          if (!face.tracking) face.tracking = probe.tracking;
+      var paint = function(list, size) {
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && list[i].style) list[i].style.setProperty('font-size', size, 'important');
         }
-      }
-      var resolved = {
-        size: size || '',
-        family: face.family || '',
-        weight: face.weight || '',
-        lineHeight: face.lineHeight || '',
-        tracking: face.tracking || ''
       };
-      this._sqFontCache[cacheKey] = resolved;
-      return resolved;
+      paint(wrapper.querySelectorAll('.bb-title--post'), pxFor('titleSize', 'title'));
+      paint(wrapper.querySelectorAll('.blog-overlay-post-deck'), pxFor('deckSize', 'deck'));
+      paint(wrapper.querySelectorAll('.bb-post-meta--on-bg, .bb-post-meta--on-image, .bb-post-meta--on-dark'), pxFor('metaSize', 'meta'));
     },
 
-    _setOptionalStyleProp: function(el, name, value) {
-      if (!el || !el.style) return;
-      if (value) el.style.setProperty(name, value);
-      else el.style.removeProperty(name);
-    },
-
-    _postHeaderChoiceKeys: function(key) {
-      return key && key.charAt(0) === 'h' ? ['h1', 'h2', 'h3', 'h4'] : ['p1', 'p2', 'p3'];
-    },
-
-    _fontSizeToPx: function(size) {
-      var n = parseFloat(size);
-      if (!isFinite(n)) return null;
-      var s = String(size);
-      if (s.indexOf('px') !== -1) return n;
-      if (s.indexOf('rem') !== -1) {
-        var rootPx = 16;
-        try {
-          rootPx = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-        } catch (ePx) { /* ignore */ }
-        return n * rootPx;
-      }
-      return null;
-    },
-
-    /**
-     * A size shared with another step in the menu is not that step's style
-     * (Squarespace often sets one size on h1–h4). Drop it so the choice's
-     * own fallback is used and the menu still changes the type.
-     */
-    _postHeaderStepSize: function(key) {
-      var resolved = this._resolveSquarespaceFont(key);
-      var size = resolved.size || '';
-      if (!size) return { size: '', resolved: resolved };
-      var keys = this._postHeaderChoiceKeys(key);
-      var selfPx = this._fontSizeToPx(size);
-      var matches = 0;
-      for (var i = 0; i < keys.length; i++) {
-        var other = this._resolveSquarespaceFont(keys[i]).size || '';
-        if (!other) continue;
-        if (selfPx != null) {
-          var otherPx = this._fontSizeToPx(other);
-          if (otherPx != null && Math.abs(selfPx - otherPx) < 1) matches++;
-          else if (otherPx == null && other === size) matches++;
-        } else if (other === size) {
-          matches++;
-        }
-      }
-      if (matches > 1) return { size: '', resolved: resolved };
-      return { size: size, resolved: resolved };
-    },
-
-    _setRoleFontVars: function(el, role, key) {
-      var fb = this._postHeaderFontFallbacks[key] || this._postHeaderFontFallbacks.h1;
-      var picked = this._postHeaderStepSize(key);
-      var resolved = picked.resolved;
-      var desktop = picked.size || fb.desktop;
-      var mobile = picked.size || fb.mobile;
-      el.style.setProperty('--bb-' + role + '-size', desktop);
-      el.style.setProperty('--bb-' + role + '-size-mobile', mobile);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-family', resolved.family);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-weight', resolved.weight);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-line-height', resolved.lineHeight);
-      this._setOptionalStyleProp(el, '--bb-' + role + '-tracking', resolved.tracking);
-    },
-
-    /** Apply the Post Header title / deck / meta font choices onto the overlay root. */
+    /** Apply each Post Header size onto the overlay root and the title, deck, and meta. */
     _applyPostHeaderTypeScale: function(wrapper, postHeaderCfg) {
       if (!wrapper || !wrapper.style) return;
       var ph = postHeaderCfg && typeof postHeaderCfg === 'object' ? postHeaderCfg : (this._postHeaderFontCfg || {});
       this._postHeaderFontCfg = ph;
-      var title = this._normalizePostHeaderFont(ph.titleFont, 'heading');
-      var deck = this._normalizePostHeaderFont(ph.deckFont, 'deck');
-      var meta = this._normalizePostHeaderFont(ph.metaFont, 'paragraph');
-      wrapper.setAttribute('data-bb-title-font', title);
-      wrapper.setAttribute('data-bb-deck-font', deck);
-      wrapper.setAttribute('data-bb-meta-font', meta);
-      this._setRoleFontVars(wrapper, 'title', title);
-      this._setRoleFontVars(wrapper, 'deck', deck);
-      this._setRoleFontVars(wrapper, 'meta', meta);
+      var title = this._normalizePostHeaderTypeSize(ph.titleSize);
+      var deck = this._normalizePostHeaderTypeSize(ph.deckSize);
+      var meta = this._normalizePostHeaderTypeSize(ph.metaSize);
+      wrapper.setAttribute('data-bb-title-size', title);
+      wrapper.setAttribute('data-bb-deck-size', deck);
+      wrapper.setAttribute('data-bb-meta-size', meta);
+      wrapper.removeAttribute('data-bb-type-size');
+      var chosen = { title: title, deck: deck, meta: meta };
+      var roles = ['title', 'deck', 'meta'];
+      for (var i = 0; i < roles.length; i++) {
+        var role = roles[i];
+        var scale = this._postHeaderTypeScale[chosen[role]] || this._postHeaderTypeScale.m;
+        var step = scale[role];
+        wrapper.style.setProperty('--bb-' + role + '-size', step.desktop);
+        wrapper.style.setProperty('--bb-' + role + '-size-mobile', step.mobile);
+      }
+      this._paintPostHeaderElementSizes(wrapper);
     },
 
     _clearPostHeaderTypeScale: function(wrapper) {
       if (!wrapper) return;
       this._postHeaderFontCfg = null;
-      wrapper.removeAttribute('data-bb-title-font');
-      wrapper.removeAttribute('data-bb-deck-font');
-      wrapper.removeAttribute('data-bb-meta-font');
+      wrapper.removeAttribute('data-bb-type-size');
+      wrapper.removeAttribute('data-bb-title-size');
+      wrapper.removeAttribute('data-bb-deck-size');
+      wrapper.removeAttribute('data-bb-meta-size');
       var roles = ['title', 'deck', 'meta'];
       var parts = ['size', 'size-mobile', 'family', 'weight', 'line-height', 'tracking'];
       for (var r = 0; r < roles.length; r++) {
@@ -9985,6 +9785,7 @@
         }
       }
     },
+
 
     _readPrimaryButtonRadius: function(scopeEl) {
       try {
@@ -10533,7 +10334,8 @@
         s + ' .blog-overlay-story-header-row{display:flex!important;flex-direction:column!important;flex-wrap:nowrap;align-items:stretch!important;gap:20px!important;width:100%!important;margin-bottom:0!important;}' +
         s + ' .blog-overlay-story-featured-image,' +
         s + ' .blog-overlay-story-info-col{width:100%!important;max-width:100%!important;flex:0 0 auto!important;margin:0!important;min-width:0!important;}' +
-        s + ' .blog-overlay-story-featured-image>div{aspect-ratio:16/10!important;width:100%!important;height:auto!important;max-height:none!important;}' +
+        s + ' .blog-overlay-story-featured-image>div{aspect-ratio:16/10!important;width:100%!important;height:auto!important;max-height:none!important;min-height:0!important;flex:none!important;}' +
+        s + ' .blog-overlay-story-featured-image img{position:static!important;inset:auto!important;width:100%!important;height:100%!important;object-fit:cover!important;}' +
         s + ' .blog-overlay-post-breadcrumbs,' +
         s + ' .blog-overlay-post-breadcrumbs--on-dark-solid{display:block!important;width:100%!important;font-size:13px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:var(--bb-p1-font-weight,inherit);line-height:1.4;color:' + ink60 + '!important;text-shadow:none!important;margin:0!important;text-align:left;}' +
         s + ' .blog-overlay-post-breadcrumbs a,' +
@@ -10577,6 +10379,7 @@
         s + '{margin-top:0!important;padding-top:var(--bb-wrapper-pad-top,5px)!important;}' +
         s + ' .blog-overlay-post-header-fullbleed,' +
         s + ' .blog-overlay-post-header-fullbleed--publisher{margin-bottom:0!important;}' +
+        s + ' .blog-overlay-post-header-fullbleed--publisher{height:500px!important;min-height:500px!important;}' +
         s + ' .blog-overlay-post-categories-line,' +
         s + ' .blog-overlay-post-header-categories{display:block!important;line-height:1;margin:0 0 10px 0!important;width:100%;}' +
         ribbon + '{display:inline-flex!important;align-items:center;justify-content:center;line-height:1;padding:7px 12px!important;font-size:11px!important;font-family:var(--bb-p1-font-family,inherit);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;margin:0!important;background:var(--bb-accent,#5B4FE8);color:var(--bb-text-on-accent,#fff);border-radius:var(--bb-btn-radius,0);width:fit-content;max-width:100%;}' +
@@ -10616,8 +10419,10 @@
         s + ' .blog-overlay-reporter-header-row>*{flex:0 0 auto!important;width:100%!important;max-width:100%!important;height:auto!important;min-width:0!important;}' +
         s + ' .blog-overlay-reporter-featured-image,' +
         s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image{width:100%!important;max-width:100%!important;flex:0 0 auto!important;height:auto!important;margin-top:-10px;margin-bottom:15px;}' +
+        s + ' .blog-overlay-single-post-header-inner:has(> .blog-overlay-post-breadcrumbs) .blog-overlay-reporter-featured-image,' +
+        s + ' .blog-overlay-single-post-header-inner:has(> .blog-overlay-post-breadcrumbs) .blog-overlay-reporter-header-row .blog-overlay-featured-image{margin-top:0;}' +
         s + ' .blog-overlay-reporter-header-row .blog-overlay-featured-image>div{width:100%!important;height:auto!important;aspect-ratio:16/10!important;max-height:none!important;}' +
-        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%;order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:12px!important;}' +
+        s + ' .blog-overlay-post-breadcrumbs{display:block!important;width:100%;order:-1;font-size:13px;font-family:inherit;line-height:1.4;color:var(--bb-body-60,rgba(0,0,0,0.6));margin-top:15px!important;margin-bottom:15px!important;}' +
         s + ' .blog-overlay-post-breadcrumbs a,' +
         s + ' .blog-overlay-post-breadcrumbs span{display:inline!important;}' +
         s + ' .blog-overlay-post-title,' +
@@ -10627,7 +10432,8 @@
         s + ' .blog-overlay-meta,' +
         s + ' .bb-post-meta--on-bg{font-size:var(--bb-meta-size-mobile,13px)!important;font-family:var(--bb-meta-family,var(--bb-p1-font-family,inherit));font-weight:var(--bb-meta-weight,var(--bb-p1-font-weight,inherit));letter-spacing:var(--bb-meta-tracking,normal);line-height:var(--bb-meta-line-height,1.4);}' +
         s + ' .blog-overlay-reporter-meta-divider{border-top:none!important;padding-top:0!important;margin-top:8px!important;}' +
-        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-reporter-accent-rule{display:block;margin:0 0 49px 0;width:100%;height:1px;border:none;background:var(--bb-border,#e8e7e4);}' +
+        s + ' .blog-overlay-reporter-accent-rule--above-meta{display:none!important;}' +
         s + ' .blog-overlay-post-article--sidebar-row{margin-top:-55px!important;margin-bottom:var(--bb-reporter-article-mb,0px)!important;}' +
         s + ' .bb-comments-section{display:flex;flex-direction:column;padding-top:24px;}' +
         s + ' .bb-comments-list{margin-top:15px;margin-bottom:0;}' +
@@ -10735,14 +10541,14 @@
         '#blog-overlay-list .blog-overlay-share-links--on-dark .blog-overlay-share-link{color:var(--bb-meta-on-image,rgba(255,255,255,0.78));}' +
         '#blog-overlay-list .blog-overlay-writer-rule{width:40px;height:1px;background:var(--bb-body,#111);border:none;margin:0 auto 20px auto;}' +
         '#blog-overlay-list .blog-overlay-story-rule{width:100%;height:1px;background:rgba(255,255,255,0.2);border:none;margin:10px 0;}' +
-        '#blog-overlay-list .blog-overlay-single-post-header-zone--story{padding:48px calc(50vw - 50% + var(--pagePadding, 3vw) + 2vw);margin-bottom:40px;box-sizing:border-box;}' +
-        '#blog-overlay-list .blog-overlay-story-header-row{display:flex;align-items:stretch;gap:40px;margin-bottom:0;}' +
+        '#blog-overlay-list .blog-overlay-single-post-header-zone--story{box-sizing:border-box;width:auto;max-width:none;margin-left:calc(-1 * (var(--pagePadding, 3vw) + 2vw));margin-right:calc(-1 * (var(--pagePadding, 3vw) + 2vw));margin-bottom:40px;padding:48px calc(var(--pagePadding, 3vw) + 2vw);}' +
+        '#blog-overlay-list .blog-overlay-story-header-row{display:flex;align-items:stretch;gap:40px;margin-bottom:0;width:100%;min-width:0;box-sizing:border-box;}' +
         '#blog-overlay-list .blog-overlay-story-info-col{display:flex;flex-direction:column;justify-content:flex-start;min-width:0;align-self:stretch;}' +
         '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-post-breadcrumbs{flex-shrink:0;margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-story-info-col > .blog-overlay-story-info-panel{flex:1 1 auto;min-height:0;}' +
-        '#blog-overlay-list .blog-overlay-story-featured-image{flex:0 0 58%;min-width:0;display:flex;margin:0;align-self:stretch;}' +
-        '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;aspect-ratio:4/3;overflow:hidden;border-radius:4px;}' +
-        '#blog-overlay-list .blog-overlay-story-featured-image img{width:100%;height:100%;object-fit:cover;display:block;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image{container-type:inline-size;flex:0 0 58%;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;margin:0;align-self:stretch;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image>div{width:100%;flex:1 1 auto;min-height:75cqw;max-height:100cqw;aspect-ratio:auto;overflow:hidden;border-radius:4px;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-story-featured-image img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel{background:transparent;padding:0;border-radius:0;box-sizing:border-box;gap:0;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-breadcrumbs{margin-bottom:24px;}' +
         '#blog-overlay-list .blog-overlay-story-info-panel .blog-overlay-post-header-categories,' +
@@ -10838,7 +10644,11 @@
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div{width:100%;max-height:600px;aspect-ratio:16/9;overflow:hidden;border-radius:4px;}' +
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div img,' +
         '#blog-overlay-list .blog-overlay-featured-image-stacked-fullbleed--feature > div [role="img"]{width:100%;height:100%;object-fit:cover;display:block;}' +
-        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:500px;box-sizing:border-box;min-height:0;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
+        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher{height:auto;min-height:500px;box-sizing:border-box;max-height:none;aspect-ratio:auto;padding:48px calc(var(--pagePadding, 3vw) + 2vw) 32px;}' +
+        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher > .blog-overlay-post-header-fullbleed-content{min-width:0;max-width:100%;width:100%;box-sizing:border-box;}' +
+        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher .blog-overlay-post-title,' +
+        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher .blog-overlay-meta-row,' +
+        '#blog-overlay-list .blog-overlay-post-header-fullbleed--publisher .blog-overlay-post-header-categories{width:100%;max-width:100%;min-width:0;align-self:stretch;box-sizing:border-box;white-space:normal;overflow-wrap:break-word;}' +
         '#blog-overlay-list .bb-sidebar-post-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;text-align:left;height:60px;max-height:60px;gap:1px;overflow:hidden;box-sizing:border-box;}' +
         '#blog-overlay-list .bb-sidebar-post-title{font-size:15px;line-height:1.2;color:var(--bb-body,#111);margin:0;margin-bottom:5px;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;width:100%;}' +
         '#blog-overlay-list .bb-more-to-read-title{font-size:calc(1em + 5px);line-height:1.3;color:var(--bb-heading,var(--bb-body,#111));margin-top:-4px;margin-bottom:0;padding:0;font-family:var(--bb-heading-font-family,inherit);font-weight:var(--bb-heading-font-weight,inherit);}' +
@@ -11206,7 +11016,7 @@
         el.classList.add(opts.onImage ? 'bb-title--on-image' : 'bb-title--on-bg');
       }
       el.style.margin = opts.margin || el.style.margin || '0 0 8px 0';
-      /* Post titles take family/weight from the selected heading style. */
+      /* Post title size comes from the Post Header scale; family stays the site heading font. */
       if (opts.size === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -11221,7 +11031,7 @@
       } else {
         el.classList.add(opts.onImage ? (base + '--on-image') : (base + '--on-bg'));
       }
-      /* Post meta takes family/weight from the selected paragraph style. */
+      /* Post meta size comes from the Post Header scale; family stays the site paragraph font. */
       if (opts.variant === 'post') return;
       var tokens = this._getCollectionStyleTokens();
       if (tokens && tokens.headingFontFamily) el.style.fontFamily = tokens.headingFontFamily;
@@ -11681,6 +11491,12 @@
       }
       if (wrapper.getAttribute('data-bb-spec-horizontal-padding') === '1') {
         this._applySiteContentInsetsToWrapper(wrapper, padTop);
+        /* Spec-padding heroes (Publisher) lock a measured pixel width. The
+           wrapper padding is vw-based and does not change these insets, so
+           the old early return left that width stuck. Re-measure on every
+           resize so the hero shrinks with the window and the title can wrap. */
+        if (this._blogOverlayWrapperEl) this._syncViewportBleeds(this._blogOverlayWrapperEl);
+        this._positionFixedProgressBar(true);
         return;
       }
       var prevL = (this._siteContentInsets && this._siteContentInsets.left) || 0;
@@ -12090,10 +11906,10 @@
       return '#000000';
     },
 
-    /** Reporter post header: full-width decorative rule above meta row. */
+    /** Reporter post header: full-width decorative rule above meta row. Hidden on mobile. */
     _createReporterPostHeaderDivider: function() {
       var hr = document.createElement('hr');
-      hr.className = 'blog-overlay-reporter-accent-rule';
+      hr.className = 'blog-overlay-reporter-accent-rule blog-overlay-reporter-accent-rule--above-meta';
       hr.setAttribute('aria-hidden', 'true');
       return hr;
     },
@@ -12391,7 +12207,7 @@
       opts = opts && typeof opts === 'object' ? opts : {};
       var narrow = this._isNarrowCollectionViewport();
       wrapper.classList.toggle('bb-narrow-viewport', narrow);
-      if (wrapper.getAttribute('data-bb-title-font')) {
+      if (wrapper.getAttribute('data-bb-title-size')) {
         this._applyPostHeaderTypeScale(wrapper, this._postHeaderFontCfg);
       }
       this._lockMobilePageAxis(narrow);
@@ -12512,8 +12328,8 @@
     /**
      * Mobile (<768): cap in-article h1–h6 at the computed post-title size × 0.85
      * so customer heading scales cannot exceed the headline. Cap only — never enlarge.
-     * The default H1 phone fallback is 28px, so the cap is 24px until a larger
-     * Squarespace heading size is in use.
+     * The default Medium phone title is 28px, so the cap is 24px until the
+     * customer picks Large or XL.
      */
     _postTitleFontSizePx: function(wrapper, narrow) {
       var fallback = narrow ? 28 : 40;
@@ -12948,6 +12764,28 @@
       }
     },
 
+    /**
+     * Fixed top bar tracks the site header as it scrolls away, then pins to the
+     * viewport. Resize must apply that position immediately: the 50ms top
+     * transition otherwise leaves the bar sitting in the post header.
+     */
+    _positionFixedProgressBar: function(snap) {
+      if (this._previewMode) return;
+      var track = document.getElementById('blog-overlay-progress');
+      if (!track || !track.style || track.style.position !== 'fixed') return;
+      if (track.style.bottom && track.style.bottom !== 'auto') return;
+      var navbarHeight = this._getNavbarOffset();
+      if (!(navbarHeight > 0)) return;
+      var scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      if (snap) track.style.transition = 'none';
+      track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
+      track.style.bottom = 'auto';
+      if (snap) {
+        void track.offsetHeight;
+        track.style.transition = 'top 0.05s ease-out';
+      }
+    },
+
     _updateProgressBar: function() {
       var track = document.getElementById('blog-overlay-progress');
       var fill = track && track.querySelector('.blog-overlay-progress-fill');
@@ -12966,9 +12804,7 @@
         postHeight = article.offsetHeight;
       } else {
         scrollY = window.scrollY || document.documentElement.scrollTop;
-        var navbarHeight = this._getNavbarOffset();
-        track.style.top = Math.max(0, navbarHeight - scrollY) + 'px';
-        track.style.bottom = 'auto';
+        this._positionFixedProgressBar(false);
         viewportHeight = window.innerHeight;
         var rect = article.getBoundingClientRect();
         postTop = rect.top + scrollY;
@@ -13288,8 +13124,6 @@
       var showReadingTime = Boolean(cfg.showReadingTime);
       /** Collection teasers: default on when unset. Editorial/Digest force off via template lock. */
       var showPostExcerpt = cfg.showPostExcerpt !== false;
-      /** Paywalled logged-out collection JSON often lacks full post body, so reading time cannot be calculated. */
-      if (viewerMode === 'loggedOut' && !isSinglePost && self._isPaywalledSite()) showReadingTime = false;
       var pbCfg = cfg.progressBar && typeof cfg.progressBar === 'object' ? cfg.progressBar : {};
       var showProgressBar = Boolean(pbCfg.show != null ? pbCfg.show : cfg.showProgressBar);
       /** Logged-out paywalled readers may see a gated post body — scroll progress is misleading. */
@@ -13728,7 +13562,7 @@
         if (reporterPostHeaderImage) {
           fiRatio = '3:2';
         }
-        /** Story (split header): cover crop at 4:3 (spec). */
+        /** Story desktop: cover crop whose height tracks the text column from 4:3 up to square. */
         var storyPostHeaderCrop = isSinglePost && storyPostLayout && fiShow;
         if (storyPostHeaderCrop) {
           fiAspect = 'cropped';
@@ -13873,7 +13707,9 @@
             rowEl.classList.add('blog-overlay-reporter-header-row');
             contentEl.classList.add('blog-overlay-reporter-header-copy');
           }
-          contentEl.style.flex = storyPostLayout ? '0 0 42%' : (reporterPostHeaderLayout ? '0 0 40%' : '1');
+          /* Reporter must shrink: 40% + 60% + the column gap overflows, and
+             row-reverse paints that overflow off the left edge. */
+          contentEl.style.flex = storyPostLayout ? '0 0 calc(42% - 40px)' : (reporterPostHeaderLayout ? '0 1 40%' : '1');
           contentEl.style.minWidth = '0';
           if (isSinglePost && (phImagePos === 'leftOfInfo' || phImagePos === 'rightOfInfo')) {
             if (storyPostLayout) contentEl.classList.add('blog-overlay-story-info-col');
@@ -13907,7 +13743,6 @@
           fullBleedHeaderBlock.style.background = self._featuredImageAreaBackground(imgUrl, placeholderMap, post, items);
           if (publisherFullBleedHero) {
             fullBleedHeaderBlock.classList.add('blog-overlay-post-header-fullbleed--publisher');
-            fullBleedHeaderBlock.style.height = '500px';
             fullBleedHeaderBlock.style.boxSizing = 'border-box';
           } else {
             fullBleedHeaderBlock.style.minHeight = 'min(42vw, 420px)';
@@ -13932,9 +13767,13 @@
           overlay.setAttribute('aria-hidden', 'true');
           fullBleedHeaderBlock.appendChild(overlay);
           var fullBleedHeaderContent = document.createElement('div');
+          fullBleedHeaderContent.className = 'blog-overlay-post-header-fullbleed-content';
           fullBleedHeaderContent.style.position = 'relative';
           fullBleedHeaderContent.style.zIndex = '1';
           fullBleedHeaderContent.style.width = '100%';
+          fullBleedHeaderContent.style.maxWidth = '100%';
+          fullBleedHeaderContent.style.minWidth = '0';
+          fullBleedHeaderContent.style.boxSizing = 'border-box';
           fullBleedHeaderContent.style.color = '#fff';
           fullBleedHeaderContent.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
           fullBleedHeaderBlock.appendChild(fullBleedHeaderContent);
@@ -14048,7 +13887,7 @@
               fiWrap.style.flex = '0 0 58%';
             } else if (reporterPostHeaderLayout) {
               fiWrap.classList.add('blog-overlay-reporter-featured-image');
-              fiWrap.style.flex = '0 0 60%';
+              fiWrap.style.flex = '0 1 60%';
             } else if (collectionLayout === 'listRows' && listRowsMobileCompact) {
               fiWrap.style.flex = '0 0 80px';
               fiWrap.style.width = '80px';
@@ -14076,6 +13915,8 @@
           } else if (reporterPostHeaderImage) {
             fiInner.style.aspectRatio = '3 / 2';
             fiInner.style.width = '100%';
+          } else if (storyPostHeaderCrop) {
+            fiInner.style.width = '100%';
           } else if (fiFixedAspectCrop || digestFeaturedViewportBleed) {
             fiInner.style.aspectRatio = (collectionLayout === 'listRows' && listRowsMobileCompact)
               ? '4 / 3'
@@ -14093,7 +13934,7 @@
             img.style.height = '100%';
             img.style.display = 'block';
             img.style.objectFit = (reporterPostHeaderImage || fiFixedAspectCrop || digestFeaturedViewportBleed) ? 'cover' : 'contain';
-            img.style.objectPosition = gridCardThumb ? self._squarespaceImageObjectPosition(post) : 'center';
+            img.style.objectPosition = (gridCardThumb || storyPostHeaderCrop) ? self._squarespaceImageObjectPosition(post) : 'center';
             self._bindFeaturedImagePlaceholderFallback(img, fiInner, imgUrl, placeholderMap, post, items);
             fiInner.appendChild(img);
           } else {
@@ -14160,6 +14001,10 @@
           }
           if (reporterPostHeaderLayout) {
             postInfoWrap.classList.add('blog-overlay-reporter-header-stack');
+          }
+          if (self._isPublisherPostLayout(cfg)) {
+            postInfoWrap.style.minWidth = '0';
+            postInfoWrap.style.maxWidth = '100%';
           }
         }
         var headlineMount = postInfoWrap || digestFeaturedIntro || appendTo;
@@ -14452,7 +14297,7 @@
             var updatedAtLabel = self._getUpdatedAtLabel(post);
             if (updatedAtLabel) metaParts.push(updatedAtLabel);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var minsSingle = self._getReadingTimeMinutes(post.body);
             metaParts.push(minsSingle === 1 ? '1 min read' : minsSingle + ' min read');
           }
@@ -14465,7 +14310,7 @@
             var listRowsDateStr = self._getDate(post);
             if (listRowsDateStr) metaParts.push(listRowsDateStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var listRowsMins = self._getReadingTimeMinutes(post.body);
             metaParts.push(listRowsMins === 1 ? '1 min read' : listRowsMins + ' min read');
           }
@@ -14478,7 +14323,7 @@
             var authorStr = self._getAuthorsForPost(post, cfg);
             if (authorStr) metaParts.push(authorStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
             var mins = self._getReadingTimeMinutes(post.body);
             metaParts.push(mins === 1 ? '1 min read' : mins + ' min read');
           }
@@ -14996,7 +14841,7 @@
         var metaParts = [];
         if (showDate) { var ds = self._getDate(post); if (ds) metaParts.push(ds); }
         if (showAuthor) { var as = self._getAuthorsForPost(post, cfg); if (as) metaParts.push(as); }
-        if (showReadingTime) {
+        if (showReadingTime && !self._shouldGateSinglePostBody(post)) {
           var minsShowcase = self._getReadingTimeMinutes(post.body);
           metaParts.push(minsShowcase === 1 ? '1 min read' : minsShowcase + ' min read');
         }
@@ -15299,6 +15144,10 @@
         this._progressScrollHandler = null;
         this._progressScrollTarget = null;
       }
+      if (this._progressResizeHandler && window.removeEventListener) {
+        window.removeEventListener('resize', this._progressResizeHandler);
+        this._progressResizeHandler = null;
+      }
       if (this._tocScrollHandler) {
         var tocTarget = this._tocScrollTarget || window;
         tocTarget.removeEventListener('scroll', this._tocScrollHandler, { passive: true });
@@ -15564,14 +15413,11 @@
           singlePostHeaderZoneEl.style.paddingLeft = '';
           singlePostHeaderZoneEl.style.paddingRight = '';
           singlePostHeaderZoneEl.style.marginBottom = '';
-          if (!self._isNarrowCollectionViewport()) {
-            self._applyViewportFullBleed(singlePostHeaderZoneEl);
-          } else {
-            singlePostHeaderZoneEl.style.marginLeft = '';
-            singlePostHeaderZoneEl.style.marginRight = '';
-            singlePostHeaderZoneEl.style.width = '';
-            singlePostHeaderZoneEl.style.maxWidth = '';
-          }
+          singlePostHeaderZoneEl.style.marginLeft = '';
+          singlePostHeaderZoneEl.style.marginRight = '';
+          singlePostHeaderZoneEl.style.width = '';
+          singlePostHeaderZoneEl.style.maxWidth = '';
+          singlePostHeaderZoneEl.removeAttribute('data-bb-viewport-bleed');
         } else {
           singlePostHeaderZoneEl.style.paddingLeft = normalizedSideGap + 'px';
           singlePostHeaderZoneEl.style.paddingRight = normalizedSideGap + 'px';
@@ -15714,6 +15560,12 @@
         this._progressScrollTarget = scrollTarget;
         if (scrollTarget) {
           scrollTarget.addEventListener('scroll', this._progressScrollHandler, { passive: true });
+        }
+        if (!this._previewMode && window.addEventListener) {
+          this._progressResizeHandler = function() {
+            self._positionFixedProgressBar(true);
+          };
+          window.addEventListener('resize', this._progressResizeHandler, { passive: true });
         }
         /** Fixed top-positioned bar overlays the wrapper; reserve its height so content doesn't sit under it. */
         if (progressBarPosition === 'top' && !this._previewMode && !flushNavHero) {
@@ -15861,7 +15713,7 @@
             var heroAuthorStr = self._getAuthorsForPost(featuredPost, cfg);
             if (heroAuthorStr) heroMetaParts.push('By ' + heroAuthorStr);
           }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(featuredPost)) {
             var heroMins = self._getReadingTimeMinutes(featuredPost.body);
             heroMetaParts.push(heroMins === 1 ? '1 min read' : heroMins + ' min read');
           }
@@ -16969,7 +16821,7 @@
           var metaParts = [];
           if (showDate) { var ds = self._getDate(p); if (ds) metaParts.push(ds); }
           if (showAuthor) { var as = self._getAuthorsForPost(p, cfg); if (as) metaParts.push(as); }
-          if (showReadingTime) {
+          if (showReadingTime && !self._shouldGateSinglePostBody(p)) {
             var minsGrid = self._getReadingTimeMinutes(p.body);
             metaParts.push(minsGrid === 1 ? '1 min read' : minsGrid + ' min read');
           }
@@ -18140,10 +17992,6 @@
           : self._wrapperPadTopForNavbar(offset, flushNav);
         self._applySiteContentInsetsToWrapper(wrapper, pad);
         var navTop = mobilePost ? headerH : offset;
-        var progressTrack = document.getElementById('blog-overlay-progress');
-        if (progressTrack && progressTrack.style.position === 'fixed') {
-          progressTrack.style.top = navTop + 'px';
-        }
         var articles = wrapper.querySelectorAll('article');
         for (var a = 0; a < articles.length; a++) {
           articles[a].style.scrollMarginTop = (navTop + 8) + 'px';
@@ -18154,15 +18002,18 @@
         if (self._isMobilePostWrapper(wrapper)) {
           var headerH = self._measureRenderedSiteHeaderHeight();
           if (Math.abs(headerH - lastAppliedHeaderH) >= 1) applyNavbarOffset(headerH);
-          return;
+        } else {
+          var newOffset = self._getNavbarOffset();
+          var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
+          if (flushNav) {
+            if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
+          } else if (newOffset > lastAppliedOffset) {
+            applyNavbarOffset(newOffset);
+          }
         }
-        var newOffset = self._getNavbarOffset();
-        var flushNav = wrapper.getAttribute('data-bb-flush-nav-hero') === '1';
-        if (flushNav) {
-          if (Math.abs(newOffset - lastAppliedOffset) >= 2) applyNavbarOffset(newOffset);
-        } else if (newOffset > lastAppliedOffset) {
-          applyNavbarOffset(newOffset);
-        }
+        /* Header remeasure used to ignore shrinks and reset `top` to the full
+           navbar height, so a resize dropped the bar onto the post header. */
+        self._positionFixedProgressBar(true);
       };
       requestAnimationFrame(function() {
         requestAnimationFrame(scheduleRecheck);
