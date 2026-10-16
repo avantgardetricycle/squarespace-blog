@@ -735,7 +735,7 @@ export default function LandingPage() {
             >
               Squarespace
             </a>
-            {" "}is a trademark of Squarespace, Inc. BetterBlog is not affiliated with or endorsed by Squarespace.
+            {" "}is a trademark of Squarespace, Inc. BetterBlog is not in a partnership with, not sponsored or endorsed by, and has no affiliation with Squarespace.
           </p>
         </div>
       </footer>
