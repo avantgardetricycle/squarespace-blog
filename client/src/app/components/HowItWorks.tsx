@@ -188,7 +188,7 @@ export default function HowItWorks() {
               Format from your dashboard
             </div>
             <div className="text-[0.85rem] text-[#6b6b6b] font-light leading-[1.75] mb-7">
-              Turn features on, tweak settings, choose templates — all from BetterBlog. Every change goes live the moment you hit save.
+              Turn features on, tweak settings, choose templates — all from BetterBlog. Preview every change on your real blog, in your own fonts, on desktop, tablet or phone. It goes live the moment you hit save.
             </div>
 
             <div className="rounded-[14px] overflow-hidden border border-[#e4e3de] shadow-[0_4px_24px_rgba(0,0,0,0.06)] transition-all duration-200 group-hover:shadow-[0_8px_40px_rgba(0,0,0,0.1)] group-hover:-translate-y-[3px]">
