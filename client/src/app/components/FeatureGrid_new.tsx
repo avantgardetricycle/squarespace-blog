@@ -100,8 +100,24 @@ const blogNav = `<div class="bnav" style="padding:11px 18px"><div class="bsite" 
   <div class="blinks"><span>Weddings</span><span>Portraits</span><span>Journal</span></div></div>`;
 const lines = (n: number) => Array.from({length:n},(_,i)=>`<div class="ln ${i%3===1?'m':i%3===2?'s':''}" style="height:8px;margin-bottom:8px"></div>`).join('');
 
+
+/** The sample site is Maya's, so previews use her site's colours (the same sienna accent as the
+ *  template previews), not BetterBlog purple. Only the analytics dashboard is BetterBlog's own UI. */
+const SITE_SWAPS: [RegExp, string][] = [
+  [/var\(--violet-f2\)/g, 'var(--site-f2)'], [/var\(--violet-f\)/g, 'var(--site-f)'], [/var\(--violet\)/g, 'var(--site)'],
+  [/var\(--plum-f\)/g, 'var(--site-f)'], [/var\(--plum\)/g, 'var(--site)'],
+  [/rgba\(91,79,232,\.(16|15|3)\)/g, 'rgba(160,82,45,.$1)'], [/rgba\(91,79,232,\.1\)/g, 'rgba(160,82,45,.1)'],
+  [/rgba\(91,79,232,\.0?\d+\)/g, 'rgba(40,30,20,.08)'],
+  [/rgba\(122,45,94,\.(\d+)\)/g, 'rgba(160,82,45,.$1)'], [/rgba\(30,22,90,/g, 'rgba(28,20,14,'],
+  [/#fdf8fb/g, '#fbf7f3'], [/#fdf6fa/g, '#fbf6f1'], [/#f8eef5/g, '#f6ece4'], [/#e4dae2/g, '#e6dcd2'],
+  [/#faf9ff/g, '#fbf8f5'], [/#b3accf/g, '#c9a58f'], [/#e8e6ef/g, '#e8e4df'], [/#e2e0ea/g, '#e4e0da'],
+  [/#dcd9e8/g, '#ddd6ce'], [/#eceaf4/g, '#ece6df'], [/#5B4FE8/g, '#6b7f6a'], [/#9a1a3e/g, 'var(--site)'],
+  [/rgba\(154,26,62,\.1\)/g, 'rgba(160,82,45,.1)'],
+];
+const siteTheme = (html: string) => SITE_SWAPS.reduce((h, [re, to]) => h.replace(re, to), html);
+
 function stage(f: Feat): string {
-  const body = {
+  const raw = {
     collection:`<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch">
       ${[
         ['Wedding journal','Maya Okonkwo',`
@@ -123,7 +139,7 @@ function stage(f: Feat): string {
       ].map(([label,site,inner])=>`
         <div style="display:flex;flex-direction:column">
           <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:9px">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--violet);flex-shrink:0;transform:translateY(-1px)"></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--bb);flex-shrink:0;transform:translateY(-1px)"></span>
             <span style="font-family:'DM Serif Display',serif;font-size:.92rem;color:#1a1a1a">${label}</span>
           </div>
           <div style="flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid #dde;border-radius:9px;overflow:hidden;box-shadow:0 8px 26px rgba(91,79,232,.09)">
@@ -216,7 +232,7 @@ function stage(f: Feat): string {
       <div style="display:grid;grid-template-columns:1fr 168px;gap:14px;align-items:start">
 
         <div>
-          <div style="font-size:.56rem;font-weight:600;color:var(--violet);margin-bottom:6px">Above the grid</div>
+          <div style="font-size:.56rem;font-weight:600;color:var(--bb);margin-bottom:6px">Above the grid</div>
           <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:11px 13px;box-shadow:0 5px 18px rgba(91,79,232,.07)">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid #f2f2f2;margin-bottom:11px">
               <span style="font-size:.64rem;font-weight:700;color:#1a1a1a">All 24</span>
@@ -233,7 +249,7 @@ function stage(f: Feat): string {
         </div>
 
         <div>
-          <div style="font-size:.56rem;font-weight:600;color:var(--violet);margin-bottom:6px">In the sidebar</div>
+          <div style="font-size:.56rem;font-weight:600;color:var(--bb);margin-bottom:6px">In the sidebar</div>
           <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:11px 12px;box-shadow:0 5px 18px rgba(91,79,232,.07)">
             <div style="font-size:.5rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:7px">Categories</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
@@ -253,7 +269,7 @@ function stage(f: Feat): string {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
         ${['Numbered','Connected dots','Bookmark'].map((label,idx)=>`
           <div>
-            <div style="font-size:.6rem;font-weight:600;color:var(--violet);margin-bottom:7px">${label}</div>
+            <div style="font-size:.6rem;font-weight:600;color:var(--bb);margin-bottom:7px">${label}</div>
             <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:12px;
               box-shadow:0 5px 18px rgba(91,79,232,.07);position:relative">
               ${idx===1?'<div style="position:absolute;left:15.5px;top:20px;bottom:20px;width:1.5px;background:#eceaf4"></div>':''}
@@ -599,7 +615,7 @@ function stage(f: Feat): string {
         <div style="background:#fff;border:1px solid #e4dae2;border-radius:4px;padding:6px 8px;font-size:.54rem;color:#555;text-align:left;margin-bottom:6px">maya@example.com</div>
         <div style="background:var(--plum);color:#fff;font-size:.56rem;font-weight:600;padding:7px;border-radius:4px">Subscribe</div>
         <div style="font-size:.48rem;color:#aaa;margin-top:8px">A sign-up form on your blog</div></div>
-      <svg viewBox="0 0 40 24" width="40" height="24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round"><line x1="2" y1="12" x2="34" y2="12"/><polyline points="28 6 34 12 28 18"/></svg>
+      <svg viewBox="0 0 40 24" width="40" height="24" fill="none" stroke="var(--bb)" stroke-width="2" stroke-linecap="round"><line x1="2" y1="12" x2="34" y2="12"/><polyline points="28 6 34 12 28 18"/></svg>
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px 14px;box-shadow:0 6px 20px rgba(91,79,232,.08)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.66rem;font-weight:700;color:#1a1a1a">Kit</span><span style="font-size:.5rem;color:#1f8a5b;font-weight:600;white-space:nowrap">&#10003; Added</span></div>
@@ -761,6 +777,7 @@ function stage(f: Feat): string {
         </div>
       </div>`
   }[f.id] as string | undefined;
+  const body = f.id === 'analytics' || raw === undefined ? raw : siteTheme(raw);
 
   if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting','updated','integrations','mobilesidebar'].includes(f.id)) return body as string;
   if(body) return shell(body);
@@ -772,7 +789,8 @@ function stage(f: Feat): string {
 }
 
 const STYLES = `.bb-features{
-  --violet:#5B4FE8; --violet-dk:#4a3fd4; --violet-lt:#8F86F0;
+  --violet:#5B4FE8; --violet-dk:#4a3fd4; --violet-lt:#8F86F0; --bb:#5B4FE8;
+  --site:#A0522D; --site-f:rgba(160,82,45,.08); --site-f2:rgba(160,82,45,.14);
   --violet-f:rgba(91,79,232,.07); --violet-f2:rgba(91,79,232,.12);
   --black:#0a0a0a; --dark:#1a1a1a; --mid:#6b6b6b; --line:#e4e3de; --off:#f7f6f3;
   --teal:#1a7a5e; --teal-f:rgba(26,122,94,.08); --teal-lt:#3aaa86;
@@ -816,25 +834,25 @@ const STYLES = `.bb-features{
 .bb-features .af-hero{height:56px;border-radius:5px;background:linear-gradient(to top,rgba(20,14,8,.55),rgba(20,14,8,0) 70%),url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat;display:flex;align-items:flex-end;padding:8px;margin-bottom:9px}
 .bb-features .af-hero span{font-family:var(--serif);font-size:.62rem;color:#fff;line-height:1.2}
 .bb-features .af-crumb{font-size:.46rem;color:var(--mid);padding:5px 14px;border-bottom:1px solid #f6f6f6;background:#fafafa;display:flex;gap:4px}
-.bb-features .af-crumb b{color:var(--violet);font-weight:400}
-.bb-features .af-prog{position:absolute;right:12px;top:5px;font-size:.46rem;color:var(--violet);font-weight:700}
+.bb-features .af-crumb b{color:var(--site);font-weight:400}
+.bb-features .af-prog{position:absolute;right:12px;top:5px;font-size:.46rem;color:var(--site);font-weight:700}
 .bb-features .af-grid{display:grid;grid-template-columns:1fr 92px;gap:10px}
-.bb-features .toc{background:#f7f5ff;border-left:2px solid var(--violet);border-radius:4px;padding:8px;margin-bottom:9px}
-.bb-features .toc-h{font-size:.46rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:5px}
+.bb-features .toc{background:#fbf7f3;border-left:2px solid var(--site);border-radius:4px;padding:8px;margin-bottom:9px}
+.bb-features .toc-h{font-size:.46rem;font-weight:700;letter-spacing:.1em;color:var(--site);margin-bottom:5px}
 .bb-features .toc div{font-size:.5rem;color:#777;margin-bottom:3px}
-.bb-features .toc div.act{color:var(--violet);font-weight:500}
+.bb-features .toc div.act{color:var(--site);font-weight:500}
 .bb-features .sb-h{font-size:.44rem;font-weight:700;letter-spacing:.11em;color:#999;margin:9px 0 5px;text-transform:uppercase}
 .bb-features .sb-av{width:26px;height:26px;border-radius:50%;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat;margin:0 auto 5px}
 .bb-features .sb-nm{font-size:.52rem;font-weight:600;text-align:center;color:#333}
 .bb-features .sb-bio{font-size:.44rem;color:#999;text-align:center;line-height:1.4;margin-top:3px}
-.bb-features .sb-fol{font-size:.46rem;color:var(--violet);text-align:center;margin-top:5px}
+.bb-features .sb-fol{font-size:.46rem;color:var(--site);text-align:center;margin-top:5px}
 .bb-features .sb-row{display:flex;gap:5px;align-items:center;margin-bottom:5px}
 .bb-features .sb-th{width:16px;height:12px;border-radius:2px;flex-shrink:0}
 .bb-features .sb-tt{font-size:.44rem;color:#777;line-height:1.2}
 .bb-features .sb-cat{display:flex;justify-content:space-between;font-size:.46rem;color:#888;padding:2px 0}
 .bb-features .sb-cat i{font-style:normal;color:#ccc}
 .bb-features .tags{display:flex;gap:4px;margin-top:8px}
-.bb-features .tag{font-size:.46rem;background:var(--violet-f);color:var(--violet);padding:2px 7px;border-radius:100px}
+.bb-features .tag{font-size:.46rem;background:var(--site-f);color:var(--site);padding:2px 7px;border-radius:100px}
 .bb-features .rel{border-top:1px solid #f0f0f0;padding:10px 14px}
 .bb-features .rel-h{font-size:.44rem;font-weight:700;letter-spacing:.11em;color:#999;text-transform:uppercase;margin-bottom:6px}
 .bb-features .rel-g{display:grid;grid-template-columns:1fr 1fr;gap:7px}
