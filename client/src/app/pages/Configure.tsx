@@ -3460,7 +3460,7 @@ export default function Configure() {
       siteId: effectiveSite?.id ?? undefined,
       paywallMode: effectiveSite?.paywallMode ?? "auto",
       paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
-      viewerMode: previewAudience === "loggedIn" ? "loggedIn" : "loggedOut",
+      viewerMode: featureAllowed(entitlements, "paywall", planLoaded) && previewAudience !== "loggedIn" ? "loggedOut" : "loggedIn",
       paywallSettings:
         shouldShowViewerModeToggle && featureAllowed(entitlements, "paywall", planLoaded)
           ? {
@@ -4198,7 +4198,7 @@ export default function Configure() {
               <Trash2 className="h-3.5 w-3.5 mr-1.5 shrink-0" />
               Clear all settings
             </Button>
-            {shouldShowViewerModeToggle && (
+            {(shouldShowViewerModeToggle || !featureAllowed(entitlements, "paywall", planLoaded)) && (
               <PlanFeatureLock
                 locked={!featureAllowed(entitlements, "paywall", planLoaded)}
                 planName={currentPlanName}
@@ -6941,6 +6941,10 @@ export default function Configure() {
         </div>
 
         <div className="border-b border-[#e5e4e0] bg-white px-4 py-2 flex flex-wrap items-center gap-3">
+          <PlanFeatureLock
+            locked={!featureAllowed(entitlements, "paywall", planLoaded)}
+            planName={currentPlanName}
+          >
           <div className="flex items-center bg-[#f7f6f3] rounded-lg p-1" role="group" aria-label="Preview as">
             {(
               [
@@ -6960,6 +6964,7 @@ export default function Configure() {
               </button>
             ))}
           </div>
+          </PlanFeatureLock>
           <Button
             variant="ghost"
             size="sm"

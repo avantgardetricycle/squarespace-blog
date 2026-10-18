@@ -45,6 +45,12 @@ import {
 } from '../lib/squarespace-paywall-probe.js'
 
 const router = Router()
+
+async function paywallUnavailable (userId: number): Promise<string | null> {
+  const planContext = await loadUserPlanContext(userId)
+  if (planContext.entitlements.features.paywall) return null
+  return `This feature is not available on ${planContext.entitlements.planDisplay}.`
+}
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
 type PaywallMode = (typeof PAYWALL_MODES)[number]
 const PAYWALL_DETECTION_SOURCES = ['json_probe', 'manual'] as const
@@ -640,6 +646,11 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
 
     if (userPaywallState === 'detected_paywalled') {
+      const unavailable = await paywallUnavailable(user.id)
+      if (unavailable) {
+        res.status(403).json({ error: unavailable })
+        return
+      }
       const subscribeProvided =
         typeof rawSubscribeForCreate === 'string' && rawSubscribeForCreate.trim().length > 0
       if (subscribeProvided && !subscribeNormalized) {
@@ -1065,6 +1076,13 @@ router.patch('/sites/by-key/:siteKey', requireSession, requireEditableSubscripti
         res.status(400).json({ error: 'Invalid paywallDetectionState' })
         return
       }
+      if (paywallDetectionState === 'detected_paywalled' && site.paywallDetectionState !== 'detected_paywalled') {
+        const unavailable = await paywallUnavailable(user.id)
+        if (unavailable) {
+          res.status(403).json({ error: unavailable })
+          return
+        }
+      }
       updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
       updates.paywallDetectionSource = 'manual'
     }
@@ -1198,6 +1216,13 @@ router.patch('/sites/:id', requireSession, requireEditableSubscription, async (r
       if (paywallDetectionState !== 'unknown' && paywallDetectionState !== 'detected_paywalled' && paywallDetectionState !== 'detected_unpaywalled') {
         res.status(400).json({ error: 'Invalid paywallDetectionState' })
         return
+      }
+      if (paywallDetectionState === 'detected_paywalled' && site.paywallDetectionState !== 'detected_paywalled') {
+        const unavailable = await paywallUnavailable(user.id)
+        if (unavailable) {
+          res.status(403).json({ error: unavailable })
+          return
+        }
       }
       updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
       updates.paywallDetectionSource = 'manual'
