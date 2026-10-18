@@ -25,12 +25,12 @@ const pricingPlans = {
   essentials: {
     name: "Essentials",
     description: "Make your blog look right.",
-    features: ["1 website, 1 blog", "4 templates", "Same support on every plan"],
+    features: ["1 website, 1 blog", "4 templates", "Comments with moderation", "Same support on every plan"],
   },
   professional: {
     name: "Professional",
     description: "Make your blog findable.",
-    features: ["1 website, 2 blogs", "8 templates", "Search, comments, and basic analytics"],
+    features: ["1 website, 2 blogs", "8 templates", "Search, filters, and basic analytics"],
   },
   publication: {
     name: "Publication",
