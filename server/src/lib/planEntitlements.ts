@@ -28,12 +28,13 @@ const ESSENTIALS_LAYOUTS = ['showcase', 'digest'] as const
 const PROFESSIONAL_LAYOUTS = [...ESSENTIALS_LAYOUTS, 'grid', 'listRows'] as const
 const ALL_LAYOUTS = [...PROFESSIONAL_LAYOUTS, 'editorial'] as const
 
+const ESSENTIALS_FEATURES: PlanFeature[] = ['comments']
 const PRO_FEATURES: PlanFeature[] = [
+  ...ESSENTIALS_FEATURES,
   'search',
   'tagCategoryFilters',
   'featuredAndPinned',
   'sorting',
-  'comments',
   'basicAnalytics'
 ]
 const PUBLICATION_FEATURES: PlanFeature[] = [
@@ -60,7 +61,7 @@ const FEATURE_PLAN: Record<PlanFeature, PlanKey> = {
   tagCategoryFilters: 'professional',
   featuredAndPinned: 'professional',
   sorting: 'professional',
-  comments: 'professional',
+  comments: 'essentials',
   basicAnalytics: 'professional',
   paywall: 'publication',
   emailCapture: 'publication',
@@ -177,7 +178,7 @@ function layoutsFor (planKey: PlanKey): string[] {
 }
 
 function featuresFor (planKey: PlanKey): Record<PlanFeature, boolean> {
-  if (planKey === 'essentials') return featureFlags([])
+  if (planKey === 'essentials') return featureFlags(ESSENTIALS_FEATURES)
   if (planKey === 'professional') return featureFlags(PRO_FEATURES)
   return featureFlags(PUBLICATION_FEATURES)
 }
