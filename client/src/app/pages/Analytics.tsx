@@ -39,7 +39,8 @@ import {
   Download,
 } from "lucide-react";
 import { getDashboardMe, type DashboardMe } from "@/api/auth";
-import { featureAllowed, requiredPlanName } from "@/lib/servedConfig";
+import { featureAllowed } from "@/lib/servedConfig";
+import { PlanFeatureLock, planUnavailableMessage } from "@/app/components/PlanFeatureLock";
 import { NoBlogsPlaceholder } from "@/app/components/NoBlogsPlaceholder";
 import { GoogleAnalyticsModal, type GAConfig } from "@/app/components/GoogleAnalyticsModal";
 import { FathomAnalyticsModal, type FathomConfig } from "@/app/components/FathomAnalyticsModal";
@@ -253,12 +254,14 @@ export default function Analytics() {
     return <NoBlogsPlaceholder />;
   }
 
+  const planName = me.entitlements?.planDisplay || me.subscription?.planDisplay || "your plan";
+
   if (!featureAllowed(me.entitlements, "basicAnalytics", true)) {
     return (
       <div className="min-h-screen bg-[#f7f6f3] p-6">
         <h1 className="font-heading text-4xl text-[#0a0a0a] mb-2">Analytics</h1>
         <p className="text-[#6b6b6b] max-w-xl">
-          Traffic, top posts, and how far people read are included on the {requiredPlanName(me.entitlements, "basicAnalytics")} plan.
+          {planUnavailableMessage(planName)}
         </p>
       </div>
     );
@@ -307,18 +310,8 @@ export default function Analytics() {
         </div>
       </div>
 
-      {!advancedAnalytics && (
-        <p className="text-sm text-[#6b6b6b]">
-          Google Analytics, click tracking, search terms, and per-author performance are included on the {requiredPlanName(me.entitlements, "advancedAnalytics")} plan.
-        </p>
-      )}
-      {!emailCapture && (
-        <p className="text-sm text-[#6b6b6b]">
-          The downloadable subscriber list is included on the {requiredPlanName(me.entitlements, "emailCapture")} plan.
-        </p>
-      )}
-
       {/* Google Analytics Integration Card */}
+      <PlanFeatureLock locked={!advancedAnalytics} planName={planName}>
       <Card className="bg-white border-[#e4e3de] p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -384,6 +377,7 @@ export default function Analytics() {
           </Button>
         </div>
       </Card>
+      </PlanFeatureLock>
 
       <GoogleAnalyticsModal
         open={gaModalOpen}
@@ -399,6 +393,7 @@ export default function Analytics() {
         }}
       />
 
+      <PlanFeatureLock locked={!advancedAnalytics} planName={planName}>
       <Card className="bg-white border-[#e4e3de] p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -464,6 +459,7 @@ export default function Analytics() {
           </Button>
         </div>
       </Card>
+      </PlanFeatureLock>
 
       <FathomAnalyticsModal
         open={fathomModalOpen}
@@ -480,6 +476,7 @@ export default function Analytics() {
       />
 
       {/* Leads & Subscribers */}
+      <PlanFeatureLock locked={!emailCapture} planName={planName}>
       <Card className="bg-white border-[#e4e3de] p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -571,6 +568,7 @@ export default function Analytics() {
           </p>
         )}
       </Card>
+      </PlanFeatureLock>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -813,6 +811,7 @@ export default function Analytics() {
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Click Tracking */}
+        <PlanFeatureLock locked={!advancedAnalytics} planName={planName}>
         <Card className="bg-white border-[#e4e3de] p-6">
           <div className="flex items-center gap-3 mb-6">
             <MousePointer className="w-5 h-5 text-[#5B4FE8]" />
@@ -857,6 +856,7 @@ export default function Analytics() {
             ))}
           </div>
         </Card>
+        </PlanFeatureLock>
 
         {/* Read Percent Distribution */}
         <Card className="bg-white border-[#e4e3de] p-6">
@@ -946,6 +946,7 @@ export default function Analytics() {
       </div>
 
       {/* Search Analytics */}
+      <PlanFeatureLock locked={!advancedAnalytics} planName={planName}>
       <Card className="bg-white border-[#e4e3de] p-6">
         <div className="flex items-center gap-3 mb-6">
           <Search className="w-5 h-5 text-[#5B4FE8]" />
@@ -1001,8 +1002,10 @@ export default function Analytics() {
           </table>
         </div>
       </Card>
+      </PlanFeatureLock>
 
       {/* Author Analytics */}
+      <PlanFeatureLock locked={!advancedAnalytics} planName={planName}>
       <Card className="bg-white border-[#e4e3de] p-6">
         <div className="flex items-center gap-3 mb-6">
           <Users className="w-5 h-5 text-[#5B4FE8]" />
@@ -1084,6 +1087,7 @@ export default function Analytics() {
           </table>
         </div>
       </Card>
+      </PlanFeatureLock>
     </div>
   );
 }

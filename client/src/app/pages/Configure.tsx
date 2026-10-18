@@ -55,6 +55,7 @@ import BlogPreviewIframe, {
 } from "@/app/components/BlogPreviewIframe";
 import { AuthorImageUpload } from "@/app/components/AuthorImageUpload";
 import { AuthorBioPreview } from "@/app/components/AuthorBioPreview";
+import { PlanFeatureLock, planUnavailableMessage } from "@/app/components/PlanFeatureLock";
 import { TemplateModal, type Template } from "@/app/components/TemplateModal";
 import { SquarespaceApiKeyModal, type SquarespaceApiKeyModalMode } from "@/app/components/SquarespaceApiKeyModal";
 import {
@@ -65,7 +66,7 @@ import {
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
 import { getDashboardMe, createPaymentMethodUpdateSession, type DashboardMe } from "@/api/auth";
-import { featureAllowed, requiredPlanName, stripPreviewConfig } from "@/lib/servedConfig";
+import { featureAllowed, moduleFeature, stripPreviewConfig } from "@/lib/servedConfig";
 import { formatSubscriptionDate, isInPaymentGrace, paymentGraceEndsAt } from "@/lib/subscription";
 import {
   EmailDestinationFields,
@@ -2238,18 +2239,55 @@ function configFromApi(data: Record<string, unknown>): SiteConfigForm {
 }
 
 /** Module section with only expand/collapse (no on/off toggle). For zone-driven modules. */
+function ModuleSelectChoices({
+  modules,
+  labels,
+  isLocked,
+  planName,
+}: {
+  modules: readonly string[];
+  labels: Record<string, string>;
+  isLocked: (moduleId: string) => boolean;
+  planName: string;
+}) {
+  return modules.map((moduleId) => {
+    const label = labels[moduleId] ?? moduleId;
+    if (isLocked(moduleId)) {
+      return (
+        <div
+          key={moduleId}
+          title={planUnavailableMessage(planName)}
+          className="cursor-not-allowed rounded-sm px-2 py-1.5 text-sm opacity-50"
+        >
+          {label}
+        </div>
+      );
+    }
+    return (
+      <SelectItem key={moduleId} value={moduleId}>
+        {label}
+      </SelectItem>
+    );
+  });
+}
+
 function ModuleSettingSectionCollapseOnly({
   title,
   expanded,
   onToggle,
   content,
+  locked = false,
+  planName = "",
 }: {
   title: string;
   expanded: boolean;
   onToggle: () => void;
   content: React.ReactNode;
+  locked?: boolean;
+  planName?: string;
 }) {
   return (
+    <PlanFeatureLock locked={locked} planName={planName}>
     <div className="border-b border-[#e5e4e0]">
       <div className="flex items-center justify-between py-3">
         <span className="font-medium">{title}</span>
@@ -2262,12 +2300,13 @@ function ModuleSettingSectionCollapseOnly({
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
       </div>
-      <Collapsible open={expanded}>
+      <Collapsible open={locked ? false : expanded}>
         <CollapsibleContent>
           <div className="pb-4 space-y-3">{content}</div>
         </CollapsibleContent>
       </Collapsible>
     </div>
+    </PlanFeatureLock>
   );
 }
 
@@ -3373,6 +3412,12 @@ export default function Configure() {
   }, [config.collectionConfig, blogItems, getFeaturedPostKey]);
   const entitlements = me?.entitlements ?? null;
   const planLoaded = me != null;
+  const currentPlanName = entitlements?.planDisplay || me?.subscription?.planDisplay || "your plan";
+  const moduleLocked = (moduleId: string) => {
+    const feature = moduleFeature(moduleId);
+    return feature != null && !featureAllowed(entitlements, feature, planLoaded);
+  };
+  const multipleAuthorsLocked = !featureAllowed(entitlements, "multipleAuthors", planLoaded);
   const rendererConfig = useMemo(() => {
     let previewConfig = config;
     if (entitlements) {
@@ -3720,6 +3765,8 @@ export default function Configure() {
         }
         testing={emailTestingModule === moduleKey}
         testMessage={emailTestMessages[moduleKey] ?? null}
+        externalProvidersLocked={!featureAllowed(entitlements, "kitMailchimp", planLoaded)}
+        planName={currentPlanName}
         catalog={slot.provider === value.provider ? slot.catalog : EMPTY_EMAIL_CATALOG}
         catalogLoading={slot.loading}
         catalogError={slot.error}
@@ -3765,7 +3812,10 @@ export default function Configure() {
       if (level === "collection" && template.collectionConfig && typeof template.collectionConfig === "object") {
         const parsedCollection = parseLevelConfig(template.collectionConfig as Record<string, unknown>, "collection") as CollectionLevelConfig;
         const locks = getCollectionTemplateLocks(template.templateKey);
-        const enforcedCollection = enforceCollectionTemplateLockedValues(parsedCollection, parsedCollection, locks);
+        const enforcedCollection = stripPreviewConfig(
+          enforceCollectionTemplateLockedValues(parsedCollection, parsedCollection, locks),
+          entitlements
+        );
         setConfig((prev) => ({
           ...prev,
           collectionConfig: enforcedCollection,
@@ -3783,7 +3833,10 @@ export default function Configure() {
         }
         toast.success(`Applied "${template.name}" collection template.`);
       } else if (level === "post" && template.postConfig && typeof template.postConfig === "object") {
-        const parsedPost = parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig;
+        const parsedPost = stripPreviewConfig(
+          parseLevelConfig(template.postConfig as Record<string, unknown>, "post") as PostLevelConfig,
+          entitlements
+        );
         setConfig((prev) => ({
           ...prev,
           postConfig: {
@@ -3806,7 +3859,7 @@ export default function Configure() {
         toast.success(`Applied "${template.name}" post template.`);
       }
     },
-    [previewDebugEnabled]
+    [previewDebugEnabled, entitlements]
   );
 
   const updateConfigRef = useRef<(path: string, value: unknown) => void>(() => {});
@@ -4146,22 +4199,20 @@ export default function Configure() {
               Clear all settings
             </Button>
             {shouldShowViewerModeToggle && (
-              <div className="space-y-1">
+              <PlanFeatureLock
+                locked={!featureAllowed(entitlements, "paywall", planLoaded)}
+                planName={currentPlanName}
+                className="w-full"
+              >
                 <Button
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  disabled={!featureAllowed(entitlements, "paywall", planLoaded)}
                   onClick={() => setPaywallSettingsModalOpen(true)}
                 >
                   Paywall Settings
                 </Button>
-                {!featureAllowed(entitlements, "paywall", planLoaded) && (
-                  <p className="text-[11px] text-[#6b6b6b]">
-                    Included on the {requiredPlanName(entitlements, "paywall")} plan.
-                  </p>
-                )}
-              </div>
+              </PlanFeatureLock>
             )}
             <Dialog
               open={clearSettingsModalOpen}
@@ -4283,7 +4334,7 @@ export default function Configure() {
             collectionTemplateId={config.collectionTemplateId}
             postTemplateId={config.postTemplateId}
             allowedTemplateKeys={planLoaded ? entitlements?.templates ?? { collection: [], post: [] } : null}
-            requiredPlan={entitlements?.requiredPlan}
+            planName={currentPlanName}
           />
           {shouldShowViewerModeToggle && (
             <PaywallSettingsModal
@@ -4426,22 +4477,17 @@ export default function Configure() {
                     )}
 
                     {selectedLevel === "collection" && (
-                    <div className={featureAllowed(entitlements, "featuredAndPinned", planLoaded) ? "min-w-0 border-b border-[#e5e4e0]" : "min-w-0 border-b border-[#e5e4e0] pointer-events-none opacity-60"}>
+                    <PlanFeatureLock
+                      locked={!featureAllowed(entitlements, "featuredAndPinned", planLoaded)}
+                      planName={currentPlanName}
+                    >
+                    <div className="min-w-0 border-b border-[#e5e4e0]">
                       <div className="flex items-center justify-between py-3">
-                        <span className="font-medium">
-                          Featured Article
-                          {!featureAllowed(entitlements, "featuredAndPinned", planLoaded) && (
-                            <span className="ml-2 text-[11px] font-normal text-[#6b6b6b]">
-                              Included on the {requiredPlanName(entitlements, "featuredAndPinned")} plan.
-                            </span>
-                          )}
-                        </span>
+                        <span className="font-medium">Featured Article</span>
                         <div className="flex items-center gap-1">
                           <Switch
-                            disabled={!featureAllowed(entitlements, "featuredAndPinned", planLoaded)}
                             checked={((effectiveConfig as CollectionLevelConfig).featuredArticle ?? defaultFeaturedArticle).show}
                             onCheckedChange={(v) => {
-                              if (!featureAllowed(entitlements, "featuredAndPinned", planLoaded)) return;
                               updateLevelConfigPath("featuredArticle.show", v);
                               setSectionExpanded((p) => ({ ...p, featuredArticle: v }));
                             }}
@@ -4534,6 +4580,7 @@ export default function Configure() {
                         </CollapsibleContent>
                       </Collapsible>
                     </div>
+                    </PlanFeatureLock>
                     )}
 
                     {selectedLevel === "post" && (
@@ -4610,13 +4657,13 @@ export default function Configure() {
                                         </button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="start" className="min-w-[180px]">
-                                        {authors.map((a) => (
+                                        {authors.map((a) => {
+                                          const rowLocked = multipleAuthorsLocked && displayIds.length >= 1 && !displayIds.includes(a.id);
+                                          const item = (
                                           <DropdownMenuItem
-                                            key={a.id}
                                             onSelect={() => {
-                                              if (!displayIds.includes(a.id)) {
-                                                updateConfig(`postAuthorOverrides.${postId}`, [...displayIds, a.id]);
-                                              }
+                                              if (rowLocked || displayIds.includes(a.id)) return;
+                                              updateConfig(`postAuthorOverrides.${postId}`, [...displayIds, a.id]);
                                             }}
                                             className="flex items-center justify-between gap-2"
                                           >
@@ -4635,7 +4682,21 @@ export default function Configure() {
                                               <Pencil className="h-3 w-3" />
                                             </button>
                                           </DropdownMenuItem>
-                                        ))}
+                                          );
+                                          return rowLocked ? (
+                                            <PlanFeatureLock key={a.id} locked planName={currentPlanName}>{item}</PlanFeatureLock>
+                                          ) : (
+                                            <span key={a.id}>{item}</span>
+                                          );
+                                        })}
+                                        {multipleAuthorsLocked && authors.length >= 1 ? (
+                                          <PlanFeatureLock locked planName={currentPlanName}>
+                                            <DropdownMenuItem>
+                                              <Plus className="h-3 w-3" />
+                                              Add New Author
+                                            </DropdownMenuItem>
+                                          </PlanFeatureLock>
+                                        ) : (
                                         <DropdownMenuItem
                                           onSelect={() => {
                                             setEditAuthor(null);
@@ -4649,6 +4710,7 @@ export default function Configure() {
                                           <Plus className="h-3 w-3" />
                                           Add New Author
                                         </DropdownMenuItem>
+                                        )}
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </div>
@@ -4745,13 +4807,13 @@ export default function Configure() {
                                     </button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="start" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
-                                    {authors.map((a) => (
+                                    {authors.map((a) => {
+                                      const rowLocked = multipleAuthorsLocked && config.defaultAuthorIds.length >= 1 && !config.defaultAuthorIds.includes(a.id);
+                                      const item = (
                                       <DropdownMenuItem
-                                        key={a.id}
                                         onSelect={() => {
-                                          if (!config.defaultAuthorIds.includes(a.id)) {
-                                            updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, a.id]);
-                                          }
+                                          if (rowLocked || config.defaultAuthorIds.includes(a.id)) return;
+                                          updateConfig("defaultAuthorIds", [...config.defaultAuthorIds, a.id]);
                                         }}
                                         className="flex items-center justify-between gap-2"
                                       >
@@ -4770,7 +4832,21 @@ export default function Configure() {
                                           <Pencil className="h-3 w-3" />
                                         </button>
                                       </DropdownMenuItem>
-                                    ))}
+                                      );
+                                      return rowLocked ? (
+                                        <PlanFeatureLock key={a.id} locked planName={currentPlanName}>{item}</PlanFeatureLock>
+                                      ) : (
+                                        <span key={a.id}>{item}</span>
+                                      );
+                                    })}
+                                    {multipleAuthorsLocked && authors.length >= 1 ? (
+                                      <PlanFeatureLock locked planName={currentPlanName}>
+                                        <DropdownMenuItem>
+                                          <Plus className="h-3 w-3" />
+                                          Add New Author
+                                        </DropdownMenuItem>
+                                      </PlanFeatureLock>
+                                    ) : (
                                     <DropdownMenuItem
                                       onSelect={() => {
                                         setEditAuthor(null);
@@ -4784,6 +4860,7 @@ export default function Configure() {
                                       <Plus className="h-3 w-3" />
                                       Add New Author
                                     </DropdownMenuItem>
+                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                                 <Button
@@ -4810,17 +4887,16 @@ export default function Configure() {
                     {selectedLevel === "post" && (
                     <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#7a4a1a] border-b border-[rgba(122,74,26,0.2)]">
                       Comments
-                      {!featureAllowed(entitlements, "comments", planLoaded) && (
-                        <span className="ml-2 normal-case tracking-normal font-medium text-[#6b6b6b]">
-                          Included on the {requiredPlanName(entitlements, "comments")} plan.
-                        </span>
-                      )}
                     </div>
                     )}
                     {selectedLevel === "post" && (commentSettingsLoading ? (
                       <div className="border-b border-[#e5e4e0] py-4 text-sm text-[#6b6b6b]">Loading comment settings…</div>
                     ) : commentSettings && (
-                    <div className={featureAllowed(entitlements, "comments", planLoaded) ? "border-b border-[#e5e4e0] pb-4" : "border-b border-[#e5e4e0] pb-4 pointer-events-none opacity-60"}>
+                    <PlanFeatureLock
+                      locked={!featureAllowed(entitlements, "comments", planLoaded)}
+                      planName={currentPlanName}
+                    >
+                    <div className="border-b border-[#e5e4e0] pb-4">
                       <div className="flex items-center justify-between py-3">
                         <span className="font-medium">Show Comments</span>
                         <div className="flex items-center gap-1">
@@ -5002,6 +5078,7 @@ export default function Configure() {
                         </CollapsibleContent>
                       </Collapsible>
                     </div>
+                    </PlanFeatureLock>
                     ))}
 
                     {/* Layout & Design */}
@@ -5547,7 +5624,8 @@ export default function Configure() {
                                       {activeModules.map((m) => (
                                         <span
                                           key={m}
-                                          className="inline-flex items-center gap-1 rounded-md bg-[#5B4FE8]/10 px-2 py-1 text-sm text-[#5B4FE8]"
+                                          title={moduleLocked(m) ? planUnavailableMessage(currentPlanName) : undefined}
+                                          className={`inline-flex items-center gap-1 rounded-md bg-[#5B4FE8]/10 px-2 py-1 text-sm text-[#5B4FE8] ${moduleLocked(m) ? "opacity-50" : ""}`}
                                         >
                                           {HEADER_LABELS[m] ?? m}
                                           <button
@@ -5565,18 +5643,19 @@ export default function Configure() {
                                       <Select
                                         value=""
                                         onValueChange={(v) => {
-                                          if (v) handleAddHeader(v);
+                                          if (v && !moduleLocked(v)) handleAddHeader(v);
                                         }}
                                       >
                                         <SelectTrigger className="w-full">
                                           <SelectValue placeholder="Add module…" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {headerAvailable.map((m) => (
-                                            <SelectItem key={m} value={m}>
-                                              {HEADER_LABELS[m] ?? m}
-                                            </SelectItem>
-                                          ))}
+                                          <ModuleSelectChoices
+                                            modules={headerAvailable}
+                                            labels={HEADER_LABELS}
+                                            isLocked={moduleLocked}
+                                            planName={currentPlanName}
+                                          />
                                         </SelectContent>
                                       </Select>
                                     ) : null}
@@ -5742,13 +5821,16 @@ export default function Configure() {
                                       <div className="flex items-center gap-2">
                                         <Select
                                           value=""
-                                          onValueChange={(v) => { if (v) handleAddFooter(v); }}
+                                          onValueChange={(v) => { if (v && !moduleLocked(v)) handleAddFooter(v); }}
                                         >
                                           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Add module…" /></SelectTrigger>
                                           <SelectContent>
-                                            {footerAvailable.map((m) => (
-                                              <SelectItem key={m} value={m}>{FOOTER_LABELS[m] ?? m}</SelectItem>
-                                            ))}
+                                            <ModuleSelectChoices
+                                              modules={footerAvailable}
+                                              labels={FOOTER_LABELS}
+                                              isLocked={moduleLocked}
+                                              planName={currentPlanName}
+                                            />
                                           </SelectContent>
                                         </Select>
                                       </div>
@@ -5774,7 +5856,8 @@ export default function Configure() {
                                             if (fromIdx !== idx && fromIdx >= 0) moveModule(fromIdx, idx);
                                           }}
                                           onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                          className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                          title={moduleLocked(m) ? planUnavailableMessage(currentPlanName) : undefined}
+                                          className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing ${moduleLocked(m) ? "opacity-50" : ""}`}
                                         >
                                           <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
                                           <span className="flex-1 min-w-0 truncate">{FOOTER_LABELS[m] ?? m}</span>
@@ -6024,12 +6107,15 @@ export default function Configure() {
                                           });
                                       return available.length > 0 ? (
                                         <div className="flex items-center gap-2 mb-2">
-                                          <Select value="" onValueChange={(v) => { if (v) handleAddSidebar(v); }}>
+                                          <Select value="" onValueChange={(v) => { if (v && !moduleLocked(v)) handleAddSidebar(v); }}>
                                             <SelectTrigger className="w-[180px]"><SelectValue placeholder="Add module…" /></SelectTrigger>
                                             <SelectContent>
-                                              {available.map((m) => (
-                                                <SelectItem key={m} value={m}>{SIDEBAR_MODULE_LABELS[m] ?? m}</SelectItem>
-                                              ))}
+                                              <ModuleSelectChoices
+                                                modules={available}
+                                                labels={SIDEBAR_MODULE_LABELS}
+                                                isLocked={moduleLocked}
+                                                planName={currentPlanName}
+                                              />
                                             </SelectContent>
                                           </Select>
                                         </div>
@@ -6047,7 +6133,8 @@ export default function Configure() {
                                             onDragOver={handleDragOver}
                                             onDrop={(e) => handleDrop(e, idx)}
                                             onDragEnd={(e) => { e.dataTransfer.clearData(); }}
-                                            className="flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing"
+                                            title={moduleLocked(m) ? planUnavailableMessage(currentPlanName) : undefined}
+                                            className={`flex items-center gap-2 rounded-md border border-[#e5e4e0] bg-white px-2 py-1.5 text-sm cursor-grab active:cursor-grabbing ${moduleLocked(m) ? "opacity-50" : ""}`}
                                           >
                                             <GripVertical className="h-4 w-4 text-[#6b6b6b] shrink-0" />
                                             <span className="flex-1 min-w-0 truncate">{SIDEBAR_MODULE_LABELS[m] ?? m}</span>
@@ -6078,16 +6165,12 @@ export default function Configure() {
                           <div className="pt-4 pb-1 text-[0.56rem] font-bold tracking-[0.18em] uppercase text-[#1a7a5e] border-b border-[rgba(26,122,94,0.2)]">
                             Navigation & Discovery
                           </div>
-                          {planLoaded && (!featureAllowed(entitlements, "search", planLoaded) || !featureAllowed(entitlements, "emailCapture", planLoaded)) && (
-                            <p className="text-[11px] text-[#6b6b6b] pt-2">
-                              {!featureAllowed(entitlements, "search", planLoaded) && `Search, filters, and sorting are on the ${requiredPlanName(entitlements, "search")} plan. `}
-                              {!featureAllowed(entitlements, "emailCapture", planLoaded) && `Email sign-up and lead magnets are on the ${requiredPlanName(entitlements, "emailCapture")} plan.`}
-                            </p>
-                          )}
                           {selectedLevel === "collection" && (
                             <>
                               <ModuleSettingSectionCollapseOnly
                                 title="Filtering"
+                                locked={!featureAllowed(entitlements, "tagCategoryFilters", planLoaded)}
+                                planName={currentPlanName}
                                 expanded={sectionExpanded.filtering}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, filtering: !p.filtering }))}
                                 content={
@@ -6159,6 +6242,8 @@ export default function Configure() {
                               )}
                               <ModuleSettingSectionCollapseOnly
                                 title="Email Capture"
+                                locked={!featureAllowed(entitlements, "emailCapture", planLoaded)}
+                                planName={currentPlanName}
                                 expanded={sectionExpanded.emailCapture}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
@@ -6194,6 +6279,8 @@ export default function Configure() {
                               />
                               <ModuleSettingSectionCollapseOnly
                                 title="Lead Magnet"
+                                locked={!featureAllowed(entitlements, "emailCapture", planLoaded)}
+                                planName={currentPlanName}
                                 expanded={sectionExpanded.leadMagnet}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
@@ -6315,6 +6402,8 @@ export default function Configure() {
                               />
                               <ModuleSettingSectionCollapseOnly
                                 title="Email Capture"
+                                locked={!featureAllowed(entitlements, "emailCapture", planLoaded)}
+                                planName={currentPlanName}
                                 expanded={sectionExpanded.emailCapture}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, emailCapture: !p.emailCapture }))}
                                 content={
@@ -6350,6 +6439,8 @@ export default function Configure() {
                               />
                               <ModuleSettingSectionCollapseOnly
                                 title="Lead Magnet"
+                                locked={!featureAllowed(entitlements, "emailCapture", planLoaded)}
+                                planName={currentPlanName}
                                 expanded={sectionExpanded.leadMagnet}
                                 onToggle={() => setSectionExpanded((p) => ({ ...p, leadMagnet: !p.leadMagnet }))}
                                 content={
