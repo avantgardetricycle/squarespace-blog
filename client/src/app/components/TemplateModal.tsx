@@ -264,7 +264,7 @@ export function TemplateModal({
                       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-9 bg-gradient-to-b from-transparent to-white" />
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto pt-1.5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto pt-1.5">
                     <div className="flex items-baseline justify-between gap-3">
                       <div className="text-[30px] leading-[1.1]" style={{ fontFamily: "'DM Serif Display', serif" }}>
                         {previewTemplate.name}
@@ -293,19 +293,21 @@ export function TemplateModal({
                       <p className="text-[12.5px] leading-normal text-[#5F5F5F]">
                         Previewed with sample posts. Your blog keeps its own fonts and colors.
                       </p>
-                      <div className="flex gap-2.5">
-                        <DialogClose className="h-11 rounded-full border border-[#D6D3CC] bg-white px-[18px] text-[14.5px] font-medium">
+                      <div className="flex min-w-0 gap-2.5">
+                        <DialogClose className="h-11 shrink-0 rounded-full border border-[#D6D3CC] bg-white px-[18px] text-[14.5px] font-medium">
                           Cancel
                         </DialogClose>
-                        <PlanFeatureLock locked={previewLocked} planName={planName} className="flex-1">
-                          <Button
-                            type="button"
-                            className="h-11 w-full rounded-full bg-[#5B4FE8] text-[14.5px] font-semibold hover:bg-[#4339C9]"
-                            onClick={handleUse}
-                          >
-                            {`Use ${previewTemplate.name}`}
-                          </Button>
-                        </PlanFeatureLock>
+                        <div className="min-w-0 flex-1">
+                          <PlanFeatureLock locked={previewLocked} planName={planName} className="w-full">
+                            <Button
+                              type="button"
+                              className="h-11 w-full rounded-full bg-[#5B4FE8] text-[14.5px] font-semibold hover:bg-[#4339C9]"
+                              onClick={handleUse}
+                            >
+                              {`Use ${previewTemplate.name}`}
+                            </Button>
+                          </PlanFeatureLock>
+                        </div>
                       </div>
                     </div>
                   </div>
