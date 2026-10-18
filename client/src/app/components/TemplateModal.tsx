@@ -10,6 +10,7 @@ import { Button } from "@/app/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { TEMPLATE_PICKER_ART } from "@/app/components/template-picker-art";
 import { cn } from "@/app/components/ui/utils";
+import { PlanFeatureLock } from "@/app/components/PlanFeatureLock";
 
 export interface Template {
   id: string;
@@ -82,7 +83,7 @@ interface TemplateModalProps {
   postTemplateId?: string | null;
   /** Template keys the current plan can apply. Omitted keys stay visible and locked. */
   allowedTemplateKeys?: { collection: string[]; post: string[] } | null;
-  requiredPlan?: Record<string, string>;
+  planName?: string;
 }
 
 function sortTemplates(templates: Template[], order: string[]): Template[] {
@@ -102,7 +103,7 @@ export function TemplateModal({
   collectionTemplateId = null,
   postTemplateId = null,
   allowedTemplateKeys = null,
-  requiredPlan = {},
+  planName = "your plan",
 }: TemplateModalProps) {
   const [collectionTemplates, setCollectionTemplates] = useState<Template[]>([]);
   const [postTemplates, setPostTemplates] = useState<Template[]>([]);
@@ -243,6 +244,8 @@ export function TemplateModal({
                     key={template.id}
                     template={template}
                     selected={template.id === previewTemplate?.id}
+                    locked={templateLocked(template, activeTab)}
+                    planName={planName}
                     onSelect={() => setPreviewId(template.id)}
                   />
                 ))}
@@ -294,16 +297,15 @@ export function TemplateModal({
                         <DialogClose className="h-11 rounded-full border border-[#D6D3CC] bg-white px-[18px] text-[14.5px] font-medium">
                           Cancel
                         </DialogClose>
-                        <Button
-                          type="button"
-                          className="h-11 flex-1 rounded-full bg-[#5B4FE8] text-[14.5px] font-semibold hover:bg-[#4339C9]"
-                          disabled={previewLocked}
-                          onClick={handleUse}
-                        >
-                          {previewLocked
-                            ? `Included on ${requiredPlan[previewTemplate.templateKey] ?? "a higher plan"}`
-                            : `Use ${previewTemplate.name}`}
-                        </Button>
+                        <PlanFeatureLock locked={previewLocked} planName={planName} className="flex-1">
+                          <Button
+                            type="button"
+                            className="h-11 w-full rounded-full bg-[#5B4FE8] text-[14.5px] font-semibold hover:bg-[#4339C9]"
+                            onClick={handleUse}
+                          >
+                            {`Use ${previewTemplate.name}`}
+                          </Button>
+                        </PlanFeatureLock>
                       </div>
                     </div>
                   </div>
@@ -374,20 +376,25 @@ function ScaledPreview({ previewLayout }: { previewLayout: string }) {
 function TemplateThumb({
   template,
   selected,
+  locked,
+  planName,
   onSelect,
 }: {
   template: Template;
   selected: boolean;
+  locked: boolean;
+  planName: string;
   onSelect: () => void;
 }) {
   return (
+    <PlanFeatureLock locked={locked} planName={planName} className="min-w-0">
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
       aria-label={template.name}
       className={cn(
-        "flex min-w-0 flex-col gap-1.5 rounded-[10px] border-2 p-1.5 text-left font-inherit",
+        "flex min-w-0 w-full flex-col gap-1.5 rounded-[10px] border-2 p-1.5 text-left font-inherit",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5B4FE8]/50",
         selected ? "border-[#5B4FE8] bg-[#F1EFFE]" : "border-transparent bg-transparent hover:bg-white/60"
       )}
@@ -397,5 +404,6 @@ function TemplateThumb({
       </div>
       <span className="truncate px-[3px] text-[13px] font-semibold">{template.name}</span>
     </button>
+    </PlanFeatureLock>
   );
 }
