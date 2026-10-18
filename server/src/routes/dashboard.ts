@@ -28,9 +28,11 @@ import { isAdminEmail } from '../lib/admin-team.js'
 import { isSupportTeamEmail } from '../lib/support-team.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
 import {
+  betaConversionTrialEnd,
+  checkoutBlockReason,
   effectiveSubscriptionStatus,
+  isBetaSubscription,
   isEntitledSubscription,
-  isResubscribableStatus,
   pickDisplaySubscription,
   usableStripeCustomerId
 } from '../lib/subscriptionStatus.js'
@@ -43,6 +45,12 @@ import {
 } from '../lib/squarespace-paywall-probe.js'
 
 const router = Router()
+
+async function paywallUnavailable (userId: number): Promise<string | null> {
+  const planContext = await loadUserPlanContext(userId)
+  if (planContext.entitlements.features.paywall) return null
+  return `This feature is not available on ${planContext.entitlements.planDisplay}.`
+}
 const PAYWALL_MODES = ['auto', 'force_logged_out', 'force_logged_in'] as const
 type PaywallMode = (typeof PAYWALL_MODES)[number]
 const PAYWALL_DETECTION_SOURCES = ['json_probe', 'manual'] as const
@@ -466,19 +474,21 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       return
     }
 
-    const entitled = subscriptions.find((sub) => isEntitledSubscription(sub))
-    if (entitled) {
+    const block = checkoutBlockReason(subscriptions)
+    if (block === 'active_paid') {
       res.status(409).json({ error: 'You already have an active subscription.' })
       return
     }
-
-    const subscription = subscriptions[0] ?? null
-    if (!isResubscribableStatus(effectiveSubscriptionStatus(subscription))) {
+    if (block === 'payment_required') {
       res.status(409).json({
         error: 'Update your payment method to continue this subscription.'
       })
       return
     }
+
+    const betaGrant =
+      subscriptions.find((sub) => isBetaSubscription(sub) && isEntitledSubscription(sub)) ?? null
+    const trialEnd = betaConversionTrialEnd(betaGrant)
 
     const plan = await prisma.plan.findUnique({
       where: {
@@ -499,9 +509,10 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
     }
 
     const stripe = getStripe()
+    const paidSubscription = subscriptions.find((sub) => !isBetaSubscription(sub)) ?? null
     let stripeCustomerId =
       usableStripeCustomerId(dbUser.stripeCustomerId) ??
-      usableStripeCustomerId(subscription?.source === 'beta' ? null : subscription?.stripeCustomerId)
+      usableStripeCustomerId(paidSubscription?.stripeCustomerId)
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
         email: dbUser.email,
@@ -520,8 +531,9 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       plan_key: normalizedPlanKey,
       cadence,
       stripe_price_label: plan.stripePriceLabel,
-      resubscribe: 'true'
+      resubscribe: betaGrant ? 'false' : 'true'
     }
+    if (betaGrant) metadata.beta_conversion = 'true'
     if (dbUser.name) {
       metadata.customer_name = dbUser.name
     }
@@ -531,7 +543,13 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       customer: stripeCustomerId,
       customer_update: { name: 'auto' },
       line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-      subscription_data: { metadata },
+      subscription_data: {
+        metadata,
+        ...(trialEnd ? { trial_end: Math.floor(trialEnd.getTime() / 1000) } : {})
+      },
+      // A beta conversion can start with a trial. Always collect a card so the
+      // subscription continues when complimentary access ends.
+      ...(trialEnd ? { payment_method_collection: 'always' as const } : {}),
       metadata,
       success_url: `${appUrl}/dashboard/account?checkout=success`,
       cancel_url: `${appUrl}/dashboard/account`
@@ -549,7 +567,9 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
           cadence,
           stripePriceLabel: plan.stripePriceLabel,
           maxSites: plan.maxSites,
-          resubscribe: true,
+          resubscribe: !betaGrant,
+          betaConversion: Boolean(betaGrant),
+          trialEnd: trialEnd?.toISOString(),
           customerName: dbUser.name ?? undefined
         })
       }
@@ -626,6 +646,11 @@ router.post('/sites', requireSession, async (req: Request, res: Response) => {
     const subscribeNormalized = normalizeSubscribeUrlInput(rawSubscribeForCreate)
 
     if (userPaywallState === 'detected_paywalled') {
+      const unavailable = await paywallUnavailable(user.id)
+      if (unavailable) {
+        res.status(403).json({ error: unavailable })
+        return
+      }
       const subscribeProvided =
         typeof rawSubscribeForCreate === 'string' && rawSubscribeForCreate.trim().length > 0
       if (subscribeProvided && !subscribeNormalized) {
@@ -1051,6 +1076,13 @@ router.patch('/sites/by-key/:siteKey', requireSession, requireEditableSubscripti
         res.status(400).json({ error: 'Invalid paywallDetectionState' })
         return
       }
+      if (paywallDetectionState === 'detected_paywalled' && site.paywallDetectionState !== 'detected_paywalled') {
+        const unavailable = await paywallUnavailable(user.id)
+        if (unavailable) {
+          res.status(403).json({ error: unavailable })
+          return
+        }
+      }
       updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
       updates.paywallDetectionSource = 'manual'
     }
@@ -1184,6 +1216,13 @@ router.patch('/sites/:id', requireSession, requireEditableSubscription, async (r
       if (paywallDetectionState !== 'unknown' && paywallDetectionState !== 'detected_paywalled' && paywallDetectionState !== 'detected_unpaywalled') {
         res.status(400).json({ error: 'Invalid paywallDetectionState' })
         return
+      }
+      if (paywallDetectionState === 'detected_paywalled' && site.paywallDetectionState !== 'detected_paywalled') {
+        const unavailable = await paywallUnavailable(user.id)
+        if (unavailable) {
+          res.status(403).json({ error: unavailable })
+          return
+        }
       }
       updates.paywallDetectionState = paywallDetectionState as PaywallDetectionState
       updates.paywallDetectionSource = 'manual'

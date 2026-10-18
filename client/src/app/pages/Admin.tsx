@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
 import {
   Table,
   TableBody,
@@ -15,11 +32,15 @@ import {
   fetchBetaTesterUsage,
   inviteBetaTester,
   resendBetaInvite,
+  updateBetaTesterPlan,
   type BetaTesterSummary,
   type BetaTesterUsage,
   type InviteStatus,
 } from "@/api/admin";
+import { getPlanDisplayName } from "@/lib/planLabels";
 import { toast } from "sonner";
+
+const BETA_PLAN_KEYS = ["essentials", "professional", "publication", "studio"] as const;
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -58,6 +79,8 @@ export default function Admin() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [usage, setUsage] = useState<BetaTesterUsage | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<{ userId: number; email: string; from: string; to: string } | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
 
   const loadTesters = useCallback(async () => {
     const rows = await fetchBetaTesters();
@@ -111,6 +134,28 @@ export default function Admin() {
     }
   };
 
+  const applyTester = (tester: BetaTesterSummary) => {
+    setTesters((current) => replaceTester(current, tester));
+    setUsage((current) =>
+      current && current.tester.userId === tester.userId ? { ...current, tester } : current
+    );
+  };
+
+  const confirmPlanChange = async () => {
+    if (!pendingPlan) return;
+    setSavingPlan(true);
+    try {
+      const tester = await updateBetaTesterPlan(pendingPlan.userId, pendingPlan.to);
+      applyTester(tester);
+      toast.success(`Plan updated to ${getPlanDisplayName(tester.plan)}`);
+      setPendingPlan(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update plan");
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
   const handleResend = async (userId: number) => {
     setResendingId(userId);
     try {
@@ -130,7 +175,7 @@ export default function Admin() {
       <div className="flex flex-col gap-2">
         <h1 className="font-heading text-3xl font-bold tracking-tight text-[#0a0a0a]">Admin</h1>
         <p className="text-sm text-[#6b6b6b]">
-          Invite beta testers and review how they use BetterBlog. Each invite includes one year of Publication access.
+          Invite beta testers and review how they use BetterBlog. Each invite includes one year of Publication access, and you can change a tester&apos;s plan from the table.
         </p>
       </div>
 
@@ -167,6 +212,7 @@ export default function Admin() {
           <TableHeader>
             <TableRow>
               <TableHead>Email</TableHead>
+              <TableHead>Plan</TableHead>
               <TableHead>Invite</TableHead>
               <TableHead>Access until</TableHead>
               <TableHead>Last login</TableHead>
@@ -177,13 +223,13 @@ export default function Admin() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-[#6b6b6b]">
+                <TableCell colSpan={7} className="text-[#6b6b6b]">
                   Loading…
                 </TableCell>
               </TableRow>
             ) : testers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-[#6b6b6b]">
+                <TableCell colSpan={7} className="text-[#6b6b6b]">
                   No beta testers yet.
                 </TableCell>
               </TableRow>
@@ -198,6 +244,32 @@ export default function Admin() {
                   <TableCell>
                     <div className="font-medium text-[#0a0a0a]">{tester.email}</div>
                     {tester.name ? <div className="text-xs text-[#6b6b6b]">{tester.name}</div> : null}
+                  </TableCell>
+                  <TableCell onClick={(event) => event.stopPropagation()}>
+                    <Select
+                      value={tester.plan}
+                      disabled={savingPlan}
+                      onValueChange={(value) => {
+                        if (value === tester.plan) return;
+                        setPendingPlan({
+                          userId: tester.userId,
+                          email: tester.email,
+                          from: tester.plan,
+                          to: value,
+                        });
+                      }}
+                    >
+                      <SelectTrigger aria-label={`Plan for ${tester.email}`} className="h-8 w-[148px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BETA_PLAN_KEYS.map((planKey) => (
+                          <SelectItem key={planKey} value={planKey}>
+                            {getPlanDisplayName(planKey)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>{inviteLabel(tester.inviteStatus)}</TableCell>
                   <TableCell>
@@ -236,7 +308,7 @@ export default function Admin() {
               <div>
                 <h2 className="font-heading text-xl font-semibold text-[#0a0a0a]">{usage.tester.email}</h2>
                 <p className="text-sm text-[#6b6b6b]">
-                  {usage.blogs.length} {usage.blogs.length === 1 ? "blog" : "blogs"} · invite {usage.tester.inviteStatus}
+                  {getPlanDisplayName(usage.tester.plan)} · {usage.blogs.length} {usage.blogs.length === 1 ? "blog" : "blogs"} · invite {usage.tester.inviteStatus}
                 </p>
               </div>
 
@@ -287,6 +359,37 @@ export default function Admin() {
           )}
         </section>
       )}
+
+      <AlertDialog
+        open={pendingPlan != null}
+        onOpenChange={(open) => {
+          if (savingPlan) return;
+          if (!open) setPendingPlan(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change beta plan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingPlan
+                ? `${pendingPlan.email} will move from ${getPlanDisplayName(pendingPlan.from)} to ${getPlanDisplayName(pendingPlan.to)}. Blog limits and features update immediately. Their beta end date stays the same.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingPlan}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmPlanChange();
+              }}
+              disabled={savingPlan}
+            >
+              {savingPlan ? "Updating…" : "Update plan"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

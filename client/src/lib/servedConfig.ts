@@ -16,6 +16,20 @@ export function requiredPlanName(
   return entitlements?.requiredPlan[feature] ?? "a higher";
 }
 
+const MODULE_FEATURE: Partial<Record<string, keyof PlanFeatureFlags>> = {
+  searchPosts: "search",
+  filterByCategory: "tagCategoryFilters",
+  filterByTag: "tagCategoryFilters",
+  filterByTagsAndCategories: "tagCategoryFilters",
+  postSort: "sorting",
+  emailCapture: "emailCapture",
+  leadMagnet: "emailCapture",
+};
+
+export function moduleFeature(moduleId: string): keyof PlanFeatureFlags | null {
+  return MODULE_FEATURE[moduleId] ?? null;
+}
+
 export function templateAllowed(
   entitlements: PlanEntitlements | null | undefined,
   level: "collection" | "post",

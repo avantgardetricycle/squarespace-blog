@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { getDashboardMe, updateProfile, cancelSubscription, resumeSubscription, createPortalSession, deleteAccount, type DashboardMe } from "@/api/auth";
 import { ResubscribePlanModal } from "@/app/components/ResubscribePlanModal";
 import { getPlanDisplayName } from "@/lib/planLabels";
-import { formatSubscriptionDate, hasActiveSubscription, isResubscribableStatus } from "@/lib/subscription";
+import { betaChargeWaitsUntilAccessEnds, formatSubscriptionDate, hasActiveSubscription, isResubscribableStatus } from "@/lib/subscription";
 
 export default function Account() {
   const navigate = useNavigate();
@@ -190,6 +190,8 @@ export default function Account() {
   const subscriptionExpired = !subscriptionActive;
   const isBeta = me.subscription?.source === "beta";
   const betaActive = Boolean(isBeta && subscriptionActive);
+  const betaChargeLater = betaActive && betaChargeWaitsUntilAccessEnds(me.subscription?.currentPeriodEnd);
+  const openSubscribeModal = () => setShowResubscribeModal(true);
   const canResubscribe = subscriptionExpired && isResubscribableStatus(me.subscription?.status);
   const deleteEmailMatches =
     confirmEmail.trim().toLowerCase() === me.user.email.trim().toLowerCase();
@@ -262,7 +264,7 @@ export default function Account() {
               </div>
               <div className="flex-1 space-y-1">
                 <p className="text-sm font-medium leading-none">
-                  {betaActive ? "Beta access" : `${planDisplay} Plan`}
+                  {betaActive ? `${planDisplay} · Beta` : `${planDisplay} Plan`}
                 </p>
                 <p className="text-xs text-[#6b6b6b]">
                   {betaActive
@@ -270,23 +272,24 @@ export default function Account() {
                     : `${cadenceDisplay} • ${priceDisplay} • ${statusDisplay}`}
                 </p>
               </div>
-              {isBeta ? null : (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleOpenPortal("changePlan")}
-                disabled={portalLoading || !me.subscription || subscriptionExpired}
+                onClick={isBeta ? openSubscribeModal : handleOpenPortal("changePlan")}
+                disabled={portalLoading || !me.subscription || (!isBeta && subscriptionExpired)}
               >
                 {portalLoadingButton === "changePlan" ? "Opening…" : "Change Plan"}
               </Button>
-              )}
             </div>
             <div className="text-sm text-[#6b6b6b]">
               {betaActive ? (
                 <>
                   Beta access ends on{" "}
                   <span className="font-medium text-[#0a0a0a]">{currentPeriodEnd}</span>.
-                  The Publication plan is included, with no payment method required.
+                  The {planDisplay} plan is included until then.{" "}
+                  {betaChargeLater
+                    ? "Choose a plan to keep BetterBlog after that date. You won't be charged until beta access ends."
+                    : "Choose a plan to keep BetterBlog. You'll be billed today."}
                 </>
               ) : subscriptionExpired ? (
                 currentPeriodEnd !== "—" ? (
@@ -321,9 +324,7 @@ export default function Account() {
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-6">
             {betaActive ? (
-              <p className="text-sm text-[#6b6b6b]">
-                No payment method is required during beta access.
-              </p>
+              <p className="text-sm text-[#6b6b6b]">No card on file yet.</p>
             ) : subscriptionExpired || scheduledCancel ? (
               <p className="text-sm text-amber-600">
                 {scheduledCancel
@@ -368,7 +369,11 @@ export default function Account() {
                 </AlertDialog>
               </>
             )}
-            {betaActive ? null : scheduledCancel ? (
+            {betaActive ? (
+              <Button onClick={openSubscribeModal} disabled={portalLoading}>
+                Update Payment Method
+              </Button>
+            ) : scheduledCancel ? (
               <Button
                 onClick={() => void handleRestoreSubscription()}
                 disabled={restoring || portalLoading}
@@ -466,6 +471,8 @@ export default function Account() {
         onOpenChange={setShowResubscribeModal}
         defaultPlanKey={me.subscription?.plan}
         defaultCadence={me.subscription?.cadence}
+        subscribeDuringBeta={betaActive}
+        betaAccessUntil={me.subscription?.currentPeriodEnd}
       />
     </div>
   );

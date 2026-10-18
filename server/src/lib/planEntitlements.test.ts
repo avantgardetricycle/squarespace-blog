@@ -24,6 +24,7 @@ test('plan caps are 1/2/3 blogs on one website, and Studio starts at 10 websites
     [1, 1, ['showcase', 'digest']]
   )
   assert.equal(essentials.features.search, false)
+  assert.equal(essentials.features.comments, true)
   assert.equal(essentials.features.paywall, false)
 
   assert.deepEqual([professional.maxWebsites, professional.maxBlogsPerWebsite], [1, 2])

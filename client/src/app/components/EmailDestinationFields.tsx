@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
+import { planUnavailableMessage } from "@/app/components/PlanFeatureLock";
 
 export type EmailDestinationProvider = "betterblog" | "kit" | "mailchimp";
 export type KitTarget = "form" | "tag";
@@ -383,6 +384,8 @@ type EmailDestinationFieldsProps = {
   catalogLoading: boolean;
   catalogError: string | null;
   tagsError: string | null;
+  externalProvidersLocked?: boolean;
+  planName?: string;
 };
 
 function ApiKeyField({
@@ -455,6 +458,8 @@ export function EmailDestinationFields({
   catalogLoading,
   catalogError,
   tagsError,
+  externalProvidersLocked = false,
+  planName = "your plan",
 }: EmailDestinationFieldsProps) {
   const external = value.provider === "kit" || value.provider === "mailchimp";
   const canLoad = value.apiKey.trim() !== "" || value.hasApiKey;
@@ -468,17 +473,31 @@ export function EmailDestinationFields({
         <Label className="text-xs text-[#6b6b6b]">Send subscribers to</Label>
         <Select
           value={value.provider}
-          onValueChange={(provider) =>
-            onChange(switchEmailDestination(value, provider as EmailDestinationProvider, savedKeys, platformKeys))
-          }
+          onValueChange={(provider) => {
+            const external = provider === "kit" || provider === "mailchimp";
+            if (external && externalProvidersLocked && provider !== value.provider) return;
+            onChange(switchEmailDestination(value, provider as EmailDestinationProvider, savedKeys, platformKeys));
+          }}
         >
           <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="betterblog">BetterBlog</SelectItem>
-            <SelectItem value="kit">Kit</SelectItem>
-            <SelectItem value="mailchimp">Mailchimp</SelectItem>
+            {externalProvidersLocked && value.provider !== "kit" ? (
+              <div title={planUnavailableMessage(planName)} className="cursor-not-allowed rounded-sm px-2 py-1.5 text-sm opacity-50">
+                Kit
+              </div>
+            ) : (
+              <SelectItem value="kit">Kit</SelectItem>
+            )}
+            {externalProvidersLocked && value.provider !== "mailchimp" ? (
+              <div title={planUnavailableMessage(planName)} className="cursor-not-allowed rounded-sm px-2 py-1.5 text-sm opacity-50">
+                Mailchimp
+              </div>
+            ) : (
+              <SelectItem value="mailchimp">Mailchimp</SelectItem>
+            )}
           </SelectContent>
         </Select>
         {value.provider === "betterblog" && (

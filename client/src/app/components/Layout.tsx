@@ -2,7 +2,9 @@ import { Outlet, NavLink, Link, Navigate, useNavigate, useLocation, useLoaderDat
 import { LayoutDashboard, Settings, User, LogOut, BarChart3, MessageSquare, LifeBuoy, AlertCircle, Shield } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Logo } from "@/app/components/Logo";
+import { PlanFeatureLock } from "@/app/components/PlanFeatureLock";
 import type { DashboardMe } from "@/api/auth";
+import { featureAllowed } from "@/lib/servedConfig";
 import { hasActiveSubscription, isInPaymentGrace } from "@/lib/subscription";
 
 const EXPIRED_REDIRECT_PATHS = [
@@ -38,14 +40,15 @@ export default function Layout() {
     navigate("/login");
   };
 
+  const planName = me.entitlements?.planDisplay || me.subscription?.planDisplay || "your plan";
   const navItems = [
-    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true },
-    { to: "/dashboard/comments", icon: MessageSquare, label: "Comments", end: false },
-    { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics", end: false },
-    { to: "/dashboard/configure", icon: Settings, label: "Customize Blog" },
-    { to: "/dashboard/account", icon: User, label: "Account" },
-    { to: "/dashboard/support", icon: LifeBuoy, label: "Support" },
-    ...(me.isAdmin ? [{ to: "/dashboard/admin", icon: Shield, label: "Admin" }] : []),
+    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard", end: true, locked: false },
+    { to: "/dashboard/comments", icon: MessageSquare, label: "Comments", end: false, locked: !featureAllowed(me.entitlements, "comments", true) },
+    { to: "/dashboard/analytics", icon: BarChart3, label: "Analytics", end: false, locked: !featureAllowed(me.entitlements, "basicAnalytics", true) },
+    { to: "/dashboard/configure", icon: Settings, label: "Customize Blog", locked: false },
+    { to: "/dashboard/account", icon: User, label: "Account", locked: false },
+    { to: "/dashboard/support", icon: LifeBuoy, label: "Support", locked: false },
+    ...(me.isAdmin ? [{ to: "/dashboard/admin", icon: Shield, label: "Admin", locked: false }] : []),
   ];
 
   return (
@@ -59,7 +62,14 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => (
+          {navItems.map((item) => item.locked ? (
+            <PlanFeatureLock key={item.to} locked planName={planName}>
+              <div className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-[#6b6b6b]">
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </div>
+            </PlanFeatureLock>
+          ) : (
             <NavLink
               key={item.to}
               to={item.to}
