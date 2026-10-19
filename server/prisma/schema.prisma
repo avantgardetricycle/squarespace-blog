@@ -76,6 +76,8 @@ model Site {
   cachedPosts           CachedPost[]
   comments              Comment[]
   commentVerificationTokens CommentVerificationToken[]
+  commenterOtpChallenges CommenterOtpChallenge[]
+  commenterSessions     CommenterSession[]
   supportConversations  SupportConversation[]
   supportTickets        SupportTicket[]
   previewSnapshots      PreviewSnapshot[]
@@ -392,8 +394,11 @@ model Comment {
   /// Squarespace native comment id when row was lazy-imported from GetComments (enables replies)
   externalCommentId        String?   @map("external_comment_id")
   importedFromSquarespace  Boolean   @default(false) @map("imported_from_squarespace")
+  commenterSessionId       String?   @map("commenter_session_id")
+  clientReportedLoggedIn   Boolean?  @map("client_reported_logged_in")
 
   site         Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  commenterSession CommenterSession? @relation(fields: [commenterSessionId], references: [id], onDelete: SetNull)
   parent       Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies      Comment[]     @relation("CommentReplies")
   commentLikes CommentLike[]
@@ -421,6 +426,61 @@ model CommentVerificationToken {
   @@index([siteId])
   @@index([expiresAt])
   @@map("comment_verification_tokens")
+}
+
+/// One-time code for proving a commenter owns an email. The plain code is never stored.
+model CommenterOtpChallenge {
+  id          String    @id @default(uuid())
+  siteId      String    @map("site_id")
+  hostname    String
+  email       String
+  displayName String    @map("display_name")
+  codeHash    String    @map("code_hash")
+  attempts    Int       @default(0)
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  ip          String?
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([hostname, email, createdAt])
+  @@index([ip, createdAt])
+  @@map("commenter_otp_challenges")
+}
+
+/// Opaque commenter session. The browser stores the token; the database stores its hash.
+model CommenterSession {
+  id             String    @id @default(uuid())
+  siteId         String?   @map("site_id")
+  hostname       String
+  email          String
+  displayName    String    @map("display_name")
+  tokenHash      String    @unique @map("token_hash")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  lastExtendedAt DateTime  @default(now()) @map("last_extended_at")
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  ip             String?
+  userAgent      String?   @map("user_agent")
+
+  site     Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  comments Comment[]
+
+  @@index([hostname, email])
+  @@map("commenter_sessions")
+}
+
+/// Failed OTP verify attempts, counted by IP. Kept separate from the challenge's start IP.
+model CommenterAuthEvent {
+  id        String   @id @default(uuid())
+  ip        String
+  kind      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ip, kind, createdAt])
+  @@map("commenter_auth_events")
 }
 
 model CommentLike {

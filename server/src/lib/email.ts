@@ -1,6 +1,6 @@
 import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
-import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail, renderTrialDayFourEmail } from '../emails/index.js'
+import { getLogoBase64, renderInviteEmail, renderMagicLinkEmail, renderCommentNotificationEmail, renderProfilesApiAlertEmail, renderTrialDayFourEmail, renderCommenterCodeEmail, commenterCodeText } from '../emails/index.js'
 import { signCommentActionToken, type CommentAction } from './comment-action-token.js'
 import { redactSubscriberText } from './email-providers.js'
 import { getAppUrl, getSupportPortalUrl } from './url.js'
@@ -151,6 +151,44 @@ export async function sendMagicLinkEmailViaSendGrid(to: string, magicLink: strin
     } else {
       throw err
     }
+  }
+}
+
+function sendingAddress(): string {
+  const match = mailFrom.match(/<([^>]+)>/)
+  return (match?.[1] || mailFrom).trim()
+}
+
+/**
+ * One-time code for a commenter. The subject and body contain the code, so neither is logged.
+ */
+export async function sendCommenterCodeEmail(to: string, code: string, blogName: string): Promise<void> {
+  const name = blogName.trim() || 'this site'
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[commenter-code] mailer not configured; code email not sent')
+    }
+    return
+  }
+
+  sgMail.setApiKey(apiKey)
+  const html = await renderCommenterCodeEmail({ code, blogName: name })
+  const text = commenterCodeText(code, name)
+  try {
+    await sgMail.send({
+      to,
+      from: { email: sendingAddress(), name },
+      subject: `${code} is your code to comment on ${name}`,
+      html,
+      text,
+      trackingSettings: { clickTracking: { enable: false }, openTracking: { enable: false } },
+    })
+  } catch (err: unknown) {
+    const res = err && typeof err === 'object' && 'response' in err
+      ? (err as { response?: { statusCode?: number } }).response
+      : undefined
+    console.error('[commenter-code] SendGrid error', res?.statusCode ?? 'unknown')
   }
 }
 

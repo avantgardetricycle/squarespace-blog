@@ -4951,7 +4951,6 @@ export default function Configure() {
                                 <Switch
                                   checked={commentSettings.subscriberCommentsEnabled}
                                   onCheckedChange={(v) => {
-                                    if (!commentSettings.apiKeyVerified) return;
                                     setCommentSettings((p) => {
                                       if (!p) return p;
                                       const next = { ...p, subscriberCommentsEnabled: v };
@@ -4959,10 +4958,10 @@ export default function Configure() {
                                       return next;
                                     });
                                   }}
-                                  disabled={!commentSettings.apiKeyVerified}
                                 />
                               </div>
-                              <p className="text-xs text-[#6b6b6b]">Require a member email, verified against your Squarespace member list. Failed checks are shown in a modal.</p>
+                              <p className="text-xs text-[#6b6b6b]">Readers confirm their email with a one-time code and must be signed in to your site to get a verified badge.</p>
+                              <p className="text-xs text-[#6b6b6b]">Optional: also check commenters against your Squarespace member list.</p>
                               {commentSettings.apiKeyVerified && (
                                 <div className={commentSettings.apiKeyInvalid ? "opacity-70" : undefined}>
                                   <div className="flex items-center gap-2 text-sm">
@@ -4996,7 +4995,7 @@ export default function Configure() {
                                   onClick={() => setSquarespaceApiKeyModalOpen("setup")}
                                   className="text-xs text-[#5B4FE8] hover:underline"
                                 >
-                                  Connect Squarespace API key to enable this setting
+                                  Connect Squarespace API key
                                 </button>
                               )}
                             </div>

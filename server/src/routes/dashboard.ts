@@ -7,6 +7,7 @@ import { requireEditableSubscription } from '../middleware/editableSubscription.
 import dashboardCommentSettingsRoutes from './dashboard-comment-settings.js'
 import dashboardEmailIntegrationRoutes from './dashboard-email-integration.js'
 import dashboardCommentsRoutes from './dashboard-comments.js'
+import dashboardCommentersRoutes from './dashboard-commenters.js'
 import { getPlanDisplayName } from '../lib/planLabels.js'
 import {
   formatPricePerMo,
@@ -153,6 +154,7 @@ function generateSiteKey(): string {
 router.use('/settings/comments', dashboardCommentSettingsRoutes)
 router.use('/settings/email-integration', dashboardEmailIntegrationRoutes)
 router.use('/comments', dashboardCommentsRoutes)
+router.use('/commenters', dashboardCommentersRoutes)
 
 // GET /api/dashboard/me - Current user, plan, sites
 router.get('/me', requireSession, async (req: Request, res: Response) => {
