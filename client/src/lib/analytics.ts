@@ -15,6 +15,8 @@ export const INTEREST_MODAL_SOURCES = {
   pricingTierPublication: 'pricing_tier_publication',
   pricingStudioContact: 'pricing_studio_contact',
   bottomGetStarted: 'bottom_get_started',
+  blogTrial: 'blog_trial',
+  blogUpdates: 'blog_updates',
 } as const;
 
 export type InterestModalSource =
