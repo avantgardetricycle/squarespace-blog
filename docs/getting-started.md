@@ -71,8 +71,8 @@ BetterBlog offers four plans. Essentials, Professional, and Publication are on t
 
 | Plan | Websites | Blogs | Templates |
 |---|---|---|---|
-| **Essentials** | 1 | 1 | 4 (Showcase, Digest, Feature, Reporter) |
-| **Professional** | 1 | 2 | 8, plus search, filters, comments, and basic analytics |
+| **Essentials** | 1 | 1 | 4 (Showcase, Digest, Feature, Reporter), plus comments with moderation |
+| **Professional** | 1 | 2 | 8, plus search, filters, and basic analytics |
 | **Publication** | 1 | 3 | All 10, plus paywall, email, Kit and Mailchimp, multiple authors, and advanced analytics |
 | **Studio** | 10, then $7/month each | 3 per website | Everything in Publication, on every client website |
 

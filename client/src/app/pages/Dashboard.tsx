@@ -62,6 +62,8 @@ import {
   squarespaceOriginFromUrl,
 } from "@/lib/squarespaceSiteGroups";
 import { signupPageUrlError } from "@/lib/signupPageUrl";
+import { PlanFeatureLock } from "@/app/components/PlanFeatureLock";
+import { featureAllowed } from "@/lib/servedConfig";
 
 export default function Dashboard() {
   const [me, setMe] = useState<DashboardMe | null>(null);
@@ -125,6 +127,8 @@ export default function Dashboard() {
       : `${sites.length} of ${blogLimit} blog${blogLimit !== 1 ? "s" : ""}`;
 
   const getSiteUrl = (site: { url?: string | null }) => site.url ?? "";
+  const paywallLocked = !featureAllowed(me?.entitlements, "paywall", me != null);
+  const currentPlanName = me?.entitlements?.planDisplay || me?.subscription?.planDisplay || "your plan";
 
   const performAddBlog = async (opts?: { purgeDeletedSiteId?: string }) => {
     if (!newBlogName.trim()) {
@@ -139,7 +143,7 @@ export default function Dashboard() {
       toast.error("You've reached your site limit");
       return;
     }
-    if (newBlogPaywalled === "yes") {
+    if (!paywallLocked && newBlogPaywalled === "yes") {
       const signupError = signupPageUrlError(newBlogSubscribeUrl);
       if (signupError) {
         toast.error(signupError);
@@ -149,9 +153,9 @@ export default function Dashboard() {
     setCreating(true);
     setBlogUrlError(null);
     try {
-      const paywallDetectionState =
-        newBlogPaywalled === "yes" ? "detected_paywalled" : "detected_unpaywalled";
-      const subscribeArg = newBlogPaywalled === "yes" ? newBlogSubscribeUrl.trim() : undefined;
+      const markingPaywalled = !paywallLocked && newBlogPaywalled === "yes";
+      const paywallDetectionState = markingPaywalled ? "detected_paywalled" : "detected_unpaywalled";
+      const subscribeArg = markingPaywalled ? newBlogSubscribeUrl.trim() : undefined;
       const result = await createSite(newBlogName.trim(), newBlogUrl.trim(), paywallDetectionState, subscribeArg, {
         purgeDeletedSiteId: opts?.purgeDeletedSiteId,
       });
@@ -273,7 +277,7 @@ export default function Dashboard() {
       toast.error("Please enter a blog name");
       return;
     }
-    if (editBlogRequiresLogin === "yes") {
+    if (!paywallLocked && editBlogRequiresLogin === "yes") {
       const signupError = signupPageUrlError(editBlogSubscribeUrl);
       if (signupError) {
         toast.error(signupError);
@@ -284,7 +288,9 @@ export default function Dashboard() {
     try {
       const paywallDetectionState =
         editBlogRequiresLogin === "yes" ? "detected_paywalled" : "detected_unpaywalled";
-      const result = await updateSite(editingSite.siteKey, {
+      const result = await updateSite(editingSite.siteKey, paywallLocked
+        ? { name: editBlogName.trim() }
+        : {
         name: editBlogName.trim(),
         paywallDetectionState,
         ...(editBlogRequiresLogin === "yes"
@@ -563,6 +569,7 @@ export default function Dashboard() {
                     </p>
                   )}
                 </div>
+                <PlanFeatureLock locked={paywallLocked} planName={currentPlanName}>
                 <div className="space-y-2">
                   <Label>Does this blog require a membership to view posts?</Label>
                   <div className="grid grid-cols-2 gap-2 pt-0.5">
@@ -592,7 +599,8 @@ export default function Dashboard() {
                     update this setting later if your blog&apos;s membership setup changes.
                   </p>
                 </div>
-                {newBlogPaywalled === "yes" ? (
+                </PlanFeatureLock>
+                {!paywallLocked && newBlogPaywalled === "yes" ? (
                   <div className="space-y-2">
                     <Label htmlFor="blog-subscribe-url">
                       Signup / subscription page URL <span className="text-red-500">*</span>
@@ -764,6 +772,7 @@ export default function Dashboard() {
                 }}
               />
             </div>
+            <PlanFeatureLock locked={paywallLocked} planName={currentPlanName}>
             <div className="space-y-2">
               <Label>Does this blog require a membership to view posts?</Label>
               <div className="grid grid-cols-2 gap-2 pt-0.5">
@@ -792,7 +801,8 @@ export default function Dashboard() {
                 When set to Yes, Customize shows separate layout options for logged-in and logged-out visitors.
               </p>
             </div>
-            {editBlogRequiresLogin === "yes" ? (
+            </PlanFeatureLock>
+            {!paywallLocked && editBlogRequiresLogin === "yes" ? (
               <div className="space-y-2">
                 <Label htmlFor="edit-blog-subscribe-url">
                   Signup / subscription page URL <span className="text-red-500">*</span>
