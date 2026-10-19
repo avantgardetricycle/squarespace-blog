@@ -1,57 +1,11 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { AnimatePresence, motion, useInView } from 'motion/react';
+import { TEMPLATE_PICKER_ART } from '@/app/components/template-picker-art';
 
-/* Wireframe helpers + data ported from the approved landing-page design.
-   Markup is static and author-authored; no user input reaches these strings. */
-const L = (n: number, a?: boolean) => Array.from({length:n},(_,i)=>`<div class="wl${a&&i===0?' a':''}" style="width:${[92,78,85,64][i%4]}%"></div>`).join('');
-// shared: a sidebar column (violet dot + lines) and a centered header (dot + title)
-// unified sidebar parts — no background, accent heading + content rows
-const SBH = (w = 64) => `<div class="wl a" style="width:${w}%;height:2px;flex-shrink:0"></div>`;
-const SBROW = () => `<div style="display:flex;gap:3px;align-items:center;flex-shrink:0"><div class="wi" style="width:9px;height:8px"></div><div style="flex:1;display:flex;flex-direction:column;gap:1px"><div class="wl" style="width:92%;height:2px;background:#dcdce4"></div><div class="wl" style="width:56%;height:2px"></div></div></div>`;
-const SBAV = () => `<div style="display:flex;gap:3px;align-items:center;flex-shrink:0"><div class="wi" style="width:8px;height:8px;border-radius:50%"></div><div class="wl" style="width:52%;height:2px"></div></div>`;
-const SB = (n = 2) => `<div class="wsb" style="flex:1;gap:2px">${SBH(62)}${SBAV()}${SBH(54)}${Array.from({length:n},SBROW).join('')}</div>`;
-const OV = (w1 = 70, w2 = 42) => `<div class="wl w" style="width:${w1}%;height:4px"></div><div class="wl w" style="width:${w2}%"></div>`;
-const T: Record<string, string> = {
-  // ── Collection ──
-  showcase:`<div style="display:flex;gap:6px;flex:1"><div class="wi" style="flex:1.5"></div><div style="flex:1;display:flex;flex-direction:column;gap:3px;justify-content:center"><div class="wl a" style="width:35%"></div><div class="wt"></div><div class="wt" style="width:75%"></div>${L(2)}</div></div>
-    <div style="display:flex;gap:6px;flex:1;min-height:0"><div style="flex:1;display:flex;flex-direction:column;gap:3px;justify-content:center"><div class="wl a" style="width:35%"></div><div class="wt"></div><div class="wt" style="width:75%"></div>${L(1)}</div><div class="wi" style="flex:1.5"></div></div>`,
-  newsroom:`<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-shrink:0"><div class="wt" style="width:28%;height:4px"></div><div class="w" style="width:36%;height:9px;border:1px solid #d8d6cf;display:flex;align-items:center;padding:0 3px;gap:2px"><div class="wl" style="width:3px;height:3px;border-radius:50%"></div><div class="wl" style="width:55%;height:2px"></div></div></div>
-    ${[0,1,2,3].map(()=>`<div style="display:flex;gap:5px;flex:1;align-items:center;border-top:1px solid #e6e4de;padding-top:3px"><div class="wi" style="height:100%;aspect-ratio:1"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;gap:3px"><div class="wo" style="width:3px;height:3px"></div><div class="wl a" style="width:22%;height:2px"></div></div><div class="wt" style="height:3px;width:85%"></div><div class="wl" style="width:60%;height:2px"></div></div></div>`).join('')}`,
-  masthead:`<div class="wov" style="flex:2.6;min-height:0;padding:5px 6px;gap:2px"><div style="width:14%;height:4px;border-radius:3px;background:var(--violet)"></div><div class="wl" style="width:20%;height:2px;background:rgba(255,255,255,.6)"></div><div class="wl" style="width:74%;height:4px;background:#fff"></div><div class="wl" style="width:30%;height:2px;background:rgba(255,255,255,.45)"></div></div>
-    <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;padding:1px 0"><div class="wt" style="width:8%;height:3px"></div>${[0,1,2,3].map(()=>`<div class="wl" style="width:10%;height:3px"></div>`).join('')}<div class="w" style="margin-left:auto;width:20%;height:7px;border:1px solid #d8d6cf"></div><div class="w" style="width:11%;height:7px;border:1px solid #d8d6cf"></div></div>
-    <div style="display:flex;gap:5px;flex:1.4;min-height:0">${[0,1,2].map(()=>`<div style="flex:1;display:flex;flex-direction:column;gap:2px;min-height:0"><div class="wi" style="flex:1;min-height:0"></div><div class="wl a" style="width:38%;height:2px;flex-shrink:0"></div><div class="wt" style="height:3px;flex-shrink:0"></div><div class="wl" style="width:55%;height:2px;flex-shrink:0"></div></div>`).join('')}</div>`,
-  editorial:`<div style="display:flex;gap:4px;flex:1"><div class="wov" style="flex:1.7">${OV(72,44)}</div><div style="flex:1;display:flex;flex-direction:column;gap:4px"><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div></div></div>
-    <div style="display:flex;gap:4px;flex:1"><div style="flex:1;display:flex;flex-direction:column;gap:4px"><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div><div class="wov" style="flex:1;padding:3px">${OV(80,0)}</div></div><div class="wov" style="flex:1.7">${OV(72,44)}</div></div>`,
-  digest:`<div style="display:flex;align-items:center;gap:3px;flex-shrink:0;padding-bottom:2px;border-bottom:1px solid #e6e4de"><div class="wt" style="width:9%;height:3px"></div>${[0,1,2].map(()=>`<div class="wl" style="width:11%;height:3px"></div>`).join('')}<div class="w" style="margin-left:auto;width:22%;height:7px;border:1px solid #d8d6cf"></div><div class="w" style="width:12%;height:7px;border:1px solid #d8d6cf"></div></div>
-    <div style="display:flex;gap:6px;flex:1"><div style="flex:2.3;display:flex;flex-direction:column;gap:3px">
-      <div class="wi" style="height:26px;flex-shrink:0"></div>
-      <div style="display:flex;align-items:center;gap:3px"><div class="wl a" style="width:16%;height:4px;opacity:1"></div><div class="wl a" style="width:18%;height:2px"></div></div>
-      <div class="wt"></div><div class="wt" style="width:62%"></div><div class="wl" style="width:44%"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:4px;flex:1.5;min-height:0;margin-top:1px">${[0,1,2,3].map(()=>`<div style="display:flex;flex-direction:column;gap:1px;min-height:0"><div class="wi" style="flex:1;min-height:0"></div><div class="wl a" style="width:38%;height:2px;flex-shrink:0"></div><div class="wl" style="width:86%;height:2px;background:#e4e4ea;flex-shrink:0"></div></div>`).join('')}</div></div>
-    <div class="wsb" style="flex:1;gap:2px">
-      ${SBH(58)}${SBAV()}${SBAV()}
-      ${SBH(64)}
-      <div class="w" style="height:6px;border:1px solid #d8d6cf"></div><div style="height:6px;background:var(--violet);opacity:.75;border-radius:2px"></div>
-      ${SBH(50)}${SBROW()}${SBROW()}
-    </div></div>`,
-  // ── Post ──
-  reporter:`<div style="display:flex;gap:6px;flex:1"><div style="flex:1;display:flex;flex-direction:column;gap:3px;justify-content:center"><div style="display:flex;align-items:center;gap:3px"><div class="wo"></div><div class="wl a" style="width:40%"></div></div><div class="wt"></div><div class="wt" style="width:78%"></div><div class="wl" style="width:55%"></div></div><div class="wi" style="flex:1.35"></div></div>
-    <div style="display:flex;gap:6px;flex:1.25;min-height:0"><div style="flex:2.3;display:flex;flex-direction:column;gap:3px">${L(5)}</div>${SB(2)}</div>`,
-  feature:`<div style="display:flex;flex-direction:column;gap:2px;align-items:center;flex-shrink:0;padding:1px 0 3px"><div class="wl" style="width:34%;height:2px"></div><div class="wl a" style="width:12%;height:2px;margin-top:1px"></div><div class="wt" style="width:64%;height:5px"></div><div class="wl" style="width:44%;height:2px"></div><div class="wl" style="width:30%;height:2px"></div><div class="wl" style="width:22%;height:2px;margin-top:1px"></div><div style="display:flex;gap:2px;margin-top:1px">${[0,1,2,3].map(()=>'<div class="wl" style="width:3px;height:3px;border-radius:50%;background:#bbb"></div>').join('')}</div></div>
-    <div class="wi" style="flex:2.4;min-height:0;margin:0 -11px;border-radius:0"></div>
-    <div style="display:flex;gap:5px;flex:2;min-height:0;padding-top:2px"><div class="wsb" style="flex:.8;gap:2px">${SBH(70)}<div class="wl" style="width:92%;height:2px"></div><div class="wl" style="width:62%;height:2px"></div></div><div style="flex:2.3;display:flex;flex-direction:column;gap:3px">${L(5)}</div>${SB(2)}</div>`,
-  writer:`<div style="display:flex;flex-direction:column;gap:3px;align-items:center;padding:7px 0 6px;flex-shrink:0"><div class="wo"></div><div class="wt" style="width:66%"></div><div class="wt" style="width:44%;height:4px"></div><div class="wl" style="width:26%;margin-top:1px"></div></div><div style="display:flex;flex-direction:column;gap:3px;padding:0 15%;flex:1;min-height:0">${L(6)}</div>`,
-  story:`<div style="flex:2.1;min-height:0;display:flex;margin:-11px -11px 0;background:#0b0b0f;padding:8px 10px;gap:8px"><div style="flex:1;display:flex;align-items:center"><div class="wi" style="width:100%;height:82%"></div></div><div style="flex:1.15;display:flex;flex-direction:column;justify-content:center;gap:2px"><div class="wl" style="width:70%;height:2px;background:rgba(255,255,255,.3)"></div><div class="wl" style="width:22%;height:2px;background:var(--violet-lt);margin-top:1px"></div><div class="wl" style="width:92%;height:4px;background:#fff"></div><div class="wl" style="width:64%;height:4px;background:#fff"></div><div class="wl" style="width:88%;height:2px;background:rgba(255,255,255,.55);margin-top:1px"></div><div class="wl" style="width:50%;height:2px;background:rgba(255,255,255,.55)"></div><div style="height:1px;background:rgba(255,255,255,.18);margin:2px 0 1px"></div><div class="wl" style="width:48%;height:2px;background:rgba(255,255,255,.4)"></div><div style="display:flex;gap:2px;margin-top:1px">${[0,1,2,3].map(()=>'<div style="width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.45)"></div>').join('')}</div></div></div>
-    <div style="display:flex;flex-direction:column;gap:3px;padding:6px 20% 0;flex:1.6;min-height:0;justify-content:flex-start">${L(5)}</div>`,
-  publisher:`<div style="flex:2.3;min-height:0;margin:-11px -11px 0;padding:0 8px 6px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;background:linear-gradient(to top,rgba(10,10,25,.92),rgba(10,10,25,.35) 55%,rgba(10,10,25,.1)),linear-gradient(135deg,#7f76d8,#3b3170 70%,#1d1840)"><div style="width:22%;height:5px;border-radius:3px;background:var(--violet)"></div><div class="wl" style="width:84%;height:4px;background:#fff;margin-top:1px"></div><div class="wl" style="width:42%;height:2px;background:rgba(255,255,255,.5)"></div></div>
-    <div style="display:flex;gap:6px;flex:2.4;min-height:0;padding-top:4px"><div style="flex:2.1;display:flex;flex-direction:column;gap:3px">${L(6)}</div>
-    <div class="wsb" style="flex:1;gap:2px;min-height:0">
-      ${SBH(62)}${SBROW()}${SBROW()}
-      ${SBH(55)}${SBROW()}${SBROW()}
-      ${SBH(48)}
-      <div style="display:flex;flex-wrap:wrap;gap:2px">${[34,26,30,22,28].map(w=>`<div class="w" style="width:${w}%;height:5px;border:1px solid #dcdad4"></div>`).join('')}</div>
-    </div></div>`
-};
+/* Blog index and post previews reuse the product's template-picker art, so the
+   landing page and the in-app picker always show the same thing. Footer blocks
+   are wireframes. All markup is static and author-authored; no user input
+   reaches these strings. */
 const TPL: { collection: [string,string,string][]; post: [string,string,string][] } = {
   collection:[
     ['showcase','The Showcase','Large alternating images'],
@@ -68,22 +22,66 @@ const TPL: { collection: [string,string,string][]; post: [string,string,string][
 };
 
 /* ── Footer blocks ── */
+/* Footer blocks, drawn like the template previews (same fonts, colors and
+   photos) at a post column's real width (760px), using the renderer's layout:
+   "More to Read" is a 3-column grid of 16:10 cards; Popular Posts is a list
+   with square thumbnails; Previous / Next has no images. */
+const PH = (n: string) => `background:#E9E5DF url(/template-photos/${n}.webp) center / cover no-repeat`;
+const HEAD = (t: string) => `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding-bottom:8px;border-bottom:1px solid #ECE8E2;margin-bottom:16px">${t}</div>`;
+const CAT = (t: string) => `<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#A0522D">${t}</div>`;
+const SERIF = "font-family:'DM Serif Display',serif";
+const BLOCK = (inner: string) => `<div style="width:760px;box-sizing:border-box;padding:28px 32px;background:#fff;font-family:'DM Sans',sans-serif;color:#2B2723">${inner}</div>`;
 const B: Record<string, string> = {
-  author:`<div style="display:flex;gap:8px;align-items:center"><div class="wi" style="width:26px;height:26px;border-radius:50%;flex-shrink:0"></div>
-    <div style="flex:1;display:flex;flex-direction:column;gap:3px"><div class="wl a" style="width:28%;height:2px"></div><div class="wt" style="width:46%;height:4px"></div><div class="wl" style="width:92%"></div><div class="wl" style="width:64%"></div>
-    <div style="display:flex;gap:3px;margin-top:2px">${[0,1,2].map(()=>'<div style="width:5px;height:5px;border-radius:50%;background:#c9c7c0"></div>').join('')}</div></div></div>`,
-  related:`<div style="display:flex;flex-direction:column;gap:6px"><div class="wt" style="width:30%;height:5px"></div>
-    <div style="display:flex;gap:6px">${[0,1,2].map(()=>`<div style="flex:1;display:flex;flex-direction:column;gap:3px"><div class="wi" style="height:22px;border-radius:3px"></div><div class="wl a" style="width:52%;height:2px"></div><div class="wt" style="width:96%;height:4px"></div><div class="wt" style="width:62%;height:4px"></div></div>`).join('')}</div></div>`,
-  popular:`<div style="display:flex;flex-direction:column;gap:5px"><div class="wl a" style="width:34%;height:3px"></div>
-    ${[0,1,2].map(()=>`<div style="display:flex;gap:5px;align-items:center"><div class="wi" style="width:18px;height:14px;flex-shrink:0"></div><div style="flex:1;display:flex;flex-direction:column;gap:2px"><div class="wl" style="width:86%;height:3px;background:#dcdce4"></div><div class="wl" style="width:50%"></div></div></div>`).join('')}</div>`,
-  email:`<div style="display:flex;gap:10px;align-items:center"><div class="wt" style="flex:1;width:auto;height:5px"></div>
-    <div style="display:flex;gap:5px;flex:1.25;align-items:center"><div class="w" style="flex:1;height:12px;border:1px solid #d8d6cf;border-radius:3px"></div><div style="width:38%;height:12px;background:var(--violet);border-radius:100px"></div></div></div>`,
-  magnet:`<div style="display:flex;flex-direction:column;gap:4px"><div class="wt" style="width:34%;height:5px"></div><div class="wl" style="width:60%"></div>
-    <div style="display:flex;gap:5px;align-items:center;margin-top:4px"><div class="w" style="flex:1;height:12px;border:1px solid #d8d6cf;border-radius:3px"></div><div style="width:26%;height:12px;background:var(--violet);border-radius:100px"></div></div></div>`,
-  prevnext:`<div style="display:flex;align-items:center"><div style="flex:1;display:flex;flex-direction:column;gap:4px;padding-right:12px"><div class="wl" style="width:30%;height:2px"></div><div class="wl a" style="width:38%;height:2px"></div><div class="wt" style="width:86%;height:4px"></div></div>
-    <div style="width:1px;align-self:stretch;background:#dcdad4"></div>
-    <div style="flex:1;display:flex;flex-direction:column;gap:4px;padding-left:12px;align-items:flex-end"><div class="wl" style="width:22%;height:2px"></div><div class="wl a" style="width:30%;height:2px"></div><div class="wt" style="width:92%;height:4px"></div></div></div>`
+  author: BLOCK(`${HEAD('About the author')}
+    <div style="display:flex;gap:20px;align-items:flex-start">
+      <div style="width:84px;height:84px;border-radius:50%;flex-shrink:0;${PH('bride-window')}"></div>
+      <div><div style="${SERIF};font-size:24px;line-height:1.2;margin-bottom:6px">Maya Okonkwo</div>
+        <div style="font-size:15px;line-height:1.55;color:#5A534C;margin-bottom:12px">Bay Area wedding and portrait photographer. I write about light, planning, and the parts of the day nobody warns you about.</div>
+        <div style="display:flex;gap:14px;font-size:13px;color:#766D64">${['Instagram', 'Pinterest', 'Website'].map((x) => `<span style="border-bottom:1px solid #DCD6CE">${x}</span>`).join('')}</div></div>
+    </div>`),
+  related: BLOCK(`${HEAD('More to read')}
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+      ${[['venue-barn', 'Venues', 'Small Oakland Venues That Feel Like a Dinner Party', 'Six spaces under 100 guests where nobody has to shout.'],
+         ['couple-walking', 'Engagements', 'What to Wear to Your Engagement Session', 'Texture over pattern, every time.'],
+         ['reception-table', 'Planning', 'A Shot List Your Photographer Will Actually Use', 'Keep it to the people only you know about.']]
+        .map(([ph, c, t, d]) => `<div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+          <div style="aspect-ratio:16/10;border-radius:4px;${PH(ph)}"></div>${CAT(c)}
+          <div style="${SERIF};font-size:21px;line-height:1.3;margin-top:-4px">${t}</div>
+          <div style="font-size:13.6px;color:#555;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</div></div>`).join('')}
+    </div>`),
+  popular: BLOCK(`${HEAD('Popular posts')}
+    ${[['forest-sunbeams', 'Elopements: Small Days, Big Feelings', 'Aug 9, 2026 · 5 min read'],
+       ['wedding-arch-dusk', 'Ana &amp; Theo: A Rainy Day at the Redwood Grange', 'Sep 3, 2026 · 4 min read'],
+       ['golden-hour-ceremony', 'How to Plan a Golden-Hour Ceremony', 'Oct 2, 2026 · 6 min read']]
+      .map(([ph, t, m]) => `<div style="display:flex;gap:14px;align-items:center;margin-bottom:14px">
+        <div style="width:80px;height:80px;flex-shrink:0;border-radius:4px;${PH(ph)}"></div>
+        <div><div style="${SERIF};font-size:18px;line-height:1.2;margin-bottom:5px">${t}</div>
+          <div style="font-size:12px;color:#888">${m}</div></div></div>`).join('')}`),
+  email: BLOCK(`<div style="display:flex;gap:28px;align-items:center">
+      <div style="flex:1"><div style="${SERIF};font-size:26px;line-height:1.2;margin-bottom:6px">Get the planning notes</div>
+        <div style="font-size:15px;line-height:1.5;color:#5A534C">One planning email a month: light, timelines, and venues worth seeing.</div></div>
+      <div style="flex:0 0 300px"><div style="height:44px;box-sizing:border-box;border:1px solid #DCD6CE;border-radius:4px;display:flex;align-items:center;padding:0 14px;font-size:15px;color:#766D64;margin-bottom:8px">you@email.com</div>
+        <div style="height:44px;background:#A0522D;color:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">Subscribe</div></div>
+    </div>`),
+  magnet: BLOCK(`<div style="display:flex;gap:24px;align-items:center">
+      <div style="flex:0 0 150px;aspect-ratio:3/4;border-radius:4px;box-shadow:0 8px 22px rgba(43,39,35,.18);${PH('golden-hour-ceremony')};position:relative">
+        <div style="position:absolute;left:0;right:0;bottom:0;padding:10px;background:linear-gradient(to top,rgba(20,14,8,.75),rgba(20,14,8,0));border-radius:0 0 4px 4px;${SERIF};color:#fff;font-size:15px;line-height:1.15">The Golden-Hour Timeline</div></div>
+      <div style="flex:1">${CAT('Free download')}
+        <div style="${SERIF};font-size:26px;line-height:1.2;margin:6px 0">The golden-hour timeline</div>
+        <div style="font-size:15px;line-height:1.5;color:#5A534C;margin-bottom:14px">One page. Work back from sunset to plan your ceremony and portraits.</div>
+        <div style="display:flex;gap:8px"><div style="flex:1;height:44px;box-sizing:border-box;border:1px solid #DCD6CE;border-radius:4px;display:flex;align-items:center;padding:0 14px;font-size:15px;color:#766D64">you@email.com</div>
+          <div style="height:44px;padding:0 20px;background:#A0522D;color:#fff;border-radius:4px;display:flex;align-items:center;font-size:15px;font-weight:600">Send it to me</div></div></div>
+    </div>`),
+  prevnext: BLOCK(`<div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #ECE8E2;border-bottom:1px solid #ECE8E2">
+      <div style="padding:22px 24px 22px 0;border-right:1px solid #ECE8E2">
+        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#766D64;margin-bottom:8px">&larr; Previous</div>${CAT('Venues')}
+        <div style="${SERIF};font-size:22px;line-height:1.25;margin-top:6px">Small Oakland Venues That Feel Like a Dinner Party</div></div>
+      <div style="padding:22px 0 22px 24px;text-align:right">
+        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#766D64;margin-bottom:8px">Next &rarr;</div>${CAT('Engagements')}
+        <div style="${SERIF};font-size:22px;line-height:1.25;margin-top:6px">What to Wear to Your Engagement Session</div></div>
+    </div>`),
 };
+
 const BLK: [string,string,string][] = [
   ['author','Author Profile','Photo, bio, and social links'],
   ['related','Related Posts','What to read next, by tag'],
@@ -95,9 +93,9 @@ const BLK: [string,string,string][] = [
 
 type GroupKey = 'collection' | 'post' | 'footer';
 
-const GROUPS: { key: GroupKey; label: string; hint: string; items: [string, string, string][]; thumbs: Record<string, string>; blk?: boolean }[] = [
-  { key: 'collection', label: 'Blog index', hint: 'How the page listing your posts looks', items: TPL.collection, thumbs: T },
-  { key: 'post', label: 'Post page', hint: 'How each article looks', items: TPL.post, thumbs: T },
+const GROUPS: { key: GroupKey; label: string; hint: string; items: [string, string, string][]; thumbs: Record<string, string>; blk?: boolean; art?: boolean }[] = [
+  { key: 'collection', label: 'Blog index', hint: 'How the page listing your posts looks', items: TPL.collection, thumbs: TEMPLATE_PICKER_ART, art: true },
+  { key: 'post', label: 'Post page', hint: 'How each article looks', items: TPL.post, thumbs: TEMPLATE_PICKER_ART, art: true },
   { key: 'footer', label: 'Footer blocks', hint: 'Stack any of these under a post or collection', items: BLK, thumbs: B, blk: true },
 ];
 
@@ -148,8 +146,37 @@ const STYLES = `.bb-templates{
   .bb-templates .tp-frame{padding:16px;min-height:0}
   .bb-templates .tp-big{zoom:1}
   .bb-templates .tp-big.blk{zoom:1}
-  .bb-templates .tp-panel{gap:28px;margin-top:28px}
+  .bb-templates .tp-panel{gap:14px;margin-top:20px}
+  /* Phones: the chooser becomes a swipeable strip right above the preview, so
+     picking a template and seeing it happen stay on one screen. */
+  .bb-templates .tp-list{order:-1;flex:1 1 100%;flex-direction:row;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;position:relative;padding:2px 2px 6px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+  .bb-templates .tp-list::-webkit-scrollbar{display:none}
+  .bb-templates .tp-hint{display:none}
+  .bb-templates .tp-opt{flex:0 0 auto;width:104px;min-height:0;flex-direction:column;align-items:stretch;gap:6px;padding:6px;scroll-snap-align:center}
+  .bb-templates .tp-opt .tp-art-mini{width:100%}
+  .bb-templates .tp-mini{width:280px;zoom:.32}
+  .bb-templates .tp-opt-name{font-size:.82rem;line-height:1.2}
+  .bb-templates .tp-opt-desc{display:none}
+  .bb-templates .tp-stage{flex-basis:100%;gap:10px}
+  .bb-templates .tp-cap-name{font-size:1.25rem}
+  .bb-templates .tp-cap-desc{font-size:.85rem}
 }
+
+/* footer blocks: a 760px block scaled to fit */
+.bb-templates .tp-block{position:relative;overflow:hidden;border:1px solid #e6e4de;border-radius:10px;background:#fff;box-shadow:0 8px 26px rgba(20,18,16,.08)}
+.bb-templates .tp-art-mini .tp-block{border-radius:6px;box-shadow:none}
+.bb-templates .tp-block-scale{position:absolute;top:0;left:0;transform-origin:top left;pointer-events:none;user-select:none}
+/* product preview art (same as the in-app template picker) */
+.bb-templates .tp-art-big{width:100%;max-width:640px}
+.bb-templates .tp-art-mini{width:84px;flex-shrink:0;pointer-events:none}
+.bb-templates .tp-art{background:#fff;border:1px solid #e6e4de;border-radius:10px;overflow:hidden;box-shadow:0 8px 26px rgba(20,18,16,.08)}
+.bb-templates .tp-art-mini .tp-art{border-radius:6px;box-shadow:none}
+.bb-templates .tp-art-bar{display:flex;align-items:center;gap:4px;height:22px;padding:0 10px;background:#f1efeb;border-bottom:1px solid #e4e2dc}
+.bb-templates .tp-art-bar i{width:6px;height:6px;border-radius:50%;background:#d6d2cb}
+.bb-templates .tp-art-bar span{margin-left:8px;font-size:10px;color:#6b6b6b}
+.bb-templates .tp-art-page{position:relative;aspect-ratio:1280/1000;overflow:hidden;background:#fff}
+.bb-templates .tp-art-scale{position:absolute;top:0;left:0;width:1280px;height:1000px;transform-origin:top left;pointer-events:none;user-select:none}
 
 /* wireframe thumbnail shell */
 .bb-templates .tp-thumb{aspect-ratio:4/3;background:#fff;border:1px solid #e6e6ec;border-radius:9px;padding:11px;overflow:hidden;box-sizing:border-box;
@@ -169,9 +196,63 @@ const STYLES = `.bb-templates{
 .bb-templates .wsb{display:flex;flex-direction:column;gap:3px}
 .bb-templates .wov{background:linear-gradient(to top,rgba(18,14,48,.78),rgba(18,14,48,0) 62%),linear-gradient(135deg,#ded8f8,#9b90ec);border-radius:2px;display:flex;flex-direction:column;justify-content:flex-end;padding:4px;gap:2px}`;
 
-function Thumb({ html, blk }: { html: string; blk?: boolean }) {
-  return <div className={blk ? 'tp-thumb blk' : 'tp-thumb'} aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }} />;
+/** A product template preview (1280x1000 page) scaled to the box's width. */
+function Art({ html, show, url }: { html: string; show: boolean; url?: boolean }) {
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    const fit = () => setScale(el.clientWidth / 1280);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div className="tp-art" aria-hidden="true">
+      {url && (
+        <div className="tp-art-bar">
+          <i /><i /><i />
+          <span>mayaokonkwo.com/journal</span>
+        </div>
+      )}
+      <div className="tp-art-page" ref={pageRef}>
+        {show && scale > 0 && (
+          <div className="tp-art-scale" style={{ transform: `scale(${scale})` }} dangerouslySetInnerHTML={{ __html: html }} />
+        )}
+      </div>
+    </div>
+  );
 }
+
+/** A footer block (760px wide) scaled to the box width; height follows. */
+function BlockArt({ html, show }: { html: string; show: boolean }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState({ scale: 0, height: 0 });
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const measure = () => {
+      const s = box.clientWidth / 760;
+      const h = innerRef.current ? innerRef.current.offsetHeight : 0;
+      setFit({ scale: s, height: Math.ceil(h * s) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [html, show]);
+  return (
+    <div className="tp-block" ref={boxRef} aria-hidden="true" style={{ height: fit.height || undefined }}>
+      {show && (
+        <div ref={innerRef} className="tp-block-scale" style={{ transform: `scale(${fit.scale || 0.0001})` }} dangerouslySetInnerHTML={{ __html: html }} />
+      )}
+    </div>
+  );
+}
+
 
 /**
  * One template type at a time (tabs), one large preview, and a short list to
@@ -182,6 +263,29 @@ export default function TemplatesSection() {
   const [tab, setTab] = useState<GroupKey>('collection');
   const [sel, setSel] = useState<Record<GroupKey, number>>({ collection: 0, post: 0, footer: 0 });
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The previews pull in photos; wait until the section is close to view.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const near = useInView(sectionRef, { once: true, margin: '600px 0px' });
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // Switching tabs: bring that tab's picked item into view in the strip.
+  useEffect(() => {
+    const strip = listRef.current;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    const btn = strip.querySelectorAll<HTMLButtonElement>('.tp-opt')[sel[tab]];
+    strip.scrollLeft = btn ? Math.max(0, btn.offsetLeft - (strip.clientWidth - btn.clientWidth) / 2) : 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  // When the list is a horizontal strip (phones), keep the picked item in view
+  // without moving the page vertically.
+  const pick = (i: number, btn: HTMLButtonElement) => {
+    setSel((s) => ({ ...s, [tab]: i }));
+    const strip = listRef.current;
+    if (strip && strip.scrollWidth > strip.clientWidth) {
+      strip.scrollTo({ left: btn.offsetLeft - (strip.clientWidth - btn.clientWidth) / 2, behavior: 'smooth' });
+    }
+  };
 
   const groupIndex = GROUPS.findIndex((g) => g.key === tab);
   const group = GROUPS[groupIndex];
@@ -202,7 +306,7 @@ export default function TemplatesSection() {
   };
 
   return (
-    <section id="templates" className="bb-templates bg-white py-12 md:py-[100px] overflow-hidden">
+    <section ref={sectionRef} id="templates" className="bb-templates bg-white py-12 md:py-[100px] overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <div className="tp-wrap">
         <motion.div
@@ -254,13 +358,17 @@ export default function TemplatesSection() {
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={`${tab}-${key}`}
-                  className={group.blk ? 'tp-big blk' : 'tp-big'}
+                  className={group.art ? 'tp-art-big' : 'tp-art-big tp-block-big'}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <Thumb html={group.thumbs[key]} blk={group.blk} />
+                  {group.art ? (
+                    <Art html={group.thumbs[key]} show={near} url />
+                  ) : (
+                    <BlockArt html={group.thumbs[key]} show={near} />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -275,7 +383,7 @@ export default function TemplatesSection() {
             </div>
           </div>
 
-          <div className="tp-list">
+          <div className="tp-list" ref={listRef}>
             <div className="tp-hint">{group.hint}</div>
             {group.items.map(([k, n, d], i) => (
               <button
@@ -283,11 +391,17 @@ export default function TemplatesSection() {
                 type="button"
                 className="tp-opt"
                 aria-pressed={i === idx}
-                onClick={() => setSel((s) => ({ ...s, [tab]: i }))}
+                onClick={(e) => pick(i, e.currentTarget)}
               >
-                <span className={group.blk ? 'tp-mini blk' : 'tp-mini'}>
-                  <Thumb html={group.thumbs[k]} blk={group.blk} />
-                </span>
+                {group.art ? (
+                  <span className="tp-art-mini">
+                    <Art html={group.thumbs[k]} show={near} />
+                  </span>
+                ) : (
+                  <span className="tp-art-mini">
+                    <BlockArt html={group.thumbs[k]} show={near} />
+                  </span>
+                )}
                 <span>
                   <span className="tp-opt-name">{n}</span>
                   <span className="tp-opt-desc">{d}</span>
