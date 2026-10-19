@@ -1219,7 +1219,19 @@
       var bbCmtSurfaceCss =
         '#bb-comments input,#bb-comments textarea{background:transparent!important}';
       var bbCmtFocusCss =
-        '#bb-comments input:focus,#bb-comments textarea:focus{outline:none!important;border:1px solid #bbb!important;box-shadow:none!important}';
+        '#bb-comments input,#bb-comments textarea,.bb-comment-modal input{outline:none!important;outline-offset:0!important;box-shadow:none!important;border-width:1px!important;border-style:solid!important}' +
+        '#bb-comments input:focus,#bb-comments textarea:focus,.bb-comment-modal input:focus{outline:none!important;outline-offset:0!important;box-shadow:none!important;border-width:1px!important;border-style:solid!important;border-color:var(--bb-accent,#5B4FE8)!important}' +
+        '.bb-comment-modal{font-family:var(--bb-p1-font-family,inherit)}' +
+        '.bb-comment-modal input{display:block;width:100%!important;max-width:none!important;box-sizing:border-box;padding:10px 12px;margin:0 0 10px;border-color:var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);background:#fff!important;color:#111;font:inherit;font-size:0.95rem}' +
+        '.bb-comment-modal-actions{display:flex;flex-wrap:nowrap;align-items:stretch;gap:8px;width:100%}' +
+        '.bb-comment-modal-btn{appearance:none;-webkit-appearance:none;box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center;width:auto!important;max-width:none!important;min-height:40px;margin:0!important;padding:8px 12px!important;border-radius:var(--bb-btn-radius,0)!important;font-family:var(--bb-btn-font,var(--bb-p1-font-family,inherit))!important;font-weight:var(--bb-btn-weight,500)!important;font-size:14px!important;letter-spacing:var(--bb-btn-letter-spacing,normal)!important;text-transform:var(--bb-btn-transform,none)!important;line-height:1.25!important;text-align:center;white-space:normal;cursor:pointer}' +
+        '.bb-comment-modal-actions .bb-comment-modal-btn{flex:1 1 0;min-width:0}' +
+        '.bb-comment-modal-btn-primary{border:none!important;background:var(--bb-accent,#5B4FE8)!important;color:var(--bb-text-on-accent,#fff)!important}' +
+        '.bb-comment-modal-btn-secondary{border:1px solid var(--bb-accent,#5B4FE8)!important;background:transparent!important;color:var(--bb-accent,#5B4FE8)!important}' +
+        '.bb-comment-modal-btn:disabled{opacity:0.55;cursor:not-allowed}' +
+        '.bb-comment-modal-status{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:148px;color:#333;font-size:0.95rem}' +
+        '.bb-comment-modal-spinner{width:28px;height:28px;border-radius:50%;border:2px solid #e7e7e7;border-top-color:var(--bb-accent,#5B4FE8);animation:bb-comment-modal-spin .7s linear infinite}' +
+        '@keyframes bb-comment-modal-spin{to{transform:rotate(360deg)}}';
       var style = document.getElementById('bb-comments-styles');
       if (!style) {
         style = document.createElement('style');
@@ -1233,7 +1245,7 @@
         if (style.textContent.indexOf('#bb-comments input,#bb-comments textarea{background') === -1) {
           style.textContent += bbCmtSurfaceCss;
         }
-        if (style.textContent.indexOf('#bb-comments input:focus') === -1) {
+        if (style.textContent.indexOf('.bb-comment-modal-actions') === -1) {
           style.textContent += bbCmtFocusCss;
         }
       }
@@ -1392,11 +1404,13 @@
       }
       var commenterMemoryToken = null;
       var commenterProfile = null;
+      var commenterTokenSuppressed = false;
       var forceDifferentEmail = false;
       function bbSessionStorageKey() {
         return 'bb_commenter_session:' + String(siteKey || 'site');
       }
       function bbReadCommenterToken() {
+        if (commenterTokenSuppressed) return null;
         try {
           var stored = window.localStorage.getItem(bbSessionStorageKey());
           if (stored) {
@@ -1407,11 +1421,15 @@
         return commenterMemoryToken;
       }
       function bbWriteCommenterToken(token) {
-        commenterMemoryToken = token || null;
-        try {
-          if (token) window.localStorage.setItem(bbSessionStorageKey(), token);
-          else window.localStorage.removeItem(bbSessionStorageKey());
-        } catch (e) {}
+        if (!token) {
+          commenterTokenSuppressed = true;
+          commenterMemoryToken = null;
+          try { window.localStorage.removeItem(bbSessionStorageKey()); } catch (e) {}
+          return;
+        }
+        commenterTokenSuppressed = false;
+        commenterMemoryToken = token;
+        try { window.localStorage.setItem(bbSessionStorageKey(), token); } catch (e2) {}
       }
       function bbDeleteLegacyVerifiedCookies() {
         bbClearCookie(verifiedCookieName);
@@ -1565,7 +1583,19 @@
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
         var modal = document.createElement('div');
+        modal.className = 'bb-comment-modal';
         modal.style.cssText = 'width:100%;max-width:420px;background:#fff;border-radius:10px;padding:18px 18px 14px;box-shadow:0 18px 40px rgba(0,0,0,.22);box-sizing:border-box';
+        try {
+          var tokenSource = document.getElementById('blog-overlay-list') || document.getElementById('bb-comments');
+          if (tokenSource) {
+            var computed = window.getComputedStyle(tokenSource);
+            var tokenNames = ['--bb-accent', '--bb-text-on-accent', '--bb-border', '--bb-btn-radius', '--bb-form-radius', '--bb-p1-font-family', '--bb-btn-font', '--bb-btn-weight', '--bb-btn-letter-spacing', '--bb-btn-transform'];
+            for (var ti = 0; ti < tokenNames.length; ti++) {
+              var tokenValue = computed.getPropertyValue(tokenNames[ti]);
+              if (tokenValue && tokenValue.trim()) modal.style.setProperty(tokenNames[ti], tokenValue.trim());
+            }
+          }
+        } catch (e) {}
         overlay.appendChild(modal);
         return { overlay: overlay, modal: modal };
       }
@@ -1573,11 +1603,13 @@
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = label;
-        btn.style.cssText = primary
-          ? 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer'
-          : 'padding:8px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#444;cursor:pointer';
-        if (primary) btn.style.background = 'var(--bb-accent, #5B4FE8)';
+        btn.className = 'bb-comment-modal-btn ' + (primary ? 'bb-comment-modal-btn-primary' : 'bb-comment-modal-btn-secondary');
         return btn;
+      }
+      function bbCommentModalActions() {
+        var row = document.createElement('div');
+        row.className = 'bb-comment-modal-actions';
+        return row;
       }
       function bbShowCommentMessageModal(opts, done) {
         opts = opts || {};
@@ -1598,8 +1630,7 @@
           body.appendChild(document.createElement('br'));
           body.appendChild(signInLink);
         }
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        var row = bbCommentModalActions();
         function close(choice) {
           bbCommentsLog('comment message modal closed', { title: opts.title || null, choice: choice || null });
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1652,11 +1683,10 @@
         input.setAttribute('autocorrect', 'off');
         input.setAttribute('spellcheck', 'false');
         input.value = initialValue || '';
-        input.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:10px';
+        input.className = 'bb-comment-modal-input';
         var msg = document.createElement('div');
         msg.style.cssText = 'min-height:16px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        var row = bbCommentModalActions();
         var cancel = bbCommentModalButton('Cancel', false);
         var ok = bbCommentModalButton('Continue', true);
         function close(ret) {
@@ -1751,7 +1781,27 @@
       // Email: email, loginEmail, username. Name: displayName, name, firstName + lastName.
       // DOM fallback: .user-accounts-panel .auth / .unauth (and .user-account, [data-controller="UserAccount"]).
       // "unknown" is treated as logged out when gating the verified path.
+      function bbAccountPanelState() {
+        function visible(el) {
+          if (!el) return false;
+          try {
+            if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return false;
+            var styles = window.getComputedStyle(el);
+            if (!styles || styles.display === 'none' || styles.visibility === 'hidden') return false;
+          } catch (e) { return false; }
+          return true;
+        }
+        try {
+          var auth = document.querySelector('.user-accounts-panel .auth, .user-account .auth, [data-controller="UserAccount"] .auth');
+          var unauth = document.querySelector('.user-accounts-panel .unauth, .user-account .unauth, [data-controller="UserAccount"] .unauth');
+          if (visible(unauth) && !visible(auth)) return 'logged_out';
+          if (visible(auth) && !visible(unauth)) return 'logged_in';
+        } catch (e) {}
+        return null;
+      }
       function bbSquarespaceLoginState() {
+        var panel = bbAccountPanelState();
+        if (panel === 'logged_out') return 'logged_out';
         var id = null;
         try { id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null; } catch (e) { id = null; }
         if (id && id.loggedIn === true) return 'logged_in';
@@ -1787,8 +1837,12 @@
         }
         return { email: email, firstName: firstName.slice(0, 100) };
       }
+      function bbHeldCommenterToken() {
+        if (commenterMemoryToken) return commenterMemoryToken;
+        try { return window.localStorage.getItem(bbSessionStorageKey()); } catch (e) { return null; }
+      }
       function bbSignOutCommenter() {
-        var token = bbReadCommenterToken();
+        var token = bbHeldCommenterToken();
         bbWriteCommenterToken(null);
         commenterProfile = null;
         forceDifferentEmail = false;
@@ -1805,6 +1859,12 @@
             }).catch(function() {});
           } catch (e) {}
         }
+        try {
+          if (loggedInIdentityLine) {
+            loggedInIdentityLine.style.display = 'none';
+            loggedInIdentityLine.textContent = '';
+          }
+        } catch (e1) {}
         try { applyCommentIdentityMode(); } catch (e2) {}
       }
       function bbRefreshCommenterProfile(done) {
@@ -1827,7 +1887,7 @@
             return { status: r.status, data: data };
           });
         }).then(function(res) {
-          if (bbReadCommenterToken() !== token) {
+          if (commenterTokenSuppressed || bbReadCommenterToken() !== token) {
             if (done) done();
             return;
           }
@@ -2039,8 +2099,32 @@
             cleanup();
           }
           cleanup = bbBindCommentModal(overlay, modal, returnFocus, closeModal);
+          var releaseModal = cleanup;
+          cleanup = function() {
+            clearCodeTimer();
+            releaseModal();
+          };
+          function showVerifying() {
+            clearCodeTimer();
+            modal.textContent = '';
+            modal.setAttribute('aria-busy', 'true');
+            var status = document.createElement('div');
+            status.className = 'bb-comment-modal-status';
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+            var spinner = document.createElement('div');
+            spinner.className = 'bb-comment-modal-spinner';
+            spinner.setAttribute('aria-hidden', 'true');
+            var label = document.createElement('div');
+            label.id = 'bb-commenter-modal-title';
+            label.textContent = 'Verifying...';
+            status.appendChild(spinner);
+            status.appendChild(label);
+            modal.appendChild(status);
+          }
           function showEmail(values) {
             clearCodeTimer();
+            modal.setAttribute('aria-busy', 'false');
             modal.textContent = '';
             var title = document.createElement('div');
             title.id = 'bb-commenter-modal-title';
@@ -2057,7 +2141,7 @@
             emailInput.required = true;
             emailInput.autocomplete = 'email';
             emailInput.value = values.email || '';
-            emailInput.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:10px';
+            emailInput.className = 'bb-comment-modal-input';
             var nameLabel = document.createElement('label');
             nameLabel.textContent = 'Name, shown with your comment';
             nameLabel.htmlFor = 'bb-commenter-name';
@@ -2069,12 +2153,11 @@
             nameInput.required = true;
             nameInput.maxLength = 100;
             nameInput.value = values.name || '';
-            nameInput.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:8px';
+            nameInput.className = 'bb-comment-modal-input';
             var msg = document.createElement('div');
             msg.setAttribute('aria-live', 'polite');
             msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
-            var row = document.createElement('div');
-            row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+            var row = bbCommentModalActions();
             var different = bbCommentModalButton('Use a different email', false);
             different.onclick = function() {
               emailInput.value = '';
@@ -2139,7 +2222,8 @@
             modal.appendChild(row);
             try { (focusDifferent ? different : emailInput).focus(); } catch (e) {}
           }
-          function showCode(email, name, challengeId) {
+          function showCode(email, name, challengeId, errorText) {
+            modal.setAttribute('aria-busy', 'false');
             modal.textContent = '';
             var title = document.createElement('div');
             title.id = 'bb-commenter-modal-title';
@@ -2161,12 +2245,13 @@
             codeInput.inputMode = 'numeric';
             codeInput.autocomplete = 'one-time-code';
             codeInput.maxLength = 6;
-            codeInput.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:1.1rem;letter-spacing:0.2em;margin-bottom:8px';
+            codeInput.className = 'bb-comment-modal-input';
+            codeInput.style.letterSpacing = '0.2em';
+            codeInput.style.fontSize = '1.1rem';
             var msg = document.createElement('div');
             msg.setAttribute('aria-live', 'polite');
             msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
-            var row = document.createElement('div');
-            row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;align-items:center';
+            var row = bbCommentModalActions();
             var resend = bbCommentModalButton('Resend code (30)', false);
             resend.disabled = true;
             var remaining = 30;
@@ -2187,18 +2272,19 @@
               }, 1000);
             }
             startResendCountdown();
-            var previousCleanup = cleanup;
-            cleanup = function() {
-              clearCodeTimer();
-              previousCleanup();
-            };
             var submitting = false;
+            function verifyFailureMessage(fail) {
+              if (fail === 'code_expired') return 'That code has expired. Send a new one.';
+              if (fail === 'too_many_attempts') return 'Too many tries. Send a new code.';
+              return "That code isn't right. Check the email and try again.";
+            }
             function submitCode(digits) {
               if (submitting || digits.length !== 6) return;
               submitting = true;
               var oldToken = bbReadCommenterToken();
               var verifyBody = { challenge_id: challengeId, code: digits };
               if (oldToken) verifyBody.replaces_token = oldToken;
+              showVerifying();
               fetch(apiUrl + '/auth/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
@@ -2218,17 +2304,13 @@
                   postDraft();
                   return;
                 }
+                if (!overlay.parentNode) return;
                 var fail = res.data && res.data.code ? String(res.data.code) : '';
-                msg.textContent = fail === 'code_expired'
-                  ? 'That code has expired. Send a new one.'
-                  : (fail === 'too_many_attempts'
-                    ? 'Too many tries. Send a new code.'
-                    : "That code isn't right. Check the email and try again.");
-                codeInput.value = '';
-                try { codeInput.focus(); } catch (e2) {}
+                showCode(email, name, challengeId, verifyFailureMessage(fail));
               }).catch(function() {
                 submitting = false;
-                msg.textContent = "That code isn't right. Check the email and try again.";
+                if (!overlay.parentNode) return;
+                showCode(email, name, challengeId, "That code isn't right. Check the email and try again.");
               });
             }
             codeInput.addEventListener('paste', function(ev) {
@@ -2280,6 +2362,7 @@
             modal.appendChild(copy);
             modal.appendChild(codeLabel);
             modal.appendChild(codeInput);
+            if (errorText) msg.textContent = errorText;
             modal.appendChild(msg);
             modal.appendChild(row);
             try { codeInput.focus(); } catch (e) {}
@@ -2304,6 +2387,10 @@
         var mode = self._resolveViewerMode();
         var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
         if (id && id.loggedIn === true) mode = 'loggedIn';
+        if (id && id.loggedIn === false) mode = 'loggedOut';
+        var panel = bbAccountPanelState();
+        if (panel === 'logged_out') mode = 'loggedOut';
+        else if (panel === 'logged_in') mode = 'loggedIn';
         return { mode: mode, identity: id };
       }
 
@@ -3100,6 +3187,42 @@
         applyCommentIdentityMode();
         if (authProbeCount >= 12) clearInterval(authProbeTimer);
       }, 500);
+      if (typeof MutationObserver === 'function') {
+        var commentAuthSnap = bbSquarespaceLoginState();
+        var commentAuthTimer = null;
+        function refreshCommentAuthFromPage() {
+          if (commentAuthTimer) return;
+          commentAuthTimer = setTimeout(function() {
+            commentAuthTimer = null;
+            var nextSnap = bbSquarespaceLoginState();
+            if (nextSnap === commentAuthSnap) return;
+            commentAuthSnap = nextSnap;
+            try { applyCommentIdentityMode(); } catch (e) {}
+          }, 200);
+        }
+        var accountRoot = document.querySelector('.user-accounts-panel, .user-account, [data-controller="UserAccount"]');
+        if (accountRoot) {
+          try {
+            var commentAuthObserver = new MutationObserver(refreshCommentAuthFromPage);
+            commentAuthObserver.observe(accountRoot, {
+              attributes: true,
+              attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
+              childList: true,
+              subtree: true
+            });
+          } catch (e) {}
+        }
+        document.addEventListener('click', function(ev) {
+          var target = ev.target && ev.target.closest ? ev.target.closest('a, button') : null;
+          if (!target || target.classList.contains('bb-comment-logout')) return;
+          var label = (target.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          var href = '';
+          try { href = String(target.getAttribute('href') || ''); } catch (e2) { href = ''; }
+          if (label === 'log out' || label === 'logout' || label === 'sign out' || /logout|sign-out/i.test(href)) {
+            refreshCommentAuthFromPage();
+          }
+        }, true);
+      }
 
       refreshBetterBlogCommentsList = function() {
         return fetch(bbCommentsListUrl())
