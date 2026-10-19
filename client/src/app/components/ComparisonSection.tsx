@@ -181,7 +181,7 @@ export default function ComparisonSection() {
           </h2>
           <p className="mt-5 text-[17px] text-[#5f5f5f] font-light leading-relaxed max-w-[620px] mx-auto">
             Ghost, Substack and beehiiv are good platforms. Moving to one means a second site, a migration, and a bill
-            that grows with your audience. BetterBlog upgrades the blog you already have.
+            that grows with your audience. BetterBlog upgrades the blog you already have, and never charges more as your audience grows.
           </p>
         </motion.div>
 

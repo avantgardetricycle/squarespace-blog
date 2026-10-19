@@ -29,6 +29,9 @@ const IC: Record<string, string> = {
   paywall:'<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1.2"/>',
   email:'<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2.5 6 12 13 21.5 6"/>',
   magnet:'<path d="M6 3v9a6 6 0 0 0 12 0V3"/><line x1="3" y1="3" x2="9" y2="3"/><line x1="15" y1="3" x2="21" y2="3"/><line x1="6" y1="10" x2="9" y2="10"/><line x1="15" y1="10" x2="18" y2="10"/>',
+  mobilesb:'<rect x="6" y="2" width="12" height="20" rx="2"/><line x1="13" y1="5" x2="13" y2="19"/><line x1="10.5" y1="18.5" x2="10.5" y2="18.5"/>',
+  updated:'<path d="M21 12a9 9 0 1 1-2.6-6.4"/><polyline points="21 3 21 9 15 9"/><polyline points="12 7 12 12 15 14"/>',
+  sync:'<rect x="2" y="5" width="8" height="14" rx="1.5"/><rect x="14" y="5" width="8" height="6" rx="1.5"/><rect x="14" y="13" width="8" height="6" rx="1.5"/><path d="M10 12h2v-4h2M12 12v4h2"/>',
   popular:'<path d="M12 2s4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.6-2.8 1.3-4"/><path d="M12 22a7 7 0 0 1-7-7c0-2 1-3.6 2.2-5A6.9 6.9 0 0 0 12 22a6.9 6.9 0 0 0 4.8-12c1.2 1.4 2.2 3 2.2 5a7 7 0 0 1-7 7z"/>'
 };
 
@@ -41,66 +44,102 @@ const CATS: Record<string, { label: string; tag: string; badge: string }> = {
   analytics:{label:'Insights & Analytics',tag:'Analytics',badge:'b-analytics'}
 };
 
-interface Feat { id: string; c: string; n: string; i: string; d: string; s?: string }
+interface Feat { id: string; c: string; n: string; i: string; d: string; s?: string; isNew?: boolean }
 const F: Feat[] = [
   {id:'sidebars',c:'layout',n:'Sidebars',i:'sidebars',d:'Sidebars are built into certain templates. Fill them with recent posts, categories, a newsletter signup, your author bio, or anything else you need. Configured from your dashboard, no code required.',s:'Sidebars'},
-  {id:'header',c:'layout',n:'Post Headers',i:'header',d:'Your header treatment comes with the template you pick: full-bleed, overlay, beside-the-title, or text-only. From there, choose what appears in it — breadcrumbs, byline, share icons, a caption.',s:'Post Headers'},
-  {id:'collection',c:'layout',n:'Multiple Blogs',i:'collection',d:"Run several blogs on one site and style each one separately — its own template, its own sidebars, its own settings. "+"A recipe archive and a travel journal don't have to look alike.",s:'Multiple Blogs'},
+  {id:'mobilesidebar',c:'layout',n:'Sidebars on Phones',i:'mobilesb',isNew:true,d:"Choose how each sidebar shows up on phones. Put it in a drawer that readers open from a tab on the edge of the screen, or let the right sidebar stack below the post. Your related posts, sign-up form and author bio stay one tap away instead of disappearing.",s:'Phone Sidebars'},
+  {id:'header',c:'layout',n:'Post Headers',i:'header',d:'Your header treatment comes with the template you pick: full-bleed, overlay, beside-the-title, or text-only. From there, choose what appears in it — breadcrumbs, byline, share icons, a caption — and set the title, subtitle and byline sizes, from Small to XL.',s:'Post Headers'},
+  {id:'collection',c:'layout',n:'Multiple Blogs',i:'collection',d:"Run several blogs on one site and style each one separately — its own template, its own sidebars, its own settings. "+"A wedding journal and a set of portrait guides don't have to look alike.",s:'Multiple Blogs'},
   {id:'search',c:'nav',n:'Post Search',i:'search',d:"Full-text search across all your posts with live results and keyword highlights. So nothing you've ever written gets lost in your archive.",s:'Search'},
-  {id:'toc',c:'nav',n:'Table of Contents',i:'toc',d:'Auto-generated from your post headings, and it follows the reader down the page. Three styles to choose from — numbered, connected dots, or bookmark.',s:'Table of Contents'},
+  {id:'toc',c:'nav',n:'Table of Contents',i:'toc',d:'Auto-generated from your post headings. Place it in a sidebar or above the post, and it highlights the section being read as the reader scrolls. Three styles to choose from — numbered, connected dots, or bookmark.',s:'Table of Contents'},
   {id:'filters',c:'nav',n:'Tags & Category Filters',i:'filters',d:"Filter by category or tag — as a row above your post grid, as a chip cloud in the sidebar, or both. "+"Readers narrow a long archive down to exactly what they came for.",s:'Tags & Filters'},
-  {id:'related',c:'nav',n:'Related Posts',i:'related',d:'Automatically show readers what to read next, based on tags and categories. More time on site, less work for you.',s:'Related'},
+  {id:'related',c:'nav',n:'Related Posts',i:'related',d:'At the end of every post, automatically show readers what to read next, based on tags and categories. More time on site, less work for you.',s:'Related'},
   {id:'popular',c:'nav',n:'Popular Posts',i:'popular',d:'Surface your best-performing posts automatically, ranked by real reader data. Your strongest work keeps working.',s:'Popular'},
   {id:'social',c:'nav',n:'Social Sharing',i:'social',d:'One-click share buttons for X, Facebook, Pinterest, Reddit, WhatsApp, LinkedIn and more — right on every post. The platforms your readers actually asked for.',s:'Sharing'},
-  {id:'crumbs',c:'nav',n:'Breadcrumbs',i:'crumbs',d:'Show readers exactly where they are and give them an easy path back. A small detail that makes a real difference to navigation and SEO.',s:'Breadcrumbs'},
+  {id:'crumbs',c:'nav',n:'Breadcrumbs',i:'crumbs',d:'Show readers exactly where they are — blog, category, post — with a link at every step back. A small detail that makes a real difference to navigation and SEO.',s:'Breadcrumbs'},
   {id:'prevnext',c:'nav',n:'Previous / Next Post',i:'prevnext',d:'End every post with a link to the one before and the one after. Readers keep moving through your archive instead of stopping at the bottom.',s:'Prev / Next'},
-  {id:'page',c:'nav',n:'Pagination',i:'page',d:"Replace Squarespace's bare arrows with real pagination — numbered pages, or a load-more button that keeps readers on the page. Either way they see how much archive is left.",s:'Pagination'},
+  {id:'page',c:'nav',n:'Pagination',i:'page',d:"Replace Squarespace's bare arrows with real pagination — numbered pages, or a load-more button that keeps readers on the page, set per blog. Either way they see how much archive is left.",s:'Pagination'},
   {id:'progress',c:'reader',n:'Scroll Progress Bar',i:'progress',d:'A thin bar across the top of every post that fills as readers scroll. Subtle, satisfying, and a quiet nudge to keep going.',s:'Progress Bar'},
-  {id:'time',c:'reader',n:'Reading Time',i:'time',d:'Auto-calculate and display estimated reading time. Sets expectations before readers click in.',s:'Reading Time'},
+  {id:'time',c:'reader',n:'Reading Time',i:'time',d:'Auto-calculate and display estimated reading time, on the post itself and on every card in the grid. Sets expectations before readers click in.',s:'Reading Time'},
+  {id:'updated',c:'reader',n:'Last Updated Date',i:'updated',isNew:true,d:"Show readers when you last revised a post, right beside the date you published it. It uses the edit date Squarespace already keeps, so there's nothing to maintain. Switch it on from your dashboard.",s:'Updated Date'},
   {id:'comments',c:'reader',n:'Comments',i:'comments',d:'A real comment system on your Squarespace blog — threaded replies, likes, and a full moderation dashboard. Approve, hide, or mark spam, and tell verified subscribers from anonymous readers at a glance.',s:'Comments'},
-  {id:'authors',c:'pub',n:'Multiple Authors',i:'authors',d:'Publish posts under any author name. Add multiple authors to a single post, or assign different contributors across your blog — no workarounds needed.',s:'Multi-Author'},
-  {id:'profiles',c:'pub',n:'Author Profiles',i:'profiles',d:'Display a rich author profile in the sidebar of every post — name, photo, bio, and social links. Builds trust with readers.',s:'Author Profiles'},
+  {id:'authors',c:'pub',n:'Multiple Authors',i:'authors',d:'Publish posts under any author name. Add multiple authors to a single post, with every name in the byline, or assign different contributors across your blog — no workarounds needed.',s:'Multi-Author'},
+  {id:'profiles',c:'pub',n:'Author Profiles',i:'profiles',d:'Display a rich author profile on every post — a full block at the foot of the post or a compact one in the sidebar — with name, photo, bio, and social links. Write the bio with bold, italics, links and lists. Builds trust with readers.',s:'Author Profiles'},
   {id:'featured',c:'pub',n:'Featured Posts',i:'featured',d:"Mark any post as Featured and it'll appear at the top of your blog as a hero, no matter when it was published.",s:'Featured'},
   {id:'sorting',c:'pub',n:'Advanced Post Sorting',i:'sorting',d:'Let readers reorder your archive themselves — by date, A–Z, or by what other readers are actually reading. One control, instant results.',s:'Sorting'},
   {id:'paywall',c:'growth',n:'Paywall & Memberships',i:'paywall',d:"Put posts behind your Squarespace membership with a proper paywall overlay for logged-out readers. It stays in sync with Squarespace's own membership settings. BetterBlog takes no cut; Squarespace's own fees apply.",s:'Paywall'},
-  {id:'email',c:'growth',n:'Email Capture',i:'email',d:'Drop a newsletter signup anywhere on your blog — sidebar, post footer, or collection page. Subscribers land in your dashboard, and can also be sent to Kit or Mailchimp.',s:'Email Capture'},
+  {id:'email',c:'growth',n:'Email Capture',i:'email',d:'Drop a newsletter signup anywhere on your blog — sidebar, post footer, or collection page. Subscribers land in your dashboard, ready to download, or go straight to Kit or Mailchimp.',s:'Email Capture'},
   {id:'magnet',c:'growth',n:'Lead Magnet',i:'magnet',d:'Offer a freebie in exchange for an email. Guides, checklists, templates — delivered automatically, tracked alongside your newsletter signups.',s:'Lead Magnet'},
+  {id:'integrations',c:'growth',n:'Kit & Mailchimp',i:'sync',isNew:true,d:"Connect Kit or Mailchimp once and every newsletter sign-up and lead-magnet request on your blog goes straight to your list. Lead-magnet sign-ups are tagged with the freebie's name, so you know who came for what.",s:'Kit & Mailchimp'},
   {id:'analytics',c:'analytics',n:'Analytics Dashboard',i:'analytics',d:'Page views, unique visitors, time on page and read-percent — plus read-depth breakdowns, per-post and per-author tables, click tracking with CTR, search analytics, and an exportable leads list. Connect Google Analytics or Fathom and your blog events forward into that account, so traffic sources, top referrers and new vs. returning show up there.',s:'Analytics'}
 ];
 
+/** Number of features shown on the landing page (used by the hero stats too). */
+export const FEATURE_COUNT = F.length;
+
 const shell = (inner: string) => `<div class="stage-mb">
   <div class="mb-top" style="height:30px"><span class="d r"></span><span class="d y"></span><span class="d g"></span>
-    <div class="mb-url" style="height:16px;font-size:.55rem">yoursite.squarespace.com/blog</div></div>
+    <div class="mb-url" style="height:16px;font-size:.55rem">mayaokonkwo.com/journal</div></div>
   ${inner}</div>`;
-const blogNav = `<div class="bnav" style="padding:11px 18px"><div class="bsite" style="font-size:1rem">Sarah Clarke</div>
-  <div class="blinks"><span>About</span><span>Blog</span><span>Contact</span></div></div>`;
+const PHOTO_BY: Record<string, string> = {
+  'How to Plan a Golden-Hour Ceremony': 'golden-hour-ceremony',
+  'Small Oakland Venues That Feel Like a Dinner Party': 'venue-barn',
+  'What to Wear to Your Engagement Session': 'couple-walking',
+  'Engagement outfits': 'couple-walking',
+  'Rainy-day weddings': 'wedding-arch-dusk',
+  'A Shot List Your Photographer Will Actually Use': 'reception-table',
+  'Elopements: Small Days, Big Feelings': 'forest-sunbeams',
+  'Maya Okonkwo': 'bride-window',
+  'Ana Ruiz': 'couple-walking',
+  '#ded8f8': 'venue-barn', '#d4ece2': 'forest-sunbeams', '#f0e6d4': 'reception-table',
+};
+const PHOTOS = ['golden-hour-ceremony', 'venue-barn', 'couple-walking', 'wedding-arch-dusk', 'reception-table', 'forest-sunbeams', 'bride-window'];
+const photoFor = (k: string) => PHOTO_BY[k] ?? PHOTOS[[...k].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % PHOTOS.length];
+const photoBg = (k: string) => `url(/template-photos/${photoFor(k)}.webp) center/cover no-repeat`;
+const blogNav = `<div class="bnav" style="padding:11px 18px"><div class="bsite" style="font-size:1rem">Maya Okonkwo</div>
+  <div class="blinks"><span>Weddings</span><span>Portraits</span><span>Journal</span></div></div>`;
 const lines = (n: number) => Array.from({length:n},(_,i)=>`<div class="ln ${i%3===1?'m':i%3===2?'s':''}" style="height:8px;margin-bottom:8px"></div>`).join('');
 
+
+/** The sample site is Maya's, so previews use her site's colours (the same sienna accent as the
+ *  template previews), not BetterBlog purple. Only the analytics dashboard is BetterBlog's own UI. */
+const SITE_SWAPS: [RegExp, string][] = [
+  [/var\(--violet-f2\)/g, 'var(--site-f2)'], [/var\(--violet-f\)/g, 'var(--site-f)'], [/var\(--violet\)/g, 'var(--site)'],
+  [/var\(--plum-f\)/g, 'var(--site-f)'], [/var\(--plum\)/g, 'var(--site)'],
+  [/rgba\(91,79,232,\.(16|15|3)\)/g, 'rgba(160,82,45,.$1)'], [/rgba\(91,79,232,\.1\)/g, 'rgba(160,82,45,.1)'],
+  [/rgba\(91,79,232,\.0?\d+\)/g, 'rgba(40,30,20,.08)'],
+  [/rgba\(122,45,94,\.(\d+)\)/g, 'rgba(160,82,45,.$1)'], [/rgba\(30,22,90,/g, 'rgba(28,20,14,'],
+  [/#fdf8fb/g, '#fbf7f3'], [/#fdf6fa/g, '#fbf6f1'], [/#f8eef5/g, '#f6ece4'], [/#e4dae2/g, '#e6dcd2'],
+  [/#faf9ff/g, '#fbf8f5'], [/#b3accf/g, '#c9a58f'], [/#e8e6ef/g, '#e8e4df'], [/#e2e0ea/g, '#e4e0da'],
+  [/#dcd9e8/g, '#ddd6ce'], [/#eceaf4/g, '#ece6df'], [/#5B4FE8/g, '#6b7f6a'], [/#9a1a3e/g, 'var(--site)'],
+  [/rgba\(154,26,62,\.1\)/g, 'rgba(160,82,45,.1)'],
+];
+const siteTheme = (html: string) => SITE_SWAPS.reduce((h, [re, to]) => h.replace(re, to), html);
+
 function stage(f: Feat): string {
-  const imgIcon = (o = 0.34) => `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" style="width:46px;height:46px;opacity:${o}"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.6" cy="8.6" r="1.7"/><path d="M21 15.5l-5.2-5.2L5 21"/></svg>`;
-  const body = {
+  const raw = {
     collection:`<div style="width:100%;display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch">
       ${[
-        ['Recipe archive','Kitchen Notes',`
-          ${[0,1,2,3].map(()=>`<div style="display:flex;gap:9px;align-items:center;padding:6px 0;border-bottom:1px solid #f4f4f4">
-            <div style="width:36px;height:28px;border-radius:4px;background:linear-gradient(135deg,#ded8f8,#b9afee);flex-shrink:0"></div>
+        ['Wedding journal','Maya Okonkwo',`
+          ${[0,1,2,3].map((_,pi)=>`<div style="display:flex;gap:9px;align-items:center;padding:6px 0;border-bottom:1px solid #f4f4f4">
+            <div style="width:48px;height:27px;border-radius:4px;background:url(/template-photos/${['golden-hour-ceremony','venue-barn','couple-walking','wedding-arch-dusk'][pi]}.webp) center/cover no-repeat;flex-shrink:0"></div>
             <div style="flex:1;min-width:0">
               <div style="height:6px;width:84%;background:#ececec;border-radius:3px;margin-bottom:4px"></div>
               <div style="height:5px;width:52%;background:#f3f3f3;border-radius:3px"></div>
             </div></div>`).join('')}`],
-        ['Travel journal','Far Afield',`
-          <div style="flex:1;min-height:58px;border-radius:5px;background:linear-gradient(135deg,#cfc7f5,#9b90ec);margin-bottom:9px"></div>
+        ['Portrait guides','Maya Okonkwo',`
+          <div style="aspect-ratio:21/9;border-radius:5px;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat;margin-bottom:9px"></div>
           <div style="height:7px;width:76%;background:#ececec;border-radius:3px;margin-bottom:5px"></div>
           <div style="height:5px;width:48%;background:#f3f3f3;border-radius:3px;margin-bottom:12px"></div>
           <div style="display:flex;gap:9px">
-            ${[0,1].map(()=>`<div style="flex:1">
-              <div style="height:34px;border-radius:4px;background:linear-gradient(135deg,#ded8f8,#bdb3f0);margin-bottom:5px"></div>
+            ${[0,1].map((_,pi)=>`<div style="flex:1">
+              <div style="aspect-ratio:16/9;border-radius:4px;background:url(/template-photos/${['venue-barn','reception-table'][pi]}.webp) center/cover no-repeat;margin-bottom:5px"></div>
               <div style="height:5px;width:86%;background:#ececec;border-radius:3px"></div></div>`).join('')}
           </div>`]
       ].map(([label,site,inner])=>`
         <div style="display:flex;flex-direction:column">
           <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:9px">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--violet);flex-shrink:0;transform:translateY(-1px)"></span>
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--bb);flex-shrink:0;transform:translateY(-1px)"></span>
             <span style="font-family:'DM Serif Display',serif;font-size:.92rem;color:#1a1a1a">${label}</span>
           </div>
           <div style="flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid #dde;border-radius:9px;overflow:hidden;box-shadow:0 8px 26px rgba(91,79,232,.09)">
@@ -119,17 +158,13 @@ function stage(f: Feat): string {
             <div style="flex:1;display:flex;flex-direction:column;padding:11px 13px 13px">${inner}</div>
           </div>
         </div>`).join('')}
-      <div style="grid-column:1/-1;text-align:center;font-size:.68rem;color:var(--mid);font-weight:300;margin-top:4px">
-        Same site. Same account. Two completely different blogs.
-      </div>
     </div>`,
     search:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="height:38px;border-radius:7px 7px 0 0;background:linear-gradient(to top,rgba(30,22,90,.45),rgba(30,22,90,.05)),linear-gradient(135deg,#cfc7f5,#9b90ec)"></div>
-      <div style="background:#fff;border:1px solid #e6e6ec;border-top:none;border-radius:0 0 7px 7px;padding:15px 16px 16px;
+      <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:15px 16px 16px;
         box-shadow:0 10px 30px rgba(91,79,232,.1)">
         <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:13px">
           <span style="font-size:.68rem;font-weight:700;color:#1a1a1a">All 24</span>
-          ${['Lifestyle 14','Creativity 9','Travel 7','Wellness 5'].map(c=>{
+          ${['Planning 14','Venues 9','Elopements 7','Engagements 5'].map(c=>{
             const [n,k]=c.split(' ');
             return `<span style="font-size:.62rem;color:#999">${n} <span style="color:#ccc">${k}</span></span>`;}).join('')}
           <span style="font-size:.62rem;color:#ccc">›</span>
@@ -138,7 +173,7 @@ function stage(f: Feat): string {
           <div style="flex:1;display:flex;align-items:center;gap:9px;background:#faf9ff;border:1.5px solid var(--violet);
             border-radius:7px;padding:10px 13px;box-shadow:0 0 0 4px rgba(91,79,232,.09)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>
-            <span style="font-size:.72rem;color:var(--violet);font-weight:500;flex:1">slow mornings</span>
+            <span style="font-size:.72rem;color:var(--violet);font-weight:500;flex:1">golden hour</span>
             <span style="width:1px;height:13px;background:#e0dcf5"></span>
             <span style="font-size:.6rem;color:#b3accf">24 posts</span>
           </div>
@@ -151,64 +186,62 @@ function stage(f: Feat): string {
           <span style="font-size:.6rem;color:#999">3 results</span>
           <span style="flex:1;height:1px;background:#f0f0f0"></span>
         </div>
-        ${[['#ded8f8','#b9afee'],['#d4ece2','#a8d8c4'],['#f0e6d4','#dcc8a8']].map(([a,b])=>`
+        ${[['#ded8f8','#b9afee'],['#d4ece2','#a8d8c4'],['#f0e6d4','#dcc8a8']].map(([a])=>`
           <div style="display:flex;gap:11px;align-items:center;padding:8px 0;border-bottom:1px solid #f6f6f6">
-            <div style="width:44px;height:34px;border-radius:4px;background:linear-gradient(135deg,${a},${b});flex-shrink:0"></div>
+            <div style="width:56px;height:32px;border-radius:4px;background:${photoBg(String(a))};flex-shrink:0"></div>
             <div style="flex:1;min-width:0">
               <div style="height:6px;width:70%;background:#ececec;border-radius:3px;margin-bottom:5px"></div>
-              <div style="font-size:.58rem;color:#aaa">…embracing <mark style="background:rgba(91,79,232,.16);color:var(--violet);padding:0 3px;border-radius:2px">slow mornings</mark> as a ritual…</div>
+              <div style="font-size:.58rem;color:#aaa">…embracing <mark style="background:rgba(91,79,232,.16);color:var(--violet);padding:0 3px;border-radius:2px">golden hour</mark> as a ritual…</div>
             </div>
           </div>`).join('')}
       </div>
     </div>`,
     header:`${blogNav}
-      <div style="position:relative;height:150px;margin:0;display:flex;align-items:center;justify-content:center;
-        background:linear-gradient(to top,rgba(30,22,90,.55),rgba(30,22,90,.06) 65%),linear-gradient(135deg,#c9c1f3,#8F86F0)">
-        ${imgIcon()}
+      <div style="position:relative;aspect-ratio:1280/500;margin:0;display:flex;align-items:center;justify-content:center;
+        background:linear-gradient(to top,rgba(30,22,90,.55),rgba(30,22,90,.06) 65%),url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat">
         <div style="position:absolute;left:18px;right:18px;bottom:12px">
-          <div style="display:inline-flex;font-size:.5rem;font-weight:700;letter-spacing:.12em;color:#fff;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:100px;margin-bottom:6px">LIFESTYLE</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#fff;line-height:1.15;">Finding balance in a busy creative life</div>
+          <div style="display:inline-flex;font-size:.5rem;font-weight:700;letter-spacing:.12em;color:#fff;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:100px;margin-bottom:6px">PLANNING</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#fff;line-height:1.15;">How to Plan a Golden-Hour Ceremony</div>
         </div>
         <div style="position:absolute;top:10px;left:18px;font-size:.5rem;color:rgba(255,255,255,.75);display:flex;gap:5px">Home <span>/</span> Blog <span>/</span> <span style="color:#fff">This post</span></div>
       </div>
       <div style="padding:8px 18px 0;display:flex;align-items:center;gap:8px">
-        <div style="font-size:.5rem;color:#aaa;font-style:italic;flex:1">Photo by Sarah Clarke</div>
+        <div style="font-size:.5rem;color:#aaa;font-style:italic;flex:1">Photo by Maya Okonkwo</div>
         
       </div>
       <div style="padding:6px 18px 16px">
         <div style="display:flex;align-items:center;gap:7px;padding-bottom:10px;border-bottom:1px solid #f0f0f0;margin-bottom:10px">
-          <div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#a89cf2,#7c6ef0)"></div>
-          <span style="font-size:.6rem;color:#444">Sarah Clarke</span><span style="color:#ddd">·</span>
+          <div style="width:18px;height:18px;border-radius:50%;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat"></div>
+          <span style="font-size:.6rem;color:#444">Maya Okonkwo</span><span style="color:#ddd">·</span>
           <span style="font-size:.56rem;color:#999">Mar 12, 2026</span>
           <div style="margin-left:auto;display:flex;gap:4px">${[0,1,2,3].map(()=>'<div style="width:13px;height:13px;border-radius:3px;background:#f0f0f0"></div>').join('')}</div>
         </div>
         ${lines(4)}
       </div>`,
     sidebars:`${blogNav}<div style="padding:16px 18px;display:grid;grid-template-columns:150px 1fr 150px;gap:14px">
-      <div><div class="sb-h">About Me</div><div class="sb-av"></div><div class="sb-nm">Sarah Clarke</div>
-        <div class="sb-bio">Writer &amp; creative in Portland.</div>
+      <div><div class="sb-h">About Me</div><div class="sb-av"></div><div class="sb-nm">Maya Okonkwo</div>
+        <div class="sb-bio">Photographer in Oakland.</div>
         <div class="sb-h">Newsletter</div><div style="background:var(--violet);color:#fff;font-size:.55rem;text-align:center;padding:6px;border-radius:4px">Subscribe</div></div>
-      <div><div class="af-hero" style="height:88px"><span style="font-size:.9rem">Finding balance in a busy creative life</span></div>${lines(6)}
-        <div class="tags"><span class="tag">Lifestyle</span><span class="tag">Creativity</span></div></div>
+      <div><div class="af-hero" style="height:auto;aspect-ratio:16/9"><span style="font-size:.9rem">How to Plan a Golden-Hour Ceremony</span></div>${lines(6)}
+        <div class="tags"><span class="tag">Planning</span><span class="tag">Venues</span></div></div>
       <div><div class="sb-h">Popular</div>
-        <div class="sb-row"><div class="sb-th" style="width:26px;height:20px;background:linear-gradient(135deg,#e8e4f8,#c8c0f0)"></div><div class="sb-tt">My morning ritual</div></div>
-        <div class="sb-row"><div class="sb-th" style="width:26px;height:20px;background:linear-gradient(135deg,#d4f0e8,#a8d8c4)"></div><div class="sb-tt">On slow living</div></div>
-        <div class="sb-h">Categories</div><div class="sb-cat">Lifestyle <i>14</i></div><div class="sb-cat">Travel <i>7</i></div></div></div>`,
+        <div class="sb-row"><div class="sb-th" style="width:24px;height:24px;background:url(/template-photos/reception-table.webp) center/cover no-repeat"></div><div class="sb-tt">Engagement outfits</div></div>
+        <div class="sb-row"><div class="sb-th" style="width:24px;height:24px;background:url(/template-photos/forest-sunbeams.webp) center/cover no-repeat"></div><div class="sb-tt">Rainy-day weddings</div></div>
+        <div class="sb-h">Categories</div><div class="sb-cat">Planning <i>14</i></div><div class="sb-cat">Elopements <i>7</i></div></div></div>`,
     filters:`<div style="width:100%;max-width:730px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Put them above the grid, in the sidebar, or both</div>
       <div style="display:grid;grid-template-columns:1fr 168px;gap:14px;align-items:start">
 
         <div>
-          <div style="font-size:.56rem;font-weight:600;color:var(--violet);margin-bottom:6px">Above the grid</div>
+          <div style="font-size:.56rem;font-weight:600;color:var(--bb);margin-bottom:6px">Above the grid</div>
           <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:11px 13px;box-shadow:0 5px 18px rgba(91,79,232,.07)">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid #f2f2f2;margin-bottom:11px">
               <span style="font-size:.64rem;font-weight:700;color:#1a1a1a">All 24</span>
-              ${[['Lifestyle','14'],['Creativity','9'],['Travel','7'],['Wellness','5']].map(([n,k],i)=>
+              ${[['Planning','14'],['Venues','9'],['Elopements','7'],['Engagements','5']].map(([n,k],i)=>
                 `<span style="font-size:.6rem;color:${i===2?'var(--violet)':'#999'};font-weight:${i===2?600:400}">${n} <span style="color:${i===2?'#b3accf':'#ccc'}">${k}</span></span>`).join('')}
             </div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
-              ${[['#ded8f8','#b9afee'],['#d4ece2','#a8d8c4'],['#f0e6d4','#dcc8a8']].map(([a,b])=>`
-                <div><div style="height:38px;border-radius:4px;background:linear-gradient(135deg,${a},${b});margin-bottom:5px"></div>
+              ${[['#ded8f8','#b9afee'],['#d4ece2','#a8d8c4'],['#f0e6d4','#dcc8a8']].map(([a])=>`
+                <div><div style="aspect-ratio:16/9;border-radius:4px;background:${photoBg(String(a))};margin-bottom:5px"></div>
                 <div style="height:5px;width:88%;background:#ececec;border-radius:3px;margin-bottom:4px"></div>
                 <div style="height:4px;width:56%;background:#f4f4f4;border-radius:3px"></div></div>`).join('')}
             </div>
@@ -216,16 +249,16 @@ function stage(f: Feat): string {
         </div>
 
         <div>
-          <div style="font-size:.56rem;font-weight:600;color:var(--violet);margin-bottom:6px">In the sidebar</div>
+          <div style="font-size:.56rem;font-weight:600;color:var(--bb);margin-bottom:6px">In the sidebar</div>
           <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:11px 12px;box-shadow:0 5px 18px rgba(91,79,232,.07)">
             <div style="font-size:.5rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:7px">Categories</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">
-              ${['Lifestyle','Creativity','Travel','Wellness'].map((c,i)=>
+              ${['Planning','Venues','Elopements','Engagements'].map((c,i)=>
                 `<span style="font-size:.54rem;padding:3px 8px;border-radius:100px;border:1px solid ${i===2?'rgba(91,79,232,.3)':'#e8e6ef'};background:${i===2?'var(--violet-f2)':'#fbfbfc'};color:${i===2?'var(--violet)':'#888'};font-weight:${i===2?600:400}">${c}</span>`).join('')}
             </div>
             <div style="font-size:.5rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#aaa;margin-bottom:7px">Tags</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px">
-              ${['mornings','routines','slow living','focus','rest'].map(c=>
+              ${['golden hour','timelines','venues','portraits','elopements'].map(c=>
                 `<span style="font-size:.54rem;padding:3px 8px;border-radius:100px;border:1px solid #e8e6ef;background:#fbfbfc;color:#888">${c}</span>`).join('')}
             </div>
           </div>
@@ -233,15 +266,14 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     toc:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Three styles, same auto-generated headings</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
         ${['Numbered','Connected dots','Bookmark'].map((label,idx)=>`
           <div>
-            <div style="font-size:.6rem;font-weight:600;color:var(--violet);margin-bottom:7px">${label}</div>
+            <div style="font-size:.6rem;font-weight:600;color:var(--bb);margin-bottom:7px">${label}</div>
             <div style="background:#fff;border:1px solid #e6e6ec;border-radius:7px;padding:12px;
               box-shadow:0 5px 18px rgba(91,79,232,.07);position:relative">
               ${idx===1?'<div style="position:absolute;left:15.5px;top:20px;bottom:20px;width:1.5px;background:#eceaf4"></div>':''}
-              ${['Introduction','Finding your rhythm','The tools that help','Final thoughts'].map((t,i)=>{
+              ${['Introduction','Work backwards from the light','Build in a buffer','Final thoughts'].map((t,i)=>{
                 const on = i===1;
                 const txt = `<span style="font-size:.6rem;color:${on?'var(--violet)':'#888'};font-weight:${on?600:400};line-height:1.3">${t}</span>`;
                 if(idx===0) return `<div style="display:flex;gap:8px;align-items:baseline;padding:4px 0">
@@ -254,44 +286,75 @@ function stage(f: Feat): string {
             </div>
           </div>`).join('')}
       </div>
-      <div style="text-align:center;font-size:.66rem;color:var(--mid);font-weight:300;margin-top:13px">
-        Sits in a sidebar or above the post, and highlights the section being read.
-      </div>
     </div>`,
     progress:`<div style="height:4px;background:#f0f0f0;position:relative"><div style="width:62%;height:100%;background:var(--violet)"></div></div>
       <div style="padding:6px 18px;background:#faf9ff;border-bottom:1px solid rgba(91,79,232,.08);display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:.65rem;color:var(--violet);font-weight:700">62% read</span></div>
-      ${blogNav}<div style="padding:16px 18px"><div class="af-hero" style="height:84px"><span style="font-size:.9rem">Finding balance in a busy creative life</span></div>${lines(8)}</div>`,
+      ${blogNav}<div style="padding:16px 18px"><div class="af-hero" style="height:auto;aspect-ratio:1280/600"><span style="font-size:.9rem">How to Plan a Golden-Hour Ceremony</span></div>${lines(8)}</div>`,
     time:`<div style="width:100%;max-width:740px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">On the post itself, and on every card in the grid</div>
       <div style="display:grid;grid-template-columns:1fr 236px;gap:16px;align-items:start">
         <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:18px 20px 16px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
           <div style="text-align:center">
-            <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">LIFESTYLE</div>
-            <div style="font-family:'DM Serif Display',serif;font-size:1.06rem;color:#1a1a1a;line-height:1.2;margin-bottom:8px">Finding balance in a busy creative life</div>
-            <div style="font-size:.6rem;font-style:italic;color:#8a8a8a;line-height:1.45;margin-bottom:11px">What changed when I stopped trying to do everything at once.</div>
+            <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">PLANNING</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:1.06rem;color:#1a1a1a;line-height:1.2;margin-bottom:8px">How to Plan a Golden-Hour Ceremony</div>
+            <div style="font-size:.6rem;font-style:italic;color:#8a8a8a;line-height:1.45;margin-bottom:11px">Timing a sunset ceremony is mostly math and a little luck.</div>
             <div style="width:26px;height:1px;background:#d8d8de;margin:0 auto 11px"></div>
-            <div style="font-size:.56rem;color:#9e9ea8;margin-bottom:14px">Sarah Clarke <span style="color:#cbcbd4">&middot;</span> Mar 12, 2026
+            <div style="font-size:.56rem;color:#9e9ea8;margin-bottom:14px">Maya Okonkwo <span style="color:#cbcbd4">&middot;</span> Mar 12, 2026
               <span style="color:#cbcbd4">&middot;</span> <span style="color:var(--violet);font-weight:700">5 min read</span></div>
           </div>
           ${lines(4)}
         </div>
         <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
-          <div style="height:96px;border-radius:5px;background:linear-gradient(135deg,#ded8f8,#b9afee);margin-bottom:11px"></div>
-          <div style="font-size:.48rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:7px">CREATIVITY</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:.84rem;color:#1a1a1a;line-height:1.25;margin-bottom:9px">The case for slow living</div>
-          <div style="font-size:.5rem;color:#a5a5ae">Mar 12, 2026 <span style="color:#d2d2d8">&middot;</span> Sarah Clarke
+          <div style="aspect-ratio:16/9;border-radius:5px;background:url(/template-photos/bride-window.webp) center/cover no-repeat;margin-bottom:11px"></div>
+          <div style="font-size:.48rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:7px">VENUES</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:.84rem;color:#1a1a1a;line-height:1.25;margin-bottom:9px">Small Oakland Venues That Feel Like a Dinner Party</div>
+          <div style="font-size:.5rem;color:#a5a5ae">Mar 12, 2026 <span style="color:#d2d2d8">&middot;</span> Maya Okonkwo
             <span style="color:#d2d2d8">&middot;</span> <span style="color:var(--violet);font-weight:700">4 min read</span></div>
         </div>
       </div>
     </div>`,
+    mobilesidebar:`<div style="width:100%;max-width:640px;margin:0 auto;display:flex;justify-content:center;gap:34px;align-items:flex-start;flex-wrap:wrap">
+      ${[['Drawer closed',false],['Drawer open',true]].map(([label,open])=>`<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+        <div style="width:190px;height:340px;border:7px solid #1a1a1a;border-radius:26px;background:#fff;position:relative;overflow:hidden;box-shadow:0 10px 30px rgba(26,26,42,.15)">
+          <div style="padding:16px 14px 0">
+            <div style="font-size:.42rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:6px">PLANNING</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:.8rem;line-height:1.2;color:#1a1a1a;margin-bottom:10px">How to Plan a Golden-Hour Ceremony</div>
+            <div class="af-hero" style="height:auto;aspect-ratio:16/9;margin-bottom:10px"></div>${lines(7)}</div>
+          ${open?`<div style="position:absolute;inset:0;background:rgba(17,17,17,.35)"></div>
+          <div style="position:absolute;top:0;right:0;bottom:0;width:72%;background:#fff;box-shadow:-10px 0 24px rgba(0,0,0,.18);padding:16px 12px">
+            <div style="font-size:.5rem;font-weight:700;color:#1a1a1a;margin-bottom:8px">Related posts</div>
+            <div style="display:flex;gap:7px;margin-bottom:7px"><div style="width:30px;height:30px;border-radius:3px;background:url(/template-photos/venue-barn.webp) center/cover no-repeat"></div><div style="flex:1;font-size:.44rem;color:#555;line-height:1.3">Small Oakland Venues That Feel Like a Dinner Party</div></div>
+            <div style="display:flex;gap:7px;margin-bottom:12px"><div style="width:30px;height:30px;border-radius:3px;background:url(/template-photos/couple-walking.webp) center/cover no-repeat"></div><div style="flex:1;font-size:.44rem;color:#555;line-height:1.3">Ana &amp; Theo at the Redwood Grange</div></div>
+            <div style="border:1px solid rgba(122,45,94,.2);background:#fdf8fb;border-radius:6px;padding:9px;text-align:center">
+              <div style="font-size:.5rem;color:#1a1a1a;margin-bottom:6px;font-weight:600">The weekly letter</div>
+              <div style="background:#fff;border:1px solid #e4dae2;border-radius:3px;height:14px;margin-bottom:4px"></div>
+              <div style="background:var(--plum);border-radius:3px;height:15px"></div></div>
+          </div>`:''}
+          <div style="position:absolute;top:44%;right:${open?'72%':'0'};width:20px;height:58px;border-radius:7px 0 0 7px;background:${open?'var(--violet)':'#fff'};border:1px solid ${open?'var(--violet)':'#e2e0ea'};border-right:none;box-shadow:-3px 2px 10px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${open?'#fff':'var(--violet)'}" stroke-width="2.5" stroke-linecap="round"><polyline points="${open?'9 18 15 12 9 6':'15 18 9 12 15 6'}"/></svg></div>
+        </div>
+        <div style="font-size:.6rem;color:var(--mid)">${label}</div></div>`).join('')}
+    </div>`,
+    updated:`<div style="width:100%;max-width:640px;margin:0 auto">
+      <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:22px 24px 18px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
+        <div style="text-align:center">
+          <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">REAL WEDDINGS</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:1.12rem;color:#1a1a1a;line-height:1.2;margin-bottom:10px">Ana &amp; Theo: A Rainy Day at the Redwood Grange</div>
+          <div style="width:26px;height:1px;background:#d8d8de;margin:0 auto 11px"></div>
+          <div style="font-size:.58rem;color:#9e9ea8;margin-bottom:16px">Maya Okonkwo <span style="color:#cbcbd4">&middot;</span> Mar 12, 2025
+            <span style="color:#cbcbd4">&middot;</span> <span style="color:var(--violet);font-weight:700;background:var(--violet-f2);padding:2px 7px;border-radius:100px">Updated 10/2/2026</span>
+            <span style="color:#cbcbd4">&middot;</span> 7 min read</div>
+        </div>
+        ${lines(4)}
+      </div>
+    </div>`,
     social:`${blogNav}
-      <div style="position:relative;height:138px;display:flex;flex-direction:column;justify-content:flex-end;padding:0 18px 13px;
-        background:linear-gradient(to top,rgba(18,14,48,.86),rgba(18,14,48,.3) 60%,rgba(18,14,48,.08)),linear-gradient(135deg,#8f86f0,#3b3170)">
+      <div style="position:relative;aspect-ratio:1280/500;display:flex;flex-direction:column;justify-content:flex-end;padding:0 18px 13px;
+        background:linear-gradient(to top,rgba(18,14,48,.86),rgba(18,14,48,.3) 60%,rgba(18,14,48,.08)),url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat">
         <div style="display:inline-flex;align-self:flex-start;font-size:.5rem;font-weight:700;letter-spacing:.11em;color:#fff;
-          background:var(--violet);padding:4px 10px;border-radius:100px;margin-bottom:8px">LIFESTYLE</div>
-        <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#fff;line-height:1.18;margin-bottom:7px">Finding balance in a busy creative life</div>
-        <div style="font-size:.55rem;color:rgba(255,255,255,.7);margin-bottom:9px">Sarah Clarke · Mar 12, 2026 · 5 min read</div>
+          background:var(--violet);padding:4px 10px;border-radius:100px;margin-bottom:8px">PLANNING</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#fff;line-height:1.18;margin-bottom:7px">How to Plan a Golden-Hour Ceremony</div>
+        <div style="font-size:.55rem;color:rgba(255,255,255,.7);margin-bottom:9px">Maya Okonkwo · Mar 12, 2026 · 5 min read</div>
         <div style="display:flex;gap:9px;align-items:center">
           ${[
             '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
@@ -306,32 +369,29 @@ function stage(f: Feat): string {
       </div>
       <div style="padding:14px 18px 16px">${lines(6)}</div>`,
     authors:`<div style="width:100%;max-width:640px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Assign as many authors to a post as you need &mdash; every name shows in the byline</div>
-      <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:0 0 18px;box-shadow:0 8px 26px rgba(91,79,232,.09);overflow:hidden">
-        <div style="height:74px;background:linear-gradient(135deg,#cfc7f5,#9b90ec)"></div>
-        <div style="padding:16px 22px 0">
-          <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">LIFESTYLE</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:1.22rem;color:#1a1a1a;line-height:1.18;margin-bottom:11px">Finding balance in a busy creative life</div>
-          <div style="font-size:.58rem;color:#9e9ea8;font-weight:500;margin-bottom:15px">
-            <span style="color:var(--violet);font-weight:700">Sarah Clarke, Marcus Webb</span>
+      <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;box-shadow:0 8px 26px rgba(91,79,232,.09);overflow:hidden">
+        <div style="padding:20px 22px 16px;text-align:center">
+          <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">PLANNING</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:1.22rem;color:#1a1a1a;line-height:1.18;margin-bottom:11px">How to Plan a Golden-Hour Ceremony</div>
+          <div style="font-size:.58rem;color:#9e9ea8;font-weight:500">
+            <span style="color:var(--violet);font-weight:700">Maya Okonkwo, Ana Ruiz</span>
             <span style="color:#cbcbd4;margin:0 2px">&middot;</span> Mar 12, 2026
             <span style="color:#cbcbd4;margin:0 2px">&middot;</span> 5 min read</div>
-          ${lines(3)}
         </div>
+        <div style="aspect-ratio:1280/600;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat"></div>
       </div>
     </div>`,
     profiles:`<div style="width:100%;max-width:730px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">A full profile block at the foot of the post, or a compact one in the sidebar</div>
       <div style="display:grid;grid-template-columns:1fr 194px;gap:15px;align-items:start">
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:15px 17px 17px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="font-size:.46rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#b4b4be;margin-bottom:11px">In the post footer</div>
         <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#8a8a8a;
           padding-bottom:8px;border-bottom:1px solid #f0f0f0;margin-bottom:13px">About the Authors</div>
-        ${([['#b9afee,#7c6ef0','Sarah Clarke','Writes about creative work, slow living, and the systems that make both possible. Based in Portland.',[0,1,2,5]],
-           ['#ded8f8,#a79aef','Marcus Webb','Former magazine editor turned independent publisher. Covers design, typography, and the business of writing.',[0,3,4]]] as [string,string,string,number[]][])
-          .map(([g,name,bio,socials],i)=>`
+        ${([['#b9afee,#7c6ef0','Maya Okonkwo','Wedding and portrait photographer in Oakland. Writes about planning around the light.',[0,1,2,5]],
+           ['#ded8f8,#a79aef','Ana Ruiz','Second shooter and planner. Covers timelines, venues and family photos.',[0,3,4]]] as [string,string,string,number[]][])
+          .map(([,name,bio,socials],i)=>`
           <div style="display:flex;gap:13px;align-items:flex-start;border:1px solid #eceae4;border-radius:8px;padding:13px 14px;${i===0?'margin-bottom:11px':''}">
-            <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,${g});flex-shrink:0"></div>
+            <div style="width:44px;height:44px;border-radius:50%;background:${photoBg(String(name))};flex-shrink:0"></div>
             <div style="flex:1;min-width:0">
               <div style="font-size:.74rem;font-weight:700;color:#1a1a1a;margin-bottom:6px">${name}</div>
               <div style="display:flex;gap:8px;align-items:center;margin-bottom:7px">
@@ -352,12 +412,12 @@ function stage(f: Feat): string {
         <div style="font-size:.46rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#b4b4be;margin-bottom:11px">In the sidebar</div>
         <div style="font-size:.46rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#8a8a8a;
           padding-bottom:7px;border-bottom:1px solid #f0f0f0;margin-bottom:12px">About the Authors</div>
-        ${[['#b9afee,#7c6ef0','Sarah Clarke','Writes about creative work and slow living.'],
-           ['#ded8f8,#a79aef','Marcus Webb','Former magazine editor turned publisher.']]
-          .map(([g,name,bio],i)=>`
+        ${[['#b9afee,#7c6ef0','Maya Okonkwo','Wedding photographer in Oakland.'],
+           ['#ded8f8,#a79aef','Ana Ruiz','Second shooter and planner.']]
+          .map(([,name,bio],i)=>`
           <div style="${i===0?'margin-bottom:13px':''}">
             <div style="display:flex;gap:9px;align-items:center;margin-bottom:6px">
-              <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${g});flex-shrink:0"></div>
+              <div style="width:30px;height:30px;border-radius:50%;background:${photoBg(String(name))};flex-shrink:0"></div>
               <div style="font-size:.62rem;font-weight:700;color:#1a1a1a;line-height:1.25">${name}</div>
             </div>
             <div style="font-size:.53rem;color:#8a8a94;line-height:1.5">${bio}</div>
@@ -366,7 +426,6 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     sorting:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Readers reorder the archive themselves, right above the post grid</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:14px 16px 16px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="position:relative;display:flex;justify-content:flex-end;margin-bottom:10px;z-index:2">
           <div>
@@ -382,12 +441,12 @@ function stage(f: Feat): string {
           </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:11px">
-          ${[['#ded8f8,#b9afee','LIFESTYLE','Finding balance in a busy creative life'],
-             ['#f0e6d4,#dcc8a8','LIFESTYLE','My morning ritual and why it works'],
-             ['#d4ece2,#a8d8c4','CREATIVITY','The case for slow living']]
-            .map(([g,cat,title])=>`
+          ${[['#ded8f8,#b9afee','PLANNING','How to Plan a Golden-Hour Ceremony'],
+             ['#f0e6d4,#dcc8a8','PLANNING','What to Wear to Your Engagement Session'],
+             ['#d4ece2,#a8d8c4','VENUES','Small Oakland Venues That Feel Like a Dinner Party']]
+            .map(([,cat,title])=>`
             <div>
-              <div style="height:58px;border-radius:5px;background:linear-gradient(135deg,${g});margin-bottom:8px"></div>
+              <div style="aspect-ratio:16/9;border-radius:5px;background:${photoBg(String(title))};margin-bottom:8px"></div>
               <div style="font-size:.44rem;font-weight:700;letter-spacing:.12em;color:var(--violet);margin-bottom:5px">${cat}</div>
               <div style="font-family:'DM Serif Display',serif;font-size:.7rem;color:#1a1a1a;line-height:1.25">${title}</div>
             </div>`).join('')}
@@ -395,45 +454,43 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     featured:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Mark any post Featured and it's pulled to the top of the blog as a hero</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
-        <div style="position:relative;height:148px;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:0 16px 14px;margin-bottom:14px;
-          background:linear-gradient(to top,rgba(16,12,42,.9),rgba(16,12,42,.45) 55%,rgba(16,12,42,.12)),linear-gradient(135deg,#8f86f0,#2e2660)">
+        <div style="position:relative;aspect-ratio:21/9;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:0 16px 14px;margin-bottom:14px;
+          background:linear-gradient(to top,rgba(16,12,42,.9),rgba(16,12,42,.45) 55%,rgba(16,12,42,.12)),url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat">
           <div style="display:inline-flex;align-self:flex-start;font-size:.46rem;font-weight:700;letter-spacing:.12em;color:#fff;
             background:var(--violet);padding:4px 10px;border-radius:4px;margin-bottom:9px">FEATURED</div>
-          <div style="font-size:.46rem;font-weight:700;letter-spacing:.13em;color:rgba(255,255,255,.72);margin-bottom:6px">LIFESTYLE</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#fff;line-height:1.16;margin-bottom:7px">Finding balance in a busy creative life</div>
-          <div style="font-size:.5rem;color:rgba(255,255,255,.6)">Mar 12, 2026 <span style="opacity:.5">&middot;</span> By Sarah Clarke <span style="opacity:.5">&middot;</span> 5 min read</div>
+          <div style="font-size:.46rem;font-weight:700;letter-spacing:.13em;color:rgba(255,255,255,.72);margin-bottom:6px">PLANNING</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#fff;line-height:1.16;margin-bottom:7px">How to Plan a Golden-Hour Ceremony</div>
+          <div style="font-size:.5rem;color:rgba(255,255,255,.6)">Mar 12, 2026 <span style="opacity:.5">&middot;</span> By Maya Okonkwo <span style="opacity:.5">&middot;</span> 5 min read</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:11px">
-          ${[['#ded8f8,#b9afee','CREATIVITY','The case for slow living','4 min read'],
-             ['#d4ece2,#a8d8c4','WELLNESS','The edit method, start to finish','6 min read'],
-             ['#f0e6d4,#dcc8a8','LIFESTYLE','My morning ritual and why it works','5 min read']]
-            .map(([g,cat,title,t])=>`
+          ${[['#ded8f8,#b9afee','VENUES','Small Oakland Venues That Feel Like a Dinner Party','4 min read'],
+             ['#d4ece2,#a8d8c4','ENGAGEMENTS','A Shot List Your Photographer Will Actually Use','6 min read'],
+             ['#f0e6d4,#dcc8a8','PLANNING','What to Wear to Your Engagement Session','5 min read']]
+            .map(([,cat,title,t])=>`
             <div>
-              <div style="height:62px;border-radius:5px;background:linear-gradient(135deg,${g});margin-bottom:8px"></div>
+              <div style="aspect-ratio:16/9;border-radius:5px;background:${photoBg(String(title))};margin-bottom:8px"></div>
               <div style="font-size:.44rem;font-weight:700;letter-spacing:.12em;color:var(--violet);margin-bottom:5px">${cat}</div>
               <div style="font-family:'DM Serif Display',serif;font-size:.7rem;color:#1a1a1a;line-height:1.25;margin-bottom:5px">${title}</div>
-              <div style="font-size:.44rem;color:#b5b5be">Mar 12, 2026 <span style="color:#dcdce2">&middot;</span> Sarah Clarke <span style="color:#dcdce2">&middot;</span> ${t}</div>
+              <div style="font-size:.44rem;color:#b5b5be">Mar 12, 2026 <span style="color:#dcdce2">&middot;</span> Maya Okonkwo <span style="color:#dcdce2">&middot;</span> ${t}</div>
             </div>`).join('')}
         </div>
       </div>
     </div>`,
     crumbs:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Blog name → category → post title, linked the whole way back</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:20px 22px 0;box-shadow:0 8px 26px rgba(91,79,232,.09);overflow:hidden">
         <div style="text-align:center;font-size:.62rem;color:#8e8e98;line-height:1.4;margin-bottom:16px">
-          <span>Sarah Clarke</span>
+          <span>Maya Okonkwo</span>
           <span style="margin:0 4px;color:#c2c2cc">&rsaquo;</span>
-          <span>Lifestyle</span>
+          <span>Planning</span>
           <span style="margin:0 4px;color:#c2c2cc">&rsaquo;</span>
-          <span>Finding balance in a busy creative life</span>
+          <span>How to Plan a Golden-Hour Ceremony</span>
         </div>
         <div style="text-align:center">
-          <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">LIFESTYLE</div>
-          <div style="font-family:'DM Serif Display',serif;font-size:1.22rem;color:#1a1a1a;line-height:1.18;margin-bottom:7px">Finding balance in a busy creative life</div>
-          <div style="font-size:.62rem;color:#8a8a8a;margin-bottom:10px">What changed when I stopped trying to do everything at once.</div>
-          <div style="font-size:.55rem;color:#aaa;margin-bottom:9px">Sarah Clarke &middot; Mar 12, 2026 &middot; 5 min read</div>
+          <div style="font-size:.5rem;font-weight:700;letter-spacing:.13em;color:var(--violet);margin-bottom:8px">PLANNING</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:1.22rem;color:#1a1a1a;line-height:1.18;margin-bottom:7px">How to Plan a Golden-Hour Ceremony</div>
+          <div style="font-size:.62rem;color:#8a8a8a;margin-bottom:10px">Timing a sunset ceremony is mostly math and a little luck.</div>
+          <div style="font-size:.55rem;color:#aaa;margin-bottom:9px">Maya Okonkwo &middot; Mar 12, 2026 &middot; 5 min read</div>
           <div style="display:flex;gap:9px;align-items:center;justify-content:center;margin-bottom:16px">
             ${['<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
                '<path d="M18.2 2.2h3.3l-7.2 8.3 8.5 11.2h-6.6l-4.7-6.2-5.4 6.2H2.7l7.7-8.8L1.3 2.2h6.8l4.2 5.6zM17 19.8h1.8L7.1 4.1H5.1z"/>',
@@ -442,29 +499,27 @@ function stage(f: Feat): string {
               .map(d=>`<svg width="11" height="11" viewBox="0 0 24 24" fill="#9a9aa8">${d}</svg>`).join('')}
           </div>
         </div>
-        <div style="height:62px;margin:0 -22px;background:linear-gradient(135deg,#8f86f0,#3b3170)"></div>
+        <div style="aspect-ratio:1280/600;margin:0 -22px;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat"></div>
       </div>
     </div>`,
     prevnext:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Sits at the bottom of every post, pulling the real titles on either side of it</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:17px 18px 18px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="opacity:.5;margin-bottom:15px">${lines(2)}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;border:1px solid #e6e4df;border-radius:8px;overflow:hidden">
           <div style="padding:15px 16px">
             <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:#9a9a9a;margin-bottom:7px">PREVIOUS</div>
-            <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:5px">CREATIVITY</div>
-            <div style="font-family:'DM Serif Display',serif;font-size:.82rem;color:#1a1a1a;line-height:1.3">The case for slow living</div>
+            <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:5px">VENUES</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:.82rem;color:#1a1a1a;line-height:1.3">Small Oakland Venues That Feel Like a Dinner Party</div>
           </div>
           <div style="padding:15px 16px;border-left:1px solid #edebe6;text-align:right">
             <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:#9a9a9a;margin-bottom:7px">NEXT</div>
-            <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:5px">WELLNESS</div>
-            <div style="font-family:'DM Serif Display',serif;font-size:.82rem;color:#1a1a1a;line-height:1.3">The edit method, start to finish</div>
+            <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:5px">ENGAGEMENTS</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:.82rem;color:#1a1a1a;line-height:1.3">A Shot List Your Photographer Will Actually Use</div>
           </div>
         </div>
       </div>
     </div>`,
     page:`<div style="width:100%;max-width:720px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Two modes, set per blog &mdash; numbered pages or load more</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         ${[['Numbered pages',`
             <div style="display:flex;gap:5px;align-items:center;justify-content:center;margin-bottom:9px">
@@ -483,8 +538,8 @@ function stage(f: Feat): string {
           <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:15px 16px 17px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
             <div style="font-size:.5rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#8a8a8a;
               padding-bottom:7px;border-bottom:1px solid #f0f0f0;margin-bottom:12px">${label}</div>
-            ${[0,1].map(()=>`<div style="display:flex;gap:9px;align-items:center;padding:5px 0">
-              <div style="width:40px;height:30px;border-radius:4px;background:linear-gradient(135deg,#ded8f8,#b9afee);flex-shrink:0"></div>
+            ${[0,1].map((_,pi)=>`<div style="display:flex;gap:9px;align-items:center;padding:5px 0">
+              <div style="width:48px;height:27px;border-radius:4px;background:url(/template-photos/${['forest-sunbeams','wedding-arch-dusk'][pi]}.webp) center/cover no-repeat;flex-shrink:0"></div>
               <div style="flex:1;min-width:0"><div style="height:5px;background:#ededed;border-radius:3px;margin-bottom:5px"></div>
               <div style="height:4px;width:58%;background:#f5f5f5;border-radius:3px"></div></div></div>`).join('')}
             <div style="height:20px;margin:0 -16px 10px;background:linear-gradient(to bottom,rgba(255,255,255,0),#fff)"></div>
@@ -493,12 +548,11 @@ function stage(f: Feat): string {
       </div>
     </div>`,
     comments:`${blogNav}<div style="padding:16px 18px">
-      <div class="af-hero" style="height:64px"><span style="font-size:.8rem">Finding balance in a busy creative life</span></div>
-      <div style="margin:10px 0 14px">${lines(2)}</div>
+      <div style="margin:2px 0 14px">${lines(5)}</div>
       <div style="border-top:1px solid #f0f0f0;padding-top:13px">
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">
           <span style="font-size:.72rem;font-weight:600">3 Comments</span></div>
-        ${[['J','Jenna R.','Verified','#5B4FE8',"This landed at exactly the right time for me. The bit about protecting mornings especially.",'4'],
+        ${[['J','Jenna R.','Verified','#5B4FE8',"This landed at exactly the right time for us. The bit about working back from sunset especially.",'4'],
            ['M','Marcus','','#1a7a5e','Saving this one. Thanks for writing it.','2']]
           .map(([ini,nm,vb,c,tx,lk])=>`<div style="display:flex;gap:9px;margin-bottom:11px">
             <div style="width:24px;height:24px;border-radius:50%;background:${c};color:#fff;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;flex-shrink:0">${ini}</div>
@@ -514,14 +568,15 @@ function stage(f: Feat): string {
         <div style="margin-left:33px;padding-left:11px;border-left:2px solid #f0f0f0;display:flex;gap:9px">
           <div style="width:20px;height:20px;border-radius:50%;background:#9a1a3e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.48rem;font-weight:700;flex-shrink:0">S</div>
           <div><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-            <span style="font-size:.56rem;font-weight:600">Sarah Clarke</span>
+            <span style="font-size:.56rem;font-weight:600">Maya Okonkwo</span>
             <span style="font-size:.44rem;background:rgba(154,26,62,.1);color:#9a1a3e;padding:1px 6px;border-radius:100px;font-weight:600">Author</span></div>
             <div style="font-size:.56rem;color:#555;line-height:1.5">Thank you Marcus — glad it resonated.</div></div></div>
         <div style="margin-top:12px;border:1px solid #e8e8ee;border-radius:6px;padding:9px 11px;font-size:.56rem;color:#bbb">Join the conversation…</div>
       </div></div>`,
     paywall:`${blogNav}<div style="padding:16px 18px;position:relative">
-      <div class="af-hero" style="height:70px"><span style="font-size:.82rem">The complete guide to slow mornings</span></div>
-      <div style="margin-top:11px">${lines(2)}</div>
+      <div style="font-family:var(--serif);font-size:1rem;color:#1a1a1a;line-height:1.2;margin-bottom:5px">Elopements: Small Days, Big Feelings</div>
+      <div style="font-size:.55rem;color:#aaa;margin-bottom:12px">Maya Okonkwo · Mar 12, 2026 · 6 min read</div>
+      <div>${lines(3)}</div>
       <div style="position:relative;margin-top:4px">
         <div style="filter:blur(2.5px);opacity:.45">${lines(4)}</div>
         <div style="position:absolute;inset:-6px;background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.95) 45%)"></div>
@@ -535,61 +590,76 @@ function stage(f: Feat): string {
           <span style="border:1px solid #e0d5dd;color:var(--mid);font-size:.56rem;padding:7px 15px;border-radius:5px">Log in</span></div>
       </div></div>`,
     email:`${blogNav}<div style="padding:16px 18px;display:grid;grid-template-columns:1fr 160px;gap:14px">
-      <div><div class="af-hero" style="height:76px"><span style="font-size:.85rem">Finding balance in a busy creative life</span></div>
+      <div><div class="af-hero" style="height:auto;aspect-ratio:16/9"><span style="font-size:.85rem">How to Plan a Golden-Hour Ceremony</span></div>
         <div style="margin-top:11px">${lines(5)}</div></div>
       <div>
         <div style="border:1px solid rgba(122,45,94,.2);background:#fdf8fb;border-radius:8px;padding:12px;text-align:center">
           <div style="font-family:var(--serif);font-size:.72rem;color:#1a1a1a;margin-bottom:5px">The weekly letter</div>
-          <div style="font-size:.5rem;color:var(--mid);line-height:1.5;margin-bottom:9px">One honest note about slow work, every Sunday.</div>
+          <div style="font-size:.5rem;color:var(--mid);line-height:1.5;margin-bottom:9px">Planning notes for couples, once a month.</div>
           <div style="background:#fff;border:1px solid #e4dae2;border-radius:4px;padding:5px 8px;font-size:.5rem;color:#bbb;text-align:left;margin-bottom:5px">you@example.com</div>
           <div style="background:var(--plum);color:#fff;font-size:.54rem;font-weight:600;padding:6px;border-radius:4px">Subscribe</div>
           <div style="font-size:.44rem;color:#bbb;margin-top:6px">1,240 readers · No spam</div></div></div></div>`,
     magnet:`${blogNav}<div style="padding:16px 18px">
-      <div class="af-hero" style="height:64px"><span style="font-size:.8rem">My morning ritual and why it works</span></div>
-      <div style="margin:11px 0">${lines(4)}</div>
+      <div style="margin:2px 0 12px">${lines(6)}</div>
       <div style="border:1px solid rgba(122,45,94,.22);background:linear-gradient(135deg,#fdf6fa,#f8eef5);border-radius:10px;padding:16px 17px">
         <div style="font-size:.46rem;font-weight:700;letter-spacing:.13em;color:var(--plum);opacity:.75;margin-bottom:7px">FREE DOWNLOAD</div>
-        <div style="font-family:var(--serif);font-size:.85rem;color:#1a1a1a;margin-bottom:4px">The weekly reset worksheet</div>
-        <div style="font-size:.56rem;color:var(--mid);line-height:1.5;margin-bottom:11px">One page. The five questions I answer every Sunday before the week starts.</div>
+        <div style="font-family:var(--serif);font-size:.85rem;color:#1a1a1a;margin-bottom:4px">The golden-hour timeline</div>
+        <div style="font-size:.56rem;color:var(--mid);line-height:1.5;margin-bottom:11px">One page. Work back from sunset to plan your ceremony and portraits.</div>
         <div style="display:flex;gap:6px;max-width:330px">
           <div style="flex:1;background:#fff;border:1px solid #e4dae2;border-radius:4px;padding:6px 9px;font-size:.52rem;color:#bbb">you@example.com</div>
           <div style="background:var(--plum);color:#fff;font-size:.54rem;font-weight:600;padding:6px 13px;border-radius:4px;white-space:nowrap">Send it to me</div></div></div></div>`,
+    integrations:`<div style="width:100%;max-width:720px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1.15fr);gap:10px;align-items:center">
+      <div style="border:1px solid rgba(122,45,94,.2);background:#fdf8fb;border-radius:8px;padding:14px;text-align:center">
+        <div style="font-family:var(--serif);font-size:.78rem;color:#1a1a1a;margin-bottom:5px">The weekly letter</div>
+        <div style="font-size:.52rem;color:var(--mid);line-height:1.5;margin-bottom:9px">Planning notes for couples, once a month.</div>
+        <div style="background:#fff;border:1px solid #e4dae2;border-radius:4px;padding:6px 8px;font-size:.54rem;color:#555;text-align:left;margin-bottom:6px">maya@example.com</div>
+        <div style="background:var(--plum);color:#fff;font-size:.56rem;font-weight:600;padding:7px;border-radius:4px">Subscribe</div>
+        <div style="font-size:.48rem;color:#aaa;margin-top:8px">A sign-up form on your blog</div></div>
+      <svg viewBox="0 0 40 24" width="40" height="24" fill="none" stroke="var(--bb)" stroke-width="2" stroke-linecap="round"><line x1="2" y1="12" x2="34" y2="12"/><polyline points="28 6 34 12 28 18"/></svg>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px 14px;box-shadow:0 6px 20px rgba(91,79,232,.08)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.66rem;font-weight:700;color:#1a1a1a">Kit</span><span style="font-size:.5rem;color:#1f8a5b;font-weight:600;white-space:nowrap">&#10003; Added</span></div>
+          <div style="font-size:.54rem;color:#777">maya@example.com &rarr; form &ldquo;Weekly letter&rdquo;</div></div>
+        <div style="text-align:center;font-size:.52rem;color:#aaa">or</div>
+        <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:12px 14px;box-shadow:0 6px 20px rgba(91,79,232,.08)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.66rem;font-weight:700;color:#1a1a1a">Mailchimp</span><span style="font-size:.5rem;color:#1f8a5b;font-weight:600;white-space:nowrap">&#10003; Added</span></div>
+          <div style="font-size:.54rem;color:#777">maya@example.com &rarr; your audience, tagged &ldquo;Packing checklist&rdquo;</div></div>
+      </div>
+    </div>`,
     related:`<div style="width:100%;max-width:700px;margin:0 auto">
-      <div style="font-size:.66rem;color:var(--mid);font-weight:300;margin-bottom:12px">Appears at the end of a post, picked from your tags and categories</div>
       <div style="background:#fff;border:1px solid #e6e6ec;border-radius:8px;padding:16px 17px 17px;box-shadow:0 8px 26px rgba(91,79,232,.09)">
         <div style="height:6px;width:26%;background:#ececec;border-radius:3px;margin-bottom:4px"></div>
         <div style="height:4px;width:40%;background:#f5f5f5;border-radius:3px;margin-bottom:16px"></div>
         <div style="font-family:'DM Serif Display',serif;font-size:.86rem;color:#1a1a1a;margin-bottom:12px">Related Posts</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-          ${[['#ded8f8','#b9afee','LIFESTYLE','My morning ritual and why it works','5 min'],
-             ['#d4ece2','#a8d8c4','CREATIVITY','The case for slow living','4 min'],
-             ['#f0e6d4','#dcc8a8','WELLNESS','The edit method','6 min']]
-            .map(([a,b,cat,title,t])=>`
+          ${[['#ded8f8','#b9afee','PLANNING','What to Wear to Your Engagement Session','5 min'],
+             ['#d4ece2','#a8d8c4','VENUES','Small Oakland Venues That Feel Like a Dinner Party','4 min'],
+             ['#f0e6d4','#dcc8a8','ENGAGEMENTS','A Shot List Your Photographer Will Actually Use','6 min']]
+            .map(([,,cat,title,t])=>`
             <div>
-              <div style="height:52px;border-radius:5px;background:linear-gradient(135deg,${a},${b});margin-bottom:7px"></div>
+              <div style="aspect-ratio:16/9;border-radius:5px;background:${photoBg(String(title))};margin-bottom:7px"></div>
               <div style="font-size:.5rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:4px">${cat}</div>
               <div style="font-size:.64rem;color:#333;line-height:1.35;font-weight:500;margin-bottom:4px">${title}</div>
-              <div style="font-size:.54rem;color:#bbb">Sarah Clarke · ${t} read</div>
+              <div style="font-size:.54rem;color:#bbb">Maya Okonkwo · ${t} read</div>
             </div>`).join('')}
         </div>
       </div>
     </div>`,
     popular:`${blogNav}
-      <div style="height:74px;background:linear-gradient(135deg,#cfc7f5,#9b90ec)"></div>
       <div style="padding:14px 18px 16px">
-        <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#1a1a1a;line-height:1.2;margin-bottom:5px">Finding balance in a busy creative life</div>
-        <div style="font-size:.55rem;color:#aaa;margin-bottom:14px">Sarah Clarke · Mar 12, 2026 · 5 min read</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#1a1a1a;line-height:1.2;margin-bottom:5px">How to Plan a Golden-Hour Ceremony</div>
+        <div style="font-size:.55rem;color:#aaa;margin-bottom:14px">Maya Okonkwo · Mar 12, 2026 · 5 min read</div>
         <div style="display:grid;grid-template-columns:1fr 218px;gap:20px;align-items:start">
-          <div>${lines(9)}</div>
+          <div><div style="aspect-ratio:16/9;border-radius:4px;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat;margin-bottom:12px"></div>${lines(5)}</div>
           <div>
             <div style="font-size:.52rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#8a8a8a;
               padding-bottom:7px;border-bottom:1px solid #ececec;margin-bottom:11px">Popular Posts</div>
-            ${[['#ded8f8','#b9afee','My morning ritual and why it works','5 min read'],
-               ['#d4ece2','#a8d8c4','The case for slow living','4 min read'],
-               ['#f0e6d4','#dcc8a8','The edit method, start to finish','6 min read']]
-              .map(([a,b,title,t],i)=>`
+            ${[['#ded8f8','#b9afee','What to Wear to Your Engagement Session','5 min read'],
+               ['#d4ece2','#a8d8c4','Small Oakland Venues That Feel Like a Dinner Party','4 min read'],
+               ['#f0e6d4','#dcc8a8','A Shot List Your Photographer Will Actually Use','6 min read']]
+              .map(([,,title,t],i)=>`
               <div style="display:flex;gap:9px;align-items:flex-start;${i<2?'margin-bottom:11px':''}">
-                <div style="width:44px;height:40px;border-radius:4px;background:linear-gradient(135deg,${a},${b});flex-shrink:0"></div>
+                <div style="width:40px;height:40px;border-radius:4px;background:${photoBg(String(title))};flex-shrink:0"></div>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:.58rem;color:#1a1a1a;font-weight:600;line-height:1.35;margin-bottom:4px">${title}</div>
                   <div style="font-size:.46rem;color:#b5b5b5">Mar 12, 2026 · ${t}</div>
@@ -646,12 +716,12 @@ function stage(f: Feat): string {
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
               <div style="font-size:.56rem;font-weight:600">Per-Post Analytics</div>
               <span style="font-size:.42rem;color:#8a8a94;border:1px solid #eaeaef;border-radius:4px;padding:2px 6px">Views (high &rarr; low)</span></div>
-            ${[['Finding balance in a busy creative life','4,218','82'],['My morning ritual and why it works','3,067','74'],['The case for slow living','2,540','61']]
+            ${[['How to Plan a Golden-Hour Ceremony','4,218','82'],['What to Wear to Your Engagement Session','3,067','74'],['Small Oakland Venues That Feel Like a Dinner Party','2,540','61']]
               .map(([t,v,r],i)=>`<div style="display:flex;gap:8px;align-items:center;${i<2?'margin-bottom:8px':''}">
                 <span style="font-size:.5rem;color:#c2c2ca;font-weight:600;width:8px;flex-shrink:0">${i+1}</span>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:.5rem;color:#1a1a1a;font-weight:500;line-height:1.3;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</div>
-                  <div style="font-size:.42rem;color:#aeaeb8">Sarah Clarke <span style="color:#dcdce2">&middot;</span> ${v} views <span style="color:#dcdce2">&middot;</span> 3:12 avg. time</div></div>
+                  <div style="font-size:.42rem;color:#aeaeb8">Maya Okonkwo <span style="color:#dcdce2">&middot;</span> ${v} views <span style="color:#dcdce2">&middot;</span> 3:12 avg. time</div></div>
                 <div style="width:52px;flex-shrink:0;text-align:right">
                   <div style="font-size:.5rem;font-weight:700;color:#1a1a1a">${r}%</div>
                   <div style="height:3px;background:#f0f0f0;border-radius:100px;margin-top:3px"><div style="width:${r}%;height:100%;background:var(--violet);border-radius:100px"></div></div></div></div>`).join('')}
@@ -660,7 +730,7 @@ function stage(f: Feat): string {
             <div style="font-size:.56rem;font-weight:600;margin-bottom:9px">Search Analytics</div>
             <div style="display:flex;font-size:.4rem;color:#aeaeb8;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid #f4f4f6;margin-bottom:6px">
               <span style="flex:1">Search Term</span><span style="width:32px;text-align:right">Clicks</span><span style="width:30px;text-align:right">CTR</span></div>
-            ${[['morning routine','61','42%'],['slow living','44','31%'],['newsletter','28','18%']]
+            ${[['golden hour','61','42%'],['oakland venues','44','31%'],['shot list','28','18%']]
               .map(([t,c,r],i)=>`<div style="display:flex;align-items:center;font-size:.46rem;color:#55555f;${i<2?'margin-bottom:6px':''}">
                 <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</span>
                 <span style="width:32px;text-align:right;color:#8a8a94">${c}</span>
@@ -681,10 +751,10 @@ function stage(f: Feat): string {
             <div style="font-size:.56rem;font-weight:600;margin-bottom:9px">Per-Author Analytics</div>
             <div style="display:flex;font-size:.4rem;color:#aeaeb8;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid #f4f4f6;margin-bottom:6px">
               <span style="flex:1">Author</span><span style="width:26px;text-align:right">Posts</span><span style="width:38px;text-align:right">Views</span><span style="width:40px;text-align:right">Read %</span></div>
-            ${[['#b9afee,#7c6ef0','Sarah Clarke','14','16.2k','74'],['#ded8f8,#a79aef','Marcus Webb','6','5.9k','68']]
-              .map(([g,n,p,v,r],i)=>`<div style="display:flex;align-items:center;font-size:.46rem;${i<1?'margin-bottom:7px':''}">
+            ${[['#b9afee,#7c6ef0','Maya Okonkwo','14','16.2k','74'],['#ded8f8,#a79aef','Ana Ruiz','6','5.9k','68']]
+              .map(([,n,p,v,r],i)=>`<div style="display:flex;align-items:center;font-size:.46rem;${i<1?'margin-bottom:7px':''}">
                 <span style="flex:1;min-width:0;display:flex;align-items:center;gap:5px">
-                  <span style="width:15px;height:15px;border-radius:50%;background:linear-gradient(135deg,${g});flex-shrink:0"></span>
+                  <span style="width:15px;height:15px;border-radius:50%;background:${photoBg(String(n))};flex-shrink:0"></span>
                   <span style="color:#1a1a1a;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n}</span></span>
                 <span style="width:26px;text-align:right;color:#8a8a94">${p}</span>
                 <span style="width:38px;text-align:right;color:#8a8a94">${v}</span>
@@ -707,18 +777,20 @@ function stage(f: Feat): string {
         </div>
       </div>`
   }[f.id] as string | undefined;
+  const body = f.id === 'analytics' || raw === undefined ? raw : siteTheme(raw);
 
-  if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting'].includes(f.id)) return body as string;
+  if(['collection','search','toc','filters','related','crumbs','prevnext','page','time','authors','profiles','featured','sorting','updated','integrations','mobilesidebar'].includes(f.id)) return body as string;
   if(body) return shell(body);
   // generic fallback
   return shell(`${blogNav}<div style="padding:16px 18px">
-    <div class="af-hero" style="height:84px"><span style="font-size:.9rem">Finding balance in a busy creative life</span></div>
+    <div class="af-hero" style="height:84px"><span style="font-size:.9rem">How to Plan a Golden-Hour Ceremony</span></div>
     <div style="margin-top:12px">${lines(6)}</div>
-    <div class="tags"><span class="tag">Lifestyle</span><span class="tag">Creativity</span><span class="tag">Wellness</span></div></div>`);
+    <div class="tags"><span class="tag">Planning</span><span class="tag">Venues</span><span class="tag">Engagements</span></div></div>`);
 }
 
 const STYLES = `.bb-features{
-  --violet:#5B4FE8; --violet-dk:#4a3fd4; --violet-lt:#8F86F0;
+  --violet:#5B4FE8; --violet-dk:#4a3fd4; --violet-lt:#8F86F0; --bb:#5B4FE8;
+  --site:#A0522D; --site-f:rgba(160,82,45,.08); --site-f2:rgba(160,82,45,.14);
   --violet-f:rgba(91,79,232,.07); --violet-f2:rgba(91,79,232,.12);
   --black:#0a0a0a; --dark:#1a1a1a; --mid:#6b6b6b; --line:#e4e3de; --off:#f7f6f3;
   --teal:#1a7a5e; --teal-f:rgba(26,122,94,.08); --teal-lt:#3aaa86;
@@ -759,36 +831,36 @@ const STYLES = `.bb-features{
 .bb-features .ba-badge{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);background:#fff;border:1px solid var(--line);
   border-radius:100px;padding:6px 14px;font-size:.55rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);
   box-shadow:0 4px 14px rgba(0,0,0,.08);z-index:3;white-space:nowrap}
-.bb-features .af-hero{height:56px;border-radius:5px;background:linear-gradient(135deg,#b9aef4,#8F86F0);display:flex;align-items:flex-end;padding:8px;margin-bottom:9px}
+.bb-features .af-hero{height:56px;border-radius:5px;background:linear-gradient(to top,rgba(20,14,8,.55),rgba(20,14,8,0) 70%),url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat;display:flex;align-items:flex-end;padding:8px;margin-bottom:9px}
 .bb-features .af-hero span{font-family:var(--serif);font-size:.62rem;color:#fff;line-height:1.2}
 .bb-features .af-crumb{font-size:.46rem;color:var(--mid);padding:5px 14px;border-bottom:1px solid #f6f6f6;background:#fafafa;display:flex;gap:4px}
-.bb-features .af-crumb b{color:var(--violet);font-weight:400}
-.bb-features .af-prog{position:absolute;right:12px;top:5px;font-size:.46rem;color:var(--violet);font-weight:700}
+.bb-features .af-crumb b{color:var(--site);font-weight:400}
+.bb-features .af-prog{position:absolute;right:12px;top:5px;font-size:.46rem;color:var(--site);font-weight:700}
 .bb-features .af-grid{display:grid;grid-template-columns:1fr 92px;gap:10px}
-.bb-features .toc{background:#f7f5ff;border-left:2px solid var(--violet);border-radius:4px;padding:8px;margin-bottom:9px}
-.bb-features .toc-h{font-size:.46rem;font-weight:700;letter-spacing:.1em;color:var(--violet);margin-bottom:5px}
+.bb-features .toc{background:#fbf7f3;border-left:2px solid var(--site);border-radius:4px;padding:8px;margin-bottom:9px}
+.bb-features .toc-h{font-size:.46rem;font-weight:700;letter-spacing:.1em;color:var(--site);margin-bottom:5px}
 .bb-features .toc div{font-size:.5rem;color:#777;margin-bottom:3px}
-.bb-features .toc div.act{color:var(--violet);font-weight:500}
+.bb-features .toc div.act{color:var(--site);font-weight:500}
 .bb-features .sb-h{font-size:.44rem;font-weight:700;letter-spacing:.11em;color:#999;margin:9px 0 5px;text-transform:uppercase}
-.bb-features .sb-av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#a89cf2,#7c6ef0);margin:0 auto 5px}
+.bb-features .sb-av{width:26px;height:26px;border-radius:50%;background:url(/template-photos/golden-hour-ceremony.webp) center/cover no-repeat;margin:0 auto 5px}
 .bb-features .sb-nm{font-size:.52rem;font-weight:600;text-align:center;color:#333}
 .bb-features .sb-bio{font-size:.44rem;color:#999;text-align:center;line-height:1.4;margin-top:3px}
-.bb-features .sb-fol{font-size:.46rem;color:var(--violet);text-align:center;margin-top:5px}
+.bb-features .sb-fol{font-size:.46rem;color:var(--site);text-align:center;margin-top:5px}
 .bb-features .sb-row{display:flex;gap:5px;align-items:center;margin-bottom:5px}
 .bb-features .sb-th{width:16px;height:12px;border-radius:2px;flex-shrink:0}
 .bb-features .sb-tt{font-size:.44rem;color:#777;line-height:1.2}
 .bb-features .sb-cat{display:flex;justify-content:space-between;font-size:.46rem;color:#888;padding:2px 0}
 .bb-features .sb-cat i{font-style:normal;color:#ccc}
 .bb-features .tags{display:flex;gap:4px;margin-top:8px}
-.bb-features .tag{font-size:.46rem;background:var(--violet-f);color:var(--violet);padding:2px 7px;border-radius:100px}
+.bb-features .tag{font-size:.46rem;background:var(--site-f);color:var(--site);padding:2px 7px;border-radius:100px}
 .bb-features .rel{border-top:1px solid #f0f0f0;padding:10px 14px}
 .bb-features .rel-h{font-size:.44rem;font-weight:700;letter-spacing:.11em;color:#999;text-transform:uppercase;margin-bottom:6px}
 .bb-features .rel-g{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .bb-features .rel-c{border:1px solid #f2f2f2;border-radius:4px;overflow:hidden}
-.bb-features .rel-i{height:18px;background:linear-gradient(135deg,#ddd6f8,#c6bcf2)}
+.bb-features .rel-i{height:18px;background:url(/template-photos/forest-sunbeams.webp) center/cover no-repeat}
 .bb-features .rel-t{font-size:.46rem;color:#555;padding:4px;line-height:1.3}
 /* ─── FEATURE GRID ─── */
-.bb-features .fg{background:var(--off);padding:92px 0 100px}
+.bb-features.fg{background:var(--off);padding:92px 0 100px}
 .bb-features .fg-head{display:flex;align-items:flex-end;justify-content:space-between;gap:40px;margin-bottom:56px;flex-wrap:wrap}
 .bb-features .stamp{flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;width:112px;height:112px;
   border-radius:50%;background:var(--violet);color:#fff;box-shadow:0 0 0 11px rgba(91,79,232,.1),0 0 0 22px rgba(91,79,232,.05)}
@@ -811,6 +883,9 @@ const STYLES = `.bb-features{
 .bb-features .fc:hover{transform:translateY(-2px);background:#fdfcff}
 .bb-features .fc.on{background:#fff;border-color:rgba(91,79,232,.32);box-shadow:0 3px 14px rgba(91,79,232,.14)}
 .bb-features .fc.on .fc-nm{color:var(--violet);font-weight:600}
+.bb-features .fc{position:relative}
+.bb-features .ex-new{display:inline-block;vertical-align:middle;margin-left:10px;font-family:'DM Sans',sans-serif;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--violet);background:var(--violet-f2);border-radius:100px;padding:3px 9px}
+.bb-features .fc-new{position:absolute;top:6px;right:8px;font-size:.5rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--violet);border-radius:100px;padding:2px 6px;line-height:1.3}
 .bb-features .fc:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
 .bb-features .fg-hint{text-align:center;font-size:.72rem;color:#b5b3ac;font-weight:300;margin:14px 0 14px}
 .bb-features .ex-pane.preview{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;
@@ -868,11 +943,93 @@ const STYLES = `.bb-features{
 .bb-features .b-pub{background:var(--amber-f);color:var(--amber)}
 .bb-features .b-analytics{background:var(--slate-f);color:var(--slate)}
 .bb-features .b-growth{background:var(--plum-f);color:var(--plum)}
-.bb-features .ex-stage{flex:1;padding:22px;background:#f5f5f7;min-height:380px}
+.bb-features .ex-stage{flex:none;padding:22px;background:#f5f5f7;min-height:380px;display:flex;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box}
+.bb-features .ex-fit{width:100%;flex-shrink:0;transform-origin:center center}
+.bb-features .ex-fit.shell,.bb-features .ex-fit.desk{width:760px}
+.bb-features .ex-fit.crop{position:relative;overflow:hidden}
+.bb-features .ex-fit.crop::after{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;background:linear-gradient(to bottom,rgba(245,245,247,0),#f5f5f7);pointer-events:none}
+.bb-features .ex-fit.shell>.stage-mb{width:760px;height:400px;position:relative;box-sizing:border-box}
+.bb-features .ex-fit.shell>.stage-mb::after{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;background:linear-gradient(to bottom,rgba(255,255,255,0),#fff);pointer-events:none}
 .bb-features .stage-mb{border:1px solid #dde;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 10px 36px rgba(91,79,232,.11)}
 .bb-features .hl{outline:2px solid var(--violet);outline-offset:2px;border-radius:5px}
 .bb-features .cal{display:inline-flex;align-items:center;gap:5px;font-size:.5rem;font-weight:600;color:var(--violet);
   background:var(--violet-f);padding:3px 9px;border-radius:100px;margin-bottom:7px}`;
+
+/**
+ * Every preview sits in a box of the same height. Browser mock-ups are a fixed
+ * window (SHELL_W x SHELL_H, cut off at the bottom like a real browser) scaled
+ * to SHELL_SHARE of the box width, so they are always the same size and never
+ * fill the box.
+ * Smaller diagrams are scaled to fill the box (up to 1.6x) and centered. On
+ * phones (box under 520px) everything reflows at natural size so text stays
+ * readable.
+ */
+const SHELL_W = 760;
+const SHELL_H = 400;
+const SHELL_SHARE = 0.72;
+const STAGE_H = 470;
+
+function FitStage({ html }: { html: string }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState<{ scale: number; shell: boolean; height?: number; crop?: number }>({ scale: 1, shell: false });
+
+  useEffect(() => {
+    const box = boxRef.current;
+    const inner = innerRef.current;
+    if (!box || !inner) return;
+    const measure = () => {
+      const child = inner.firstElementChild as HTMLElement | null;
+      if (!child) return;
+      // Clear any crop height left over from the previous feature before measuring.
+      inner.style.height = '';
+      const shell = child.classList.contains('stage-mb');
+      const cs = getComputedStyle(box);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const availW = box.clientWidth - padX;
+      const phone = box.clientWidth < 520;
+      if (shell && !phone) {
+        // Same share of the box at every width: 72% wide, never wider than SHELL_W.
+        const s = Math.min((availW * SHELL_SHARE) / SHELL_W, (STAGE_H - padY) / SHELL_H, 1);
+        setFit({ scale: s, shell: true, height: STAGE_H });
+        return;
+      }
+      if (phone) {
+        inner.classList.remove('desk');
+        setFit({ scale: 1, shell: false });
+        return;
+      }
+      inner.classList.add('desk'); // measure at the design width
+      // Diagrams lay out at the same design width as the browser window, then
+      // scale to the same share of the box. offsetWidth/Height ignore transforms.
+      const w = Math.max(...Array.from(inner.children).map((c) => (c as HTMLElement).offsetWidth), 1);
+      const h = inner.scrollHeight || 1; // full content height, even when cropped
+      // Same width as everything else; if that makes it too tall, crop the
+      // bottom with a fade (like the browser windows) instead of shrinking it.
+      const s = Math.min((availW * SHELL_SHARE) / w, 1.6);
+      const maxH = (STAGE_H - padY) / s;
+      const crop = h > maxH ? Math.floor(maxH) : undefined;
+      inner.style.height = crop ? `${crop}px` : '';
+      setFit({ scale: Math.round(s * 100) / 100, shell: false, height: STAGE_H, crop });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [html]);
+
+  return (
+    <div className="ex-stage" ref={boxRef} style={{ height: fit.height, minHeight: fit.shell ? 0 : undefined }}>
+      <div
+        className={fit.shell ? 'ex-fit shell' : fit.height ? (fit.crop ? 'ex-fit desk crop' : 'ex-fit desk') : 'ex-fit'}
+        ref={innerRef}
+        style={{ transform: fit.scale !== 1 ? `scale(${fit.scale})` : undefined }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    </div>
+  );
+}
 
 export function FeatureGrid() {
   const [active, setActive] = useState<string>('sidebars');
@@ -964,6 +1121,7 @@ export function FeatureGrid() {
                   <svg viewBox="0 0 24 24" dangerouslySetInnerHTML={{ __html: IC[f.i] }} />
                 </span>
                 <span className="fc-nm">{f.s || f.n}</span>
+                {f.isNew && <span className="fc-new">New</span>}
               </button>
             ))}
           </div>
@@ -983,12 +1141,12 @@ export function FeatureGrid() {
         <div className="ex-pane preview">
           <div className="ex-ph">
             <div>
-              <div className="ex-pn">{feature.n}</div>
+              <div className="ex-pn">{feature.n}{feature.isNew && <span className="ex-new">New</span>}</div>
               <div className="ex-pd">{feature.d}</div>
             </div>
             <div className={`ex-bd ${cat.badge}`}>{cat.label}</div>
           </div>
-          <div className="ex-stage" dangerouslySetInnerHTML={{ __html: stage(feature) }} />
+          <FitStage html={stage(feature)} />
         </div>
 
         <div className="fg-foot">
@@ -1011,7 +1169,7 @@ export function FeatureGrid() {
 
 const WORDS: Record<number, string> = {
   20: 'Twenty', 21: 'Twenty-one', 22: 'Twenty-two', 23: 'Twenty-three',
-  24: 'Twenty-four', 25: 'Twenty-five', 26: 'Twenty-six',
+  24: 'Twenty-four', 25: 'Twenty-five', 26: 'Twenty-six', 27: 'Twenty-seven', 28: 'Twenty-eight', 29: 'Twenty-nine', 30: 'Thirty',
 };
 function numberWord(n: number) {
   return WORDS[n] ?? String(n);
