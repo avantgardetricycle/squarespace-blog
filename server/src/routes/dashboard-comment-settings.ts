@@ -114,7 +114,6 @@ router.put('/', requireSession, requireEditableSubscription, async (req: Request
     res.status(403).json({ error: `Comments require the ${plan.entitlements.requiredPlan.comments} plan.` })
     return
   }
-  const legacyApiKey = (site.blogCommentSettings as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null
 
   const updates: Record<string, unknown> = {
     commentsEnabled: body.commentsEnabled ?? site.blogCommentSettings?.commentsEnabled ?? true,
@@ -138,11 +137,6 @@ router.put('/', requireSession, requireEditableSubscription, async (req: Request
       res.status(500).json({ error: 'Failed to store API key' })
       return
     }
-  }
-
-  if (updates.subscriberCommentsEnabled === true && !updates.squarespaceApiKeyEnc && !site.squarespaceApiKeyEnc && !legacyApiKey) {
-    res.status(400).json({ error: 'Verified API key is required to enable subscriber comments' })
-    return
   }
 
   // Normalize 0 and undefined to null (UI uses 0 for "Never"; modal omits field)

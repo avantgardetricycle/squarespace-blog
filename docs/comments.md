@@ -17,7 +17,7 @@ When Show Comments is on, these options appear:
 
 **Allow Anonymous Comments** — Readers post under a session username such as Anonymous1234. They cannot enter their own name or email. When verification is also on, logged-out readers still get a sign-in link so they can comment as a member. When this is off and verification is also off, guests see a message to sign in with a site member account.
 
-**Verify subscriber comments** — Require a member email and check it against your Squarespace member list. Disabled until a Squarespace API key is connected. Can be combined with anonymous comments; see below.
+**Verify subscriber comments** — Readers confirm their email with a one-time code and must be signed in to your site to get a verified badge. An API key is optional. Can be combined with anonymous comments; see below.
 
 **Require Approval Before Publishing** — New comments wait in **Awaiting Review** until you approve them.
 
@@ -41,22 +41,23 @@ On desktop, comments sit below the post body and sidebars. On phones, comments s
 
 **Anonymous** — Session usernames such as Anonymous1234 when **Allow Anonymous Comments** is on. The same browser session keeps the same username. No email is stored. In the dashboard these show an **Anonymous** badge.
 
-**Authenticated (member)** — The commenter’s email matched a Squarespace member via the Profiles API. These show an **Authenticated** badge and a checkmark (✓) on the live blog. Authenticated names may link to the Squarespace member profile.
+**Authenticated (member)** — The commenter proved they own the email with a one-time code and was signed in to the site. These show an **Authenticated** badge and a checkmark (✓) on the live blog. When the comment was posted with a code session, the dashboard also shows **Email verified**. Authenticated names may link to the Squarespace member profile when a profile id was stored.
 
 The two toggles are independent and can be combined. Reader experience:
 
 **Verify subscriber comments on, anonymous off**
 
 - Logged-out readers can still read comments, but the comment form is hidden. **Sign in to comment** links to the site member login.
-- Logged-in readers confirm their member email. If the Profiles API finds that email, the comment posts as verified.
-- If the email is not in your member list, the comment is not posted. A modal explains that membership could not be verified, and the same message stays under the comment button: site accent color, italic, regular weight, slightly smaller than the button. The button stays visible. The message remains until a later attempt verifies and the comment posts. Clicking the comment button again opens the email confirmation modal so they can try another address.
+- Logged-in readers who have already entered a code in this browser see **Commenting as {name} · Sign out** and the comment posts immediately. The code lasts about 30 days.
+- Otherwise they enter an email and the name to show, then a 6-digit code. The comment they already wrote posts as soon as the code is accepted.
+- **Sign out** ends that code session. The next verified comment asks for a new code.
+- If an API key is connected and the email is not in your member list, the comment is not posted. A modal explains that membership could not be verified, and the same message stays under the comment button: site accent color, italic, regular weight, slightly smaller than the button. The button stays visible. The message remains until a later attempt verifies and the comment posts. Clicking the comment button again opens the email modal so they can try another address.
 
 **Verify subscriber comments on, anonymous on**
 
 - Logged-out readers see the comment form and post as a session username such as Anonymous1234. They cannot enter a name or email. **Sign in to comment as a member** links to the site member login.
-- Logged-in readers confirm their member email. They can also choose **Comment anonymously** in that modal before submitting, which posts as Anonymous.
-- If the Profiles API finds the email, the comment posts as verified.
-- If the email is not in your member list, a modal asks whether they want to post anonymously. The same message stays under the comment button — site accent color, italic, regular weight, slightly smaller than the button — and the button stays visible. The message remains until a comment posts. Clicking the comment button again opens the email confirmation modal. The comment is only stored as a guest after they confirm.
+- Logged-in readers follow the code flow above. They can also choose **Comment anonymously** in the email modal, which posts as Anonymous.
+- If an API key is connected and the email is not in your member list, a modal asks whether they want to post anonymously. The same message stays under the comment button — site accent color, italic, regular weight, slightly smaller than the button — and the button stays visible. The message remains until a comment posts. The comment is only stored as a guest after they confirm.
 
 **Verify subscriber comments off, anonymous on**
 
@@ -68,7 +69,7 @@ On paywalled posts, logged-out readers do not see the comment section unless the
 
 ## Connecting your Squarespace API key
 
-Verified subscriber comments need a Squarespace API key with **Profiles (Read)** permission.
+An API key is optional. Connect one to also check commenters against your Squarespace member list. The key needs **Profiles (Read)** permission.
 
 1. In Squarespace, go to **Settings → Developer Tools → Developer API Keys** (or **Settings → Advanced → Developer API Keys**).
 2. Create a key with **Profiles (Read)**, or paste an existing key that already has that permission. Permissions cannot be edited after creation — if Profiles (Read) is missing, delete the key and create a new one.
@@ -94,6 +95,8 @@ Per-comment actions:
 - **Mark as Spam** / **Publish** from spam
 - **Delete** — Permanent removal (cannot be undone)
 - **Reply** — Post a reply as the site owner from the dashboard
+- **Remove verified badge** — On an authenticated comment, removes the badge. The comment stays published.
+- **Sign out this commenter** — On a comment posted with an email code, ends that commenter’s code sessions for this site. They need a new code before the next verified comment.
 
 You can select multiple comments for bulk Approve, Hide, Mark as Spam, or Delete (20 comments per page).
 

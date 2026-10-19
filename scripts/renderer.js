@@ -1390,6 +1390,44 @@
           bbCommentsLog('cookie clear failed', { name: name, error: String(e && e.message || e) });
         }
       }
+      var commenterMemoryToken = null;
+      var commenterProfile = null;
+      var forceDifferentEmail = false;
+      function bbSessionStorageKey() {
+        return 'bb_commenter_session:' + String(siteKey || 'site');
+      }
+      function bbReadCommenterToken() {
+        try {
+          var stored = window.localStorage.getItem(bbSessionStorageKey());
+          if (stored) {
+            commenterMemoryToken = stored;
+            return stored;
+          }
+        } catch (e) {}
+        return commenterMemoryToken;
+      }
+      function bbWriteCommenterToken(token) {
+        commenterMemoryToken = token || null;
+        try {
+          if (token) window.localStorage.setItem(bbSessionStorageKey(), token);
+          else window.localStorage.removeItem(bbSessionStorageKey());
+        } catch (e) {}
+      }
+      function bbDeleteLegacyVerifiedCookies() {
+        bbClearCookie(verifiedCookieName);
+        try {
+          var all = document.cookie ? document.cookie.split(';') : [];
+          for (var i = 0; i < all.length; i++) {
+            var part = all[i].trim();
+            var eq = part.indexOf('=');
+            var name = eq >= 0 ? part.slice(0, eq).trim() : part;
+            if (name.indexOf('bb_verified_sub_') === 0 || name.indexOf('bb_verified_commenter_') === 0) {
+              document.cookie = name + '=; Path=/; Max-Age=0; SameSite=Lax';
+            }
+          }
+        } catch (e) {}
+      }
+      bbDeleteLegacyVerifiedCookies();
       function bbEraseVerifiedCookie() {
         bbClearCookie(verifiedCookieName);
       }
@@ -1401,6 +1439,15 @@
         }
       }
       function bbGetVerifiedIdentity() {
+        if (subscriberCommentsEnabled) {
+          var sessionToken = bbReadCommenterToken();
+          if (!sessionToken || !commenterProfile || !commenterProfile.display_name) return null;
+          return {
+            name: String(commenterProfile.display_name),
+            token: sessionToken,
+            email: commenterProfile.email ? String(commenterProfile.email) : ''
+          };
+        }
         try {
           var raw = bbReadCookie(verifiedCookieName);
           if (!raw) return null;
@@ -1543,6 +1590,14 @@
         var body = document.createElement('div');
         body.textContent = opts.message || '';
         body.style.cssText = 'font-size:0.92rem;color:#333;line-height:1.45;margin-bottom:14px';
+        if (opts.linkHref) {
+          var signInLink = document.createElement('a');
+          signInLink.href = opts.linkHref;
+          signInLink.textContent = opts.linkLabel || 'Sign in';
+          signInLink.style.cssText = 'display:inline-block;margin-top:8px;color:var(--bb-accent, #5B4FE8);';
+          body.appendChild(document.createElement('br'));
+          body.appendChild(signInLink);
+        }
         var row = document.createElement('div');
         row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
         function close(choice) {
@@ -1648,6 +1703,7 @@
         var el = document.createElement('div');
         el.className = 'bb-comment-form-error';
         el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
         el.style.cssText = 'display:none;margin:8px 0 0;padding:0;background:none;border:none;color:var(--bb-accent,#5B4FE8);font-style:italic;font-weight:400;font-size:12px;line-height:1.4;max-width:560px';
         return el;
       }
@@ -1686,6 +1742,562 @@
           return true;
         }
         return false;
+      }
+
+      // Squarespace login for verified comments.
+      // JSON: Static.SQUARESPACE_CONTEXT account objects walked by _extractSquarespaceIdentityFromObject
+      // (authenticatedAccount, loggedInAccount, member, currentUser, user, profile, and the rest).
+      // Flags: authenticated, isAuthenticated, loggedIn, isLoggedIn, signedIn, isSignedIn.
+      // Email: email, loginEmail, username. Name: displayName, name, firstName + lastName.
+      // DOM fallback: .user-accounts-panel .auth / .unauth (and .user-account, [data-controller="UserAccount"]).
+      // "unknown" is treated as logged out when gating the verified path.
+      function bbSquarespaceLoginState() {
+        var id = null;
+        try { id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null; } catch (e) { id = null; }
+        if (id && id.loggedIn === true) return 'logged_in';
+        if (id && id.loggedIn === false) return 'logged_out';
+        try {
+          var mode = self._resolveViewerMode();
+          if (mode === 'loggedIn') return 'logged_in';
+          if (mode === 'loggedOut') return 'logged_out';
+        } catch (e2) {}
+        try {
+          if (document.querySelector('.user-accounts-panel .auth, .user-account .auth, [data-controller="UserAccount"] .auth')) return 'logged_in';
+          if (document.querySelector('.user-accounts-panel .unauth, .user-account .unauth, [data-controller="UserAccount"] .unauth')) return 'logged_out';
+        } catch (e3) {}
+        return 'unknown';
+      }
+      function bbSquarespacePrefill() {
+        var email = '';
+        var firstName = '';
+        try {
+          var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
+          var account = ctx && (ctx.authenticatedAccount || ctx.loggedInAccount || null);
+          if (account && typeof account === 'object') {
+            if (account.email) email = String(account.email).trim();
+            if (account.firstName) firstName = String(account.firstName).trim();
+            else if (account.givenName) firstName = String(account.givenName).trim();
+          }
+        } catch (e) {}
+        if (!email) {
+          try {
+            var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
+            if (id && id.email) email = String(id.email).trim();
+          } catch (e2) {}
+        }
+        return { email: email, firstName: firstName.slice(0, 100) };
+      }
+      function bbSignOutCommenter() {
+        var token = bbReadCommenterToken();
+        bbWriteCommenterToken(null);
+        commenterProfile = null;
+        forceDifferentEmail = false;
+        if (token) {
+          try {
+            fetch(apiUrl + '/auth/logout', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-BetterBlog-Site-Token': siteKey,
+                'Authorization': 'Bearer ' + token
+              },
+              credentials: 'omit'
+            }).catch(function() {});
+          } catch (e) {}
+        }
+        try { applyCommentIdentityMode(); } catch (e2) {}
+      }
+      function bbRefreshCommenterProfile(done) {
+        var token = bbReadCommenterToken();
+        if (!subscriberCommentsEnabled || !token) {
+          if (done) done();
+          return;
+        }
+        fetch(apiUrl + '/auth/me', {
+          method: 'GET',
+          headers: {
+            'X-BetterBlog-Site-Token': siteKey,
+            'Authorization': 'Bearer ' + token
+          },
+          credentials: 'omit'
+        }).then(function(r) {
+          return r.text().then(function(text) {
+            var data = {};
+            if (text) { try { data = JSON.parse(text); } catch (e) { data = {}; } }
+            return { status: r.status, data: data };
+          });
+        }).then(function(res) {
+          if (bbReadCommenterToken() !== token) {
+            if (done) done();
+            return;
+          }
+          if (res.status === 401) {
+            bbWriteCommenterToken(null);
+            commenterProfile = null;
+          } else if (res.data && res.data.display_name) {
+            commenterProfile = res.data;
+          }
+          if (done) done();
+        }).catch(function() { if (done) done(); });
+      }
+      function bbRunInvisibleHCaptcha(done) {
+        if (!cs.hcaptchaSiteKey || typeof window.hcaptcha === 'undefined') {
+          done(null);
+          return;
+        }
+        try {
+          var existing = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
+          if (existing) { done(existing); return; }
+          var holder = document.createElement('div');
+          holder.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden';
+          document.body.appendChild(holder);
+          var widgetId = window.hcaptcha.render(holder, { sitekey: cs.hcaptchaSiteKey, size: 'invisible' });
+          var finished = false;
+          function finish(token) {
+            if (finished) return;
+            finished = true;
+            try { if (holder.parentNode) holder.parentNode.removeChild(holder); } catch (e) {}
+            done(token || null);
+          }
+          window.hcaptcha.execute(widgetId).then(function(result) {
+            var token = result && (result.response || result) ? (result.response || result) : null;
+            if (token && typeof token !== 'string') token = window.hcaptcha.getResponse(widgetId);
+            finish(typeof token === 'string' ? token : null);
+          }).catch(function() { finish(null); });
+        } catch (e) {
+          done(null);
+        }
+      }
+      function bbBindCommentModal(overlay, modal, returnFocus, close) {
+        function focusable() {
+          return Array.prototype.slice.call(modal.querySelectorAll('button, input, textarea, a[href], select')).filter(function(el) {
+            return !el.disabled;
+          });
+        }
+        function onKey(ev) {
+          if (ev.key === 'Escape') {
+            ev.preventDefault();
+            close(null);
+            return;
+          }
+          if (ev.key !== 'Tab') return;
+          var items = focusable();
+          if (!items.length) return;
+          var first = items[0];
+          var last = items[items.length - 1];
+          if (ev.shiftKey && document.activeElement === first) {
+            ev.preventDefault();
+            last.focus();
+          } else if (!ev.shiftKey && document.activeElement === last) {
+            ev.preventDefault();
+            first.focus();
+          }
+        }
+        document.addEventListener('keydown', onKey);
+        return function cleanup() {
+          document.removeEventListener('keydown', onKey);
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          try { if (returnFocus && returnFocus.focus) returnFocus.focus(); } catch (e) {}
+        };
+      }
+      function bbReadFetchJson(r) {
+        return r.text().then(function(text) {
+          var data = {};
+          if (text) { try { data = JSON.parse(text); } catch (e) { data = {}; } }
+          return { status: r.status, data: data };
+        });
+      }
+      var verifiedFlowOpen = false;
+      function bbBeginVerifiedPost(opts) {
+        opts = opts || {};
+        var draftBody = opts.body || '';
+        var parentId = opts.parentId || null;
+        var button = opts.button || null;
+        var errorEl = opts.errorEl || null;
+        var idleLabel = opts.idleLabel || 'Post Comment';
+        var returnFocus = button || document.activeElement;
+        if (verifiedFlowOpen) return;
+        function setPosting(posting) {
+          if (!button) return;
+          button.disabled = posting;
+          button.style.opacity = posting ? '0.55' : '1';
+          button.style.cursor = posting ? 'not-allowed' : 'pointer';
+          button.textContent = posting ? 'Posting…' : idleLabel;
+        }
+        function postDraft() {
+          var token = bbReadCommenterToken();
+          var headers = {
+            'Content-Type': 'application/json',
+            'X-BetterBlog-Site-Token': siteKey
+          };
+          if (token) headers.Authorization = 'Bearer ' + token;
+          var payload = {
+            post_id: postId,
+            body: draftBody,
+            siteKey: siteKey,
+            squarespace_logged_in: bbSquarespaceLoginState() === 'logged_in',
+            post_title: (post && post.title) || null,
+            post_published_at: bbResolvePostPublishedAt(post),
+            post_url: (post && (post.fullUrl || post.url)) || null
+          };
+          if (parentId) payload.parent_id = parentId;
+          if (post && post.recordType != null && parentId && String(parentId).indexOf('sq:') === 0) {
+            payload.squarespace_record_type = post.recordType;
+          }
+          setPosting(true);
+          fetch(apiUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload),
+            credentials: 'omit'
+          }).then(bbReadFetchJson).then(function(res) {
+            var data = res.data || {};
+            var code = data.code ? String(data.code) : '';
+            if (res.status === 201 && data.id) {
+              forceDifferentEmail = false;
+              bbSetCommentError(errorEl, '');
+              setPosting(false);
+              if (typeof opts.onPosted === 'function') opts.onPosted(data);
+              return;
+            }
+            setPosting(false);
+            if (code === 'commenter_auth_required' || res.status === 401) {
+              bbWriteCommenterToken(null);
+              commenterProfile = null;
+              bbSetCommentError(errorEl, '');
+              try { applyCommentIdentityMode(); } catch (e) {}
+              openEmailModal(bbSquarespacePrefill());
+              return;
+            }
+            var err = data.error || 'Failed to post';
+            if (code === 'squarespace_login_required') {
+              bbSetCommentError(errorEl, err);
+              bbShowCommentMessageModal({
+                title: 'Sign in to comment',
+                message: err,
+                linkHref: bbCommentSignInHref(),
+                linkLabel: 'Sign in',
+                primaryLabel: 'OK',
+                secondaryLabel: data.anonymous_retry_token ? 'Post anonymously' : ''
+              }, function(choice) {
+                if (choice === 'secondary' && data.anonymous_retry_token && typeof opts.onAnonymousRetry === 'function') {
+                  opts.onAnonymousRetry(String(data.anonymous_retry_token));
+                }
+              });
+              return;
+            }
+            if (code === 'verification_failed' || code === 'verification_failed_anonymous_available') {
+              forceDifferentEmail = true;
+              bbSetCommentError(errorEl, err);
+              bbShowCommentMessageModal({
+                title: 'Couldn’t verify membership',
+                message: err,
+                primaryLabel: 'OK'
+              }, function() {
+                if (code !== 'verification_failed_anonymous_available') return;
+                bbShowCommentMessageModal({
+                  title: 'Post anonymously?',
+                  message: 'Post this comment anonymously instead?',
+                  primaryLabel: 'Post anonymously',
+                  secondaryLabel: 'Cancel'
+                }, function(choice) {
+                  if (choice === 'primary' && typeof opts.onAnonymousRetry === 'function') {
+                    opts.onAnonymousRetry(data.anonymous_retry_token ? String(data.anonymous_retry_token) : '');
+                  }
+                });
+              });
+              return;
+            }
+            bbSetCommentError(errorEl, err);
+          }).catch(function() {
+            setPosting(false);
+            bbSetCommentError(errorEl, 'Failed to post');
+          });
+        }
+        function openEmailModal(prefill) {
+          if (verifiedFlowOpen) return;
+          verifiedFlowOpen = true;
+          var focusDifferent = forceDifferentEmail;
+          forceDifferentEmail = false;
+          var shell = bbCreateCommentModalShell();
+          var overlay = shell.overlay;
+          var modal = shell.modal;
+          overlay.setAttribute('role', 'presentation');
+          modal.setAttribute('role', 'dialog');
+          modal.setAttribute('aria-modal', 'true');
+          modal.setAttribute('aria-labelledby', 'bb-commenter-modal-title');
+          var cleanup = function() {};
+          var codeTimer = null;
+          function clearCodeTimer() {
+            if (codeTimer) {
+              clearInterval(codeTimer);
+              codeTimer = null;
+            }
+          }
+          function closeModal() {
+            verifiedFlowOpen = false;
+            cleanup();
+          }
+          cleanup = bbBindCommentModal(overlay, modal, returnFocus, closeModal);
+          function showEmail(values) {
+            clearCodeTimer();
+            modal.textContent = '';
+            var title = document.createElement('div');
+            title.id = 'bb-commenter-modal-title';
+            title.textContent = 'Confirm your email';
+            title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:10px';
+            var emailLabel = document.createElement('label');
+            emailLabel.textContent = 'Email';
+            emailLabel.htmlFor = 'bb-commenter-email';
+            emailLabel.style.cssText = 'display:block;font-size:0.85rem;margin-bottom:4px';
+            var emailInput = document.createElement('input');
+            emailInput.id = 'bb-commenter-email';
+            emailInput.type = 'email';
+            emailInput.name = 'email';
+            emailInput.required = true;
+            emailInput.autocomplete = 'email';
+            emailInput.value = values.email || '';
+            emailInput.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:10px';
+            var nameLabel = document.createElement('label');
+            nameLabel.textContent = 'Name, shown with your comment';
+            nameLabel.htmlFor = 'bb-commenter-name';
+            nameLabel.style.cssText = 'display:block;font-size:0.85rem;margin-bottom:4px';
+            var nameInput = document.createElement('input');
+            nameInput.id = 'bb-commenter-name';
+            nameInput.type = 'text';
+            nameInput.name = 'name';
+            nameInput.required = true;
+            nameInput.maxLength = 100;
+            nameInput.value = values.name || '';
+            nameInput.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:8px';
+            var msg = document.createElement('div');
+            msg.setAttribute('aria-live', 'polite');
+            msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+            var different = bbCommentModalButton('Use a different email', false);
+            different.onclick = function() {
+              emailInput.value = '';
+              try { emailInput.focus(); } catch (e) {}
+            };
+            var send = bbCommentModalButton('Send code', true);
+            send.onclick = function() {
+              var em = (emailInput.value || '').trim();
+              var nm = (nameInput.value || '').trim();
+              if (!em || em.indexOf('@') < 1) {
+                msg.textContent = 'Please enter a valid email.';
+                try { emailInput.focus(); } catch (e) {}
+                return;
+              }
+              if (!nm || nm.length > 100) {
+                msg.textContent = 'Enter the name to show with your comment.';
+                try { nameInput.focus(); } catch (e) {}
+                return;
+              }
+              send.disabled = true;
+              bbRunInvisibleHCaptcha(function(captchaToken) {
+                var startBody = { email: em, display_name: nm, siteKey: siteKey };
+                if (captchaToken) startBody.hcaptcha_token = captchaToken;
+                fetch(apiUrl + '/auth/start', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                  body: JSON.stringify(startBody),
+                  credentials: 'omit'
+                }).then(bbReadFetchJson).then(function(res) {
+                  send.disabled = false;
+                  if (res.status === 202 && res.data && res.data.challenge_id) {
+                    showCode(em, nm, String(res.data.challenge_id));
+                    return;
+                  }
+                  var code = res.data && res.data.code ? String(res.data.code) : '';
+                  msg.textContent = code === 'captcha_failed'
+                    ? 'Captcha verification failed. Try again.'
+                    : ((res.data && res.data.error) || 'Could not send a code. Try again.');
+                }).catch(function() {
+                  send.disabled = false;
+                  msg.textContent = 'Could not send a code. Try again.';
+                });
+              });
+            };
+            overlay.onclick = function(ev) { if (ev.target === overlay) closeModal(); };
+            row.appendChild(different);
+            if (allowAnonymousComments) {
+              var anon = bbCommentModalButton('Comment anonymously', false);
+              anon.onclick = function() {
+                closeModal();
+                if (typeof opts.onAnonymous === 'function') opts.onAnonymous();
+              };
+              row.appendChild(anon);
+            }
+            row.appendChild(send);
+            modal.appendChild(title);
+            modal.appendChild(emailLabel);
+            modal.appendChild(emailInput);
+            modal.appendChild(nameLabel);
+            modal.appendChild(nameInput);
+            modal.appendChild(msg);
+            modal.appendChild(row);
+            try { (focusDifferent ? different : emailInput).focus(); } catch (e) {}
+          }
+          function showCode(email, name, challengeId) {
+            modal.textContent = '';
+            var title = document.createElement('div');
+            title.id = 'bb-commenter-modal-title';
+            title.textContent = 'Confirm your email';
+            title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:8px';
+            var copy = document.createElement('div');
+            copy.style.cssText = 'font-size:0.9rem;color:#333;line-height:1.45;margin-bottom:10px';
+            copy.appendChild(document.createTextNode('We sent a 6-digit code to '));
+            var strong = document.createElement('strong');
+            strong.textContent = email;
+            copy.appendChild(strong);
+            copy.appendChild(document.createTextNode('. It expires in 10 minutes.'));
+            var codeLabel = document.createElement('label');
+            codeLabel.textContent = 'Code';
+            codeLabel.htmlFor = 'bb-commenter-code';
+            codeLabel.style.cssText = 'display:block;font-size:0.85rem;margin-bottom:4px';
+            var codeInput = document.createElement('input');
+            codeInput.id = 'bb-commenter-code';
+            codeInput.inputMode = 'numeric';
+            codeInput.autocomplete = 'one-time-code';
+            codeInput.maxLength = 6;
+            codeInput.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:1.1rem;letter-spacing:0.2em;margin-bottom:8px';
+            var msg = document.createElement('div');
+            msg.setAttribute('aria-live', 'polite');
+            msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;align-items:center';
+            var resend = bbCommentModalButton('Resend code (30)', false);
+            resend.disabled = true;
+            var remaining = 30;
+            function startResendCountdown() {
+              clearCodeTimer();
+              remaining = 30;
+              resend.disabled = true;
+              resend.textContent = 'Resend code (30)';
+              codeTimer = setInterval(function() {
+                remaining -= 1;
+                if (remaining <= 0) {
+                  clearCodeTimer();
+                  resend.disabled = false;
+                  resend.textContent = 'Resend code';
+                  return;
+                }
+                resend.textContent = 'Resend code (' + remaining + ')';
+              }, 1000);
+            }
+            startResendCountdown();
+            var previousCleanup = cleanup;
+            cleanup = function() {
+              clearCodeTimer();
+              previousCleanup();
+            };
+            var submitting = false;
+            function submitCode(digits) {
+              if (submitting || digits.length !== 6) return;
+              submitting = true;
+              var oldToken = bbReadCommenterToken();
+              var verifyBody = { challenge_id: challengeId, code: digits };
+              if (oldToken) verifyBody.replaces_token = oldToken;
+              fetch(apiUrl + '/auth/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify(verifyBody),
+                credentials: 'omit'
+              }).then(bbReadFetchJson).then(function(res) {
+                submitting = false;
+                if (res.status === 200 && res.data && res.data.session_token) {
+                  bbWriteCommenterToken(String(res.data.session_token));
+                  commenterProfile = {
+                    email: res.data.email,
+                    display_name: res.data.display_name,
+                    expires_at: res.data.expires_at
+                  };
+                  closeModal();
+                  try { applyCommentIdentityMode(); } catch (e) {}
+                  postDraft();
+                  return;
+                }
+                var fail = res.data && res.data.code ? String(res.data.code) : '';
+                msg.textContent = fail === 'code_expired'
+                  ? 'That code has expired. Send a new one.'
+                  : (fail === 'too_many_attempts'
+                    ? 'Too many tries. Send a new code.'
+                    : "That code isn't right. Check the email and try again.");
+                codeInput.value = '';
+                try { codeInput.focus(); } catch (e2) {}
+              }).catch(function() {
+                submitting = false;
+                msg.textContent = "That code isn't right. Check the email and try again.";
+              });
+            }
+            codeInput.addEventListener('paste', function(ev) {
+              var text = '';
+              try { text = (ev.clipboardData || window.clipboardData).getData('text') || ''; } catch (e) { text = ''; }
+              var digits = text.replace(/\D/g, '').slice(0, 6);
+              if (!digits) return;
+              ev.preventDefault();
+              codeInput.value = digits;
+              if (digits.length === 6) submitCode(digits);
+            });
+            codeInput.addEventListener('input', function() {
+              var digits = (codeInput.value || '').replace(/\D/g, '').slice(0, 6);
+              if (codeInput.value !== digits) codeInput.value = digits;
+              if (digits.length === 6) submitCode(digits);
+            });
+            resend.onclick = function() {
+              if (resend.disabled) return;
+              resend.disabled = true;
+              bbRunInvisibleHCaptcha(function(captchaToken) {
+                var startBody = { email: email, display_name: name, siteKey: siteKey };
+                if (captchaToken) startBody.hcaptcha_token = captchaToken;
+                fetch(apiUrl + '/auth/start', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                  body: JSON.stringify(startBody),
+                  credentials: 'omit'
+                }).then(bbReadFetchJson).then(function(res) {
+                  if (res.status === 202 && res.data && res.data.challenge_id) {
+                    challengeId = String(res.data.challenge_id);
+                    msg.textContent = '';
+                    startResendCountdown();
+                    return;
+                  }
+                  resend.disabled = false;
+                  msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
+                }).catch(function() {
+                  resend.disabled = false;
+                  msg.textContent = 'Could not send a code. Try again.';
+                });
+              });
+            };
+            var different = bbCommentModalButton('Use a different email', false);
+            different.onclick = function() { showEmail({ email: email, name: name }); };
+            overlay.onclick = function(ev) { if (ev.target === overlay) closeModal(); };
+            row.appendChild(resend);
+            row.appendChild(different);
+            modal.appendChild(title);
+            modal.appendChild(copy);
+            modal.appendChild(codeLabel);
+            modal.appendChild(codeInput);
+            modal.appendChild(msg);
+            modal.appendChild(row);
+            try { codeInput.focus(); } catch (e) {}
+          }
+          document.body.appendChild(overlay);
+          var current = commenterProfile && commenterProfile.email ? String(commenterProfile.email) : '';
+          var savedName = commenterProfile && commenterProfile.display_name ? String(commenterProfile.display_name) : '';
+          showEmail({
+            email: current || (prefill && prefill.email) || '',
+            name: savedName || (prefill && prefill.firstName) || ''
+          });
+        }
+        var held = bbReadCommenterToken();
+        if (held && !forceDifferentEmail) {
+          postDraft();
+          return;
+        }
+        openEmailModal(bbSquarespacePrefill());
       }
 
       function currentCommentViewerMode() {
@@ -1954,6 +2566,43 @@
             };
             rSubmit.onclick = function() {
               var modeNow = currentCommentViewerMode().mode;
+              var replyDraft = (rBody.value || '').trim();
+              if (subscriberCommentsEnabled && modeNow === 'loggedIn' && !bbUseGeneratedAnonymousName(modeNow) && !replyPostAsAnonymous) {
+                if (!replyDraft) { rBody.focus(); return; }
+                bbBeginVerifiedPost({
+                  body: replyDraft,
+                  parentId: parentCommentId,
+                  button: rSubmit,
+                  errorEl: rError,
+                  idleLabel: 'Post reply',
+                  onAnonymous: function() {
+                    replyPostAsAnonymous = true;
+                    rSubmit.onclick();
+                  },
+                  onAnonymousRetry: function(retryToken) {
+                    replyPostAsAnonymous = true;
+                    replyAnonymousRetryToken = retryToken || '';
+                    rSubmit.onclick();
+                  },
+                  onPosted: function(data) {
+                    bbSetCommentError(rError, '');
+                    replyFormShell.style.display = 'none';
+                    rBody.value = '';
+                    replyPostAsAnonymous = false;
+                    replyAnonymousRetryToken = '';
+                    if (data.status === 'pending') {
+                      var pend = document.createElement('p');
+                      pend.className = 'bb-comment-reply-pending-note';
+                      pend.style.cssText = 'margin:10px 0 0;font-size:0.85rem;color:#666;padding-left:4px';
+                      pend.textContent = 'Your reply was submitted and is awaiting moderation.';
+                      wrap.appendChild(pend);
+                    } else {
+                      refreshBetterBlogCommentsList();
+                    }
+                  }
+                });
+                return;
+              }
               var nm = (rName.value || '').trim();
               var bd = (rBody.value || '').trim();
               if (modeNow !== 'loggedIn' && !allowAnonymousComments && !nm) { rName.focus(); return; }
@@ -2018,10 +2667,10 @@
                 post_url: (post && (post.fullUrl || post.url)) || null
               };
               var rEm = (replyGenerated || replyPostAsAnonymous) ? null : (modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim());
-              if (replyPostAsAnonymous) payload.post_as_anonymous = true;
+              if (replyPostAsAnonymous || replyGenerated) payload.post_as_anonymous = true;
               if (replyPostAsAnonymous && replyAnonymousRetryToken) payload.anonymous_retry_token = replyAnonymousRetryToken;
               if (rEm) payload.email = rEm;
-              if (loggedInToken) payload.verification_cookie_token = loggedInToken;
+              if (!subscriberCommentsEnabled && loggedInToken) payload.verification_cookie_token = loggedInToken;
               if (!replyGenerated && !replyPostAsAnonymous && modeNow === 'loggedIn' && replySubscriberName && !loggedInToken) {
                 payload.subscriber_display_name = replySubscriberName;
               }
@@ -2410,7 +3059,7 @@
       var mainNameOverride = null;
       var mainEmailEpoch = verifiedCommenterEpoch;
       function bbRenderLoggedInIdentityLine(identity) {
-        var labelText = 'Logged in as ' + identity.name;
+        var labelText = (subscriberCommentsEnabled ? 'Commenting as ' : 'Logged in as ') + identity.name;
         var label = loggedInIdentityLine.querySelector('.bb-comment-logged-in-label');
         var logout = loggedInIdentityLine.querySelector('.bb-comment-logout');
         if (label && logout && label.textContent === labelText && loggedInIdentityLine.style.display !== 'none') return;
@@ -2422,11 +3071,15 @@
         logout = document.createElement('button');
         logout.type = 'button';
         logout.className = 'bb-comment-logout';
-        logout.textContent = 'Logout';
+        logout.textContent = subscriberCommentsEnabled ? 'Sign out' : 'Logout';
         logout.style.cssText = 'display:inline;margin:0 0 0 10px;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:inherit;vertical-align:baseline';
         logout.onclick = function() {
           mainEmailOverride = null;
           mainNameOverride = null;
+          if (subscriberCommentsEnabled) {
+            bbSignOutCommenter();
+            return;
+          }
           bbClearVerifiedIdentity();
           applyCommentIdentityMode();
         };
@@ -2436,6 +3089,7 @@
 
       nameInput.oninput = emailInput.oninput = bodyArea.oninput = mainFormSync;
       applyCommentIdentityMode();
+      bbRefreshCommenterProfile(function() { applyCommentIdentityMode(); });
       // Auth UI can mount asynchronously; probe a few times, then stop.
       setTimeout(function() { applyCommentIdentityMode(); }, 250);
       setTimeout(function() { applyCommentIdentityMode(); }, 1200);
@@ -2480,10 +3134,10 @@
           post_published_at: bbResolvePostPublishedAt(post),
           post_url: (post && (post.fullUrl || post.url)) || null
         };
-        if (postAsAnonymous) payload.post_as_anonymous = true;
+        if (postAsAnonymous || generatedNow) payload.post_as_anonymous = true;
         if (postAsAnonymous && anonymousRetryToken) payload.anonymous_retry_token = anonymousRetryToken;
         if (!generatedNow && !postAsAnonymous && emailToUse && !verificationToken) payload.email = emailToUse;
-        if (!generatedNow && !postAsAnonymous && verificationToken) payload.verification_cookie_token = verificationToken;
+        if (!subscriberCommentsEnabled && !generatedNow && !postAsAnonymous && verificationToken) payload.verification_cookie_token = verificationToken;
         if (chosenSubscriberName) payload.subscriber_display_name = chosenSubscriberName;
         bbCommentsLog('main POST payload', {
           mode: modeNow,
@@ -2585,6 +3239,38 @@
         var modeNow = currentCommentViewerMode().mode;
         var name = (nameInput.value || '').trim();
         var body = (bodyArea.value || '').trim();
+        if (subscriberCommentsEnabled && modeNow === 'loggedIn' && !bbUseGeneratedAnonymousName(modeNow)) {
+          if (!body) { bodyArea.focus(); return; }
+          bbBeginVerifiedPost({
+            body: body,
+            parentId: null,
+            button: submitBtn,
+            errorEl: mainCommentError,
+            idleLabel: 'Post Comment',
+            onAnonymous: function() {
+              submitMainCommentWithEmail(modeNow, name, body, null, true);
+            },
+            onAnonymousRetry: function(retryToken) {
+              submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
+            },
+            onPosted: function(data) {
+              bbSetCommentError(mainCommentError, '');
+              bodyArea.value = '';
+              if (data.status === 'pending') {
+                var msg = document.createElement('p');
+                msg.style.color = '#666';
+                msg.style.fontSize = '0.9rem';
+                msg.textContent = 'Your comment is awaiting moderation.';
+                formWrap.appendChild(msg);
+              } else {
+                applyCommentIdentityMode();
+                refreshBetterBlogCommentsList();
+              }
+              mainFormSync();
+            }
+          });
+          return;
+        }
         if (modeNow !== 'loggedIn' && !allowAnonymousComments && !name) { nameInput.focus(); return; }
         if (!body) { bodyArea.focus(); return; }
         if (bbUseGeneratedAnonymousName(modeNow)) {
@@ -2658,6 +3344,7 @@
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      if (subscriberCommentsEnabled) formWrap.insertBefore(loggedInIdentityLine, submitBtn);
       var mainCommentError = bbCreateCommentErrorEl();
       formWrap.appendChild(mainCommentError);
       }

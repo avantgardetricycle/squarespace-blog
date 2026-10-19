@@ -63,7 +63,15 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use('/api/config', cors({ origin: true, credentials: true }), configRoutes)
   app.use('/api/analytics', cors({ origin: true, credentials: true }), analyticsRoutes)
   app.use('/api/capture', cors({ origin: true, credentials: true }), captureRoutes)
-  app.use('/api/comments', cors({ origin: true, credentials: true }), commentsRoutes)
+  app.use(
+    '/api/comments',
+    cors({
+      origin: true,
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'X-BetterBlog-Site-Token', 'Authorization'],
+    }),
+    commentsRoutes
+  )
   app.use('/api/auth', cors({ origin: true, credentials: true }), authRoutes)
 
   const appOrigin = (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')

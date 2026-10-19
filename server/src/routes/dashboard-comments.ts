@@ -149,6 +149,7 @@ router.get('/', requireSession, async (req: Request, res: Response) => {
       email: c.email,
       verifiedSubscriber: c.verifiedSubscriber,
       squarespaceProfileId: c.squarespaceProfileId,
+      commenterSessionId: c.commenterSessionId,
       body: c.body,
       status: c.status,
       ipAddress: c.ipAddress,
@@ -250,7 +251,7 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   })
   if (siteRow) await migrateBlogPasswordAtRest(siteRow.id, siteRow.blogPassword)
 
-  const body = req.body as { status?: string; body?: string }
+  const body = req.body as { status?: string; body?: string; verified_subscriber?: boolean }
   if (body.status === 'deleted') {
     await hardDeleteComment(comment.id, comment.parentId)
     res.json({ id: comment.id, deleted: true })
@@ -263,6 +264,9 @@ router.patch('/:id', requireSession, async (req: Request, res: Response) => {
   }
   if (typeof body.body === 'string') {
     updates.body = body.body.trim().slice(0, 5000)
+  }
+  if (body.verified_subscriber === false) {
+    updates.verifiedSubscriber = false
   }
 
   if (Object.keys(updates).length === 0) {

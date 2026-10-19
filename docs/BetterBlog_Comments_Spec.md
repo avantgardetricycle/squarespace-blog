@@ -3,6 +3,8 @@
 **Status:** Draft  
 **Authors:** BetterBlog Team
 
+> **Superseded in part by** `BetterBlog_Verified_Comments_v2_Spec.md`: §5.3 (Subscriber Verification Flow), §5.4 (Verification Cookie), and the §4.3 rule that `subscriber_comments_enabled` requires an API key. The rest of this document still applies.
+
 ---
 
 ## 1. Overview
@@ -184,6 +186,8 @@ The API key is **never transmitted to the client** after being saved. The UI sho
 
 ### 4.3 Settings Validation Rules
 
+> Superseded: the API-key requirement below is replaced by `BetterBlog_Verified_Comments_v2_Spec.md`. Verification no longer requires a stored key.
+
 - `subscriber_comments_enabled` cannot be `TRUE` unless a verified API key is stored.
 - `auto_close_after_days` accepts `NULL` (never) or an integer between 1 and 365.
 - `allow_anonymous_comments` and `subscriber_comments_enabled` are independent toggles and can be on simultaneously. When both are on, logged-in readers can verify as a member or explicitly choose to comment anonymously. When verification is on and anonymous is off, logged-out readers see comments but not the comment form.
@@ -219,6 +223,8 @@ Displayed when `allow_anonymous_comments = TRUE` and the post is not paywalled.
 5. Notification triggered if configured (§7).
 
 ### 5.3 Subscriber Verification Flow
+
+> Superseded by `BetterBlog_Verified_Comments_v2_Spec.md`.
 
 Displayed when `subscriber_comments_enabled = TRUE`. The overlay detects authenticated state via Squarespace's DOM (presence of `.auth` class / absence of `.unauth` class on the body).
 
@@ -285,6 +291,8 @@ On paywalled posts that are not a public preview, logged-out readers still do no
 If a valid verification cookie exists (§5.4), the email modal is skipped and the stored email is sent automatically. A failed verification does not write that cookie, and the email entered for that attempt is not reused.
 
 ### 5.4 Verification Cookie
+
+> Superseded by `BetterBlog_Verified_Comments_v2_Spec.md`.
 
 On successful subscriber verification:
 

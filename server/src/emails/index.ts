@@ -7,6 +7,7 @@ import { MagicLinkEmail } from './MagicLinkEmail.js'
 import { CommentNotificationEmail } from './CommentNotificationEmail.js'
 import { ProfilesApiAlertEmail } from './ProfilesApiAlertEmail.js'
 import { TrialDayFourEmail } from './TrialDayFourEmail.js'
+import { CommenterCodeEmail } from './CommenterCodeEmail.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const logoPath = join(__dirname, 'logo-email.png')
@@ -45,6 +46,20 @@ export async function renderTrialDayFourEmail(props: {
   recipientName?: string | null
 }): Promise<string> {
   return render(TrialDayFourEmail(props))
+}
+
+export async function renderCommenterCodeEmail(props: { code: string; blogName: string }): Promise<string> {
+  return render(CommenterCodeEmail(props))
+}
+
+export function commenterCodeText(code: string, blogName: string): string {
+  return [
+    `Your code is ${code}. It expires in 10 minutes.`,
+    '',
+    `Enter it on ${blogName} to post your comment.`,
+    '',
+    "If you didn't ask for this, you can ignore this email.",
+  ].join('\n')
 }
 
 export async function renderProfilesApiAlertEmail(props: {
