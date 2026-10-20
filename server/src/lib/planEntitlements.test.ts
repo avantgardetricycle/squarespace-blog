@@ -5,6 +5,7 @@ import {
   capacityForPlanChange,
   decideAddBlog,
   newlyLockedViolations,
+  publicPaywallSettings,
   resolveEntitlements,
   stripServedConfig,
   websiteHostname,
@@ -165,6 +166,33 @@ test('Publication allows a third blog on one website and blocks a second website
   })
   assert.equal(otherSite.ok, false)
   assert.equal(entitlements.features.paywall, true)
+})
+
+test('lower plans serve default paywall copy and keep the signup URL', () => {
+  const stored = {
+    subscribeUrl: 'https://example.com/join',
+    footerDescription: 'Custom description',
+    eyebrowText: 'Members',
+    headlineText: 'Read everything',
+    featureItems: ['Custom perk']
+  }
+  const essentials = resolveEntitlements({ plan: 'essentials' })
+  const professional = resolveEntitlements({ plan: 'professional' })
+  const defaults = {
+    subscribeUrl: 'https://example.com/join',
+    footerDescription: null,
+    eyebrowText: null,
+    headlineText: null,
+    featureItems: []
+  }
+  assert.deepEqual(publicPaywallSettings(essentials, stored), defaults)
+  assert.deepEqual(publicPaywallSettings(professional, stored), defaults)
+  assert.equal(publicPaywallSettings(essentials, null), null)
+
+  const publication = resolveEntitlements({ plan: 'publication' })
+  const studio = resolveEntitlements({ plan: 'studio' })
+  assert.deepEqual(publicPaywallSettings(publication, stored), stored)
+  assert.deepEqual(publicPaywallSettings(studio, stored), stored)
 })
 
 test('Studio can open a second website and is blocked at 4 blogs on one website', () => {

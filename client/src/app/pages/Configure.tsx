@@ -63,6 +63,7 @@ import {
   DEFAULT_PAYWALL_FEATURE_ITEMS,
   PAYWALL_EYEBROW_MAX,
   PAYWALL_HEADLINE_MAX,
+  defaultPaywallForm,
   type PaywallFormState,
 } from "@/app/components/PaywallSettingsModal";
 import { getDashboardMe, createPaymentMethodUpdateSession, type DashboardMe } from "@/api/auth";
@@ -3034,8 +3035,13 @@ export default function Configure() {
      commentSettings.allowLikes !== savedCommentSettings.allowLikes ||
      commentSettings.allowThreadedReplies !== savedCommentSettings.allowThreadedReplies ||
      commentSettings.sortOrder !== savedCommentSettings.sortOrder);
+  const paywallCopyLocked = !featureAllowed(me?.entitlements, "paywall", me != null);
+  const paywallModalForm = paywallCopyLocked
+    ? defaultPaywallForm(effectiveSite?.paywallSettings?.subscribeUrl ?? "")
+    : paywallForm;
   const paywallFormDirty =
     shouldShowViewerModeToggle &&
+    !paywallCopyLocked &&
     (paywallForm.subscribeUrl !== savedPaywallForm.subscribeUrl ||
       paywallForm.footerDescription !== savedPaywallForm.footerDescription ||
       paywallForm.eyebrowText !== savedPaywallForm.eyebrowText ||
@@ -3460,17 +3466,24 @@ export default function Configure() {
       siteId: effectiveSite?.id ?? undefined,
       paywallMode: effectiveSite?.paywallMode ?? "auto",
       paywallDetectionState: effectiveSite?.paywallDetectionState ?? "unknown",
-      viewerMode: featureAllowed(entitlements, "paywall", planLoaded) && previewAudience !== "loggedIn" ? "loggedOut" : "loggedIn",
-      paywallSettings:
-        shouldShowViewerModeToggle && featureAllowed(entitlements, "paywall", planLoaded)
+      viewerMode: previewAudience !== "loggedIn" ? "loggedOut" : "loggedIn",
+      paywallSettings: shouldShowViewerModeToggle
+        ? paywallCopyLocked
           ? {
+              subscribeUrl: effectiveSite?.paywallSettings?.subscribeUrl?.trim() || null,
+              footerDescription: null,
+              eyebrowText: null,
+              headlineText: null,
+              featureItems: [],
+            }
+          : {
               subscribeUrl: paywallForm.subscribeUrl.trim() || null,
               footerDescription: paywallForm.footerDescription.trim().slice(0, 160) || null,
               eyebrowText: paywallForm.eyebrowText.trim().slice(0, PAYWALL_EYEBROW_MAX) || null,
               headlineText: paywallForm.headlineText.trim().slice(0, PAYWALL_HEADLINE_MAX) || null,
               featureItems: paywallForm.featureItems.map((s) => s.trim()).filter(Boolean).slice(0, 4),
             }
-          : null,
+        : null,
       previewSelectedPostIndex,
       previewFeaturedDebug: previewDebugEnabled,
       previewDevice: device,
@@ -3490,6 +3503,7 @@ export default function Configure() {
     previewDebugEnabled,
     device,
     shouldShowViewerModeToggle,
+    paywallCopyLocked,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
     paywallForm.eyebrowText,
@@ -3552,7 +3566,7 @@ export default function Configure() {
     if (isInPaymentGrace(me?.subscription)) return;
     const keyToSave = effectiveSiteKey ?? siteKey;
     if (!keyToSave) return;
-    if (shouldShowViewerModeToggle) {
+    if (shouldShowViewerModeToggle && !paywallCopyLocked) {
       const signupError = signupPageUrlError(paywallForm.subscribeUrl);
       if (signupError) {
         toast.error(signupError);
@@ -3577,7 +3591,7 @@ export default function Configure() {
           body: JSON.stringify({
             siteKey: keyToSave,
             config: configToApiPayload(config),
-            ...(shouldShowViewerModeToggle
+            ...(shouldShowViewerModeToggle && !paywallCopyLocked
               ? {
                   paywallSettings: {
                     subscribeUrl: paywallForm.subscribeUrl.trim() ? paywallForm.subscribeUrl.trim() : null,
@@ -3635,7 +3649,7 @@ export default function Configure() {
       if (configOk) {
         setSavedConfig(config);
         setConfig(config);
-        if (shouldShowViewerModeToggle) {
+        if (shouldShowViewerModeToggle && !paywallCopyLocked) {
           setSavedPaywallForm({
             subscribeUrl: paywallForm.subscribeUrl,
             footerDescription: paywallForm.footerDescription,
@@ -3689,6 +3703,7 @@ export default function Configure() {
     config,
     commentSettings,
     shouldShowViewerModeToggle,
+    paywallCopyLocked,
     paywallForm.subscribeUrl,
     paywallForm.footerDescription,
     paywallForm.eyebrowText,
@@ -4198,21 +4213,15 @@ export default function Configure() {
               <Trash2 className="h-3.5 w-3.5 mr-1.5 shrink-0" />
               Clear all settings
             </Button>
-            {(shouldShowViewerModeToggle || !featureAllowed(entitlements, "paywall", planLoaded)) && (
-              <PlanFeatureLock
-                locked={!featureAllowed(entitlements, "paywall", planLoaded)}
-                planName={currentPlanName}
+            {(shouldShowViewerModeToggle || paywallCopyLocked) && (
+              <Button
+                variant="outline"
+                size="sm"
                 className="w-full"
+                onClick={() => setPaywallSettingsModalOpen(true)}
               >
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setPaywallSettingsModalOpen(true)}
-                >
-                  Paywall Settings
-                </Button>
-              </PlanFeatureLock>
+                Paywall Settings
+              </Button>
             )}
             <Dialog
               open={clearSettingsModalOpen}
@@ -4336,12 +4345,15 @@ export default function Configure() {
             allowedTemplateKeys={planLoaded ? entitlements?.templates ?? { collection: [], post: [] } : null}
             planName={currentPlanName}
           />
-          {shouldShowViewerModeToggle && (
+          {(shouldShowViewerModeToggle || paywallCopyLocked) && (
             <PaywallSettingsModal
               open={paywallSettingsModalOpen}
               onOpenChange={setPaywallSettingsModalOpen}
-              form={paywallForm}
+              form={paywallModalForm}
               onChange={setPaywallForm}
+              readOnly={paywallCopyLocked}
+              planName={currentPlanName}
+              upgradePlanName={entitlements?.requiredPlan.paywall ?? "Publication"}
             />
           )}
           <h2 className="font-semibold text-lg">Settings</h2>
@@ -6940,10 +6952,6 @@ export default function Configure() {
         </div>
 
         <div className="border-b border-[#e5e4e0] bg-white px-4 py-2 flex flex-wrap items-center gap-3">
-          <PlanFeatureLock
-            locked={!featureAllowed(entitlements, "paywall", planLoaded)}
-            planName={currentPlanName}
-          >
           <div className="flex items-center bg-[#f7f6f3] rounded-lg p-1" role="group" aria-label="Preview as">
             {(
               [
@@ -6963,7 +6971,6 @@ export default function Configure() {
               </button>
             ))}
           </div>
-          </PlanFeatureLock>
           <Button
             variant="ghost"
             size="sm"

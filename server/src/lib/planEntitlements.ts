@@ -63,6 +63,7 @@ const FEATURE_PLAN: Record<PlanFeature, PlanKey> = {
   sorting: 'professional',
   comments: 'essentials',
   basicAnalytics: 'professional',
+  // Custom paywall copy. The overlay itself works on every plan and uses defaults below Publication.
   paywall: 'publication',
   emailCapture: 'publication',
   kitMailchimp: 'publication',
@@ -643,4 +644,32 @@ export function stripServedConfig (
 export function templateRequiredPlan (templateKey: string): string {
   const plan = TEMPLATE_PLAN[templateKey]
   return plan ? getPlanDisplayName(plan) : getPlanDisplayName('publication')
+}
+
+export type PaywallSettingsPayload = {
+  subscribeUrl: string | null
+  footerDescription: string | null
+  eyebrowText: string | null
+  headlineText: string | null
+  featureItems: string[]
+}
+
+/**
+ * Live paywall settings. Publication and Studio keep saved copy. Lower plans
+ * keep the signup URL and render the default eyebrow, headline, description,
+ * and feature list.
+ */
+export function publicPaywallSettings (
+  entitlements: PublicEntitlements,
+  stored: PaywallSettingsPayload | null
+): PaywallSettingsPayload | null {
+  if (!stored) return null
+  if (entitlements.features.paywall) return stored
+  return {
+    subscribeUrl: stored.subscribeUrl,
+    footerDescription: null,
+    eyebrowText: null,
+    headlineText: null,
+    featureItems: []
+  }
 }

@@ -19,6 +19,18 @@ export const PAYWALL_EYEBROW_MAX = 80;
 export const PAYWALL_HEADLINE_MAX = 160;
 export const DEFAULT_PAYWALL_EYEBROW = "Member Exclusive";
 export const DEFAULT_PAYWALL_HEADLINE = "Unlock unlimited access to {blogName}";
+export const DEFAULT_PAYWALL_FOOTER =
+  "Subscribe for full access to every story, the complete archive, and exclusive reading.";
+
+export function defaultPaywallForm(subscribeUrl = ""): PaywallFormState {
+  return {
+    subscribeUrl,
+    footerDescription: DEFAULT_PAYWALL_FOOTER,
+    eyebrowText: DEFAULT_PAYWALL_EYEBROW,
+    headlineText: DEFAULT_PAYWALL_HEADLINE,
+    featureItems: [...DEFAULT_PAYWALL_FEATURE_ITEMS],
+  };
+}
 
 export type PaywallFormState = {
   subscribeUrl: string;
@@ -33,15 +45,27 @@ type PaywallSettingsModalProps = {
   onOpenChange: (open: boolean) => void;
   form: PaywallFormState;
   onChange: (next: PaywallFormState | ((prev: PaywallFormState) => PaywallFormState)) => void;
+  /** Essentials and Professional see the defaults and cannot edit them. */
+  readOnly?: boolean;
+  planName?: string;
+  upgradePlanName?: string;
 };
 
-export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: PaywallSettingsModalProps) {
+export function PaywallSettingsModal({
+  open,
+  onOpenChange,
+  form,
+  onChange,
+  readOnly = false,
+  planName = "your plan",
+  upgradePlanName = "Publication",
+}: PaywallSettingsModalProps) {
   const [urlError, setUrlError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || readOnly) return;
     setUrlError(signupPageUrlError(form.subscribeUrl));
-  }, [open]);
+  }, [open, readOnly]);
 
   const requestClose = (nextOpen: boolean) => {
     if (nextOpen) {
@@ -49,10 +73,12 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
       onOpenChange(true);
       return;
     }
-    const error = signupPageUrlError(form.subscribeUrl);
-    if (error) {
-      setUrlError(error);
-      return;
+    if (!readOnly) {
+      const error = signupPageUrlError(form.subscribeUrl);
+      if (error) {
+        setUrlError(error);
+        return;
+      }
     }
     setUrlError(null);
     onOpenChange(false);
@@ -64,7 +90,9 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
         <DialogHeader>
           <DialogTitle>Paywall Settings</DialogTitle>
           <DialogDescription>
-            These settings apply to both the collection and post views.
+            {readOnly
+              ? `On ${planName}, this copy stays at the defaults. Customizing it is available on the ${upgradePlanName} plan. Change the signup URL from the blog’s edit dialog.`
+              : "These settings apply to both the collection and post views."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-1">
@@ -81,6 +109,7 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
               }}
               placeholder="https://…"
               className="text-sm"
+              readOnly={readOnly}
             />
             <p className="text-[10px] text-[#6b6b6b] leading-snug">
               The URL where readers sign up for your blog
@@ -96,6 +125,7 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
               }
               placeholder={DEFAULT_PAYWALL_EYEBROW}
               className="text-sm"
+              readOnly={readOnly}
             />
             <p className="text-[10px] text-[#6b6b6b] leading-snug">
               Small label above the headline. Displayed in uppercase. Leave blank for “{DEFAULT_PAYWALL_EYEBROW}”.
@@ -110,6 +140,7 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
               }
               placeholder={DEFAULT_PAYWALL_HEADLINE}
               className="text-sm"
+              readOnly={readOnly}
             />
             <p className="text-[10px] text-[#6b6b6b] leading-snug">
               Headline below the eyebrow. Leave blank for the default. Use {"{blogName}"} to insert your site title.
@@ -122,9 +153,10 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
               onChange={(e) =>
                 onChange((p) => ({ ...p, footerDescription: e.target.value.slice(0, 160) }))
               }
-              placeholder="Subscribe for full access to every story, the complete archive, and exclusive reading."
+              placeholder={DEFAULT_PAYWALL_FOOTER}
               rows={3}
               className="text-sm resize-y min-h-[72px]"
+              readOnly={readOnly}
             />
           </div>
           <div className="space-y-2">
@@ -141,7 +173,9 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
                     })
                   }
                   className="text-sm flex-1"
+                  readOnly={readOnly}
                 />
+                {readOnly ? null : (
                 <button
                   type="button"
                   className="p-2 rounded hover:bg-red-100 text-[#6b6b6b] shrink-0"
@@ -155,9 +189,10 @@ export function PaywallSettingsModal({ open, onOpenChange, form, onChange }: Pay
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                )}
               </div>
             ))}
-            {form.featureItems.length < 4 && (
+            {!readOnly && form.featureItems.length < 4 && (
               <Button
                 type="button"
                 variant="outline"
