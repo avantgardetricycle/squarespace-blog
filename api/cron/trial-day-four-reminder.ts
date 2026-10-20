@@ -13,7 +13,7 @@ function headerValue(value: string | string[] | undefined): string | null {
 
 /**
  * Daily reminder for Stripe free trials entering day 4.
- * Schedule is hourly at minute 0 (`0 * * * *`) while testing. Routed explicitly in vercel.json
+ * Schedule is every 10 minutes (`*/10 * * * *`) while testing. Routed explicitly in vercel.json
  * so it is not handled by api/index.ts.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
