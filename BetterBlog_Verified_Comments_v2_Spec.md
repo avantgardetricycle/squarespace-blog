@@ -29,7 +29,7 @@ Defaults are chosen below; change them here if product disagrees.
 |---|---|---|
 | D1 | Does verification require an API key? | **No.** The badge requires OTP session + logged-in signal. If a key is connected, the contact cross-check also applies. |
 | D2 | Existing verified comments (earned under the old flow) | **Keep their badges.** No backfill. |
-| D3 | hCaptcha on comment submit for verified sessions | **Skipped.** The OTP start step already required a captcha. Anonymous submits still require it. |
+| D3 | Extra challenge on comment submit or code send | **None.** Spam control is the per-IP comment rate limit and the OTP send limits. |
 | D4 | Profiles → Contacts API migration | **Out of scope.** Put the lookup behind an interface (§7.3) so the swap later touches one file. |
 | D5 | Session scope | **Per Squarespace site** (the hostname that owns the snippet), not per blog. One verification works across all blogs on that site. This matches how the API key is already shared per hostname. |
 
@@ -86,8 +86,8 @@ The settings and paywall rules for whether the comment section shows at all are 
      - **Email** (required). Prefilled from the Squarespace JSON if that source exposes the account email (§10.2).
      - **Name, shown with your comment** (required, max 100). Prefilled from the Squarespace JSON first name if exposed.
    - Primary button: **Send code**.
-   - If anonymous comments are on, a secondary text button: **Comment anonymously**. This submits the draft with `post_as_anonymous: true`, using the existing anonymous path and captcha.
-   - **Send code** runs invisible hCaptcha, then calls `POST /api/comments/auth/start`.
+   - If anonymous comments are on, a secondary text button: **Comment anonymously**. This submits the draft with `post_as_anonymous: true`, using the existing anonymous path.
+   - **Send code** calls `POST /api/comments/auth/start`.
 4. **Code modal** (replaces the Email modal content):
    - Copy: "We sent a 6-digit code to **{email}**. It expires in 10 minutes."
    - One input: `inputmode="numeric"`, `autocomplete="one-time-code"`, `maxlength=6`. Accept pasted codes with spaces or dashes and strip non-digits. Auto-submit when 6 digits are entered.
@@ -141,7 +141,7 @@ Count rows in `commenter_otp_challenges` within the window.
 ### 5.2 No enumeration
 
 - `POST /auth/start` returns **the same 202 body** whether or not the code was sent. The cases are: rate limited for that email, email invalid in a way that passes basic format checks, or a normal send.
-  - Exception: hCaptcha failure and malformed input (not an email at all) may return 400.
+  - Exception: malformed input (not an email at all) may return 400.
   - Exception: IP-level rate limiting may return 429, because it isn't tied to the email.
 - Send the email **after** responding. Use `waitUntil` from `@vercel/functions` (or the existing background mechanism) so response timing doesn't reveal whether a send happened.
 - Membership and contact status are never checked or revealed at `/auth/start` or `/auth/verify`. They are only checked at comment submit, after the reader has proven they own the email.
@@ -191,7 +191,6 @@ async function submitComment(req) {
 
   if (req.body.post_as_anonymous) {
     if (!settings.allow_anonymous_comments) return error(403, 'anonymous_not_allowed');
-    await requireCaptchaOrRetryToken(req);          // existing anonymous_retry_token logic
     return storeAnonymousComment(req);              // unchanged
   }
 
@@ -261,14 +260,14 @@ All endpoints require the existing `X-BetterBlog-Site-Token` header, which resol
 ### 8.1 `POST /api/comments/auth/start`
 
 ```json
-{ "blog_id": "uuid", "email": "reader@example.com", "display_name": "Sam", "hcaptcha_token": "..." }
+{ "blog_id": "uuid", "email": "reader@example.com", "display_name": "Sam" }
 ```
 
-- Validates hCaptcha, email format, and `display_name` (1–100 chars, trimmed).
+- Validates email format and `display_name` (1–100 chars, trimmed).
 - Applies the rate limits in §5.1. If a per-email limit is hit, return the same 202 and don't send.
 - Creates the challenge and sends the email after responding.
 - **202** `{ "challenge_id": "uuid", "expires_in": 600, "resend_after": 30 }`
-- **400** `{ code: "invalid_request" | "captcha_failed" }`, **429** `{ code: "rate_limited" }` (IP-level only).
+- **400** `{ code: "invalid_request" }`, **429** `{ code: "rate_limited" }` (IP-level only).
 
 ### 8.2 `POST /api/comments/auth/verify`
 
@@ -459,29 +458,28 @@ Reuse the transactional email service already used for dashboard magic links.
 3. A 6th attempt after 5 wrong codes returns `too_many_attempts`, even with the right code.
 4. A new `/auth/start` for the same email invalidates the previous challenge.
 5. A 4th send within 15 min for the same email returns 202 but no email is sent.
-6. hCaptcha failure returns 400 `captcha_failed`.
 
 **Sessions**
-7. `/auth/me` more than 24 h after the last extension moves `expires_at` forward by 30 days. It never goes past `created_at + 180d`.
-8. Logout, then `/auth/me`, returns 401.
-9. The dashboard revoke signs out every session for that email on the site.
+6. `/auth/me` more than 24 h after the last extension moves `expires_at` forward by 30 days. It never goes past `created_at + 180d`.
+7. Logout, then `/auth/me`, returns 401.
+8. The dashboard revoke signs out every session for that email on the site.
 
 **Submit matrix** (with and without an API key connected)
-10. Verify on, valid session, logged in, no key → 201, `verified_subscriber = true`.
-11. Verify on, valid session, logged in, key connected, contact found → 201 verified.
-12. Same as 11, contact not found → `verification_failed` (anonymous off) or `verification_failed_anonymous_available` with a retry token (anonymous on). No comment is stored.
-13. Verify on, valid session, `squarespace_logged_in: false` → 403 `squarespace_login_required`. The session is not revoked.
-14. Verify on, no token → 401 `commenter_auth_required`.
-15. `post_as_anonymous: true` with anonymous off → 403. With anonymous on and a valid captcha → 201 anonymous, unchanged from today.
-16. Verify off → behavior identical to before this change.
+9. Verify on, valid session, logged in, no key → 201, `verified_subscriber = true`.
+10. Verify on, valid session, logged in, key connected, contact found → 201 verified.
+11. Same as 10, contact not found → `verification_failed` (anonymous off) or `verification_failed_anonymous_available` with a retry token (anonymous on). No comment is stored.
+12. Verify on, valid session, `squarespace_logged_in: false` → 403 `squarespace_login_required`. The session is not revoked.
+13. Verify on, no token → 401 `commenter_auth_required`.
+14. `post_as_anonymous: true` with anonymous off → 403. With anonymous on → 201 anonymous, unchanged from today.
+15. Verify off → behavior identical to before this change.
 
 **Overlay**
-17. Logged-in reader, no token: draft → Email modal → Code modal → comment posts automatically with the original draft and `parent_id`.
-18. Reader returning with a token: no modal, comment posts directly, signed-in line shown.
-19. With `localStorage` throwing, the flow still completes; the token lives in memory only.
-20. The Squarespace session logs out mid-page: the form switches to the sign-in state and the draft is kept. After signing back in, no new code is required.
-21. A legacy `bb_verified_sub_*` cookie is deleted on load.
-22. Keyboard-only: both modals can be completed, Esc closes them, and focus returns to the comment button.
+16. Logged-in reader, no token: draft → Email modal → Code modal → comment posts automatically with the original draft and `parent_id`.
+17. Reader returning with a token: no modal, comment posts directly, signed-in line shown.
+18. With `localStorage` throwing, the flow still completes; the token lives in memory only.
+19. The Squarespace session logs out mid-page: the form switches to the sign-in state and the draft is kept. After signing back in, no new code is required.
+20. A legacy `bb_verified_sub_*` cookie is deleted on load.
+21. Keyboard-only: both modals can be completed, Esc closes them, and focus returns to the comment button.
 
 ---
 

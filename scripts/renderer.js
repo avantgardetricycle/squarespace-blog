@@ -1916,34 +1916,6 @@
           if (done) done();
         }).catch(function() { if (done) done(); });
       }
-      function bbRunInvisibleHCaptcha(done) {
-        if (!cs.hcaptchaSiteKey || typeof window.hcaptcha === 'undefined') {
-          done(null);
-          return;
-        }
-        try {
-          var existing = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
-          if (existing) { done(existing); return; }
-          var holder = document.createElement('div');
-          holder.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden';
-          document.body.appendChild(holder);
-          var widgetId = window.hcaptcha.render(holder, { sitekey: cs.hcaptchaSiteKey, size: 'invisible' });
-          var finished = false;
-          function finish(token) {
-            if (finished) return;
-            finished = true;
-            try { if (holder.parentNode) holder.parentNode.removeChild(holder); } catch (e) {}
-            done(token || null);
-          }
-          window.hcaptcha.execute(widgetId).then(function(result) {
-            var token = result && (result.response || result) ? (result.response || result) : null;
-            if (token && typeof token !== 'string') token = window.hcaptcha.getResponse(widgetId);
-            finish(typeof token === 'string' ? token : null);
-          }).catch(function() { finish(null); });
-        } catch (e) {
-          done(null);
-        }
-      }
       function bbBindCommentModal(overlay, modal, returnFocus, close) {
         function focusable() {
           return Array.prototype.slice.call(modal.querySelectorAll('button, input, textarea, a[href], select')).filter(function(el) {
@@ -2189,35 +2161,29 @@
                 return;
               }
               send.disabled = true;
-              bbRunInvisibleHCaptcha(function(captchaToken) {
-                var startBody = { email: em, siteKey: siteKey };
-                if (captchaToken) startBody.hcaptcha_token = captchaToken;
-                fetch(apiUrl + '/auth/start', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
-                  body: JSON.stringify(startBody),
-                  credentials: 'omit'
-                }).then(bbReadFetchJson).then(function(res) {
-                  send.disabled = false;
-                  if (res.status === 202 && res.data && res.data.challenge_id) {
-                    showCode(em, String(res.data.challenge_id));
-                    return;
-                  }
-                  var code = res.data && res.data.code ? String(res.data.code) : '';
-                  if (code === 'verification_failed' || code === 'verification_failed_anonymous_available') {
-                    bbRejectCommenterEmail(em);
-                    emailInput.value = '';
-                    msg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + em + '.');
-                    try { emailInput.focus(); } catch (e) {}
-                    return;
-                  }
-                  msg.textContent = code === 'captcha_failed'
-                    ? 'Captcha verification failed. Try again.'
-                    : ((res.data && res.data.error) || 'Could not send a code. Try again.');
-                }).catch(function() {
-                  send.disabled = false;
-                  msg.textContent = 'Could not send a code. Try again.';
-                });
+              fetch(apiUrl + '/auth/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify({ email: em, siteKey: siteKey }),
+                credentials: 'omit'
+              }).then(bbReadFetchJson).then(function(res) {
+                send.disabled = false;
+                if (res.status === 202 && res.data && res.data.challenge_id) {
+                  showCode(em, String(res.data.challenge_id));
+                  return;
+                }
+                var code = res.data && res.data.code ? String(res.data.code) : '';
+                if (code === 'verification_failed' || code === 'verification_failed_anonymous_available') {
+                  bbRejectCommenterEmail(em);
+                  emailInput.value = '';
+                  msg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + em + '.');
+                  try { emailInput.focus(); } catch (e) {}
+                  return;
+                }
+                msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
+              }).catch(function() {
+                send.disabled = false;
+                msg.textContent = 'Could not send a code. Try again.';
               });
             };
             row.appendChild(different);
@@ -2348,35 +2314,31 @@
             resend.onclick = function() {
               if (resend.disabled) return;
               resend.disabled = true;
-              bbRunInvisibleHCaptcha(function(captchaToken) {
-                var startBody = { email: email, siteKey: siteKey };
-                if (captchaToken) startBody.hcaptcha_token = captchaToken;
-                fetch(apiUrl + '/auth/start', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
-                  body: JSON.stringify(startBody),
-                  credentials: 'omit'
-                }).then(bbReadFetchJson).then(function(res) {
-                  if (res.status === 202 && res.data && res.data.challenge_id) {
-                    challengeId = String(res.data.challenge_id);
-                    msg.textContent = '';
-                    startResendCountdown();
-                    return;
-                  }
-                  resend.disabled = false;
-                  var resendCode = res.data && res.data.code ? String(res.data.code) : '';
-                  if (resendCode === 'verification_failed' || resendCode === 'verification_failed_anonymous_available') {
-                    bbRejectCommenterEmail(email);
-                    showEmail({ email: '' });
-                    var emailMsg = modal.querySelector('[aria-live="polite"]');
-                    if (emailMsg) emailMsg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + email + '.');
-                    return;
-                  }
-                  msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
-                }).catch(function() {
-                  resend.disabled = false;
-                  msg.textContent = 'Could not send a code. Try again.';
-                });
+              fetch(apiUrl + '/auth/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify({ email: email, siteKey: siteKey }),
+                credentials: 'omit'
+              }).then(bbReadFetchJson).then(function(res) {
+                if (res.status === 202 && res.data && res.data.challenge_id) {
+                  challengeId = String(res.data.challenge_id);
+                  msg.textContent = '';
+                  startResendCountdown();
+                  return;
+                }
+                resend.disabled = false;
+                var resendCode = res.data && res.data.code ? String(res.data.code) : '';
+                if (resendCode === 'verification_failed' || resendCode === 'verification_failed_anonymous_available') {
+                  bbRejectCommenterEmail(email);
+                  showEmail({ email: '' });
+                  var emailMsg = modal.querySelector('[aria-live="polite"]');
+                  if (emailMsg) emailMsg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + email + '.');
+                  return;
+                }
+                msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
+              }).catch(function() {
+                resend.disabled = false;
+                msg.textContent = 'Could not send a code. Try again.';
               });
             };
             var different = bbCommentModalButton('Use a different email', false);
@@ -2793,12 +2755,6 @@
               });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
                 payload.squarespace_record_type = post.recordType;
-              }
-              if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
-                try {
-                  var tok = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
-                  if (tok) payload.hcaptcha_token = tok;
-                } catch (e3) {}
               }
               fetch(apiUrl, {
                 method: 'POST',
@@ -3298,12 +3254,6 @@
           generatedAnonymous: generatedNow,
           postAsAnonymous: Boolean(postAsAnonymous)
         });
-        if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
-          try {
-            var token = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
-            if (token) payload.hcaptcha_token = token;
-          } catch (e) {}
-        }
         fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
