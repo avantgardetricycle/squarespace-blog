@@ -19,6 +19,7 @@ export const PUBLIC_PRICING_TIERS = [
       "Last updated date on posts",
       "Post footer block",
       "Comments with moderation",
+      "Paywall with Squarespace Memberships, using the default layout (BetterBlog takes no cut; Squarespace's own fees apply)",
       "Live preview (desktop, tablet, phone)",
     ],
     highlight: false,
@@ -50,7 +51,7 @@ export const PUBLIC_PRICING_TIERS = [
     features: [
       "Everything in Professional, plus",
       "All 10 templates: adds the magazine layouts Editorial (blog page) and Story (post)",
-      "Paywall with Squarespace Memberships (BetterBlog takes no cut; Squarespace's own fees apply)",
+      "Custom paywall copy: eyebrow, headline, description, and feature list",
       "Email sign-up forms and lead magnets, with a downloadable list",
       "Send sign-ups straight to Kit or Mailchimp",
       "Multiple authors and author management",
