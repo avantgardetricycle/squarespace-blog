@@ -55,7 +55,6 @@ function clientIp(req: Request): string {
 export function createCommentAuthRouter(deps: {
   getSiteToken: (req: Request) => string | null
   getSite: (siteToken: string) => Promise<CommentSite | null>
-  verifyHCaptcha: (token: string) => Promise<boolean>
 }): Router {
   const router = Router()
 
@@ -86,15 +85,7 @@ export function createCommentAuthRouter(deps: {
       return
     }
 
-    const body = req.body as { email?: unknown; hcaptcha_token?: unknown }
-    const captchaToken = typeof body.hcaptcha_token === 'string' ? body.hcaptcha_token.trim() : ''
-    if (process.env.HCAPTCHA_SECRET_KEY) {
-      if (!captchaToken || !(await deps.verifyHCaptcha(captchaToken))) {
-        res.status(400).json({ code: 'captcha_failed', error: 'Captcha verification failed' })
-        return
-      }
-    }
-
+    const body = req.body as { email?: unknown }
     const emailRaw = typeof body.email === 'string' ? body.email : ''
     const email = normalizeCommenterEmail(emailRaw)
     if (!isPlausibleEmail(email)) {

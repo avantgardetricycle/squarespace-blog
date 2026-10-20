@@ -57,18 +57,6 @@ function issueAnonymousRetryToken(siteId: string): string {
   return token
 }
 
-function peekAnonymousRetryToken(token: string, siteId: string): boolean {
-  cleanupAnonymousRetryTokens()
-  const entry = anonymousRetryTokens.get(token)
-  return Boolean(entry && entry.siteId === siteId && entry.expiresAt > Date.now())
-}
-
-function consumeAnonymousRetryToken(token: string, siteId: string): boolean {
-  if (!peekAnonymousRetryToken(token, siteId)) return false
-  anonymousRetryTokens.delete(token)
-  return true
-}
-
 function cleanupCommentRateLimit(): void {
   const now = Date.now()
   const cutoff = now - RATE_LIMIT_WINDOW_MS
@@ -176,26 +164,6 @@ function effectiveCommentSettings(s: CommentSettingsRow | null) {
   return s
 }
 
-async function verifyHCaptcha(token: string): Promise<boolean> {
-  const secret = process.env.HCAPTCHA_SECRET_KEY
-  if (!secret) {
-    console.warn('[comments] HCAPTCHA_SECRET_KEY not set, skipping verification')
-    return true
-  }
-  try {
-    const res = await fetch('https://api.hcaptcha.com/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ secret, response: token }),
-    })
-    const data = (await res.json()) as { success?: boolean }
-    return data.success === true
-  } catch (err) {
-    console.error('[comments] hCaptcha verification error:', err)
-    return false
-  }
-}
-
 function fingerprintHash(ip: string, userAgent: string): string {
   return crypto.createHash('sha256').update(`${ip}:${userAgent}`).digest('hex')
 }
@@ -219,7 +187,6 @@ router.use(
         notificationEmail: settings?.notificationEmail ?? null,
       }
     },
-    verifyHCaptcha,
   })
 )
 
@@ -470,10 +437,8 @@ router.post('/', async (req: Request, res: Response) => {
     body?: string
     parent_id?: string | null
     squarespace_record_type?: number | string
-    hcaptcha_token?: string
     verification_cookie_token?: string
     post_as_anonymous?: boolean
-    anonymous_retry_token?: string
     anonymous_handle?: string
     squarespace_logged_in?: boolean
     post_title?: string
@@ -488,25 +453,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const postAsAnonymous = body.post_as_anonymous === true
-  const anonymousRetryToken =
-    typeof body.anonymous_retry_token === 'string' ? body.anonymous_retry_token.trim() : ''
-  const skipCaptchaForAnonymousRetry =
-    postAsAnonymous && !!anonymousRetryToken && peekAnonymousRetryToken(anonymousRetryToken, site.id)
   const verifiedSubmit = settings.subscriberCommentsEnabled && !postAsAnonymous
-
-  const hcaptchaSecret = process.env.HCAPTCHA_SECRET_KEY
-  const hcaptchaToken = typeof body.hcaptcha_token === 'string' ? body.hcaptcha_token.trim() : null
-  if (!verifiedSubmit && hcaptchaSecret && !hcaptchaToken && !skipCaptchaForAnonymousRetry) {
-    res.status(400).json({ error: 'hcaptcha_token is required' })
-    return
-  }
-
-  const hcaptchaValid =
-    !verifiedSubmit && hcaptchaSecret && !skipCaptchaForAnonymousRetry ? await verifyHCaptcha(hcaptchaToken!) : true
-  if (!hcaptchaValid) {
-    res.status(400).json({ error: 'Captcha verification failed' })
-    return
-  }
 
   const displayNameRaw = typeof body.display_name === 'string' ? body.display_name.trim() : ''
   // Optional name from the member email modal. Kept off display_name so a typed
@@ -737,10 +684,6 @@ router.post('/', async (req: Request, res: Response) => {
 
   const status = settings.requireApproval ? 'pending' : 'approved'
   const autoApproved = !settings.requireApproval
-
-  if (skipCaptchaForAnonymousRetry && anonymousRetryToken) {
-    consumeAnonymousRetryToken(anonymousRetryToken, site.id)
-  }
 
   const comment = await prisma.comment.create({
     data: {

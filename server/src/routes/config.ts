@@ -985,7 +985,6 @@ router.get('/:siteKey', optionalSession, async (req: Request, res: Response) => 
           allowLikes: cs?.allowLikes ?? true,
           allowThreadedReplies: cs?.allowThreadedReplies ?? true,
           sortOrder,
-          hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
         }
 
     const pw = site.sitePaywallSettings
