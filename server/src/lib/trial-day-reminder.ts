@@ -59,6 +59,11 @@ export type TrialDayFourReminderStats = {
 
 export async function sendTrialDayFourReminders(now = new Date()): Promise<TrialDayFourReminderStats> {
   const { after, until } = trialDayFourWindow(now)
+  console.log('[trial-day-four] start', {
+    now: now.toISOString(),
+    createdAfter: after.toISOString(),
+    createdUntil: until.toISOString(),
+  })
   const rows = await prisma.subscription.findMany({
     where: {
       status: 'trialing',
@@ -76,21 +81,37 @@ export async function sendTrialDayFourReminders(now = new Date()): Promise<Trial
   })
 
   const stats: TrialDayFourReminderStats = { matched: rows.length, emailed: 0, errors: 0 }
+  console.log('[trial-day-four] query', {
+    matched: rows.length,
+    subscriptionIds: rows.map((row) => row.id),
+  })
   const loginUrl = trialReminderLoginUrl(getAppUrl())
 
   for (const row of rows) {
     const trialEndsAt = resolveTrialEndDate(row.currentPeriodEnd, row.createdAt)
-    if (!trialEndsAt || trialEndsAt.getTime() <= now.getTime()) continue
-    if (!isEnteringTrialDayFour(row.createdAt, now)) continue
+    if (!trialEndsAt || trialEndsAt.getTime() <= now.getTime()) {
+      console.log('[trial-day-four] skip', { subscriptionId: row.id, reason: 'trial-ended' })
+      continue
+    }
+    if (!isEnteringTrialDayFour(row.createdAt, now)) {
+      console.log('[trial-day-four] skip', { subscriptionId: row.id, reason: 'outside-window' })
+      continue
+    }
 
     const email = row.user.email.trim()
-    if (!email) continue
+    if (!email) {
+      console.log('[trial-day-four] skip', { subscriptionId: row.id, reason: 'missing-email' })
+      continue
+    }
 
     const claimed = await prisma.subscription.updateMany({
       where: { id: row.id, trialDayFourEmailSentAt: null },
       data: { trialDayFourEmailSentAt: now },
     })
-    if (claimed.count === 0) continue
+    if (claimed.count === 0) {
+      console.log('[trial-day-four] skip', { subscriptionId: row.id, reason: 'already-claimed' })
+      continue
+    }
 
     try {
       await sendTrialDayFourEmail(email, {
@@ -99,6 +120,7 @@ export async function sendTrialDayFourReminders(now = new Date()): Promise<Trial
         recipientName: row.user.name,
       })
       stats.emailed += 1
+      console.log('[trial-day-four] sent', { subscriptionId: row.id, email })
     } catch (err) {
       stats.errors += 1
       console.error('[trial-day-four] send failed', {
