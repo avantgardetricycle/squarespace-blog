@@ -30,6 +30,11 @@ export function profileCommentDisplayName(profile: unknown): string {
   return ''
 }
 
+/** Name stored on a verified comment. A profile with no usable name stays anonymous. */
+export function commenterNameFromProfile(profile: unknown): string {
+  return profileCommentDisplayName(profile) || 'Anonymous'
+}
+
 export type AnonymousIdentityDecision = {
   generatedHandle: string | null
   useAnonymousIdentity: boolean

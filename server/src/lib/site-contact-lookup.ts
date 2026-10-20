@@ -1,9 +1,10 @@
+import { commenterNameFromProfile } from './anonymous-comment-identity.js'
 import { decrypt } from './encryption.js'
 import { redactSubscriberText } from './email-providers.js'
 import { markSquarespaceApiKeyInvalid } from './profiles-api-alert.js'
 
 export type SiteContactLookupResult =
-  | { found: true; contactId: string; firstName?: string }
+  | { found: true; contactId: string; displayName: string }
   | { found: false; error?: 'unauthorized' | 'rate_limited' | 'network' | 'unknown' }
 
 type ProfileRecord = {
@@ -13,6 +14,8 @@ type ProfileRecord = {
   has_account?: boolean
   firstName?: string
   first_name?: string
+  lastName?: string
+  last_name?: string
 }
 
 function profilesFromPayload(data: unknown): ProfileRecord[] {
@@ -80,11 +83,10 @@ export async function findSiteContactByEmail(input: {
       if (email !== wanted) continue
       const hasAccount = profile.hasAccount ?? profile.has_account ?? true
       if (!hasAccount || !profile.id) continue
-      const firstName = profile.firstName || profile.first_name
       return {
         found: true,
         contactId: profile.id,
-        ...(firstName ? { firstName } : {}),
+        displayName: commenterNameFromProfile(profile),
       }
     }
     return { found: false }

@@ -3,6 +3,8 @@ import prisma from '../db/index.js'
 import {
   generateOtpCode,
   hashOtpCode,
+  OTP_EMAIL_WINDOW_24_H_MS,
+  OTP_IP_SENDS_WINDOW_MS,
   OTP_TTL_MS,
   otpCodeMatches,
   judgeOtpCode,
@@ -17,25 +19,23 @@ import {
 } from './commenter-session.js'
 
 const HOUR_MS = 60 * 60 * 1000
-const FIFTEEN_MIN_MS = 15 * 60 * 1000
-const DAY_MS = 24 * HOUR_MS
 
-export async function countEmailSends(hostname: string, email: string, now = new Date()) {
-  const [last15Min, last24h] = await Promise.all([
-    prisma.commenterOtpChallenge.count({
-      where: { hostname, email, createdAt: { gte: new Date(now.getTime() - FIFTEEN_MIN_MS) } },
-    }),
-    prisma.commenterOtpChallenge.count({
-      where: { hostname, email, createdAt: { gte: new Date(now.getTime() - DAY_MS) } },
-    }),
-  ])
-  return { last15Min, last24h }
+export async function listRecentEmailSendTimes(hostname: string, email: string, now = new Date()): Promise<Date[]> {
+  const rows = await prisma.commenterOtpChallenge.findMany({
+    where: { hostname, email, createdAt: { gte: new Date(now.getTime() - OTP_EMAIL_WINDOW_24_H_MS) } },
+    select: { createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  return rows.map((row) => row.createdAt)
 }
 
-export async function countIpSends(ip: string, now = new Date()): Promise<number> {
-  return prisma.commenterOtpChallenge.count({
-    where: { ip, createdAt: { gte: new Date(now.getTime() - HOUR_MS) } },
+export async function listRecentIpSendTimes(ip: string, now = new Date()): Promise<Date[]> {
+  const rows = await prisma.commenterOtpChallenge.findMany({
+    where: { ip, createdAt: { gte: new Date(now.getTime() - OTP_IP_SENDS_WINDOW_MS) } },
+    select: { createdAt: true },
+    orderBy: { createdAt: 'asc' },
   })
+  return rows.map((row) => row.createdAt)
 }
 
 export async function countIpVerifyFailures(ip: string, now = new Date()): Promise<number> {
@@ -98,7 +98,7 @@ export async function verifyOtpChallenge(input: {
   pepper: string
   ip: string
   now?: Date
-}): Promise<{ ok: true; email: string; displayName: string } | { ok: false; code: OtpFailureCode }> {
+}): Promise<{ ok: true; email: string; displayName: string } | { ok: false; code: OtpFailureCode; guessesLeft?: number }> {
   const now = input.now ?? new Date()
   const challenge = await prisma.commenterOtpChallenge.findUnique({ where: { id: input.challengeId } })
   if (!challenge || challenge.hostname !== input.hostname) {
@@ -121,7 +121,11 @@ export async function verifyOtpChallenge(input: {
       })
     }
     await recordVerifyFailure(input.ip)
-    return { ok: false, code: judged.code }
+    return {
+      ok: false,
+      code: judged.code,
+      ...(typeof judged.guessesLeft === 'number' ? { guessesLeft: judged.guessesLeft } : {}),
+    }
   }
   await prisma.commenterOtpChallenge.update({
     where: { id: challenge.id },

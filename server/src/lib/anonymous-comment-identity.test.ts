@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   decideAnonymousCommentIdentity,
   finalizeCommentIdentity,
+  commenterNameFromProfile,
   profileCommentDisplayName,
 } from './anonymous-comment-identity.js'
 
@@ -180,6 +181,9 @@ test('a blank subscriber name becomes first name plus last initial', () => {
   assert.equal(profileCommentDisplayName({ firstName: 'Sarah', lastName: '...' }), 'Sarah')
   assert.equal(profileCommentDisplayName(null), '')
   assert.equal(profileCommentDisplayName({ email: 'sarah@example.com' }), '')
+  assert.equal(commenterNameFromProfile({ firstName: 'Sarah', lastName: 'Kim' }), 'Sarah K.')
+  assert.equal(commenterNameFromProfile({ email: 'sarah@example.com' }), 'Anonymous')
+  assert.equal(commenterNameFromProfile(null), 'Anonymous')
 })
 
 test('anonymous comments off does not accept a generated handle', () => {

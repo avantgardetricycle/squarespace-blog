@@ -3,7 +3,7 @@
 **Status:** Draft  
 **Authors:** BetterBlog Team
 
-> **Superseded in part by** `BetterBlog_Verified_Comments_v2_Spec.md`: §5.3 (Subscriber Verification Flow), §5.4 (Verification Cookie), and the §4.3 rule that `subscriber_comments_enabled` requires an API key. The rest of this document still applies.
+> **Superseded in part by** `BetterBlog_Verified_Comments_v2_Spec.md`: §5.3 (Subscriber Verification Flow) and §5.4 (Verification Cookie). Verified comments still require a Squarespace API key. The comment name comes from the member profile (first name and last initial), or Anonymous when the profile has no name. The rest of this document still applies.
 
 ---
 

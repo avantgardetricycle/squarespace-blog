@@ -139,6 +139,13 @@ router.put('/', requireSession, requireEditableSubscription, async (req: Request
     }
   }
 
+  const legacyApiKey = (site.blogCommentSettings as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null
+  const hasSquarespaceApiKey = Boolean(updates.squarespaceApiKeyEnc || site.squarespaceApiKeyEnc || legacyApiKey)
+  if (updates.subscriberCommentsEnabled && !hasSquarespaceApiKey) {
+    res.status(400).json({ error: 'Connect a Squarespace API key before enabling verified subscriber comments.' })
+    return
+  }
+
   // Normalize 0 and undefined to null (UI uses 0 for "Never"; modal omits field)
   const raw = updates.autoCloseAfterDays
   if (raw === 0 || raw === undefined || raw === null) {
