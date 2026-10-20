@@ -1231,7 +1231,12 @@
         '.bb-comment-modal-btn:disabled{opacity:0.55;cursor:not-allowed}' +
         '.bb-comment-modal-status{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:148px;color:#333;font-size:0.95rem}' +
         '.bb-comment-modal-spinner{width:28px;height:28px;border-radius:50%;border:2px solid #e7e7e7;border-top-color:var(--bb-accent,#5B4FE8);animation:bb-comment-modal-spin .7s linear infinite}' +
-        '@keyframes bb-comment-modal-spin{to{transform:rotate(360deg)}}';
+        '@keyframes bb-comment-modal-spin{to{transform:rotate(360deg)}}' +
+        '.bb-comment-modal{position:relative}' +
+        '.bb-comment-modal-body{padding-right:28px}' +
+        '.bb-comment-modal-close{position:absolute;top:8px;right:8px;width:32px!important;max-width:32px!important;height:32px;min-height:0!important;margin:0!important;padding:0!important;border:none!important;border-radius:6px!important;background:transparent!important;color:#333!important;font-size:22px!important;font-weight:400!important;line-height:1!important;letter-spacing:0!important;text-transform:none!important;cursor:pointer;display:flex!important;align-items:center;justify-content:center;flex:none!important}' +
+        '.bb-comment-modal-close:hover{background:#f3f3f3!important}' +
+        '.bb-comment-modal-close:focus{outline:1px solid var(--bb-accent,#5B4FE8)!important;outline-offset:2px}';
       var style = document.getElementById('bb-comments-styles');
       if (!style) {
         style = document.createElement('style');
@@ -1247,6 +1252,8 @@
         }
         if (style.textContent.indexOf('.bb-comment-modal-actions') === -1) {
           style.textContent += bbCmtFocusCss;
+        } else if (style.textContent.indexOf('.bb-comment-modal-close') === -1) {
+          style.textContent += bbCmtFocusCss.slice(bbCmtFocusCss.indexOf('.bb-comment-modal{position:relative}'));
         }
       }
 
@@ -1406,6 +1413,15 @@
       var commenterProfile = null;
       var commenterTokenSuppressed = false;
       var forceDifferentEmail = false;
+      var rejectedCommenterEmails = {};
+      function bbRejectCommenterEmail(email) {
+        var key = String(email || '').trim().toLowerCase();
+        if (key) rejectedCommenterEmails[key] = true;
+      }
+      function bbCommenterEmailRejected(email) {
+        var key = String(email || '').trim().toLowerCase();
+        return Boolean(key && rejectedCommenterEmails[key]);
+      }
       function bbSessionStorageKey() {
         return 'bb_commenter_session:' + String(siteKey || 'site');
       }
@@ -2104,9 +2120,20 @@
             clearCodeTimer();
             releaseModal();
           };
+          modal.style.position = 'relative';
+          var closeBtn = document.createElement('button');
+          closeBtn.type = 'button';
+          closeBtn.className = 'bb-comment-modal-close';
+          closeBtn.setAttribute('aria-label', 'Close');
+          closeBtn.textContent = '\u00d7';
+          closeBtn.onclick = function() { closeModal(); };
+          var modalBody = document.createElement('div');
+          modalBody.className = 'bb-comment-modal-body';
+          modal.appendChild(closeBtn);
+          modal.appendChild(modalBody);
           function showVerifying() {
             clearCodeTimer();
-            modal.textContent = '';
+            modalBody.textContent = '';
             modal.setAttribute('aria-busy', 'true');
             var status = document.createElement('div');
             status.className = 'bb-comment-modal-status';
@@ -2120,12 +2147,12 @@
             label.textContent = 'Verifying...';
             status.appendChild(spinner);
             status.appendChild(label);
-            modal.appendChild(status);
+            modalBody.appendChild(status);
           }
           function showEmail(values) {
             clearCodeTimer();
             modal.setAttribute('aria-busy', 'false');
-            modal.textContent = '';
+            modalBody.textContent = '';
             var title = document.createElement('div');
             title.id = 'bb-commenter-modal-title';
             title.textContent = 'Confirm your email';
@@ -2140,20 +2167,10 @@
             emailInput.name = 'email';
             emailInput.required = true;
             emailInput.autocomplete = 'email';
-            emailInput.value = values.email || '';
+            var emailValue = values.email || '';
+            if (bbCommenterEmailRejected(emailValue)) emailValue = '';
+            emailInput.value = emailValue;
             emailInput.className = 'bb-comment-modal-input';
-            var nameLabel = document.createElement('label');
-            nameLabel.textContent = 'Name, shown with your comment';
-            nameLabel.htmlFor = 'bb-commenter-name';
-            nameLabel.style.cssText = 'display:block;font-size:0.85rem;margin-bottom:4px';
-            var nameInput = document.createElement('input');
-            nameInput.id = 'bb-commenter-name';
-            nameInput.type = 'text';
-            nameInput.name = 'name';
-            nameInput.required = true;
-            nameInput.maxLength = 100;
-            nameInput.value = values.name || '';
-            nameInput.className = 'bb-comment-modal-input';
             var msg = document.createElement('div');
             msg.setAttribute('aria-live', 'polite');
             msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
@@ -2166,20 +2183,14 @@
             var send = bbCommentModalButton('Send code', true);
             send.onclick = function() {
               var em = (emailInput.value || '').trim();
-              var nm = (nameInput.value || '').trim();
               if (!em || em.indexOf('@') < 1) {
                 msg.textContent = 'Please enter a valid email.';
                 try { emailInput.focus(); } catch (e) {}
                 return;
               }
-              if (!nm || nm.length > 100) {
-                msg.textContent = 'Enter the name to show with your comment.';
-                try { nameInput.focus(); } catch (e) {}
-                return;
-              }
               send.disabled = true;
               bbRunInvisibleHCaptcha(function(captchaToken) {
-                var startBody = { email: em, display_name: nm, siteKey: siteKey };
+                var startBody = { email: em, siteKey: siteKey };
                 if (captchaToken) startBody.hcaptcha_token = captchaToken;
                 fetch(apiUrl + '/auth/start', {
                   method: 'POST',
@@ -2189,10 +2200,17 @@
                 }).then(bbReadFetchJson).then(function(res) {
                   send.disabled = false;
                   if (res.status === 202 && res.data && res.data.challenge_id) {
-                    showCode(em, nm, String(res.data.challenge_id));
+                    showCode(em, String(res.data.challenge_id));
                     return;
                   }
                   var code = res.data && res.data.code ? String(res.data.code) : '';
+                  if (code === 'verification_failed' || code === 'verification_failed_anonymous_available') {
+                    bbRejectCommenterEmail(em);
+                    emailInput.value = '';
+                    msg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + em + '.');
+                    try { emailInput.focus(); } catch (e) {}
+                    return;
+                  }
                   msg.textContent = code === 'captcha_failed'
                     ? 'Captcha verification failed. Try again.'
                     : ((res.data && res.data.error) || 'Could not send a code. Try again.');
@@ -2202,7 +2220,6 @@
                 });
               });
             };
-            overlay.onclick = function(ev) { if (ev.target === overlay) closeModal(); };
             row.appendChild(different);
             if (allowAnonymousComments) {
               var anon = bbCommentModalButton('Comment anonymously', false);
@@ -2213,18 +2230,16 @@
               row.appendChild(anon);
             }
             row.appendChild(send);
-            modal.appendChild(title);
-            modal.appendChild(emailLabel);
-            modal.appendChild(emailInput);
-            modal.appendChild(nameLabel);
-            modal.appendChild(nameInput);
-            modal.appendChild(msg);
-            modal.appendChild(row);
+            modalBody.appendChild(title);
+            modalBody.appendChild(emailLabel);
+            modalBody.appendChild(emailInput);
+            modalBody.appendChild(msg);
+            modalBody.appendChild(row);
             try { (focusDifferent ? different : emailInput).focus(); } catch (e) {}
           }
-          function showCode(email, name, challengeId, errorText) {
+          function showCode(email, challengeId, errorText, guessesLeft) {
             modal.setAttribute('aria-busy', 'false');
-            modal.textContent = '';
+            modalBody.textContent = '';
             var title = document.createElement('div');
             title.id = 'bb-commenter-modal-title';
             title.textContent = 'Confirm your email';
@@ -2248,6 +2263,7 @@
             codeInput.className = 'bb-comment-modal-input';
             codeInput.style.letterSpacing = '0.2em';
             codeInput.style.fontSize = '1.1rem';
+            if (guessesLeft === 0) codeInput.disabled = true;
             var msg = document.createElement('div');
             msg.setAttribute('aria-live', 'polite');
             msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
@@ -2306,11 +2322,13 @@
                 }
                 if (!overlay.parentNode) return;
                 var fail = res.data && res.data.code ? String(res.data.code) : '';
-                showCode(email, name, challengeId, verifyFailureMessage(fail));
+                var guessesLeft = res.data && typeof res.data.guesses_left === 'number' ? res.data.guesses_left : null;
+                var message = (res.data && res.data.error) || verifyFailureMessage(fail);
+                showCode(email, challengeId, message, guessesLeft);
               }).catch(function() {
                 submitting = false;
                 if (!overlay.parentNode) return;
-                showCode(email, name, challengeId, "That code isn't right. Check the email and try again.");
+                showCode(email, challengeId, "That code isn't right. Check the email and try again.");
               });
             }
             codeInput.addEventListener('paste', function(ev) {
@@ -2331,7 +2349,7 @@
               if (resend.disabled) return;
               resend.disabled = true;
               bbRunInvisibleHCaptcha(function(captchaToken) {
-                var startBody = { email: email, display_name: name, siteKey: siteKey };
+                var startBody = { email: email, siteKey: siteKey };
                 if (captchaToken) startBody.hcaptcha_token = captchaToken;
                 fetch(apiUrl + '/auth/start', {
                   method: 'POST',
@@ -2346,6 +2364,14 @@
                     return;
                   }
                   resend.disabled = false;
+                  var resendCode = res.data && res.data.code ? String(res.data.code) : '';
+                  if (resendCode === 'verification_failed' || resendCode === 'verification_failed_anonymous_available') {
+                    bbRejectCommenterEmail(email);
+                    showEmail({ email: '' });
+                    var emailMsg = modal.querySelector('[aria-live="polite"]');
+                    if (emailMsg) emailMsg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + email + '.');
+                    return;
+                  }
                   msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
                 }).catch(function() {
                   resend.disabled = false;
@@ -2354,25 +2380,22 @@
               });
             };
             var different = bbCommentModalButton('Use a different email', false);
-            different.onclick = function() { showEmail({ email: email, name: name }); };
-            overlay.onclick = function(ev) { if (ev.target === overlay) closeModal(); };
+            different.onclick = function() { showEmail({ email: email }); };
             row.appendChild(resend);
             row.appendChild(different);
-            modal.appendChild(title);
-            modal.appendChild(copy);
-            modal.appendChild(codeLabel);
-            modal.appendChild(codeInput);
+            modalBody.appendChild(title);
+            modalBody.appendChild(copy);
+            modalBody.appendChild(codeLabel);
+            modalBody.appendChild(codeInput);
             if (errorText) msg.textContent = errorText;
-            modal.appendChild(msg);
-            modal.appendChild(row);
+            modalBody.appendChild(msg);
+            modalBody.appendChild(row);
             try { codeInput.focus(); } catch (e) {}
           }
           document.body.appendChild(overlay);
           var current = commenterProfile && commenterProfile.email ? String(commenterProfile.email) : '';
-          var savedName = commenterProfile && commenterProfile.display_name ? String(commenterProfile.display_name) : '';
           showEmail({
-            email: current || (prefill && prefill.email) || '',
-            name: savedName || (prefill && prefill.firstName) || ''
+            email: current || (prefill && prefill.email) || ''
           });
         }
         var held = bbReadCommenterToken();

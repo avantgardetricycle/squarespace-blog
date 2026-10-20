@@ -7,6 +7,14 @@ export function membershipNotFoundMessage(email: string): string {
   return `We couldn't find a membership for ${email}.`
 }
 
+/** A code is sent only when a Profiles key is connected and the email matches a member. */
+export function membershipAllowsCodeSend(input: {
+  hasApiKey: boolean
+  contactFound: boolean
+}): boolean {
+  return input.hasApiKey && input.contactFound
+}
+
 export type ContactLookupOutcome =
   | { found: true; contactId: string }
   | { found: false; error?: string }
@@ -36,13 +44,10 @@ export function decideVerifiedCommentSubmit(input: {
   if (!input.squarespaceLoggedIn) {
     return { action: 'reject', status: 403, code: 'squarespace_login_required' }
   }
-  if (input.hasApiKey) {
-    if (!input.contact || !input.contact.found) {
-      return input.allowAnonymousComments
-        ? { action: 'reject', status: 400, code: 'verification_failed_anonymous_available' }
-        : { action: 'reject', status: 400, code: 'verification_failed' }
-    }
-    return { action: 'store', contactId: input.contact.contactId }
+  if (!input.hasApiKey || !input.contact || !input.contact.found) {
+    return input.allowAnonymousComments
+      ? { action: 'reject', status: 400, code: 'verification_failed_anonymous_available' }
+      : { action: 'reject', status: 400, code: 'verification_failed' }
   }
-  return { action: 'store', contactId: null }
+  return { action: 'store', contactId: input.contact.contactId }
 }

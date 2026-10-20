@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   digitsOnlyCode,
+  codeSendRetryWaitMs,
+  codeSendWaitMessage,
   emailSendIsLimited,
   generateOtpCode,
   hashOtpCode,
@@ -12,6 +14,7 @@ import {
   normalizeCommenterEmail,
   otpCodeMatches,
   OTP_MAX_ATTEMPTS,
+  guessesLeftMessage,
 } from './commenter-otp.js'
 import {
   commenterScope,
@@ -21,7 +24,7 @@ import {
   SESSION_ABSOLUTE_CAP_MS,
   SESSION_TTL_MS,
 } from './commenter-session.js'
-import { decideVerifiedCommentSubmit, membershipNotFoundMessage } from './commenter-submit.js'
+import { decideVerifiedCommentSubmit, membershipAllowsCodeSend, membershipNotFoundMessage } from './commenter-submit.js'
 
 const PEPPER = 'test-pepper-must-be-at-least-32-characters'
 
@@ -91,6 +94,7 @@ test('the fifth wrong code kills the challenge and a later correct code stays de
   if (!fifth.ok) {
     assert.equal(fifth.code, 'too_many_attempts')
     assert.equal(fifth.incrementAttempt, true)
+    assert.equal(fifth.guessesLeft, 0)
   }
   const sixth = judgeOtpCode({
     now,
@@ -100,7 +104,22 @@ test('the fifth wrong code kills the challenge and a later correct code stays de
     codeMatches: true,
   })
   assert.equal(sixth.ok, false)
-  if (!sixth.ok) assert.equal(sixth.code, 'too_many_attempts')
+  if (!sixth.ok) {
+    assert.equal(sixth.code, 'too_many_attempts')
+    assert.equal(sixth.guessesLeft, 0)
+  }
+  const firstWrong = judgeOtpCode({
+    now,
+    expiresAt,
+    consumedAt: null,
+    attempts: 0,
+    codeMatches: false,
+  })
+  assert.equal(firstWrong.ok, false)
+  if (!firstWrong.ok) assert.equal(firstWrong.guessesLeft, 4)
+  assert.equal(guessesLeftMessage(4), "That code isn't right. You have 4 guesses left.")
+  assert.equal(guessesLeftMessage(1), "That code isn't right. You have 1 guess left.")
+  assert.equal(guessesLeftMessage(0), 'Too many tries. Send a new code.')
 })
 
 test('per-email send limits and ip limits', () => {
@@ -111,6 +130,32 @@ test('per-email send limits and ip limits', () => {
   assert.equal(ipSendIsLimited(10), true)
   assert.equal(ipVerifyIsLimited(29), false)
   assert.equal(ipVerifyIsLimited(30), true)
+})
+
+test('a throttled code send says how long to wait', () => {
+  const now = new Date('2026-10-20T12:00:00Z')
+  const fifteen = [
+    new Date(now.getTime() - 14 * 60 * 1000),
+    new Date(now.getTime() - 10 * 60 * 1000),
+    new Date(now.getTime() - 60 * 1000),
+  ]
+  const wait = codeSendRetryWaitMs({ now, emailSends: fifteen, ipSends: [] })
+  assert.equal(wait, 60 * 1000)
+  assert.equal(codeSendWaitMessage(wait), 'Wait 1 minute before requesting a new code.')
+  assert.equal(codeSendWaitMessage(45_000), 'Wait 45 seconds before requesting a new code.')
+  assert.equal(codeSendWaitMessage(1000), 'Wait 1 second before requesting a new code.')
+  assert.equal(codeSendWaitMessage(90 * 60 * 1000), 'Wait 1 hour 30 minutes before requesting a new code.')
+  assert.equal(codeSendRetryWaitMs({ now, emailSends: fifteen.slice(0, 2), ipSends: [] }), 0)
+
+  const day = Array.from({ length: 10 }, (_, index) => new Date(now.getTime() - (20 - index) * 60 * 60 * 1000))
+  assert.equal(codeSendRetryWaitMs({ now, emailSends: day, ipSends: [] }), 4 * 60 * 60 * 1000)
+
+  const ip = Array.from({ length: 10 }, (_, index) => new Date(now.getTime() - (50 - index) * 60 * 1000))
+  assert.equal(codeSendRetryWaitMs({ now, emailSends: [], ipSends: ip }), 10 * 60 * 1000)
+  assert.equal(
+    codeSendRetryWaitMs({ now, emailSends: fifteen, ipSends: ip }),
+    10 * 60 * 1000,
+  )
 })
 
 test('pasted codes keep digits only', () => {
@@ -173,7 +218,7 @@ test('verified submit matrix', () => {
       contact: null,
       allowAnonymousComments: false,
     }),
-    { action: 'store', contactId: null }
+    { action: 'reject', status: 400, code: 'verification_failed' }
   )
   assert.deepEqual(
     decideVerifiedCommentSubmit({
@@ -222,4 +267,8 @@ test('verified submit matrix', () => {
   assert.equal(noSession.action, 'reject')
   if (noSession.action === 'reject') assert.equal(noSession.code, 'commenter_auth_required')
   assert.equal(membershipNotFoundMessage('reader@example.com'), "We couldn't find a membership for reader@example.com.")
+  assert.equal(membershipAllowsCodeSend({ hasApiKey: false, contactFound: false }), false)
+  assert.equal(membershipAllowsCodeSend({ hasApiKey: false, contactFound: true }), false)
+  assert.equal(membershipAllowsCodeSend({ hasApiKey: true, contactFound: true }), true)
+  assert.equal(membershipAllowsCodeSend({ hasApiKey: true, contactFound: false }), false)
 })

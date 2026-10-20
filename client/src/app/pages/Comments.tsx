@@ -1455,11 +1455,10 @@ export default function Comments() {
                 <Switch
                   checked={settings?.subscriberCommentsEnabled ?? false}
                   onCheckedChange={(v) => settings && updateSetting("subscriberCommentsEnabled", v)}
-                  disabled={settingsSaving}
+                  disabled={settingsSaving || (!settings?.apiKeyVerified && !(settings?.subscriberCommentsEnabled ?? false))}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Readers confirm their email with a one-time code and must be signed in to your site to get a verified badge.</p>
-              <p className="text-xs text-neutral-500">Optional: also check commenters against your Squarespace member list.</p>
+              <p className="text-xs text-neutral-500">Readers confirm their email with a one-time code and must be signed in to your site. Their name comes from their Squarespace profile. Requires a Squarespace API key.</p>
               {settings?.apiKeyVerified && (
                 <div className={settings.apiKeyInvalid ? "opacity-70" : undefined}>
                   <div className="flex items-center gap-2 text-sm mt-1">
@@ -1494,7 +1493,7 @@ export default function Comments() {
                   onClick={() => setSquarespaceApiKeyModalOpen("setup")}
                   className="text-xs text-[#5B4FE8] hover:underline"
                 >
-                  Connect Squarespace API key
+                  Connect Squarespace API key to enable this setting
                 </button>
               )}
             </div>

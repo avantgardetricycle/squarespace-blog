@@ -207,7 +207,17 @@ router.use(
     getSite: async (token) => {
       const site = await getSiteWithSubscription(token)
       if (!site) return null
-      return { id: site.id, name: site.name, url: site.url }
+      const settings = site.blogCommentSettings
+      const legacyApiKey = (settings as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null
+      return {
+        id: site.id,
+        siteKey: site.siteKey,
+        name: site.name,
+        url: site.url,
+        apiKeyEnc: site.squarespaceApiKeyEnc || legacyApiKey,
+        ownerEmail: site.user?.email ?? null,
+        notificationEmail: settings?.notificationEmail ?? null,
+      }
     },
     verifyHCaptcha,
   })
@@ -687,7 +697,7 @@ router.post('/', async (req: Request, res: Response) => {
       })
       return
     }
-    displayName = (session?.displayName || 'Member').slice(0, MAX_DISPLAY_NAME)
+    displayName = (session?.displayName || 'Anonymous').slice(0, MAX_DISPLAY_NAME)
     email = session?.email ?? null
     verifiedSubscriber = true
     squarespaceProfileId = decision.contactId

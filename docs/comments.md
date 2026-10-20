@@ -17,7 +17,7 @@ When Show Comments is on, these options appear:
 
 **Allow Anonymous Comments** — Readers post under a session username such as Anonymous1234. They cannot enter their own name or email. When verification is also on, logged-out readers still get a sign-in link so they can comment as a member. When this is off and verification is also off, guests see a message to sign in with a site member account.
 
-**Verify subscriber comments** — Readers confirm their email with a one-time code and must be signed in to your site to get a verified badge. An API key is optional. Can be combined with anonymous comments; see below.
+**Verify subscriber comments** — Readers confirm their email with a one-time code and must be signed in to your site to get a verified badge. A Squarespace API key is required. The public name is the member’s first name and last initial from Squarespace. If the profile has no name, the comment is shown as Anonymous. Can be combined with anonymous comments; see below.
 
 **Require Approval Before Publishing** — New comments wait in **Awaiting Review** until you approve them.
 
@@ -49,15 +49,15 @@ The two toggles are independent and can be combined. Reader experience:
 
 - Logged-out readers can still read comments, but the comment form is hidden. **Sign in to comment** links to the site member login.
 - Logged-in readers who have already entered a code in this browser see **Commenting as {name} · Sign out** and the comment posts immediately. The code lasts about 30 days.
-- Otherwise they enter an email and the name to show, then a 6-digit code. The comment they already wrote posts as soon as the code is accepted.
+- Otherwise they enter an email, then a 6-digit code. They do not choose a name. A wrong code can be tried 5 times, and the modal says how many guesses are left. After that they need a new code. The same email can request 3 codes in 15 minutes and 10 in 24 hours. When that limit is reached, **Send code** stays on the email step and says how long to wait. The comment they already wrote posts as soon as the code is accepted, under the name from their Squarespace profile.
 - **Sign out** ends that code session. The next verified comment asks for a new code.
-- If an API key is connected and the email is not in your member list, the comment is not posted. A modal explains that membership could not be verified, and the same message stays under the comment button: site accent color, italic, regular weight, slightly smaller than the button. The button stays visible. The message remains until a later attempt verifies and the comment posts. Clicking the comment button again opens the email modal so they can try another address.
+- **Send code** checks the member list before a code is emailed. If the email is not a member, no code is sent and the email modal shows “We couldn't find a membership for {email}.” The same check still runs when the comment is posted. A failed post shows a modal, and the same message stays under the comment button: site accent color, italic, regular weight, slightly smaller than the button. The button stays visible. The message remains until a later attempt verifies and the comment posts. Clicking the comment button again opens the email modal so they can try another address.
 
 **Verify subscriber comments on, anonymous on**
 
 - Logged-out readers see the comment form and post as a session username such as Anonymous1234. They cannot enter a name or email. **Sign in to comment as a member** links to the site member login.
 - Logged-in readers follow the code flow above. They can also choose **Comment anonymously** in the email modal, which posts as Anonymous.
-- If an API key is connected and the email is not in your member list, a modal asks whether they want to post anonymously. The same message stays under the comment button — site accent color, italic, regular weight, slightly smaller than the button — and the button stays visible. The message remains until a comment posts. The comment is only stored as a guest after they confirm.
+- **Send code** checks the member list first. A miss shows the membership message in the email modal and does not send a code. **Comment anonymously** is still available there. If the check fails later, when the comment is posted, a modal asks whether they want to post anonymously. The same message stays under the comment button — site accent color, italic, regular weight, slightly smaller than the button — and the button stays visible. The message remains until a comment posts. The comment is only stored as a guest after they confirm.
 
 **Verify subscriber comments off, anonymous on**
 
@@ -69,7 +69,7 @@ On paywalled posts, logged-out readers do not see the comment section unless the
 
 ## Connecting your Squarespace API key
 
-An API key is optional. Connect one to also check commenters against your Squarespace member list. The key needs **Profiles (Read)** permission.
+A Squarespace API key is required to turn on **Verify subscriber comments**. The key checks the member list and supplies the commenter’s name. It needs **Profiles (Read)** permission.
 
 1. In Squarespace, go to **Settings → Developer Tools → Developer API Keys** (or **Settings → Advanced → Developer API Keys**).
 2. Create a key with **Profiles (Read)**, or paste an existing key that already has that permission. Permissions cannot be edited after creation — if Profiles (Read) is missing, delete the key and create a new one.

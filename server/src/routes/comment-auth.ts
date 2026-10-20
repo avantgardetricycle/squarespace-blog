@@ -1,11 +1,12 @@
-import crypto from 'crypto'
 import { Router, Request, Response } from 'express'
 import { sendCommenterCodeEmail } from '../lib/email.js'
 import { runAfterResponse } from '../lib/run-after-response.js'
 import { commenterScope, readBearerToken } from '../lib/commenter-session.js'
+import { membershipAllowsCodeSend, membershipNotFoundMessage } from '../lib/commenter-submit.js'
+import { findSiteContactByEmail } from '../lib/site-contact-lookup.js'
 import {
-  countEmailSends,
-  countIpSends,
+  listRecentEmailSendTimes,
+  listRecentIpSendTimes,
   countIpVerifyFailures,
   createCommenterSession,
   createOtpChallenge,
@@ -18,8 +19,9 @@ import {
   OTP_EXPIRES_IN_SEC,
   OTP_RESEND_AFTER_SEC,
   digitsOnlyCode,
-  emailSendIsLimited,
-  ipSendIsLimited,
+  guessesLeftMessage,
+  codeSendRetryWaitMs,
+  codeSendWaitMessage,
   ipVerifyIsLimited,
   isPlausibleEmail,
   normalizeCommenterEmail,
@@ -28,8 +30,12 @@ import {
 
 type CommentSite = {
   id: string
+  siteKey: string
   name: string | null
   url: string | null
+  apiKeyEnc: string | null
+  ownerEmail: string | null
+  notificationEmail: string | null
 }
 
 const MAX_DISPLAY_NAME = 100
@@ -80,7 +86,7 @@ export function createCommentAuthRouter(deps: {
       return
     }
 
-    const body = req.body as { email?: unknown; display_name?: unknown; hcaptcha_token?: unknown }
+    const body = req.body as { email?: unknown; hcaptcha_token?: unknown }
     const captchaToken = typeof body.hcaptcha_token === 'string' ? body.hcaptcha_token.trim() : ''
     if (process.env.HCAPTCHA_SECRET_KEY) {
       if (!captchaToken || !(await deps.verifyHCaptcha(captchaToken))) {
@@ -91,23 +97,55 @@ export function createCommentAuthRouter(deps: {
 
     const emailRaw = typeof body.email === 'string' ? body.email : ''
     const email = normalizeCommenterEmail(emailRaw)
-    const displayName = typeof body.display_name === 'string' ? body.display_name.trim() : ''
-    if (!isPlausibleEmail(email) || displayName.length < 1 || displayName.length > MAX_DISPLAY_NAME) {
-      res.status(400).json({ code: 'invalid_request', error: 'Enter an email and a name (1–100 characters).' })
+    if (!isPlausibleEmail(email)) {
+      res.status(400).json({ code: 'invalid_request', error: 'Enter an email address.' })
       return
     }
+
+    if (!site.apiKeyEnc) {
+      res.status(400).json({ code: 'verification_unavailable', error: 'Comment verification is unavailable.' })
+      return
+    }
+
+    const contact = await findSiteContactByEmail({
+      siteId: site.id,
+      siteKey: site.siteKey,
+      siteName: site.name,
+      siteUrl: site.url,
+      apiKeyEnc: site.apiKeyEnc,
+      email,
+      ownerEmails: [site.ownerEmail, site.notificationEmail],
+    })
+    if (!contact.found && contact.error) {
+      console.warn('[commenter-auth] contact_lookup_failed', { siteId: site.id, kind: contact.error })
+    }
+    if (!contact.found || !membershipAllowsCodeSend({ hasApiKey: true, contactFound: true })) {
+      res.status(400).json({
+        code: 'verification_failed',
+        error: membershipNotFoundMessage(email),
+      })
+      return
+    }
+    const displayName = contact.displayName.slice(0, MAX_DISPLAY_NAME)
 
     const ip = clientIp(req)
     const userAgent = (req.get('user-agent') ?? '').slice(0, 500)
     const hostname = commenterScope(site)
 
-    if (ipSendIsLimited(await countIpSends(ip))) {
-      res.status(429).json({ code: 'rate_limited', error: 'Rate limit exceeded. Try again later.' })
-      return
-    }
-
-    if (emailSendIsLimited(await countEmailSends(hostname, email))) {
-      res.status(202).json(accepted(crypto.randomUUID()))
+    const now = new Date()
+    const [emailSends, ipSends] = await Promise.all([
+      listRecentEmailSendTimes(hostname, email, now),
+      listRecentIpSendTimes(ip, now),
+    ])
+    const waitMs = codeSendRetryWaitMs({ now, emailSends, ipSends })
+    if (waitMs > 0) {
+      const retryAfterSeconds = Math.max(1, Math.ceil(waitMs / 1000))
+      res.setHeader('Retry-After', String(retryAfterSeconds))
+      res.status(429).json({
+        code: 'rate_limited',
+        error: codeSendWaitMessage(waitMs),
+        retry_after_seconds: retryAfterSeconds,
+      })
       return
     }
 
@@ -166,10 +204,16 @@ export function createCommentAuthRouter(deps: {
       const message =
         verified.code === 'code_expired'
           ? 'That code has expired. Send a new one.'
-          : verified.code === 'too_many_attempts'
-            ? 'Too many tries. Send a new code.'
-            : "That code isn't right. Check the email and try again."
-      res.status(400).json({ code: verified.code, error: message })
+          : typeof verified.guessesLeft === 'number'
+            ? guessesLeftMessage(verified.guessesLeft)
+            : verified.code === 'too_many_attempts'
+              ? 'Too many tries. Send a new code.'
+              : "That code isn't right. Check the email and try again."
+      res.status(400).json({
+        code: verified.code,
+        error: message,
+        ...(typeof verified.guessesLeft === 'number' ? { guesses_left: verified.guessesLeft } : {}),
+      })
       return
     }
 
