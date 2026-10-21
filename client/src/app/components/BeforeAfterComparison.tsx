@@ -546,6 +546,41 @@ export function BeforeAfterComparison() {
             height: 32px;
             background: #e4e3de;
           }
+
+          /* Phones: stack Before above After instead of squeezing them side by side. */
+          @media (max-width: 767px) {
+            .ba-comparison-wrapper {
+              grid-template-columns: 1fr;
+              min-height: 0;
+            }
+            .ba-split-divider { display: none; }
+            .ba-side-before,
+            .ba-side-after {
+              padding: 40px 16px 20px;
+              min-width: 0;
+            }
+            .ba-side-after {
+              border-left: none;
+              border-top: 1px solid #e4e3de;
+            }
+            .ba-side-before-label { left: 16px; }
+            .ba-side-after-label { left: 16px; right: auto; }
+            .ba-browser { min-width: 0; }
+            .ba-browser-url {
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              min-width: 0;
+            }
+            .ba-proof-strip {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 18px 12px;
+              padding: 20px 16px;
+            }
+            .ba-proof-sep { display: none; }
+            .ba-proof-label { text-align: center; }
+          }
         `}} />
   
         <div className="ba-comparison-wrapper">
