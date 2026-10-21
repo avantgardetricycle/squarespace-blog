@@ -547,6 +547,7 @@ router.post('/subscription/checkout', requireSession, async (req: Request, res: 
       // A beta conversion can start with a trial. Always collect a card so the
       // subscription continues when complimentary access ends.
       ...(trialEnd ? { payment_method_collection: 'always' as const } : {}),
+      allow_promotion_codes: true,
       metadata,
       success_url: `${appUrl}/dashboard/account?checkout=success`,
       cancel_url: `${appUrl}/dashboard/account`

@@ -127,6 +127,7 @@ router.post('/create-session', optionalSession, async (req: Request, res: Respon
       },
       success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/checkout?plan=${normalizedPlanKey}&billing=${cadence}`,
+      allow_promotion_codes: true,
       metadata,
       // Collect name on Stripe's form as fallback if our metadata doesn't propagate
       name_collection: { individual: { enabled: true, optional: true } }
