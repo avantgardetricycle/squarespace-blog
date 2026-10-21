@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { FEATURE_COUNT } from './FeatureGrid_new';
 
 export function BeforeAfterComparison() {
+    // Phones show one side at a time with a switch; desktop shows both.
+    const [show, setShow] = useState<'before' | 'after'>('after');
     return (
       <div className="w-full bg-white">
         <style dangerouslySetInnerHTML={{ __html: `
@@ -546,9 +549,72 @@ export function BeforeAfterComparison() {
             height: 32px;
             background: #e4e3de;
           }
+
+          .ba-toggle { display: none; }
+
+          /* Phones: one side at a time, switched by the toggle above it. */
+          @media (max-width: 767px) {
+            .ba-toggle {
+              display: flex;
+              gap: 4px;
+              margin: 0 16px 14px;
+              padding: 4px;
+              background: #f3f1fe;
+              border: 1px solid #e6e3f5;
+              border-radius: 100px;
+              font-family: 'DM Sans', -apple-system, sans-serif;
+            }
+            .ba-toggle button {
+              flex: 1;
+              border: 0;
+              background: transparent;
+              border-radius: 100px;
+              padding: 10px 8px;
+              font-size: 0.85rem;
+              font-weight: 600;
+              color: #6b6b6b;
+              transition: background .2s, color .2s;
+            }
+            .ba-toggle button.on { background: #fff; color: #1a1a1a; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+            .ba-toggle button.on.after { background: #5B4FE8; color: #fff; }
+            .ba-comparison-wrapper {
+              grid-template-columns: 1fr;
+              min-height: 0;
+            }
+            .ba-comparison-wrapper[data-show="after"] .ba-side-before,
+            .ba-comparison-wrapper[data-show="before"] .ba-side-after { display: none; }
+            .ba-split-divider,
+            .ba-side-before-label,
+            .ba-side-after-label { display: none; }
+            .ba-side-before,
+            .ba-side-after {
+              padding: 16px;
+              min-width: 0;
+              border-left: none;
+            }
+            .ba-browser { min-width: 0; }
+            .ba-browser-url {
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              min-width: 0;
+            }
+            .ba-proof-strip {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 18px 12px;
+              padding: 20px 16px;
+            }
+            .ba-proof-sep { display: none; }
+            .ba-proof-label { text-align: center; }
+          }
         `}} />
   
-        <div className="ba-comparison-wrapper">
+        <div className="ba-toggle" role="tablist" aria-label="Compare">
+          <button type="button" role="tab" aria-selected={show === 'before'} className={show === 'before' ? 'on' : ''} onClick={() => setShow('before')}>Without</button>
+          <button type="button" role="tab" aria-selected={show === 'after'} className={show === 'after' ? 'on after' : 'after'} onClick={() => setShow('after')}>✦ With BetterBlog</button>
+        </div>
+        <div className="ba-comparison-wrapper" data-show={show}>
           {/* Divider */}
           <div className="ba-split-divider">
             <div className="ba-divider-line"></div>
