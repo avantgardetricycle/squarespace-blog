@@ -64,6 +64,17 @@ function runExpress(handler: ExpressHandler, req: VercelRequest, res: VercelResp
 
 export default async function expressHandler(req: VercelRequest, res: VercelResponse) {
   const incomingUrl = req.url ?? '/'
+  // #region agent log
+  if (incomingUrl.includes('trial-day-four')) {
+    console.error('[trial-day-four-debug] catch-all received cron path', {
+      at: new Date().toISOString(),
+      url: incomingUrl,
+      method: req.method ?? null,
+      host: req.headers.host ?? null,
+    })
+    fetch('http://127.0.0.1:7779/ingest/21c07440-19af-4cd8-979a-7d2c134d7467',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'408230'},body:JSON.stringify({sessionId:'408230',hypothesisId:'C',location:'api/express-handler.ts:handler',message:'catch-all received cron path',data:{url:incomingUrl,method:req.method??null,host:req.headers.host??null},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   // Vercel rewrites /api/* requests to this function; pass the original path into Express.
   if (incomingUrl.startsWith('/api/')) {
     req.headers['x-betterblog-original-path'] = incomingUrl

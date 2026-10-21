@@ -32,6 +32,12 @@ type MountOptions = {
   commentPostResponse?: () => { status: number; json: unknown };
   /** Replace the fixture comment list returned by GET /api/comments. */
   commentsResponse?: unknown;
+  /** When set, the page starts with this commenter session and /auth/me returns it. */
+  commenterSession?: { token: string; email: string; displayName: string };
+  /** Seed legacy verification cookies before the overlay boots, so init can delete them. */
+  legacyVerifiedCookies?: boolean;
+  commentAuthStart?: (body: Record<string, unknown>) => { status: number; json: unknown };
+  commentAuthVerify?: (body: Record<string, unknown>) => { status: number; json: unknown };
   /**
    * Host page colors. `section` is the blog section background (removed with native markup).
    * `cssVariable` is --siteBackgroundColor. When only `section` is set, the site variable and
@@ -70,6 +76,7 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   await page.route("**/api/comment/**", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: '{"comments":[]}' });
   });
+  let lastCodeRequest: { email?: string; display_name?: string } = {};
   await page.route("**/api/comments**", async (route) => {
     const requestUrl = route.request().url();
     let path = "";
@@ -78,7 +85,61 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
     } catch {
       path = "";
     }
-    const isCommentCreate = route.request().method() === "POST" && path.endsWith("/api/comments");
+    const method = route.request().method();
+    if (path.endsWith("/api/comments/auth/start") && method === "POST") {
+      const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      lastCodeRequest = {
+        email: typeof body.email === "string" ? body.email : undefined,
+        display_name: typeof body.display_name === "string" ? body.display_name : undefined,
+      };
+      const payload = options.commentAuthStart
+        ? options.commentAuthStart(body)
+        : { status: 202, json: { challenge_id: "ch-1", expires_in: 600, resend_after: 30 } };
+      await route.fulfill({
+        status: payload.status,
+        contentType: "application/json",
+        body: JSON.stringify(payload.json),
+      });
+      return;
+    }
+    if (path.endsWith("/api/comments/auth/verify") && method === "POST") {
+      const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      const payload = options.commentAuthVerify
+        ? options.commentAuthVerify(body)
+        : {
+            status: 200,
+            json: {
+              session_token: "sess-token",
+              email: lastCodeRequest.email ?? "reader@example.com",
+              display_name: lastCodeRequest.display_name ?? "Sam",
+              expires_at: "2026-11-18T00:00:00.000Z",
+            },
+          };
+      await route.fulfill({
+        status: payload.status,
+        contentType: "application/json",
+        body: JSON.stringify(payload.json),
+      });
+      return;
+    }
+    if (path.endsWith("/api/comments/auth/me") && method === "GET") {
+      const session = options.commenterSession;
+      await route.fulfill({
+        status: session ? 200 : 401,
+        contentType: "application/json",
+        body: JSON.stringify(
+          session
+            ? { email: session.email, display_name: session.displayName, expires_at: "2026-11-18T00:00:00.000Z" }
+            : { code: "commenter_auth_required" },
+        ),
+      });
+      return;
+    }
+    if (path.endsWith("/api/comments/auth/logout")) {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+    const isCommentCreate = method === "POST" && path.endsWith("/api/comments");
     if (isCommentCreate) {
       const payload = options.commentPostResponse
         ? options.commentPostResponse()
@@ -156,11 +217,18 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
   );
 
   await page.evaluate(
-    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap, liveSite: live }) => {
+    ({ collectionConfig, postConfig, previewSelectedPostIndex: selected, previewDevice, commentSettings, loggedInAccount, authorProfiles, defaultAuthorIds, authorMap, liveSite: live, commenterSession, legacyVerifiedCookies }) => {
       const w = window as unknown as {
         BlogOverlayRenderer: { init: (config: Record<string, unknown>) => void };
         Static?: { SQUARESPACE_CONTEXT: Record<string, unknown> };
       };
+      if (legacyVerifiedCookies) {
+        document.cookie = `bb_verified_commenter_renderer-layout=${encodeURIComponent(JSON.stringify({ token: "old" }))}; Path=/`;
+        document.cookie = "bb_verified_sub_blog=legacy; Path=/";
+      }
+      if (commenterSession) {
+        localStorage.setItem("bb_commenter_session:renderer-layout", commenterSession.token);
+      }
       if (loggedInAccount) {
         w.Static = {
           SQUARESPACE_CONTEXT: {
@@ -205,6 +273,8 @@ export async function mountRenderer(page: Page, options: MountOptions = {}): Pro
       liveSite,
       commentSettings: options.commentSettings,
       loggedInAccount: options.loggedInAccount,
+      commenterSession: options.commenterSession ?? null,
+      legacyVerifiedCookies: options.legacyVerifiedCookies === true,
       authorProfiles: profiles,
       defaultAuthorIds,
       authorMap,

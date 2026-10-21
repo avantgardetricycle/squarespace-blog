@@ -14,7 +14,7 @@ import { SNAPSHOT_CSP, snapshotErrorHtml, type SnapshotView } from '../lib/previ
 import { mergePublicPostBody, publicPostJsonUrl } from '../lib/squarespace-public-post.js'
 import { canRenderSubscription } from '../lib/subscriptionStatus.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
-import { newlyLockedViolations, resolveEntitlements, stripServedConfig } from '../lib/planEntitlements.js'
+import { newlyLockedViolations, publicPaywallSettings, resolveEntitlements, stripServedConfig } from '../lib/planEntitlements.js'
 import { loadUserPlanContext } from '../lib/planAccess.js'
 import { readBlogPassword } from '../lib/blog-password.js'
 import { resolveDefaultCollectionTemplate, resolveDefaultPostTemplate } from './templates.js'
@@ -985,7 +985,6 @@ router.get('/:siteKey', optionalSession, async (req: Request, res: Response) => 
           allowLikes: cs?.allowLikes ?? true,
           allowThreadedReplies: cs?.allowThreadedReplies ?? true,
           sortOrder,
-          hcaptchaSiteKey: process.env.HCAPTCHA_SITE_KEY || null,
         }
 
     const pw = site.sitePaywallSettings
@@ -1056,10 +1055,7 @@ router.get('/:siteKey', optionalSession, async (req: Request, res: Response) => 
         Object.entries(authorProfiles).filter(([id]) => allowedAuthors.has(id))
       ) as typeof authorProfiles
       if (!entitlements.features.comments) servedComments = { commentsEnabled: false }
-      if (!entitlements.features.paywall) {
-        servedPaywall = null
-        servedPaywallMode = 'auto'
-      }
+      servedPaywall = publicPaywallSettings(entitlements, servedPaywall)
       if (!entitlements.features.advancedAnalytics) includeFathom = false
       if (!entitlements.features.sorting) includePostViews = false
     }

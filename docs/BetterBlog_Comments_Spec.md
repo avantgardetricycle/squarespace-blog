@@ -3,6 +3,8 @@
 **Status:** Draft  
 **Authors:** BetterBlog Team
 
+> **Superseded in part by** `BetterBlog_Verified_Comments_v2_Spec.md`: §5.3 (Subscriber Verification Flow) and §5.4 (Verification Cookie). Verified comments still require a Squarespace API key. The comment name comes from the member profile (first name and last initial), or Anonymous when the profile has no name. The rest of this document still applies.
+
 ---
 
 ## 1. Overview
@@ -184,6 +186,8 @@ The API key is **never transmitted to the client** after being saved. The UI sho
 
 ### 4.3 Settings Validation Rules
 
+> Superseded: the API-key requirement below is replaced by `BetterBlog_Verified_Comments_v2_Spec.md`. Verification no longer requires a stored key.
+
 - `subscriber_comments_enabled` cannot be `TRUE` unless a verified API key is stored.
 - `auto_close_after_days` accepts `NULL` (never) or an integer between 1 and 365.
 - `allow_anonymous_comments` and `subscriber_comments_enabled` are independent toggles and can be on simultaneously. When both are on, logged-in readers can verify as a member or explicitly choose to comment anonymously. When verification is on and anonymous is off, logged-out readers see comments but not the comment form.
@@ -209,16 +213,17 @@ Displayed when `allow_anonymous_comments = TRUE` and the post is not paywalled.
 | Comment | Yes | Max 5,000 chars. Plain text only for MVP. |
 | Email | No | If provided, stored but never shown publicly |
 
-**Spam protection:** hCaptcha invisible challenge on every submission.
+**Spam protection:** Rate limiting of 5 comments per IP per hour per blog.
 
 **On submit:**
-1. Client sends `POST /api/comments` with `{ post_id, display_name, email?, body, hcaptcha_token }`.
-2. Server verifies hCaptcha token.
-3. If `require_approval = FALSE` → status set to `approved`, comment appears immediately.
-4. If `require_approval = TRUE` → status set to `pending`, "Your comment is awaiting moderation" shown to reader.
-5. Notification triggered if configured (§7).
+1. Client sends `POST /api/comments` with `{ post_id, display_name, email?, body }`.
+2. If `require_approval = FALSE` → status set to `approved`, comment appears immediately.
+3. If `require_approval = TRUE` → status set to `pending`, "Your comment is awaiting moderation" shown to reader.
+4. Notification triggered if configured (§7).
 
 ### 5.3 Subscriber Verification Flow
+
+> Superseded by `BetterBlog_Verified_Comments_v2_Spec.md`.
 
 Displayed when `subscriber_comments_enabled = TRUE`. The overlay detects authenticated state via Squarespace's DOM (presence of `.auth` class / absence of `.unauth` class on the body).
 
@@ -234,19 +239,18 @@ On paywalled posts that are not a public preview, logged-out readers still do no
 **On submit — server-side flow (anonymous off):**
 
 ```
-1. Verify hCaptcha token
-2. Call Squarespace Profiles API:
+1. Call Squarespace Profiles API:
    GET https://api.squarespace.com/1.0/profiles?filter=email,{email}
    Authorization: Bearer {blogger_api_key}
 
-3a. Profile found:
+2a. Profile found:
     - Set verified_subscriber = TRUE
     - Store squarespace_profile_id
     - Use firstName from profile as display_name if reader left name blank
     - Set verification cookie (§5.4)
     - Store and process comment normally
 
-3b. Profile not found OR API key not configured OR Profiles API error:
+2b. Profile not found OR API key not configured OR Profiles API error:
     - Do not create the comment
     - Return 400 { code: "verification_failed", error: "We could not verify a member account…" }
     - Overlay shows the error in a modal and inline under the comment button
@@ -265,16 +269,15 @@ On paywalled posts that are not a public preview, logged-out readers still do no
 **On submit — server-side flow (anonymous on):**
 
 ```
-1. Verify hCaptcha token
-2. If the client sent post_as_anonymous = true (reader chose anonymous in a modal):
+1. If the client sent post_as_anonymous = true (reader chose anonymous in a modal):
     - Skip Profiles lookup
     - Store as unverified guest (display_name "Anonymous" if blank)
-3. Otherwise call Squarespace Profiles API as above
+2. Otherwise call Squarespace Profiles API as above
 
-3a. Profile found:
-    - Same as verified-only 3a (comment posts as verified)
+2a. Profile found:
+    - Same as verified-only 2a (comment posts as verified)
 
-3b. Profile not found OR Profiles API error:
+2b. Profile not found OR Profiles API error:
     - Do not create the comment
     - Return 400 { code: "verification_failed_anonymous_available", error: "…Would you like to post this comment anonymously?" }
     - Overlay shows a confirmation modal. If the reader confirms, the client resubmits with post_as_anonymous = true
@@ -285,6 +288,8 @@ On paywalled posts that are not a public preview, logged-out readers still do no
 If a valid verification cookie exists (§5.4), the email modal is skipped and the stored email is sent automatically. A failed verification does not write that cookie, and the email entered for that attempt is not reused.
 
 ### 5.4 Verification Cookie
+
+> Superseded by `BetterBlog_Verified_Comments_v2_Spec.md`.
 
 On successful subscriber verification:
 
@@ -367,14 +372,13 @@ Submit a new comment.
   "email": "sarah@example.com",
   "body": "Great post!",
   "parent_id": null,
-  "hcaptcha_token": "...",
   "verification_cookie_token": "...",
   "post_as_anonymous": false,
   "anonymous_retry_token": "..."
 }
 ```
 
-`post_as_anonymous` is sent when the reader confirms posting as a guest after a failed verification, or chooses **Comment anonymously** in the email modal. `anonymous_retry_token` is a one-time token from the `verification_failed_anonymous_available` error so the confirmation POST can skip a second captcha.
+`post_as_anonymous` is sent when the reader confirms posting as a guest after a failed verification, or chooses **Comment anonymously** in the email modal. `anonymous_retry_token` is the token from that error, sent back with the confirmation POST.
 
 **Response:** `201 Created` with the comment object (status will be `pending` or `approved` depending on settings).
 
@@ -608,7 +612,7 @@ Comments are automatically closed based on `auto_close_after_days` relative to `
 | Concern | Mitigation |
 |---|---|
 | API key exposure | Encrypted at rest (AES-256). Never returned in any API response. Masked in UI after entry. Used only server-side. |
-| Spam | hCaptcha on every comment submission. Rate limiting: max 5 comments per IP per hour per blog. |
+| Spam | Rate limiting: max 5 comments per IP per hour per blog. |
 | XSS | Comment body stored as plain text. Rendered with `textContent`, not `innerHTML`. |
 | CSRF | All `POST`/`PATCH` endpoints require `X-BetterBlog-Site-Token` header matching the installed script token. |
 | Email enumeration | Profiles API lookup errors and "not found" responses return the same UI state to the reader — no signal about whether an email exists in Squarespace. |
@@ -621,11 +625,11 @@ Comments are automatically closed based on `auto_close_after_days` relative to `
 | Scenario | Handling |
 |---|---|
 | Blogger disables comments globally mid-thread | Existing approved comments remain visible. Form is hidden. New submissions return `403`. |
-| Squarespace API key is revoked after being saved | Profiles API call fails at comment submit time. Treat as verification failure (§5.3, step 3b). Surface a warning in the blogger dashboard: "Your Squarespace API key appears to be invalid." |
+| Squarespace API key is revoked after being saved | Profiles API call fails at comment submit time. Treat as verification failure (§5.3, step 2b). Surface a warning in the blogger dashboard: "Your Squarespace API key appears to be invalid." |
 | Post has no Squarespace native comments | Legacy "Earlier comments" block is hidden entirely. No empty heading shown. BetterBlog comment section renders at normal position. |
 | Reader submits comment on a post that just passed its close window (race condition) | API returns `403 comments_closed`. UI shows: "Comments on this post are now closed." |
 | Threaded reply submitted to a deleted parent comment | Reply is stored but rendered flat (orphaned) with no parent reference shown. |
-| Profiles API rate limit hit | Log server-side. Treat as verification failure (§5.3, step 3b). Do not surface the API error to the reader — they see the same verification modal and inline message as "not found". |
+| Profiles API rate limit hit | Log server-side. Treat as verification failure (§5.3, step 2b). Do not surface the API error to the reader — they see the same verification modal and inline message as "not found". |
 | `auto_close_after_days` changed after comments are already closed | Reopens or closes comments retroactively across all posts. This is intentional — the setting is blog-level, not per-post. |
 
 ---
@@ -653,4 +657,3 @@ The following are explicitly deferred to V2:
 | 1 | Which Squarespace plan tier is required for Profiles API access? Confirm against a Basic-plan test site. | Eng | Before build |
 | 2 | Confirm current DOM selectors for paywall detection and auth state are accurate across Squarespace 7.0 and 7.1 templates. | Eng | Before build |
 | 3 | Decide on the blogger-facing display name used for dashboard replies (blog title vs. configurable name). | Product | Before build |
-| 4 | Define exact hCaptcha site key management — one global key vs. per-blog key. | Eng | Before build |

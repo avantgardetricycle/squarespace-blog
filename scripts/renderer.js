@@ -1219,7 +1219,24 @@
       var bbCmtSurfaceCss =
         '#bb-comments input,#bb-comments textarea{background:transparent!important}';
       var bbCmtFocusCss =
-        '#bb-comments input:focus,#bb-comments textarea:focus{outline:none!important;border:1px solid #bbb!important;box-shadow:none!important}';
+        '#bb-comments input,#bb-comments textarea,.bb-comment-modal input{outline:none!important;outline-offset:0!important;box-shadow:none!important;border-width:1px!important;border-style:solid!important}' +
+        '#bb-comments input:focus,#bb-comments textarea:focus,.bb-comment-modal input:focus{outline:none!important;outline-offset:0!important;box-shadow:none!important;border-width:1px!important;border-style:solid!important;border-color:var(--bb-accent,#5B4FE8)!important}' +
+        '.bb-comment-modal{font-family:var(--bb-p1-font-family,inherit)}' +
+        '.bb-comment-modal input{display:block;width:100%!important;max-width:none!important;box-sizing:border-box;padding:10px 12px;margin:0 0 10px;border-color:var(--bb-border,#ddd);border-radius:var(--bb-form-radius,6px);background:#fff!important;color:#111;font:inherit;font-size:0.95rem}' +
+        '.bb-comment-modal-actions{display:flex;flex-wrap:nowrap;align-items:stretch;gap:8px;width:100%}' +
+        '.bb-comment-modal-btn{appearance:none;-webkit-appearance:none;box-sizing:border-box;display:inline-flex!important;align-items:center;justify-content:center;width:auto!important;max-width:none!important;min-height:40px;margin:0!important;padding:8px 12px!important;border-radius:var(--bb-btn-radius,0)!important;font-family:var(--bb-btn-font,var(--bb-p1-font-family,inherit))!important;font-weight:var(--bb-btn-weight,500)!important;font-size:14px!important;letter-spacing:var(--bb-btn-letter-spacing,normal)!important;text-transform:var(--bb-btn-transform,none)!important;line-height:1.25!important;text-align:center;white-space:normal;cursor:pointer}' +
+        '.bb-comment-modal-actions .bb-comment-modal-btn{flex:1 1 0;min-width:0}' +
+        '.bb-comment-modal-btn-primary{border:none!important;background:var(--bb-accent,#5B4FE8)!important;color:var(--bb-text-on-accent,#fff)!important}' +
+        '.bb-comment-modal-btn-secondary{border:1px solid var(--bb-accent,#5B4FE8)!important;background:transparent!important;color:var(--bb-accent,#5B4FE8)!important}' +
+        '.bb-comment-modal-btn:disabled{opacity:0.55;cursor:not-allowed}' +
+        '.bb-comment-modal-status{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:148px;color:#333;font-size:0.95rem}' +
+        '.bb-comment-modal-spinner{width:28px;height:28px;border-radius:50%;border:2px solid #e7e7e7;border-top-color:var(--bb-accent,#5B4FE8);animation:bb-comment-modal-spin .7s linear infinite}' +
+        '@keyframes bb-comment-modal-spin{to{transform:rotate(360deg)}}' +
+        '.bb-comment-modal{position:relative}' +
+        '.bb-comment-modal-body{padding-right:28px}' +
+        '.bb-comment-modal-close{position:absolute;top:8px;right:8px;width:32px!important;max-width:32px!important;height:32px;min-height:0!important;margin:0!important;padding:0!important;border:none!important;border-radius:6px!important;background:transparent!important;color:#333!important;font-size:22px!important;font-weight:400!important;line-height:1!important;letter-spacing:0!important;text-transform:none!important;cursor:pointer;display:flex!important;align-items:center;justify-content:center;flex:none!important}' +
+        '.bb-comment-modal-close:hover{background:#f3f3f3!important}' +
+        '.bb-comment-modal-close:focus{outline:1px solid var(--bb-accent,#5B4FE8)!important;outline-offset:2px}';
       var style = document.getElementById('bb-comments-styles');
       if (!style) {
         style = document.createElement('style');
@@ -1233,8 +1250,10 @@
         if (style.textContent.indexOf('#bb-comments input,#bb-comments textarea{background') === -1) {
           style.textContent += bbCmtSurfaceCss;
         }
-        if (style.textContent.indexOf('#bb-comments input:focus') === -1) {
+        if (style.textContent.indexOf('.bb-comment-modal-actions') === -1) {
           style.textContent += bbCmtFocusCss;
+        } else if (style.textContent.indexOf('.bb-comment-modal-close') === -1) {
+          style.textContent += bbCmtFocusCss.slice(bbCmtFocusCss.indexOf('.bb-comment-modal{position:relative}'));
         }
       }
 
@@ -1390,6 +1409,59 @@
           bbCommentsLog('cookie clear failed', { name: name, error: String(e && e.message || e) });
         }
       }
+      var commenterMemoryToken = null;
+      var commenterProfile = null;
+      var commenterTokenSuppressed = false;
+      var forceDifferentEmail = false;
+      var rejectedCommenterEmails = {};
+      function bbRejectCommenterEmail(email) {
+        var key = String(email || '').trim().toLowerCase();
+        if (key) rejectedCommenterEmails[key] = true;
+      }
+      function bbCommenterEmailRejected(email) {
+        var key = String(email || '').trim().toLowerCase();
+        return Boolean(key && rejectedCommenterEmails[key]);
+      }
+      function bbSessionStorageKey() {
+        return 'bb_commenter_session:' + String(siteKey || 'site');
+      }
+      function bbReadCommenterToken() {
+        if (commenterTokenSuppressed) return null;
+        try {
+          var stored = window.localStorage.getItem(bbSessionStorageKey());
+          if (stored) {
+            commenterMemoryToken = stored;
+            return stored;
+          }
+        } catch (e) {}
+        return commenterMemoryToken;
+      }
+      function bbWriteCommenterToken(token) {
+        if (!token) {
+          commenterTokenSuppressed = true;
+          commenterMemoryToken = null;
+          try { window.localStorage.removeItem(bbSessionStorageKey()); } catch (e) {}
+          return;
+        }
+        commenterTokenSuppressed = false;
+        commenterMemoryToken = token;
+        try { window.localStorage.setItem(bbSessionStorageKey(), token); } catch (e2) {}
+      }
+      function bbDeleteLegacyVerifiedCookies() {
+        bbClearCookie(verifiedCookieName);
+        try {
+          var all = document.cookie ? document.cookie.split(';') : [];
+          for (var i = 0; i < all.length; i++) {
+            var part = all[i].trim();
+            var eq = part.indexOf('=');
+            var name = eq >= 0 ? part.slice(0, eq).trim() : part;
+            if (name.indexOf('bb_verified_sub_') === 0 || name.indexOf('bb_verified_commenter_') === 0) {
+              document.cookie = name + '=; Path=/; Max-Age=0; SameSite=Lax';
+            }
+          }
+        } catch (e) {}
+      }
+      bbDeleteLegacyVerifiedCookies();
       function bbEraseVerifiedCookie() {
         bbClearCookie(verifiedCookieName);
       }
@@ -1401,6 +1473,15 @@
         }
       }
       function bbGetVerifiedIdentity() {
+        if (subscriberCommentsEnabled) {
+          var sessionToken = bbReadCommenterToken();
+          if (!sessionToken || !commenterProfile || !commenterProfile.display_name) return null;
+          return {
+            name: String(commenterProfile.display_name),
+            token: sessionToken,
+            email: commenterProfile.email ? String(commenterProfile.email) : ''
+          };
+        }
         try {
           var raw = bbReadCookie(verifiedCookieName);
           if (!raw) return null;
@@ -1518,7 +1599,19 @@
         var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
         var modal = document.createElement('div');
+        modal.className = 'bb-comment-modal';
         modal.style.cssText = 'width:100%;max-width:420px;background:#fff;border-radius:10px;padding:18px 18px 14px;box-shadow:0 18px 40px rgba(0,0,0,.22);box-sizing:border-box';
+        try {
+          var tokenSource = document.getElementById('blog-overlay-list') || document.getElementById('bb-comments');
+          if (tokenSource) {
+            var computed = window.getComputedStyle(tokenSource);
+            var tokenNames = ['--bb-accent', '--bb-text-on-accent', '--bb-border', '--bb-btn-radius', '--bb-form-radius', '--bb-p1-font-family', '--bb-btn-font', '--bb-btn-weight', '--bb-btn-letter-spacing', '--bb-btn-transform'];
+            for (var ti = 0; ti < tokenNames.length; ti++) {
+              var tokenValue = computed.getPropertyValue(tokenNames[ti]);
+              if (tokenValue && tokenValue.trim()) modal.style.setProperty(tokenNames[ti], tokenValue.trim());
+            }
+          }
+        } catch (e) {}
         overlay.appendChild(modal);
         return { overlay: overlay, modal: modal };
       }
@@ -1526,11 +1619,13 @@
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = label;
-        btn.style.cssText = primary
-          ? 'padding:8px 16px;border:none;border-radius:6px;color:#fff;cursor:pointer'
-          : 'padding:8px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#444;cursor:pointer';
-        if (primary) btn.style.background = 'var(--bb-accent, #5B4FE8)';
+        btn.className = 'bb-comment-modal-btn ' + (primary ? 'bb-comment-modal-btn-primary' : 'bb-comment-modal-btn-secondary');
         return btn;
+      }
+      function bbCommentModalActions() {
+        var row = document.createElement('div');
+        row.className = 'bb-comment-modal-actions';
+        return row;
       }
       function bbShowCommentMessageModal(opts, done) {
         opts = opts || {};
@@ -1543,8 +1638,15 @@
         var body = document.createElement('div');
         body.textContent = opts.message || '';
         body.style.cssText = 'font-size:0.92rem;color:#333;line-height:1.45;margin-bottom:14px';
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        if (opts.linkHref) {
+          var signInLink = document.createElement('a');
+          signInLink.href = opts.linkHref;
+          signInLink.textContent = opts.linkLabel || 'Sign in';
+          signInLink.style.cssText = 'display:inline-block;margin-top:8px;color:var(--bb-accent, #5B4FE8);';
+          body.appendChild(document.createElement('br'));
+          body.appendChild(signInLink);
+        }
+        var row = bbCommentModalActions();
         function close(choice) {
           bbCommentsLog('comment message modal closed', { title: opts.title || null, choice: choice || null });
           if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -1597,11 +1699,10 @@
         input.setAttribute('autocorrect', 'off');
         input.setAttribute('spellcheck', 'false');
         input.value = initialValue || '';
-        input.style.cssText = 'display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;font-size:0.95rem;margin-bottom:10px';
+        input.className = 'bb-comment-modal-input';
         var msg = document.createElement('div');
         msg.style.cssText = 'min-height:16px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+        var row = bbCommentModalActions();
         var cancel = bbCommentModalButton('Cancel', false);
         var ok = bbCommentModalButton('Continue', true);
         function close(ret) {
@@ -1648,6 +1749,7 @@
         var el = document.createElement('div');
         el.className = 'bb-comment-form-error';
         el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
         el.style.cssText = 'display:none;margin:8px 0 0;padding:0;background:none;border:none;color:var(--bb-accent,#5B4FE8);font-style:italic;font-weight:400;font-size:12px;line-height:1.4;max-width:560px';
         return el;
       }
@@ -1688,10 +1790,592 @@
         return false;
       }
 
+      // Squarespace login for verified comments.
+      // JSON: Static.SQUARESPACE_CONTEXT account objects walked by _extractSquarespaceIdentityFromObject
+      // (authenticatedAccount, loggedInAccount, member, currentUser, user, profile, and the rest).
+      // Flags: authenticated, isAuthenticated, loggedIn, isLoggedIn, signedIn, isSignedIn.
+      // Email: email, loginEmail, username. Name: displayName, name, firstName + lastName.
+      // DOM fallback: .user-accounts-panel .auth / .unauth (and .user-account, [data-controller="UserAccount"]).
+      // "unknown" is treated as logged out when gating the verified path.
+      function bbAccountPanelState() {
+        function visible(el) {
+          if (!el) return false;
+          try {
+            if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return false;
+            var styles = window.getComputedStyle(el);
+            if (!styles || styles.display === 'none' || styles.visibility === 'hidden') return false;
+          } catch (e) { return false; }
+          return true;
+        }
+        try {
+          var auth = document.querySelector('.user-accounts-panel .auth, .user-account .auth, [data-controller="UserAccount"] .auth');
+          var unauth = document.querySelector('.user-accounts-panel .unauth, .user-account .unauth, [data-controller="UserAccount"] .unauth');
+          if (visible(unauth) && !visible(auth)) return 'logged_out';
+          if (visible(auth) && !visible(unauth)) return 'logged_in';
+        } catch (e) {}
+        return null;
+      }
+      function bbSquarespaceLoginState() {
+        var panel = bbAccountPanelState();
+        if (panel === 'logged_out') return 'logged_out';
+        var id = null;
+        try { id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null; } catch (e) { id = null; }
+        if (id && id.loggedIn === true) return 'logged_in';
+        if (id && id.loggedIn === false) return 'logged_out';
+        try {
+          var mode = self._resolveViewerMode();
+          if (mode === 'loggedIn') return 'logged_in';
+          if (mode === 'loggedOut') return 'logged_out';
+        } catch (e2) {}
+        try {
+          if (document.querySelector('.user-accounts-panel .auth, .user-account .auth, [data-controller="UserAccount"] .auth')) return 'logged_in';
+          if (document.querySelector('.user-accounts-panel .unauth, .user-account .unauth, [data-controller="UserAccount"] .unauth')) return 'logged_out';
+        } catch (e3) {}
+        return 'unknown';
+      }
+      function bbSquarespacePrefill() {
+        var email = '';
+        var firstName = '';
+        try {
+          var ctx = window.Static && window.Static.SQUARESPACE_CONTEXT;
+          var account = ctx && (ctx.authenticatedAccount || ctx.loggedInAccount || null);
+          if (account && typeof account === 'object') {
+            if (account.email) email = String(account.email).trim();
+            if (account.firstName) firstName = String(account.firstName).trim();
+            else if (account.givenName) firstName = String(account.givenName).trim();
+          }
+        } catch (e) {}
+        if (!email) {
+          try {
+            var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
+            if (id && id.email) email = String(id.email).trim();
+          } catch (e2) {}
+        }
+        return { email: email, firstName: firstName.slice(0, 100) };
+      }
+      function bbHeldCommenterToken() {
+        if (commenterMemoryToken) return commenterMemoryToken;
+        try { return window.localStorage.getItem(bbSessionStorageKey()); } catch (e) { return null; }
+      }
+      function bbSignOutCommenter() {
+        var token = bbHeldCommenterToken();
+        bbWriteCommenterToken(null);
+        commenterProfile = null;
+        forceDifferentEmail = false;
+        if (token) {
+          try {
+            fetch(apiUrl + '/auth/logout', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-BetterBlog-Site-Token': siteKey,
+                'Authorization': 'Bearer ' + token
+              },
+              credentials: 'omit'
+            }).catch(function() {});
+          } catch (e) {}
+        }
+        try {
+          if (loggedInIdentityLine) {
+            loggedInIdentityLine.style.display = 'none';
+            loggedInIdentityLine.textContent = '';
+          }
+        } catch (e1) {}
+        try { applyCommentIdentityMode(); } catch (e2) {}
+      }
+      function bbRefreshCommenterProfile(done) {
+        var token = bbReadCommenterToken();
+        if (!subscriberCommentsEnabled || !token) {
+          if (done) done();
+          return;
+        }
+        fetch(apiUrl + '/auth/me', {
+          method: 'GET',
+          headers: {
+            'X-BetterBlog-Site-Token': siteKey,
+            'Authorization': 'Bearer ' + token
+          },
+          credentials: 'omit'
+        }).then(function(r) {
+          return r.text().then(function(text) {
+            var data = {};
+            if (text) { try { data = JSON.parse(text); } catch (e) { data = {}; } }
+            return { status: r.status, data: data };
+          });
+        }).then(function(res) {
+          if (commenterTokenSuppressed || bbReadCommenterToken() !== token) {
+            if (done) done();
+            return;
+          }
+          if (res.status === 401) {
+            bbWriteCommenterToken(null);
+            commenterProfile = null;
+          } else if (res.data && res.data.display_name) {
+            commenterProfile = res.data;
+          }
+          if (done) done();
+        }).catch(function() { if (done) done(); });
+      }
+      function bbBindCommentModal(overlay, modal, returnFocus, close) {
+        function focusable() {
+          return Array.prototype.slice.call(modal.querySelectorAll('button, input, textarea, a[href], select')).filter(function(el) {
+            return !el.disabled;
+          });
+        }
+        function onKey(ev) {
+          if (ev.key === 'Escape') {
+            ev.preventDefault();
+            close(null);
+            return;
+          }
+          if (ev.key !== 'Tab') return;
+          var items = focusable();
+          if (!items.length) return;
+          var first = items[0];
+          var last = items[items.length - 1];
+          if (ev.shiftKey && document.activeElement === first) {
+            ev.preventDefault();
+            last.focus();
+          } else if (!ev.shiftKey && document.activeElement === last) {
+            ev.preventDefault();
+            first.focus();
+          }
+        }
+        document.addEventListener('keydown', onKey);
+        return function cleanup() {
+          document.removeEventListener('keydown', onKey);
+          if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          try { if (returnFocus && returnFocus.focus) returnFocus.focus(); } catch (e) {}
+        };
+      }
+      function bbReadFetchJson(r) {
+        return r.text().then(function(text) {
+          var data = {};
+          if (text) { try { data = JSON.parse(text); } catch (e) { data = {}; } }
+          return { status: r.status, data: data };
+        });
+      }
+      var verifiedFlowOpen = false;
+      function bbBeginVerifiedPost(opts) {
+        opts = opts || {};
+        var draftBody = opts.body || '';
+        var parentId = opts.parentId || null;
+        var button = opts.button || null;
+        var errorEl = opts.errorEl || null;
+        var idleLabel = opts.idleLabel || 'Post Comment';
+        var returnFocus = button || document.activeElement;
+        if (verifiedFlowOpen) return;
+        function setPosting(posting) {
+          if (!button) return;
+          button.disabled = posting;
+          button.style.opacity = posting ? '0.55' : '1';
+          button.style.cursor = posting ? 'not-allowed' : 'pointer';
+          button.textContent = posting ? 'Posting…' : idleLabel;
+        }
+        function postDraft() {
+          var token = bbReadCommenterToken();
+          var headers = {
+            'Content-Type': 'application/json',
+            'X-BetterBlog-Site-Token': siteKey
+          };
+          if (token) headers.Authorization = 'Bearer ' + token;
+          var payload = {
+            post_id: postId,
+            body: draftBody,
+            siteKey: siteKey,
+            squarespace_logged_in: bbSquarespaceLoginState() === 'logged_in',
+            post_title: (post && post.title) || null,
+            post_published_at: bbResolvePostPublishedAt(post),
+            post_url: (post && (post.fullUrl || post.url)) || null
+          };
+          if (parentId) payload.parent_id = parentId;
+          if (post && post.recordType != null && parentId && String(parentId).indexOf('sq:') === 0) {
+            payload.squarespace_record_type = post.recordType;
+          }
+          setPosting(true);
+          fetch(apiUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload),
+            credentials: 'omit'
+          }).then(bbReadFetchJson).then(function(res) {
+            var data = res.data || {};
+            var code = data.code ? String(data.code) : '';
+            if (res.status === 201 && data.id) {
+              forceDifferentEmail = false;
+              bbSetCommentError(errorEl, '');
+              setPosting(false);
+              if (typeof opts.onPosted === 'function') opts.onPosted(data);
+              return;
+            }
+            setPosting(false);
+            if (code === 'commenter_auth_required' || res.status === 401) {
+              bbWriteCommenterToken(null);
+              commenterProfile = null;
+              bbSetCommentError(errorEl, '');
+              try { applyCommentIdentityMode(); } catch (e) {}
+              openEmailModal(bbSquarespacePrefill());
+              return;
+            }
+            var err = data.error || 'Failed to post';
+            if (code === 'squarespace_login_required') {
+              bbSetCommentError(errorEl, err);
+              bbShowCommentMessageModal({
+                title: 'Sign in to comment',
+                message: err,
+                linkHref: bbCommentSignInHref(),
+                linkLabel: 'Sign in',
+                primaryLabel: 'OK',
+                secondaryLabel: data.anonymous_retry_token ? 'Post anonymously' : ''
+              }, function(choice) {
+                if (choice === 'secondary' && data.anonymous_retry_token && typeof opts.onAnonymousRetry === 'function') {
+                  opts.onAnonymousRetry(String(data.anonymous_retry_token));
+                }
+              });
+              return;
+            }
+            if (code === 'verification_failed' || code === 'verification_failed_anonymous_available') {
+              forceDifferentEmail = true;
+              bbSetCommentError(errorEl, err);
+              bbShowCommentMessageModal({
+                title: 'Couldn’t verify membership',
+                message: err,
+                primaryLabel: 'OK'
+              }, function() {
+                if (code !== 'verification_failed_anonymous_available') return;
+                bbShowCommentMessageModal({
+                  title: 'Post anonymously?',
+                  message: 'Post this comment anonymously instead?',
+                  primaryLabel: 'Post anonymously',
+                  secondaryLabel: 'Cancel'
+                }, function(choice) {
+                  if (choice === 'primary' && typeof opts.onAnonymousRetry === 'function') {
+                    opts.onAnonymousRetry(data.anonymous_retry_token ? String(data.anonymous_retry_token) : '');
+                  }
+                });
+              });
+              return;
+            }
+            bbSetCommentError(errorEl, err);
+          }).catch(function() {
+            setPosting(false);
+            bbSetCommentError(errorEl, 'Failed to post');
+          });
+        }
+        function openEmailModal(prefill) {
+          if (verifiedFlowOpen) return;
+          verifiedFlowOpen = true;
+          var focusDifferent = forceDifferentEmail;
+          forceDifferentEmail = false;
+          var shell = bbCreateCommentModalShell();
+          var overlay = shell.overlay;
+          var modal = shell.modal;
+          overlay.setAttribute('role', 'presentation');
+          modal.setAttribute('role', 'dialog');
+          modal.setAttribute('aria-modal', 'true');
+          modal.setAttribute('aria-labelledby', 'bb-commenter-modal-title');
+          var cleanup = function() {};
+          var codeTimer = null;
+          function clearCodeTimer() {
+            if (codeTimer) {
+              clearInterval(codeTimer);
+              codeTimer = null;
+            }
+          }
+          function closeModal() {
+            verifiedFlowOpen = false;
+            cleanup();
+          }
+          cleanup = bbBindCommentModal(overlay, modal, returnFocus, closeModal);
+          var releaseModal = cleanup;
+          cleanup = function() {
+            clearCodeTimer();
+            releaseModal();
+          };
+          modal.style.position = 'relative';
+          var closeBtn = document.createElement('button');
+          closeBtn.type = 'button';
+          closeBtn.className = 'bb-comment-modal-close';
+          closeBtn.setAttribute('aria-label', 'Close');
+          closeBtn.textContent = '\u00d7';
+          closeBtn.onclick = function() { closeModal(); };
+          var modalBody = document.createElement('div');
+          modalBody.className = 'bb-comment-modal-body';
+          modal.appendChild(closeBtn);
+          modal.appendChild(modalBody);
+          function showVerifying() {
+            clearCodeTimer();
+            modalBody.textContent = '';
+            modal.setAttribute('aria-busy', 'true');
+            var status = document.createElement('div');
+            status.className = 'bb-comment-modal-status';
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+            var spinner = document.createElement('div');
+            spinner.className = 'bb-comment-modal-spinner';
+            spinner.setAttribute('aria-hidden', 'true');
+            var label = document.createElement('div');
+            label.id = 'bb-commenter-modal-title';
+            label.textContent = 'Verifying...';
+            status.appendChild(spinner);
+            status.appendChild(label);
+            modalBody.appendChild(status);
+          }
+          function showEmail(values) {
+            clearCodeTimer();
+            modal.setAttribute('aria-busy', 'false');
+            modalBody.textContent = '';
+            var title = document.createElement('div');
+            title.id = 'bb-commenter-modal-title';
+            title.textContent = 'Confirm your email';
+            title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:10px';
+            var emailLabel = document.createElement('label');
+            emailLabel.textContent = 'Email';
+            emailLabel.htmlFor = 'bb-commenter-email';
+            emailLabel.style.cssText = 'display:block;font-size:0.85rem;margin-bottom:4px';
+            var emailInput = document.createElement('input');
+            emailInput.id = 'bb-commenter-email';
+            emailInput.type = 'email';
+            emailInput.name = 'email';
+            emailInput.required = true;
+            emailInput.autocomplete = 'email';
+            var emailValue = values.email || '';
+            if (bbCommenterEmailRejected(emailValue)) emailValue = '';
+            emailInput.value = emailValue;
+            emailInput.className = 'bb-comment-modal-input';
+            var msg = document.createElement('div');
+            msg.setAttribute('aria-live', 'polite');
+            msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
+            var row = bbCommentModalActions();
+            var different = bbCommentModalButton('Use a different email', false);
+            different.onclick = function() {
+              emailInput.value = '';
+              try { emailInput.focus(); } catch (e) {}
+            };
+            var send = bbCommentModalButton('Send code', true);
+            send.onclick = function() {
+              var em = (emailInput.value || '').trim();
+              if (!em || em.indexOf('@') < 1) {
+                msg.textContent = 'Please enter a valid email.';
+                try { emailInput.focus(); } catch (e) {}
+                return;
+              }
+              send.disabled = true;
+              fetch(apiUrl + '/auth/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify({ email: em, siteKey: siteKey }),
+                credentials: 'omit'
+              }).then(bbReadFetchJson).then(function(res) {
+                send.disabled = false;
+                if (res.status === 202 && res.data && res.data.challenge_id) {
+                  showCode(em, String(res.data.challenge_id));
+                  return;
+                }
+                var code = res.data && res.data.code ? String(res.data.code) : '';
+                if (code === 'verification_failed' || code === 'verification_failed_anonymous_available') {
+                  bbRejectCommenterEmail(em);
+                  emailInput.value = '';
+                  msg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + em + '.');
+                  try { emailInput.focus(); } catch (e) {}
+                  return;
+                }
+                msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
+              }).catch(function() {
+                send.disabled = false;
+                msg.textContent = 'Could not send a code. Try again.';
+              });
+            };
+            row.appendChild(different);
+            if (allowAnonymousComments) {
+              var anon = bbCommentModalButton('Comment anonymously', false);
+              anon.onclick = function() {
+                closeModal();
+                if (typeof opts.onAnonymous === 'function') opts.onAnonymous();
+              };
+              row.appendChild(anon);
+            }
+            row.appendChild(send);
+            modalBody.appendChild(title);
+            modalBody.appendChild(emailLabel);
+            modalBody.appendChild(emailInput);
+            modalBody.appendChild(msg);
+            modalBody.appendChild(row);
+            try { (focusDifferent ? different : emailInput).focus(); } catch (e) {}
+          }
+          function showCode(email, challengeId, errorText, guessesLeft) {
+            modal.setAttribute('aria-busy', 'false');
+            modalBody.textContent = '';
+            var title = document.createElement('div');
+            title.id = 'bb-commenter-modal-title';
+            title.textContent = 'Confirm your email';
+            title.style.cssText = 'font-size:1rem;font-weight:600;color:#111;margin-bottom:8px';
+            var copy = document.createElement('div');
+            copy.style.cssText = 'font-size:0.9rem;color:#333;line-height:1.45;margin-bottom:10px';
+            copy.appendChild(document.createTextNode('We sent a 6-digit code to '));
+            var strong = document.createElement('strong');
+            strong.textContent = email;
+            copy.appendChild(strong);
+            copy.appendChild(document.createTextNode('. It expires in 10 minutes.'));
+            var codeLabel = document.createElement('label');
+            codeLabel.textContent = 'Code';
+            codeLabel.htmlFor = 'bb-commenter-code';
+            codeLabel.style.cssText = 'display:block;font-size:0.85rem;margin-bottom:4px';
+            var codeInput = document.createElement('input');
+            codeInput.id = 'bb-commenter-code';
+            codeInput.inputMode = 'numeric';
+            codeInput.autocomplete = 'one-time-code';
+            codeInput.maxLength = 6;
+            codeInput.className = 'bb-comment-modal-input';
+            codeInput.style.letterSpacing = '0.2em';
+            codeInput.style.fontSize = '1.1rem';
+            if (guessesLeft === 0) codeInput.disabled = true;
+            var msg = document.createElement('div');
+            msg.setAttribute('aria-live', 'polite');
+            msg.style.cssText = 'min-height:18px;font-size:0.8rem;color:#b91c1c;margin-bottom:8px';
+            var row = bbCommentModalActions();
+            var resend = bbCommentModalButton('Resend code (30)', false);
+            resend.disabled = true;
+            var remaining = 30;
+            function startResendCountdown() {
+              clearCodeTimer();
+              remaining = 30;
+              resend.disabled = true;
+              resend.textContent = 'Resend code (30)';
+              codeTimer = setInterval(function() {
+                remaining -= 1;
+                if (remaining <= 0) {
+                  clearCodeTimer();
+                  resend.disabled = false;
+                  resend.textContent = 'Resend code';
+                  return;
+                }
+                resend.textContent = 'Resend code (' + remaining + ')';
+              }, 1000);
+            }
+            startResendCountdown();
+            var submitting = false;
+            function verifyFailureMessage(fail) {
+              if (fail === 'code_expired') return 'That code has expired. Send a new one.';
+              if (fail === 'too_many_attempts') return 'Too many tries. Send a new code.';
+              return "That code isn't right. Check the email and try again.";
+            }
+            function submitCode(digits) {
+              if (submitting || digits.length !== 6) return;
+              submitting = true;
+              var oldToken = bbReadCommenterToken();
+              var verifyBody = { challenge_id: challengeId, code: digits };
+              if (oldToken) verifyBody.replaces_token = oldToken;
+              showVerifying();
+              fetch(apiUrl + '/auth/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify(verifyBody),
+                credentials: 'omit'
+              }).then(bbReadFetchJson).then(function(res) {
+                submitting = false;
+                if (res.status === 200 && res.data && res.data.session_token) {
+                  bbWriteCommenterToken(String(res.data.session_token));
+                  commenterProfile = {
+                    email: res.data.email,
+                    display_name: res.data.display_name,
+                    expires_at: res.data.expires_at
+                  };
+                  closeModal();
+                  try { applyCommentIdentityMode(); } catch (e) {}
+                  postDraft();
+                  return;
+                }
+                if (!overlay.parentNode) return;
+                var fail = res.data && res.data.code ? String(res.data.code) : '';
+                var guessesLeft = res.data && typeof res.data.guesses_left === 'number' ? res.data.guesses_left : null;
+                var message = (res.data && res.data.error) || verifyFailureMessage(fail);
+                showCode(email, challengeId, message, guessesLeft);
+              }).catch(function() {
+                submitting = false;
+                if (!overlay.parentNode) return;
+                showCode(email, challengeId, "That code isn't right. Check the email and try again.");
+              });
+            }
+            codeInput.addEventListener('paste', function(ev) {
+              var text = '';
+              try { text = (ev.clipboardData || window.clipboardData).getData('text') || ''; } catch (e) { text = ''; }
+              var digits = text.replace(/\D/g, '').slice(0, 6);
+              if (!digits) return;
+              ev.preventDefault();
+              codeInput.value = digits;
+              if (digits.length === 6) submitCode(digits);
+            });
+            codeInput.addEventListener('input', function() {
+              var digits = (codeInput.value || '').replace(/\D/g, '').slice(0, 6);
+              if (codeInput.value !== digits) codeInput.value = digits;
+              if (digits.length === 6) submitCode(digits);
+            });
+            resend.onclick = function() {
+              if (resend.disabled) return;
+              resend.disabled = true;
+              fetch(apiUrl + '/auth/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
+                body: JSON.stringify({ email: email, siteKey: siteKey }),
+                credentials: 'omit'
+              }).then(bbReadFetchJson).then(function(res) {
+                if (res.status === 202 && res.data && res.data.challenge_id) {
+                  challengeId = String(res.data.challenge_id);
+                  msg.textContent = '';
+                  startResendCountdown();
+                  return;
+                }
+                resend.disabled = false;
+                var resendCode = res.data && res.data.code ? String(res.data.code) : '';
+                if (resendCode === 'verification_failed' || resendCode === 'verification_failed_anonymous_available') {
+                  bbRejectCommenterEmail(email);
+                  showEmail({ email: '' });
+                  var emailMsg = modal.querySelector('[aria-live="polite"]');
+                  if (emailMsg) emailMsg.textContent = (res.data && res.data.error) || ("We couldn't find a membership for " + email + '.');
+                  return;
+                }
+                msg.textContent = (res.data && res.data.error) || 'Could not send a code. Try again.';
+              }).catch(function() {
+                resend.disabled = false;
+                msg.textContent = 'Could not send a code. Try again.';
+              });
+            };
+            var different = bbCommentModalButton('Use a different email', false);
+            different.onclick = function() { showEmail({ email: email }); };
+            row.appendChild(resend);
+            row.appendChild(different);
+            modalBody.appendChild(title);
+            modalBody.appendChild(copy);
+            modalBody.appendChild(codeLabel);
+            modalBody.appendChild(codeInput);
+            if (errorText) msg.textContent = errorText;
+            modalBody.appendChild(msg);
+            modalBody.appendChild(row);
+            try { codeInput.focus(); } catch (e) {}
+          }
+          document.body.appendChild(overlay);
+          var current = commenterProfile && commenterProfile.email ? String(commenterProfile.email) : '';
+          showEmail({
+            email: current || (prefill && prefill.email) || ''
+          });
+        }
+        var held = bbReadCommenterToken();
+        if (held && !forceDifferentEmail) {
+          postDraft();
+          return;
+        }
+        openEmailModal(bbSquarespacePrefill());
+      }
+
       function currentCommentViewerMode() {
         var mode = self._resolveViewerMode();
         var id = self._extractSquarespaceIdentity ? self._extractSquarespaceIdentity() : null;
         if (id && id.loggedIn === true) mode = 'loggedIn';
+        if (id && id.loggedIn === false) mode = 'loggedOut';
+        var panel = bbAccountPanelState();
+        if (panel === 'logged_out') mode = 'loggedOut';
+        else if (panel === 'logged_in') mode = 'loggedIn';
         return { mode: mode, identity: id };
       }
 
@@ -1954,6 +2638,43 @@
             };
             rSubmit.onclick = function() {
               var modeNow = currentCommentViewerMode().mode;
+              var replyDraft = (rBody.value || '').trim();
+              if (subscriberCommentsEnabled && modeNow === 'loggedIn' && !bbUseGeneratedAnonymousName(modeNow) && !replyPostAsAnonymous) {
+                if (!replyDraft) { rBody.focus(); return; }
+                bbBeginVerifiedPost({
+                  body: replyDraft,
+                  parentId: parentCommentId,
+                  button: rSubmit,
+                  errorEl: rError,
+                  idleLabel: 'Post reply',
+                  onAnonymous: function() {
+                    replyPostAsAnonymous = true;
+                    rSubmit.onclick();
+                  },
+                  onAnonymousRetry: function(retryToken) {
+                    replyPostAsAnonymous = true;
+                    replyAnonymousRetryToken = retryToken || '';
+                    rSubmit.onclick();
+                  },
+                  onPosted: function(data) {
+                    bbSetCommentError(rError, '');
+                    replyFormShell.style.display = 'none';
+                    rBody.value = '';
+                    replyPostAsAnonymous = false;
+                    replyAnonymousRetryToken = '';
+                    if (data.status === 'pending') {
+                      var pend = document.createElement('p');
+                      pend.className = 'bb-comment-reply-pending-note';
+                      pend.style.cssText = 'margin:10px 0 0;font-size:0.85rem;color:#666;padding-left:4px';
+                      pend.textContent = 'Your reply was submitted and is awaiting moderation.';
+                      wrap.appendChild(pend);
+                    } else {
+                      refreshBetterBlogCommentsList();
+                    }
+                  }
+                });
+                return;
+              }
               var nm = (rName.value || '').trim();
               var bd = (rBody.value || '').trim();
               if (modeNow !== 'loggedIn' && !allowAnonymousComments && !nm) { rName.focus(); return; }
@@ -2018,10 +2739,10 @@
                 post_url: (post && (post.fullUrl || post.url)) || null
               };
               var rEm = (replyGenerated || replyPostAsAnonymous) ? null : (modeNow === 'loggedIn' ? loggedInEmail : (rEmail.value || '').trim());
-              if (replyPostAsAnonymous) payload.post_as_anonymous = true;
+              if (replyPostAsAnonymous || replyGenerated) payload.post_as_anonymous = true;
               if (replyPostAsAnonymous && replyAnonymousRetryToken) payload.anonymous_retry_token = replyAnonymousRetryToken;
               if (rEm) payload.email = rEm;
-              if (loggedInToken) payload.verification_cookie_token = loggedInToken;
+              if (!subscriberCommentsEnabled && loggedInToken) payload.verification_cookie_token = loggedInToken;
               if (!replyGenerated && !replyPostAsAnonymous && modeNow === 'loggedIn' && replySubscriberName && !loggedInToken) {
                 payload.subscriber_display_name = replySubscriberName;
               }
@@ -2034,12 +2755,6 @@
               });
               if (post && post.recordType != null && String(parentCommentId).indexOf('sq:') === 0) {
                 payload.squarespace_record_type = post.recordType;
-              }
-              if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
-                try {
-                  var tok = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
-                  if (tok) payload.hcaptcha_token = tok;
-                } catch (e3) {}
               }
               fetch(apiUrl, {
                 method: 'POST',
@@ -2410,7 +3125,7 @@
       var mainNameOverride = null;
       var mainEmailEpoch = verifiedCommenterEpoch;
       function bbRenderLoggedInIdentityLine(identity) {
-        var labelText = 'Logged in as ' + identity.name;
+        var labelText = (subscriberCommentsEnabled ? 'Commenting as ' : 'Logged in as ') + identity.name;
         var label = loggedInIdentityLine.querySelector('.bb-comment-logged-in-label');
         var logout = loggedInIdentityLine.querySelector('.bb-comment-logout');
         if (label && logout && label.textContent === labelText && loggedInIdentityLine.style.display !== 'none') return;
@@ -2422,11 +3137,15 @@
         logout = document.createElement('button');
         logout.type = 'button';
         logout.className = 'bb-comment-logout';
-        logout.textContent = 'Logout';
+        logout.textContent = subscriberCommentsEnabled ? 'Sign out' : 'Logout';
         logout.style.cssText = 'display:inline;margin:0 0 0 10px;padding:0;border:0;background:transparent;color:var(--bb-accent, #5B4FE8);text-decoration:underline;cursor:pointer;font:inherit;font-size:inherit;vertical-align:baseline';
         logout.onclick = function() {
           mainEmailOverride = null;
           mainNameOverride = null;
+          if (subscriberCommentsEnabled) {
+            bbSignOutCommenter();
+            return;
+          }
           bbClearVerifiedIdentity();
           applyCommentIdentityMode();
         };
@@ -2436,6 +3155,7 @@
 
       nameInput.oninput = emailInput.oninput = bodyArea.oninput = mainFormSync;
       applyCommentIdentityMode();
+      bbRefreshCommenterProfile(function() { applyCommentIdentityMode(); });
       // Auth UI can mount asynchronously; probe a few times, then stop.
       setTimeout(function() { applyCommentIdentityMode(); }, 250);
       setTimeout(function() { applyCommentIdentityMode(); }, 1200);
@@ -2446,6 +3166,42 @@
         applyCommentIdentityMode();
         if (authProbeCount >= 12) clearInterval(authProbeTimer);
       }, 500);
+      if (typeof MutationObserver === 'function') {
+        var commentAuthSnap = bbSquarespaceLoginState();
+        var commentAuthTimer = null;
+        function refreshCommentAuthFromPage() {
+          if (commentAuthTimer) return;
+          commentAuthTimer = setTimeout(function() {
+            commentAuthTimer = null;
+            var nextSnap = bbSquarespaceLoginState();
+            if (nextSnap === commentAuthSnap) return;
+            commentAuthSnap = nextSnap;
+            try { applyCommentIdentityMode(); } catch (e) {}
+          }, 200);
+        }
+        var accountRoot = document.querySelector('.user-accounts-panel, .user-account, [data-controller="UserAccount"]');
+        if (accountRoot) {
+          try {
+            var commentAuthObserver = new MutationObserver(refreshCommentAuthFromPage);
+            commentAuthObserver.observe(accountRoot, {
+              attributes: true,
+              attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'],
+              childList: true,
+              subtree: true
+            });
+          } catch (e) {}
+        }
+        document.addEventListener('click', function(ev) {
+          var target = ev.target && ev.target.closest ? ev.target.closest('a, button') : null;
+          if (!target || target.classList.contains('bb-comment-logout')) return;
+          var label = (target.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          var href = '';
+          try { href = String(target.getAttribute('href') || ''); } catch (e2) { href = ''; }
+          if (label === 'log out' || label === 'logout' || label === 'sign out' || /logout|sign-out/i.test(href)) {
+            refreshCommentAuthFromPage();
+          }
+        }, true);
+      }
 
       refreshBetterBlogCommentsList = function() {
         return fetch(bbCommentsListUrl())
@@ -2480,10 +3236,10 @@
           post_published_at: bbResolvePostPublishedAt(post),
           post_url: (post && (post.fullUrl || post.url)) || null
         };
-        if (postAsAnonymous) payload.post_as_anonymous = true;
+        if (postAsAnonymous || generatedNow) payload.post_as_anonymous = true;
         if (postAsAnonymous && anonymousRetryToken) payload.anonymous_retry_token = anonymousRetryToken;
         if (!generatedNow && !postAsAnonymous && emailToUse && !verificationToken) payload.email = emailToUse;
-        if (!generatedNow && !postAsAnonymous && verificationToken) payload.verification_cookie_token = verificationToken;
+        if (!subscriberCommentsEnabled && !generatedNow && !postAsAnonymous && verificationToken) payload.verification_cookie_token = verificationToken;
         if (chosenSubscriberName) payload.subscriber_display_name = chosenSubscriberName;
         bbCommentsLog('main POST payload', {
           mode: modeNow,
@@ -2498,12 +3254,6 @@
           generatedAnonymous: generatedNow,
           postAsAnonymous: Boolean(postAsAnonymous)
         });
-        if (cs.hcaptchaSiteKey && typeof window.hcaptcha !== 'undefined') {
-          try {
-            var token = window.hcaptcha.getResponse && window.hcaptcha.getResponse();
-            if (token) payload.hcaptcha_token = token;
-          } catch (e) {}
-        }
         fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-BetterBlog-Site-Token': siteKey },
@@ -2585,6 +3335,38 @@
         var modeNow = currentCommentViewerMode().mode;
         var name = (nameInput.value || '').trim();
         var body = (bodyArea.value || '').trim();
+        if (subscriberCommentsEnabled && modeNow === 'loggedIn' && !bbUseGeneratedAnonymousName(modeNow)) {
+          if (!body) { bodyArea.focus(); return; }
+          bbBeginVerifiedPost({
+            body: body,
+            parentId: null,
+            button: submitBtn,
+            errorEl: mainCommentError,
+            idleLabel: 'Post Comment',
+            onAnonymous: function() {
+              submitMainCommentWithEmail(modeNow, name, body, null, true);
+            },
+            onAnonymousRetry: function(retryToken) {
+              submitMainCommentWithEmail(modeNow, name, body, null, true, retryToken);
+            },
+            onPosted: function(data) {
+              bbSetCommentError(mainCommentError, '');
+              bodyArea.value = '';
+              if (data.status === 'pending') {
+                var msg = document.createElement('p');
+                msg.style.color = '#666';
+                msg.style.fontSize = '0.9rem';
+                msg.textContent = 'Your comment is awaiting moderation.';
+                formWrap.appendChild(msg);
+              } else {
+                applyCommentIdentityMode();
+                refreshBetterBlogCommentsList();
+              }
+              mainFormSync();
+            }
+          });
+          return;
+        }
         if (modeNow !== 'loggedIn' && !allowAnonymousComments && !name) { nameInput.focus(); return; }
         if (!body) { bodyArea.focus(); return; }
         if (bbUseGeneratedAnonymousName(modeNow)) {
@@ -2658,6 +3440,7 @@
         submitMainCommentWithEmail(modeNow, name, body, (emailInput.value || '').trim() || null);
       };
       formWrap.appendChild(submitBtn);
+      if (subscriberCommentsEnabled) formWrap.insertBefore(loggedInIdentityLine, submitBtn);
       var mainCommentError = bbCreateCommentErrorEl();
       formWrap.appendChild(mainCommentError);
       }

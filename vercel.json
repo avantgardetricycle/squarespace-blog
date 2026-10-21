@@ -181,7 +181,7 @@
     },
     {
       "path": "/api/cron/trial-day-four-reminder",
-      "schedule": "59 23 * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/delete-expired-accounts",

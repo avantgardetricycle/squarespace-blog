@@ -60,6 +60,7 @@ interface Comment {
   email: string | null;
   verifiedSubscriber: boolean;
   squarespaceProfileId: string | null;
+  commenterSessionId?: string | null;
   body: string;
   status: ApiStatus;
   ipAddress: string | null;
@@ -624,6 +625,42 @@ export default function Comments() {
     });
   };
 
+  const removeVerifiedBadge = (c: Comment) => {
+    fetch(`/api/dashboard/comments/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ verified_subscriber: false }),
+    }).then(async (r) => {
+      if (!r.ok) {
+        toast.error("Could not update comment");
+        return;
+      }
+      setComments((prev) =>
+        prev.map((row) => (row.id === c.id ? { ...row, verifiedSubscriber: false } : row))
+      );
+      toast.success("Verified badge removed");
+    });
+  };
+
+  const signOutCommenter = (c: Comment) => {
+    const siteId = me?.sites.find((site) => site.siteKey === siteKey)?.id;
+    if (!c.email || !siteId) return;
+    if (!window.confirm("Sign out this commenter on all devices? They'll need a new code to comment as verified.")) return;
+    fetch("/api/dashboard/commenters/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ site_id: siteId, email: c.email }),
+    }).then(async (r) => {
+      if (!r.ok) {
+        toast.error("Could not sign out this commenter");
+        return;
+      }
+      toast.success("Signed out on all devices. They'll need a new code to comment as verified.");
+    });
+  };
+
   const requestPermanentDelete = (c: Comment) => {
     setPermanentDeleteTarget({ mode: "single", comment: c });
     setPermanentDeleteOpen(true);
@@ -1163,6 +1200,11 @@ export default function Comments() {
                                   {comment.email ? (
                                     <span className="text-neutral-600 truncate max-w-full">{comment.email}</span>
                                   ) : null}
+                                  {comment.commenterSessionId ? (
+                                    <span className="shrink-0 px-2 py-0.5 rounded-full border border-sky-200 bg-sky-50 text-sky-800 font-medium">
+                                      Email verified
+                                    </span>
+                                  ) : null}
                                   <span
                                     className={`shrink-0 px-2 py-0.5 rounded-full border font-medium ${
                                       isAuthenticated
@@ -1252,6 +1294,22 @@ export default function Comments() {
                                   Mark as Spam
                                 </button>
                               )}
+                              {comment.verifiedSubscriber ? (
+                                <button
+                                  onClick={() => removeVerifiedBadge(comment)}
+                                  className="text-sm font-medium text-neutral-600 hover:text-neutral-700"
+                                >
+                                  Remove verified badge
+                                </button>
+                              ) : null}
+                              {comment.commenterSessionId && comment.email ? (
+                                <button
+                                  onClick={() => signOutCommenter(comment)}
+                                  className="text-sm font-medium text-neutral-600 hover:text-neutral-700"
+                                >
+                                  Sign out this commenter
+                                </button>
+                              ) : null}
                               <button
                                 onClick={() => requestPermanentDelete(comment)}
                                 className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center gap-1.5 ml-auto"
@@ -1397,10 +1455,10 @@ export default function Comments() {
                 <Switch
                   checked={settings?.subscriberCommentsEnabled ?? false}
                   onCheckedChange={(v) => settings && updateSetting("subscriberCommentsEnabled", v)}
-                  disabled={settingsSaving || !settings?.apiKeyVerified}
+                  disabled={settingsSaving || (!settings?.apiKeyVerified && !(settings?.subscriberCommentsEnabled ?? false))}
                 />
               </div>
-              <p className="text-xs text-neutral-500">Require a member email, verified against your Squarespace member list. Failed checks are shown in a modal.</p>
+              <p className="text-xs text-neutral-500">Readers confirm their email with a one-time code and must be signed in to your site. Their name comes from their Squarespace profile. Requires a Squarespace API key.</p>
               {settings?.apiKeyVerified && (
                 <div className={settings.apiKeyInvalid ? "opacity-70" : undefined}>
                   <div className="flex items-center gap-2 text-sm mt-1">

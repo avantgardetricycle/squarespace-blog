@@ -5,10 +5,8 @@
 import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
 import prisma, { migrateBlogPasswordAtRest } from '../db/index.js'
-import { decrypt } from '../lib/encryption.js'
 import { loadUserPlanContext } from '../lib/planAccess.js'
 import { sendCommentNotificationEmail } from '../lib/email.js'
-import { markSquarespaceApiKeyInvalid } from '../lib/profiles-api-alert.js'
 import {
   clampParentIdsForThreadDepth,
   resolveParentIdForReply,
@@ -17,14 +15,18 @@ import { resolveSquarespaceParentForReply } from '../lib/squarespace-comments-im
 import {
   decideAnonymousCommentIdentity,
   finalizeCommentIdentity,
-  profileCommentDisplayName,
 } from '../lib/anonymous-comment-identity.js'
-import { applyVerificationSession } from '../lib/comment-verification-session.js'
+import { deleteCommentVerificationSession } from '../lib/comment-verification-token.js'
+import { createCommentAuthRouter } from './comment-auth.js'
+import { commenterScope, readBearerToken } from '../lib/commenter-session.js'
+import { findValidCommenterSession, touchCommenterSession } from '../lib/commenter-auth-store.js'
+import { findSiteContactByEmail } from '../lib/site-contact-lookup.js'
 import {
-  deleteCommentVerificationSession,
-  readCommentVerificationSession,
-  saveCommentVerificationSession,
-} from '../lib/comment-verification-token.js'
+  COMMENTER_AUTH_REQUIRED_MESSAGE,
+  SQUARESPACE_LOGIN_REQUIRED_MESSAGE,
+  decideVerifiedCommentSubmit,
+  membershipNotFoundMessage,
+} from '../lib/commenter-submit.js'
 import { redactSubscriberText } from '../lib/email-providers.js'
 import { canRenderSubscription } from '../lib/subscriptionStatus.js'
 import { stampPaymentFailure } from '../lib/paymentGrace.js'
@@ -53,18 +55,6 @@ function issueAnonymousRetryToken(siteId: string): string {
   const token = crypto.randomBytes(16).toString('hex')
   anonymousRetryTokens.set(token, { siteId, expiresAt: Date.now() + ANON_RETRY_TTL_MS })
   return token
-}
-
-function peekAnonymousRetryToken(token: string, siteId: string): boolean {
-  cleanupAnonymousRetryTokens()
-  const entry = anonymousRetryTokens.get(token)
-  return Boolean(entry && entry.siteId === siteId && entry.expiresAt > Date.now())
-}
-
-function consumeAnonymousRetryToken(token: string, siteId: string): boolean {
-  if (!peekAnonymousRetryToken(token, siteId)) return false
-  anonymousRetryTokens.delete(token)
-  return true
 }
 
 function cleanupCommentRateLimit(): void {
@@ -174,29 +164,31 @@ function effectiveCommentSettings(s: CommentSettingsRow | null) {
   return s
 }
 
-async function verifyHCaptcha(token: string): Promise<boolean> {
-  const secret = process.env.HCAPTCHA_SECRET_KEY
-  if (!secret) {
-    console.warn('[comments] HCAPTCHA_SECRET_KEY not set, skipping verification')
-    return true
-  }
-  try {
-    const res = await fetch('https://api.hcaptcha.com/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ secret, response: token }),
-    })
-    const data = (await res.json()) as { success?: boolean }
-    return data.success === true
-  } catch (err) {
-    console.error('[comments] hCaptcha verification error:', err)
-    return false
-  }
-}
-
 function fingerprintHash(ip: string, userAgent: string): string {
   return crypto.createHash('sha256').update(`${ip}:${userAgent}`).digest('hex')
 }
+
+router.use(
+  '/auth',
+  createCommentAuthRouter({
+    getSiteToken,
+    getSite: async (token) => {
+      const site = await getSiteWithSubscription(token)
+      if (!site) return null
+      const settings = site.blogCommentSettings
+      const legacyApiKey = (settings as unknown as { squarespaceApiKeyEnc?: string | null } | null)?.squarespaceApiKeyEnc ?? null
+      return {
+        id: site.id,
+        siteKey: site.siteKey,
+        name: site.name,
+        url: site.url,
+        apiKeyEnc: site.squarespaceApiKeyEnc || legacyApiKey,
+        ownerEmail: site.user?.email ?? null,
+        notificationEmail: settings?.notificationEmail ?? null,
+      }
+    },
+  })
+)
 
 // GET /api/comments?post_id=xxx&page=1&per_page=20
 router.get('/', async (req: Request, res: Response) => {
@@ -445,11 +437,10 @@ router.post('/', async (req: Request, res: Response) => {
     body?: string
     parent_id?: string | null
     squarespace_record_type?: number | string
-    hcaptcha_token?: string
     verification_cookie_token?: string
     post_as_anonymous?: boolean
-    anonymous_retry_token?: string
     anonymous_handle?: string
+    squarespace_logged_in?: boolean
     post_title?: string
     post_published_at?: string
     post_url?: string
@@ -462,24 +453,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const postAsAnonymous = body.post_as_anonymous === true
-  const anonymousRetryToken =
-    typeof body.anonymous_retry_token === 'string' ? body.anonymous_retry_token.trim() : ''
-  const skipCaptchaForAnonymousRetry =
-    postAsAnonymous && !!anonymousRetryToken && peekAnonymousRetryToken(anonymousRetryToken, site.id)
-
-  const hcaptchaSecret = process.env.HCAPTCHA_SECRET_KEY
-  const hcaptchaToken = typeof body.hcaptcha_token === 'string' ? body.hcaptcha_token.trim() : null
-  if (hcaptchaSecret && !hcaptchaToken && !skipCaptchaForAnonymousRetry) {
-    res.status(400).json({ error: 'hcaptcha_token is required' })
-    return
-  }
-
-  const hcaptchaValid =
-    hcaptchaSecret && !skipCaptchaForAnonymousRetry ? await verifyHCaptcha(hcaptchaToken!) : true
-  if (!hcaptchaValid) {
-    res.status(400).json({ error: 'Captcha verification failed' })
-    return
-  }
+  const verifiedSubmit = settings.subscriberCommentsEnabled && !postAsAnonymous
 
   const displayNameRaw = typeof body.display_name === 'string' ? body.display_name.trim() : ''
   // Optional name from the member email modal. Kept off display_name so a typed
@@ -502,22 +476,6 @@ router.post('/', async (req: Request, res: Response) => {
     return
   }
 
-  const verificationCookieToken =
-    typeof body.verification_cookie_token === 'string' ? body.verification_cookie_token.trim() : ''
-  let reuseVerificationToken: string | null = null
-  if (verificationCookieToken && !email && !postAsAnonymous) {
-    const session = await readCommentVerificationSession(verificationCookieToken, site.id)
-    if (!session) {
-      res.status(400).json({
-        code: 'verification_expired',
-        error: 'Please confirm your email again.',
-      })
-      return
-    }
-    email = applyVerificationSession({ email, session }).email
-    reuseVerificationToken = verificationCookieToken
-  }
-
   if (postAsAnonymous && !settings.allowAnonymousComments) {
     res.status(403).json({
       error:
@@ -525,7 +483,7 @@ router.post('/', async (req: Request, res: Response) => {
     })
     return
   }
-  if (!settings.allowAnonymousComments) {
+  if (!verifiedSubmit && !settings.allowAnonymousComments) {
     const guestNameOnly = !!displayNameRaw && !email
     const guestNoCredentials = !displayNameRaw && !email
     if (guestNameOnly || guestNoCredentials) {
@@ -635,143 +593,97 @@ router.post('/', async (req: Request, res: Response) => {
   let displayName = displayNameRaw.slice(0, MAX_DISPLAY_NAME)
   let verifiedSubscriber = false
   let squarespaceProfileId: string | null = null
-  const { generatedHandle, useAnonymousIdentity, memberEmailAttempt } = decideAnonymousCommentIdentity({
-    allowAnonymousComments: settings.allowAnonymousComments,
-    subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
-    displayNameRaw,
-    anonymousHandleRaw: typeof body.anonymous_handle === 'string' ? body.anonymous_handle : '',
-    email,
-    postAsAnonymous,
-  })
-  // Subscriber verification: if they have API key and subscriber_comments_enabled, verify when email provided.
-  // Generated anonymous handles never go through Profiles, so a typed email cannot impersonate a member.
-  if (
-    !useAnonymousIdentity &&
-    !postAsAnonymous &&
-    settings.subscriberCommentsEnabled &&
-    email &&
-    effectiveSquarespaceApiKeyEnc
-  ) {
-    try {
-      const apiKey = decrypt(effectiveSquarespaceApiKeyEnc)
-      const profilesUrl = `https://api.squarespace.com/1.0/profiles?filter=email,${encodeURIComponent(email)}`
-      // Squarespace Profiles API: GET /1.0/profiles, filter=email,{encoded} (comma-separated per docs)
-      const resProfiles = await fetch(profilesUrl, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: 'application/json',
-          'User-Agent': 'BetterBlog/1.0',
-        },
-      })
-      const sqReqId =
-        resProfiles.headers.get('x-request-id') ||
-        resProfiles.headers.get('x-squarespace-request-id') ||
-        null
-      if (resProfiles.ok) {
-        const data = (await resProfiles.json()) as
-          | { Profiles?: Array<{ id?: string; hasAccount?: boolean; has_account?: boolean; firstName?: string; first_name?: string }> }
-          | { profiles?: Array<{ id?: string; hasAccount?: boolean; has_account?: boolean; firstName?: string; first_name?: string }> }
-          | Record<string, unknown>
-        const profiles =
-          (Array.isArray((data as { Profiles?: unknown[] }).Profiles) ? (data as { Profiles: Array<{ id?: string; hasAccount?: boolean; has_account?: boolean; firstName?: string; first_name?: string }> }).Profiles : null)
-          || (Array.isArray((data as { profiles?: unknown[] }).profiles) ? (data as { profiles: Array<{ id?: string; hasAccount?: boolean; has_account?: boolean; firstName?: string; first_name?: string }> }).profiles : null)
-          || []
-        const profile = profiles[0]
-        const hasAccount =
-          profile && typeof profile === 'object'
-            ? (profile.hasAccount ?? profile.has_account ?? true)
-            : false
-        if (profile && hasAccount) {
-          verifiedSubscriber = true
-          squarespaceProfileId = profile.id ?? null
-          if (!displayName) {
-            displayName = profileCommentDisplayName(profile).slice(0, MAX_DISPLAY_NAME)
-          }
-        }
-      } else {
-        const errText = await resProfiles.text().catch(() => '')
-        const errSnippet = errText ? redactSubscriberText(errText) : null
-        console.error('[comments] Profiles API non-200', {
-          status: resProfiles.status,
-          statusText: resProfiles.statusText,
-          requestId: sqReqId,
-          body: errSnippet,
-        })
-        if (resProfiles.status === 401 || resProfiles.status === 403) {
-          markSquarespaceApiKeyInvalid({
-            siteId: site.id,
-            siteKey: site.siteKey,
-            siteName: site.name ?? null,
-            siteUrl: site.url ?? null,
-            status: resProfiles.status,
-            reason: resProfiles.status === 403 ? 'profiles_forbidden' : 'profiles_unauthorized',
-            errorBodySnippet: errSnippet,
-            ownerEmails: [site.user?.email, settings.notificationEmail],
-          }).catch((err) =>
-            console.error(
-              '[comments] Profiles API alert error:',
-              redactSubscriberText(err instanceof Error ? err.message : String(err))
-            )
-          )
-        }
-      }
-    } catch (err) {
-      console.error(
-        '[comments] Profiles API error:',
-        redactSubscriberText(err instanceof Error ? err.message : String(err))
-      )
-      // Graceful degradation - continue as unverified. Network/5xx is not a dead API key.
-    }
-  }
+  let commenterSessionId: string | null = null
+  let clientReportedLoggedIn: boolean | null = null
 
-  if (!useAnonymousIdentity && memberEmailAttempt && !verifiedSubscriber) {
-    if (!settings.allowAnonymousComments) {
-      if (!settings.subscriberCommentsEnabled || !effectiveSquarespaceApiKeyEnc) {
-        res.status(400).json({
-          error:
-            'Email verification failed. Please try again.',
-        })
-        return
+  if (verifiedSubmit) {
+    const hostname = commenterScope(site)
+    const session = await findValidCommenterSession(readBearerToken(req), hostname)
+    if (session) await touchCommenterSession(session)
+    const squarespaceLoggedIn = body.squarespace_logged_in === true
+    let contact: { found: true; contactId: string } | { found: false; error?: string } | null = null
+    if (session && squarespaceLoggedIn && effectiveSquarespaceApiKeyEnc) {
+      const result = await findSiteContactByEmail({
+        siteId: site.id,
+        siteKey: site.siteKey,
+        siteName: site.name ?? null,
+        siteUrl: site.url ?? null,
+        apiKeyEnc: effectiveSquarespaceApiKeyEnc,
+        email: session.email,
+        ownerEmails: [site.user?.email, settings.notificationEmail],
+      })
+      if (!result.found && result.error) {
+        console.warn('[comments] contact_lookup_failed', { siteId: site.id, kind: result.error })
       }
-      res.status(400).json({
-        code: 'verification_failed',
-        error:
-          'We could not verify a member account for that email. Use the address tied to your site membership, or ask the site owner for help.',
+      contact = result.found
+        ? { found: true, contactId: result.contactId }
+        : { found: false, error: result.error }
+    }
+    const decision = decideVerifiedCommentSubmit({
+      hasValidSession: Boolean(session),
+      squarespaceLoggedIn,
+      hasApiKey: Boolean(effectiveSquarespaceApiKeyEnc),
+      contact,
+      allowAnonymousComments: settings.allowAnonymousComments,
+    })
+    if (decision.action === 'reject') {
+      const anonymousRetry =
+        decision.code !== 'commenter_auth_required' && settings.allowAnonymousComments
+          ? { anonymous_retry_token: issueAnonymousRetryToken(site.id) }
+          : {}
+      const message =
+        decision.code === 'squarespace_login_required'
+          ? SQUARESPACE_LOGIN_REQUIRED_MESSAGE
+          : decision.code === 'commenter_auth_required'
+            ? COMMENTER_AUTH_REQUIRED_MESSAGE
+            : membershipNotFoundMessage(session?.email ?? '')
+      res.status(decision.status).json({
+        code: decision.code,
+        error: message,
+        ...anonymousRetry,
       })
       return
     }
-    if (settings.subscriberCommentsEnabled) {
+    displayName = (session?.displayName || 'Anonymous').slice(0, MAX_DISPLAY_NAME)
+    email = session?.email ?? null
+    verifiedSubscriber = true
+    squarespaceProfileId = decision.contactId
+    commenterSessionId = session?.id ?? null
+    clientReportedLoggedIn = true
+  } else {
+    const { generatedHandle, useAnonymousIdentity, memberEmailAttempt } = decideAnonymousCommentIdentity({
+      allowAnonymousComments: settings.allowAnonymousComments,
+      subscriberCommentsEnabled: settings.subscriberCommentsEnabled,
+      displayNameRaw,
+      anonymousHandleRaw: typeof body.anonymous_handle === 'string' ? body.anonymous_handle : '',
+      email,
+      postAsAnonymous,
+    })
+    if (!useAnonymousIdentity && memberEmailAttempt && !verifiedSubscriber) {
       res.status(400).json({
-        code: 'verification_failed_anonymous_available',
-        error:
-          'We could not verify a member account for that email. Would you like to post this comment anonymously?',
-        anonymous_retry_token: issueAnonymousRetryToken(site.id),
+        error: 'Email verification failed. Please try again.',
       })
       return
     }
-  }
 
-  // Unverified comments never keep a caller-chosen name or email. Generated handles
-  // (Anonymous1234) are the only custom anonymous identity. Verified members keep both.
-  const finalizedIdentity = finalizeCommentIdentity({
-    useAnonymousIdentity,
-    generatedHandle,
-    displayName,
-    email,
-    verifiedSubscriber,
-    squarespaceProfileId,
-  })
-  displayName = finalizedIdentity.displayName
-  email = finalizedIdentity.email
-  verifiedSubscriber = finalizedIdentity.verifiedSubscriber
-  squarespaceProfileId = finalizedIdentity.squarespaceProfileId
+    // Unverified comments never keep a caller-chosen name or email. Generated handles
+    // (Anonymous1234) are the only custom anonymous identity. Verified members keep both.
+    const finalizedIdentity = finalizeCommentIdentity({
+      useAnonymousIdentity,
+      generatedHandle,
+      displayName,
+      email,
+      verifiedSubscriber,
+      squarespaceProfileId,
+    })
+    displayName = finalizedIdentity.displayName
+    email = finalizedIdentity.email
+    verifiedSubscriber = finalizedIdentity.verifiedSubscriber
+    squarespaceProfileId = finalizedIdentity.squarespaceProfileId
+  }
 
   const status = settings.requireApproval ? 'pending' : 'approved'
   const autoApproved = !settings.requireApproval
-
-  if (skipCaptchaForAnonymousRetry && anonymousRetryToken) {
-    consumeAnonymousRetryToken(anonymousRetryToken, site.id)
-  }
 
   const comment = await prisma.comment.create({
     data: {
@@ -782,6 +694,8 @@ router.post('/', async (req: Request, res: Response) => {
       email,
       verifiedSubscriber,
       squarespaceProfileId,
+      commenterSessionId,
+      clientReportedLoggedIn,
       body: commentBody.slice(0, MAX_BODY),
       status,
       autoApproved,
@@ -815,18 +729,6 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
 
-  const createdEmail =
-    comment.email && typeof comment.email === 'string' ? comment.email.trim() : ''
-  let verificationToken: string | null = null
-  if (comment.verifiedSubscriber && createdEmail) {
-    verificationToken = await saveCommentVerificationSession({
-      existingToken: reuseVerificationToken,
-      siteId: site.id,
-      email: createdEmail,
-      displayName: comment.displayName,
-      customName: false,
-    })
-  }
   res.status(201).json({
     id: comment.id,
     display_name: comment.displayName,
@@ -836,7 +738,6 @@ router.post('/', async (req: Request, res: Response) => {
     like_count: 0,
     created_at: comment.createdAt.toISOString(),
     replies: [],
-    ...(verificationToken ? { verification_token: verificationToken } : {}),
   })
 })
 

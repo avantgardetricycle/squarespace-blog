@@ -28,13 +28,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { deleteExpiredAccounts } = await import('../../server/dist/lib/expired-account-cleanup.js')
+    const { cleanupCommenterAuthRecords } = await import('../../server/dist/lib/commenter-auth-cleanup.js')
     const stats = await deleteExpiredAccounts()
+    const authCleanup = await cleanupCommenterAuthRecords()
     res.setHeader('Cache-Control', 'no-store')
     if (stats.errors > 0) {
-      res.status(500).json({ ok: false, ...stats })
+      res.status(500).json({ ok: false, ...stats, authCleanup })
       return
     }
-    res.status(200).json({ ok: true, ...stats })
+    res.status(200).json({ ok: true, ...stats, authCleanup })
   } catch (err) {
     console.error('[api/cron/delete-expired-accounts]', err)
     res.status(500).json({ error: 'Cron failed' })
