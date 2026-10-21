@@ -557,7 +557,7 @@ export function BeforeAfterComparison() {
             .ba-toggle {
               display: flex;
               gap: 4px;
-              margin: 0 16px 14px;
+              margin: 16px 16px 14px;
               padding: 4px;
               background: #f3f1fe;
               border: 1px solid #e6e3f5;
